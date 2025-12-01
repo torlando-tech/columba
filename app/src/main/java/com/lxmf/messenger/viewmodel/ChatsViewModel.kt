@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 @HiltViewModel
@@ -25,6 +26,9 @@ class ChatsViewModel
         companion object {
             private const val TAG = "ChatsViewModel"
         }
+
+        // Cache for contact saved state flows to prevent flickering on recomposition
+        private val contactSavedCache = ConcurrentHashMap<String, StateFlow<Boolean>>()
 
         // Search query state
         val searchQuery = MutableStateFlow("")
@@ -113,14 +117,17 @@ class ChatsViewModel
         }
 
         /**
-         * Check if a peer is saved as a contact
+         * Check if a peer is saved as a contact.
+         * Uses a cache to prevent flickering when the LazyColumn recomposes.
          */
         fun isContactSaved(peerHash: String): StateFlow<Boolean> {
-            return contactRepository.hasContactFlow(peerHash)
-                .stateIn(
-                    scope = viewModelScope,
-                    started = SharingStarted.Eagerly,
-                    initialValue = false,
-                )
+            return contactSavedCache.getOrPut(peerHash) {
+                contactRepository.hasContactFlow(peerHash)
+                    .stateIn(
+                        scope = viewModelScope,
+                        started = SharingStarted.WhileSubscribed(5000),
+                        initialValue = false,
+                    )
+            }
         }
     }

@@ -115,11 +115,14 @@ class InputValidatorTest {
     // ========== PUBLIC KEY VALIDATION TESTS ==========
 
     @Test
-    fun `validatePublicKey - valid 64-char hex passes`() {
-        val validKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    fun `validatePublicKey - valid 128-char hex passes`() {
+        val validKey = "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef"
         val result = InputValidator.validatePublicKey(validKey)
         assertTrue(result is ValidationResult.Success)
-        assertEquals(32, result.getOrNull()?.size)
+        assertEquals(64, result.getOrNull()?.size)
     }
 
     @Test
@@ -141,7 +144,11 @@ class InputValidatorTest {
 
     @Test
     fun `validateIdentityString - valid format passes`() {
-        val validIdentity = "lxma://0123456789abcdef0123456789abcdef:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        val validIdentity = "lxma://0123456789abcdef0123456789abcdef:" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef"
         val result = InputValidator.validateIdentityString(validIdentity)
         assertTrue(result is ValidationResult.Success)
     }

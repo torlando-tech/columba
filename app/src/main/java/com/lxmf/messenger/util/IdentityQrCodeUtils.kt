@@ -1,5 +1,7 @@
 package com.lxmf.messenger.util
 
+import com.lxmf.messenger.util.validation.ValidationConstants
+
 /**
  * Utility functions for encoding and decoding Reticulum identity information in QR codes.
  *
@@ -11,7 +13,6 @@ package com.lxmf.messenger.util
 object IdentityQrCodeUtils {
     private const val QR_PREFIX = "lxma://"
     private const val DESTINATION_HASH_LENGTH = 16 // bytes
-    private const val PUBLIC_KEY_LENGTH = 64 // bytes
 
     /**
      * Encoded identity data for QR codes.
@@ -58,7 +59,7 @@ object IdentityQrCodeUtils {
         if (destinationHash.size != DESTINATION_HASH_LENGTH) {
             return null
         }
-        if (publicKey.size != PUBLIC_KEY_LENGTH) {
+        if (publicKey.size != ValidationConstants.PUBLIC_KEY_LENGTH) {
             return null
         }
 
@@ -93,7 +94,7 @@ object IdentityQrCodeUtils {
         if (destHashHex.length != DESTINATION_HASH_LENGTH * 2) { // 32 hex chars
             return null
         }
-        if (publicKeyHex.length != PUBLIC_KEY_LENGTH * 2) { // 128 hex chars
+        if (publicKeyHex.length != ValidationConstants.PUBLIC_KEY_LENGTH * 2) { // 128 hex chars
             return null
         }
 

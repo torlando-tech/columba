@@ -80,4 +80,4 @@ robolectric = { module = "org.robolectric:robolectric", version = "4.13" }
 junit-android = { module = "androidx.test.ext:junit", version = "1.2.1" }
 espresso = { module = "androidx.test.espresso:espresso-core", version = "3.6.1" }
 test-orchestrator = { module = "androidx.test:orchestrator", version = "1.4.2" }
-test-services = { module = "androidx.test.services:test-services", version = "1.4.2" }
+test-services = { module = "androidx.test.services:test-services", version = "1.6.0" }

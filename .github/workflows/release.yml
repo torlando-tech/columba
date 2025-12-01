@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags (e.g., v1.0.0, v1.2.3-beta1)
+
+jobs:
+  build-and-release:
+    runs-on: self-hosted
+    permissions:
+      contents: write  # Required to create releases and upload assets
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0  # Fetch all history for version tagging
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Build ble-reticulum wheel
+        run: |
+          cd external/ble-reticulum
+          python -m build --wheel --outdir dist/
+          cd ../..
+          mkdir -p python/wheels
+          cp external/ble-reticulum/dist/*.whl python/wheels/
+          echo "✓ Built ble-reticulum wheel"
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG_NAME#v}
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION from tag: $TAG_NAME"
+
+      - name: Build Release APK
+        env:
+          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+          echo "✓ Release APK built successfully"
+
+      - name: Rename APK with version
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          cp app/build/outputs/apk/release/app-release.apk \
+             columba-${VERSION}.apk
+          echo "✓ Renamed APK to columba-${VERSION}.apk"
+
+      - name: Generate SHA256 checksum
+        run: |
+          sha256sum columba-${{ steps.version.outputs.version }}.apk > \
+            columba-${{ steps.version.outputs.version }}.apk.sha256
+          echo "✓ Generated SHA256 checksum"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            columba-${{ steps.version.outputs.version }}.apk
+            columba-${{ steps.version.outputs.version }}.apk.sha256
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          generate_release_notes: true
+          body: |
+            ## Columba ${{ steps.version.outputs.version }}
+
+            ### Installation
+            Download the APK below and install on your Android device.
+
+            **SHA256 Checksum:**
+            ```
+            $(cat columba-${{ steps.version.outputs.version }}.apk.sha256)
+            ```
+
+            ### What's Changed
+            See the release notes below for details.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: columba-${{ steps.version.outputs.version }}-apk
+          path: columba-${{ steps.version.outputs.version }}.apk
+          retention-days: 30

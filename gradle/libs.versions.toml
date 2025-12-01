@@ -1,0 +1,83 @@
+[versions]
+kotlin = "2.0.21"
+compose = "1.7.5"
+composeBom = "2024.12.01"
+hilt = "2.52"
+room = "2.6.1"
+coroutines = "1.9.0"
+lifecycle = "2.8.7"
+navigation = "2.8.4"
+chaquopy = "16.0.0"
+msgpack = "0.9.8"
+dataStore = "1.1.1"
+paging = "3.3.5"
+zxing = "3.5.3"
+cameraX = "1.4.1"
+ktlint = "12.1.1"
+detekt = "1.23.7"
+
+[libraries]
+# Compose
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-activity = { module = "androidx.activity:activity-compose", version = "1.9.3" }
+compose-test = { module = "androidx.compose.ui:ui-test-junit4" }
+navigation = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
+
+# Hilt
+hilt = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
+hilt-navigation = { module = "androidx.hilt:hilt-navigation-compose", version = "1.2.0" }
+hilt-testing = { module = "com.google.dagger:hilt-android-testing", version.ref = "hilt" }
+
+# Room
+room = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+
+# Coroutines
+coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+
+# Lifecycle
+lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
+lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }
+lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+
+# Core
+core-ktx = { module = "androidx.core:core-ktx", version = "1.15.0" }
+
+# DataStore
+datastore = { module = "androidx.datastore:datastore-preferences", version.ref = "dataStore" }
+
+# Paging
+paging-runtime = { module = "androidx.paging:paging-runtime", version.ref = "paging" }
+paging-compose = { module = "androidx.paging:paging-compose", version = "3.3.5" }
+paging-testing = { module = "androidx.paging:paging-testing", version.ref = "paging" }
+
+# MessagePack
+msgpack = { module = "org.msgpack:msgpack-core", version.ref = "msgpack" }
+
+# QR Code & Camera
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+cameraX-core = { module = "androidx.camera:camera-core", version.ref = "cameraX" }
+cameraX-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cameraX" }
+cameraX-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "cameraX" }
+cameraX-view = { module = "androidx.camera:camera-view", version.ref = "cameraX" }
+
+# Testing
+junit = { module = "junit:junit", version = "4.13.2" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version = "5.11.4" }
+mockk = { module = "io.mockk:mockk", version = "1.13.14" }
+mockk-android = { module = "io.mockk:mockk-android", version = "1.13.14" }
+turbine = { module = "app.cash.turbine:turbine", version = "1.2.0" }
+arch-core-testing = { module = "androidx.arch.core:core-testing", version = "2.2.0" }
+robolectric = { module = "org.robolectric:robolectric", version = "4.13" }
+junit-android = { module = "androidx.test.ext:junit", version = "1.2.1" }
+espresso = { module = "androidx.test.espresso:espresso-core", version = "3.6.1" }
+test-orchestrator = { module = "androidx.test:orchestrator", version = "1.4.2" }
+test-services = { module = "androidx.test.services:test-services", version = "1.4.2" }

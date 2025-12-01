@@ -1,0 +1,22 @@
+# direnv configuration for Columba project
+# Copy this file to .envrc and customize for your environment
+
+# Android SDK path
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+
+# Java home (adjust path if needed)
+export JAVA_HOME="/usr/lib/jvm/java-17-openjdk"
+
+# Python configuration for Chaquopy
+export PYTHON_VERSION="3.11"
+
+# Gradle configuration
+export GRADLE_OPTS="-Xmx4g -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError"
+
+# GitHub CLI configuration (uncomment if needed for private repo)
+# export GH_HOST="github.com"
+
+# Add any project-specific environment variables below:
+# export MY_API_KEY="your-key-here"
+# export MY_VAR="value"

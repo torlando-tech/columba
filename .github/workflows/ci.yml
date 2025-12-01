@@ -1,0 +1,321 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  validate-wrapper:
+    name: Validate Gradle Wrapper
+    runs-on: self-hosted
+    timeout-minutes: 2
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+  lint:
+    name: Code Quality (ktlint + detekt)
+    runs-on: self-hosted
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run ktlint
+        run: ./gradlew ktlintCheck --continue
+
+      - name: Run detekt
+        run: ./gradlew detekt --continue
+
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports
+          path: |
+            **/build/reports/ktlint/
+            **/build/reports/detekt/
+          retention-days: 7
+
+  threading-audit:
+    name: Threading Architecture Audit
+    runs-on: self-hosted
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Make audit script executable
+        run: chmod +x audit-dispatchers.sh
+
+      - name: Run dispatcher audit
+        id: audit
+        run: |
+          echo "Running threading architecture audit..."
+          ./audit-dispatchers.sh
+          exit_code=$?
+          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+          exit $exit_code
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: threading-audit-report
+          path: dispatcher-audit-report.txt
+          retention-days: 30
+
+      - name: Comment audit results on PR
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report = 'Dispatcher audit report not found';
+            try {
+              report = fs.readFileSync('dispatcher-audit-report.txt', 'utf8');
+            } catch (e) {
+              console.log('Could not read audit report');
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ❌ Threading Architecture Audit Failed\n\n<details><summary>View Audit Report</summary>\n\n\`\`\`\n${report}\n\`\`\`\n\n</details>\n\nPlease fix the dispatcher violations before merging.`
+            });
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: self-hosted
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python build dependencies
+        run: pip install build
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Clean AIDL generated code
+        run: |
+          # Clean AIDL generated code to avoid stale cache issues
+          # This MUST happen before Gradle cache restore to prevent cached stale AIDL files
+          rm -rf app/build/generated/aidl_source_output_dir
+          rm -rf */build/generated/aidl_source_output_dir
+
+      - name: Run unit tests
+        run: ./gradlew test --stacktrace --max-workers=2
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            **/build/test-results/test*/*.xml
+            **/build/test-results/test*/*.html
+          retention-days: 7
+
+      - name: Upload unit test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            **/build/reports/tests/
+
+      - name: Generate code coverage report
+        run: ./gradlew jacocoTestReport --stacktrace
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            **/build/reports/jacoco/
+          retention-days: 7
+
+  # instrumented-tests:
+  #   name: Instrumented Tests
+  #   runs-on: self-hosted
+  #   timeout-minutes: 90
+
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #       with:
+  #         submodules: recursive
+
+  #     - name: Setup Gradle
+  #       uses: gradle/actions/setup-gradle@v4
+  #       with:
+  #         cache-read-only: false
+
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: '3.11'
+
+  #     - name: Install Python build dependencies
+  #       run: pip install build
+
+  #     - name: Grant execute permission for gradlew
+  #       run: chmod +x gradlew
+
+  #     - name: Clean AIDL generated code
+  #       run: |
+  #         # Clean AIDL generated code to avoid stale cache issues
+  #         # This MUST happen before Gradle cache restore to prevent cached stale AIDL files
+  #         rm -rf app/build/generated/aidl_source_output_dir
+  #         rm -rf */build/generated/aidl_source_output_dir
+
+  #     # KVM configuration is handled at k3s pod/host level for self-hosted runners
+  #     # No need for udev rules in containerized environment
+
+  #     - name: Pre-build test APKs to reduce emulator load
+  #       run: |
+  #         echo "Building APKs before starting emulator to reduce resource contention..."
+  #         ./gradlew :app:assembleDebugAndroidTest --stacktrace --max-workers=2
+  #         ./gradlew :app:assembleDebug --stacktrace --max-workers=2
+  #         echo "APKs built successfully"
+
+  #     - name: Clear stale emulator state
+  #       run: |
+  #         # Kill any emulators
+  #         adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
+  #         sleep 2
+  #         # Force kill qemu processes
+  #         pkill -9 qemu-system-x86_64 || true
+  #         pkill -9 qemu-system || true
+  #         # Kill ADB and wait for ports to free
+  #         adb kill-server || true
+  #         sleep 2
+  #         # Check if port 5554 is in use and kill the process
+  #         lsof -ti:5554 | xargs kill -9 || true
+  #         lsof -ti:5555 | xargs kill -9 || true
+  #         sleep 1
+  #         # Clean temp files
+  #         rm -rf /tmp/android-* || true
+  #         rm -rf /tmp/avd-* || true
+  #         # Start fresh ADB server
+  #         adb start-server
+  #         sleep 2
+  #         # Verify no emulators running
+  #         adb devices
+
+  #     - name: AVD cache
+  #       uses: actions/cache@v4
+  #       id: avd-cache
+  #       with:
+  #         path: |
+  #           ~/.android/avd/*
+  #           ~/.android/adb*
+  #         key: avd-34-x86_64-v5-2gb
+
+  #     - name: Create AVD and generate snapshot for caching
+  #       if: steps.avd-cache.outputs.cache-hit != 'true'
+  #       uses: reactivecircus/android-emulator-runner@v2
+  #       with:
+  #         api-level: 34
+  #         arch: x86_64
+  #         target: google_apis
+  #         force-avd-creation: false
+  #         emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048 -accel on
+  #         disable-animations: true
+  #         emulator-boot-timeout: 900
+  #         script: echo "Waiting for input service to be available..." && i=0 && while [ $i -lt 30 ]; do if adb shell service check input >/dev/null 2>&1; then echo "Input service is available" && break; fi; i=$((i + 1)); echo "Waiting for input service... ($i/30)"; sleep 2; done && echo "Generated AVD snapshot for caching."
+
+  #     - name: Run instrumented tests
+  #       uses: reactivecircus/android-emulator-runner@v2
+  #       with:
+  #         api-level: 34
+  #         arch: x86_64
+  #         target: google_apis
+  #         force-avd-creation: false
+  #         emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048 -accel on
+  #         disable-animations: true
+  #         emulator-boot-timeout: 600
+  #         script: |
+  #           echo "Running emulator health check..." && adb shell getprop ro.build.version.sdk && adb shell pm list packages | head -5 && echo "Emulator is responsive, starting tests..." && ./gradlew :app:connectedDebugAndroidTest --stacktrace
+
+  #     - name: Upload instrumented test results
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: instrumented-test-results
+  #         path: |
+  #           **/build/outputs/androidTest-results/**/*.xml
+  #           **/build/outputs/androidTest-results/**/*.html
+  #         retention-days: 7
+
+  #     - name: Upload instrumented test reports
+  #       if: failure()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: instrumented-test-reports
+  #         path: |
+  #           **/build/reports/androidTests/
+  #         retention-days: 7
+
+  #     - name: Upload logcat output
+  #       if: failure()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: logcat
+  #         path: artifacts/logcat.log
+  #         retention-days: 7
+  #         if-no-files-found: ignore
+
+  #     - name: Cleanup emulator
+  #       if: always()
+  #       run: |
+  #         adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
+  #         pkill -9 qemu-system || true
+  #       adb kill-server || true

@@ -1,0 +1,149 @@
+name: Build Pre-Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_name:
+        description: 'Release name (optional, defaults to auto-generated)'
+        required: false
+        default: ''
+      release_notes:
+        description: 'Release notes (optional)'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python build dependencies
+        run: pip install build
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v3
+        continue-on-error: true
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build ble-reticulum wheel
+        run: |
+          cd external/ble-reticulum
+          python -m build --wheel --outdir dist/
+          cd ../..
+          mkdir -p python/wheels
+          cp external/ble-reticulum/dist/*.whl python/wheels/
+          echo "✓ Built ble-reticulum wheel"
+
+      - name: Build Release APK
+        env:
+          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Get branch name
+        id: branch
+        run: echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+      - name: Get short SHA
+        id: sha
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Get timestamp
+        id: timestamp
+        run: echo "timestamp=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Get version from build
+        id: version
+        run: |
+          VERSION=$(./gradlew -q printVersion | grep "versionName:" | cut -d' ' -f2)
+          if [ -z "$VERSION" ]; then
+            VERSION="unknown"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release Tag
+        id: tag
+        run: |
+          TAG="prerelease-${{ steps.timestamp.outputs.timestamp }}-${{ steps.sha.outputs.sha }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Find APK
+        id: apk
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          echo "path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "name=$(basename $APK_PATH)" >> $GITHUB_OUTPUT
+
+      - name: Rename APK
+        run: |
+          cp ${{ steps.apk.outputs.path }} columba.apk
+          echo "✓ Renamed APK to columba.apk"
+
+      - name: Determine release name
+        id: release_name
+        run: |
+          if [ -n "${{ github.event.inputs.release_name }}" ]; then
+            echo "name=${{ github.event.inputs.release_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=Pre-Release v${{ steps.version.outputs.version }} (${{ steps.sha.outputs.sha }})" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pre-Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.release_name.outputs.name }}
+          body: |
+            ## Pre-Release Build
+
+            **Version:** ${{ steps.version.outputs.version }}
+            **Branch:** `${{ steps.branch.outputs.branch }}`
+            **Commit:** ${{ github.sha }}
+            **Built:** ${{ steps.timestamp.outputs.timestamp }}
+
+            This is a production-ready pre-release APK built with:
+            - Release build configuration
+            - ProGuard optimization enabled
+            - Code minification enabled
+            - No debug features
+
+            ${{ github.event.inputs.release_notes }}
+
+            ### Installation
+            Download the APK below and install it on your Android device.
+
+            **Note:** You may need to enable "Install from Unknown Sources" in your device settings.
+          files: columba.apk
+          draft: false
+          prerelease: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-${{ steps.sha.outputs.sha }}
+          path: columba.apk
+          retention-days: 90

@@ -2,9 +2,11 @@
 
 # Columba
 
-Columba is a simple messaging app for the Reticulum network on Android. Send messages without relying on the internet, cell towers, or any central servers.
+Columba is a simple messaging app for the [Reticulum](https://github.com/markqvist/Reticulum) network on Android. Send [LXMF](https://github.com/markqvist/LXMF) messages without relying on the internet, cell towers, or any central servers.
 
 Built with a native Android interface and Material Design 3, Columba brings mesh networking to your pocket in a familiar, easy-to-use package.
+
+<img src="https://github.com/user-attachments/assets/77532689-3568-4224-a75d-62fb08a4ad33" width="33%"></img> <img src="https://github.com/user-attachments/assets/70804d27-6307-441f-b29f-b32ecfe72098" width="33%"></img> <img src="https://github.com/user-attachments/assets/c2d2c9ad-63da-42e0-a045-bc30ec3bb128" width="33%"></img>
 
 ## What You Can Do
 
@@ -24,7 +26,7 @@ Download the latest release from [Releases](https://github.com/torlando-tech/col
 
 ## About Reticulum
 
-Reticulum is a networking stack that lets devices communicate directly with each other, forming resilient mesh networks. Columba uses LXMF (Lightweight Extensible Message Format) to send messages across the Reticulum network.
+[Reticulum](https://github.com/markqvist/Reticulum) is a networking stack that lets devices communicate directly with each other, forming resilient mesh networks. It is optimized for low bandwidth, high latency connections, and can communicate over nearly any medium. Columba uses [LXMF](https://github.com/markqvist/LXMF) (Lightweight Extensible Message Format) to send messages across the Reticulum network, and uses a native Android implementation of [ble-reticulum](https://github.com/torlando-tech/ble-reticulum) to enable messaging over BLE with other Android and Linux devices.
 
 Want to learn more? Visit [Reticulum's documentation](https://reticulum.network/).
 

@@ -1,7 +1,7 @@
 [versions]
 kotlin = "2.0.21"
 compose = "1.7.5"
-composeBom = "2024.12.01"
+composeBom = "2025.11.01"
 hilt = "2.52"
 room = "2.6.1"
 coroutines = "1.9.0"

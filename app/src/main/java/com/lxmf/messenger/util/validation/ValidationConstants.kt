@@ -53,9 +53,9 @@ object ValidationConstants {
     const val DESTINATION_HASH_LENGTH = 16
 
     /**
-     * Public key length in bytes (64 hex characters)
+     * Public key length in bytes (128 hex characters)
      */
-    const val PUBLIC_KEY_LENGTH = 32
+    const val PUBLIC_KEY_LENGTH = 64
 
     // ========== NETWORK LIMITS ==========
 

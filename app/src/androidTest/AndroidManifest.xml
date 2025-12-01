@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+    Android Test Manifest
+    Contains test-only components that should not be in the production APK.
+    -->
+
+    <application>
+        <!-- Test Activity for instrumented UI tests -->
+        <activity
+            android:name="com.lxmf.messenger.test.TestActivity"
+            android:exported="false" />
+    </application>
+
+    <instrumentation
+        android:name="androidx.test.runner.AndroidJUnitRunner"
+        android:targetPackage="com.lxmf.messenger" />
+
+</manifest>

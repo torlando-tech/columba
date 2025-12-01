@@ -1,0 +1,509 @@
+package com.lxmf.messenger.viewmodel
+
+import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import app.cash.turbine.test
+import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.service.InterfaceConfigManager
+import io.mockk.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.*
+import org.junit.After
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+
+/**
+ * Validation tests for InterfaceManagementViewModel.
+ * Tests input validation for interface configurations.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class InterfaceManagementViewModelValidationTest {
+
+    @get:Rule
+    val instantExecutorRule = InstantTaskExecutorRule()
+
+    private val testDispatcher = StandardTestDispatcher()
+
+    private lateinit var repository: InterfaceRepository
+    private lateinit var configManager: InterfaceConfigManager
+    private lateinit var viewModel: InterfaceManagementViewModel
+
+    @Before
+    fun setup() {
+        Dispatchers.setMain(testDispatcher)
+
+        repository = mockk()
+        configManager = mockk()
+
+        // Mock default behaviors
+        every { repository.allInterfaceEntities } returns flowOf(emptyList())
+        every { repository.enabledInterfaceCount } returns flowOf(0)
+        every { repository.totalInterfaceCount } returns flowOf(0)
+        coEvery { repository.insertInterface(any()) } returns 1L
+        coEvery { repository.updateInterface(any(), any()) } just Runs
+        coEvery { configManager.applyInterfaceConfig(any()) } just Runs
+
+        viewModel = InterfaceManagementViewModel(repository, configManager)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+        clearAllMocks()
+    }
+
+    // ========== INTERFACE NAME VALIDATION ==========
+
+    @Test
+    fun `saveConfig with empty interface name shows error`() = runTest {
+        // Open dialog for TCPClient
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        // Set empty name
+        viewModel.updateName("")
+        viewModel.updateTargetHost("192.168.1.1")
+        viewModel.updateTargetPort("8080")
+
+        // Try to save
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        // Assert: Name error is shown
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNotNull(state.nameError)
+            assertTrue(state.nameError!!.contains("empty") || state.nameError!!.contains("blank"))
+        }
+
+        // Verify: Config NOT saved
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `saveConfig with too-long interface name shows error`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        // Set name longer than 50 characters
+        val longName = "a".repeat(51)
+        viewModel.updateName(longName)
+        viewModel.updateTargetHost("192.168.1.1")
+        viewModel.updateTargetPort("8080")
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        // Assert: Name error is shown
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNotNull(state.nameError)
+            assertTrue(state.nameError!!.contains("50") || state.nameError!!.contains("long"))
+        }
+
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `saveConfig with valid interface name succeeds`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        viewModel.updateName("Valid TCP Interface")
+        viewModel.updateTargetHost("192.168.1.1")
+        viewModel.updateTargetPort("8080")
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        // Assert: No name error
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNull(state.nameError)
+        }
+
+        // Verify: Config saved
+        coVerify(exactly = 1) { repository.insertInterface(any()) }
+    }
+
+    // ========== TCP CLIENT VALIDATION ==========
+
+    @Test
+    fun `TCPClient with invalid hostname shows error`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        viewModel.updateName("TCP Test")
+        viewModel.updateTargetHost("invalid host!")  // Contains spaces and special chars
+        viewModel.updateTargetPort("8080")
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        // Assert: Target host error is shown
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNotNull(state.targetHostError)
+        }
+
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `TCPClient with empty hostname shows error`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        viewModel.updateName("TCP Test")
+        viewModel.updateTargetHost("")
+        viewModel.updateTargetPort("8080")
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNotNull(state.targetHostError)
+        }
+
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `TCPClient with invalid port shows error`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        viewModel.updateName("TCP Test")
+        viewModel.updateTargetHost("192.168.1.1")
+        viewModel.updateTargetPort("70000")  // Out of range
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNotNull(state.targetPortError)
+        }
+
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `TCPClient with zero port shows error`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        viewModel.updateName("TCP Test")
+        viewModel.updateTargetHost("192.168.1.1")
+        viewModel.updateTargetPort("0")  // Port 0 is invalid
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNotNull(state.targetPortError)
+        }
+
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `TCPClient with non-numeric port shows error`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        viewModel.updateName("TCP Test")
+        viewModel.updateTargetHost("192.168.1.1")
+        viewModel.updateTargetPort("abc")  // Not a number
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNotNull(state.targetPortError)
+        }
+
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `TCPClient with valid IP address succeeds`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        viewModel.updateName("TCP Test")
+        viewModel.updateTargetHost("192.168.1.100")
+        viewModel.updateTargetPort("8080")
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNull(state.targetHostError)
+            assertNull(state.targetPortError)
+        }
+
+        coVerify(exactly = 1) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `TCPClient with valid hostname succeeds`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        viewModel.updateName("TCP Test")
+        viewModel.updateTargetHost("example.com")
+        viewModel.updateTargetPort("443")
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNull(state.targetHostError)
+            assertNull(state.targetPortError)
+        }
+
+        coVerify(exactly = 1) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `TCPClient with localhost succeeds`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        viewModel.updateName("TCP Test")
+        viewModel.updateTargetHost("localhost")
+        viewModel.updateTargetPort("4965")
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNull(state.targetHostError)
+            assertNull(state.targetPortError)
+        }
+
+        coVerify(exactly = 1) { repository.insertInterface(any()) }
+    }
+
+    // ========== AUTO INTERFACE VALIDATION ==========
+
+    @Test
+    fun `AutoInterface with invalid discovery port shows error`() = runTest {
+        viewModel.openCreateDialog("AutoInterface")
+        advanceUntilIdle()
+
+        viewModel.updateName("Auto Test")
+        viewModel.updateDiscoveryPort("70000")  // Out of range
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNotNull(state.discoveryPortError)
+        }
+
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `AutoInterface with invalid data port shows error`() = runTest {
+        viewModel.openCreateDialog("AutoInterface")
+        advanceUntilIdle()
+
+        viewModel.updateName("Auto Test")
+        viewModel.updateDiscoveryPort("48555")
+        viewModel.updateDataPort("-1")  // Negative port
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNotNull(state.dataPortError)
+        }
+
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `AutoInterface with non-numeric ports shows errors`() = runTest {
+        viewModel.openCreateDialog("AutoInterface")
+        advanceUntilIdle()
+
+        viewModel.updateName("Auto Test")
+        viewModel.updateDiscoveryPort("abc")
+        viewModel.updateDataPort("xyz")
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNotNull(state.discoveryPortError)
+            assertNotNull(state.dataPortError)
+        }
+
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `AutoInterface with valid ports succeeds`() = runTest {
+        viewModel.openCreateDialog("AutoInterface")
+        advanceUntilIdle()
+
+        viewModel.updateName("Auto Test")
+        viewModel.updateDiscoveryPort("48555")
+        viewModel.updateDataPort("49555")
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNull(state.discoveryPortError)
+            assertNull(state.dataPortError)
+        }
+
+        coVerify(exactly = 1) { repository.insertInterface(any()) }
+    }
+
+    // ========== ANDROID BLE VALIDATION ==========
+
+    @Test
+    fun `AndroidBLE with invalid device name shows error`() = runTest {
+        viewModel.openCreateDialog("AndroidBLE")
+        advanceUntilIdle()
+
+        viewModel.updateName("BLE Test")
+        viewModel.updateDeviceName("a".repeat(31))  // Too long (max 30)
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNotNull(state.deviceNameError)
+        }
+
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `AndroidBLE with empty device name succeeds with default`() = runTest {
+        viewModel.openCreateDialog("AndroidBLE")
+        advanceUntilIdle()
+
+        viewModel.updateName("BLE Test")
+        viewModel.updateDeviceName("")  // Empty is OK, will use default
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNull(state.deviceNameError)
+        }
+
+        coVerify(exactly = 1) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `AndroidBLE with valid device name succeeds`() = runTest {
+        viewModel.openCreateDialog("AndroidBLE")
+        advanceUntilIdle()
+
+        viewModel.updateName("BLE Test")
+        viewModel.updateDeviceName("Reticulum-BLE")
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            assertNull(state.deviceNameError)
+        }
+
+        coVerify(exactly = 1) { repository.insertInterface(any()) }
+    }
+
+    // ========== MULTIPLE ERRORS ==========
+
+    @Test
+    fun `saveConfig with multiple errors shows all errors`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        // Set ALL fields invalid
+        viewModel.updateName("")  // Invalid
+        viewModel.updateTargetHost("invalid host!")  // Invalid
+        viewModel.updateTargetPort("70000")  // Invalid
+
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        viewModel.configState.test {
+            val state = awaitItem()
+            // All errors should be shown
+            assertNotNull(state.nameError)
+            assertNotNull(state.targetHostError)
+            assertNotNull(state.targetPortError)
+        }
+
+        coVerify(exactly = 0) { repository.insertInterface(any()) }
+    }
+
+    @Test
+    fun `updating field clears its error`() = runTest {
+        viewModel.openCreateDialog("TCPClient")
+        advanceUntilIdle()
+
+        // Set invalid values and trigger validation
+        viewModel.updateName("")
+        viewModel.updateTargetHost("invalid!")
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        // Verify errors exist
+        viewModel.configState.test {
+            val stateWithErrors = awaitItem()
+            assertNotNull(stateWithErrors.nameError)
+            assertNotNull(stateWithErrors.targetHostError)
+        }
+
+        // Fix the values
+        viewModel.updateName("Valid Name")
+        advanceUntilIdle()
+
+        viewModel.updateTargetHost("192.168.1.1")
+        advanceUntilIdle()
+
+        viewModel.updateTargetPort("8080")
+        advanceUntilIdle()
+
+        // Try saving again
+        viewModel.saveConfig()
+        advanceUntilIdle()
+
+        // Errors should be cleared
+        viewModel.configState.test {
+            val fixedState = awaitItem()
+            assertNull(fixedState.nameError)
+            assertNull(fixedState.targetHostError)
+            assertNull(fixedState.targetPortError)
+        }
+
+        // Config should save successfully
+        coVerify(exactly = 1) { repository.insertInterface(any()) }
+    }
+}

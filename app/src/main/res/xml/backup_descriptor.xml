@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup configuration for Android 11 and below (legacy format)
+
+  SECURITY POLICY:
+  - Database (contacts, messages, announces): BACKED UP
+  - Identity files (private keys): EXCLUDED (manual export required)
+  - Shared preferences: BACKED UP
+  - Cache: EXCLUDED
+-->
+<full-backup-content>
+    <!-- Include database and shared preferences -->
+    <include domain="database" path="." />
+    <include domain="sharedpref" path="." />
+
+    <!-- Include files, but exclude identity files (contain private keys) -->
+    <include domain="file" path="." />
+    <exclude domain="file" path="reticulum/" />
+    <exclude domain="file" path=".reticulum/" />
+</full-backup-content>

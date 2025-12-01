@@ -1,0 +1,6 @@
+# Python dependencies for Reticulum integration
+# These will be installed by Chaquopy when building the Android app
+
+rns>=1.0.0
+lxmf>=0.8.0
+cryptography>=42.0.0

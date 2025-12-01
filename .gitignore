@@ -12,6 +12,7 @@
 
 # Package Files #
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.nar
 *.ear
@@ -25,3 +26,67 @@ replay_pid*
 
 # Kotlin Gradle plugin data, see https://kotlinlang.org/docs/whatsnew20.html#new-directory-for-kotlin-data-in-gradle-projects
 .kotlin/
+
+# Android Studio
+.gradle/
+build/
+*/build/
+.idea/
+*.iml
+local.properties
+.navigation/
+captures/
+.externalNativeBuild
+.cxx/
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
+
+# APK files
+*.apk
+*.aab
+*.aar
+*.ap_
+
+# Keystore files
+*.jks
+*.keystore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+python/wheels/
+
+# Temporary files
+*.swp
+*~
+.DS_Store
+
+# Conversion script
+convert_docx.py
+
+# Android profiler and analysis
+*.hprof
+lint/
+lint-results*
+
+# Firebase (if added in future)
+google-services.json
+
+# Release builds
+release/.envrc
+
+# Release keystore files (keep private!)
+*.keystore
+*.keystore.b64
+*.jks
+
+.envrc
+.python-version

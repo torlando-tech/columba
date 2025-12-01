@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" xmlns:bx="https://boxy-svg.com">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0" style="stop-color:#C471ED"/>
+      <stop offset="1" style="stop-color:#F64F59"/>
+    </linearGradient>
+    <radialGradient id="starGlow">
+      <stop offset="0" style="stop-color:#FFFFFF;stop-opacity:0.8"/>
+      <stop offset="0.5" style="stop-color:#FFFFFF;stop-opacity:0.3"/>
+      <stop offset="1" style="stop-color:#FFFFFF;stop-opacity:0"/>
+    </radialGradient>
+    <bx:export>
+      <bx:file format="svg" href="#object-0"/>
+      <bx:file format="svg" href="#object-1" path="Untitled 2.svg"/>
+      <bx:file format="svg" href="#object-2" path="Untitled 3.svg"/>
+      <bx:file format="svg" href="#object-3" path="Untitled 4.svg"/>
+      <bx:file format="svg" href="#object-4" path="Untitled 5.svg"/>
+      <bx:file format="svg" href="#object-5" path="Untitled 6.svg"/>
+      <bx:file format="svg" href="#object-6" path="Untitled 7.svg"/>
+      <bx:file format="svg" href="#object-7" path="Untitled 8.svg"/>
+      <bx:file format="svg" href="#object-8" path="Untitled 9.svg"/>
+      <bx:file format="svg" href="#object-9" path="Untitled 10.svg"/>
+      <bx:file format="svg" href="#object-10" path="Untitled 11.svg"/>
+      <bx:file format="svg" href="#object-11" path="Untitled 12.svg"/>
+      <bx:file format="svg" href="#object-12" path="Untitled 13.svg"/>
+      <bx:file format="svg" href="#object-13" path="Untitled 14.svg"/>
+      <bx:file format="svg" href="#object-14" path="Untitled 15.svg"/>
+    </bx:export>
+  </defs>
+  <circle cx="256" cy="256" r="256" fill="url(#bg)" style="stroke-width: 1;" id="object-0"/>
+  <path stroke="#FFFFFF" stroke-width="4.5" fill="none" stroke-linecap="round" opacity="0.6" style="stroke-width: 4.5;" d="M 93.53 128.431 C 94.162 128.471 271.37 194.336 271.29 193.077" id="object-1"/>
+  <path d="M 270.75 193.487 C 270.902 226.855 231.12 378.151 216.617 402.841" stroke="#FFFFFF" stroke-width="4.5" fill="none" stroke-linecap="round" opacity="0.6" style="stroke-width: 4.5;" id="object-2"/>
+  <path d="M 270.923 193.326 C 281.938 183.739 347.714 144.654 356.069 139.108" stroke="#FFFFFF" stroke-width="4.5" fill="none" stroke-linecap="round" opacity="0.6" style="stroke-width: 4.5;" id="object-3"/>
+  <circle cx="406.658" cy="182.257" r="20.163" fill="url(#starGlow)" style="stroke-width: 1;" id="object-4"/>
+  <circle cx="406.658" cy="182.257" r="9" fill="#FFFFFF" style="stroke-width: 1;" id="object-5"/>
+  <circle cx="356.658" cy="138.257" r="28.322" fill="url(#starGlow)" style="stroke-width: 1;" id="object-6"/>
+  <circle cx="356.658" cy="138.257" r="10.837" fill="#FFFFFF" style="stroke-width: 1;" id="object-7"/>
+  <circle cx="270.658" cy="193.257" r="16" fill="url(#starGlow)" style="stroke-width: 1;" id="object-8"/>
+  <circle cx="270.658" cy="193.257" r="6.5" fill="#FFFFFF" style="stroke-width: 1;" id="object-9"/>
+  <circle cx="214.658" cy="403.257" r="16" fill="url(#starGlow)" style="stroke-width: 1;" id="object-10"/>
+  <circle cx="214.658" cy="403.257" r="6.5" fill="#FFFFFF" style="stroke-width: 1;" id="object-11"/>
+  <circle cx="93.506" cy="128.312" r="13" fill="url(#starGlow)" style="stroke-width: 1;" id="object-12"/>
+  <circle cx="93.506" cy="128.312" r="5" fill="#FFFFFF" style="stroke-width: 1;" id="object-13"/>
+  <path stroke="#FFFFFF" stroke-width="4.5" fill="none" stroke-linecap="round" opacity="0.6" style="stroke-width: 4.5;" d="M 405.781 182.043 C 381.14 160.276 371.817 147.932 356.85 138.219" id="object-14"/>
+  <circle cx="229.346" cy="182.625" r="20.163" fill="url(#starGlow)" style="stroke-width: 1;" id="circle-1" transform="matrix(0.592793, 0, 0, 0.638039, 94.759598, 61.99794)"/>
+  <circle cx="229.346" cy="182.625" r="9" fill="#FFFFFF" style="stroke-width: 1;" id="circle-2" transform="matrix(0.592793, 0, 0, 0.638039, 94.759598, 61.99794)"/>
+</svg>

@@ -1,0 +1,3 @@
+[submodule "external/ble-reticulum"]
+	path = external/ble-reticulum
+	url = https://github.com/torlando-tech/ble-reticulum.git

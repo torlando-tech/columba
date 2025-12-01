@@ -1,0 +1,998 @@
+package com.lxmf.messenger.ui.screens
+
+import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.data.model.EnrichedContact
+import com.lxmf.messenger.ui.components.AddContactConfirmationDialog
+import com.lxmf.messenger.ui.components.Identicon
+import com.lxmf.messenger.ui.theme.MeshConnected
+import com.lxmf.messenger.util.formatRelativeTime
+import com.lxmf.messenger.util.validation.InputValidator
+import com.lxmf.messenger.util.validation.ValidationConstants
+import com.lxmf.messenger.util.validation.ValidationResult
+import com.lxmf.messenger.viewmodel.ContactsViewModel
+
+private const val TAG = "ContactsScreen"
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ContactsScreen(
+    onContactClick: (destinationHash: String, displayName: String) -> Unit = { _, _ -> },
+    onViewPeerDetails: (destinationHash: String) -> Unit = { },
+    onNavigateToQrScanner: () -> Unit = {},
+    pendingDeepLinkContact: String? = null,
+    onDeepLinkContactProcessed: () -> Unit = {},
+    onNavigateToConversation: (destinationHash: String) -> Unit = {},
+    viewModel: ContactsViewModel = hiltViewModel(),
+) {
+    val groupedContacts by viewModel.groupedContacts.collectAsState()
+    val contactCount by viewModel.contactCount.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    var isSearching by remember { mutableStateOf(false) }
+    var showAddContactSheet by remember { mutableStateOf(false) }
+    var showManualEntryDialog by remember { mutableStateOf(false) }
+
+    // Deep link confirmation dialog state
+    var showDeepLinkConfirmation by remember { mutableStateOf(false) }
+    var deepLinkDestinationHash by remember { mutableStateOf<String?>(null) }
+    var deepLinkPublicKey by remember { mutableStateOf<ByteArray?>(null) }
+
+    // Contact already exists dialog state
+    var showContactExistsDialog by remember { mutableStateOf(false) }
+    var existingContactName by remember { mutableStateOf<String?>(null) }
+
+    // Edit nickname dialog state
+    var showEditNicknameDialog by remember { mutableStateOf(false) }
+    var editNicknameContactHash by remember { mutableStateOf<String?>(null) }
+    var editNicknameCurrentValue by remember { mutableStateOf<String?>(null) }
+
+    val scope = rememberCoroutineScope()
+
+    // Handle pending deep link contact
+    LaunchedEffect(pendingDeepLinkContact) {
+        pendingDeepLinkContact?.let { lxmaUrl ->
+            Log.d(TAG, "Processing pending deep link contact: $lxmaUrl")
+            // Decode the QR code
+            val decodedData = viewModel.decodeQrCode(lxmaUrl)
+            if (decodedData != null) {
+                val (hashHex, publicKey) = decodedData
+                // Check if contact already exists
+                val existingContact = viewModel.checkContactExists(hashHex)
+                if (existingContact != null) {
+                    // Contact exists - show info dialog
+                    Log.d(TAG, "Deep link contact already exists: $hashHex")
+                    existingContactName = existingContact.displayName
+                    showContactExistsDialog = true
+                    onDeepLinkContactProcessed()
+                } else {
+                    // New contact - show confirmation dialog
+                    Log.d(TAG, "New deep link contact detected, showing confirmation dialog: $hashHex")
+                    deepLinkDestinationHash = hashHex
+                    deepLinkPublicKey = publicKey
+                    showDeepLinkConfirmation = true
+                }
+            } else {
+                Log.e(TAG, "Failed to decode deep link contact: $lxmaUrl")
+                onDeepLinkContactProcessed()
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            Column {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                text = "Contacts",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = "$contactCount ${if (contactCount == 1) "contact" else "contacts"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { isSearching = !isSearching }) {
+                            Icon(
+                                imageVector = if (isSearching) Icons.Default.Close else Icons.Default.Search,
+                                contentDescription = if (isSearching) "Close search" else "Search",
+                            )
+                        }
+                        IconButton(onClick = { showAddContactSheet = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Add contact",
+                            )
+                        }
+                    },
+                    colors =
+                        TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                )
+
+                // Search bar
+                AnimatedVisibility(visible = isSearching) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { query ->
+                            // VALIDATION: Sanitize and limit search query
+                            val sanitized =
+                                InputValidator.sanitizeText(
+                                    query,
+                                    ValidationConstants.MAX_SEARCH_QUERY_LENGTH,
+                                )
+                            viewModel.onSearchQueryChanged(sanitized)
+                        },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        placeholder = { Text("Search by name, hash, or tag...") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null)
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        colors =
+                            OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                            ),
+                    )
+                }
+            }
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAddContactSheet = true },
+                containerColor = MaterialTheme.colorScheme.primary,
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add contact")
+            }
+        },
+    ) { paddingValues ->
+        if (groupedContacts.pinned.isEmpty() && groupedContacts.all.isEmpty()) {
+            EmptyContactsState(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+            )
+        } else {
+            LazyColumn(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .consumeWindowInsets(paddingValues),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // Pinned contacts section
+                if (groupedContacts.pinned.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "PINNED",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+                        )
+                    }
+                    items(
+                        groupedContacts.pinned,
+                        key = { contact -> "pinned_${contact.destinationHash}" },
+                    ) { contact ->
+                        // Per-card menu state and haptic feedback
+                        val hapticFeedback = LocalHapticFeedback.current
+                        var showMenu by remember { mutableStateOf(false) }
+
+                        // Wrap card and menu in Box to anchor menu to card
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            ContactListItem(
+                                contact = contact,
+                                onClick = { onContactClick(contact.destinationHash, contact.displayName) },
+                                onPinClick = { viewModel.togglePin(contact.destinationHash) },
+                                onLongPress = {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showMenu = true
+                                },
+                            )
+
+                            // Context menu anchored to this card
+                            ContactContextMenu(
+                                expanded = showMenu,
+                                onDismiss = { showMenu = false },
+                                isPinned = contact.isPinned,
+                                contactName = contact.displayName,
+                                onPin = {
+                                    viewModel.togglePin(contact.destinationHash)
+                                    showMenu = false
+                                },
+                                onEditNickname = {
+                                    editNicknameContactHash = contact.destinationHash
+                                    editNicknameCurrentValue = contact.customNickname
+                                    showEditNicknameDialog = true
+                                    showMenu = false
+                                },
+                                onViewDetails = {
+                                    onViewPeerDetails(contact.destinationHash)
+                                    showMenu = false
+                                },
+                                onRemove = {
+                                    viewModel.deleteContact(contact.destinationHash)
+                                    showMenu = false
+                                },
+                            )
+                        }
+                    }
+                }
+
+                // All contacts section
+                if (groupedContacts.all.isNotEmpty()) {
+                    if (groupedContacts.pinned.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "ALL CONTACTS",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
+                            )
+                        }
+                    }
+                    items(
+                        groupedContacts.all,
+                        key = { contact -> contact.destinationHash },
+                    ) { contact ->
+                        // Per-card menu state and haptic feedback
+                        val hapticFeedback = LocalHapticFeedback.current
+                        var showMenu by remember { mutableStateOf(false) }
+
+                        // Wrap card and menu in Box to anchor menu to card
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            ContactListItem(
+                                contact = contact,
+                                onClick = { onContactClick(contact.destinationHash, contact.displayName) },
+                                onPinClick = { viewModel.togglePin(contact.destinationHash) },
+                                onLongPress = {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showMenu = true
+                                },
+                            )
+
+                            // Context menu anchored to this card
+                            ContactContextMenu(
+                                expanded = showMenu,
+                                onDismiss = { showMenu = false },
+                                isPinned = contact.isPinned,
+                                contactName = contact.displayName,
+                                onPin = {
+                                    viewModel.togglePin(contact.destinationHash)
+                                    showMenu = false
+                                },
+                                onEditNickname = {
+                                    editNicknameContactHash = contact.destinationHash
+                                    editNicknameCurrentValue = contact.customNickname
+                                    showEditNicknameDialog = true
+                                    showMenu = false
+                                },
+                                onViewDetails = {
+                                    onViewPeerDetails(contact.destinationHash)
+                                    showMenu = false
+                                },
+                                onRemove = {
+                                    viewModel.deleteContact(contact.destinationHash)
+                                    showMenu = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Add contact bottom sheet
+    if (showAddContactSheet) {
+        AddContactBottomSheet(
+            onDismiss = { showAddContactSheet = false },
+            onScanQrCode = {
+                showAddContactSheet = false
+                onNavigateToQrScanner()
+            },
+            onManualEntry = {
+                showAddContactSheet = false
+                showManualEntryDialog = true
+            },
+        )
+    }
+
+    // Manual entry dialog
+    if (showManualEntryDialog) {
+        ManualEntryDialog(
+            onDismiss = { showManualEntryDialog = false },
+            onConfirm = { identityString, nickname ->
+                viewModel.addContactFromQrCode(identityString, nickname)
+                showManualEntryDialog = false
+            },
+        )
+    }
+
+    // Deep link confirmation dialog
+    if (showDeepLinkConfirmation && deepLinkDestinationHash != null) {
+        AddContactConfirmationDialog(
+            destinationHash = deepLinkDestinationHash!!,
+            onDismiss = {
+                showDeepLinkConfirmation = false
+                deepLinkDestinationHash = null
+                deepLinkPublicKey = null
+                onDeepLinkContactProcessed()
+            },
+            onConfirm = { nickname ->
+                // Add the contact
+                val lxmaUrl = "lxma://$deepLinkDestinationHash:${deepLinkPublicKey?.joinToString("") { "%02x".format(it) }}"
+                viewModel.addContactFromQrCode(lxmaUrl, nickname)
+                showDeepLinkConfirmation = false
+                deepLinkDestinationHash = null
+                deepLinkPublicKey = null
+                onDeepLinkContactProcessed()
+            },
+        )
+    }
+
+    // Contact already exists dialog
+    if (showContactExistsDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showContactExistsDialog = false
+                existingContactName = null
+            },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Contact Exists",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            },
+            title = {
+                Text(
+                    text = "Contact Already Added",
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            },
+            text = {
+                Text(
+                    text =
+                        if (existingContactName != null) {
+                            "This contact is already in your contacts list as \"$existingContactName\"."
+                        } else {
+                            "This contact is already in your contacts list."
+                        },
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showContactExistsDialog = false
+                        existingContactName = null
+                    },
+                ) {
+                    Text("OK")
+                }
+            },
+        )
+    }
+
+    // Edit nickname dialog
+    if (showEditNicknameDialog && editNicknameContactHash != null) {
+        EditNicknameDialog(
+            destinationHash = editNicknameContactHash!!,
+            currentNickname = editNicknameCurrentValue,
+            onDismiss = {
+                showEditNicknameDialog = false
+                editNicknameContactHash = null
+                editNicknameCurrentValue = null
+            },
+            onConfirm = { newNickname ->
+                viewModel.updateNickname(editNicknameContactHash!!, newNickname)
+                showEditNicknameDialog = false
+                editNicknameContactHash = null
+                editNicknameCurrentValue = null
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ContactListItem(
+    contact: EnrichedContact,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onPinClick: () -> Unit,
+    onLongPress: () -> Unit = {},
+) {
+    Card(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongPress,
+                ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Identicon with online indicator
+            Box {
+                Identicon(
+                    hash = contact.publicKey,
+                    size = 48.dp,
+                )
+
+                // Online indicator
+                if (contact.isOnline) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(14.dp)
+                                .align(Alignment.BottomEnd)
+                                .background(MeshConnected, CircleShape)
+                                .clip(CircleShape),
+                    )
+                }
+            }
+
+            // Contact info
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                // Display name with source badge
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = contact.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+
+                    // Source badge
+                    val (badgeIcon, badgeColor) =
+                        when (contact.addedVia) {
+                            "ANNOUNCE" -> Icons.Default.Star to MaterialTheme.colorScheme.tertiary
+                            "QR_CODE" -> Icons.Default.QrCode to MaterialTheme.colorScheme.secondary
+                            "MANUAL" -> Icons.Default.Edit to MaterialTheme.colorScheme.secondary
+                            else -> Icons.Default.Person to MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    Icon(
+                        imageVector = badgeIcon,
+                        contentDescription = "Added via ${contact.addedVia}",
+                        modifier = Modifier.size(16.dp),
+                        tint = badgeColor,
+                    )
+                }
+
+                // Destination hash
+                Text(
+                    text = "${contact.destinationHash.take(12)}...",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                // Status line
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val lastSeen = contact.lastSeenTimestamp
+                    if (lastSeen != null) {
+                        Text(
+                            text = if (contact.isOnline) "Online" else formatRelativeTime(lastSeen),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (contact.isOnline) MeshConnected else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+
+                        if (contact.isOnline && contact.hops != null) {
+                            Text(
+                                text = "• ${contact.hops} hops",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "Never seen",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    // Show first tag if exists
+                    val tags = contact.getTagsList()
+                    if (tags.isNotEmpty()) {
+                        Text(
+                            text = "• ${tags.first()}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+
+            // Pin button
+            IconButton(onClick = onPinClick) {
+                Icon(
+                    imageVector = if (contact.isPinned) Icons.Filled.Star else Icons.Outlined.Star,
+                    contentDescription = if (contact.isPinned) "Unpin" else "Pin",
+                    tint = if (contact.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ContactContextMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    isPinned: Boolean,
+    contactName: String,
+    onPin: () -> Unit,
+    onEditNickname: () -> Unit,
+    onViewDetails: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = 3.dp,
+        offset = DpOffset(x = 8.dp, y = 0.dp),
+    ) {
+        // Pin/Unpin contact
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = if (isPinned) Icons.Filled.Star else Icons.Outlined.Star,
+                    contentDescription = null,
+                    tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+            },
+            text = {
+                Text(if (isPinned) "Unpin Contact" else "Pin Contact")
+            },
+            onClick = onPin,
+        )
+
+        HorizontalDivider()
+
+        // View peer details
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                )
+            },
+            text = {
+                Text("View Peer Details")
+            },
+            onClick = onViewDetails,
+        )
+
+        HorizontalDivider()
+
+        // Edit nickname
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = null,
+                )
+            },
+            text = {
+                Text("Edit Nickname")
+            },
+            onClick = onEditNickname,
+        )
+
+        HorizontalDivider()
+
+        // Remove from contacts (destructive action)
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            text = {
+                Text(
+                    text = "Remove from Contacts",
+                    color = MaterialTheme.colorScheme.error,
+                )
+            },
+            onClick = onRemove,
+        )
+    }
+}
+
+@Composable
+fun EmptyContactsState(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Default.People,
+            contentDescription = null,
+            modifier = Modifier.size(96.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "No contacts yet",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Star peers in the Announce Stream\nor add contacts via QR code",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.padding(horizontal = 32.dp),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddContactBottomSheet(
+    onDismiss: () -> Unit,
+    onScanQrCode: () -> Unit,
+    onManualEntry: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        contentWindowInsets = { WindowInsets(0) },
+        modifier = Modifier.systemBarsPadding(),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth(),
+        ) {
+            Text(
+                text = "Add Contact",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            )
+
+            Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // Scan QR Code option
+            ListItem(
+                headlineContent = { Text("Scan QR Code") },
+                supportingContent = { Text("Scan a contact's QR code to add them") },
+                leadingContent = {
+                    Icon(
+                        Icons.Default.QrCodeScanner,
+                        contentDescription = null,
+                    )
+                },
+                modifier =
+                    Modifier.clickable {
+                        onDismiss()
+                        onScanQrCode()
+                    },
+            )
+
+            // Manual Entry option
+            ListItem(
+                headlineContent = { Text("Manual Entry") },
+                supportingContent = { Text("Paste RNS identity string") },
+                leadingContent = {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = null,
+                    )
+                },
+                modifier = Modifier.clickable { onManualEntry() },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ManualEntryDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (identityString: String, nickname: String?) -> Unit,
+) {
+    var identityString by remember { mutableStateOf("") }
+    var nickname by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Contact Manually") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    text = "Paste the LXMF identity string (format: lxma://hash:pubkey)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                OutlinedTextField(
+                    value = identityString,
+                    onValueChange = {
+                        // VALIDATION: Trim whitespace automatically
+                        identityString = it.trim()
+                        errorMessage = null
+                    },
+                    label = { Text("LXMF Identity String") },
+                    placeholder = { Text("lxma://a1b2c3...") },
+                    singleLine = false,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = errorMessage != null,
+                    supportingText =
+                        if (errorMessage != null) {
+                            { Text(errorMessage!!, color = MaterialTheme.colorScheme.error) }
+                        } else {
+                            null
+                        },
+                )
+
+                OutlinedTextField(
+                    value = nickname,
+                    onValueChange = { newValue ->
+                        // VALIDATION: Enforce nickname length limit
+                        if (newValue.length <= ValidationConstants.MAX_NICKNAME_LENGTH) {
+                            nickname = newValue
+                        }
+                    },
+                    label = { Text("Nickname (optional)") },
+                    placeholder = { Text("Enter a name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = {
+                        Text("${nickname.length}/${ValidationConstants.MAX_NICKNAME_LENGTH}")
+                    },
+                    isError = nickname.length >= ValidationConstants.MAX_NICKNAME_LENGTH,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    // VALIDATION: Use InputValidator for robust validation
+                    when (val result = InputValidator.validateIdentityString(identityString)) {
+                        is ValidationResult.Error -> {
+                            errorMessage = result.message
+                            return@TextButton
+                        }
+                        is ValidationResult.Success -> {
+                            // Validation passed, proceed
+                            onConfirm(identityString, nickname.ifBlank { null })
+                        }
+                    }
+                },
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
+fun EditNicknameDialog(
+    destinationHash: String,
+    currentNickname: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (String?) -> Unit,
+) {
+    var nickname by remember { mutableStateOf(currentNickname ?: "") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Nickname") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    text = "Set a custom nickname for this contact",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                // Show destination hash for context
+                Text(
+                    text = "Contact: ${destinationHash.take(12)}...",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+
+                OutlinedTextField(
+                    value = nickname,
+                    onValueChange = { newValue ->
+                        // VALIDATION: Enforce nickname length limit
+                        if (newValue.length <= ValidationConstants.MAX_NICKNAME_LENGTH) {
+                            nickname = newValue
+                        }
+                    },
+                    label = { Text("Nickname") },
+                    placeholder = { Text("Enter a custom name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = {
+                        Text("${nickname.length}/${ValidationConstants.MAX_NICKNAME_LENGTH}")
+                    },
+                    isError = nickname.length >= ValidationConstants.MAX_NICKNAME_LENGTH,
+                    trailingIcon = {
+                        if (nickname.isNotEmpty()) {
+                            IconButton(onClick = { nickname = "" }) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Clear nickname",
+                                )
+                            }
+                        }
+                    },
+                )
+
+                if (nickname.isEmpty() && currentNickname != null) {
+                    Text(
+                        text = "Clearing the nickname will use the announce name if available",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(nickname.ifBlank { null })
+                },
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}

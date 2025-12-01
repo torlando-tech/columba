@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup configuration for Columba
+
+  SECURITY POLICY:
+  - Database (contacts, messages, announces): BACKED UP
+  - Identity files (private keys): EXCLUDED (manual export required)
+  - Shared preferences: BACKED UP
+  - Cache: EXCLUDED
+
+  This follows security best practices by requiring users to manually
+  export/import their Reticulum identity keys while preserving their
+  data (contacts, messages, etc.) on reinstall.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- Include database and shared preferences -->
+        <include domain="database" path="." />
+        <include domain="sharedpref" path="." />
+
+        <!-- Include files, but exclude identity files (contain private keys) -->
+        <include domain="file" path="." />
+        <exclude domain="file" path="reticulum/" />
+        <exclude domain="file" path=".reticulum/" />
+    </cloud-backup>
+
+    <!-- Device-to-device transfer has same rules as cloud backup -->
+    <device-transfer>
+        <include domain="database" path="." />
+        <include domain="sharedpref" path="." />
+
+        <!-- Include files, but exclude identity files (contain private keys) -->
+        <include domain="file" path="." />
+        <exclude domain="file" path="reticulum/" />
+        <exclude domain="file" path=".reticulum/" />
+    </device-transfer>
+</data-extraction-rules>

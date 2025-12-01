@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Main app theme (used after splash) -->
+    <style name="Theme.Columba" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Splash screen theme for Android 13+ with icon_preferred behavior -->
+    <style name="Theme.Columba.Splash" parent="Theme.SplashScreen">
+        <item name="android:windowSplashScreenBackground">#C471ED</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenBehavior">icon_preferred</item>
+        <item name="postSplashScreenTheme">@style/Theme.Columba</item>
+    </style>
+</resources>

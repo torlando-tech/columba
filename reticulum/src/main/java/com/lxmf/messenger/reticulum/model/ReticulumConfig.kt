@@ -49,6 +49,8 @@ sealed class InterfaceConfig {
      * @param targetPort TCP port number of the remote server
      * @param kissFraming Whether to use KISS framing (for connecting to TNCs/modems)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
+     * @param networkName Optional IFAC network name for cryptographic authentication
+     * @param passphrase Optional IFAC passphrase for cryptographic authentication
      */
     data class TCPClient(
         override val name: String = "TCP Connection",
@@ -57,6 +59,8 @@ sealed class InterfaceConfig {
         val targetPort: Int,
         val kissFraming: Boolean = false,
         val mode: String = "full",
+        val networkName: String? = null,
+        val passphrase: String? = null,
     ) : InterfaceConfig()
 
     /**

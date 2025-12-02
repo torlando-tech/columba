@@ -337,6 +337,15 @@ class ReticulumWrapper:
                 if kiss_framing:
                     config_lines.append("    kiss_framing = True")
 
+                # IFAC parameters
+                network_name = iface.get("network_name")
+                if network_name:
+                    config_lines.append(f"    network_name = {network_name}")
+
+                passphrase = iface.get("passphrase")
+                if passphrase:
+                    config_lines.append(f"    passphrase = {passphrase}")
+
                 mode = iface.get("mode", "full")
                 if mode != "full":
                     config_lines.append(f"    mode = {mode}")

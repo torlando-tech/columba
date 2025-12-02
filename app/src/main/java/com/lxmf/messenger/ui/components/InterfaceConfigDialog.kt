@@ -12,6 +12,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
@@ -20,12 +22,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -290,6 +295,71 @@ fun TCPClientFields(
         singleLine = true,
         isError = configState.targetPortError != null,
         supportingText = configState.targetPortError?.let { { Text(it) } },
+    )
+
+    // Network Name (IFAC)
+    OutlinedTextField(
+        value = configState.networkName,
+        onValueChange = { onConfigUpdate(configState.copy(networkName = it)) },
+        label = { Text("Network Name") },
+        placeholder = { Text("Optional") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        supportingText = {
+            Text(
+                "Optional: Sets the virtual network name for this segment. " + 
+                    "This allows multiple separate networks to exist on the same " +
+                    "physical channel or medium.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+    )
+
+    // Passphrase (IFAC)
+    OutlinedTextField(
+        value = configState.passphrase,
+        onValueChange = { onConfigUpdate(configState.copy(passphrase = it)) },
+        label = { Text("Passphrase") },
+        placeholder = { Text("Optional") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        visualTransformation =
+            if (configState.passphraseVisible) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+        trailingIcon = {
+            IconButton(
+                onClick = {
+                    onConfigUpdate(configState.copy(passphraseVisible = !configState.passphraseVisible))
+                },
+            ) {
+                Icon(
+                    imageVector =
+                        if (configState.passphraseVisible) {
+                            Icons.Default.VisibilityOff
+                        } else {
+                            Icons.Default.Visibility
+                        },
+                    contentDescription =
+                        if (configState.passphraseVisible) {
+                            "Hide passphrase"
+                        } else {
+                            "Show passphrase"
+                        },
+                )
+            }
+        },
+        supportingText = {
+            Text(
+                "Optional: Sets an authentication passphrase on the interface. " +
+                    "This can be used in conjunction with Network Name, or alone.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
     )
 }
 

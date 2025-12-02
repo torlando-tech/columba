@@ -63,6 +63,9 @@ data class InterfaceConfigState(
     // TCPClient fields
     val targetHost: String = "",
     val targetPort: String = "4242",
+    val networkName: String = "",
+    val passphrase: String = "",
+    val passphraseVisible: Boolean = false,
     // AndroidBLE fields
     val deviceName: String = "",
     val maxConnections: String = "7",
@@ -375,6 +378,27 @@ class InterfaceManagementViewModel
         }
 
         /**
+         * Update network name for TCP interface.
+         */
+        fun updateNetworkName(value: String) {
+            _configState.update { it.copy(networkName = value) }
+        }
+
+        /**
+         * Update passphrase for TCP interface.
+         */
+        fun updatePassphrase(value: String) {
+            _configState.update { it.copy(passphrase = value) }
+        }
+
+        /**
+         * Toggle passphrase visibility.
+         */
+        fun togglePassphraseVisibility() {
+            _configState.update { it.copy(passphraseVisible = !it.passphraseVisible) }
+        }
+
+        /**
          * Show error message.
          */
         private fun showError(message: String) {
@@ -518,6 +542,8 @@ class InterfaceManagementViewModel
                         enabled = config.enabled,
                         targetHost = config.targetHost,
                         targetPort = config.targetPort.toString(),
+                        networkName = config.networkName ?: "",
+                        passphrase = config.passphrase ?: "",
                         mode = config.mode,
                     )
 
@@ -559,6 +585,8 @@ class InterfaceManagementViewModel
                         targetPort = state.targetPort.toIntOrNull() ?: 4242,
                         kissFraming = false, // Always false, removed from UI
                         mode = state.mode,
+                        networkName = state.networkName.trim().ifEmpty { null },
+                        passphrase = state.passphrase.ifEmpty { null },
                     )
 
                 "AndroidBLE" ->

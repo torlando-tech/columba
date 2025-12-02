@@ -139,6 +139,8 @@ class InterfaceRepository
                             put("target_port", config.targetPort)
                             put("kiss_framing", config.kissFraming)
                             put("mode", config.mode)
+                            config.networkName?.let { put("network_name", it) }
+                            config.passphrase?.let { put("passphrase", it) }
                         }.toString()
 
                     is InterfaceConfig.RNode ->
@@ -242,6 +244,8 @@ class InterfaceRepository
                             targetPort = targetPort,
                             kissFraming = json.optBoolean("kiss_framing", false),
                             mode = json.optString("mode", "full"),
+                            networkName = json.optString("network_name", "").ifEmpty { null },
+                            passphrase = json.optString("passphrase", "").ifEmpty { null },
                         )
                     }
 

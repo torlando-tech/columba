@@ -123,9 +123,15 @@ print_success "Device connected: $DEVICE_INFO"
 # Step 4: Install APK
 print_info "Installing APK to device..."
 if ! adb install -r -d "$APK_PATH" 2>&1; then
-    print_info "Installation failed, attempting to uninstall and reinstall..."
-    adb uninstall "$PACKAGE_NAME" 2>/dev/null || true
-    adb install "$APK_PATH"
+    echo ""
+    print_error "Installation failed (likely signature mismatch)"
+    echo ""
+    echo "This usually means the Gradle daemon has stale environment variables."
+    echo "Try: ./gradlew --stop && ./deploy.sh"
+    echo ""
+    echo "If you want to uninstall and lose app data, run:"
+    echo "  adb uninstall $PACKAGE_NAME && ./deploy.sh"
+    exit 1
 fi
 print_success "Installation complete"
 

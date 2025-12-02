@@ -127,6 +127,9 @@ android {
             buildConfigField("Boolean", "USE_RUST", "false")
         }
         debug {
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             buildConfigField("Boolean", "USE_RUST", "false")
             enableUnitTestCoverage = true
             enableAndroidTestCoverage = true

@@ -2179,7 +2179,7 @@ class ReticulumWrapper:
                     errors.append(error_msg)
                     log_error("ReticulumWrapper", "restore_all_peer_identities", f"{error_msg}")
 
-            log_error("ReticulumWrapper", "restore_all_peer_identities", f"Restored {success_count} peer identities, {len(errors)} errors")
+            log_info("ReticulumWrapper", "restore_all_peer_identities", f"Restored {success_count} peer identities, {len(errors)} errors")
             return {"success_count": success_count, "errors": errors}
 
         except Exception as e:

@@ -84,4 +84,10 @@ interface ConversationDao {
 
     @Query("SELECT * FROM conversations WHERE identityHash = :identityHash")
     suspend fun getAllConversationsList(identityHash: String): List<ConversationEntity>
+
+    /**
+     * Bulk insert conversations (for import).
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertConversations(conversations: List<ConversationEntity>)
 }

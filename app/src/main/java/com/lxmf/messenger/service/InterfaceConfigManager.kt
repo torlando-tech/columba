@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Process
 import android.util.Log
+import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
@@ -39,6 +40,7 @@ class InterfaceConfigManager
         private val identityRepository: IdentityRepository,
         private val conversationRepository: ConversationRepository,
         private val messageCollector: MessageCollector,
+        private val database: ColumbaDatabase,
     ) {
         companion object {
             private const val TAG = "InterfaceConfigManager"
@@ -100,7 +102,8 @@ class InterfaceConfigManager
                     val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
                     // Get list of running processes
                     val runningProcesses = activityManager.runningAppProcesses ?: emptyList()
-                    val reticulumProcess = runningProcesses.find { it.processName == "com.lxmf.messenger:reticulum" }
+                    val reticulumProcessName = "${context.packageName}:reticulum"
+                    val reticulumProcess = runningProcesses.find { it.processName == reticulumProcessName }
 
                     if (reticulumProcess != null) {
                         Log.d(TAG, "Found reticulum process PID ${reticulumProcess.pid}, killing it...")
@@ -204,6 +207,33 @@ class InterfaceConfigManager
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Error restoring peer identities", e)
+                    // Not fatal - continue
+                }
+
+                // Step 9b: Restore announce peer identities
+                Log.d(TAG, "Step 9b: Restoring announce peer identities...")
+                try {
+                    val announces = database.announceDao().getAllAnnouncesSync()
+                    Log.d(TAG, "Retrieved ${announces.size} announce peer identities from database")
+
+                    if (announces.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
+                        // Map announces to peer identity format (destinationHash, publicKey)
+                        val announcePeerIdentities = announces.map { announce ->
+                            announce.destinationHash to announce.publicKey
+                        }
+                        reticulumProtocol.restorePeerIdentities(announcePeerIdentities)
+                            .onSuccess { count ->
+                                Log.d(TAG, "✓ Restored $count announce peer identities")
+                            }
+                            .onFailure { error ->
+                                Log.w(TAG, "Failed to restore announce peer identities: ${error.message}", error)
+                                // Not fatal - continue
+                            }
+                    } else {
+                        Log.d(TAG, "No announce peer identities to restore")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error restoring announce peer identities", e)
                     // Not fatal - continue
                 }
 

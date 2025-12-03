@@ -15,11 +15,12 @@ data class MigrationBundle(
     val messages: List<MessageExport>,
     val contacts: List<ContactExport>,
     val announces: List<AnnounceExport> = emptyList(),
+    val interfaces: List<InterfaceExport> = emptyList(),
     val settings: SettingsExport,
     val attachmentManifest: List<AttachmentRef> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 2
+        const val CURRENT_VERSION = 3
     }
 }
 
@@ -104,6 +105,18 @@ data class AnnounceExport(
 )
 
 /**
+ * Exported interface configuration.
+ */
+@Serializable
+data class InterfaceExport(
+    val name: String,
+    val type: String,
+    val enabled: Boolean,
+    val configJson: String,
+    val displayOrder: Int,
+)
+
+/**
  * Exported user settings.
  */
 @Serializable
@@ -139,6 +152,7 @@ sealed class ExportResult {
         val messageCount: Int,
         val contactCount: Int,
         val announceCount: Int,
+        val interfaceCount: Int,
         val attachmentCount: Int,
     ) : ExportResult()
 
@@ -154,6 +168,7 @@ sealed class ImportResult {
         val messagesImported: Int,
         val contactsImported: Int,
         val announcesImported: Int,
+        val interfacesImported: Int,
         val attachmentsImported: Int,
     ) : ImportResult()
 
@@ -171,6 +186,7 @@ data class MigrationPreview(
     val messageCount: Int,
     val contactCount: Int,
     val announceCount: Int,
+    val interfaceCount: Int,
     val attachmentCount: Int,
     val identityNames: List<String>,
 )

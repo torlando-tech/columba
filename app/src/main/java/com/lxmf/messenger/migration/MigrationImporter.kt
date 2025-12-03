@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import android.util.Base64
 import android.util.Log
+import com.lxmf.messenger.data.database.InterfaceDatabase
+import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.data.db.entity.ContactEntity
@@ -13,6 +15,7 @@ import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -31,6 +34,7 @@ class MigrationImporter
     constructor(
         @ApplicationContext private val context: Context,
         private val database: ColumbaDatabase,
+        private val interfaceDatabase: InterfaceDatabase,
         private val reticulumProtocol: ReticulumProtocol,
         private val settingsRepository: SettingsRepository,
     ) {
@@ -65,6 +69,7 @@ class MigrationImporter
                             messageCount = bundle.messages.size,
                             contactCount = bundle.contacts.size,
                             announceCount = bundle.announces.size,
+                            interfaceCount = bundle.interfaces.size,
                             attachmentCount = bundle.attachmentManifest.size,
                             identityNames = bundle.identities.map { it.displayName },
                         ),
@@ -206,17 +211,43 @@ class MigrationImporter
                     }
                     database.announceDao().insertAnnounces(announceEntities)
                     Log.d(TAG, "Imported ${announceEntities.size} announces")
-                    onProgress(0.8f)
+                    onProgress(0.78f)
 
-                    // 7. Import attachments
+                    // 7. Import interfaces (checking for duplicates by name+type)
+                    var interfacesImported = 0
+                    val existingInterfaces = interfaceDatabase.interfaceDao()
+                        .getAllInterfaces().first()
+                    val existingKeys = existingInterfaces.map { "${it.name}|${it.type}" }.toSet()
+
+                    bundle.interfaces.forEach { iface ->
+                        val key = "${iface.name}|${iface.type}"
+                        if (key !in existingKeys) {
+                            interfaceDatabase.interfaceDao().insertInterface(
+                                InterfaceEntity(
+                                    name = iface.name,
+                                    type = iface.type,
+                                    enabled = iface.enabled,
+                                    configJson = iface.configJson,
+                                    displayOrder = iface.displayOrder,
+                                ),
+                            )
+                            interfacesImported++
+                        } else {
+                            Log.d(TAG, "Interface '${iface.name}' (${iface.type}) already exists, skipping")
+                        }
+                    }
+                    Log.d(TAG, "Imported $interfacesImported interfaces")
+                    onProgress(0.82f)
+
+                    // 8. Import attachments
                     var attachmentsImported = 0
                     if (bundle.attachmentManifest.isNotEmpty()) {
                         attachmentsImported = importAttachments(uri, bundle.attachmentManifest)
                     }
                     Log.d(TAG, "Imported $attachmentsImported attachments")
-                    onProgress(0.9f)
+                    onProgress(0.92f)
 
-                    // 8. Import settings
+                    // 9. Import settings
                     importSettings(bundle.settings)
                     Log.d(TAG, "Imported settings")
                     onProgress(1.0f)
@@ -228,6 +259,7 @@ class MigrationImporter
                         messagesImported = messageEntities.size,
                         contactsImported = contactEntities.size,
                         announcesImported = announceEntities.size,
+                        interfacesImported = interfacesImported,
                         attachmentsImported = attachmentsImported,
                     )
                 } catch (e: Exception) {

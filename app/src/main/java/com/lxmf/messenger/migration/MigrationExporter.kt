@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import androidx.core.content.FileProvider
+import com.lxmf.messenger.data.database.InterfaceDatabase
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -36,6 +37,7 @@ class MigrationExporter
     constructor(
         @ApplicationContext private val context: Context,
         private val database: ColumbaDatabase,
+        private val interfaceDatabase: InterfaceDatabase,
         private val settingsRepository: SettingsRepository,
     ) {
         companion object {
@@ -186,7 +188,21 @@ class MigrationExporter
                     Log.d(TAG, "Collected ${announceExports.size} announces")
                     onProgress(0.6f)
 
-                    // 4. Collect settings
+                    // 4b. Collect interface configurations
+                    val interfaces = interfaceDatabase.interfaceDao().getAllInterfaces().first()
+                    val interfaceExports = interfaces.map { iface ->
+                        InterfaceExport(
+                            name = iface.name,
+                            type = iface.type,
+                            enabled = iface.enabled,
+                            configJson = iface.configJson,
+                            displayOrder = iface.displayOrder,
+                        )
+                    }
+                    Log.d(TAG, "Collected ${interfaceExports.size} interfaces")
+                    onProgress(0.62f)
+
+                    // 5. Collect settings
                     val settingsExport = SettingsExport(
                         notificationsEnabled = settingsRepository.notificationsEnabledFlow.first(),
                         notificationReceivedMessage = settingsRepository
@@ -230,18 +246,19 @@ class MigrationExporter
                     Log.d(TAG, "Found ${attachmentRefs.size} attachments to export")
                     onProgress(0.7f)
 
-                    // 6. Create migration bundle
+                    // 7. Create migration bundle
                     val bundle = MigrationBundle(
                         identities = identityExports,
                         conversations = allConversations,
                         messages = allMessages,
                         contacts = allContacts,
                         announces = announceExports,
+                        interfaces = interfaceExports,
                         settings = settingsExport,
                         attachmentManifest = attachmentRefs,
                     )
 
-                    // 7. Create ZIP file
+                    // 8. Create ZIP file
                     val exportDir = File(context.cacheDir, EXPORT_DIR).also { it.mkdirs() }
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US)
                     val timestamp = dateFormat.format(Date())
@@ -334,12 +351,15 @@ class MigrationExporter
                     }
 
                     val announceCount = database.announceDao().getAnnounceCount()
+                    val interfaceCount = interfaceDatabase.interfaceDao()
+                        .getAllInterfaces().first().size
 
                     ExportResult.Success(
                         identityCount = identities.size,
                         messageCount = messageCount,
                         contactCount = contactCount,
                         announceCount = announceCount,
+                        interfaceCount = interfaceCount,
                         attachmentCount = attachmentCount,
                     )
                 } catch (e: Exception) {

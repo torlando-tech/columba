@@ -111,7 +111,8 @@ fun MigrationScreen(
                 snackbarHostState.showSnackbar(
                     "Import complete! ${state.result.identitiesImported} identities, " +
                         "${state.result.messagesImported} messages, " +
-                        "${state.result.announcesImported} announces imported.",
+                        "${state.result.announcesImported} announces, " +
+                        "${state.result.interfacesImported} interfaces imported.",
                 )
             }
             is MigrationUiState.Error -> {
@@ -240,6 +241,7 @@ private fun ExportSection(
                             Text("${exportPreview.messageCount} messages")
                             Text("${exportPreview.contactCount} contacts")
                             Text("${exportPreview.announceCount} announces")
+                            Text("${exportPreview.interfaceCount} interfaces")
                             Text("${exportPreview.attachmentCount} attachments")
                         }
                     }
@@ -393,7 +395,8 @@ private fun ImportSection(
                                     "${uiState.result.identitiesImported} identities, " +
                                         "${uiState.result.messagesImported} messages, " +
                                         "${uiState.result.contactsImported} contacts, " +
-                                        "${uiState.result.announcesImported} announces",
+                                        "${uiState.result.announcesImported} announces, " +
+                                        "${uiState.result.interfacesImported} interfaces",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -504,6 +507,7 @@ private fun ImportConfirmDialog(
                         Text("${preview.messageCount} messages")
                         Text("${preview.contactCount} contacts")
                         Text("${preview.announceCount} announces")
+                        Text("${preview.interfaceCount} interfaces")
                         Text("${preview.attachmentCount} attachments")
                     }
                 }

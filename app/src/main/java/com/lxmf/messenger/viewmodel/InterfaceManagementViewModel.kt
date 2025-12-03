@@ -69,6 +69,16 @@ data class InterfaceConfigState(
     // AndroidBLE fields
     val deviceName: String = "",
     val maxConnections: String = "7",
+    // RNode fields
+    val targetDeviceName: String = "",
+    val connectionMode: String = "classic", // "classic" or "ble"
+    val frequency: String = "915000000", // Hz
+    val bandwidth: String = "125000", // Hz
+    val txPower: String = "7", // dBm
+    val spreadingFactor: String = "7",
+    val codingRate: String = "5",
+    val stAlock: String = "", // Short-term airtime limit % (optional)
+    val ltAlock: String = "", // Long-term airtime limit % (optional)
     // Common fields
     val mode: String = "roaming",
     // Validation
@@ -79,6 +89,12 @@ data class InterfaceConfigState(
     val dataPortError: String? = null,
     val deviceNameError: String? = null,
     val maxConnectionsError: String? = null,
+    val targetDeviceNameError: String? = null,
+    val frequencyError: String? = null,
+    val bandwidthError: String? = null,
+    val txPowerError: String? = null,
+    val spreadingFactorError: String? = null,
+    val codingRateError: String? = null,
 )
 
 /**
@@ -566,6 +582,23 @@ class InterfaceManagementViewModel
                         mode = config.mode,
                     )
 
+                is InterfaceConfig.RNode ->
+                    InterfaceConfigState(
+                        name = config.name,
+                        type = "RNode",
+                        enabled = config.enabled,
+                        targetDeviceName = config.targetDeviceName,
+                        connectionMode = config.connectionMode,
+                        frequency = config.frequency.toString(),
+                        bandwidth = config.bandwidth.toString(),
+                        txPower = config.txPower.toString(),
+                        spreadingFactor = config.spreadingFactor.toString(),
+                        codingRate = config.codingRate.toString(),
+                        stAlock = config.stAlock?.toString() ?: "",
+                        ltAlock = config.ltAlock?.toString() ?: "",
+                        mode = config.mode,
+                    )
+
                 else -> InterfaceConfigState() // Default for unsupported types
             }
         }
@@ -604,6 +637,22 @@ class InterfaceManagementViewModel
                         enabled = state.enabled,
                         deviceName = state.deviceName.trim(),
                         maxConnections = state.maxConnections.toIntOrNull() ?: 7,
+                        mode = state.mode,
+                    )
+
+                "RNode" ->
+                    InterfaceConfig.RNode(
+                        name = state.name.trim(),
+                        enabled = state.enabled,
+                        targetDeviceName = state.targetDeviceName.trim(),
+                        connectionMode = state.connectionMode,
+                        frequency = state.frequency.toLongOrNull() ?: 915000000,
+                        bandwidth = state.bandwidth.toIntOrNull() ?: 125000,
+                        txPower = state.txPower.toIntOrNull() ?: 7,
+                        spreadingFactor = state.spreadingFactor.toIntOrNull() ?: 7,
+                        codingRate = state.codingRate.toIntOrNull() ?: 5,
+                        stAlock = state.stAlock.toDoubleOrNull(),
+                        ltAlock = state.ltAlock.toDoubleOrNull(),
                         mode = state.mode,
                     )
 

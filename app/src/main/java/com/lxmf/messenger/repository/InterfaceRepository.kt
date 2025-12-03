@@ -224,23 +224,26 @@ class InterfaceRepository
                     }
 
                     "RNode" -> {
-                        val port = json.optString("port", "")
+                        val targetDeviceName = json.getString("target_device_name")
 
-                        // Validate port path (basic check - should be non-empty)
-                        if (port.isBlank()) {
-                            Log.e(TAG, "Missing or empty RNode port path in database for '${entity.name}'")
-                            error("Missing or empty RNode port path")
+                        // Validate device name (basic check - should be non-empty)
+                        if (targetDeviceName.isBlank()) {
+                            Log.e(TAG, "Empty RNode target device name in database")
+                            error("Empty RNode target device name")
                         }
 
                         InterfaceConfig.RNode(
                             name = entity.name,
                             enabled = entity.enabled,
-                            port = port,
+                            targetDeviceName = targetDeviceName,
+                            connectionMode = json.optString("connection_mode", "classic"),
                             frequency = json.optLong("frequency", 915000000),
                             bandwidth = json.optInt("bandwidth", 125000),
                             txPower = json.optInt("tx_power", 7),
                             spreadingFactor = json.optInt("spreading_factor", 7),
                             codingRate = json.optInt("coding_rate", 5),
+                            stAlock = if (json.has("st_alock")) json.getDouble("st_alock") else null,
+                            ltAlock = if (json.has("lt_alock")) json.getDouble("lt_alock") else null,
                             mode = json.optString("mode", "full"),
                         )
                     }

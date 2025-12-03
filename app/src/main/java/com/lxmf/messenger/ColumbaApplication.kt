@@ -131,12 +131,37 @@ class ColumbaApplication : Application() {
                     android.util.Log.d("ColumbaApplication", "Service status after binding: $currentStatus")
 
                     if (currentStatus == "READY") {
-                        android.util.Log.d("ColumbaApplication", "Service already initialized and ready - skipping auto-init")
-                        // Service is already initialized, just reconnect message collector and auto-announce
-                        messageCollector.startCollecting()
-                        autoAnnounceManager.start()
-                        android.util.Log.d("ColumbaApplication", "MessageCollector and AutoAnnounceManager started")
-                        return@launch
+                        android.util.Log.d("ColumbaApplication", "Service already initialized and ready")
+
+                        // Verify service identity matches database active identity
+                        // This catches mismatches from interrupted identity switches or data imports
+                        val serviceIdentity = (reticulumProtocol as ServiceReticulumProtocol)
+                            .getLxmfIdentity().getOrNull()
+                        val serviceIdentityHash = serviceIdentity?.hash?.toHexString()
+
+                        val activeIdentity = identityRepository.getActiveIdentitySync()
+                        val dbIdentityHash = activeIdentity?.identityHash
+
+                        if (serviceIdentityHash != null && dbIdentityHash != null &&
+                            serviceIdentityHash != dbIdentityHash
+                        ) {
+                            android.util.Log.w(
+                                "ColumbaApplication",
+                                "Identity mismatch detected! Service: ${serviceIdentityHash.take(8)}..., " +
+                                    "DB: ${dbIdentityHash.take(8)}... - forcing reinitialization",
+                            )
+                            // Fall through to initialization code below to fix the mismatch
+                        } else {
+                            android.util.Log.d(
+                                "ColumbaApplication",
+                                "Identity verified (${dbIdentityHash?.take(8) ?: "none"}...) - reconnecting",
+                            )
+                            // Identity matches - just reconnect message collector and auto-announce
+                            messageCollector.startCollecting()
+                            autoAnnounceManager.start()
+                            android.util.Log.d("ColumbaApplication", "MessageCollector and AutoAnnounceManager started")
+                            return@launch
+                        }
                     } else if (currentStatus != "SHUTDOWN" && currentStatus != null &&
                         !currentStatus.startsWith("ERROR:")
                     ) {

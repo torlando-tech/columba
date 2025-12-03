@@ -202,6 +202,72 @@ class MigrationExporter
                     Log.d(TAG, "Collected ${interfaceExports.size} interfaces")
                     onProgress(0.62f)
 
+                    // 4c. Collect custom themes
+                    val customThemes = database.customThemeDao().getAllThemes().first()
+                    val customThemeExports = customThemes.map { theme ->
+                        CustomThemeExport(
+                            originalId = theme.id,
+                            name = theme.name,
+                            description = theme.description,
+                            baseTheme = theme.baseTheme,
+                            seedPrimary = theme.seedPrimary,
+                            seedSecondary = theme.seedSecondary,
+                            seedTertiary = theme.seedTertiary,
+                            createdTimestamp = theme.createdTimestamp,
+                            modifiedTimestamp = theme.modifiedTimestamp,
+                            lightPrimary = theme.lightPrimary,
+                            lightOnPrimary = theme.lightOnPrimary,
+                            lightPrimaryContainer = theme.lightPrimaryContainer,
+                            lightOnPrimaryContainer = theme.lightOnPrimaryContainer,
+                            lightSecondary = theme.lightSecondary,
+                            lightOnSecondary = theme.lightOnSecondary,
+                            lightSecondaryContainer = theme.lightSecondaryContainer,
+                            lightOnSecondaryContainer = theme.lightOnSecondaryContainer,
+                            lightTertiary = theme.lightTertiary,
+                            lightOnTertiary = theme.lightOnTertiary,
+                            lightTertiaryContainer = theme.lightTertiaryContainer,
+                            lightOnTertiaryContainer = theme.lightOnTertiaryContainer,
+                            lightError = theme.lightError,
+                            lightOnError = theme.lightOnError,
+                            lightErrorContainer = theme.lightErrorContainer,
+                            lightOnErrorContainer = theme.lightOnErrorContainer,
+                            lightBackground = theme.lightBackground,
+                            lightOnBackground = theme.lightOnBackground,
+                            lightSurface = theme.lightSurface,
+                            lightOnSurface = theme.lightOnSurface,
+                            lightSurfaceVariant = theme.lightSurfaceVariant,
+                            lightOnSurfaceVariant = theme.lightOnSurfaceVariant,
+                            lightOutline = theme.lightOutline,
+                            lightOutlineVariant = theme.lightOutlineVariant,
+                            darkPrimary = theme.darkPrimary,
+                            darkOnPrimary = theme.darkOnPrimary,
+                            darkPrimaryContainer = theme.darkPrimaryContainer,
+                            darkOnPrimaryContainer = theme.darkOnPrimaryContainer,
+                            darkSecondary = theme.darkSecondary,
+                            darkOnSecondary = theme.darkOnSecondary,
+                            darkSecondaryContainer = theme.darkSecondaryContainer,
+                            darkOnSecondaryContainer = theme.darkOnSecondaryContainer,
+                            darkTertiary = theme.darkTertiary,
+                            darkOnTertiary = theme.darkOnTertiary,
+                            darkTertiaryContainer = theme.darkTertiaryContainer,
+                            darkOnTertiaryContainer = theme.darkOnTertiaryContainer,
+                            darkError = theme.darkError,
+                            darkOnError = theme.darkOnError,
+                            darkErrorContainer = theme.darkErrorContainer,
+                            darkOnErrorContainer = theme.darkOnErrorContainer,
+                            darkBackground = theme.darkBackground,
+                            darkOnBackground = theme.darkOnBackground,
+                            darkSurface = theme.darkSurface,
+                            darkOnSurface = theme.darkOnSurface,
+                            darkSurfaceVariant = theme.darkSurfaceVariant,
+                            darkOnSurfaceVariant = theme.darkOnSurfaceVariant,
+                            darkOutline = theme.darkOutline,
+                            darkOutlineVariant = theme.darkOutlineVariant,
+                        )
+                    }
+                    Log.d(TAG, "Collected ${customThemeExports.size} custom themes")
+                    onProgress(0.64f)
+
                     // 5. Collect settings
                     val settingsExport = SettingsExport(
                         notificationsEnabled = settingsRepository.notificationsEnabledFlow.first(),
@@ -254,6 +320,7 @@ class MigrationExporter
                         contacts = allContacts,
                         announces = announceExports,
                         interfaces = interfaceExports,
+                        customThemes = customThemeExports,
                         settings = settingsExport,
                         attachmentManifest = attachmentRefs,
                     )
@@ -353,6 +420,7 @@ class MigrationExporter
                     val announceCount = database.announceDao().getAnnounceCount()
                     val interfaceCount = interfaceDatabase.interfaceDao()
                         .getAllInterfaces().first().size
+                    val customThemeCount = database.customThemeDao().getThemeCount()
 
                     ExportResult.Success(
                         identityCount = identities.size,
@@ -360,6 +428,7 @@ class MigrationExporter
                         contactCount = contactCount,
                         announceCount = announceCount,
                         interfaceCount = interfaceCount,
+                        customThemeCount = customThemeCount,
                         attachmentCount = attachmentCount,
                     )
                 } catch (e: Exception) {

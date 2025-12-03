@@ -8,6 +8,7 @@ import com.lxmf.messenger.data.database.InterfaceDatabase
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
+import com.lxmf.messenger.data.db.entity.CustomThemeEntity
 import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
@@ -70,6 +71,7 @@ class MigrationImporter
                             contactCount = bundle.contacts.size,
                             announceCount = bundle.announces.size,
                             interfaceCount = bundle.interfaces.size,
+                            customThemeCount = bundle.customThemes.size,
                             attachmentCount = bundle.attachmentManifest.size,
                             identityNames = bundle.identities.map { it.displayName },
                         ),
@@ -239,7 +241,89 @@ class MigrationImporter
                     Log.d(TAG, "Imported $interfacesImported interfaces")
                     onProgress(0.82f)
 
-                    // 8. Import attachments
+                    // 8. Import custom themes (with ID mapping for theme preference)
+                    var customThemesImported = 0
+                    val themeIdMap = mutableMapOf<Long, Long>() // old ID -> new ID
+                    val existingThemeNames = database.customThemeDao().getAllThemes().first()
+                        .map { it.name }.toSet()
+
+                    bundle.customThemes.forEach { theme ->
+                        if (theme.name !in existingThemeNames) {
+                            val entity = CustomThemeEntity(
+                                id = 0, // Auto-generate new ID
+                                name = theme.name,
+                                description = theme.description,
+                                baseTheme = theme.baseTheme,
+                                seedPrimary = theme.seedPrimary,
+                                seedSecondary = theme.seedSecondary,
+                                seedTertiary = theme.seedTertiary,
+                                createdTimestamp = theme.createdTimestamp,
+                                modifiedTimestamp = theme.modifiedTimestamp,
+                                lightPrimary = theme.lightPrimary,
+                                lightOnPrimary = theme.lightOnPrimary,
+                                lightPrimaryContainer = theme.lightPrimaryContainer,
+                                lightOnPrimaryContainer = theme.lightOnPrimaryContainer,
+                                lightSecondary = theme.lightSecondary,
+                                lightOnSecondary = theme.lightOnSecondary,
+                                lightSecondaryContainer = theme.lightSecondaryContainer,
+                                lightOnSecondaryContainer = theme.lightOnSecondaryContainer,
+                                lightTertiary = theme.lightTertiary,
+                                lightOnTertiary = theme.lightOnTertiary,
+                                lightTertiaryContainer = theme.lightTertiaryContainer,
+                                lightOnTertiaryContainer = theme.lightOnTertiaryContainer,
+                                lightError = theme.lightError,
+                                lightOnError = theme.lightOnError,
+                                lightErrorContainer = theme.lightErrorContainer,
+                                lightOnErrorContainer = theme.lightOnErrorContainer,
+                                lightBackground = theme.lightBackground,
+                                lightOnBackground = theme.lightOnBackground,
+                                lightSurface = theme.lightSurface,
+                                lightOnSurface = theme.lightOnSurface,
+                                lightSurfaceVariant = theme.lightSurfaceVariant,
+                                lightOnSurfaceVariant = theme.lightOnSurfaceVariant,
+                                lightOutline = theme.lightOutline,
+                                lightOutlineVariant = theme.lightOutlineVariant,
+                                darkPrimary = theme.darkPrimary,
+                                darkOnPrimary = theme.darkOnPrimary,
+                                darkPrimaryContainer = theme.darkPrimaryContainer,
+                                darkOnPrimaryContainer = theme.darkOnPrimaryContainer,
+                                darkSecondary = theme.darkSecondary,
+                                darkOnSecondary = theme.darkOnSecondary,
+                                darkSecondaryContainer = theme.darkSecondaryContainer,
+                                darkOnSecondaryContainer = theme.darkOnSecondaryContainer,
+                                darkTertiary = theme.darkTertiary,
+                                darkOnTertiary = theme.darkOnTertiary,
+                                darkTertiaryContainer = theme.darkTertiaryContainer,
+                                darkOnTertiaryContainer = theme.darkOnTertiaryContainer,
+                                darkError = theme.darkError,
+                                darkOnError = theme.darkOnError,
+                                darkErrorContainer = theme.darkErrorContainer,
+                                darkOnErrorContainer = theme.darkOnErrorContainer,
+                                darkBackground = theme.darkBackground,
+                                darkOnBackground = theme.darkOnBackground,
+                                darkSurface = theme.darkSurface,
+                                darkOnSurface = theme.darkOnSurface,
+                                darkSurfaceVariant = theme.darkSurfaceVariant,
+                                darkOnSurfaceVariant = theme.darkOnSurfaceVariant,
+                                darkOutline = theme.darkOutline,
+                                darkOutlineVariant = theme.darkOutlineVariant,
+                            )
+                            val newId = database.customThemeDao().insertTheme(entity)
+                            themeIdMap[theme.originalId] = newId
+                            customThemesImported++
+                        } else {
+                            Log.d(TAG, "Custom theme '${theme.name}' already exists, skipping")
+                            // Map to existing theme ID for preference restoration
+                            val existingTheme = database.customThemeDao().getThemeByName(theme.name)
+                            if (existingTheme != null) {
+                                themeIdMap[theme.originalId] = existingTheme.id
+                            }
+                        }
+                    }
+                    Log.d(TAG, "Imported $customThemesImported custom themes")
+                    onProgress(0.86f)
+
+                    // 9. Import attachments
                     var attachmentsImported = 0
                     if (bundle.attachmentManifest.isNotEmpty()) {
                         attachmentsImported = importAttachments(uri, bundle.attachmentManifest)
@@ -247,8 +331,8 @@ class MigrationImporter
                     Log.d(TAG, "Imported $attachmentsImported attachments")
                     onProgress(0.92f)
 
-                    // 9. Import settings
-                    importSettings(bundle.settings)
+                    // 10. Import settings (with theme ID mapping)
+                    importSettings(bundle.settings, themeIdMap)
                     Log.d(TAG, "Imported settings")
                     onProgress(1.0f)
 
@@ -260,6 +344,7 @@ class MigrationImporter
                         contactsImported = contactEntities.size,
                         announcesImported = announceEntities.size,
                         interfacesImported = interfacesImported,
+                        customThemesImported = customThemesImported,
                         attachmentsImported = attachmentsImported,
                     )
                 } catch (e: Exception) {
@@ -396,8 +481,12 @@ class MigrationImporter
 
         /**
          * Import settings using SettingsRepository.
+         * @param themeIdMap Maps old custom theme IDs to new IDs for theme preference restoration
          */
-        private suspend fun importSettings(settings: SettingsExport) {
+        private suspend fun importSettings(
+            settings: SettingsExport,
+            themeIdMap: Map<Long, Long>,
+        ) {
             settingsRepository.saveNotificationsEnabled(settings.notificationsEnabled)
             settingsRepository.saveNotificationReceivedMessage(settings.notificationReceivedMessage)
             settingsRepository.saveNotificationReceivedMessageFavorite(settings.notificationReceivedMessageFavorite)
@@ -406,6 +495,33 @@ class MigrationImporter
             settingsRepository.saveNotificationBleDisconnected(settings.notificationBleDisconnected)
             settingsRepository.saveAutoAnnounceEnabled(settings.autoAnnounceEnabled)
             settingsRepository.saveAutoAnnounceIntervalMinutes(settings.autoAnnounceIntervalMinutes)
+
+            // Restore theme preference with ID remapping for custom themes
+            try {
+                val themePreference = settings.themePreference
+                val remappedThemePref = if (themePreference.startsWith("custom:")) {
+                    // Extract old ID and map to new ID
+                    val oldId = themePreference.removePrefix("custom:").toLongOrNull()
+                    if (oldId != null && themeIdMap.containsKey(oldId)) {
+                        "custom:${themeIdMap[oldId]}"
+                    } else {
+                        Log.w(TAG, "Custom theme ID $oldId not found in mapping, using default")
+                        null // Will use default theme
+                    }
+                } else {
+                    // Preset theme (e.g., "preset:VIBRANT") - use as-is
+                    themePreference
+                }
+
+                if (remappedThemePref != null) {
+                    settingsRepository.saveThemePreferenceByIdentifier(remappedThemePref)
+                    Log.d(TAG, "Restored theme preference: $remappedThemePref")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to restore theme preference: ${e.message}")
+                // Non-fatal - continue with default theme
+            }
+
             // Mark onboarding as completed since we're importing from another device
             settingsRepository.markOnboardingCompleted()
         }

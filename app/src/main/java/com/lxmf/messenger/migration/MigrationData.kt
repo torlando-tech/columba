@@ -16,11 +16,12 @@ data class MigrationBundle(
     val contacts: List<ContactExport>,
     val announces: List<AnnounceExport> = emptyList(),
     val interfaces: List<InterfaceExport> = emptyList(),
+    val customThemes: List<CustomThemeExport> = emptyList(),
     val settings: SettingsExport,
     val attachmentManifest: List<AttachmentRef> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 3
+        const val CURRENT_VERSION = 4
     }
 }
 
@@ -117,6 +118,72 @@ data class InterfaceExport(
 )
 
 /**
+ * Exported custom theme data.
+ */
+@Serializable
+data class CustomThemeExport(
+    val originalId: Long,
+    val name: String,
+    val description: String,
+    val baseTheme: String?,
+    val seedPrimary: Int,
+    val seedSecondary: Int,
+    val seedTertiary: Int,
+    val createdTimestamp: Long,
+    val modifiedTimestamp: Long,
+    // Light mode colors
+    val lightPrimary: Int,
+    val lightOnPrimary: Int,
+    val lightPrimaryContainer: Int,
+    val lightOnPrimaryContainer: Int,
+    val lightSecondary: Int,
+    val lightOnSecondary: Int,
+    val lightSecondaryContainer: Int,
+    val lightOnSecondaryContainer: Int,
+    val lightTertiary: Int,
+    val lightOnTertiary: Int,
+    val lightTertiaryContainer: Int,
+    val lightOnTertiaryContainer: Int,
+    val lightError: Int,
+    val lightOnError: Int,
+    val lightErrorContainer: Int,
+    val lightOnErrorContainer: Int,
+    val lightBackground: Int,
+    val lightOnBackground: Int,
+    val lightSurface: Int,
+    val lightOnSurface: Int,
+    val lightSurfaceVariant: Int,
+    val lightOnSurfaceVariant: Int,
+    val lightOutline: Int,
+    val lightOutlineVariant: Int,
+    // Dark mode colors
+    val darkPrimary: Int,
+    val darkOnPrimary: Int,
+    val darkPrimaryContainer: Int,
+    val darkOnPrimaryContainer: Int,
+    val darkSecondary: Int,
+    val darkOnSecondary: Int,
+    val darkSecondaryContainer: Int,
+    val darkOnSecondaryContainer: Int,
+    val darkTertiary: Int,
+    val darkOnTertiary: Int,
+    val darkTertiaryContainer: Int,
+    val darkOnTertiaryContainer: Int,
+    val darkError: Int,
+    val darkOnError: Int,
+    val darkErrorContainer: Int,
+    val darkOnErrorContainer: Int,
+    val darkBackground: Int,
+    val darkOnBackground: Int,
+    val darkSurface: Int,
+    val darkOnSurface: Int,
+    val darkSurfaceVariant: Int,
+    val darkOnSurfaceVariant: Int,
+    val darkOutline: Int,
+    val darkOutlineVariant: Int,
+)
+
+/**
  * Exported user settings.
  */
 @Serializable
@@ -153,6 +220,7 @@ sealed class ExportResult {
         val contactCount: Int,
         val announceCount: Int,
         val interfaceCount: Int,
+        val customThemeCount: Int,
         val attachmentCount: Int,
     ) : ExportResult()
 
@@ -169,6 +237,7 @@ sealed class ImportResult {
         val contactsImported: Int,
         val announcesImported: Int,
         val interfacesImported: Int,
+        val customThemesImported: Int,
         val attachmentsImported: Int,
     ) : ImportResult()
 
@@ -187,6 +256,7 @@ data class MigrationPreview(
     val contactCount: Int,
     val announceCount: Int,
     val interfaceCount: Int,
+    val customThemeCount: Int,
     val attachmentCount: Int,
     val identityNames: List<String>,
 )

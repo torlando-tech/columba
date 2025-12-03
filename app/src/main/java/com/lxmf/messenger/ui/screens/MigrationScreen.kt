@@ -242,6 +242,7 @@ private fun ExportSection(
                             Text("${exportPreview.contactCount} contacts")
                             Text("${exportPreview.announceCount} announces")
                             Text("${exportPreview.interfaceCount} interfaces")
+                            Text("${exportPreview.customThemeCount} custom themes")
                             Text("${exportPreview.attachmentCount} attachments")
                         }
                     }
@@ -396,7 +397,8 @@ private fun ImportSection(
                                         "${uiState.result.messagesImported} messages, " +
                                         "${uiState.result.contactsImported} contacts, " +
                                         "${uiState.result.announcesImported} announces, " +
-                                        "${uiState.result.interfacesImported} interfaces",
+                                        "${uiState.result.interfacesImported} interfaces, " +
+                                        "${uiState.result.customThemesImported} themes",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -508,6 +510,7 @@ private fun ImportConfirmDialog(
                         Text("${preview.contactCount} contacts")
                         Text("${preview.announceCount} announces")
                         Text("${preview.interfaceCount} interfaces")
+                        Text("${preview.customThemeCount} custom themes")
                         Text("${preview.attachmentCount} attachments")
                     }
                 }

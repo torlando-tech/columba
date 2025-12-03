@@ -183,6 +183,11 @@ fun MigrationScreen(
             },
         )
     }
+
+    // Blocking dialog while service restarts after import
+    if (uiState is MigrationUiState.RestartingService) {
+        RestartingServiceDialog()
+    }
 }
 
 @Composable
@@ -369,8 +374,7 @@ private fun ImportSection(
                     }
                 }
                 is MigrationUiState.ImportComplete -> {
-                    // Trigger the callback to handle service restart from MainActivity
-                    // Use uiState as key and a flag to ensure this only fires once
+                    // Trigger the callback to navigate away after import and restart complete
                     var hasCalledImportComplete by remember { mutableStateOf(false) }
                     LaunchedEffect(uiState) {
                         if (!hasCalledImportComplete) {
@@ -387,9 +391,11 @@ private fun ImportSection(
                             modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            CircularProgressIndicator(
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
@@ -405,12 +411,6 @@ private fun ImportSection(
                                         "${uiState.result.interfacesImported} interfaces, " +
                                         "${uiState.result.customThemesImported} themes",
                                     style = MaterialTheme.typography.bodySmall,
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    "Restarting service...",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -446,7 +446,8 @@ private fun ImportSection(
                 onClick = onSelectFile,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = uiState !is MigrationUiState.Exporting &&
-                    uiState !is MigrationUiState.Importing,
+                    uiState !is MigrationUiState.Importing &&
+                    uiState !is MigrationUiState.RestartingService,
             ) {
                 if (uiState is MigrationUiState.Importing ||
                     uiState is MigrationUiState.Loading
@@ -540,5 +541,38 @@ private fun ImportConfirmDialog(
                 Text("Cancel")
             }
         },
+    )
+}
+
+/**
+ * Blocking dialog shown while service restarts after import.
+ * Similar to ApplyChangesDialog in InterfaceManagementScreen.
+ */
+@Composable
+private fun RestartingServiceDialog() {
+    AlertDialog(
+        onDismissRequest = { /* Cannot dismiss - blocking */ },
+        icon = {
+            CircularProgressIndicator(modifier = Modifier.size(48.dp))
+        },
+        title = { Text("Restarting Service") },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "Restarting network service...",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "This may take a few seconds",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { /* No buttons - blocking */ },
     )
 }

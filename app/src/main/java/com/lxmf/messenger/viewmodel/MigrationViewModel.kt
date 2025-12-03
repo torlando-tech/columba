@@ -9,11 +9,14 @@ import com.lxmf.messenger.migration.ImportResult
 import com.lxmf.messenger.migration.MigrationExporter
 import com.lxmf.messenger.migration.MigrationImporter
 import com.lxmf.messenger.migration.MigrationPreview
+import com.lxmf.messenger.service.InterfaceConfigManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 private const val TAG = "MigrationVM"
@@ -28,6 +31,7 @@ class MigrationViewModel
     constructor(
         private val migrationExporter: MigrationExporter,
         private val migrationImporter: MigrationImporter,
+        private val interfaceConfigManager: InterfaceConfigManager,
     ) : ViewModel() {
         /**
          * UI state for the Migration screen.
@@ -167,7 +171,23 @@ class MigrationViewModel
                                 "Import completed: ${result.identitiesImported} identities, " +
                                     "${result.messagesImported} messages",
                             )
-                            _uiState.value = MigrationUiState.ImportComplete(result)
+                            // Show restarting dialog while service restarts
+                            _uiState.value = MigrationUiState.RestartingService(result)
+
+                            // Restart the service to load imported data
+                            Log.i(TAG, "Restarting service after import...")
+                            withContext(Dispatchers.IO) {
+                                interfaceConfigManager.applyInterfaceChanges()
+                            }
+                                .onSuccess {
+                                    Log.i(TAG, "Service restarted successfully")
+                                    _uiState.value = MigrationUiState.ImportComplete(result)
+                                }
+                                .onFailure { e ->
+                                    Log.e(TAG, "Service restart failed", e)
+                                    // Still mark as complete since import succeeded
+                                    _uiState.value = MigrationUiState.ImportComplete(result)
+                                }
                         }
                         is ImportResult.Error -> {
                             Log.e(TAG, "Import failed: ${result.message}")
@@ -215,6 +235,7 @@ sealed class MigrationUiState {
     data class ExportComplete(val fileUri: Uri) : MigrationUiState()
     data class ImportPreview(val preview: MigrationPreview, val fileUri: Uri) : MigrationUiState()
     data object Importing : MigrationUiState()
+    data class RestartingService(val result: ImportResult.Success) : MigrationUiState()
     data class ImportComplete(val result: ImportResult.Success) : MigrationUiState()
     data class Error(val message: String) : MigrationUiState()
 }

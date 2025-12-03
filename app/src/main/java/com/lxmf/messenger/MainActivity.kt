@@ -593,17 +593,13 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                     }
 
                     composable("migration") {
-                        // Use settingsViewModel from ColumbaNavigation scope (survives navigation)
-                        val activity = LocalContext.current as ComponentActivity
                         MigrationScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onImportComplete = {
-                                // Use activity's lifecycleScope which survives navigation
-                                activity.lifecycleScope.launch {
-                                    navController.navigate("chats") {
-                                        popUpTo(0) { inclusive = true }
-                                    }
-                                    settingsViewModel.restartService()
+                                // Service restart is handled by MigrationViewModel,
+                                // just navigate to chats after import completes
+                                navController.navigate("chats") {
+                                    popUpTo(0) { inclusive = true }
                                 }
                             },
                         )

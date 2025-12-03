@@ -8,6 +8,7 @@ import com.lxmf.messenger.migration.ImportResult
 import com.lxmf.messenger.migration.MigrationExporter
 import com.lxmf.messenger.migration.MigrationImporter
 import com.lxmf.messenger.migration.MigrationPreview
+import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -42,6 +43,7 @@ class MigrationViewModelTest {
 
     private lateinit var migrationExporter: MigrationExporter
     private lateinit var migrationImporter: MigrationImporter
+    private lateinit var interfaceConfigManager: InterfaceConfigManager
     private lateinit var viewModel: MigrationViewModel
 
     private val testExportPreview = ExportResult.Success(
@@ -84,11 +86,15 @@ class MigrationViewModelTest {
 
         migrationExporter = mockk(relaxed = true)
         migrationImporter = mockk(relaxed = true)
+        interfaceConfigManager = mockk(relaxed = true)
 
         // Mock getExportPreview called in init
         coEvery { migrationExporter.getExportPreview() } returns testExportPreview
 
-        viewModel = MigrationViewModel(migrationExporter, migrationImporter)
+        // Mock service restart to succeed
+        coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+
+        viewModel = MigrationViewModel(migrationExporter, migrationImporter, interfaceConfigManager)
     }
 
     @After
@@ -232,15 +238,28 @@ class MigrationViewModelTest {
     // region Import Tests
 
     @Test
-    fun `importData sets state to Importing then ImportComplete on success`() = runTest {
+    fun `importData sets state to Importing then RestartingService then ImportComplete on success`() = runTest {
         val mockUri = mockk<Uri>()
         coEvery { migrationImporter.importData(mockUri, any()) } returns testImportResult
 
         viewModel.importData(mockUri)
+
+        // Wait for all coroutines including IO dispatcher to complete
+        advanceUntilIdle()
+        // Additional yield to allow IO dispatcher work to complete
+        kotlinx.coroutines.delay(100)
         advanceUntilIdle()
 
+        // Verify service restart was called
+        coVerify { interfaceConfigManager.applyInterfaceChanges() }
+
+        // Final state should be ImportComplete (after restart)
         viewModel.uiState.test {
-            val state = awaitItem()
+            var state = awaitItem()
+            // Skip intermediate states if needed (RestartingService)
+            if (state is MigrationUiState.RestartingService) {
+                state = awaitItem()
+            }
             assertTrue("Expected ImportComplete but was $state", state is MigrationUiState.ImportComplete)
             val result = (state as MigrationUiState.ImportComplete).result
             assertEquals(2, result.identitiesImported)
@@ -276,12 +295,20 @@ class MigrationViewModelTest {
         }
 
         viewModel.importData(mockUri)
+
+        // Wait for all coroutines including IO dispatcher to complete
+        advanceUntilIdle()
+        kotlinx.coroutines.delay(100)
         advanceUntilIdle()
 
-        // Import should complete successfully
+        // Import should complete successfully (after restart)
         viewModel.uiState.test {
-            val state = awaitItem()
-            assertTrue(state is MigrationUiState.ImportComplete)
+            var state = awaitItem()
+            // Skip intermediate states if needed (RestartingService)
+            if (state is MigrationUiState.RestartingService) {
+                state = awaitItem()
+            }
+            assertTrue("Expected ImportComplete but was $state", state is MigrationUiState.ImportComplete)
         }
     }
 

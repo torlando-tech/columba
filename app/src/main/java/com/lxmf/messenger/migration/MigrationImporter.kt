@@ -114,6 +114,9 @@ class MigrationImporter
 
                     // 2. Import identities
                     var identitiesImported = 0
+                    // Find which identity should be active (from export file)
+                    val activeIdentityFromExport = bundle.identities.find { it.isActive }?.identityHash
+
                     bundle.identities.forEachIndexed { index, identityExport ->
                         try {
                             val imported = importIdentity(identityExport)
@@ -127,6 +130,13 @@ class MigrationImporter
                         }
                         val progress = 0.1f + (0.3f * (index + 1) / bundle.identities.size)
                         onProgress(progress)
+                    }
+
+                    // Switch to the active identity from the export file
+                    // This works whether the identity was just imported or already existed
+                    if (activeIdentityFromExport != null) {
+                        Log.d(TAG, "Switching to active identity from export: $activeIdentityFromExport")
+                        database.localIdentityDao().setActive(activeIdentityFromExport)
                     }
                     Log.d(TAG, "Imported $identitiesImported identities")
                     onProgress(0.4f)

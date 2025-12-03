@@ -395,7 +395,8 @@ class MigrationDataTest {
             name = "Complex Interface",
             type = "TCPClient",
             enabled = true,
-            configJson = """{"target_host":"example.com","target_port":4965,"kiss_framing":false,"network_name":"secure","passphrase":"secret123"}""",
+            configJson = """{"target_host":"example.com","target_port":4965,""" +
+                """"kiss_framing":false,"network_name":"secure","passphrase":"secret123"}""",
             displayOrder = 2,
         )
 

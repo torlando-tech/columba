@@ -139,6 +139,7 @@ class IdentityManagerViewModel
          * If the identity file is missing but keyData is available in the database,
          * it will be recovered automatically.
          */
+        @Suppress("LongMethod") // Identity switch requires coordinated file and service operations
         fun switchToIdentity(identityHash: String) {
             viewModelScope.launch {
                 try {
@@ -196,7 +197,8 @@ class IdentityManagerViewModel
                                 sourceFile.copyTo(defaultIdentityFile, overwrite = true)
                                 Log.d(
                                     TAG,
-                                    "Copied identity file to default_identity: ${sourceFile.absolutePath} -> ${defaultIdentityFile.absolutePath}",
+                                    "Copied identity file to default_identity: " +
+                                        "${sourceFile.absolutePath} -> ${defaultIdentityFile.absolutePath}",
                                 )
                             } else {
                                 Log.w(TAG, "Source identity file doesn't exist: ${sourceFile.absolutePath}")

@@ -31,6 +31,7 @@ import javax.inject.Singleton
  * - manifest.json: Serialized MigrationBundle with all data
  * - attachments/: Directory with message attachments
  */
+@Suppress("TooManyFunctions") // Helper methods extracted for readability
 @Singleton
 class MigrationExporter
     @Inject
@@ -64,260 +65,38 @@ class MigrationExporter
                     Log.i(TAG, "Starting migration export...")
                     onProgress(0.05f)
 
-                    // 1. Collect all identities
+                    // Collect all data
                     val identities = database.localIdentityDao().getAllIdentitiesSync()
                     Log.d(TAG, "Found ${identities.size} identities to export")
                     onProgress(0.1f)
 
-                    // 2. Collect conversations, messages, and contacts for all identities
-                    val allConversations = mutableListOf<ConversationExport>()
-                    val allMessages = mutableListOf<MessageExport>()
-                    val allContacts = mutableListOf<ContactExport>()
-
-                    identities.forEachIndexed { index, identity ->
-                        // Conversations
-                        val conversations = database.conversationDao()
-                            .getAllConversationsList(identity.identityHash)
-                        allConversations.addAll(
-                            conversations.map { conv ->
-                                ConversationExport(
-                                    peerHash = conv.peerHash,
-                                    identityHash = conv.identityHash,
-                                    peerName = conv.peerName,
-                                    peerPublicKey = conv.peerPublicKey?.let {
-                                        Base64.encodeToString(it, Base64.NO_WRAP)
-                                    },
-                                    lastMessage = conv.lastMessage,
-                                    lastMessageTimestamp = conv.lastMessageTimestamp,
-                                    unreadCount = conv.unreadCount,
-                                    lastSeenTimestamp = conv.lastSeenTimestamp,
-                                )
-                            },
-                        )
-
-                        // Messages
-                        val messages = database.messageDao()
-                            .getAllMessagesForIdentity(identity.identityHash)
-                        allMessages.addAll(
-                            messages.map { msg ->
-                                MessageExport(
-                                    id = msg.id,
-                                    conversationHash = msg.conversationHash,
-                                    identityHash = msg.identityHash,
-                                    content = msg.content,
-                                    timestamp = msg.timestamp,
-                                    isFromMe = msg.isFromMe,
-                                    status = msg.status,
-                                    isRead = msg.isRead,
-                                    fieldsJson = msg.fieldsJson,
-                                )
-                            },
-                        )
-
-                        // Contacts
-                        val contacts = database.contactDao()
-                            .getAllContactsSync(identity.identityHash)
-                        allContacts.addAll(
-                            contacts.map { contact ->
-                                ContactExport(
-                                    destinationHash = contact.destinationHash,
-                                    identityHash = contact.identityHash,
-                                    publicKey = Base64.encodeToString(
-                                        contact.publicKey,
-                                        Base64.NO_WRAP,
-                                    ),
-                                    customNickname = contact.customNickname,
-                                    notes = contact.notes,
-                                    tags = contact.tags,
-                                    addedTimestamp = contact.addedTimestamp,
-                                    addedVia = contact.addedVia,
-                                    lastInteractionTimestamp = contact.lastInteractionTimestamp,
-                                    isPinned = contact.isPinned,
-                                )
-                            },
-                        )
-
-                        val progress = 0.1f + (0.4f * (index + 1) / identities.size)
-                        onProgress(progress)
-                    }
-
-                    Log.d(
-                        TAG,
-                        "Collected ${allConversations.size} conversations, " +
-                            "${allMessages.size} messages, ${allContacts.size} contacts",
-                    )
+                    val (conversations, messages, contacts) = collectUserData(identities, onProgress)
                     onProgress(0.5f)
 
-                    // 3. Export identity data (with private keys)
-                    val identityExports = identities.map { identity ->
-                        val keyData = identity.keyData
-                            ?: loadIdentityKeyFromFile(identity.filePath)
-                        IdentityExport(
-                            identityHash = identity.identityHash,
-                            displayName = identity.displayName,
-                            destinationHash = identity.destinationHash,
-                            keyData = keyData?.let {
-                                Base64.encodeToString(it, Base64.NO_WRAP)
-                            } ?: "",
-                            createdTimestamp = identity.createdTimestamp,
-                            lastUsedTimestamp = identity.lastUsedTimestamp,
-                            isActive = identity.isActive,
-                        )
-                    }
+                    val identityExports = exportIdentities(identities)
                     onProgress(0.55f)
 
-                    // 4. Collect announces (known peers)
-                    val announces = database.announceDao().getAllAnnouncesSync()
-                    val announceExports = announces.map { announce ->
-                        AnnounceExport(
-                            destinationHash = announce.destinationHash,
-                            peerName = announce.peerName,
-                            publicKey = Base64.encodeToString(announce.publicKey, Base64.NO_WRAP),
-                            appData = announce.appData?.let {
-                                Base64.encodeToString(it, Base64.NO_WRAP)
-                            },
-                            hops = announce.hops,
-                            lastSeenTimestamp = announce.lastSeenTimestamp,
-                            nodeType = announce.nodeType,
-                            receivingInterface = announce.receivingInterface,
-                            aspect = announce.aspect,
-                            isFavorite = announce.isFavorite,
-                            favoritedTimestamp = announce.favoritedTimestamp,
-                        )
-                    }
-                    Log.d(TAG, "Collected ${announceExports.size} announces")
+                    val announceExports = exportAnnounces()
                     onProgress(0.6f)
 
-                    // 4b. Collect interface configurations
-                    val interfaces = interfaceDatabase.interfaceDao().getAllInterfaces().first()
-                    val interfaceExports = interfaces.map { iface ->
-                        InterfaceExport(
-                            name = iface.name,
-                            type = iface.type,
-                            enabled = iface.enabled,
-                            configJson = iface.configJson,
-                            displayOrder = iface.displayOrder,
-                        )
-                    }
-                    Log.d(TAG, "Collected ${interfaceExports.size} interfaces")
+                    val interfaceExports = exportInterfaces()
                     onProgress(0.62f)
 
-                    // 4c. Collect custom themes
-                    val customThemes = database.customThemeDao().getAllThemes().first()
-                    val customThemeExports = customThemes.map { theme ->
-                        CustomThemeExport(
-                            originalId = theme.id,
-                            name = theme.name,
-                            description = theme.description,
-                            baseTheme = theme.baseTheme,
-                            seedPrimary = theme.seedPrimary,
-                            seedSecondary = theme.seedSecondary,
-                            seedTertiary = theme.seedTertiary,
-                            createdTimestamp = theme.createdTimestamp,
-                            modifiedTimestamp = theme.modifiedTimestamp,
-                            lightPrimary = theme.lightPrimary,
-                            lightOnPrimary = theme.lightOnPrimary,
-                            lightPrimaryContainer = theme.lightPrimaryContainer,
-                            lightOnPrimaryContainer = theme.lightOnPrimaryContainer,
-                            lightSecondary = theme.lightSecondary,
-                            lightOnSecondary = theme.lightOnSecondary,
-                            lightSecondaryContainer = theme.lightSecondaryContainer,
-                            lightOnSecondaryContainer = theme.lightOnSecondaryContainer,
-                            lightTertiary = theme.lightTertiary,
-                            lightOnTertiary = theme.lightOnTertiary,
-                            lightTertiaryContainer = theme.lightTertiaryContainer,
-                            lightOnTertiaryContainer = theme.lightOnTertiaryContainer,
-                            lightError = theme.lightError,
-                            lightOnError = theme.lightOnError,
-                            lightErrorContainer = theme.lightErrorContainer,
-                            lightOnErrorContainer = theme.lightOnErrorContainer,
-                            lightBackground = theme.lightBackground,
-                            lightOnBackground = theme.lightOnBackground,
-                            lightSurface = theme.lightSurface,
-                            lightOnSurface = theme.lightOnSurface,
-                            lightSurfaceVariant = theme.lightSurfaceVariant,
-                            lightOnSurfaceVariant = theme.lightOnSurfaceVariant,
-                            lightOutline = theme.lightOutline,
-                            lightOutlineVariant = theme.lightOutlineVariant,
-                            darkPrimary = theme.darkPrimary,
-                            darkOnPrimary = theme.darkOnPrimary,
-                            darkPrimaryContainer = theme.darkPrimaryContainer,
-                            darkOnPrimaryContainer = theme.darkOnPrimaryContainer,
-                            darkSecondary = theme.darkSecondary,
-                            darkOnSecondary = theme.darkOnSecondary,
-                            darkSecondaryContainer = theme.darkSecondaryContainer,
-                            darkOnSecondaryContainer = theme.darkOnSecondaryContainer,
-                            darkTertiary = theme.darkTertiary,
-                            darkOnTertiary = theme.darkOnTertiary,
-                            darkTertiaryContainer = theme.darkTertiaryContainer,
-                            darkOnTertiaryContainer = theme.darkOnTertiaryContainer,
-                            darkError = theme.darkError,
-                            darkOnError = theme.darkOnError,
-                            darkErrorContainer = theme.darkErrorContainer,
-                            darkOnErrorContainer = theme.darkOnErrorContainer,
-                            darkBackground = theme.darkBackground,
-                            darkOnBackground = theme.darkOnBackground,
-                            darkSurface = theme.darkSurface,
-                            darkOnSurface = theme.darkOnSurface,
-                            darkSurfaceVariant = theme.darkSurfaceVariant,
-                            darkOnSurfaceVariant = theme.darkOnSurfaceVariant,
-                            darkOutline = theme.darkOutline,
-                            darkOutlineVariant = theme.darkOutlineVariant,
-                        )
-                    }
-                    Log.d(TAG, "Collected ${customThemeExports.size} custom themes")
+                    val customThemeExports = exportCustomThemes()
                     onProgress(0.64f)
 
-                    // 5. Collect settings
-                    val settingsExport = SettingsExport(
-                        notificationsEnabled = settingsRepository.notificationsEnabledFlow.first(),
-                        notificationReceivedMessage = settingsRepository
-                            .notificationReceivedMessageFlow.first(),
-                        notificationReceivedMessageFavorite = settingsRepository
-                            .notificationReceivedMessageFavoriteFlow.first(),
-                        notificationHeardAnnounce = settingsRepository
-                            .notificationHeardAnnounceFlow.first(),
-                        notificationBleConnected = settingsRepository
-                            .notificationBleConnectedFlow.first(),
-                        notificationBleDisconnected = settingsRepository
-                            .notificationBleDisconnectedFlow.first(),
-                        autoAnnounceEnabled = settingsRepository.autoAnnounceEnabledFlow.first(),
-                        autoAnnounceIntervalMinutes = settingsRepository
-                            .autoAnnounceIntervalMinutesFlow.first(),
-                        themePreference = settingsRepository.themePreferenceFlow.first()
-                            .getIdentifier(),
-                    )
+                    val settingsExport = exportSettings()
                     onProgress(0.65f)
 
-                    // 5. Collect attachments
-                    val attachmentsDir = File(context.filesDir, "attachments")
-                    val attachmentRefs = mutableListOf<AttachmentRef>()
-
-                    if (attachmentsDir.exists()) {
-                        attachmentsDir.listFiles()?.forEach { messageDir ->
-                            if (messageDir.isDirectory) {
-                                messageDir.listFiles()?.forEach { fieldFile ->
-                                    attachmentRefs.add(
-                                        AttachmentRef(
-                                            messageId = messageDir.name,
-                                            fieldKey = fieldFile.name,
-                                            relativePath = "${messageDir.name}/${fieldFile.name}",
-                                            sizeBytes = fieldFile.length(),
-                                        ),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    Log.d(TAG, "Found ${attachmentRefs.size} attachments to export")
+                    val attachmentRefs = collectAttachments()
                     onProgress(0.7f)
 
-                    // 7. Create migration bundle
+                    // Create migration bundle
                     val bundle = MigrationBundle(
                         identities = identityExports,
-                        conversations = allConversations,
-                        messages = allMessages,
-                        contacts = allContacts,
+                        conversations = conversations,
+                        messages = messages,
+                        contacts = contacts,
                         announces = announceExports,
                         interfaces = interfaceExports,
                         customThemes = customThemeExports,
@@ -325,53 +104,295 @@ class MigrationExporter
                         attachmentManifest = attachmentRefs,
                     )
 
-                    // 8. Create ZIP file
-                    val exportDir = File(context.cacheDir, EXPORT_DIR).also { it.mkdirs() }
-                    val dateFormat = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US)
-                    val timestamp = dateFormat.format(Date())
-                    val exportFile = File(exportDir, "columba_export_$timestamp.columba")
-
-                    ZipOutputStream(FileOutputStream(exportFile)).use { zipOut ->
-                        // Write manifest
-                        zipOut.putNextEntry(ZipEntry(MANIFEST_FILENAME))
-                        zipOut.write(json.encodeToString(bundle).toByteArray())
-                        zipOut.closeEntry()
-                        onProgress(0.8f)
-
-                        // Write attachments
-                        if (attachmentsDir.exists()) {
-                            attachmentRefs.forEachIndexed { index, ref ->
-                                val sourceFile = File(attachmentsDir, ref.relativePath)
-                                if (sourceFile.exists()) {
-                                    zipOut.putNextEntry(
-                                        ZipEntry("$ATTACHMENTS_DIR/${ref.relativePath}"),
-                                    )
-                                    sourceFile.inputStream().use { it.copyTo(zipOut) }
-                                    zipOut.closeEntry()
-                                }
-
-                                val progress = 0.8f + (0.15f * (index + 1) / attachmentRefs.size)
-                                onProgress(progress)
-                            }
-                        }
-                    }
-
+                    // Create and return ZIP file
+                    val exportFile = createExportZip(bundle, attachmentRefs, onProgress)
                     Log.i(TAG, "Export complete: ${exportFile.absolutePath}")
                     onProgress(1.0f)
 
-                    // Return FileProvider URI for sharing
                     val uri = FileProvider.getUriForFile(
                         context,
                         "${context.packageName}.fileprovider",
                         exportFile,
                     )
-
                     Result.success(uri)
                 } catch (e: Exception) {
                     Log.e(TAG, "Export failed", e)
                     Result.failure(e)
                 }
             }
+
+        private data class UserData(
+            val conversations: List<ConversationExport>,
+            val messages: List<MessageExport>,
+            val contacts: List<ContactExport>,
+        )
+
+        private suspend fun collectUserData(
+            identities: List<com.lxmf.messenger.data.db.entity.LocalIdentityEntity>,
+            onProgress: (Float) -> Unit,
+        ): UserData {
+            val allConversations = mutableListOf<ConversationExport>()
+            val allMessages = mutableListOf<MessageExport>()
+            val allContacts = mutableListOf<ContactExport>()
+
+            for ((index, identity) in identities.withIndex()) {
+                allConversations.addAll(exportConversationsForIdentity(identity.identityHash))
+                allMessages.addAll(exportMessagesForIdentity(identity.identityHash))
+                allContacts.addAll(exportContactsForIdentity(identity.identityHash))
+
+                val progress = 0.1f + (0.4f * (index + 1) / identities.size)
+                onProgress(progress)
+            }
+
+            Log.d(
+                TAG,
+                "Collected ${allConversations.size} conversations, " +
+                    "${allMessages.size} messages, ${allContacts.size} contacts",
+            )
+            return UserData(allConversations, allMessages, allContacts)
+        }
+
+        private suspend fun exportConversationsForIdentity(identityHash: String): List<ConversationExport> {
+            return database.conversationDao().getAllConversationsList(identityHash).map { conv ->
+                ConversationExport(
+                    peerHash = conv.peerHash,
+                    identityHash = conv.identityHash,
+                    peerName = conv.peerName,
+                    peerPublicKey = conv.peerPublicKey?.let { Base64.encodeToString(it, Base64.NO_WRAP) },
+                    lastMessage = conv.lastMessage,
+                    lastMessageTimestamp = conv.lastMessageTimestamp,
+                    unreadCount = conv.unreadCount,
+                    lastSeenTimestamp = conv.lastSeenTimestamp,
+                )
+            }
+        }
+
+        private suspend fun exportMessagesForIdentity(identityHash: String): List<MessageExport> {
+            return database.messageDao().getAllMessagesForIdentity(identityHash).map { msg ->
+                MessageExport(
+                    id = msg.id,
+                    conversationHash = msg.conversationHash,
+                    identityHash = msg.identityHash,
+                    content = msg.content,
+                    timestamp = msg.timestamp,
+                    isFromMe = msg.isFromMe,
+                    status = msg.status,
+                    isRead = msg.isRead,
+                    fieldsJson = msg.fieldsJson,
+                )
+            }
+        }
+
+        private suspend fun exportContactsForIdentity(identityHash: String): List<ContactExport> {
+            return database.contactDao().getAllContactsSync(identityHash).map { contact ->
+                ContactExport(
+                    destinationHash = contact.destinationHash,
+                    identityHash = contact.identityHash,
+                    publicKey = Base64.encodeToString(contact.publicKey, Base64.NO_WRAP),
+                    customNickname = contact.customNickname,
+                    notes = contact.notes,
+                    tags = contact.tags,
+                    addedTimestamp = contact.addedTimestamp,
+                    addedVia = contact.addedVia,
+                    lastInteractionTimestamp = contact.lastInteractionTimestamp,
+                    isPinned = contact.isPinned,
+                )
+            }
+        }
+
+        private fun exportIdentities(
+            identities: List<com.lxmf.messenger.data.db.entity.LocalIdentityEntity>,
+        ): List<IdentityExport> {
+            return identities.map { identity ->
+                val keyData = identity.keyData ?: loadIdentityKeyFromFile(identity.filePath)
+                IdentityExport(
+                    identityHash = identity.identityHash,
+                    displayName = identity.displayName,
+                    destinationHash = identity.destinationHash,
+                    keyData = keyData?.let { Base64.encodeToString(it, Base64.NO_WRAP) } ?: "",
+                    createdTimestamp = identity.createdTimestamp,
+                    lastUsedTimestamp = identity.lastUsedTimestamp,
+                    isActive = identity.isActive,
+                )
+            }
+        }
+
+        private suspend fun exportAnnounces(): List<AnnounceExport> {
+            val announces = database.announceDao().getAllAnnouncesSync()
+            Log.d(TAG, "Collected ${announces.size} announces")
+            return announces.map { announce ->
+                AnnounceExport(
+                    destinationHash = announce.destinationHash,
+                    peerName = announce.peerName,
+                    publicKey = Base64.encodeToString(announce.publicKey, Base64.NO_WRAP),
+                    appData = announce.appData?.let { Base64.encodeToString(it, Base64.NO_WRAP) },
+                    hops = announce.hops,
+                    lastSeenTimestamp = announce.lastSeenTimestamp,
+                    nodeType = announce.nodeType,
+                    receivingInterface = announce.receivingInterface,
+                    aspect = announce.aspect,
+                    isFavorite = announce.isFavorite,
+                    favoritedTimestamp = announce.favoritedTimestamp,
+                )
+            }
+        }
+
+        private suspend fun exportInterfaces(): List<InterfaceExport> {
+            val interfaces = interfaceDatabase.interfaceDao().getAllInterfaces().first()
+            Log.d(TAG, "Collected ${interfaces.size} interfaces")
+            return interfaces.map { iface ->
+                InterfaceExport(
+                    name = iface.name,
+                    type = iface.type,
+                    enabled = iface.enabled,
+                    configJson = iface.configJson,
+                    displayOrder = iface.displayOrder,
+                )
+            }
+        }
+
+        private suspend fun exportCustomThemes(): List<CustomThemeExport> {
+            val customThemes = database.customThemeDao().getAllThemes().first()
+            Log.d(TAG, "Collected ${customThemes.size} custom themes")
+            return customThemes.map { theme ->
+                CustomThemeExport(
+                    originalId = theme.id,
+                    name = theme.name,
+                    description = theme.description,
+                    baseTheme = theme.baseTheme,
+                    seedPrimary = theme.seedPrimary,
+                    seedSecondary = theme.seedSecondary,
+                    seedTertiary = theme.seedTertiary,
+                    createdTimestamp = theme.createdTimestamp,
+                    modifiedTimestamp = theme.modifiedTimestamp,
+                    lightPrimary = theme.lightPrimary,
+                    lightOnPrimary = theme.lightOnPrimary,
+                    lightPrimaryContainer = theme.lightPrimaryContainer,
+                    lightOnPrimaryContainer = theme.lightOnPrimaryContainer,
+                    lightSecondary = theme.lightSecondary,
+                    lightOnSecondary = theme.lightOnSecondary,
+                    lightSecondaryContainer = theme.lightSecondaryContainer,
+                    lightOnSecondaryContainer = theme.lightOnSecondaryContainer,
+                    lightTertiary = theme.lightTertiary,
+                    lightOnTertiary = theme.lightOnTertiary,
+                    lightTertiaryContainer = theme.lightTertiaryContainer,
+                    lightOnTertiaryContainer = theme.lightOnTertiaryContainer,
+                    lightError = theme.lightError,
+                    lightOnError = theme.lightOnError,
+                    lightErrorContainer = theme.lightErrorContainer,
+                    lightOnErrorContainer = theme.lightOnErrorContainer,
+                    lightBackground = theme.lightBackground,
+                    lightOnBackground = theme.lightOnBackground,
+                    lightSurface = theme.lightSurface,
+                    lightOnSurface = theme.lightOnSurface,
+                    lightSurfaceVariant = theme.lightSurfaceVariant,
+                    lightOnSurfaceVariant = theme.lightOnSurfaceVariant,
+                    lightOutline = theme.lightOutline,
+                    lightOutlineVariant = theme.lightOutlineVariant,
+                    darkPrimary = theme.darkPrimary,
+                    darkOnPrimary = theme.darkOnPrimary,
+                    darkPrimaryContainer = theme.darkPrimaryContainer,
+                    darkOnPrimaryContainer = theme.darkOnPrimaryContainer,
+                    darkSecondary = theme.darkSecondary,
+                    darkOnSecondary = theme.darkOnSecondary,
+                    darkSecondaryContainer = theme.darkSecondaryContainer,
+                    darkOnSecondaryContainer = theme.darkOnSecondaryContainer,
+                    darkTertiary = theme.darkTertiary,
+                    darkOnTertiary = theme.darkOnTertiary,
+                    darkTertiaryContainer = theme.darkTertiaryContainer,
+                    darkOnTertiaryContainer = theme.darkOnTertiaryContainer,
+                    darkError = theme.darkError,
+                    darkOnError = theme.darkOnError,
+                    darkErrorContainer = theme.darkErrorContainer,
+                    darkOnErrorContainer = theme.darkOnErrorContainer,
+                    darkBackground = theme.darkBackground,
+                    darkOnBackground = theme.darkOnBackground,
+                    darkSurface = theme.darkSurface,
+                    darkOnSurface = theme.darkOnSurface,
+                    darkSurfaceVariant = theme.darkSurfaceVariant,
+                    darkOnSurfaceVariant = theme.darkOnSurfaceVariant,
+                    darkOutline = theme.darkOutline,
+                    darkOutlineVariant = theme.darkOutlineVariant,
+                )
+            }
+        }
+
+        private suspend fun exportSettings(): SettingsExport {
+            return SettingsExport(
+                notificationsEnabled = settingsRepository.notificationsEnabledFlow.first(),
+                notificationReceivedMessage = settingsRepository
+                    .notificationReceivedMessageFlow.first(),
+                notificationReceivedMessageFavorite = settingsRepository
+                    .notificationReceivedMessageFavoriteFlow.first(),
+                notificationHeardAnnounce = settingsRepository
+                    .notificationHeardAnnounceFlow.first(),
+                notificationBleConnected = settingsRepository
+                    .notificationBleConnectedFlow.first(),
+                notificationBleDisconnected = settingsRepository
+                    .notificationBleDisconnectedFlow.first(),
+                autoAnnounceEnabled = settingsRepository.autoAnnounceEnabledFlow.first(),
+                autoAnnounceIntervalMinutes = settingsRepository
+                    .autoAnnounceIntervalMinutesFlow.first(),
+                themePreference = settingsRepository.themePreferenceFlow.first().getIdentifier(),
+            )
+        }
+
+        private fun collectAttachments(): List<AttachmentRef> {
+            val attachmentsDir = File(context.filesDir, "attachments")
+            val attachmentRefs = mutableListOf<AttachmentRef>()
+
+            if (attachmentsDir.exists()) {
+                attachmentsDir.listFiles()?.forEach { messageDir ->
+                    if (messageDir.isDirectory) {
+                        messageDir.listFiles()?.forEach { fieldFile ->
+                            attachmentRefs.add(
+                                AttachmentRef(
+                                    messageId = messageDir.name,
+                                    fieldKey = fieldFile.name,
+                                    relativePath = "${messageDir.name}/${fieldFile.name}",
+                                    sizeBytes = fieldFile.length(),
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+            Log.d(TAG, "Found ${attachmentRefs.size} attachments to export")
+            return attachmentRefs
+        }
+
+        private fun createExportZip(
+            bundle: MigrationBundle,
+            attachmentRefs: List<AttachmentRef>,
+            onProgress: (Float) -> Unit,
+        ): File {
+            val exportDir = File(context.cacheDir, EXPORT_DIR).also { it.mkdirs() }
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US)
+            val timestamp = dateFormat.format(Date())
+            val exportFile = File(exportDir, "columba_export_$timestamp.columba")
+
+            ZipOutputStream(FileOutputStream(exportFile)).use { zipOut ->
+                zipOut.putNextEntry(ZipEntry(MANIFEST_FILENAME))
+                zipOut.write(json.encodeToString(bundle).toByteArray())
+                zipOut.closeEntry()
+                onProgress(0.8f)
+
+                val attachmentsDir = File(context.filesDir, "attachments")
+                if (attachmentsDir.exists() && attachmentRefs.isNotEmpty()) {
+                    attachmentRefs.forEachIndexed { index, ref ->
+                        val sourceFile = File(attachmentsDir, ref.relativePath)
+                        if (sourceFile.exists()) {
+                            zipOut.putNextEntry(ZipEntry("$ATTACHMENTS_DIR/${ref.relativePath}"))
+                            sourceFile.inputStream().use { it.copyTo(zipOut) }
+                            zipOut.closeEntry()
+                        }
+                        val progress = 0.8f + (0.15f * (index + 1) / attachmentRefs.size)
+                        onProgress(progress)
+                    }
+                }
+            }
+            return exportFile
+        }
 
         /**
          * Load identity key data from a file path.

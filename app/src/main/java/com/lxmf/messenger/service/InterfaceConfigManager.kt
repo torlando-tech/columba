@@ -54,6 +54,7 @@ class InterfaceConfigManager
          *
          * @return Result indicating success or failure with error details
          */
+        @Suppress("CyclomaticComplexMethod", "LongMethod") // Complex but necessary service restart orchestration
         suspend fun applyInterfaceChanges(): Result<Unit> {
             return runCatching {
                 Log.i(TAG, "==== Applying Interface Configuration Changes (Service Restart) ====")
@@ -137,7 +138,7 @@ class InterfaceConfigManager
 
                         if (verifyAttempts >= maxVerifyAttempts) {
                             Log.e(TAG, "ERROR: Service process refused to die after ${maxVerifyAttempts * 500}ms")
-                            throw Exception("Service process did not terminate - identity switch may be unsafe")
+                            error("Service process did not terminate")
                         }
                     }
                 }

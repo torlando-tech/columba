@@ -1,5 +1,8 @@
 package com.lxmf.messenger.ui.screens
 
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -30,9 +34,11 @@ import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,11 +55,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -85,11 +95,21 @@ fun IdentityScreen(
     bleConnectionsViewModel: com.lxmf.messenger.viewmodel.BleConnectionsViewModel = hiltViewModel(),
     onNavigateToBleStatus: () -> Unit = {},
 ) {
+    val context = LocalContext.current
     val debugInfo by viewModel.debugInfo.collectAsState()
     val networkStatus by viewModel.networkStatus.collectAsState()
     val testResult by viewModel.testAnnounceResult.collectAsState()
     val bleConnectionsState by bleConnectionsViewModel.uiState.collectAsState()
     val isRestarting by viewModel.isRestarting.collectAsState()
+
+    // Bluetooth enable launcher
+    val bluetoothEnableLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            // Bluetooth state will be updated automatically via flow
+            Log.d("IdentityScreen", "Bluetooth enable result: ${result.resultCode}")
+        }
 
     Scaffold(
         topBar = {
@@ -126,6 +146,15 @@ fun IdentityScreen(
             BleConnectionsCard(
                 uiState = bleConnectionsState,
                 onViewDetails = onNavigateToBleStatus,
+                onEnableBluetooth = {
+                    bleConnectionsViewModel.getEnableBluetoothIntent()?.let { intent ->
+                        bluetoothEnableLauncher.launch(intent)
+                    }
+                },
+                onOpenBluetoothSettings = {
+                    val intent = bleConnectionsViewModel.getBluetoothSettingsIntent()
+                    context.startActivity(intent)
+                },
             )
 
             // Status Card
@@ -578,6 +607,8 @@ fun InfoRow(
 fun BleConnectionsCard(
     uiState: BleConnectionsUiState,
     onViewDetails: () -> Unit,
+    onEnableBluetooth: () -> Unit = {},
+    onOpenBluetoothSettings: () -> Unit = {},
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -617,11 +648,59 @@ fun BleConnectionsCard(
 
                 is BleConnectionsUiState.Success -> {
                     if (uiState.totalConnections == 0) {
-                        Text(
-                            text = "No active BLE connections",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bluetooth,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Bluetooth is turned on",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            Text(
+                                text = "No active BLE connections",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            OutlinedButton(
+                                onClick = onOpenBluetoothSettings,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Bluetooth Settings")
+                            }
+                            OutlinedButton(
+                                onClick = onOpenBluetoothSettings,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors =
+                                    ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.error,
+                                    ),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BluetoothDisabled,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Turn OFF")
+                            }
+                        }
                     } else {
                         // Summary stats
                         Row(
@@ -726,6 +805,26 @@ fun BleConnectionsCard(
                                 )
                             }
                         }
+
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                        // Turn off Bluetooth button
+                        OutlinedButton(
+                            onClick = onOpenBluetoothSettings,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors =
+                                ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                ),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BluetoothDisabled,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Turn OFF")
+                        }
                     }
                 }
 
@@ -757,11 +856,38 @@ fun BleConnectionsCard(
                 }
 
                 is BleConnectionsUiState.BluetoothDisabled -> {
-                    Text(
-                        text = "Bluetooth is turned off",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BluetoothDisabled,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Bluetooth is turned off",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Button(
+                            onClick = onEnableBluetooth,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bluetooth,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Turn ON")
+                        }
+                    }
                 }
             }
         }

@@ -225,12 +225,15 @@ abstract class InterfaceDatabase : RoomDatabase() {
                     is InterfaceConfig.RNode ->
                         "RNode" to
                             JSONObject().apply {
-                                put("port", config.port)
+                                put("target_device_name", config.targetDeviceName)
+                                put("connection_mode", config.connectionMode)
                                 put("frequency", config.frequency)
                                 put("bandwidth", config.bandwidth)
                                 put("tx_power", config.txPower)
                                 put("spreading_factor", config.spreadingFactor)
                                 put("coding_rate", config.codingRate)
+                                config.stAlock?.let { put("st_alock", it) }
+                                config.ltAlock?.let { put("lt_alock", it) }
                                 put("mode", config.mode)
                             }.toString()
 
@@ -412,12 +415,15 @@ abstract class InterfaceDatabase : RoomDatabase() {
 
                     is InterfaceConfig.RNode ->
                         JSONObject().apply {
-                            put("port", config.port)
+                            put("target_device_name", config.targetDeviceName)
+                            put("connection_mode", config.connectionMode)
                             put("frequency", config.frequency)
                             put("bandwidth", config.bandwidth)
                             put("tx_power", config.txPower)
                             put("spreading_factor", config.spreadingFactor)
                             put("coding_rate", config.codingRate)
+                            config.stAlock?.let { put("st_alock", it) }
+                            config.ltAlock?.let { put("lt_alock", it) }
                             put("mode", config.mode)
                         }.toString()
 

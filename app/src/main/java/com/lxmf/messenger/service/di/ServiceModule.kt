@@ -109,6 +109,7 @@ object ServiceModule {
      * @return Configured binder implementing IReticulumService
      */
     fun createBinder(
+        context: Context,
         managers: ServiceManagers,
         scope: CoroutineScope,
         onInitialized: () -> Unit,
@@ -116,6 +117,7 @@ object ServiceModule {
         onForceExit: () -> Unit,
     ): ReticulumServiceBinder {
         return ReticulumServiceBinder(
+            context = context,
             state = managers.state,
             wrapperManager = managers.wrapperManager,
             identityManager = managers.identityManager,

@@ -236,7 +236,7 @@ class MockReticulumProtocolTest {
     fun `different interface configs can be created`() {
         val tcpConfig = InterfaceConfig.TCPClient(targetHost = "192.168.1.1", targetPort = 4242)
         val udpConfig = InterfaceConfig.UDP(listenPort = 4242)
-        val rnodeConfig = InterfaceConfig.RNode(port = "/dev/ttyUSB0")
+        val rnodeConfig = InterfaceConfig.RNode(targetDeviceName = "RNode 1234")
         val autoConfig = InterfaceConfig.AutoInterface()
 
         assertTrue(tcpConfig is InterfaceConfig.TCPClient)

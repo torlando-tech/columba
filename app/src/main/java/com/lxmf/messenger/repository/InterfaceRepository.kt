@@ -145,12 +145,15 @@ class InterfaceRepository
 
                     is InterfaceConfig.RNode ->
                         JSONObject().apply {
-                            put("port", config.port)
+                            put("target_device_name", config.targetDeviceName)
+                            put("connection_mode", config.connectionMode)
                             put("frequency", config.frequency)
                             put("bandwidth", config.bandwidth)
                             put("tx_power", config.txPower)
                             put("spreading_factor", config.spreadingFactor)
                             put("coding_rate", config.codingRate)
+                            config.stAlock?.let { put("st_alock", it) }
+                            config.ltAlock?.let { put("lt_alock", it) }
                             put("mode", config.mode)
                         }.toString()
 
@@ -250,23 +253,26 @@ class InterfaceRepository
                     }
 
                     "RNode" -> {
-                        val port = json.getString("port")
+                        val targetDeviceName = json.getString("target_device_name")
 
-                        // Validate port path (basic check - should be non-empty)
-                        if (port.isBlank()) {
-                            Log.e(TAG, "Empty RNode port path in database")
-                            throw IllegalStateException("Empty RNode port path")
+                        // Validate device name (basic check - should be non-empty)
+                        if (targetDeviceName.isBlank()) {
+                            Log.e(TAG, "Empty RNode target device name in database")
+                            throw IllegalStateException("Empty RNode target device name")
                         }
 
                         InterfaceConfig.RNode(
                             name = entity.name,
                             enabled = entity.enabled,
-                            port = port,
+                            targetDeviceName = targetDeviceName,
+                            connectionMode = json.optString("connection_mode", "classic"),
                             frequency = json.optLong("frequency", 915000000),
                             bandwidth = json.optInt("bandwidth", 125000),
                             txPower = json.optInt("tx_power", 7),
                             spreadingFactor = json.optInt("spreading_factor", 7),
                             codingRate = json.optInt("coding_rate", 5),
+                            stAlock = if (json.has("st_alock")) json.getDouble("st_alock") else null,
+                            ltAlock = if (json.has("lt_alock")) json.getDouble("lt_alock") else null,
                             mode = json.optString("mode", "full"),
                         )
                     }

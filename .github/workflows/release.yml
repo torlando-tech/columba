@@ -74,6 +74,12 @@ jobs:
             columba-${{ steps.version.outputs.version }}.apk.sha256
           echo "✓ Generated SHA256 checksum"
 
+      - name: Read SHA256 checksum
+        id: sha256
+        run: |
+          SHA256=$(cat columba-${{ steps.version.outputs.version }}.apk.sha256)
+          echo "checksum=$SHA256" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -91,7 +97,7 @@ jobs:
 
             **SHA256 Checksum:**
             ```
-            $(cat columba-${{ steps.version.outputs.version }}.apk.sha256)
+            ${{ steps.sha256.outputs.checksum }}
             ```
 
             ### What's Changed

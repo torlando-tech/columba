@@ -557,12 +557,15 @@ class PythonReticulumProtocol(
                             Log.d(TAG, "buildConfigJson: RNode - ${iface.name}")
                             ifaceJson.put("type", "RNode")
                             ifaceJson.put("name", iface.name)
-                            ifaceJson.put("port", iface.port)
+                            ifaceJson.put("target_device_name", iface.targetDeviceName)
+                            ifaceJson.put("connection_mode", iface.connectionMode)
                             ifaceJson.put("frequency", iface.frequency)
                             ifaceJson.put("bandwidth", iface.bandwidth)
                             ifaceJson.put("tx_power", iface.txPower)
                             ifaceJson.put("spreading_factor", iface.spreadingFactor)
                             ifaceJson.put("coding_rate", iface.codingRate)
+                            iface.stAlock?.let { ifaceJson.put("st_alock", it) }
+                            iface.ltAlock?.let { ifaceJson.put("lt_alock", it) }
                             ifaceJson.put("mode", iface.mode)
                         }
                         is InterfaceConfig.AndroidBLE -> {

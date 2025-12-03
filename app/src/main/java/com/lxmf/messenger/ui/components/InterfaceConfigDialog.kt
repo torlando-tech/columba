@@ -153,6 +153,7 @@ fun InterfaceConfigDialog(
                             "AutoInterface" -> AutoInterfaceFields(configState, onConfigUpdate)
                             "TCPClient" -> TCPClientFields(configState, onConfigUpdate)
                             "AndroidBLE" -> AndroidBLEFields(configState, onConfigUpdate)
+                            "RNode" -> RNodeFields(configState, onConfigUpdate)
                         }
 
                         Divider()
@@ -193,6 +194,7 @@ fun InterfaceTypeSelector(
             "AutoInterface" to "Auto Discovery",
             "TCPClient" to "TCP Client",
             "AndroidBLE" to "Bluetooth LE",
+            "RNode" to "RNode LoRa",
         )
 
     ExposedDropdownMenuBox(
@@ -526,4 +528,228 @@ fun AndroidBLEFields(
             }
         },
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RNodeFields(
+    configState: InterfaceConfigState,
+    onConfigUpdate: (InterfaceConfigState) -> Unit,
+) {
+    Text(
+        "RNode LoRa Configuration",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+
+    // Target Device Name (required)
+    OutlinedTextField(
+        value = configState.targetDeviceName,
+        onValueChange = { onConfigUpdate(configState.copy(targetDeviceName = it)) },
+        label = { Text("Target Device Name *") },
+        placeholder = { Text("e.g., RNode 1234") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        isError = configState.targetDeviceNameError != null,
+        supportingText = {
+            Column {
+                configState.targetDeviceNameError?.let { Text(it) }
+                Text(
+                    "Bluetooth device name of your paired RNode",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+
+    // Connection Mode Selector
+    RNodeConnectionModeSelector(
+        selectedMode = configState.connectionMode,
+        onModeChange = { onConfigUpdate(configState.copy(connectionMode = it)) },
+    )
+
+    // Frequency
+    OutlinedTextField(
+        value = configState.frequency,
+        onValueChange = { onConfigUpdate(configState.copy(frequency = it)) },
+        label = { Text("Frequency (Hz)") },
+        placeholder = { Text("915000000") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        isError = configState.frequencyError != null,
+        supportingText = {
+            Column {
+                configState.frequencyError?.let { Text(it) }
+                Text(
+                    "LoRa frequency (137-3000 MHz). US: 915 MHz, EU: 868 MHz",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+
+    // Bandwidth
+    OutlinedTextField(
+        value = configState.bandwidth,
+        onValueChange = { onConfigUpdate(configState.copy(bandwidth = it)) },
+        label = { Text("Bandwidth (Hz)") },
+        placeholder = { Text("125000") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        isError = configState.bandwidthError != null,
+        supportingText = {
+            Column {
+                configState.bandwidthError?.let { Text(it) }
+                Text(
+                    "LoRa bandwidth (7.8-1625 kHz). Common: 125000 Hz",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+
+    // TX Power
+    OutlinedTextField(
+        value = configState.txPower,
+        onValueChange = { onConfigUpdate(configState.copy(txPower = it)) },
+        label = { Text("TX Power (dBm)") },
+        placeholder = { Text("7") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        isError = configState.txPowerError != null,
+        supportingText = {
+            Column {
+                configState.txPowerError?.let { Text(it) }
+                Text(
+                    "Transmission power (0-22 dBm)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+
+    // Spreading Factor
+    OutlinedTextField(
+        value = configState.spreadingFactor,
+        onValueChange = { onConfigUpdate(configState.copy(spreadingFactor = it)) },
+        label = { Text("Spreading Factor") },
+        placeholder = { Text("7") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        isError = configState.spreadingFactorError != null,
+        supportingText = {
+            Column {
+                configState.spreadingFactorError?.let { Text(it) }
+                Text(
+                    "LoRa spreading factor (5-12). Higher = longer range, slower",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+
+    // Coding Rate
+    OutlinedTextField(
+        value = configState.codingRate,
+        onValueChange = { onConfigUpdate(configState.copy(codingRate = it)) },
+        label = { Text("Coding Rate") },
+        placeholder = { Text("5") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        isError = configState.codingRateError != null,
+        supportingText = {
+            Column {
+                configState.codingRateError?.let { Text(it) }
+                Text(
+                    "LoRa coding rate (5-8). Higher = more error correction",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+
+    // Airtime Limits (optional)
+    Text(
+        "Airtime Limits (optional)",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    OutlinedTextField(
+        value = configState.stAlock,
+        onValueChange = { onConfigUpdate(configState.copy(stAlock = it)) },
+        label = { Text("Short-term Limit (%)") },
+        placeholder = { Text("Leave empty for none") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+    )
+
+    OutlinedTextField(
+        value = configState.ltAlock,
+        onValueChange = { onConfigUpdate(configState.copy(ltAlock = it)) },
+        label = { Text("Long-term Limit (%)") },
+        placeholder = { Text("Leave empty for none") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RNodeConnectionModeSelector(
+    selectedMode: String,
+    onModeChange: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val modes =
+        listOf(
+            "classic" to "Bluetooth Classic (SPP)",
+            "ble" to "Bluetooth Low Energy",
+        )
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        OutlinedTextField(
+            value = modes.find { it.first == selectedMode }?.second ?: "Bluetooth Classic (SPP)",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Connection Mode") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+            supportingText = {
+                Text(
+                    "Most RNodes use Bluetooth Classic. Use BLE only if your RNode supports it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            modes.forEach { (mode, label) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        onModeChange(mode)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
 }

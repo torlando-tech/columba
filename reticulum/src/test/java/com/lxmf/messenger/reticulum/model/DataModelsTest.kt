@@ -285,7 +285,7 @@ class DataModelsTest {
                     listOf(
                         InterfaceConfig.TCPClient(targetHost = "192.168.1.1", targetPort = 4242),
                         InterfaceConfig.UDP(listenPort = 4243),
-                        InterfaceConfig.RNode(port = "/dev/ttyUSB0"),
+                        InterfaceConfig.RNode(targetDeviceName = "RNode 1234"),
                         InterfaceConfig.AutoInterface(),
                     ),
                 logLevel = LogLevel.DEBUG,

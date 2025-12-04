@@ -42,6 +42,7 @@ fun BlePermissionBottomSheet(
     onRequestPermissions: () -> Unit,
     sheetState: SheetState,
     rationale: String = getDefaultRationale(),
+    primaryActionLabel: String = "Grant Permissions",
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -95,7 +96,7 @@ fun BlePermissionBottomSheet(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(onClick = onRequestPermissions) {
-                    Text("Grant Permissions")
+                    Text(primaryActionLabel)
                 }
             }
         }

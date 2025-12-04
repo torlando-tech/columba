@@ -15,13 +15,14 @@ data class MigrationBundle(
     val messages: List<MessageExport>,
     val contacts: List<ContactExport>,
     val announces: List<AnnounceExport> = emptyList(),
+    val peerIdentities: List<PeerIdentityExport> = emptyList(),
     val interfaces: List<InterfaceExport> = emptyList(),
     val customThemes: List<CustomThemeExport> = emptyList(),
     val settings: SettingsExport,
     val attachmentManifest: List<AttachmentRef> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 4
+        const val CURRENT_VERSION = 5
     }
 }
 
@@ -103,6 +104,17 @@ data class AnnounceExport(
     val aspect: String?,
     val isFavorite: Boolean,
     val favoritedTimestamp: Long?,
+)
+
+/**
+ * Exported peer identity data for identity restoration.
+ * Peer identities store public keys indexed by identity hash (SHA256 of public key).
+ */
+@Serializable
+data class PeerIdentityExport(
+    val peerHash: String, // Identity hash (SHA256 of public key)
+    val publicKey: String, // Base64 encoded public key
+    val lastSeenTimestamp: Long,
 )
 
 /**
@@ -219,6 +231,7 @@ sealed class ExportResult {
         val messageCount: Int,
         val contactCount: Int,
         val announceCount: Int,
+        val peerIdentityCount: Int,
         val interfaceCount: Int,
         val customThemeCount: Int,
         val attachmentCount: Int,
@@ -236,6 +249,7 @@ sealed class ImportResult {
         val messagesImported: Int,
         val contactsImported: Int,
         val announcesImported: Int,
+        val peerIdentitiesImported: Int,
         val interfacesImported: Int,
         val customThemesImported: Int,
         val attachmentsImported: Int,
@@ -255,6 +269,7 @@ data class MigrationPreview(
     val messageCount: Int,
     val contactCount: Int,
     val announceCount: Int,
+    val peerIdentityCount: Int,
     val interfaceCount: Int,
     val customThemeCount: Int,
     val attachmentCount: Int,

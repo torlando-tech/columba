@@ -77,6 +77,9 @@ class MigrationExporter
                     onProgress(0.55f)
 
                     val announceExports = exportAnnounces()
+                    onProgress(0.58f)
+
+                    val peerIdentityExports = exportPeerIdentities()
                     onProgress(0.6f)
 
                     val interfaceExports = exportInterfaces()
@@ -98,6 +101,7 @@ class MigrationExporter
                         messages = messages,
                         contacts = contacts,
                         announces = announceExports,
+                        peerIdentities = peerIdentityExports,
                         interfaces = interfaceExports,
                         customThemes = customThemeExports,
                         settings = settingsExport,
@@ -233,6 +237,18 @@ class MigrationExporter
                     aspect = announce.aspect,
                     isFavorite = announce.isFavorite,
                     favoritedTimestamp = announce.favoritedTimestamp,
+                )
+            }
+        }
+
+        private suspend fun exportPeerIdentities(): List<PeerIdentityExport> {
+            val peerIdentities = database.peerIdentityDao().getAllPeerIdentities()
+            Log.d(TAG, "Collected ${peerIdentities.size} peer identities")
+            return peerIdentities.map { peer ->
+                PeerIdentityExport(
+                    peerHash = peer.peerHash,
+                    publicKey = Base64.encodeToString(peer.publicKey, Base64.NO_WRAP),
+                    lastSeenTimestamp = peer.lastSeenTimestamp,
                 )
             }
         }
@@ -439,6 +455,7 @@ class MigrationExporter
                     }
 
                     val announceCount = database.announceDao().getAnnounceCount()
+                    val peerIdentityCount = database.peerIdentityDao().getAllPeerIdentities().size
                     val interfaceCount = interfaceDatabase.interfaceDao()
                         .getAllInterfaces().first().size
                     val customThemeCount = database.customThemeDao().getThemeCount()
@@ -448,6 +465,7 @@ class MigrationExporter
                         messageCount = messageCount,
                         contactCount = contactCount,
                         announceCount = announceCount,
+                        peerIdentityCount = peerIdentityCount,
                         interfaceCount = interfaceCount,
                         customThemeCount = customThemeCount,
                         attachmentCount = attachmentCount,

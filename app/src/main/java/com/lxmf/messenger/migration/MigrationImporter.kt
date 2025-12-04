@@ -13,6 +13,7 @@ import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
+import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -71,6 +72,7 @@ class MigrationImporter
                             messageCount = bundle.messages.size,
                             contactCount = bundle.contacts.size,
                             announceCount = bundle.announces.size,
+                            peerIdentityCount = bundle.peerIdentities.size,
                             interfaceCount = bundle.interfaces.size,
                             customThemeCount = bundle.customThemes.size,
                             attachmentCount = bundle.attachmentManifest.size,
@@ -123,6 +125,9 @@ class MigrationImporter
                     onProgress(0.75f)
 
                     val announcesImported = importAnnounces(bundle.announces)
+                    onProgress(0.76f)
+
+                    val peerIdentitiesImported = importPeerIdentities(bundle.peerIdentities)
                     onProgress(0.78f)
 
                     val interfacesImported = importInterfaces(bundle.interfaces)
@@ -148,6 +153,7 @@ class MigrationImporter
                         messagesImported = messagesImported,
                         contactsImported = contactsImported,
                         announcesImported = announcesImported,
+                        peerIdentitiesImported = peerIdentitiesImported,
                         interfacesImported = interfacesImported,
                         customThemesImported = customThemesImported,
                         attachmentsImported = attachmentsImported,
@@ -264,6 +270,19 @@ class MigrationImporter
             }
             database.announceDao().insertAnnounces(entities)
             Log.d(TAG, "Imported ${entities.size} announces")
+            return entities.size
+        }
+
+        private suspend fun importPeerIdentities(peerIdentities: List<PeerIdentityExport>): Int {
+            val entities = peerIdentities.map { peer ->
+                PeerIdentityEntity(
+                    peerHash = peer.peerHash,
+                    publicKey = Base64.decode(peer.publicKey, Base64.NO_WRAP),
+                    lastSeenTimestamp = peer.lastSeenTimestamp,
+                )
+            }
+            database.peerIdentityDao().insertPeerIdentities(entities)
+            Log.d(TAG, "Imported ${entities.size} peer identities")
             return entities.size
         }
 

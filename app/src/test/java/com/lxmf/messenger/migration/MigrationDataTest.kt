@@ -179,7 +179,7 @@ class MigrationDataTest {
         )
 
         assertEquals(MigrationBundle.CURRENT_VERSION, bundle.version)
-        assertEquals(4, bundle.version)
+        assertEquals(5, bundle.version)
     }
 
     @Test
@@ -422,6 +422,7 @@ class MigrationDataTest {
             messageCount = 150,
             contactCount = 25,
             announceCount = 100,
+            peerIdentityCount = 75,
             interfaceCount = 4,
             customThemeCount = 2,
             attachmentCount = 10,
@@ -431,6 +432,7 @@ class MigrationDataTest {
         assertEquals(150, result.messageCount)
         assertEquals(25, result.contactCount)
         assertEquals(100, result.announceCount)
+        assertEquals(75, result.peerIdentityCount)
         assertEquals(4, result.interfaceCount)
         assertEquals(2, result.customThemeCount)
         assertEquals(10, result.attachmentCount)
@@ -443,6 +445,7 @@ class MigrationDataTest {
             messagesImported = 100,
             contactsImported = 15,
             announcesImported = 50,
+            peerIdentitiesImported = 40,
             interfacesImported = 3,
             customThemesImported = 1,
             attachmentsImported = 5,
@@ -452,6 +455,7 @@ class MigrationDataTest {
         assertEquals(100, result.messagesImported)
         assertEquals(15, result.contactsImported)
         assertEquals(50, result.announcesImported)
+        assertEquals(40, result.peerIdentitiesImported)
         assertEquals(3, result.interfacesImported)
         assertEquals(1, result.customThemesImported)
         assertEquals(5, result.attachmentsImported)

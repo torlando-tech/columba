@@ -246,19 +246,23 @@ class ConversationRepository
             }
 
             // NOW insert the message (after conversation exists) with SANITIZED content
-            val messageEntity =
-                MessageEntity(
-                    id = message.id,
-                    conversationHash = peerHash,
-                    identityHash = identityHash,
-                    content = sanitizedContent, // Store SANITIZED content
-                    timestamp = message.timestamp,
-                    isFromMe = message.isFromMe,
-                    status = message.status,
-                    isRead = message.isFromMe, // Our own messages are always "read"
-                    fieldsJson = message.fieldsJson, // LXMF fields (attachments, images, etc.)
-                )
-            messageDao.insertMessage(messageEntity)
+            // Only insert if message doesn't already exist - prevents LXMF replay from
+            // overwriting imported messages with new timestamps (fixes ordering bug)
+            if (!messageExists) {
+                val messageEntity =
+                    MessageEntity(
+                        id = message.id,
+                        conversationHash = peerHash,
+                        identityHash = identityHash,
+                        content = sanitizedContent, // Store SANITIZED content
+                        timestamp = message.timestamp,
+                        isFromMe = message.isFromMe,
+                        status = message.status,
+                        isRead = message.isFromMe, // Our own messages are always "read"
+                        fieldsJson = message.fieldsJson, // LXMF fields (attachments, images, etc.)
+                    )
+                messageDao.insertMessage(messageEntity)
+            }
         }
 
         /**

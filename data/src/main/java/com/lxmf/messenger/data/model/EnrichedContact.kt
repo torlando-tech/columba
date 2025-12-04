@@ -1,5 +1,7 @@
 package com.lxmf.messenger.data.model
 
+import com.lxmf.messenger.data.db.entity.ContactStatus
+
 /**
  * Enriched contact data combining contacts table with announces and conversations.
  *
@@ -10,7 +12,7 @@ package com.lxmf.messenger.data.model
  */
 data class EnrichedContact(
     val destinationHash: String,
-    val publicKey: ByteArray,
+    val publicKey: ByteArray?, // Nullable for pending contacts
     // Display name with priority: customNickname > announceName > destinationHash
     val displayName: String,
     val customNickname: String?,
@@ -27,8 +29,10 @@ data class EnrichedContact(
     val notes: String?,
     val tags: String?, // JSON array
     val addedTimestamp: Long,
-    val addedVia: String, // "ANNOUNCE", "QR_CODE", or "MANUAL"
+    val addedVia: String, // "ANNOUNCE", "QR_CODE", "MANUAL", "CONVERSATION", or "MANUAL_PENDING"
     val isPinned: Boolean,
+    // Identity resolution status
+    val status: ContactStatus = ContactStatus.ACTIVE,
 ) {
     /**
      * Parse tags from JSON string to list
@@ -55,7 +59,10 @@ data class EnrichedContact(
         other as EnrichedContact
 
         if (destinationHash != other.destinationHash) return false
-        if (!publicKey.contentEquals(other.publicKey)) return false
+        if (publicKey != null) {
+            if (other.publicKey == null) return false
+            if (!publicKey.contentEquals(other.publicKey)) return false
+        } else if (other.publicKey != null) return false
         if (displayName != other.displayName) return false
         if (customNickname != other.customNickname) return false
         if (announceName != other.announceName) return false
@@ -70,13 +77,14 @@ data class EnrichedContact(
         if (addedTimestamp != other.addedTimestamp) return false
         if (addedVia != other.addedVia) return false
         if (isPinned != other.isPinned) return false
+        if (status != other.status) return false
 
         return true
     }
 
     override fun hashCode(): Int {
         var result = destinationHash.hashCode()
-        result = 31 * result + publicKey.contentHashCode()
+        result = 31 * result + (publicKey?.contentHashCode() ?: 0)
         result = 31 * result + displayName.hashCode()
         result = 31 * result + (customNickname?.hashCode() ?: 0)
         result = 31 * result + (announceName?.hashCode() ?: 0)
@@ -91,6 +99,7 @@ data class EnrichedContact(
         result = 31 * result + addedTimestamp.hashCode()
         result = 31 * result + addedVia.hashCode()
         result = 31 * result + isPinned.hashCode()
+        result = 31 * result + status.hashCode()
         return result
     }
 }

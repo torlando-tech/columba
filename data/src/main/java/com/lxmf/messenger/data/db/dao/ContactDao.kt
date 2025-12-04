@@ -50,7 +50,8 @@ interface ContactDao {
             c.tags,
             c.addedTimestamp,
             c.addedVia,
-            c.isPinned
+            c.isPinned,
+            c.status
         FROM contacts c
         LEFT JOIN announces a ON c.destinationHash = a.destinationHash
         LEFT JOIN conversations conv ON c.destinationHash = conv.peerHash AND c.identityHash = conv.identityHash
@@ -245,4 +246,54 @@ interface ContactDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertContacts(contacts: List<ContactEntity>)
+
+    // ========== PENDING IDENTITY RESOLUTION ==========
+
+    /**
+     * Update contact identity when resolved from network.
+     * Sets public key and changes status to ACTIVE.
+     */
+    @Query(
+        """
+        UPDATE contacts
+        SET publicKey = :publicKey, status = :status
+        WHERE destinationHash = :destinationHash AND identityHash = :identityHash
+        """,
+    )
+    suspend fun updateContactIdentity(
+        destinationHash: String,
+        identityHash: String,
+        publicKey: ByteArray,
+        status: String,
+    )
+
+    /**
+     * Update contact status (e.g., PENDING_IDENTITY -> UNRESOLVED after timeout)
+     */
+    @Query(
+        """
+        UPDATE contacts SET status = :status
+        WHERE destinationHash = :destinationHash AND identityHash = :identityHash
+        """,
+    )
+    suspend fun updateContactStatus(
+        destinationHash: String,
+        identityHash: String,
+        status: String,
+    )
+
+    /**
+     * Get all contacts with specified statuses (for background identity resolution)
+     */
+    @Query("SELECT * FROM contacts WHERE status IN (:statuses)")
+    suspend fun getContactsByStatus(statuses: List<String>): List<ContactEntity>
+
+    /**
+     * Get all contacts with specified statuses for a specific identity
+     */
+    @Query("SELECT * FROM contacts WHERE identityHash = :identityHash AND status IN (:statuses)")
+    suspend fun getContactsByStatusForIdentity(
+        identityHash: String,
+        statuses: List<String>,
+    ): List<ContactEntity>
 }

@@ -1,7 +1,9 @@
 package com.lxmf.messenger.service
 
 import android.util.Log
+import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.repository.AnnounceRepository
+import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.notifications.NotificationHelper
@@ -31,6 +33,7 @@ class MessageCollector
         private val reticulumProtocol: ReticulumProtocol,
         private val conversationRepository: ConversationRepository,
         private val announceRepository: AnnounceRepository,
+        private val contactRepository: ContactRepository,
         private val identityRepository: IdentityRepository,
         private val notificationHelper: NotificationHelper,
     ) {
@@ -217,6 +220,19 @@ class MessageCollector
                                 aspect = announce.aspect,
                             )
                             Log.d(TAG, "Persisted announce to database: $peerName ($peerHash)")
+
+                            // Check if this announce resolves a pending contact
+                            if (publicKey.isNotEmpty()) {
+                                try {
+                                    val pendingContact = contactRepository.getContact(peerHash)
+                                    if (pendingContact?.status == ContactStatus.PENDING_IDENTITY) {
+                                        contactRepository.updateContactWithIdentity(peerHash, publicKey)
+                                        Log.i(TAG, "Resolved pending contact from announce: $peerHash")
+                                    }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Error checking/updating pending contact", e)
+                                }
+                            }
 
                             // Show notification for heard announce
                             try {

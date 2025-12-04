@@ -362,6 +362,45 @@ class ReticulumServiceBinder(
 
     override fun getBleConnectionDetails(): String = bleCoordinator.getConnectionDetailsJson()
 
+    override fun recallIdentity(destHash: ByteArray): String =
+        try {
+            val destHashHex = destHash.joinToString("") { "%02x".format(it) }
+            Log.d(TAG, "Attempting to recall identity for dest hash: ${destHashHex.take(16)}...")
+
+            val result =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr("recall_identity", destHashHex)
+                }
+
+            if (result != null) {
+                val found = result.getDictValue("found")?.toBoolean() ?: false
+                if (found) {
+                    val publicKey = result.getDictValue("public_key")?.toString() ?: ""
+                    Log.d(TAG, "Identity found for ${destHashHex.take(16)}...")
+                    JSONObject().apply {
+                        put("found", true)
+                        put("public_key", publicKey)
+                    }.toString()
+                } else {
+                    Log.d(TAG, "No identity found for ${destHashHex.take(16)}...")
+                    JSONObject().apply {
+                        put("found", false)
+                    }.toString()
+                }
+            } else {
+                Log.d(TAG, "Wrapper returned null for recall_identity")
+                JSONObject().apply {
+                    put("found", false)
+                }.toString()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error recalling identity", e)
+            JSONObject().apply {
+                put("found", false)
+                put("error", e.message)
+            }.toString()
+        }
+
     // ===========================================
     // Private Helpers
     // ===========================================

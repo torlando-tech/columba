@@ -235,4 +235,15 @@ interface IReticulumService {
      * @return JSON string containing array of connection details
      */
     String getBleConnectionDetails();
+
+    /**
+     * Recall an identity from local cache by destination hash.
+     *
+     * This checks Reticulum's known_destinations cache for a previously
+     * seen identity matching the destination hash.
+     *
+     * @param destHash Destination hash bytes (16 bytes)
+     * @return JSON string: {"found": true, "public_key": "hex..."} or {"found": false}
+     */
+    String recallIdentity(in byte[] destHash);
 }

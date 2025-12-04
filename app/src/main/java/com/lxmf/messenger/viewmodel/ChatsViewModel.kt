@@ -88,12 +88,10 @@ class ChatsViewModel
                         return@launch
                     }
 
-                    // Use addContactFromAnnounce with CONVERSATION as source
-                    // Note: We'll update ContactRepository to support this
+                    // Use addContactFromConversation which uses the announce peerName via COALESCE
                     contactRepository.addContactFromConversation(
                         destinationHash = conversation.peerHash,
                         publicKey = publicKey,
-                        peerName = conversation.peerName,
                     )
                     Log.d(TAG, "Saved ${conversation.peerName} to contacts")
                 } catch (e: Exception) {

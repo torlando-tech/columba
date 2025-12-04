@@ -2016,6 +2016,51 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "get_lxmf_identity", f"Error getting LXMF identity: {e}")
             return {"error": str(e)}
 
+    def recall_identity(self, destination_hash_hex: str) -> Dict:
+        """
+        Attempt to recall an identity from Reticulum's local cache by destination hash.
+
+        This checks the known_destinations cache for a previously seen identity
+        that announced with this destination hash.
+
+        Args:
+            destination_hash_hex: The destination hash as a hex string (32 chars)
+
+        Returns:
+            Dict with:
+                - {"found": True, "public_key": "hex..."} if identity is found
+                - {"found": False} if identity is not in cache
+                - {"error": "..."} if an error occurred
+        """
+        try:
+            if not RETICULUM_AVAILABLE:
+                return {"found": False, "error": "Reticulum not available"}
+
+            # Convert hex string to bytes
+            dest_hash = bytes.fromhex(destination_hash_hex)
+            log_debug("ReticulumWrapper", "recall_identity", f"Attempting to recall identity for dest hash: {destination_hash_hex[:16]}...")
+
+            # Try to recall the identity from Reticulum's cache
+            identity = RNS.Identity.recall(dest_hash)
+
+            if identity:
+                public_key = identity.get_public_key()
+                log_info("ReticulumWrapper", "recall_identity", f"Found identity in cache for {destination_hash_hex[:16]}...")
+                return {
+                    "found": True,
+                    "public_key": public_key.hex()
+                }
+            else:
+                log_debug("ReticulumWrapper", "recall_identity", f"No identity found in cache for {destination_hash_hex[:16]}...")
+                return {"found": False}
+
+        except ValueError as e:
+            log_error("ReticulumWrapper", "recall_identity", f"Invalid hex string: {e}")
+            return {"found": False, "error": f"Invalid hex string: {e}"}
+        except Exception as e:
+            log_error("ReticulumWrapper", "recall_identity", f"Error recalling identity: {e}")
+            return {"found": False, "error": str(e)}
+
     def store_peer_identity(self, identity_hash: bytes, public_key: bytes) -> Dict:
         """
         Store a peer's identity in Reticulum's identity store so it can be recalled later.

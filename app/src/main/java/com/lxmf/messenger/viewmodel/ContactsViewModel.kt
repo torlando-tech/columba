@@ -3,9 +3,13 @@ package com.lxmf.messenger.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.util.IdentityQrCodeUtils
+import com.lxmf.messenger.util.validation.IdentityInput
+import com.lxmf.messenger.util.validation.InputValidator
+import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,6 +18,32 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/**
+ * Result of adding a contact via the new unified input method.
+ */
+sealed class AddContactResult {
+    /**
+     * Contact was added successfully with full identity (immediately active).
+     */
+    object Success : AddContactResult()
+
+    /**
+     * Contact was added with pending identity status.
+     * Network search has been initiated to resolve the public key.
+     */
+    object PendingIdentity : AddContactResult()
+
+    /**
+     * Contact already exists in the contact list.
+     */
+    data class AlreadyExists(val existingContact: EnrichedContact) : AddContactResult()
+
+    /**
+     * An error occurred while adding the contact.
+     */
+    data class Error(val message: String) : AddContactResult()
+}
 
 /**
  * Data class for grouping contacts by pinned status
@@ -107,14 +137,12 @@ class ContactsViewModel
         fun addContactFromAnnounce(
             destinationHash: String,
             publicKey: ByteArray,
-            announceName: String? = null,
         ) {
             viewModelScope.launch {
                 try {
                     contactRepository.addContactFromAnnounce(
                         destinationHash = destinationHash,
                         publicKey = publicKey,
-                        announceName = announceName,
                     )
                     Log.d(TAG, "Added contact from announce: $destinationHash")
                 } catch (e: Exception) {
@@ -284,6 +312,7 @@ class ContactsViewModel
                         addedTimestamp = contactEntity.addedTimestamp,
                         addedVia = contactEntity.addedVia,
                         isPinned = contactEntity.isPinned,
+                        status = contactEntity.status,
                     )
                 } else {
                     null
@@ -310,6 +339,131 @@ class ContactsViewModel
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to decode QR code data", e)
                 null
+            }
+        }
+
+        // ========== SIDEBAND IMPORT SUPPORT ==========
+
+        /**
+         * Add a contact from user input (supports both full lxma:// URL and hash-only).
+         *
+         * This method handles the unified input flow:
+         * 1. Parses the input to determine format
+         * 2. Checks for duplicate contacts
+         * 3. For hash-only input, checks local caches for existing identity
+         * 4. Adds contact as ACTIVE (if identity known) or PENDING_IDENTITY (if not)
+         *
+         * @param input The user's input (lxma:// URL or 32-char hex hash)
+         * @param nickname Optional display name for the contact
+         * @return AddContactResult indicating the outcome
+         */
+        suspend fun addContactFromInput(
+            input: String,
+            nickname: String? = null,
+        ): AddContactResult {
+            return try {
+                // Step 1: Parse the input
+                val parsed = InputValidator.parseIdentityInput(input)
+                if (parsed is ValidationResult.Error) {
+                    Log.w(TAG, "Input validation failed: ${parsed.message}")
+                    return AddContactResult.Error(parsed.message)
+                }
+
+                val identityInput = (parsed as ValidationResult.Success).value
+
+                // Step 2: Get destination hash for duplicate check
+                val destinationHash =
+                    when (identityInput) {
+                        is IdentityInput.FullIdentity -> identityInput.destinationHash
+                        is IdentityInput.DestinationHashOnly -> identityInput.destinationHash
+                    }
+
+                // Step 3: Check for duplicate
+                val existingContact = checkContactExists(destinationHash)
+                if (existingContact != null) {
+                    Log.d(TAG, "Contact already exists: $destinationHash")
+                    return AddContactResult.AlreadyExists(existingContact)
+                }
+
+                // Step 4: Handle based on input type
+                when (identityInput) {
+                    is IdentityInput.FullIdentity -> {
+                        // Full identity - add immediately as ACTIVE
+                        val result =
+                            contactRepository.addContactManually(
+                                destinationHash = identityInput.destinationHash,
+                                publicKey = identityInput.publicKey,
+                                nickname = nickname,
+                            )
+                        if (result.isSuccess) {
+                            Log.d(TAG, "Added contact with full identity: $destinationHash")
+                            AddContactResult.Success
+                        } else {
+                            val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                            Log.e(TAG, "Failed to add contact: $error")
+                            AddContactResult.Error(error)
+                        }
+                    }
+
+                    is IdentityInput.DestinationHashOnly -> {
+                        // Hash only - check announces first, then add as PENDING_IDENTITY if needed
+                        val result =
+                            contactRepository.addPendingContact(
+                                destinationHash = identityInput.destinationHash,
+                                nickname = nickname,
+                            )
+                        if (result.isSuccess) {
+                            when (result.getOrNull()) {
+                                is ContactRepository.AddPendingResult.ResolvedImmediately -> {
+                                    Log.d(TAG, "Contact resolved from existing announce: $destinationHash")
+                                    AddContactResult.Success
+                                }
+                                is ContactRepository.AddPendingResult.AddedAsPending -> {
+                                    Log.d(TAG, "Added pending contact: $destinationHash")
+                                    // TODO: Trigger network path request here when service integration is ready
+                                    AddContactResult.PendingIdentity
+                                }
+                                null -> {
+                                    Log.e(TAG, "Unexpected null result from addPendingContact")
+                                    AddContactResult.Error("Unexpected error")
+                                }
+                            }
+                        } else {
+                            val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                            Log.e(TAG, "Failed to add pending contact: $error")
+                            AddContactResult.Error(error)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error adding contact from input", e)
+                AddContactResult.Error(e.message ?: "Unknown error")
+            }
+        }
+
+        /**
+         * Retry identity resolution for a pending or unresolved contact.
+         * Resets status to PENDING_IDENTITY and triggers a new network search.
+         *
+         * @param destinationHash The contact's destination hash
+         */
+        fun retryIdentityResolution(destinationHash: String) {
+            viewModelScope.launch {
+                try {
+                    val result =
+                        contactRepository.updateContactStatus(
+                            destinationHash = destinationHash,
+                            status = ContactStatus.PENDING_IDENTITY,
+                        )
+                    if (result.isSuccess) {
+                        Log.d(TAG, "Reset contact status to PENDING_IDENTITY: $destinationHash")
+                        // TODO: Trigger network path request here when service integration is ready
+                    } else {
+                        Log.e(TAG, "Failed to reset contact status: ${result.exceptionOrNull()?.message}")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error retrying identity resolution", e)
+                }
             }
         }
     }

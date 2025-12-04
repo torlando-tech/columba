@@ -102,7 +102,7 @@ class AnnounceStreamViewModelTest {
         coEvery { announceRepository.getAnnounce(any()) } returns null
         coEvery { contactRepository.hasContact(any()) } returns false
         coEvery { contactRepository.deleteContact(any()) } just Runs
-        coEvery { contactRepository.addContactFromAnnounce(any(), any(), any()) } returns Result.success(Unit)
+        coEvery { contactRepository.addContactFromAnnounce(any(), any()) } returns Result.success(Unit)
     }
 
     @After

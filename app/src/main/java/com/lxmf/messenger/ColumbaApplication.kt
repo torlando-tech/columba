@@ -10,6 +10,7 @@ import com.lxmf.messenger.reticulum.model.LogLevel
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.MessageCollector
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -46,6 +47,9 @@ class ColumbaApplication : Application() {
 
     @Inject
     lateinit var settingsRepository: SettingsRepository
+
+    @Inject
+    lateinit var identityResolutionManager: IdentityResolutionManager
 
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Main for lifecycle operations and UI coordination
@@ -156,10 +160,14 @@ class ColumbaApplication : Application() {
                                 "ColumbaApplication",
                                 "Identity verified (${dbIdentityHash?.take(8) ?: "none"}...) - reconnecting",
                             )
-                            // Identity matches - just reconnect message collector and auto-announce
+                            // Identity matches - reconnect collectors and managers
                             messageCollector.startCollecting()
                             autoAnnounceManager.start()
-                            android.util.Log.d("ColumbaApplication", "MessageCollector and AutoAnnounceManager started")
+                            identityResolutionManager.start(applicationScope)
+                            android.util.Log.d(
+                                "ColumbaApplication",
+                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager started",
+                            )
                             return@launch
                         }
                     } else if (currentStatus != "SHUTDOWN" && currentStatus != null &&
@@ -290,7 +298,11 @@ class ColumbaApplication : Application() {
                             // Start the message collector service after Reticulum is ready
                             messageCollector.startCollecting()
                             autoAnnounceManager.start()
-                            android.util.Log.d("ColumbaApplication", "MessageCollector and AutoAnnounceManager started")
+                            identityResolutionManager.start(applicationScope)
+                            android.util.Log.d(
+                                "ColumbaApplication",
+                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager started",
+                            )
                         }
                         .onFailure { error ->
                             android.util.Log.e("ColumbaApplication", "Failed to initialize Reticulum: ${error.message}", error)
@@ -305,9 +317,10 @@ class ColumbaApplication : Application() {
     override fun onTerminate() {
         super.onTerminate()
 
-        // Stop auto-announce manager and message collection
+        // Stop auto-announce manager, message collection, and identity resolution
         autoAnnounceManager.stop()
         messageCollector.stopCollecting()
+        identityResolutionManager.stop()
 
         // Shutdown and unbind from service when app terminates
         if (reticulumProtocol is ServiceReticulumProtocol) {

@@ -501,4 +501,133 @@ class InputValidatorTest {
         val roundTrip = bytes.toHexString()
         assertEquals(original, roundTrip)
     }
+
+    // ========== PARSE IDENTITY INPUT TESTS (Sideband Import) ==========
+
+    @Test
+    fun `parseIdentityInput - valid lxma URL returns FullIdentity`() {
+        val validLxma = "lxma://0123456789abcdef0123456789abcdef:" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef"
+        val result = InputValidator.parseIdentityInput(validLxma)
+        assertTrue(result is ValidationResult.Success)
+        val identity = (result as ValidationResult.Success).value
+        assertTrue(identity is IdentityInput.FullIdentity)
+        assertEquals("0123456789abcdef0123456789abcdef", (identity as IdentityInput.FullIdentity).destinationHash)
+        assertEquals(64, identity.publicKey.size)
+    }
+
+    @Test
+    fun `parseIdentityInput - valid 32-char hex returns DestinationHashOnly`() {
+        val validHash = "0123456789abcdef0123456789abcdef"
+        val result = InputValidator.parseIdentityInput(validHash)
+        assertTrue(result is ValidationResult.Success)
+        val identity = (result as ValidationResult.Success).value
+        assertTrue(identity is IdentityInput.DestinationHashOnly)
+        val hashOnly = identity as IdentityInput.DestinationHashOnly
+        assertEquals("0123456789abcdef0123456789abcdef", hashOnly.destinationHash)
+    }
+
+    @Test
+    fun `parseIdentityInput - uppercase 32-char hex returns DestinationHashOnly`() {
+        val validHash = "0123456789ABCDEF0123456789ABCDEF"
+        val result = InputValidator.parseIdentityInput(validHash)
+        assertTrue(result is ValidationResult.Success)
+        val identity = (result as ValidationResult.Success).value
+        assertTrue(identity is IdentityInput.DestinationHashOnly)
+        // Hash should be normalized to lowercase
+        val hashOnly = identity as IdentityInput.DestinationHashOnly
+        assertEquals("0123456789abcdef0123456789abcdef", hashOnly.destinationHash)
+    }
+
+    @Test
+    fun `parseIdentityInput - trims whitespace from hash`() {
+        val validHash = "  0123456789abcdef0123456789abcdef  "
+        val result = InputValidator.parseIdentityInput(validHash)
+        assertTrue(result is ValidationResult.Success)
+        val identity = (result as ValidationResult.Success).value
+        assertTrue(identity is IdentityInput.DestinationHashOnly)
+    }
+
+    @Test
+    fun `parseIdentityInput - trims whitespace from lxma URL`() {
+        val validLxma = "  lxma://0123456789abcdef0123456789abcdef:" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef  "
+        val result = InputValidator.parseIdentityInput(validLxma)
+        assertTrue(result is ValidationResult.Success)
+        val identity = (result as ValidationResult.Success).value
+        assertTrue(identity is IdentityInput.FullIdentity)
+    }
+
+    @Test
+    fun `parseIdentityInput - empty string fails`() {
+        val result = InputValidator.parseIdentityInput("")
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `parseIdentityInput - whitespace only fails`() {
+        val result = InputValidator.parseIdentityInput("   ")
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `parseIdentityInput - short hash fails`() {
+        val shortHash = "0123456789abcdef" // Only 16 chars
+        val result = InputValidator.parseIdentityInput(shortHash)
+        assertTrue(result is ValidationResult.Error)
+        assertTrue((result as ValidationResult.Error).message.contains("32"))
+    }
+
+    @Test
+    fun `parseIdentityInput - long hash fails`() {
+        val longHash = "0123456789abcdef0123456789abcdef0123" // 36 chars
+        val result = InputValidator.parseIdentityInput(longHash)
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `parseIdentityInput - invalid hex characters fail`() {
+        val invalidHash = "0123456789abcdef0123456789abcdeg" // 'g' is invalid
+        val result = InputValidator.parseIdentityInput(invalidHash)
+        assertTrue(result is ValidationResult.Error)
+        assertTrue((result as ValidationResult.Error).message.contains("hexadecimal"))
+    }
+
+    @Test
+    fun `parseIdentityInput - random text fails`() {
+        val randomText = "this is not a valid input"
+        val result = InputValidator.parseIdentityInput(randomText)
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `parseIdentityInput - malformed lxma URL fails`() {
+        val malformedLxma = "lxma://invalid"
+        val result = InputValidator.parseIdentityInput(malformedLxma)
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `parseIdentityInput - lxma URL with invalid hash fails`() {
+        val invalidLxma = "lxma://tooshort:" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef" +
+            "0123456789abcdef0123456789abcdef"
+        val result = InputValidator.parseIdentityInput(invalidLxma)
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `parseIdentityInput - lxma URL with invalid public key fails`() {
+        val invalidLxma = "lxma://0123456789abcdef0123456789abcdef:tooshort"
+        val result = InputValidator.parseIdentityInput(invalidLxma)
+        assertTrue(result is ValidationResult.Error)
+    }
 }

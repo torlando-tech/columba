@@ -756,8 +756,34 @@ class ServiceReticulumProtocol(
     }
 
     override suspend fun recallIdentity(hash: ByteArray): Identity? {
-        // Not implemented yet
-        return null
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.recallIdentity(hash)
+            val result = JSONObject(resultJson)
+
+            if (result.optBoolean("found", false)) {
+                val publicKeyHex = result.optString("public_key", "")
+                if (publicKeyHex.isNotEmpty()) {
+                    val publicKey =
+                        publicKeyHex
+                            .chunked(2)
+                            .map { it.toInt(16).toByte() }
+                            .toByteArray()
+                    // Return an Identity with just the public key
+                    // The hash is derived from the public key in Reticulum
+                    Identity(
+                        hash = hash,
+                        publicKey = publicKey,
+                        privateKey = null, // We don't have the private key for recalled identities
+                    )
+                } else {
+                    null
+                }
+            } else {
+                null
+            }
+        }.getOrNull()
     }
 
     override suspend fun createIdentityWithName(displayName: String): Map<String, Any> {

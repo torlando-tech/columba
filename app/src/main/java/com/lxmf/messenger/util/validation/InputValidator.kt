@@ -19,6 +19,49 @@ import com.lxmf.messenger.util.validation.ValidationConstants.MIN_PORT
 import com.lxmf.messenger.util.validation.ValidationConstants.PUBLIC_KEY_LENGTH
 
 /**
+ * Represents parsed identity input from user.
+ * Can be either a full identity (hash + pubkey) or just a destination hash.
+ */
+sealed class IdentityInput {
+    /**
+     * Full identity with both destination hash and public key.
+     * Can be added as an active contact immediately.
+     *
+     * @property destinationHash The 32-character hex destination hash
+     * @property publicKey The 64-byte public key as ByteArray
+     */
+    data class FullIdentity(
+        val destinationHash: String,
+        val publicKey: ByteArray,
+    ) : IdentityInput() {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as FullIdentity
+            if (destinationHash != other.destinationHash) return false
+            if (!publicKey.contentEquals(other.publicKey)) return false
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = destinationHash.hashCode()
+            result = 31 * result + publicKey.contentHashCode()
+            return result
+        }
+    }
+
+    /**
+     * Only destination hash available.
+     * Must resolve public key from network before messaging.
+     *
+     * @property destinationHash The 32-character hex destination hash
+     */
+    data class DestinationHashOnly(
+        val destinationHash: String,
+    ) : IdentityInput()
+}
+
+/**
  * Core input validation utilities for the application.
  *
  * Provides comprehensive validation functions for:
@@ -168,6 +211,57 @@ object InputValidator {
 
         return ValidationResult.Success(
             Pair(hashResult.getOrThrow(), keyResult.getOrThrow()),
+        )
+    }
+
+    /**
+     * Parses user input and determines the identity format.
+     *
+     * Supports two formats:
+     * 1. Full lxma:// URL: "lxma://<32-char-hash>:<128-char-pubkey>"
+     * 2. Destination hash only: 32 hexadecimal characters (from Sideband's "Copy Address")
+     *
+     * @param input Raw user input string
+     * @return ValidationResult containing parsed IdentityInput or error message
+     */
+    @Suppress("ReturnCount") // Early returns make validation logic clearer
+    fun parseIdentityInput(input: String): ValidationResult<IdentityInput> {
+        val trimmed = input.trim().lowercase()
+
+        // Check for empty input
+        if (trimmed.isEmpty()) {
+            return ValidationResult.Error("Please enter an identity string or destination hash")
+        }
+
+        // Try full lxma:// format first
+        if (trimmed.startsWith(LXMF_IDENTITY_PREFIX)) {
+            return when (val result = validateIdentityString(trimmed)) {
+                is ValidationResult.Success -> {
+                    val (hashBytes, pubKeyBytes) = result.value
+                    // Convert hash bytes back to hex string for storage
+                    val destHash = hashBytes.joinToString("") { "%02x".format(it) }
+                    ValidationResult.Success(IdentityInput.FullIdentity(destHash, pubKeyBytes))
+                }
+                is ValidationResult.Error -> ValidationResult.Error(result.message)
+            }
+        }
+
+        // Try destination hash only (32 hex chars)
+        if (trimmed.length == DESTINATION_HASH_LENGTH * 2) {
+            // Validate it's valid hex
+            if (!HEX_REGEX.matches(trimmed)) {
+                return ValidationResult.Error(
+                    "Invalid destination hash: must contain only hexadecimal characters (0-9, a-f)",
+                )
+            }
+            return ValidationResult.Success(IdentityInput.DestinationHashOnly(trimmed))
+        }
+
+        // Neither format matches - provide helpful error
+        return ValidationResult.Error(
+            "Invalid format. Enter either:\n" +
+                "• Full identity: lxma://hash:pubkey\n" +
+                "• Destination hash: 32 hexadecimal characters",
         )
     }
 

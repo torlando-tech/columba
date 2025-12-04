@@ -33,11 +33,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Delete
@@ -45,6 +47,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -85,6 +88,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.ui.components.AddContactConfirmationDialog
 import com.lxmf.messenger.ui.components.Identicon
@@ -93,7 +97,9 @@ import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.util.validation.ValidationResult
+import com.lxmf.messenger.viewmodel.AddContactResult
 import com.lxmf.messenger.viewmodel.ContactsViewModel
+import kotlinx.coroutines.launch
 
 private const val TAG = "ContactsScreen"
 
@@ -128,6 +134,10 @@ fun ContactsScreen(
     var showEditNicknameDialog by remember { mutableStateOf(false) }
     var editNicknameContactHash by remember { mutableStateOf<String?>(null) }
     var editNicknameCurrentValue by remember { mutableStateOf<String?>(null) }
+
+    // Pending contact bottom sheet state
+    var showPendingContactSheet by remember { mutableStateOf(false) }
+    var pendingContactToShow by remember { mutableStateOf<EnrichedContact?>(null) }
 
     val scope = rememberCoroutineScope()
 
@@ -286,7 +296,17 @@ fun ContactsScreen(
                         Box(modifier = Modifier.fillMaxWidth()) {
                             ContactListItem(
                                 contact = contact,
-                                onClick = { onContactClick(contact.destinationHash, contact.displayName) },
+                                onClick = {
+                                    // Show bottom sheet for pending/unresolved contacts
+                                    if (contact.status == ContactStatus.PENDING_IDENTITY ||
+                                        contact.status == ContactStatus.UNRESOLVED
+                                    ) {
+                                        pendingContactToShow = contact
+                                        showPendingContactSheet = true
+                                    } else {
+                                        onContactClick(contact.destinationHash, contact.displayName)
+                                    }
+                                },
                                 onPinClick = { viewModel.togglePin(contact.destinationHash) },
                                 onLongPress = {
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -347,7 +367,17 @@ fun ContactsScreen(
                         Box(modifier = Modifier.fillMaxWidth()) {
                             ContactListItem(
                                 contact = contact,
-                                onClick = { onContactClick(contact.destinationHash, contact.displayName) },
+                                onClick = {
+                                    // Show bottom sheet for pending/unresolved contacts
+                                    if (contact.status == ContactStatus.PENDING_IDENTITY ||
+                                        contact.status == ContactStatus.UNRESOLVED
+                                    ) {
+                                        pendingContactToShow = contact
+                                        showPendingContactSheet = true
+                                    } else {
+                                        onContactClick(contact.destinationHash, contact.displayName)
+                                    }
+                                },
                                 onPinClick = { viewModel.togglePin(contact.destinationHash) },
                                 onLongPress = {
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -402,13 +432,36 @@ fun ContactsScreen(
         )
     }
 
+    // Manual entry dialog - state for pending identity snackbar
+    var showPendingIdentityMessage by remember { mutableStateOf(false) }
+
     // Manual entry dialog
     if (showManualEntryDialog) {
         ManualEntryDialog(
             onDismiss = { showManualEntryDialog = false },
             onConfirm = { identityString, nickname ->
-                viewModel.addContactFromQrCode(identityString, nickname)
-                showManualEntryDialog = false
+                scope.launch {
+                    when (val result = viewModel.addContactFromInput(identityString, nickname)) {
+                        is AddContactResult.Success -> {
+                            Log.d(TAG, "Contact added successfully")
+                            showManualEntryDialog = false
+                        }
+                        is AddContactResult.PendingIdentity -> {
+                            Log.d(TAG, "Contact added with pending identity")
+                            showManualEntryDialog = false
+                            showPendingIdentityMessage = true
+                        }
+                        is AddContactResult.AlreadyExists -> {
+                            existingContactName = result.existingContact.displayName
+                            showContactExistsDialog = true
+                            showManualEntryDialog = false
+                        }
+                        is AddContactResult.Error -> {
+                            Log.e(TAG, "Error adding contact: ${result.message}")
+                            // Error is handled inside the dialog
+                        }
+                    }
+                }
             },
         )
     }
@@ -499,6 +552,23 @@ fun ContactsScreen(
             },
         )
     }
+
+    // Pending/unresolved contact bottom sheet
+    if (showPendingContactSheet && pendingContactToShow != null) {
+        PendingContactBottomSheet(
+            contact = pendingContactToShow!!,
+            onDismiss = {
+                showPendingContactSheet = false
+                pendingContactToShow = null
+            },
+            onRetrySearch = {
+                viewModel.retryIdentityResolution(pendingContactToShow!!.destinationHash)
+            },
+            onRemoveContact = {
+                viewModel.deleteContact(pendingContactToShow!!.destinationHash)
+            },
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -510,6 +580,14 @@ fun ContactListItem(
     onPinClick: () -> Unit,
     onLongPress: () -> Unit = {},
 ) {
+    // Determine if contact is pending or unresolved
+    val isPending = contact.status == ContactStatus.PENDING_IDENTITY
+    val isUnresolved = contact.status == ContactStatus.UNRESOLVED
+    val isActive = contact.status == ContactStatus.ACTIVE
+
+    // Dim colors for non-active contacts
+    val textAlpha = if (isActive) 1f else 0.6f
+
     Card(
         modifier =
             modifier
@@ -532,23 +610,62 @@ fun ContactListItem(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Identicon with online indicator
+            // Identicon with online/status indicator
             Box {
+                // Use publicKey if available, otherwise use destinationHash bytes for identicon
                 Identicon(
-                    hash = contact.publicKey,
+                    hash = contact.publicKey ?: contact.destinationHash.toByteArray(),
                     size = 48.dp,
                 )
 
-                // Online indicator
-                if (contact.isOnline) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(14.dp)
-                                .align(Alignment.BottomEnd)
-                                .background(MeshConnected, CircleShape)
-                                .clip(CircleShape),
-                    )
+                // Status indicator overlay
+                when {
+                    isPending -> {
+                        // Show spinner for pending
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(18.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    isUnresolved -> {
+                        // Show error icon for unresolved
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(18.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Error,
+                                contentDescription = "Identity not found",
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                    contact.isOnline -> {
+                        // Online indicator for active contacts
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(14.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .background(MeshConnected, CircleShape)
+                                    .clip(CircleShape),
+                        )
+                    }
                 }
             }
 
@@ -566,21 +683,33 @@ fun ContactListItem(
                         text = contact.displayName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = textAlpha),
                     )
 
-                    // Source badge
+                    // Source badge - prioritize status over addedVia for pending contacts
                     val (badgeIcon, badgeColor) =
-                        when (contact.addedVia) {
-                            "ANNOUNCE" -> Icons.Default.Star to MaterialTheme.colorScheme.tertiary
-                            "QR_CODE" -> Icons.Default.QrCode to MaterialTheme.colorScheme.secondary
-                            "MANUAL" -> Icons.Default.Edit to MaterialTheme.colorScheme.secondary
-                            else -> Icons.Default.Person to MaterialTheme.colorScheme.onSurfaceVariant
+                        when {
+                            // Show hourglass only if still pending
+                            contact.status == ContactStatus.PENDING_IDENTITY ->
+                                Icons.Default.HourglassEmpty to MaterialTheme.colorScheme.secondary
+                            // Show error if unresolved
+                            contact.status == ContactStatus.UNRESOLVED ->
+                                Icons.Default.Error to MaterialTheme.colorScheme.error
+                            // Otherwise show based on how contact was added
+                            contact.addedVia == "ANNOUNCE" ->
+                                Icons.Default.Star to MaterialTheme.colorScheme.tertiary
+                            contact.addedVia == "QR_CODE" ->
+                                Icons.Default.QrCode to MaterialTheme.colorScheme.secondary
+                            contact.addedVia == "MANUAL" || contact.addedVia == "MANUAL_PENDING" ->
+                                Icons.Default.Edit to MaterialTheme.colorScheme.secondary
+                            else ->
+                                Icons.Default.Person to MaterialTheme.colorScheme.onSurfaceVariant
                         }
                     Icon(
                         imageVector = badgeIcon,
                         contentDescription = "Added via ${contact.addedVia}",
                         modifier = Modifier.size(16.dp),
-                        tint = badgeColor,
+                        tint = badgeColor.copy(alpha = textAlpha),
                     )
                 }
 
@@ -589,56 +718,93 @@ fun ContactListItem(
                     text = "${contact.destinationHash.take(12)}...",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = textAlpha),
                 )
 
-                // Status line
+                // Status line - varies based on contact status
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    val lastSeen = contact.lastSeenTimestamp
-                    if (lastSeen != null) {
-                        Text(
-                            text = if (contact.isOnline) "Online" else formatRelativeTime(lastSeen),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (contact.isOnline) MeshConnected else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-
-                        if (contact.isOnline && contact.hops != null) {
+                    when {
+                        isPending -> {
                             Text(
-                                text = "• ${contact.hops} hops",
+                                text = "Searching for identity...",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.primary,
                             )
                         }
-                    } else {
-                        Text(
-                            text = "Never seen",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                        isUnresolved -> {
+                            Text(
+                                text = "Identity not found - tap to retry",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        else -> {
+                            // Normal status for active contacts
+                            val lastSeen = contact.lastSeenTimestamp
+                            if (lastSeen != null) {
+                                Text(
+                                    text = if (contact.isOnline) "Online" else formatRelativeTime(lastSeen),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (contact.isOnline) {
+                                        MeshConnected
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                )
 
-                    // Show first tag if exists
-                    val tags = contact.getTagsList()
-                    if (tags.isNotEmpty()) {
-                        Text(
-                            text = "• ${tags.first()}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                                if (contact.isOnline && contact.hops != null) {
+                                    Text(
+                                        text = "• ${contact.hops} hops",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "Never seen",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+
+                            // Show first tag if exists
+                            val tags = contact.getTagsList()
+                            if (tags.isNotEmpty()) {
+                                Text(
+                                    text = "• ${tags.first()}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // Pin button
-            IconButton(onClick = onPinClick) {
-                Icon(
-                    imageVector = if (contact.isPinned) Icons.Filled.Star else Icons.Outlined.Star,
-                    contentDescription = if (contact.isPinned) "Unpin" else "Pin",
-                    tint = if (contact.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            // Pin button (or retry button for unresolved)
+            if (isUnresolved) {
+                IconButton(onClick = onClick) {
+                    Icon(
+                        imageVector = Icons.Filled.Refresh,
+                        contentDescription = "Retry search",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            } else {
+                IconButton(onClick = onPinClick) {
+                    Icon(
+                        imageVector = if (contact.isPinned) Icons.Filled.Star else Icons.Outlined.Star,
+                        contentDescription = if (contact.isPinned) "Unpin" else "Pin",
+                        tint = if (contact.isPinned) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = textAlpha)
+                        },
+                    )
+                }
             }
         }
     }
@@ -835,13 +1001,13 @@ fun ManualEntryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Contact Manually") },
+        title = { Text("Add Contact") },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    text = "Paste the LXMF identity string (format: lxma://hash:pubkey)",
+                    text = "Paste an LXMF identity string (lxma://...) or destination hash from Sideband",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -853,8 +1019,8 @@ fun ManualEntryDialog(
                         identityString = it.trim()
                         errorMessage = null
                     },
-                    label = { Text("LXMF Identity String") },
-                    placeholder = { Text("lxma://a1b2c3...") },
+                    label = { Text("Identity or Address") },
+                    placeholder = { Text("lxma://... or 32-char hash") },
                     singleLine = false,
                     maxLines = 4,
                     modifier = Modifier.fillMaxWidth(),
@@ -863,7 +1029,7 @@ fun ManualEntryDialog(
                         if (errorMessage != null) {
                             { Text(errorMessage!!, color = MaterialTheme.colorScheme.error) }
                         } else {
-                            null
+                            { Text("Full lxma:// URL or 32-character hex address") }
                         },
                 )
 
@@ -889,8 +1055,8 @@ fun ManualEntryDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    // VALIDATION: Use InputValidator for robust validation
-                    when (val result = InputValidator.validateIdentityString(identityString)) {
+                    // VALIDATION: Use InputValidator to parse both full lxma:// and hash-only input
+                    when (val result = InputValidator.parseIdentityInput(identityString)) {
                         is ValidationResult.Error -> {
                             errorMessage = result.message
                             return@TextButton
@@ -911,6 +1077,144 @@ fun ManualEntryDialog(
             }
         },
     )
+}
+
+/**
+ * Bottom sheet for pending or unresolved contacts.
+ * Shows status explanation and actions (retry search, remove contact).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PendingContactBottomSheet(
+    contact: EnrichedContact,
+    onDismiss: () -> Unit,
+    onRetrySearch: () -> Unit,
+    onRemoveContact: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val isPending = contact.status == ContactStatus.PENDING_IDENTITY
+    val isUnresolved = contact.status == ContactStatus.UNRESOLVED
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        contentWindowInsets = { WindowInsets(0) },
+        modifier = Modifier.systemBarsPadding(),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // Header with identicon and name
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Identicon(
+                    hash = contact.destinationHash.toByteArray(),
+                    size = 48.dp,
+                )
+                Column {
+                    Text(
+                        text = contact.displayName,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "${contact.destinationHash.take(12)}...",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            // Status explanation
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(
+                    imageVector = if (isPending) Icons.Default.HourglassEmpty else Icons.Default.Error,
+                    contentDescription = null,
+                    tint = if (isPending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(24.dp),
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = if (isPending) "Searching for Identity" else "Identity Not Found",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isPending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        text =
+                            if (isPending) {
+                                "This contact was added with only their address. Columba is " +
+                                    "searching the network for their full identity. Once found, " +
+                                    "you'll be able to send messages."
+                            } else {
+                                "Columba couldn't find this contact's identity on the network " +
+                                    "after 48 hours. They may be offline or using a different " +
+                                    "address. You can retry the search or remove this contact."
+                            },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Action buttons
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Retry search button
+                TextButton(
+                    onClick = {
+                        onRetrySearch()
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(if (isPending) "Search Again Now" else "Retry Search")
+                }
+
+                // Remove contact button
+                TextButton(
+                    onClick = {
+                        onRemoveContact()
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors =
+                        androidx.compose.material3.ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("Remove Contact")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
 }
 
 @Composable

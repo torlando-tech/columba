@@ -1,8 +1,10 @@
 package com.lxmf.messenger.data.repository
 
+import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.entity.ContactEntity
+import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -27,6 +29,7 @@ class ContactRepository
     constructor(
         private val contactDao: ContactDao,
         private val localIdentityDao: LocalIdentityDao,
+        private val announceDao: AnnounceDao,
     ) {
         /**
          * Get enriched contacts with data from announces and conversations for the active identity.
@@ -105,16 +108,15 @@ class ContactRepository
         }
 
         /**
-         * Add a contact from an announce (when user stars an announce)
+         * Add a contact from an announce (when user stars an announce).
+         * Display name will automatically use the announce's peerName via database COALESCE.
          *
          * @param destinationHash The destination hash from the announce
          * @param publicKey The public key from the announce
-         * @param announceName Optional name from the announce (stored in customNickname if provided)
          */
         suspend fun addContactFromAnnounce(
             destinationHash: String,
             publicKey: ByteArray,
-            announceName: String? = null,
         ): Result<Unit> {
             return try {
                 // Get active identity hash
@@ -127,7 +129,7 @@ class ContactRepository
                         destinationHash = destinationHash,
                         identityHash = activeIdentity.identityHash,
                         publicKey = publicKey,
-                        customNickname = announceName, // Store announce name as nickname initially
+                        customNickname = null, // Let displayName fall through to announce name
                         notes = null,
                         tags = null,
                         addedTimestamp = System.currentTimeMillis(),
@@ -219,16 +221,15 @@ class ContactRepository
         }
 
         /**
-         * Add a contact from an active conversation (when user saves from Chats tab)
+         * Add a contact from an active conversation (when user saves from Chats tab).
+         * Display name will automatically use the announce's peerName via database COALESCE.
          *
          * @param destinationHash The destination hash from the conversation
          * @param publicKey The public key from the conversation
-         * @param peerName The peer name from the conversation (stored as nickname)
          */
         suspend fun addContactFromConversation(
             destinationHash: String,
             publicKey: ByteArray,
-            peerName: String? = null,
         ): Result<Unit> {
             return try {
                 // Get active identity hash
@@ -241,7 +242,7 @@ class ContactRepository
                         destinationHash = destinationHash,
                         identityHash = activeIdentity.identityHash,
                         publicKey = publicKey,
-                        customNickname = peerName, // Store conversation peer name as nickname
+                        customNickname = null, // Let displayName fall through to announce/conversation name
                         notes = null,
                         tags = null,
                         addedTimestamp = System.currentTimeMillis(),
@@ -373,5 +374,168 @@ class ContactRepository
         suspend fun deleteAllContacts() {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
             contactDao.deleteAllContacts(activeIdentity.identityHash)
+        }
+
+        // ========== PENDING IDENTITY RESOLUTION ==========
+
+        /**
+         * Add a pending contact with only a destination hash (no public key).
+         * Used when importing contacts from Sideband using only the destination hash.
+         *
+         * The contact will be created with PENDING_IDENTITY status and null public key.
+         * Background workers will attempt to resolve the identity from the network.
+         *
+         * @param destinationHash The 32-character hex destination hash
+         * @param nickname Optional display name for the contact
+         * @return Result indicating success or failure
+         */
+        /**
+         * Sealed class to represent the result of adding a pending contact.
+         * Used to communicate whether the contact was resolved immediately or is still pending.
+         */
+        sealed class AddPendingResult {
+            /** Contact was added with full identity (from existing announce) */
+            object ResolvedImmediately : AddPendingResult()
+
+            /** Contact was added as pending (no existing announce found) */
+            object AddedAsPending : AddPendingResult()
+        }
+
+        suspend fun addPendingContact(
+            destinationHash: String,
+            nickname: String? = null,
+        ): Result<AddPendingResult> {
+            return try {
+                val activeIdentity =
+                    localIdentityDao.getActiveIdentitySync()
+                        ?: return Result.failure(IllegalStateException("No active identity found"))
+
+                // Check if we already have an announce for this destination hash
+                // If so, we can resolve the contact immediately!
+                val existingAnnounce = announceDao.getAnnounce(destinationHash)
+
+                if (existingAnnounce != null && existingAnnounce.publicKey.isNotEmpty()) {
+                    // Great! We have the public key from a previous announce
+                    val contact =
+                        ContactEntity(
+                            destinationHash = destinationHash,
+                            identityHash = activeIdentity.identityHash,
+                            publicKey = existingAnnounce.publicKey,
+                            customNickname = nickname,
+                            notes = null,
+                            tags = null,
+                            addedTimestamp = System.currentTimeMillis(),
+                            addedVia = "MANUAL",
+                            lastInteractionTimestamp = 0,
+                            isPinned = false,
+                            status = ContactStatus.ACTIVE,
+                        )
+                    contactDao.insertContact(contact)
+                    Result.success(AddPendingResult.ResolvedImmediately)
+                } else {
+                    // No existing announce - add as pending
+                    val contact =
+                        ContactEntity(
+                            destinationHash = destinationHash,
+                            identityHash = activeIdentity.identityHash,
+                            publicKey = null, // Will be filled when identity is resolved
+                            customNickname = nickname,
+                            notes = null,
+                            tags = null,
+                            addedTimestamp = System.currentTimeMillis(),
+                            addedVia = "MANUAL_PENDING",
+                            lastInteractionTimestamp = 0,
+                            isPinned = false,
+                            status = ContactStatus.PENDING_IDENTITY,
+                        )
+                    contactDao.insertContact(contact)
+                    Result.success(AddPendingResult.AddedAsPending)
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+        /**
+         * Updates a pending contact with resolved identity information.
+         *
+         * Called when the network returns the public key for a pending contact.
+         * Changes status from PENDING_IDENTITY to ACTIVE.
+         *
+         * @param destinationHash The contact's destination hash
+         * @param publicKey The resolved 64-byte public key
+         * @return Result indicating success or failure
+         */
+        suspend fun updateContactWithIdentity(
+            destinationHash: String,
+            publicKey: ByteArray,
+        ): Result<Unit> {
+            return try {
+                val activeIdentity =
+                    localIdentityDao.getActiveIdentitySync()
+                        ?: return Result.failure(IllegalStateException("No active identity found"))
+
+                contactDao.updateContactIdentity(
+                    destinationHash = destinationHash,
+                    identityHash = activeIdentity.identityHash,
+                    publicKey = publicKey,
+                    status = ContactStatus.ACTIVE.name,
+                )
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+        /**
+         * Updates a contact's status (e.g., to UNRESOLVED after timeout).
+         *
+         * @param destinationHash The contact's destination hash
+         * @param status The new status
+         * @return Result indicating success or failure
+         */
+        suspend fun updateContactStatus(
+            destinationHash: String,
+            status: ContactStatus,
+        ): Result<Unit> {
+            return try {
+                val activeIdentity =
+                    localIdentityDao.getActiveIdentitySync()
+                        ?: return Result.failure(IllegalStateException("No active identity found"))
+
+                contactDao.updateContactStatus(
+                    destinationHash = destinationHash,
+                    identityHash = activeIdentity.identityHash,
+                    status = status.name,
+                )
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+        /**
+         * Gets all contacts with specified statuses (for background identity resolution).
+         * Returns contacts from ALL identities, not just the active one.
+         *
+         * @param statuses List of statuses to query
+         * @return List of contacts matching the statuses
+         */
+        suspend fun getContactsByStatus(statuses: List<ContactStatus>): List<ContactEntity> {
+            return contactDao.getContactsByStatus(statuses.map { it.name })
+        }
+
+        /**
+         * Gets all contacts with specified statuses for the active identity.
+         *
+         * @param statuses List of statuses to query
+         * @return List of contacts matching the statuses for the active identity
+         */
+        suspend fun getContactsByStatusForActiveIdentity(statuses: List<ContactStatus>): List<ContactEntity> {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
+            return contactDao.getContactsByStatusForIdentity(
+                activeIdentity.identityHash,
+                statuses.map { it.name },
+            )
         }
     }

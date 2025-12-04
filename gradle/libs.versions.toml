@@ -76,9 +76,9 @@ cameraX-view = { module = "androidx.camera:camera-view", version.ref = "cameraX"
 # Testing
 junit = { module = "junit:junit", version = "4.13.2" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version = "5.11.4" }
-mockk = { module = "io.mockk:mockk", version = "1.13.14" }
-mockk-android = { module = "io.mockk:mockk-android", version = "1.13.14" }
-turbine = { module = "app.cash.turbine:turbine", version = "1.2.0" }
+mockk = { module = "io.mockk:mockk", version = "1.14.6" }
+mockk-android = { module = "io.mockk:mockk-android", version = "1.14.6" }
+turbine = { module = "app.cash.turbine:turbine", version = "1.2.1" }
 arch-core-testing = { module = "androidx.arch.core:core-testing", version = "2.2.0" }
 robolectric = { module = "org.robolectric:robolectric", version = "4.13" }
 junit-android = { module = "androidx.test.ext:junit", version = "1.2.1" }

@@ -74,6 +74,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.model.SignalQuality
+import com.lxmf.messenger.ui.components.BluetoothPermissionController
+import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.ui.components.QrCodeImage
 import com.lxmf.messenger.util.IdentityQrCodeUtils
 import com.lxmf.messenger.viewmodel.BleConnectionsUiState
@@ -111,6 +113,19 @@ fun IdentityScreen(
             Log.d("IdentityScreen", "Bluetooth enable result: ${result.resultCode}")
         }
 
+    val btController: BluetoothPermissionController =
+        rememberBluetoothPermissionController(
+            onEnableRequested = {
+                bleConnectionsViewModel.getEnableBluetoothIntent()?.let { intent ->
+                    bluetoothEnableLauncher.launch(intent)
+                }
+            },
+            onOpenSettingsRequested = {
+                val intent = bleConnectionsViewModel.getBluetoothSettingsIntent()
+                context.startActivity(intent)
+            },
+        )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -146,15 +161,8 @@ fun IdentityScreen(
             BleConnectionsCard(
                 uiState = bleConnectionsState,
                 onViewDetails = onNavigateToBleStatus,
-                onEnableBluetooth = {
-                    bleConnectionsViewModel.getEnableBluetoothIntent()?.let { intent ->
-                        bluetoothEnableLauncher.launch(intent)
-                    }
-                },
-                onOpenBluetoothSettings = {
-                    val intent = bleConnectionsViewModel.getBluetoothSettingsIntent()
-                    context.startActivity(intent)
-                },
+                onEnableBluetooth = btController.onEnableClick,
+                onOpenBluetoothSettings = btController.onOpenSettingsClick,
             )
 
             // Status Card
@@ -684,22 +692,6 @@ fun BleConnectionsCard(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Bluetooth Settings")
                             }
-                            OutlinedButton(
-                                onClick = onOpenBluetoothSettings,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors =
-                                    ButtonDefaults.outlinedButtonColors(
-                                        contentColor = MaterialTheme.colorScheme.error,
-                                    ),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.BluetoothDisabled,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Turn OFF")
-                            }
                         }
                     } else {
                         // Summary stats
@@ -804,26 +796,6 @@ fun BleConnectionsCard(
                                     modifier = Modifier.size(16.dp),
                                 )
                             }
-                        }
-
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-
-                        // Turn off Bluetooth button
-                        OutlinedButton(
-                            onClick = onOpenBluetoothSettings,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors =
-                                ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error,
-                                ),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.BluetoothDisabled,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Turn OFF")
                         }
                     }
                 }

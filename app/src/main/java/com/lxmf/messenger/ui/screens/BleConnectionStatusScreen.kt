@@ -49,15 +49,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -69,8 +64,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.model.BleConnectionInfo
 import com.lxmf.messenger.data.model.ConnectionType
 import com.lxmf.messenger.data.model.SignalQuality
-import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
-import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
+import com.lxmf.messenger.ui.components.BluetoothPermissionController
+import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.ui.components.PermissionDeniedCard
 import com.lxmf.messenger.viewmodel.BleConnectionsUiState
 import com.lxmf.messenger.viewmodel.BleConnectionsViewModel
@@ -87,39 +82,27 @@ fun BleConnectionStatusScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
 
-    // Permission state
-    var showPermissionBottomSheet by remember { mutableStateOf(false) }
-    var permissionStatus by remember { mutableStateOf<BlePermissionManager.PermissionStatus?>(null) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    // Permission launcher
-    val permissionLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestMultiplePermissions(),
-        ) { permissions ->
-            // Re-check permission status after result
-            permissionStatus = BlePermissionManager.checkPermissionStatus(context)
-        }
-
     // Bluetooth enable launcher
     val bluetoothEnableLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.StartActivityForResult(),
         ) { result ->
-            // Bluetooth state will be updated automatically via flow
+            // Bluetooth state will be updated automáticamente via flow
             Log.d("BleConnectionStatus", "Bluetooth enable result: ${result.resultCode}")
         }
 
-    // Check permissions on screen load
-    LaunchedEffect(Unit) {
-        permissionStatus = BlePermissionManager.checkPermissionStatus(context)
-        when (permissionStatus) {
-            is BlePermissionManager.PermissionStatus.Denied -> {
-                showPermissionBottomSheet = true
-            }
-            else -> {}
-        }
-    }
+    val btController: BluetoothPermissionController =
+        rememberBluetoothPermissionController(
+            onEnableRequested = {
+                viewModel.getEnableBluetoothIntent()?.let { intent ->
+                    bluetoothEnableLauncher.launch(intent)
+                }
+            },
+            onOpenSettingsRequested = {
+                val intent = viewModel.getBluetoothSettingsIntent()
+                context.startActivity(intent)
+            },
+        )
 
     Scaffold(
         topBar = {
@@ -193,11 +176,7 @@ fun BleConnectionStatusScreen(
 
                         // Button to enable Bluetooth
                         Button(
-                            onClick = {
-                                viewModel.getEnableBluetoothIntent()?.let { intent ->
-                                    bluetoothEnableLauncher.launch(intent)
-                                }
-                            },
+                            onClick = btController.onEnableClick,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Icon(
@@ -275,10 +254,7 @@ fun BleConnectionStatusScreen(
 
                             // Button to open Bluetooth settings
                             OutlinedButton(
-                                onClick = {
-                                    val intent = viewModel.getBluetoothSettingsIntent()
-                                    context.startActivity(intent)
-                                },
+                                onClick = btController.onOpenSettingsClick,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Icon(
@@ -287,26 +263,6 @@ fun BleConnectionStatusScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Bluetooth Settings")
-                            }
-                            
-                            // Button to turn off Bluetooth
-                            OutlinedButton(
-                                onClick = {
-                                    val intent = viewModel.getBluetoothSettingsIntent()
-                                    context.startActivity(intent)
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors =
-                                    ButtonDefaults.outlinedButtonColors(
-                                        contentColor = MaterialTheme.colorScheme.error,
-                                    ),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.BluetoothDisabled,
-                                    contentDescription = null,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Turn OFF")
                             }
                         }
                     }
@@ -338,57 +294,6 @@ fun BleConnectionStatusScreen(
                                 connection = connection,
                                 onDisconnect = { viewModel.disconnectPeer(connection.currentMac) },
                             )
-                        }
-
-                        // Turn off Bluetooth button
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors =
-                                    CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                                    ),
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Warning,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onErrorContainer,
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Turn off Bluetooth will disconnect all peers",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onErrorContainer,
-                                        )
-                                    }
-                                    Button(
-                                        onClick = {
-                                            val intent = viewModel.getBluetoothSettingsIntent()
-                                            context.startActivity(intent)
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors =
-                                            ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.error,
-                                            ),
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.BluetoothDisabled,
-                                            contentDescription = null,
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Turn OFF")
-                                    }
-                                }
-                            }
                         }
 
                         // Bottom spacer
@@ -448,32 +353,6 @@ fun BleConnectionStatusScreen(
             }
         }
 
-        // Show permission denied card overlay if permissions are permanently denied
-        if (permissionStatus is BlePermissionManager.PermissionStatus.PermanentlyDenied) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                        .padding(16.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                PermissionDeniedCard()
-            }
-        }
-
-        // Bluetooth permission bottom sheet
-        if (showPermissionBottomSheet) {
-            BlePermissionBottomSheet(
-                onDismiss = { showPermissionBottomSheet = false },
-                onRequestPermissions = {
-                    showPermissionBottomSheet = false
-                    val permissions = BlePermissionManager.getRequiredPermissions()
-                    permissionLauncher.launch(permissions.toTypedArray())
-                },
-                sheetState = sheetState,
-            )
-        }
     }
 }
 

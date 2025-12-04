@@ -115,14 +115,14 @@ fun IdentityScreen(
 
     val btController: BluetoothPermissionController =
         rememberBluetoothPermissionController(
-            onEnableRequested = {
+            onEnableRequested = { _ ->
                 bleConnectionsViewModel.getEnableBluetoothIntent()?.let { intent ->
                     bluetoothEnableLauncher.launch(intent)
                 }
             },
-            onOpenSettingsRequested = {
+            onOpenSettingsRequested = { ctx ->
                 val intent = bleConnectionsViewModel.getBluetoothSettingsIntent()
-                context.startActivity(intent)
+                ctx.startActivity(intent)
             },
         )
 

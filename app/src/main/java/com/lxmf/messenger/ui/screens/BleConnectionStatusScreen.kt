@@ -93,14 +93,14 @@ fun BleConnectionStatusScreen(
 
     val btController: BluetoothPermissionController =
         rememberBluetoothPermissionController(
-            onEnableRequested = {
+            onEnableRequested = { _ ->
                 viewModel.getEnableBluetoothIntent()?.let { intent ->
                     bluetoothEnableLauncher.launch(intent)
                 }
             },
-            onOpenSettingsRequested = {
+            onOpenSettingsRequested = { ctx ->
                 val intent = viewModel.getBluetoothSettingsIntent()
-                context.startActivity(intent)
+                ctx.startActivity(intent)
             },
         )
 

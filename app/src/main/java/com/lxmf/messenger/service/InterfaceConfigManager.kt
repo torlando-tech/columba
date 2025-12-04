@@ -174,11 +174,19 @@ class InterfaceConfigManager
                 // Step 9: Initialize Reticulum with new config
                 Log.d(TAG, "Step 9: Initializing Reticulum with new configuration...")
 
-                // Load active identity for config
+                // Load active identity and ensure its file exists (recover from keyData if needed)
                 val activeIdentity = identityRepository.getActiveIdentitySync()
-                val identityPath = activeIdentity?.filePath
+                val identityPath = if (activeIdentity != null) {
+                    identityRepository.ensureIdentityFileExists(activeIdentity)
+                        .onFailure { error ->
+                            Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
+                        }
+                        .getOrNull()
+                } else {
+                    null
+                }
                 val displayName = activeIdentity?.displayName
-                Log.d(TAG, "Active identity: ${activeIdentity?.displayName ?: "none"}, path: $identityPath")
+                Log.d(TAG, "Active identity: ${activeIdentity?.displayName ?: "none"}, verified path: $identityPath")
 
                 val config =
                     ReticulumConfig(

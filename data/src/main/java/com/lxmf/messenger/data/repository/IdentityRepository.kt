@@ -233,6 +233,78 @@ class IdentityRepository
             }
 
         /**
+         * Ensure the identity file exists at the canonical path (identity_<hash>).
+         * If the file doesn't exist, recreate it from keyData stored in the database.
+         * Also updates the database filePath if it was pointing to default_identity.
+         *
+         * @param identity The identity to verify/recover
+         * @return Result containing the verified file path, or an error if recovery failed
+         */
+        suspend fun ensureIdentityFileExists(identity: LocalIdentityEntity): Result<String> =
+            withContext(ioDispatcher) {
+                try {
+                    val reticulumDir = File(context.filesDir, "reticulum")
+                    val canonicalPath = File(reticulumDir, "identity_${identity.identityHash}")
+
+                    // Check if canonical file exists
+                    if (canonicalPath.exists() && canonicalPath.length() == 64L) {
+                        Log.d(TAG, "Identity file exists at canonical path: ${canonicalPath.absolutePath}")
+
+                        // Update database if it was pointing to a different path
+                        if (identity.filePath != canonicalPath.absolutePath) {
+                            Log.i(
+                                TAG,
+                                "Updating database filePath from ${identity.filePath} " +
+                                    "to ${canonicalPath.absolutePath}",
+                            )
+                            identityDao.updateFilePath(identity.identityHash, canonicalPath.absolutePath)
+                        }
+
+                        return@withContext Result.success(canonicalPath.absolutePath)
+                    }
+
+                    // File doesn't exist or is invalid - try to recover from keyData
+                    Log.w(
+                        TAG,
+                        "Identity file missing or invalid at ${canonicalPath.absolutePath}, " +
+                            "attempting recovery",
+                    )
+
+                    val keyData = identity.keyData
+                    if (keyData == null || keyData.size != 64) {
+                        Log.e(
+                            TAG,
+                            "Cannot recover identity ${identity.identityHash}: " +
+                                "keyData is null or invalid size (${keyData?.size})",
+                        )
+                        return@withContext Result.failure(
+                            IllegalStateException("Identity file missing and no valid keyData backup available"),
+                        )
+                    }
+
+                    // Ensure directory exists
+                    if (!reticulumDir.exists()) {
+                        reticulumDir.mkdirs()
+                    }
+
+                    // Write keyData to canonical path
+                    canonicalPath.writeBytes(keyData)
+                    Log.i(TAG, "Recovered identity file from keyData: ${canonicalPath.absolutePath}")
+
+                    // Update database filePath
+                    if (identity.filePath != canonicalPath.absolutePath) {
+                        Log.i(TAG, "Updating database filePath to ${canonicalPath.absolutePath}")
+                        identityDao.updateFilePath(identity.identityHash, canonicalPath.absolutePath)
+                    }
+
+                    Result.success(canonicalPath.absolutePath)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to ensure identity file exists for ${identity.identityHash}", e)
+                    Result.failure(e)
+                }
+            }
+
+        /**
          * Migrate the default identity file to the database if the migration_placeholder exists
          * OR if there are no identities in the database at all.
          * This is called during app initialization to replace the temporary placeholder

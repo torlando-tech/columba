@@ -182,32 +182,10 @@ class IdentityManagerViewModel
                         }
                     }
 
-                    // Copy identity file to default_identity to ensure service loads correct identity
-                    // This makes identity switching atomic - even if app crashes during restart,
-                    // the next app launch will use the correct identity file
-                    if (identity != null) {
-                        try {
-                            val sourceFile = java.io.File(identity.filePath)
-                            val defaultIdentityFile = java.io.File(
-                                context.filesDir,
-                                "reticulum/default_identity",
-                            )
-
-                            if (sourceFile.exists()) {
-                                sourceFile.copyTo(defaultIdentityFile, overwrite = true)
-                                Log.d(
-                                    TAG,
-                                    "Copied identity file to default_identity: " +
-                                        "${sourceFile.absolutePath} -> ${defaultIdentityFile.absolutePath}",
-                                )
-                            } else {
-                                Log.w(TAG, "Source identity file doesn't exist: ${sourceFile.absolutePath}")
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to copy identity file to default_identity", e)
-                            // Continue anyway - service restart will still work via identityFilePath
-                        }
-                    }
+                    // Note: InterfaceConfigManager.applyInterfaceChanges() will use
+                    // ensureIdentityFileExists() to verify/recover the identity file
+                    // and pass the correct identity_<hash> path to Python.
+                    // No need to copy to default_identity anymore.
 
                     identityRepository.switchActiveIdentity(identityHash)
                         .onSuccess {

@@ -130,7 +130,7 @@ class ContactRepository
                         destinationHash = destinationHash,
                         identityHash = activeIdentity.identityHash,
                         publicKey = publicKey,
-                        customNickname = announceName, // Store announce name as nickname initially
+                        customNickname = null, // Let displayName fall through to announce name
                         notes = null,
                         tags = null,
                         addedTimestamp = System.currentTimeMillis(),
@@ -244,7 +244,7 @@ class ContactRepository
                         destinationHash = destinationHash,
                         identityHash = activeIdentity.identityHash,
                         publicKey = publicKey,
-                        customNickname = peerName, // Store conversation peer name as nickname
+                        customNickname = null, // Let displayName fall through to announce/conversation name
                         notes = null,
                         tags = null,
                         addedTimestamp = System.currentTimeMillis(),

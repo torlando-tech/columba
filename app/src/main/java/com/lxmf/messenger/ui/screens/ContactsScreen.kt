@@ -748,7 +748,11 @@ fun ContactListItem(
                                 Text(
                                     text = if (contact.isOnline) "Online" else formatRelativeTime(lastSeen),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (contact.isOnline) MeshConnected else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = if (contact.isOnline) {
+                                        MeshConnected
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                 )
 
                                 if (contact.isOnline && contact.hops != null) {
@@ -794,7 +798,11 @@ fun ContactListItem(
                     Icon(
                         imageVector = if (contact.isPinned) Icons.Filled.Star else Icons.Outlined.Star,
                         contentDescription = if (contact.isPinned) "Unpin" else "Pin",
-                        tint = if (contact.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = textAlpha),
+                        tint = if (contact.isPinned) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = textAlpha)
+                        },
                     )
                 }
             }
@@ -1147,9 +1155,13 @@ fun PendingContactBottomSheet(
                     Text(
                         text =
                             if (isPending) {
-                                "This contact was added with only their address. Columba is searching the network for their full identity. Once found, you'll be able to send messages."
+                                "This contact was added with only their address. Columba is " +
+                                    "searching the network for their full identity. Once found, " +
+                                    "you'll be able to send messages."
                             } else {
-                                "Columba couldn't find this contact's identity on the network after 48 hours. They may be offline or using a different address. You can retry the search or remove this contact."
+                                "Columba couldn't find this contact's identity on the network " +
+                                    "after 48 hours. They may be offline or using a different " +
+                                    "address. You can retry the search or remove this contact."
                             },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

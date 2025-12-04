@@ -160,11 +160,14 @@ class ColumbaApplication : Application() {
                                 "ColumbaApplication",
                                 "Identity verified (${dbIdentityHash?.take(8) ?: "none"}...) - reconnecting",
                             )
-                            // Identity matches - just reconnect message collector, auto-announce, and identity resolution
+                            // Identity matches - reconnect collectors and managers
                             messageCollector.startCollecting()
                             autoAnnounceManager.start()
                             identityResolutionManager.start(applicationScope)
-                            android.util.Log.d("ColumbaApplication", "MessageCollector, AutoAnnounceManager, and IdentityResolutionManager started")
+                            android.util.Log.d(
+                                "ColumbaApplication",
+                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager started",
+                            )
                             return@launch
                         }
                     } else if (currentStatus != "SHUTDOWN" && currentStatus != null &&
@@ -296,7 +299,10 @@ class ColumbaApplication : Application() {
                             messageCollector.startCollecting()
                             autoAnnounceManager.start()
                             identityResolutionManager.start(applicationScope)
-                            android.util.Log.d("ColumbaApplication", "MessageCollector, AutoAnnounceManager, and IdentityResolutionManager started")
+                            android.util.Log.d(
+                                "ColumbaApplication",
+                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager started",
+                            )
                         }
                         .onFailure { error ->
                             android.util.Log.e("ColumbaApplication", "Failed to initialize Reticulum: ${error.message}", error)

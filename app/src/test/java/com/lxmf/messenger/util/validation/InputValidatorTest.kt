@@ -526,7 +526,8 @@ class InputValidatorTest {
         assertTrue(result is ValidationResult.Success)
         val identity = (result as ValidationResult.Success).value
         assertTrue(identity is IdentityInput.DestinationHashOnly)
-        assertEquals("0123456789abcdef0123456789abcdef", (identity as IdentityInput.DestinationHashOnly).destinationHash)
+        val hashOnly = identity as IdentityInput.DestinationHashOnly
+        assertEquals("0123456789abcdef0123456789abcdef", hashOnly.destinationHash)
     }
 
     @Test
@@ -537,7 +538,8 @@ class InputValidatorTest {
         val identity = (result as ValidationResult.Success).value
         assertTrue(identity is IdentityInput.DestinationHashOnly)
         // Hash should be normalized to lowercase
-        assertEquals("0123456789abcdef0123456789abcdef", (identity as IdentityInput.DestinationHashOnly).destinationHash)
+        val hashOnly = identity as IdentityInput.DestinationHashOnly
+        assertEquals("0123456789abcdef0123456789abcdef", hashOnly.destinationHash)
     }
 
     @Test

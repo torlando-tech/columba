@@ -224,6 +224,7 @@ object InputValidator {
      * @param input Raw user input string
      * @return ValidationResult containing parsed IdentityInput or error message
      */
+    @Suppress("ReturnCount") // Early returns make validation logic clearer
     fun parseIdentityInput(input: String): ValidationResult<IdentityInput> {
         val trimmed = input.trim().lowercase()
 

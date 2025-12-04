@@ -15,6 +15,9 @@ interface PeerIdentityDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPeerIdentity(peerIdentity: PeerIdentityEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPeerIdentities(peerIdentities: List<PeerIdentityEntity>)
+
     @Update
     suspend fun updatePeerIdentity(peerIdentity: PeerIdentityEntity)
 

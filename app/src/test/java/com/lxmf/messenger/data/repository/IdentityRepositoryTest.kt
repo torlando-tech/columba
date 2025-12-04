@@ -503,4 +503,249 @@ class IdentityRepositoryTest {
             // Then
             assertTrue(result.isFailure)
         }
+
+    // ========== Ensure Identity File Exists Tests ==========
+
+    @Test
+    fun ensureIdentityFileExists_whenFileExists_returnsPath() =
+        runTest {
+            // Given - create real temp directory structure
+            val tempFilesDir = createTempDir("test_files")
+            val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
+            val identityHash = "abc123def456"
+            val canonicalFile = File(reticulumDir, "identity_$identityHash")
+
+            // Create a 64-byte identity file (valid size)
+            val keyData = ByteArray(64) { it.toByte() }
+            canonicalFile.writeBytes(keyData)
+
+            every { mockContext.filesDir } returns tempFilesDir
+
+            val identity =
+                LocalIdentityEntity(
+                    identityHash = identityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = canonicalFile.absolutePath,
+                    keyData = keyData,
+                    createdTimestamp = 0L,
+                    lastUsedTimestamp = 0L,
+                    isActive = true,
+                )
+
+            // When
+            val result = repository.ensureIdentityFileExists(identity)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isSuccess)
+            assertEquals(canonicalFile.absolutePath, result.getOrNull())
+
+            // Cleanup
+            tempFilesDir.deleteRecursively()
+        }
+
+    @Test
+    fun ensureIdentityFileExists_whenFileExistsButDbHasDifferentPath_updatesDb() =
+        runTest {
+            // Given - file exists at canonical path but DB has old path
+            val tempFilesDir = createTempDir("test_files")
+            val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
+            val identityHash = "abc123def456"
+            val canonicalFile = File(reticulumDir, "identity_$identityHash")
+
+            val keyData = ByteArray(64) { it.toByte() }
+            canonicalFile.writeBytes(keyData)
+
+            every { mockContext.filesDir } returns tempFilesDir
+            coEvery { mockDao.updateFilePath(any(), any()) } just Runs
+
+            // DB shows old default_identity path
+            val identity =
+                LocalIdentityEntity(
+                    identityHash = identityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/old/path/default_identity",
+                    keyData = keyData,
+                    createdTimestamp = 0L,
+                    lastUsedTimestamp = 0L,
+                    isActive = true,
+                )
+
+            // When
+            val result = repository.ensureIdentityFileExists(identity)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isSuccess)
+            assertEquals(canonicalFile.absolutePath, result.getOrNull())
+            coVerify { mockDao.updateFilePath(identityHash, canonicalFile.absolutePath) }
+
+            // Cleanup
+            tempFilesDir.deleteRecursively()
+        }
+
+    @Test
+    fun ensureIdentityFileExists_whenFileMissing_recoversFromKeyData() =
+        runTest {
+            // Given - no file exists but keyData is available
+            val tempFilesDir = createTempDir("test_files")
+            val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
+            val identityHash = "abc123def456"
+            val canonicalFile = File(reticulumDir, "identity_$identityHash")
+
+            // File does NOT exist
+            assertFalse(canonicalFile.exists())
+
+            val keyData = ByteArray(64) { it.toByte() }
+
+            every { mockContext.filesDir } returns tempFilesDir
+            coEvery { mockDao.updateFilePath(any(), any()) } just Runs
+
+            val identity =
+                LocalIdentityEntity(
+                    identityHash = identityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/old/path/identity_file",
+                    keyData = keyData,
+                    createdTimestamp = 0L,
+                    lastUsedTimestamp = 0L,
+                    isActive = true,
+                )
+
+            // When
+            val result = repository.ensureIdentityFileExists(identity)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isSuccess)
+            assertEquals(canonicalFile.absolutePath, result.getOrNull())
+
+            // Verify file was created with correct data
+            assertTrue(canonicalFile.exists())
+            assertArrayEquals(keyData, canonicalFile.readBytes())
+
+            // Verify DB was updated
+            coVerify { mockDao.updateFilePath(identityHash, canonicalFile.absolutePath) }
+
+            // Cleanup
+            tempFilesDir.deleteRecursively()
+        }
+
+    @Test
+    fun ensureIdentityFileExists_whenFileMissingAndNoKeyData_returnsFailure() =
+        runTest {
+            // Given - no file and no keyData backup
+            val tempFilesDir = createTempDir("test_files")
+            val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
+
+            every { mockContext.filesDir } returns tempFilesDir
+
+            val identity =
+                LocalIdentityEntity(
+                    identityHash = "abc123",
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/missing/path",
+                    keyData = null, // No backup!
+                    createdTimestamp = 0L,
+                    lastUsedTimestamp = 0L,
+                    isActive = true,
+                )
+
+            // When
+            val result = repository.ensureIdentityFileExists(identity)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(
+                result.exceptionOrNull()?.message?.contains("no valid keyData") == true,
+            )
+
+            // Cleanup
+            tempFilesDir.deleteRecursively()
+        }
+
+    @Test
+    fun ensureIdentityFileExists_whenFileMissingAndKeyDataWrongSize_returnsFailure() =
+        runTest {
+            // Given - keyData exists but is wrong size (not 64 bytes)
+            val tempFilesDir = createTempDir("test_files")
+            val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
+
+            every { mockContext.filesDir } returns tempFilesDir
+
+            val identity =
+                LocalIdentityEntity(
+                    identityHash = "abc123",
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/missing/path",
+                    keyData = ByteArray(32), // Wrong size - should be 64
+                    createdTimestamp = 0L,
+                    lastUsedTimestamp = 0L,
+                    isActive = true,
+                )
+
+            // When
+            val result = repository.ensureIdentityFileExists(identity)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(
+                result.exceptionOrNull()?.message?.contains("no valid keyData") == true,
+            )
+
+            // Cleanup
+            tempFilesDir.deleteRecursively()
+        }
+
+    @Test
+    fun ensureIdentityFileExists_whenFileExistsButWrongSize_recoversFromKeyData() =
+        runTest {
+            // Given - file exists but is corrupted (wrong size)
+            val tempFilesDir = createTempDir("test_files")
+            val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
+            val identityHash = "abc123def456"
+            val canonicalFile = File(reticulumDir, "identity_$identityHash")
+
+            // Create corrupted file (wrong size)
+            canonicalFile.writeBytes(ByteArray(32))
+
+            val keyData = ByteArray(64) { it.toByte() }
+
+            every { mockContext.filesDir } returns tempFilesDir
+            coEvery { mockDao.updateFilePath(any(), any()) } just Runs
+
+            val identity =
+                LocalIdentityEntity(
+                    identityHash = identityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = canonicalFile.absolutePath,
+                    keyData = keyData,
+                    createdTimestamp = 0L,
+                    lastUsedTimestamp = 0L,
+                    isActive = true,
+                )
+
+            // When
+            val result = repository.ensureIdentityFileExists(identity)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isSuccess)
+
+            // Verify file was recovered with correct data
+            assertTrue(canonicalFile.exists())
+            assertEquals(64L, canonicalFile.length())
+            assertArrayEquals(keyData, canonicalFile.readBytes())
+
+            // Cleanup
+            tempFilesDir.deleteRecursively()
+        }
 }

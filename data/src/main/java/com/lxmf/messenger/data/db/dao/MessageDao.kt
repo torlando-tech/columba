@@ -111,4 +111,25 @@ interface MessageDao {
         peerHash: String,
         identityHash: String,
     ): PagingSource<Int, MessageEntity>
+
+    /**
+     * Get all messages for an identity (sync, for export).
+     */
+    @Query("SELECT * FROM messages WHERE identityHash = :identityHash ORDER BY timestamp ASC")
+    suspend fun getAllMessagesForIdentity(identityHash: String): List<MessageEntity>
+
+    /**
+     * Bulk insert messages (for import).
+     * Uses REPLACE to update existing messages.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMessages(messages: List<MessageEntity>)
+
+    /**
+     * Bulk insert messages for migration, ignoring duplicates.
+     * Uses IGNORE to preserve existing messages (prevents LXMF replay from overwriting
+     * imported message timestamps and status).
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertMessagesIgnoreDuplicates(messages: List<MessageEntity>)
 }

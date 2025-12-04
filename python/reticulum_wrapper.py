@@ -821,8 +821,16 @@ class ReticulumWrapper:
                         raise Exception(f"Failed to load identity from {identity_path}: {e}")
 
             if not default_identity:
-                # Create a new identity if it doesn't exist
-                # This happens on first install or if the identity file was deleted
+                # SAFETY CHECK: If a specific identity file path was provided but doesn't exist,
+                # do NOT silently create a new identity - this indicates a data inconsistency
+                # that Kotlin should handle (e.g., recover from keyData backup)
+                if identity_file_path:
+                    log_error("ReticulumWrapper", "initialize", f"CRITICAL: Specified identity file not found: {identity_path}")
+                    log_error("ReticulumWrapper", "initialize", "Refusing to create new identity - Kotlin must recover file first")
+                    raise Exception(f"identity_file_missing:{identity_path}")
+
+                # Create a new identity only for first install (no specific path provided)
+                # This happens on first install when no identity exists yet
                 log_info("ReticulumWrapper", "initialize", f"Identity not found at {identity_path}, creating new identity")
                 default_identity = RNS.Identity()
                 try:
@@ -2179,7 +2187,7 @@ class ReticulumWrapper:
                     errors.append(error_msg)
                     log_error("ReticulumWrapper", "restore_all_peer_identities", f"{error_msg}")
 
-            log_error("ReticulumWrapper", "restore_all_peer_identities", f"Restored {success_count} peer identities, {len(errors)} errors")
+            log_info("ReticulumWrapper", "restore_all_peer_identities", f"Restored {success_count} peer identities, {len(errors)} errors")
             return {"success_count": success_count, "errors": errors}
 
         except Exception as e:

@@ -26,6 +26,18 @@ interface AnnounceDao {
     fun getAllAnnounces(): Flow<List<AnnounceEntity>>
 
     /**
+     * Get all announces synchronously (for export).
+     */
+    @Query("SELECT * FROM announces ORDER BY lastSeenTimestamp DESC")
+    suspend fun getAllAnnouncesSync(): List<AnnounceEntity>
+
+    /**
+     * Insert multiple announces at once (for import).
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAnnounces(announces: List<AnnounceEntity>)
+
+    /**
      * Search announces by peer name or destination hash.
      * Returns a Flow that emits updated lists whenever the database changes.
      */

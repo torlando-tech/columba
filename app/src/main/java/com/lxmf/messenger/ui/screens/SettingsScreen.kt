@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
+import com.lxmf.messenger.ui.screens.settings.cards.DataMigrationCard
 import com.lxmf.messenger.ui.screens.settings.cards.IdentityCard
 import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
@@ -47,6 +48,7 @@ fun SettingsScreen(
     onNavigateToIdentityManager: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToCustomThemes: () -> Unit = {},
+    onNavigateToMigration: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
@@ -118,6 +120,10 @@ fun SettingsScreen(
                 )
 
                 BatteryOptimizationCard()
+
+                DataMigrationCard(
+                    onNavigateToMigration = onNavigateToMigration,
+                )
 
                 // Bottom spacing for navigation bar
                 Spacer(modifier = Modifier.height(100.dp))

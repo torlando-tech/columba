@@ -49,6 +49,7 @@ import com.lxmf.messenger.viewmodel.OnboardingViewModel
 @Composable
 fun WelcomeScreen(
     onOnboardingComplete: () -> Unit,
+    onImportData: () -> Unit = {},
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -209,6 +210,19 @@ fun WelcomeScreen(
                     Text(
                         text = "Skip",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Import data option for returning users
+                TextButton(
+                    onClick = onImportData,
+                    enabled = !state.isSaving,
+                ) {
+                    Text(
+                        text = "Restore from backup",
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
 

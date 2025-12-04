@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     kotlin("android")
     kotlin("plugin.compose")
+    kotlin("plugin.serialization")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
     id("com.chaquo.python")
@@ -252,6 +253,9 @@ dependencies {
 
     // DataStore
     implementation(libs.datastore)
+
+    // Serialization (for migration export/import)
+    implementation(libs.serialization.json)
 
     // Room
     implementation(libs.room)

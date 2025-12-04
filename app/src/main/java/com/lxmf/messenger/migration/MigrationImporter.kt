@@ -75,7 +75,6 @@ class MigrationImporter
                             peerIdentityCount = bundle.peerIdentities.size,
                             interfaceCount = bundle.interfaces.size,
                             customThemeCount = bundle.customThemes.size,
-                            attachmentCount = bundle.attachmentManifest.size,
                             identityNames = bundle.identities.map { it.displayName },
                         ),
                     )
@@ -136,10 +135,8 @@ class MigrationImporter
                     val (customThemesImported, themeIdMap) = importCustomThemes(bundle.customThemes)
                     onProgress(0.86f)
 
-                    val attachmentsImported = if (bundle.attachmentManifest.isNotEmpty()) {
+                    if (bundle.attachmentManifest.isNotEmpty()) {
                         importAttachments(uri)
-                    } else {
-                        0
                     }
                     onProgress(0.92f)
 
@@ -156,7 +153,6 @@ class MigrationImporter
                         peerIdentitiesImported = peerIdentitiesImported,
                         interfacesImported = interfacesImported,
                         customThemesImported = customThemesImported,
-                        attachmentsImported = attachmentsImported,
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Migration import failed", e)

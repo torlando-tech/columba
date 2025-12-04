@@ -54,7 +54,6 @@ class MigrationViewModelTest {
         peerIdentityCount = 30,
         interfaceCount = 3,
         customThemeCount = 1,
-        attachmentCount = 5,
     )
 
     private val testImportPreview = MigrationPreview(
@@ -68,7 +67,6 @@ class MigrationViewModelTest {
         peerIdentityCount = 30,
         interfaceCount = 3,
         customThemeCount = 1,
-        attachmentCount = 5,
         identityNames = listOf("Alice", "Bob"),
     )
 
@@ -80,7 +78,6 @@ class MigrationViewModelTest {
         peerIdentitiesImported = 30,
         interfacesImported = 3,
         customThemesImported = 1,
-        attachmentsImported = 5,
     )
 
     @Before

@@ -425,7 +425,6 @@ class MigrationDataTest {
             peerIdentityCount = 75,
             interfaceCount = 4,
             customThemeCount = 2,
-            attachmentCount = 10,
         )
 
         assertEquals(3, result.identityCount)
@@ -435,7 +434,6 @@ class MigrationDataTest {
         assertEquals(75, result.peerIdentityCount)
         assertEquals(4, result.interfaceCount)
         assertEquals(2, result.customThemeCount)
-        assertEquals(10, result.attachmentCount)
     }
 
     @Test
@@ -448,7 +446,6 @@ class MigrationDataTest {
             peerIdentitiesImported = 40,
             interfacesImported = 3,
             customThemesImported = 1,
-            attachmentsImported = 5,
         )
 
         assertEquals(2, result.identitiesImported)
@@ -458,7 +455,6 @@ class MigrationDataTest {
         assertEquals(40, result.peerIdentitiesImported)
         assertEquals(3, result.interfacesImported)
         assertEquals(1, result.customThemesImported)
-        assertEquals(5, result.attachmentsImported)
     }
 
     // endregion

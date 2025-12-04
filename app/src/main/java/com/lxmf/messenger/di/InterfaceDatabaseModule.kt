@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.lxmf.messenger.data.database.InterfaceDatabase
 import com.lxmf.messenger.data.database.dao.InterfaceDao
+import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
@@ -84,6 +85,7 @@ object InterfaceDatabaseModule {
         identityRepository: IdentityRepository,
         conversationRepository: ConversationRepository,
         messageCollector: MessageCollector,
+        database: ColumbaDatabase,
     ): InterfaceConfigManager {
         return InterfaceConfigManager(
             context = context,
@@ -92,6 +94,7 @@ object InterfaceDatabaseModule {
             identityRepository = identityRepository,
             conversationRepository = conversationRepository,
             messageCollector = messageCollector,
+            database = database,
         )
     }
 }

@@ -721,6 +721,9 @@ class PythonReticulumProtocol(
             result.getDictValue("file_path")?.toString()?.let {
                 map["file_path"] = it
             }
+            result.getDictValue("key_data")?.toJava(ByteArray::class.java)?.let {
+                map["key_data"] = it
+            }
             result.getDictValue("error")?.toString()?.let {
                 map["error"] = it
             }
@@ -773,6 +776,9 @@ class PythonReticulumProtocol(
             }
             result.getDictValue("file_path")?.toString()?.let {
                 map["file_path"] = it
+            }
+            result.getDictValue("key_data")?.toJava(ByteArray::class.java)?.let {
+                map["key_data"] = it
             }
             result.getDictValue("error")?.toString()?.let {
                 map["error"] = it

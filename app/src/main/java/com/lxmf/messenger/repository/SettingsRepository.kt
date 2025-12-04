@@ -395,6 +395,18 @@ class SettingsRepository
             }
         }
 
+        /**
+         * Save theme preference by identifier string directly.
+         * Used during migration import when the full AppTheme object isn't available.
+         *
+         * @param identifier The theme identifier (e.g., "preset:VIBRANT" or "custom:123")
+         */
+        suspend fun saveThemePreferenceByIdentifier(identifier: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.THEME_PREFERENCE] = identifier
+            }
+        }
+
         // Custom theme methods (delegated to CustomThemeRepository)
 
         /**

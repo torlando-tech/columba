@@ -139,6 +139,7 @@ class IdentityManagerViewModel
          * If the identity file is missing but keyData is available in the database,
          * it will be recovered automatically.
          */
+        @Suppress("LongMethod") // Identity switch requires coordinated file and service operations
         fun switchToIdentity(identityHash: String) {
             viewModelScope.launch {
                 try {
@@ -180,6 +181,11 @@ class IdentityManagerViewModel
                             return@launch
                         }
                     }
+
+                    // Note: InterfaceConfigManager.applyInterfaceChanges() will use
+                    // ensureIdentityFileExists() to verify/recover the identity file
+                    // and pass the correct identity_<hash> path to Python.
+                    // No need to copy to default_identity anymore.
 
                     identityRepository.switchActiveIdentity(identityHash)
                         .onSuccess {

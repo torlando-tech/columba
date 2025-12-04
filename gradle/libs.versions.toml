@@ -15,6 +15,7 @@ zxing = "3.5.3"
 cameraX = "1.4.1"
 ktlint = "12.1.1"
 detekt = "1.23.7"
+serialization = "1.6.3"
 
 [libraries]
 # Compose
@@ -61,6 +62,9 @@ paging-testing = { module = "androidx.paging:paging-testing", version.ref = "pag
 
 # MessagePack
 msgpack = { module = "org.msgpack:msgpack-core", version.ref = "msgpack" }
+
+# Serialization
+serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 
 # QR Code & Camera
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }

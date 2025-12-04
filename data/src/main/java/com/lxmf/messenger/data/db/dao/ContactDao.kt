@@ -233,4 +233,16 @@ interface ContactDao {
      */
     @Query("DELETE FROM contacts WHERE identityHash = :identityHash")
     suspend fun deleteAllContacts(identityHash: String)
+
+    /**
+     * Get all contacts for an identity (sync, for export)
+     */
+    @Query("SELECT * FROM contacts WHERE identityHash = :identityHash")
+    suspend fun getAllContactsSync(identityHash: String): List<ContactEntity>
+
+    /**
+     * Bulk insert contacts (for import).
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertContacts(contacts: List<ContactEntity>)
 }

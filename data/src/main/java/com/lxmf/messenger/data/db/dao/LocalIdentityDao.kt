@@ -115,4 +115,14 @@ interface LocalIdentityDao {
      */
     @Query("SELECT EXISTS(SELECT 1 FROM local_identities WHERE identityHash = :identityHash)")
     suspend fun identityExists(identityHash: String): Boolean
+
+    /**
+     * Update the file path of an identity.
+     * Used when migrating from default_identity to identity_<hash> paths.
+     */
+    @Query("UPDATE local_identities SET filePath = :filePath WHERE identityHash = :identityHash")
+    suspend fun updateFilePath(
+        identityHash: String,
+        filePath: String,
+    )
 }

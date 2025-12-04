@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Process
 import android.util.Log
+import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
@@ -39,6 +40,7 @@ class InterfaceConfigManager
         private val identityRepository: IdentityRepository,
         private val conversationRepository: ConversationRepository,
         private val messageCollector: MessageCollector,
+        private val database: ColumbaDatabase,
     ) {
         companion object {
             private const val TAG = "InterfaceConfigManager"
@@ -52,6 +54,7 @@ class InterfaceConfigManager
          *
          * @return Result indicating success or failure with error details
          */
+        @Suppress("CyclomaticComplexMethod", "LongMethod") // Complex but necessary service restart orchestration
         suspend fun applyInterfaceChanges(): Result<Unit> {
             return runCatching {
                 Log.i(TAG, "==== Applying Interface Configuration Changes (Service Restart) ====")
@@ -96,33 +99,58 @@ class InterfaceConfigManager
                 }
 
                 // Now use ActivityManager to force kill the process
+                var reticulumProcessPid: Int? = null
+                val reticulumProcessName = "${context.packageName}:reticulum"
                 try {
                     val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
-                    // Get list of running processes
                     val runningProcesses = activityManager.runningAppProcesses ?: emptyList()
-                    val reticulumProcess = runningProcesses.find { it.processName == "com.lxmf.messenger:reticulum" }
+                    val reticulumProcess = runningProcesses.find { it.processName == reticulumProcessName }
 
                     if (reticulumProcess != null) {
-                        Log.d(TAG, "Found reticulum process PID ${reticulumProcess.pid}, killing it...")
+                        reticulumProcessPid = reticulumProcess.pid
+                        Log.d(TAG, "Found reticulum process PID $reticulumProcessPid, killing it...")
                         Process.killProcess(reticulumProcess.pid)
-                        Log.d(TAG, "✓ Service process killed")
                     } else {
                         Log.d(TAG, "Service process not found (may have already stopped)")
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Could not kill process via ActivityManager: ${e.message}")
-                    // Continue anyway - service might restart on its own
                 }
 
-                // Step 5: Wait for service process to die AND ports to be fully released by OS
-                // This is critical - even after process dies, ports remain in TIME_WAIT state
-                // 6 seconds ensures ports are released before starting fresh service
-                Log.d(TAG, "Step 5: Waiting for service process to die and ports to release (6000ms)...")
-                delay(6000)
-                Log.d(TAG, "✓ Service process dead, ports should be released")
+                // Step 5: Verify process is dead (poll up to 5 seconds)
+                // This is CRITICAL - if process survives, old identity keeps running
+                if (reticulumProcessPid != null) {
+                    Log.d(TAG, "Step 5: Verifying service process terminated...")
+                    var verifyAttempts = 0
+                    val maxVerifyAttempts = 10
+                    while (verifyAttempts < maxVerifyAttempts) {
+                        delay(500)
+                        verifyAttempts++
 
-                // Step 6: Start service again (fresh process, no port conflicts)
-                Log.d(TAG, "Step 6: Starting ReticulumService in fresh process...")
+                        val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                        val runningProcesses = activityManager.runningAppProcesses ?: emptyList()
+                        val stillRunning = runningProcesses.any { it.processName == reticulumProcessName }
+
+                        if (!stillRunning) {
+                            Log.d(TAG, "✓ Service process confirmed dead after ${verifyAttempts * 500}ms")
+                            break
+                        }
+
+                        if (verifyAttempts >= maxVerifyAttempts) {
+                            Log.e(TAG, "ERROR: Service process refused to die after ${maxVerifyAttempts * 500}ms")
+                            error("Service process did not terminate")
+                        }
+                    }
+                }
+
+                // Step 6: Wait for ports to be fully released by OS
+                // Even after process dies, ports remain in TIME_WAIT state briefly
+                Log.d(TAG, "Step 6: Waiting for ports to release (3000ms)...")
+                delay(3000)
+                Log.d(TAG, "✓ Ports should be released")
+
+                // Step 7: Start service again (fresh process, no port conflicts)
+                Log.d(TAG, "Step 7: Starting ReticulumService in fresh process...")
                 val startIntent =
                     Intent(context, ReticulumService::class.java).apply {
                         action = ReticulumService.ACTION_START
@@ -134,8 +162,8 @@ class InterfaceConfigManager
                 }
                 Log.d(TAG, "✓ Service start initiated")
 
-                // Step 7: Bind to the new service
-                Log.d(TAG, "Step 7: Binding to new service instance...")
+                // Step 8: Bind to the new service
+                Log.d(TAG, "Step 8: Binding to new service instance...")
                 if (reticulumProtocol is ServiceReticulumProtocol) {
                     reticulumProtocol.bindService()
                     // Phase 2, Task 2.3: bindService() now waits for explicit readiness signal
@@ -143,14 +171,22 @@ class InterfaceConfigManager
                 }
                 Log.d(TAG, "✓ Bound to new service and ready for IPC")
 
-                // Step 8: Initialize Reticulum with new config
-                Log.d(TAG, "Step 8: Initializing Reticulum with new configuration...")
+                // Step 9: Initialize Reticulum with new config
+                Log.d(TAG, "Step 9: Initializing Reticulum with new configuration...")
 
-                // Load active identity for config
+                // Load active identity and ensure its file exists (recover from keyData if needed)
                 val activeIdentity = identityRepository.getActiveIdentitySync()
-                val identityPath = activeIdentity?.filePath
+                val identityPath = if (activeIdentity != null) {
+                    identityRepository.ensureIdentityFileExists(activeIdentity)
+                        .onFailure { error ->
+                            Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
+                        }
+                        .getOrNull()
+                } else {
+                    null
+                }
                 val displayName = activeIdentity?.displayName
-                Log.d(TAG, "Active identity: ${activeIdentity?.displayName ?: "none"}, path: $identityPath")
+                Log.d(TAG, "Active identity: ${activeIdentity?.displayName ?: "none"}, verified path: $identityPath")
 
                 val config =
                     ReticulumConfig(
@@ -184,8 +220,8 @@ class InterfaceConfigManager
                         throw Exception("Failed to initialize Reticulum: ${error.message}", error)
                     }
 
-                // Step 9: Restore peer identities
-                Log.d(TAG, "Step 9: Restoring peer identities...")
+                // Step 10: Restore peer identities
+                Log.d(TAG, "Step 10: Restoring peer identities...")
                 try {
                     val peerIdentities = conversationRepository.getAllPeerIdentities()
                     Log.d(TAG, "Retrieved ${peerIdentities.size} peer identities from database")
@@ -207,8 +243,35 @@ class InterfaceConfigManager
                     // Not fatal - continue
                 }
 
-                // Step 10: Restart message collector
-                Log.d(TAG, "Step 10: Starting message collector...")
+                // Step 10b: Restore announce peer identities
+                Log.d(TAG, "Step 10b: Restoring announce peer identities...")
+                try {
+                    val announces = database.announceDao().getAllAnnouncesSync()
+                    Log.d(TAG, "Retrieved ${announces.size} announce peer identities from database")
+
+                    if (announces.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
+                        // Map announces to peer identity format (destinationHash, publicKey)
+                        val announcePeerIdentities = announces.map { announce ->
+                            announce.destinationHash to announce.publicKey
+                        }
+                        reticulumProtocol.restorePeerIdentities(announcePeerIdentities)
+                            .onSuccess { count ->
+                                Log.d(TAG, "✓ Restored $count announce peer identities")
+                            }
+                            .onFailure { error ->
+                                Log.w(TAG, "Failed to restore announce peer identities: ${error.message}", error)
+                                // Not fatal - continue
+                            }
+                    } else {
+                        Log.d(TAG, "No announce peer identities to restore")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error restoring announce peer identities", e)
+                    // Not fatal - continue
+                }
+
+                // Step 11: Restart message collector
+                Log.d(TAG, "Step 11: Starting message collector...")
                 messageCollector.startCollecting()
                 Log.d(TAG, "✓ Message collector started")
 

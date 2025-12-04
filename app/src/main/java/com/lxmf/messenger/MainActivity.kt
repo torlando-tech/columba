@@ -41,8 +41,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.lifecycleScope
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -64,6 +66,7 @@ import com.lxmf.messenger.ui.screens.ChatsScreen
 import com.lxmf.messenger.ui.screens.ContactsScreen
 import com.lxmf.messenger.ui.screens.IdentityManagerScreen
 import com.lxmf.messenger.ui.screens.IdentityScreen
+import com.lxmf.messenger.ui.screens.MigrationScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
 import com.lxmf.messenger.ui.screens.MessagingScreen
 import com.lxmf.messenger.ui.screens.MyIdentityScreen
@@ -428,6 +431,9 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                                     popUpTo(Screen.Welcome.route) { inclusive = true }
                                 }
                             },
+                            onImportData = {
+                                navController.navigate("migration")
+                            },
                         )
                     }
 
@@ -517,6 +523,9 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                             onNavigateToCustomThemes = {
                                 navController.navigate("theme_management")
                             },
+                            onNavigateToMigration = {
+                                navController.navigate("migration")
+                            },
                         )
                     }
 
@@ -580,6 +589,19 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                     composable("identity_manager") {
                         IdentityManagerScreen(
                             onNavigateBack = { navController.popBackStack() },
+                        )
+                    }
+
+                    composable("migration") {
+                        MigrationScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onImportComplete = {
+                                // Service restart is handled by MigrationViewModel,
+                                // just navigate to chats after import completes
+                                navController.navigate("chats") {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            },
                         )
                     }
 

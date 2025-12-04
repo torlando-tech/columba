@@ -1,0 +1,677 @@
+package com.lxmf.messenger.viewmodel
+
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
+import android.content.Context
+import android.os.ParcelUuid
+import android.util.Log
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.data.model.BluetoothType
+import com.lxmf.messenger.data.model.DiscoveredRNode
+import com.lxmf.messenger.data.model.RNodeRegionalPreset
+import com.lxmf.messenger.data.model.RNodeRegionalPresets
+import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.reticulum.model.InterfaceConfig
+import com.lxmf.messenger.service.InterfaceConfigManager
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.util.UUID
+import javax.inject.Inject
+
+/**
+ * Wizard step enumeration.
+ */
+enum class WizardStep {
+    DEVICE_DISCOVERY,
+    REGION_SELECTION,
+    REVIEW_CONFIGURE,
+}
+
+/**
+ * State for the RNode setup wizard.
+ */
+@androidx.compose.runtime.Immutable
+data class RNodeWizardState(
+    // Wizard navigation
+    val currentStep: WizardStep = WizardStep.DEVICE_DISCOVERY,
+
+    // Edit mode
+    val editingInterfaceId: Long? = null,
+    val isEditMode: Boolean = false,
+
+    // Step 1: Device Discovery
+    val isScanning: Boolean = false,
+    val discoveredDevices: List<DiscoveredRNode> = emptyList(),
+    val selectedDevice: DiscoveredRNode? = null,
+    val scanError: String? = null,
+    val showManualEntry: Boolean = false,
+    val manualDeviceName: String = "",
+    val manualBluetoothType: BluetoothType = BluetoothType.CLASSIC,
+    val isPairingInProgress: Boolean = false,
+    val pairingError: String? = null,
+
+    // Step 2: Region Selection
+    val searchQuery: String = "",
+    val selectedCountry: String? = null,
+    val selectedPreset: RNodeRegionalPreset? = null,
+    val isCustomMode: Boolean = false,
+
+    // Step 3: Review & Configure
+    val interfaceName: String = "RNode LoRa",
+    val frequency: String = "915000000",
+    val bandwidth: String = "125000",
+    val spreadingFactor: String = "8",
+    val codingRate: String = "5",
+    val txPower: String = "22",
+    val stAlock: String = "",
+    val ltAlock: String = "",
+    val interfaceMode: String = "full",
+    val showAdvancedSettings: Boolean = false,
+
+    // Validation errors
+    val nameError: String? = null,
+    val frequencyError: String? = null,
+    val bandwidthError: String? = null,
+    val txPowerError: String? = null,
+    val spreadingFactorError: String? = null,
+    val codingRateError: String? = null,
+
+    // Save state
+    val isSaving: Boolean = false,
+    val saveError: String? = null,
+    val saveSuccess: Boolean = false,
+)
+
+/**
+ * ViewModel for the RNode setup wizard.
+ */
+@HiltViewModel
+class RNodeWizardViewModel
+    @Inject
+    constructor(
+        @ApplicationContext private val context: Context,
+        private val interfaceRepository: InterfaceRepository,
+        private val configManager: InterfaceConfigManager,
+    ) : ViewModel() {
+        companion object {
+            private const val TAG = "RNodeWizardVM"
+            private val NUS_SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
+            private const val SCAN_DURATION_MS = 10000L
+        }
+
+        private val _state = MutableStateFlow(RNodeWizardState())
+        val state: StateFlow<RNodeWizardState> = _state.asStateFlow()
+
+        private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+        private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
+
+        // ========== INITIALIZATION ==========
+
+        /**
+         * Initialize wizard for editing an existing RNode interface.
+         */
+        fun loadExistingConfig(interfaceId: Long) {
+            viewModelScope.launch {
+                try {
+                    val entity = interfaceRepository.getInterfaceById(interfaceId).first()
+                    if (entity == null) {
+                        Log.e(TAG, "Interface not found: $interfaceId")
+                        return@launch
+                    }
+
+                    val config = interfaceRepository.entityToConfig(entity)
+                    if (config !is InterfaceConfig.RNode) {
+                        Log.e(TAG, "Interface is not RNode type: ${entity.type}")
+                        return@launch
+                    }
+
+                    // Find matching preset if any
+                    val matchingPreset = RNodeRegionalPresets.findMatchingPreset(
+                        config.frequency,
+                        config.bandwidth,
+                        config.spreadingFactor,
+                    )
+
+                    _state.update { state ->
+                        state.copy(
+                            editingInterfaceId = interfaceId,
+                            isEditMode = true,
+                            // Pre-populate device
+                            selectedDevice = DiscoveredRNode(
+                                name = config.targetDeviceName,
+                                address = "",
+                                type = if (config.connectionMode == "ble") BluetoothType.BLE else BluetoothType.CLASSIC,
+                                rssi = null,
+                                isPaired = true,
+                            ),
+                            // Pre-populate region
+                            selectedPreset = matchingPreset,
+                            selectedCountry = matchingPreset?.countryName,
+                            isCustomMode = matchingPreset == null,
+                            // Pre-populate settings
+                            interfaceName = config.name,
+                            frequency = config.frequency.toString(),
+                            bandwidth = config.bandwidth.toString(),
+                            spreadingFactor = config.spreadingFactor.toString(),
+                            codingRate = config.codingRate.toString(),
+                            txPower = config.txPower.toString(),
+                            stAlock = config.stAlock?.toString() ?: "",
+                            ltAlock = config.ltAlock?.toString() ?: "",
+                            interfaceMode = config.mode,
+                        )
+                    }
+
+                    Log.d(TAG, "Loaded existing config for interface $interfaceId")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load existing config", e)
+                }
+            }
+        }
+
+        // ========== NAVIGATION ==========
+
+        fun goToStep(step: WizardStep) {
+            _state.update { it.copy(currentStep = step) }
+        }
+
+        fun goToNextStep() {
+            val nextStep = when (_state.value.currentStep) {
+                WizardStep.DEVICE_DISCOVERY -> WizardStep.REGION_SELECTION
+                WizardStep.REGION_SELECTION -> WizardStep.REVIEW_CONFIGURE
+                WizardStep.REVIEW_CONFIGURE -> WizardStep.REVIEW_CONFIGURE // Already at end
+            }
+            _state.update { it.copy(currentStep = nextStep) }
+        }
+
+        fun goToPreviousStep() {
+            val prevStep = when (_state.value.currentStep) {
+                WizardStep.DEVICE_DISCOVERY -> WizardStep.DEVICE_DISCOVERY // Already at start
+                WizardStep.REGION_SELECTION -> WizardStep.DEVICE_DISCOVERY
+                WizardStep.REVIEW_CONFIGURE -> WizardStep.REGION_SELECTION
+            }
+            _state.update { it.copy(currentStep = prevStep) }
+        }
+
+        fun canProceed(): Boolean {
+            val state = _state.value
+            return when (state.currentStep) {
+                WizardStep.DEVICE_DISCOVERY ->
+                    state.selectedDevice != null ||
+                        (state.showManualEntry && state.manualDeviceName.isNotBlank())
+                WizardStep.REGION_SELECTION ->
+                    state.selectedPreset != null || state.isCustomMode
+                WizardStep.REVIEW_CONFIGURE ->
+                    state.interfaceName.isNotBlank() && validateConfigurationSilent()
+            }
+        }
+
+        // ========== STEP 1: DEVICE DISCOVERY ==========
+
+        @SuppressLint("MissingPermission")
+        fun startDeviceScan() {
+            viewModelScope.launch {
+                _state.update {
+                    it.copy(
+                        isScanning = true,
+                        scanError = null,
+                        discoveredDevices = emptyList(),
+                    )
+                }
+
+                val devices = mutableMapOf<String, DiscoveredRNode>()
+
+                // 1. Get paired Bluetooth Classic devices
+                try {
+                    bluetoothAdapter?.bondedDevices?.forEach { device ->
+                        if (device.name?.startsWith("RNode ") == true) {
+                            devices[device.address] = DiscoveredRNode(
+                                name = device.name ?: device.address,
+                                address = device.address,
+                                type = BluetoothType.CLASSIC,
+                                rssi = null,
+                                isPaired = true,
+                            )
+                        }
+                    }
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "Missing permission for Classic scan", e)
+                }
+
+                // Update with Classic devices immediately
+                _state.update { it.copy(discoveredDevices = devices.values.toList()) }
+
+                // 2. Scan for BLE devices with Nordic UART Service
+                try {
+                    scanForBleRNodes { bleDevice ->
+                        val existing = devices[bleDevice.address]
+                        if (existing == null) {
+                            // New BLE-only device
+                            devices[bleDevice.address] = bleDevice
+                        } else if (existing.type == BluetoothType.CLASSIC && !existing.isPaired) {
+                            // Update with BLE info if not paired via Classic
+                            devices[bleDevice.address] = existing.copy(
+                                type = BluetoothType.BLE,
+                                rssi = bleDevice.rssi,
+                            )
+                        }
+                        _state.update { it.copy(discoveredDevices = devices.values.toList()) }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "BLE scan failed", e)
+                }
+
+                // Scan complete
+                _state.update { it.copy(isScanning = false) }
+
+                if (devices.isEmpty()) {
+                    _state.update {
+                        it.copy(
+                            scanError = "No RNode devices found. Make sure your RNode is powered on and Bluetooth is enabled.",
+                        )
+                    }
+                }
+            }
+        }
+
+        @SuppressLint("MissingPermission")
+        private suspend fun scanForBleRNodes(onDeviceFound: (DiscoveredRNode) -> Unit) {
+            val scanner = bluetoothAdapter?.bluetoothLeScanner ?: return
+
+            val filter = ScanFilter.Builder()
+                .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
+                .build()
+
+            val settings = ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .build()
+
+            val foundDevices = mutableSetOf<String>()
+
+            val callback = object : ScanCallback() {
+                override fun onScanResult(callbackType: Int, result: ScanResult) {
+                    val name = result.device.name ?: return
+                    if (name.startsWith("RNode ") && !foundDevices.contains(result.device.address)) {
+                        foundDevices.add(result.device.address)
+                        onDeviceFound(
+                            DiscoveredRNode(
+                                name = name,
+                                address = result.device.address,
+                                type = BluetoothType.BLE,
+                                rssi = result.rssi,
+                                isPaired = result.device.bondState == BluetoothDevice.BOND_BONDED,
+                            ),
+                        )
+                    }
+                }
+
+                override fun onScanFailed(errorCode: Int) {
+                    Log.e(TAG, "BLE scan failed: $errorCode")
+                }
+            }
+
+            try {
+                scanner.startScan(listOf(filter), settings, callback)
+                delay(SCAN_DURATION_MS)
+                scanner.stopScan(callback)
+            } catch (e: SecurityException) {
+                Log.e(TAG, "BLE scan permission denied", e)
+            }
+        }
+
+        fun selectDevice(device: DiscoveredRNode) {
+            _state.update {
+                it.copy(
+                    selectedDevice = device,
+                    showManualEntry = false,
+                )
+            }
+        }
+
+        fun showManualEntry() {
+            _state.update {
+                it.copy(
+                    showManualEntry = true,
+                    selectedDevice = null,
+                )
+            }
+        }
+
+        fun hideManualEntry() {
+            _state.update {
+                it.copy(
+                    showManualEntry = false,
+                )
+            }
+        }
+
+        fun updateManualDeviceName(name: String) {
+            _state.update { it.copy(manualDeviceName = name) }
+        }
+
+        fun updateManualBluetoothType(type: BluetoothType) {
+            _state.update { it.copy(manualBluetoothType = type) }
+        }
+
+        @SuppressLint("MissingPermission")
+        fun initiateBluetoothPairing(device: DiscoveredRNode) {
+            viewModelScope.launch {
+                _state.update { it.copy(isPairingInProgress = true, pairingError = null) }
+
+                try {
+                    val btDevice = bluetoothAdapter?.getRemoteDevice(device.address)
+                    if (btDevice != null && btDevice.bondState != BluetoothDevice.BOND_BONDED) {
+                        // Initiate pairing - this will trigger system pairing dialog
+                        btDevice.createBond()
+
+                        // Wait for pairing to complete (with timeout)
+                        var attempts = 0
+                        while (btDevice.bondState == BluetoothDevice.BOND_BONDING && attempts < 30) {
+                            delay(1000)
+                            attempts++
+                        }
+
+                        when (btDevice.bondState) {
+                            BluetoothDevice.BOND_BONDED -> {
+                                // Update the device in our list
+                                val updatedDevice = device.copy(isPaired = true)
+                                _state.update { state ->
+                                    state.copy(
+                                        selectedDevice = updatedDevice,
+                                        discoveredDevices = state.discoveredDevices.map {
+                                            if (it.address == device.address) updatedDevice else it
+                                        },
+                                    )
+                                }
+                            }
+                            BluetoothDevice.BOND_NONE -> {
+                                _state.update { it.copy(pairingError = "Pairing failed or was cancelled") }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Pairing failed", e)
+                    _state.update { it.copy(pairingError = e.message ?: "Pairing failed") }
+                } finally {
+                    _state.update { it.copy(isPairingInProgress = false) }
+                }
+            }
+        }
+
+        fun clearPairingError() {
+            _state.update { it.copy(pairingError = null) }
+        }
+
+        // ========== STEP 2: REGION SELECTION ==========
+
+        fun updateSearchQuery(query: String) {
+            _state.update { it.copy(searchQuery = query) }
+        }
+
+        fun selectCountry(country: String?) {
+            _state.update {
+                it.copy(
+                    selectedCountry = country,
+                    selectedPreset = null,
+                    isCustomMode = false,
+                )
+            }
+        }
+
+        fun selectPreset(preset: RNodeRegionalPreset) {
+            _state.update {
+                it.copy(
+                    selectedPreset = preset,
+                    isCustomMode = false,
+                    // Apply preset values
+                    frequency = preset.frequency.toString(),
+                    bandwidth = preset.bandwidth.toString(),
+                    spreadingFactor = preset.spreadingFactor.toString(),
+                    codingRate = preset.codingRate.toString(),
+                    txPower = preset.txPower.toString(),
+                )
+            }
+        }
+
+        fun enableCustomMode() {
+            _state.update {
+                it.copy(
+                    isCustomMode = true,
+                    selectedPreset = null,
+                )
+            }
+        }
+
+        fun getFilteredCountries(): List<String> {
+            val query = _state.value.searchQuery.lowercase()
+            return RNodeRegionalPresets.getCountries().filter {
+                it.lowercase().contains(query)
+            }
+        }
+
+        fun getPresetsForSelectedCountry(): List<RNodeRegionalPreset> {
+            val country = _state.value.selectedCountry ?: return emptyList()
+            return RNodeRegionalPresets.getPresetsForCountry(country)
+        }
+
+        // ========== STEP 3: REVIEW & CONFIGURE ==========
+
+        fun updateInterfaceName(name: String) {
+            _state.update { it.copy(interfaceName = name, nameError = null) }
+        }
+
+        fun updateFrequency(value: String) {
+            _state.update { it.copy(frequency = value, frequencyError = null) }
+        }
+
+        fun updateBandwidth(value: String) {
+            _state.update { it.copy(bandwidth = value, bandwidthError = null) }
+        }
+
+        fun updateSpreadingFactor(value: String) {
+            _state.update { it.copy(spreadingFactor = value, spreadingFactorError = null) }
+        }
+
+        fun updateCodingRate(value: String) {
+            _state.update { it.copy(codingRate = value, codingRateError = null) }
+        }
+
+        fun updateTxPower(value: String) {
+            _state.update { it.copy(txPower = value, txPowerError = null) }
+        }
+
+        fun updateStAlock(value: String) {
+            _state.update { it.copy(stAlock = value) }
+        }
+
+        fun updateLtAlock(value: String) {
+            _state.update { it.copy(ltAlock = value) }
+        }
+
+        fun updateInterfaceMode(mode: String) {
+            _state.update { it.copy(interfaceMode = mode) }
+        }
+
+        fun toggleAdvancedSettings() {
+            _state.update { it.copy(showAdvancedSettings = !it.showAdvancedSettings) }
+        }
+
+        /**
+         * Validate configuration silently (without updating error messages).
+         */
+        private fun validateConfigurationSilent(): Boolean {
+            val state = _state.value
+
+            // Validate name
+            if (state.interfaceName.isBlank()) return false
+
+            // Validate frequency (137 MHz - 3 GHz)
+            val freq = state.frequency.toLongOrNull()
+            if (freq == null || freq < 137000000 || freq > 3000000000) return false
+
+            // Validate bandwidth
+            val bw = state.bandwidth.toIntOrNull()
+            if (bw == null || bw < 7800 || bw > 1625000) return false
+
+            // Validate spreading factor
+            val sf = state.spreadingFactor.toIntOrNull()
+            if (sf == null || sf < 5 || sf > 12) return false
+
+            // Validate coding rate
+            val cr = state.codingRate.toIntOrNull()
+            if (cr == null || cr < 5 || cr > 8) return false
+
+            // Validate TX power
+            val txp = state.txPower.toIntOrNull()
+            if (txp == null || txp < 0 || txp > 22) return false
+
+            return true
+        }
+
+        /**
+         * Validate configuration with error messages.
+         */
+        private fun validateConfiguration(): Boolean {
+            var isValid = true
+            val state = _state.value
+
+            // Validate name
+            if (state.interfaceName.isBlank()) {
+                _state.update { it.copy(nameError = "Interface name is required") }
+                isValid = false
+            }
+
+            // Validate frequency (137 MHz - 3 GHz)
+            val freq = state.frequency.toLongOrNull()
+            if (freq == null || freq < 137000000 || freq > 3000000000) {
+                _state.update { it.copy(frequencyError = "Frequency must be 137-3000 MHz") }
+                isValid = false
+            }
+
+            // Validate bandwidth
+            val bw = state.bandwidth.toIntOrNull()
+            if (bw == null || bw < 7800 || bw > 1625000) {
+                _state.update { it.copy(bandwidthError = "Bandwidth must be 7.8-1625 kHz") }
+                isValid = false
+            }
+
+            // Validate spreading factor
+            val sf = state.spreadingFactor.toIntOrNull()
+            if (sf == null || sf < 5 || sf > 12) {
+                _state.update { it.copy(spreadingFactorError = "SF must be 5-12") }
+                isValid = false
+            }
+
+            // Validate coding rate
+            val cr = state.codingRate.toIntOrNull()
+            if (cr == null || cr < 5 || cr > 8) {
+                _state.update { it.copy(codingRateError = "CR must be 5-8") }
+                isValid = false
+            }
+
+            // Validate TX power
+            val txp = state.txPower.toIntOrNull()
+            if (txp == null || txp < 0 || txp > 22) {
+                _state.update { it.copy(txPowerError = "TX power must be 0-22 dBm") }
+                isValid = false
+            }
+
+            return isValid
+        }
+
+        fun saveConfiguration() {
+            if (!validateConfiguration()) return
+
+            viewModelScope.launch {
+                _state.update { it.copy(isSaving = true, saveError = null) }
+
+                try {
+                    val state = _state.value
+
+                    // Determine device name and connection mode
+                    val (deviceName, connectionMode) = if (state.selectedDevice != null) {
+                        state.selectedDevice.name to when (state.selectedDevice.type) {
+                            BluetoothType.CLASSIC -> "classic"
+                            BluetoothType.BLE -> "ble"
+                            BluetoothType.UNKNOWN -> "classic" // Default to classic
+                        }
+                    } else {
+                        state.manualDeviceName to when (state.manualBluetoothType) {
+                            BluetoothType.CLASSIC -> "classic"
+                            BluetoothType.BLE -> "ble"
+                            BluetoothType.UNKNOWN -> "classic"
+                        }
+                    }
+
+                    val config = InterfaceConfig.RNode(
+                        name = state.interfaceName.trim(),
+                        enabled = true,
+                        targetDeviceName = deviceName,
+                        connectionMode = connectionMode,
+                        frequency = state.frequency.toLongOrNull() ?: 915000000,
+                        bandwidth = state.bandwidth.toIntOrNull() ?: 125000,
+                        txPower = state.txPower.toIntOrNull() ?: 7,
+                        spreadingFactor = state.spreadingFactor.toIntOrNull() ?: 8,
+                        codingRate = state.codingRate.toIntOrNull() ?: 5,
+                        stAlock = state.stAlock.toDoubleOrNull(),
+                        ltAlock = state.ltAlock.toDoubleOrNull(),
+                        mode = state.interfaceMode,
+                    )
+
+                    if (state.editingInterfaceId != null) {
+                        // Update existing interface
+                        interfaceRepository.updateInterface(state.editingInterfaceId, config)
+                        Log.d(TAG, "Updated RNode interface: ${state.editingInterfaceId}")
+                    } else {
+                        // Insert new interface
+                        interfaceRepository.insertInterface(config)
+                        Log.d(TAG, "Created new RNode interface")
+                    }
+
+                    _state.update { it.copy(saveSuccess = true, isSaving = false) }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to save configuration", e)
+                    _state.update {
+                        it.copy(
+                            saveError = e.message ?: "Failed to save configuration",
+                            isSaving = false,
+                        )
+                    }
+                }
+            }
+        }
+
+        fun clearSaveError() {
+            _state.update { it.copy(saveError = null) }
+        }
+
+        /**
+         * Get the effective device name for display.
+         */
+        fun getEffectiveDeviceName(): String {
+            val state = _state.value
+            return state.selectedDevice?.name
+                ?: state.manualDeviceName.ifBlank { "No device selected" }
+        }
+
+        /**
+         * Get the effective Bluetooth type for display.
+         */
+        fun getEffectiveBluetoothType(): BluetoothType {
+            val state = _state.value
+            return state.selectedDevice?.type ?: state.manualBluetoothType
+        }
+    }

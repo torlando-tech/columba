@@ -391,6 +391,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
     val isOnBleConnectionStatusScreen = currentRoute == "ble_connection_status"
     val isOnThemeManagementScreen = currentRoute == "theme_management"
     val isOnThemeEditorScreen = currentRoute == "theme_editor" || currentRoute?.startsWith("theme_editor/") == true
+    val isOnRNodeWizardScreen = currentRoute?.startsWith("rnode_wizard") ?: false
 
     val screens =
         listOf(
@@ -408,8 +409,8 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
             @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
             Scaffold(
                 bottomBar = {
-                    // Only show NavigationBar when NOT on messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, or welcome screen
-                    if (!isOnWelcomeScreen && !isOnMessagingScreen && !isOnAnnounceDetailScreen && !isOnInterfaceManagementScreen && !isOnBleConnectionStatusScreen && !isOnThemeManagementScreen && !isOnThemeEditorScreen) {
+                    // Only show NavigationBar when NOT on messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, welcome screen, or RNode wizard
+                    if (!isOnWelcomeScreen && !isOnMessagingScreen && !isOnAnnounceDetailScreen && !isOnInterfaceManagementScreen && !isOnBleConnectionStatusScreen && !isOnThemeManagementScreen && !isOnThemeEditorScreen && !isOnRNodeWizardScreen) {
                         NavigationBar {
                             screens.forEachIndexed { index, screen ->
                                 NavigationBarItem(
@@ -549,6 +550,34 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                     composable("interface_management") {
                         InterfaceManagementScreen(
                             onNavigateBack = { navController.popBackStack() },
+                            onNavigateToRNodeWizard = { interfaceId ->
+                                if (interfaceId != null) {
+                                    navController.navigate("rnode_wizard?interfaceId=$interfaceId")
+                                } else {
+                                    navController.navigate("rnode_wizard")
+                                }
+                            },
+                        )
+                    }
+
+                    composable(
+                        route = "rnode_wizard?interfaceId={interfaceId}",
+                        arguments = listOf(
+                            navArgument("interfaceId") {
+                                type = NavType.LongType
+                                defaultValue = -1L
+                            },
+                        ),
+                    ) { backStackEntry ->
+                        val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
+                        com.lxmf.messenger.ui.screens.rnode.RNodeWizardScreen(
+                            editingInterfaceId = if (interfaceId >= 0) interfaceId else null,
+                            onNavigateBack = { navController.popBackStack() },
+                            onComplete = {
+                                navController.navigate("interface_management") {
+                                    popUpTo("interface_management") { inclusive = true }
+                                }
+                            },
                         )
                     }
 

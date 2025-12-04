@@ -78,6 +78,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun InterfaceManagementScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToRNodeWizard: (interfaceId: Long?) -> Unit = {},
     viewModel: InterfaceManagementViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -86,6 +87,9 @@ fun InterfaceManagementScreen(
 
     // State for delete confirmation dialog
     var interfaceToDelete by remember { mutableStateOf<InterfaceEntity?>(null) }
+
+    // State for interface type selection
+    var showTypeSelector by remember { mutableStateOf(false) }
 
     // Permission state
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -153,7 +157,7 @@ fun InterfaceManagementScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { viewModel.showAddDialog() },
+                onClick = { showTypeSelector = true },
                 containerColor = MaterialTheme.colorScheme.primary,
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Interface")
@@ -234,7 +238,14 @@ fun InterfaceManagementScreen(
                                         val hasPermissions = BlePermissionManager.hasAllPermissions(context)
                                         viewModel.toggleInterface(iface.id, enabled, hasPermissions)
                                     },
-                                    onEdit = { viewModel.showEditDialog(iface) },
+                                    onEdit = {
+                                        // Use wizard for RNode, dialog for other types
+                                        if (iface.type == "RNode") {
+                                            onNavigateToRNodeWizard(iface.id)
+                                        } else {
+                                            viewModel.showEditDialog(iface)
+                                        }
+                                    },
                                     onDelete = { interfaceToDelete = iface },
                                     bluetoothState = state.bluetoothState,
                                     blePermissionsGranted = state.blePermissionsGranted,
@@ -342,6 +353,22 @@ fun InterfaceManagementScreen(
                 permissionLauncher.launch(permissions.toTypedArray())
             },
             sheetState = sheetState,
+        )
+    }
+
+    // Interface type selection dialog
+    if (showTypeSelector) {
+        InterfaceTypeSelector(
+            onTypeSelected = { type ->
+                showTypeSelector = false
+                if (type == "RNode") {
+                    onNavigateToRNodeWizard(null)
+                } else {
+                    viewModel.updateConfigState { it.copy(type = type) }
+                    viewModel.showAddDialog()
+                }
+            },
+            onDismiss = { showTypeSelector = false },
         )
     }
 }
@@ -742,5 +769,96 @@ private fun getInterfaceTypeLabel(type: String): String {
         "UDP" -> "UDP Interface"
         "AndroidBLE" -> "Bluetooth LE"
         else -> type
+    }
+}
+
+/**
+ * Dialog for selecting interface type when adding a new interface.
+ */
+@Composable
+fun InterfaceTypeSelector(
+    onTypeSelected: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Interface Type") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                InterfaceTypeOption(
+                    title = "Auto Discovery",
+                    description = "Automatically discover peers on local network",
+                    onClick = { onTypeSelected("AutoInterface") },
+                )
+                InterfaceTypeOption(
+                    title = "TCP Client",
+                    description = "Connect to a remote Reticulum transport node",
+                    onClick = { onTypeSelected("TCPClient") },
+                )
+                InterfaceTypeOption(
+                    title = "Bluetooth LE",
+                    description = "Connect to nearby devices via Bluetooth",
+                    onClick = { onTypeSelected("AndroidBLE") },
+                )
+                InterfaceTypeOption(
+                    title = "RNode LoRa",
+                    description = "Long-range radio via RNode hardware",
+                    onClick = { onTypeSelected("RNode") },
+                    isHighlighted = true,
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
+private fun InterfaceTypeOption(
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    isHighlighted: Boolean = false,
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isHighlighted) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+                color = if (isHighlighted) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isHighlighted) {
+                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                },
+            )
+        }
     }
 }

@@ -79,7 +79,6 @@ fun BleConnectionStatusScreen(
     onBackClick: () -> Unit,
     viewModel: BleConnectionsViewModel = hiltViewModel(),
 ) {
-    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
 
     // Bluetooth enable launcher

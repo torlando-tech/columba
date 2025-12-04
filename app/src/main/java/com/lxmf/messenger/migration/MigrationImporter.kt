@@ -4,21 +4,22 @@ import android.content.Context
 import android.net.Uri
 import android.util.Base64
 import android.util.Log
+import androidx.room.withTransaction
 import com.lxmf.messenger.data.database.InterfaceDatabase
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
-import com.lxmf.messenger.data.db.entity.CustomThemeEntity
 import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
+import com.lxmf.messenger.data.db.entity.CustomThemeEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -109,50 +110,43 @@ class MigrationImporter
                                 "Please update the app first.",
                         )
                     }
+
+                    // Check minimum supported version for backwards compatibility
+                    if (bundle.version < MigrationBundle.MINIMUM_VERSION) {
+                        return@withContext ImportResult.Error(
+                            "Migration file is from an old version (${bundle.version}). " +
+                                "Minimum supported version is ${MigrationBundle.MINIMUM_VERSION}.",
+                        )
+                    }
                     onProgress(0.1f)
 
-                    val identitiesImported = importIdentities(bundle.identities, onProgress)
-                    onProgress(0.4f)
+                    // Track successfully imported identities to filter dependent data
+                    val importedIdentityHashes = mutableSetOf<String>()
 
-                    importConversations(bundle.conversations)
-                    onProgress(0.5f)
+                    // Wrap main database operations in a transaction for atomicity
+                    val txResult = database.withTransaction {
+                        importDatabaseData(bundle, importedIdentityHashes, onProgress)
+                    }
 
-                    val messagesImported = importMessages(bundle.messages, onProgress)
-                    onProgress(0.7f)
-
-                    val contactsImported = importContacts(bundle.contacts)
-                    onProgress(0.75f)
-
-                    val announcesImported = importAnnounces(bundle.announces)
-                    onProgress(0.76f)
-
-                    val peerIdentitiesImported = importPeerIdentities(bundle.peerIdentities)
-                    onProgress(0.78f)
-
+                    // Interface database is separate, import outside main transaction
                     val interfacesImported = importInterfaces(bundle.interfaces)
-                    onProgress(0.82f)
-
-                    val (customThemesImported, themeIdMap) = importCustomThemes(bundle.customThemes)
                     onProgress(0.86f)
 
-                    if (bundle.attachmentManifest.isNotEmpty()) {
-                        importAttachments(uri)
-                    }
+                    if (bundle.attachmentManifest.isNotEmpty()) importAttachments(uri)
                     onProgress(0.92f)
 
-                    importSettings(bundle.settings, themeIdMap)
+                    importSettings(bundle.settings, txResult.themeIdMap)
                     onProgress(1.0f)
 
                     Log.i(TAG, "Migration import complete")
-
                     ImportResult.Success(
-                        identitiesImported = identitiesImported,
-                        messagesImported = messagesImported,
-                        contactsImported = contactsImported,
-                        announcesImported = announcesImported,
-                        peerIdentitiesImported = peerIdentitiesImported,
+                        identitiesImported = txResult.identitiesImported,
+                        messagesImported = txResult.messagesImported,
+                        contactsImported = txResult.contactsImported,
+                        announcesImported = txResult.announcesImported,
+                        peerIdentitiesImported = txResult.peerIdentitiesImported,
                         interfacesImported = interfacesImported,
-                        customThemesImported = customThemesImported,
+                        customThemesImported = txResult.customThemesImported,
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Migration import failed", e)
@@ -160,8 +154,68 @@ class MigrationImporter
                 }
             }
 
+        /**
+         * Helper data class to return multiple values from transaction block.
+         */
+        private data class TransactionResult(
+            val identitiesImported: Int,
+            val messagesImported: Int,
+            val contactsImported: Int,
+            val announcesImported: Int,
+            val peerIdentitiesImported: Int,
+            val customThemesImported: Int,
+            val themeIdMap: Map<Long, Long>,
+        )
+
+        /**
+         * Import all database data within a transaction.
+         * Extracted to keep importData under line limit.
+         */
+        private suspend fun importDatabaseData(
+            bundle: MigrationBundle,
+            importedIdentityHashes: MutableSet<String>,
+            onProgress: (Float) -> Unit,
+        ): TransactionResult {
+            val identities = importIdentities(bundle.identities, importedIdentityHashes, onProgress)
+            onProgress(0.4f)
+
+            // Filter to only import data for valid identities
+            val validConversations = bundle.conversations.filter {
+                it.identityHash in importedIdentityHashes ||
+                    database.localIdentityDao().identityExists(it.identityHash)
+            }
+            importConversations(validConversations)
+            onProgress(0.5f)
+
+            val validMessages = bundle.messages.filter {
+                it.identityHash in importedIdentityHashes ||
+                    database.localIdentityDao().identityExists(it.identityHash)
+            }
+            val messages = importMessages(validMessages, onProgress)
+            onProgress(0.7f)
+
+            val validContacts = bundle.contacts.filter {
+                it.identityHash in importedIdentityHashes ||
+                    database.localIdentityDao().identityExists(it.identityHash)
+            }
+            val contacts = importContacts(validContacts)
+            onProgress(0.75f)
+
+            val announces = importAnnounces(bundle.announces)
+            onProgress(0.76f)
+
+            val peerIdentities = importPeerIdentities(bundle.peerIdentities)
+            onProgress(0.78f)
+
+            val (themes, idMap) = importCustomThemes(bundle.customThemes)
+            onProgress(0.82f)
+
+            return TransactionResult(identities, messages, contacts, announces, peerIdentities, themes, idMap)
+        }
+
         private suspend fun importIdentities(
             identities: List<IdentityExport>,
+            importedIdentityHashes: MutableSet<String>,
             onProgress: (Float) -> Unit,
         ): Int {
             var imported = 0
@@ -169,7 +223,13 @@ class MigrationImporter
 
             identities.forEachIndexed { index, identityExport ->
                 try {
-                    if (importIdentity(identityExport)) imported++
+                    if (importIdentity(identityExport)) {
+                        imported++
+                        importedIdentityHashes.add(identityExport.identityHash)
+                    } else if (database.localIdentityDao().identityExists(identityExport.identityHash)) {
+                        // Identity already exists, still counts as valid for dependent data
+                        importedIdentityHashes.add(identityExport.identityHash)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to import identity ${identityExport.identityHash}", e)
                 }
@@ -221,7 +281,9 @@ class MigrationImporter
             }
             val batches = entities.chunked(100)
             batches.forEachIndexed { batchIndex, batch ->
-                database.messageDao().insertMessages(batch)
+                // Use IGNORE strategy to preserve existing messages
+                // This prevents LXMF replay from overwriting imported message timestamps
+                database.messageDao().insertMessagesIgnoreDuplicates(batch)
                 onProgress(0.5f + (0.2f * (batchIndex + 1) / batches.size))
             }
             Log.d(TAG, "Imported ${entities.size} messages")
@@ -503,12 +565,21 @@ class MigrationImporter
 
         private fun extractAttachmentsFromZip(inputStream: java.io.InputStream, destDir: File): Int {
             var imported = 0
+            val destDirCanonical = destDir.canonicalPath
             ZipInputStream(inputStream).use { zipIn ->
                 var entry = zipIn.nextEntry
                 while (entry != null) {
                     if (entry.name.startsWith(ATTACHMENTS_PREFIX) && !entry.isDirectory) {
                         val relativePath = entry.name.removePrefix(ATTACHMENTS_PREFIX)
                         val destFile = File(destDir, relativePath)
+
+                        // Security: Prevent path traversal attacks (e.g., "../../../sensitive_file")
+                        if (!destFile.canonicalPath.startsWith(destDirCanonical)) {
+                            Log.w(TAG, "Skipping suspicious path (path traversal attempt): ${entry.name}")
+                            entry = zipIn.nextEntry
+                            continue
+                        }
+
                         destFile.parentFile?.mkdirs()
                         FileOutputStream(destFile).use { output -> zipIn.copyTo(output) }
                         imported++

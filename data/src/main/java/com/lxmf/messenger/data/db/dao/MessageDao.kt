@@ -120,7 +120,16 @@ interface MessageDao {
 
     /**
      * Bulk insert messages (for import).
+     * Uses REPLACE to update existing messages.
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessages(messages: List<MessageEntity>)
+
+    /**
+     * Bulk insert messages for migration, ignoring duplicates.
+     * Uses IGNORE to preserve existing messages (prevents LXMF replay from overwriting
+     * imported message timestamps and status).
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertMessagesIgnoreDuplicates(messages: List<MessageEntity>)
 }

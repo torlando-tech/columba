@@ -255,7 +255,6 @@ class AnnounceStreamViewModel
                             contactRepository.addContactFromAnnounce(
                                 destinationHash = destinationHash,
                                 publicKey = announce.publicKey,
-                                announceName = announce.peerName,
                             )
                             announceRepository.setFavorite(destinationHash, true)
                             Log.d(TAG, "Added contact from announce: $destinationHash")

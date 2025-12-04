@@ -108,16 +108,15 @@ class ContactRepository
         }
 
         /**
-         * Add a contact from an announce (when user stars an announce)
+         * Add a contact from an announce (when user stars an announce).
+         * Display name will automatically use the announce's peerName via database COALESCE.
          *
          * @param destinationHash The destination hash from the announce
          * @param publicKey The public key from the announce
-         * @param announceName Optional name from the announce (stored in customNickname if provided)
          */
         suspend fun addContactFromAnnounce(
             destinationHash: String,
             publicKey: ByteArray,
-            announceName: String? = null,
         ): Result<Unit> {
             return try {
                 // Get active identity hash
@@ -222,16 +221,15 @@ class ContactRepository
         }
 
         /**
-         * Add a contact from an active conversation (when user saves from Chats tab)
+         * Add a contact from an active conversation (when user saves from Chats tab).
+         * Display name will automatically use the announce's peerName via database COALESCE.
          *
          * @param destinationHash The destination hash from the conversation
          * @param publicKey The public key from the conversation
-         * @param peerName The peer name from the conversation (stored as nickname)
          */
         suspend fun addContactFromConversation(
             destinationHash: String,
             publicKey: ByteArray,
-            peerName: String? = null,
         ): Result<Unit> {
             return try {
                 // Get active identity hash

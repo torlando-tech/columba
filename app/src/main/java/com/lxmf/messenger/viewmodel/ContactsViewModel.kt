@@ -137,14 +137,12 @@ class ContactsViewModel
         fun addContactFromAnnounce(
             destinationHash: String,
             publicKey: ByteArray,
-            announceName: String? = null,
         ) {
             viewModelScope.launch {
                 try {
                     contactRepository.addContactFromAnnounce(
                         destinationHash = destinationHash,
                         publicKey = publicKey,
-                        announceName = announceName,
                     )
                     Log.d(TAG, "Added contact from announce: $destinationHash")
                 } catch (e: Exception) {

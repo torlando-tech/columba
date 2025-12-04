@@ -234,7 +234,6 @@ sealed class ExportResult {
         val peerIdentityCount: Int,
         val interfaceCount: Int,
         val customThemeCount: Int,
-        val attachmentCount: Int,
     ) : ExportResult()
 
     data class Error(val message: String, val cause: Throwable? = null) : ExportResult()
@@ -252,7 +251,6 @@ sealed class ImportResult {
         val peerIdentitiesImported: Int,
         val interfacesImported: Int,
         val customThemesImported: Int,
-        val attachmentsImported: Int,
     ) : ImportResult()
 
     data class Error(val message: String, val cause: Throwable? = null) : ImportResult()
@@ -272,6 +270,5 @@ data class MigrationPreview(
     val peerIdentityCount: Int,
     val interfaceCount: Int,
     val customThemeCount: Int,
-    val attachmentCount: Int,
     val identityNames: List<String>,
 )

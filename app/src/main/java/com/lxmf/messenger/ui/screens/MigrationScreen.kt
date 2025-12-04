@@ -253,7 +253,6 @@ private fun ExportSection(
                             Text("${exportPreview.announceCount} announces")
                             Text("${exportPreview.interfaceCount} interfaces")
                             Text("${exportPreview.customThemeCount} custom themes")
-                            Text("${exportPreview.attachmentCount} attachments")
                         }
                     }
                 }
@@ -517,7 +516,6 @@ private fun ImportConfirmDialog(
                         Text("${preview.announceCount} announces")
                         Text("${preview.interfaceCount} interfaces")
                         Text("${preview.customThemeCount} custom themes")
-                        Text("${preview.attachmentCount} attachments")
                     }
                 }
 

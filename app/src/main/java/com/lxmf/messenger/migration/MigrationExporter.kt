@@ -445,15 +445,6 @@ class MigrationExporter
                             .getAllContactsSync(identity.identityHash).size
                     }
 
-                    val attachmentsDir = File(context.filesDir, "attachments")
-                    val attachmentCount = if (attachmentsDir.exists()) {
-                        attachmentsDir.listFiles()?.sumOf { messageDir ->
-                            messageDir.listFiles()?.size ?: 0
-                        } ?: 0
-                    } else {
-                        0
-                    }
-
                     val announceCount = database.announceDao().getAnnounceCount()
                     val peerIdentityCount = database.peerIdentityDao().getAllPeerIdentities().size
                     val interfaceCount = interfaceDatabase.interfaceDao()
@@ -468,7 +459,6 @@ class MigrationExporter
                         peerIdentityCount = peerIdentityCount,
                         interfaceCount = interfaceCount,
                         customThemeCount = customThemeCount,
-                        attachmentCount = attachmentCount,
                     )
                 } catch (e: Exception) {
                     ExportResult.Error("Failed to get export preview: ${e.message}", e)

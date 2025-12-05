@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,11 @@ import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
 @Composable
 fun RegionSelectionStep(viewModel: RNodeWizardViewModel) {
     val state by viewModel.state.collectAsState()
+
+    // Compute filtered countries at top level to ensure recomposition when searchQuery changes
+    val filteredCountries = remember(state.searchQuery) {
+        viewModel.getFilteredCountries()
+    }
 
     Column(
         modifier = Modifier
@@ -63,7 +69,7 @@ fun RegionSelectionStep(viewModel: RNodeWizardViewModel) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(
-                    items = viewModel.getFilteredCountries(),
+                    items = filteredCountries,
                     key = { it },
                 ) { country ->
                     CountryCard(

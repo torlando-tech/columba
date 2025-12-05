@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SignalCellular4Bar
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,6 +42,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -64,10 +68,9 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
         }
     }
 
-    // Auto-start scan when entering this step (if not in edit mode with device already selected)
+    // Auto-start scan when entering this step (always scan to detect correct device types)
     LaunchedEffect(Unit) {
-        if (state.selectedDevice == null || !state.isEditMode) {
-            val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 arrayOf(
                     Manifest.permission.BLUETOOTH_SCAN,
                     Manifest.permission.BLUETOOTH_CONNECT,
@@ -80,11 +83,10 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                 )
             }
 
-            if (BlePermissionManager.hasAllPermissions(context)) {
-                viewModel.startDeviceScan()
-            } else {
-                permissionLauncher.launch(requiredPermissions)
-            }
+        if (BlePermissionManager.hasAllPermissions(context)) {
+            viewModel.startDeviceScan()
+        } else {
+            permissionLauncher.launch(requiredPermissions)
         }
     }
 
@@ -172,6 +174,7 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                 isSelected = true,
                 onSelect = { },
                 onPair = { },
+                onSetType = { viewModel.setDeviceType(state.selectedDevice!!, it) },
                 isPairingInProgress = false,
             )
             Spacer(Modifier.height(16.dp))
@@ -200,6 +203,7 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                     isSelected = state.selectedDevice?.address == device.address,
                     onSelect = { viewModel.selectDevice(device) },
                     onPair = { viewModel.initiateBluetoothPairing(device) },
+                    onSetType = { viewModel.setDeviceType(device, it) },
                     isPairingInProgress = state.isPairingInProgress,
                 )
             }
@@ -332,30 +336,42 @@ private fun BluetoothDeviceCard(
     isSelected: Boolean,
     onSelect: () -> Unit,
     onPair: () -> Unit,
+    onSetType: (BluetoothType) -> Unit,
     isPairingInProgress: Boolean,
 ) {
+    var showTypeSelector by remember { mutableStateOf(false) }
+
     Card(
-        onClick = onSelect,
+        onClick = {
+            if (device.type == BluetoothType.UNKNOWN) {
+                showTypeSelector = !showTypeSelector
+            } else {
+                onSelect()
+            }
+        },
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) {
                 MaterialTheme.colorScheme.primaryContainer
+            } else if (device.type == BluetoothType.UNKNOWN) {
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
             } else {
                 MaterialTheme.colorScheme.surface
             },
         ),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Column {
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f),
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f),
+                ) {
                 Icon(
                     Icons.Default.Bluetooth,
                     contentDescription = null,
@@ -380,20 +396,39 @@ private fun BluetoothDeviceCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // Bluetooth type badge
-                        Text(
-                            when (device.type) {
-                                BluetoothType.CLASSIC -> "Classic"
-                                BluetoothType.BLE -> "BLE"
-                                BluetoothType.UNKNOWN -> "Unknown"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        )
+                        // Bluetooth type badge with warning for UNKNOWN
+                        if (device.type == BluetoothType.UNKNOWN) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = "Unknown type",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                                Text(
+                                    "Unknown type",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        } else {
+                            Text(
+                                when (device.type) {
+                                    BluetoothType.CLASSIC -> "Classic"
+                                    BluetoothType.BLE -> "BLE"
+                                    BluetoothType.UNKNOWN -> "Unknown"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        }
 
                         // Signal strength (BLE only)
                         device.rssi?.let { rssi ->
@@ -467,6 +502,50 @@ private fun BluetoothDeviceCard(
                     TextButton(onClick = onPair) {
                         Text("Pair")
                     }
+                }
+            }
+            }
+
+            // Type selector for UNKNOWN devices
+            AnimatedVisibility(visible = device.type == BluetoothType.UNKNOWN && showTypeSelector) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp),
+                ) {
+                    Text(
+                        "Select connection type:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterChip(
+                            selected = false,
+                            onClick = {
+                                onSetType(BluetoothType.CLASSIC)
+                                showTypeSelector = false
+                            },
+                            label = { Text("Bluetooth Classic") },
+                        )
+                        FilterChip(
+                            selected = false,
+                            onClick = {
+                                onSetType(BluetoothType.BLE)
+                                showTypeSelector = false
+                            },
+                            label = { Text("Bluetooth LE") },
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Power on device and rescan to auto-detect type.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }

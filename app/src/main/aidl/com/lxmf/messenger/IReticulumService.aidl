@@ -254,4 +254,11 @@ interface IReticulumService {
      * @return RSSI in dBm, or -100 if not connected or not available
      */
     int getRNodeRssi();
+
+    /**
+     * Reconnect to the RNode interface.
+     * Called when CompanionDeviceManager detects the RNode has reappeared
+     * after going out of BLE range.
+     */
+    void reconnectRNodeInterface();
 }

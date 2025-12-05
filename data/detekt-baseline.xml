@@ -1,15 +1,12 @@
 <?xml version="1.0" ?>
 <SmellBaseline>
-  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>CyclomaticComplexMethod:AnnounceEntity.kt$AnnounceEntity$override fun equals(other: Any?): Boolean</ID>
     <ID>CyclomaticComplexMethod:EnrichedContact.kt$EnrichedContact$override fun equals(other: Any?): Boolean</ID>
     <ID>LongMethod:DatabaseModule.kt$DatabaseModule.&lt;no name provided&gt;$override fun migrate(database: SupportSQLiteDatabase)</ID>
     <ID>LongParameterList:AnnounceRepository.kt$AnnounceRepository$( destinationHash: String, peerName: String, publicKey: ByteArray, appData: ByteArray?, hops: Int, timestamp: Long, nodeType: String, receivingInterface: String? = null, aspect: String? = null, )</ID>
     <ID>LongParameterList:CustomThemeRepository.kt$CustomThemeRepository$( id: Long, name: String, description: String, seedPrimary: Int, seedSecondary: Int, seedTertiary: Int, lightColors: ThemeColorSet, darkColors: ThemeColorSet, baseTheme: String? = null, )</ID>
     <ID>LongParameterList:CustomThemeRepository.kt$CustomThemeRepository$( name: String, description: String, seedPrimary: Int, seedSecondary: Int, seedTertiary: Int, lightColors: ThemeColorSet, darkColors: ThemeColorSet, baseTheme: String? = null, )</ID>
-    <ID>MaxLineLength:AnnounceDao.kt$AnnounceDao$"SELECT * FROM announces WHERE isFavorite = 1 AND (peerName LIKE '%' || :query || '%' OR destinationHash LIKE '%' || :query || '%') ORDER BY favoritedTimestamp DESC"</ID>
-    <ID>MaxLineLength:AnnounceDao.kt$AnnounceDao$"SELECT * FROM announces WHERE peerName LIKE '%' || :query || '%' OR destinationHash LIKE '%' || :query || '%' ORDER BY lastSeenTimestamp DESC"</ID>
     <ID>MaxLineLength:AnnounceDao.kt$AnnounceDao$@Query("UPDATE announces SET isFavorite = :isFavorite, favoritedTimestamp = :timestamp WHERE destinationHash = :destinationHash")</ID>
     <ID>MaxLineLength:ConversationRepository.kt$ConversationRepository$android.util.Log.d("ConversationRepository", "Returning ${identitiesWithKeys.size} peer identities for restoration")</ID>
     <ID>MaxLineLength:ConversationRepository.kt$ConversationRepository$android.util.Log.d("ConversationRepository", "Stored public key for peer: $peerHash (${publicKey.size} bytes)")</ID>
@@ -37,7 +34,6 @@
     <ID>TooManyFunctions:AnnounceRepository.kt$AnnounceRepository</ID>
     <ID>TooManyFunctions:ContactRepository.kt$ContactRepository</ID>
     <ID>TooManyFunctions:ConversationRepository.kt$ConversationRepository</ID>
-    <ID>UseCheckOrError:AnnounceRepository.kt$AnnounceRepository$throw IllegalStateException("No active identity found")</ID>
     <ID>UseCheckOrError:ConversationRepository.kt$ConversationRepository$throw IllegalStateException("No active identity found")</ID>
   </CurrentIssues>
 </SmellBaseline>

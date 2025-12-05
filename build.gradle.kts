@@ -11,6 +11,7 @@ plugins {
     id("jacoco")
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
+    id("de.aaschmid.cpd") version "3.5"
 }
 
 // Apply JaCoCo, ktlint, and detekt to all subprojects
@@ -44,6 +45,33 @@ subprojects {
         // Baseline captures pre-existing issues. New code must pass all checks.
         // Run `./gradlew detektBaseline` to update after intentional changes.
         baseline = file("$projectDir/detekt-baseline.xml")
+    }
+}
+
+// CPD (Copy-Paste Detector) for duplicate code detection
+cpd {
+    language = "kotlin"
+    minimumTokenCount = 100 // ~10-15 lines minimum for duplicate detection
+    toolVersion = "7.7.0"   // PMD version with Kotlin support
+}
+
+tasks.named<de.aaschmid.gradle.plugins.cpd.Cpd>("cpdCheck") {
+    // Configure source files for all modules
+    source = files(
+        "app/src/main/java",
+        "data/src/main/java",
+        "domain/src/main/kotlin",
+        "reticulum/src/main/java"
+    ).asFileTree.matching {
+        include("**/*.kt")
+        exclude("**/generated/**")
+        exclude("**/build/**")
+    }
+    // Advisory mode initially - duplicates are reported but don't fail the build
+    ignoreFailures = true
+    // Enable text report for easier reading
+    reports {
+        text.required.set(true)
     }
 }
 

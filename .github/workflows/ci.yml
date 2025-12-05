@@ -25,7 +25,7 @@ jobs:
         uses: gradle/actions/wrapper-validation@v4
 
   lint:
-    name: Code Quality (ktlint + detekt)
+    name: Code Quality (ktlint + detekt + CPD)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -47,6 +47,9 @@ jobs:
       - name: Run detekt
         run: ./gradlew detekt --continue
 
+      - name: Run CPD (duplicate code detection)
+        run: ./gradlew cpdCheck --continue
+
       - name: Upload lint reports
         if: always()
         uses: actions/upload-artifact@v5
@@ -55,6 +58,7 @@ jobs:
           path: |
             **/build/reports/ktlint/
             **/build/reports/detekt/
+            build/reports/cpd/
           retention-days: 7
 
   threading-audit:

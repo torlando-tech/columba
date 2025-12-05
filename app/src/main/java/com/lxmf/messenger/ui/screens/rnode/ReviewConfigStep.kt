@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -291,6 +292,32 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     selectedMode = state.interfaceMode,
                     onModeChange = { viewModel.updateInterfaceMode(it) },
                 )
+
+                Spacer(Modifier.height(16.dp))
+
+                // Display logo on RNode toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Display Logo on RNode",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            "Show Columba logo on RNode's OLED display when connected",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Switch(
+                        checked = state.enableFramebuffer,
+                        onCheckedChange = { viewModel.updateEnableFramebuffer(it) },
+                    )
+                }
             }
         }
 

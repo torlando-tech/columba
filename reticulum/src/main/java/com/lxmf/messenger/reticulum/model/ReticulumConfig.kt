@@ -94,6 +94,7 @@ sealed class InterfaceConfig {
      * @param stAlock Short-term airtime limit percentage (optional)
      * @param ltAlock Long-term airtime limit percentage (optional)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
+     * @param enableFramebuffer Display Columba logo on RNode's OLED screen
      */
     data class RNode(
         override val name: String = "RNode LoRa",
@@ -108,6 +109,7 @@ sealed class InterfaceConfig {
         val stAlock: Double? = null, // Short-term airtime limit %
         val ltAlock: Double? = null, // Long-term airtime limit %
         val mode: String = "full",
+        val enableFramebuffer: Boolean = true, // Display logo on RNode OLED
     ) : InterfaceConfig()
 
     /**

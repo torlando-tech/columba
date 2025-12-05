@@ -55,6 +55,13 @@ class KISS:
     CMD_RESET = 0x55
     CMD_ERROR = 0x90
 
+    # External framebuffer (display)
+    CMD_FB_EXT = 0x41      # Enable/disable external framebuffer
+    CMD_FB_WRITE = 0x43    # Write framebuffer data
+
+    # Framebuffer constants
+    FB_BYTES_PER_LINE = 8  # 64 pixels / 8 bits per byte
+
     # Detection
     DETECT_REQ = 0x73
     DETECT_RESP = 0x46
@@ -214,6 +221,10 @@ class ColumbaRNodeInterface:
         self.r_stat_rssi = None
         self.r_stat_snr = None
 
+        # External framebuffer (display) settings
+        self.enable_framebuffer = config.get("enable_framebuffer", False)
+        self.framebuffer_enabled = False
+
         # Read thread
         self._read_thread = None
         self._running = False
@@ -348,6 +359,9 @@ class ColumbaRNodeInterface:
             self.interface_ready = True
             self.online = True
             RNS.log(f"RNode '{self.name}' is online", RNS.LOG_INFO)
+
+            # Display Columba logo on RNode if enabled
+            self._display_logo()
         else:
             raise IOError("Radio configuration validation failed")
 
@@ -495,6 +509,73 @@ class ColumbaRNodeInterface:
                 time.sleep(0.3)  # Brief delay before retry
 
         raise IOError(f"Write failed after {max_retries} attempts: {last_error}")
+
+    # -------------------------------------------------------------------------
+    # External Framebuffer (Display) Methods
+    # -------------------------------------------------------------------------
+
+    def enable_external_framebuffer(self):
+        """Enable external framebuffer mode on RNode display."""
+        kiss_command = bytes([KISS.FEND, KISS.CMD_FB_EXT, 0x01, KISS.FEND])
+        self._write(kiss_command)
+        self.framebuffer_enabled = True
+        RNS.log(f"{self} External framebuffer enabled", RNS.LOG_DEBUG)
+
+    def disable_external_framebuffer(self):
+        """Disable external framebuffer, return to normal RNode UI."""
+        kiss_command = bytes([KISS.FEND, KISS.CMD_FB_EXT, 0x00, KISS.FEND])
+        self._write(kiss_command)
+        self.framebuffer_enabled = False
+        RNS.log(f"{self} External framebuffer disabled", RNS.LOG_DEBUG)
+
+    def write_framebuffer(self, line, line_data):
+        """Write 8 bytes of pixel data to a specific line (0-63).
+
+        Args:
+            line: Line number (0-63)
+            line_data: 8 bytes of pixel data (64 pixels, 1 bit per pixel)
+        """
+        if line < 0 or line > 63:
+            raise ValueError(f"Line must be 0-63, got {line}")
+        if len(line_data) != KISS.FB_BYTES_PER_LINE:
+            raise ValueError(f"Line data must be {KISS.FB_BYTES_PER_LINE} bytes")
+
+        data = bytes([line]) + line_data
+        escaped = KISS.escape(data)
+        kiss_command = bytes([KISS.FEND, KISS.CMD_FB_WRITE]) + escaped + bytes([KISS.FEND])
+        self._write(kiss_command)
+
+    def display_image(self, imagedata):
+        """Send a 64x64 monochrome image to RNode display.
+
+        Args:
+            imagedata: List or bytes of 512 bytes (64 lines x 8 bytes per line)
+        """
+        if len(imagedata) != 512:
+            raise ValueError(f"Image data must be 512 bytes, got {len(imagedata)}")
+
+        for line in range(64):
+            line_start = line * KISS.FB_BYTES_PER_LINE
+            line_end = line_start + KISS.FB_BYTES_PER_LINE
+            line_data = bytes(imagedata[line_start:line_end])
+            self.write_framebuffer(line, line_data)
+
+        RNS.log(f"{self} Sent 64x64 image to RNode framebuffer", RNS.LOG_DEBUG)
+
+    def _display_logo(self):
+        """Display the Columba logo on RNode if framebuffer is enabled."""
+        if not self.enable_framebuffer:
+            return
+
+        try:
+            from columba_logo import columba_fb_data
+            self.display_image(columba_fb_data)
+            self.enable_external_framebuffer()
+            RNS.log(f"{self} Displayed Columba logo on RNode", RNS.LOG_DEBUG)
+        except ImportError:
+            RNS.log(f"{self} columba_logo module not found, skipping logo display", RNS.LOG_WARNING)
+        except Exception as e:
+            RNS.log(f"{self} Failed to display logo: {e}", RNS.LOG_WARNING)
 
     def _read_loop(self):
         """Background thread for reading and parsing KISS frames."""

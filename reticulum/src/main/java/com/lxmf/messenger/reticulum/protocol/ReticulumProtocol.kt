@@ -137,6 +137,14 @@ interface ReticulumProtocol {
      * @param active true if a conversation screen is currently open and active
      */
     fun setConversationActive(active: Boolean)
+
+    // RNode management
+
+    /**
+     * Attempt to reconnect to the RNode interface.
+     * Use this when the RNode has disconnected and automatic reconnection has failed.
+     */
+    suspend fun reconnectRNodeInterface()
 }
 
 /**

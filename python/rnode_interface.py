@@ -219,6 +219,12 @@ class ColumbaRNodeInterface:
         self._running = False
         self._read_lock = threading.Lock()
 
+        # Auto-reconnection
+        self._reconnect_thread = None
+        self._reconnecting = False
+        self._max_reconnect_attempts = 30  # Try for ~5 minutes (30 * 10s)
+        self._reconnect_interval = 10.0  # Seconds between reconnection attempts
+
         # Validate configuration
         self._validate_config()
 
@@ -300,6 +306,7 @@ class ColumbaRNodeInterface:
     def stop(self):
         """Stop the interface and disconnect."""
         self._running = False
+        self._reconnecting = False  # Stop any reconnection attempts
         self.online = False
 
         if self.kotlin_bridge:
@@ -307,6 +314,9 @@ class ColumbaRNodeInterface:
 
         if self._read_thread:
             self._read_thread.join(timeout=2.0)
+
+        if self._reconnect_thread:
+            self._reconnect_thread.join(timeout=2.0)
 
         RNS.log(f"RNode interface '{self.name}' stopped", RNS.LOG_INFO)
 
@@ -622,10 +632,52 @@ class ColumbaRNodeInterface:
         """Callback when Bluetooth connection state changes."""
         if connected:
             RNS.log(f"RNode connected: {device_name}", RNS.LOG_INFO)
+            # Stop any reconnection attempts if we're now connected
+            self._reconnecting = False
         else:
             RNS.log(f"RNode disconnected: {device_name}", RNS.LOG_WARNING)
             self.online = False
             self.detected = False
+            # Start auto-reconnection if not already reconnecting
+            self._start_reconnection_loop()
+
+    def _start_reconnection_loop(self):
+        """Start a background thread to attempt reconnection."""
+        if self._reconnecting:
+            RNS.log("Reconnection already in progress", RNS.LOG_DEBUG)
+            return
+
+        self._reconnecting = True
+        self._reconnect_thread = threading.Thread(target=self._reconnection_loop, daemon=True)
+        self._reconnect_thread.start()
+        RNS.log(f"Started auto-reconnection loop for {self.target_device_name}", RNS.LOG_INFO)
+
+    def _reconnection_loop(self):
+        """Background thread that attempts to reconnect to the RNode."""
+        attempt = 0
+        while self._reconnecting and attempt < self._max_reconnect_attempts:
+            attempt += 1
+            RNS.log(f"Reconnection attempt {attempt}/{self._max_reconnect_attempts} for {self.target_device_name}...", RNS.LOG_INFO)
+
+            try:
+                if self.start():
+                    RNS.log(f"✅ Successfully reconnected to {self.target_device_name}", RNS.LOG_INFO)
+                    self._reconnecting = False
+                    return
+                else:
+                    RNS.log(f"Reconnection attempt {attempt} failed, will retry in {self._reconnect_interval}s", RNS.LOG_WARNING)
+            except Exception as e:
+                RNS.log(f"Reconnection attempt {attempt} error: {e}", RNS.LOG_ERROR)
+
+            # Wait before next attempt (but check if we should stop)
+            for _ in range(int(self._reconnect_interval * 10)):
+                if not self._reconnecting:
+                    return
+                time.sleep(0.1)
+
+        if self._reconnecting:
+            RNS.log(f"❌ Failed to reconnect to {self.target_device_name} after {attempt} attempts", RNS.LOG_ERROR)
+            self._reconnecting = False
 
     def process_held_announces(self):
         """Process any held announces. Required by RNS Transport."""

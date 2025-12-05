@@ -2914,7 +2914,23 @@ class ReticulumWrapper:
             if not self.initialized:
                 return {'success': False, 'error': 'Reticulum not initialized'}
 
-            # Check if we have pending RNode config
+            # Check if we already have an RNode interface that just needs reconnecting
+            if self.rnode_interface is not None:
+                if not self.rnode_interface.online:
+                    log_info("ReticulumWrapper", "initialize_rnode_interface",
+                            "Reconnecting existing offline RNode interface...")
+                    if self.rnode_interface.start():
+                        log_info("ReticulumWrapper", "initialize_rnode_interface",
+                                f"✅ RNode interface reconnected, online={self.rnode_interface.online}")
+                        return {'success': True, 'message': 'RNode interface reconnected'}
+                    else:
+                        return {'success': False, 'error': 'Failed to reconnect RNode interface'}
+                else:
+                    log_info("ReticulumWrapper", "initialize_rnode_interface",
+                            "RNode interface already online, skipping")
+                    return {'success': True, 'message': 'RNode interface already online'}
+
+            # Check if we have pending RNode config (for initial creation)
             if not hasattr(self, '_pending_rnode_config') or self._pending_rnode_config is None:
                 log_info("ReticulumWrapper", "initialize_rnode_interface", "No RNode config pending, skipping")
                 return {'success': True, 'message': 'No RNode interface configured'}

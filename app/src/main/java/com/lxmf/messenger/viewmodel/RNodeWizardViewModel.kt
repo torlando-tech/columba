@@ -111,6 +111,8 @@ class RNodeWizardViewModel
             private const val TAG = "RNodeWizardVM"
             private val NUS_SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
             private const val SCAN_DURATION_MS = 10000L
+            private const val PREFS_NAME = "rnode_device_types"
+            private const val KEY_DEVICE_TYPES = "device_type_cache"
         }
 
         private val _state = MutableStateFlow(RNodeWizardState())
@@ -118,6 +120,43 @@ class RNodeWizardViewModel
 
         private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
+
+        // Device type cache - persists detected BLE vs Classic types
+        private val deviceTypePrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        /**
+         * Get cached Bluetooth type for a device address.
+         */
+        private fun getCachedDeviceType(address: String): BluetoothType? {
+            val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
+            return try {
+                val typeStr = org.json.JSONObject(json).optString(address, null)
+                when (typeStr) {
+                    "CLASSIC" -> BluetoothType.CLASSIC
+                    "BLE" -> BluetoothType.BLE
+                    else -> null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to read device type cache", e)
+                null
+            }
+        }
+
+        /**
+         * Cache the Bluetooth type for a device address.
+         */
+        private fun cacheDeviceType(address: String, type: BluetoothType) {
+            if (type == BluetoothType.UNKNOWN) return // Don't cache unknown
+            try {
+                val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
+                val obj = org.json.JSONObject(json)
+                obj.put(address, type.name)
+                deviceTypePrefs.edit().putString(KEY_DEVICE_TYPES, obj.toString()).apply()
+                Log.d(TAG, "Cached device type: $address -> $type")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to cache device type", e)
+            }
+        }
 
         // ========== INITIALIZATION ==========
 
@@ -232,50 +271,87 @@ class RNodeWizardViewModel
                     )
                 }
 
+                val bleDeviceAddresses = mutableSetOf<String>()
                 val devices = mutableMapOf<String, DiscoveredRNode>()
 
-                // 1. Get paired Bluetooth Classic devices
-                try {
-                    bluetoothAdapter?.bondedDevices?.forEach { device ->
-                        if (device.name?.startsWith("RNode ") == true) {
-                            devices[device.address] = DiscoveredRNode(
-                                name = device.name ?: device.address,
-                                address = device.address,
-                                type = BluetoothType.CLASSIC,
-                                rssi = null,
-                                isPaired = true,
-                            )
-                        }
-                    }
-                } catch (e: SecurityException) {
-                    Log.e(TAG, "Missing permission for Classic scan", e)
-                }
-
-                // Update with Classic devices immediately
-                _state.update { it.copy(discoveredDevices = devices.values.toList()) }
-
-                // 2. Scan for BLE devices with Nordic UART Service
+                // 1. BLE scan FIRST - this definitively identifies BLE devices
+                // RNodes use EITHER Classic OR BLE, never both (determined by board type)
                 try {
                     scanForBleRNodes { bleDevice ->
-                        val existing = devices[bleDevice.address]
-                        if (existing == null) {
-                            // New BLE-only device
-                            devices[bleDevice.address] = bleDevice
-                        } else if (existing.type == BluetoothType.CLASSIC && !existing.isPaired) {
-                            // Update with BLE info if not paired via Classic
-                            devices[bleDevice.address] = existing.copy(
-                                type = BluetoothType.BLE,
-                                rssi = bleDevice.rssi,
-                            )
-                        }
+                        bleDeviceAddresses.add(bleDevice.address)
+                        devices[bleDevice.address] = bleDevice
+                        // Cache this device as BLE since we definitively detected it
+                        cacheDeviceType(bleDevice.address, BluetoothType.BLE)
                         _state.update { it.copy(discoveredDevices = devices.values.toList()) }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "BLE scan failed", e)
                 }
 
-                // Scan complete
-                _state.update { it.copy(isScanning = false) }
+                // 2. Check bonded devices - classify based on BLE scan results and cache
+                try {
+                    bluetoothAdapter?.bondedDevices?.forEach { device ->
+                        if (device.name?.startsWith("RNode ") == true) {
+                            val address = device.address
+                            val name = device.name ?: address
+
+                            when {
+                                // Found in BLE scan - definitely BLE, update paired status
+                                bleDeviceAddresses.contains(address) -> {
+                                    devices[address]?.let { existing ->
+                                        devices[address] = existing.copy(isPaired = true)
+                                    }
+                                }
+                                // Check cache for previously detected type
+                                else -> {
+                                    val cachedType = getCachedDeviceType(address)
+                                    val deviceType = cachedType ?: BluetoothType.UNKNOWN
+
+                                    devices[address] = DiscoveredRNode(
+                                        name = name,
+                                        address = address,
+                                        type = deviceType,
+                                        rssi = null,
+                                        isPaired = true,
+                                    )
+
+                                    if (cachedType != null) {
+                                        Log.d(TAG, "Using cached type for $name: $cachedType")
+                                    } else {
+                                        Log.d(TAG, "Unknown type for bonded device $name (not found in BLE scan, no cache)")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "Missing permission for bonded devices check", e)
+                }
+
+                // Update selectedDevice if we found a matching device with correct type
+                // This handles the edit mode case where device was loaded from config with wrong type
+                val currentSelected = _state.value.selectedDevice
+                val updatedSelected = if (currentSelected != null) {
+                    // Try to find matching device by name (we may not have address from saved config)
+                    devices.values.find { it.name == currentSelected.name }?.let { foundDevice ->
+                        if (foundDevice.type != currentSelected.type && foundDevice.type != BluetoothType.UNKNOWN) {
+                            Log.d(TAG, "Updating selected device type: ${currentSelected.type} -> ${foundDevice.type}")
+                            foundDevice
+                        } else {
+                            currentSelected
+                        }
+                    } ?: currentSelected
+                } else {
+                    null
+                }
+
+                _state.update {
+                    it.copy(
+                        discoveredDevices = devices.values.toList(),
+                        isScanning = false,
+                        selectedDevice = updatedSelected,
+                    )
+                }
 
                 if (devices.isEmpty()) {
                     _state.update {
@@ -284,6 +360,23 @@ class RNodeWizardViewModel
                         )
                     }
                 }
+            }
+        }
+
+        /**
+         * Set the Bluetooth type for a device (user manual selection).
+         * This caches the selection for future scans.
+         */
+        fun setDeviceType(device: DiscoveredRNode, type: BluetoothType) {
+            cacheDeviceType(device.address, type)
+            val updatedDevice = device.copy(type = type)
+            _state.update { state ->
+                state.copy(
+                    discoveredDevices = state.discoveredDevices.map {
+                        if (it.address == device.address) updatedDevice else it
+                    },
+                    selectedDevice = if (state.selectedDevice?.address == device.address) updatedDevice else state.selectedDevice,
+                )
             }
         }
 

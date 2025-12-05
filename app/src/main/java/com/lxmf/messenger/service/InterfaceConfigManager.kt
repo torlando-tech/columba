@@ -304,4 +304,29 @@ class InterfaceConfigManager
                 false
             }
         }
+
+        /**
+         * Mark that there are pending interface changes that need to be applied.
+         * Used when interfaces are modified outside of InterfaceManagementViewModel
+         * (e.g., from RNode wizard).
+         */
+        fun setPendingChanges(hasPending: Boolean) {
+            context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("has_pending_interface_changes", hasPending)
+                .apply()
+        }
+
+        /**
+         * Check if there are pending interface changes and clear the flag.
+         * @return true if there were pending changes, false otherwise
+         */
+        fun checkAndClearPendingChanges(): Boolean {
+            val prefs = context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+            val hasPending = prefs.getBoolean("has_pending_interface_changes", false)
+            if (hasPending) {
+                prefs.edit().putBoolean("has_pending_interface_changes", false).apply()
+            }
+            return hasPending
+        }
     }

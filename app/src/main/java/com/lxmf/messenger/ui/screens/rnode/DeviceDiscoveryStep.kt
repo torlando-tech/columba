@@ -1,8 +1,10 @@
 package com.lxmf.messenger.ui.screens.rnode
 
 import android.Manifest
+import android.app.Activity
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
@@ -65,6 +67,25 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
     ) { permissions ->
         if (permissions.values.all { it }) {
             viewModel.startDeviceScan()
+        }
+    }
+
+    // Companion Device Association launcher (Android 12+)
+    val associationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult(),
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) {
+            viewModel.onAssociationCancelled()
+        }
+        // If RESULT_OK, the CDM callback onAssociationCreated will handle the selection
+    }
+
+    // Launch the association intent when provided by ViewModel
+    LaunchedEffect(state.pendingAssociationIntent) {
+        state.pendingAssociationIntent?.let { intentSender ->
+            val request = IntentSenderRequest.Builder(intentSender).build()
+            associationLauncher.launch(request)
+            viewModel.onAssociationIntentLaunched()
         }
     }
 
@@ -161,6 +182,32 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
             Spacer(Modifier.height(16.dp))
         }
 
+        // Association error
+        state.associationError?.let { error ->
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { viewModel.clearAssociationError() }) {
+                        Text("Dismiss")
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
         // Current device (in edit mode)
         if (state.isEditMode && state.selectedDevice != null && !state.showManualEntry) {
             Text(
@@ -201,10 +248,17 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                 BluetoothDeviceCard(
                     device = device,
                     isSelected = state.selectedDevice?.address == device.address,
-                    onSelect = { viewModel.selectDevice(device) },
+                    onSelect = {
+                        // Use CompanionDeviceManager for official association on Android 12+
+                        viewModel.requestDeviceAssociation(device) {
+                            // Fallback for older Android - direct selection
+                            viewModel.selectDevice(device)
+                        }
+                    },
                     onPair = { viewModel.initiateBluetoothPairing(device) },
                     onSetType = { viewModel.setDeviceType(device, it) },
                     isPairingInProgress = state.isPairingInProgress,
+                    isAssociating = state.isAssociating,
                 )
             }
 
@@ -338,6 +392,7 @@ private fun BluetoothDeviceCard(
     onPair: () -> Unit,
     onSetType: (BluetoothType) -> Unit,
     isPairingInProgress: Boolean,
+    isAssociating: Boolean = false,
 ) {
     var showTypeSelector by remember { mutableStateOf(false) }
 
@@ -485,22 +540,31 @@ private fun BluetoothDeviceCard(
                 }
             }
 
-            // Selection indicator or pair button
-            if (isSelected) {
-                Icon(
-                    Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            } else if (!device.isPaired) {
-                if (isPairingInProgress) {
+            // Selection indicator, association progress, or pair button
+            when {
+                isSelected -> {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                isAssociating -> {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
                         strokeWidth = 2.dp,
                     )
-                } else {
-                    TextButton(onClick = onPair) {
-                        Text("Pair")
+                }
+                !device.isPaired -> {
+                    if (isPairingInProgress) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        TextButton(onClick = onPair) {
+                            Text("Pair")
+                        }
                     }
                 }
             }

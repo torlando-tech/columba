@@ -159,7 +159,12 @@ class ColumbaRNodeInterface:
         self.ifac_netkey = None  # Network key for IFAC
         self.AUTOCONFIGURE_MTU = False  # Whether to autoconfigure MTU
         self.FIXED_MTU = True  # Whether MTU is fixed (not dynamically adjusted)
-        self.HW_MTU = None  # Hardware MTU (None = use default)
+        # IMPORTANT: HW_MTU must NOT be None!
+        # When HW_MTU is None, RNS Transport truncates packet.data by 3 bytes before
+        # computing link_id in Link.validate_request(). This causes the receiver to
+        # compute a different link_id than the sender, causing link establishment to fail.
+        # Setting HW_MTU to 500 (LoRa typical MTU) prevents this truncation.
+        self.HW_MTU = 500  # Hardware MTU for LoRa
         self.mtu = RNS.Reticulum.MTU  # Maximum transmission unit
 
         # Set interface mode from config
@@ -284,7 +289,7 @@ class ColumbaRNodeInterface:
 
         # Configure device
         try:
-            time.sleep(0.5)  # Allow connection to stabilize
+            time.sleep(1.5)  # Allow BLE connection to fully stabilize
             self._configure_device()
             return True
         except Exception as e:
@@ -463,14 +468,23 @@ class ColumbaRNodeInterface:
 
         return True
 
-    def _write(self, data):
-        """Write data to the RNode via Kotlin bridge."""
+    def _write(self, data, max_retries=3):
+        """Write data to the RNode via Kotlin bridge with retry logic."""
         if self.kotlin_bridge is None:
             raise IOError("Kotlin bridge not available")
 
-        written = self.kotlin_bridge.writeSync(data)
-        if written != len(data):
-            raise IOError(f"Write failed: expected {len(data)}, wrote {written}")
+        last_error = None
+        for attempt in range(max_retries):
+            written = self.kotlin_bridge.writeSync(data)
+            if written == len(data):
+                return  # Success
+
+            last_error = f"expected {len(data)}, wrote {written}"
+            if attempt < max_retries - 1:
+                RNS.log(f"Write attempt {attempt + 1} failed ({last_error}), retrying...", RNS.LOG_WARNING)
+                time.sleep(0.3)  # Brief delay before retry
+
+        raise IOError(f"Write failed after {max_retries} attempts: {last_error}")
 
     def _read_loop(self):
         """Background thread for reading and parsing KISS frames."""

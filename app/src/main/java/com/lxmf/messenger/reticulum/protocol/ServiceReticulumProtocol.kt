@@ -1318,6 +1318,17 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun reconnectRNodeInterface() {
+        try {
+            service?.reconnectRNodeInterface()
+            Log.i(TAG, "Triggered RNode interface reconnection")
+        } catch (e: RemoteException) {
+            Log.e(TAG, "Error triggering RNode reconnection", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error triggering RNode reconnection", e)
+        }
+    }
+
     /**
      * Get BLE connection details from the service.
      */

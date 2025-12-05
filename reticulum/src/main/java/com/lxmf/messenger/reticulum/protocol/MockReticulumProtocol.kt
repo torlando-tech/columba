@@ -271,4 +271,8 @@ class MockReticulumProtocol : ReticulumProtocol {
     override fun setConversationActive(active: Boolean) {
         // No-op for mock implementation
     }
+
+    override suspend fun reconnectRNodeInterface() {
+        // No-op for mock implementation
+    }
 }

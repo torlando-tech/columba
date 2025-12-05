@@ -1091,4 +1091,9 @@ class PythonReticulumProtocol(
         // This is only relevant for ServiceReticulumProtocol
         Log.d(TAG, "setConversationActive($active) - no-op for PythonReticulumProtocol")
     }
+
+    override suspend fun reconnectRNodeInterface() {
+        // No-op for PythonReticulumProtocol - RNode reconnection is handled by ServiceReticulumProtocol
+        Log.d(TAG, "reconnectRNodeInterface() - no-op for PythonReticulumProtocol")
+    }
 }

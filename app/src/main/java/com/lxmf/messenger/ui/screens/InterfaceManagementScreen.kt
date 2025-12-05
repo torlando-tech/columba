@@ -257,6 +257,11 @@ fun InterfaceManagementScreen(
                                     onErrorClick = {
                                         errorDialogInterface = iface
                                     },
+                                    onReconnect = if (iface.type == "RNode") {
+                                        { viewModel.reconnectRNodeInterface() }
+                                    } else {
+                                        null
+                                    },
                                 )
                             }
                         }
@@ -408,6 +413,7 @@ fun InterfaceCard(
     blePermissionsGranted: Boolean,
     isOnline: Boolean? = null,
     onErrorClick: (() -> Unit)? = null,
+    onReconnect: (() -> Unit)? = null,
 ) {
     // Determine if toggle should be enabled and if there's an error
     val toggleEnabled = interfaceEntity.shouldToggleBeEnabled(bluetoothState, blePermissionsGranted)
@@ -528,6 +534,22 @@ fun InterfaceCard(
                                 )
                             }
                         }
+                    }
+                }
+
+                // Reconnect button for offline RNode interfaces
+                if (interfaceEntity.type == "RNode" &&
+                    interfaceEntity.enabled &&
+                    isOnline == false &&
+                    onReconnect != null
+                ) {
+                    TextButton(
+                        onClick = onReconnect,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    ) {
+                        Text("Reconnect", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }

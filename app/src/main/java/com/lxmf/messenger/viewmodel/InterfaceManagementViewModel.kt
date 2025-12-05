@@ -14,6 +14,7 @@ import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -772,5 +773,20 @@ class InterfaceManagementViewModel
          */
         fun clearApplyError() {
             _state.value = _state.value.copy(applyChangesError = null)
+        }
+
+        /**
+         * Attempt to reconnect the RNode interface.
+         * Use this when automatic reconnection has failed.
+         */
+        fun reconnectRNodeInterface() {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    Log.i(TAG, "User triggered RNode reconnection")
+                    reticulumProtocol.reconnectRNodeInterface()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error reconnecting RNode interface", e)
+                }
+            }
         }
     }

@@ -349,6 +349,10 @@ private fun RegionPresetCard(
                     isSelected = isSelected,
                 )
                 SettingChip(
+                    label = "CR${preset.codingRate}",
+                    isSelected = isSelected,
+                )
+                SettingChip(
                     label = "${preset.txPower} dBm",
                     isSelected = isSelected,
                 )

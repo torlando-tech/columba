@@ -519,6 +519,7 @@ class ReticulumWrapper:
                     "st_alock": iface.get("st_alock"),
                     "lt_alock": iface.get("lt_alock"),
                     "mode": iface.get("mode", "full"),
+                    "enable_framebuffer": iface.get("enable_framebuffer", True),  # Display Columba logo on RNode
                 }
                 log_info("ReticulumWrapper", "_create_config_file",
                         f"RNode config stored for ColumbaRNodeInterface: {self._pending_rnode_config['target_device_name']}")

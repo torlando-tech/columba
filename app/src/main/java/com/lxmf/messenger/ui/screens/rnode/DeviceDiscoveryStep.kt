@@ -369,7 +369,7 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                 Spacer(Modifier.height(8.dp))
 
                 Text(
-                    "Most RNodes use Bluetooth Classic. Only select BLE if your RNode specifically supports it.",
+                    "ESP32-S3 and nRF52840 devices support BLE. ESP32 (original) devices support Bluetooth Classic.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

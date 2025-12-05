@@ -108,6 +108,8 @@ class ReticulumWrapper:
         self.rnode_interface = None  # ColumbaRNodeInterface instance (if enabled)
         self.kotlin_rnode_bridge = None  # KotlinRNodeBridge instance (passed from Kotlin)
         self._pending_rnode_config = None  # Stored RNode config during initialization
+        self._rnode_init_lock = threading.Lock()  # Lock to prevent concurrent RNode initialization
+        self._rnode_initializing = False  # Flag to track if RNode initialization is in progress
 
         # Delivery status callback support (for event-driven message status updates)
         self.kotlin_delivery_status_callback = None  # Callback to Kotlin for delivery status events
@@ -2893,6 +2895,21 @@ class ReticulumWrapper:
         Returns:
             Dict with 'success' boolean and optional 'error' string
         """
+        # Prevent concurrent initialization (race condition fix)
+        # Quick check without lock first for performance
+        if self._rnode_initializing:
+            log_info("ReticulumWrapper", "initialize_rnode_interface",
+                    "RNode initialization already in progress, skipping duplicate call")
+            return {'success': True, 'message': 'Initialization already in progress'}
+
+        # Acquire lock and double-check
+        with self._rnode_init_lock:
+            if self._rnode_initializing:
+                log_info("ReticulumWrapper", "initialize_rnode_interface",
+                        "RNode initialization already in progress (after lock), skipping")
+                return {'success': True, 'message': 'Initialization already in progress'}
+            self._rnode_initializing = True
+
         try:
             if not self.initialized:
                 return {'success': False, 'error': 'Reticulum not initialized'}
@@ -2942,6 +2959,9 @@ class ReticulumWrapper:
             import traceback
             traceback.print_exc()
             return {'success': False, 'error': str(e)}
+
+        finally:
+            self._rnode_initializing = False
 
     # ========== Identity Management Methods ==========
 

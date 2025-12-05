@@ -9,10 +9,12 @@ import com.lxmf.messenger.data.model.BleConnectionsState
 import com.lxmf.messenger.data.repository.BleStatusRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,6 +47,8 @@ data class InterfaceManagementState(
     val blePermissionsGranted: Boolean = false,
     // Info message for transient notifications (lighter than error/success)
     val infoMessage: String? = null,
+    // Interface online status from Python/RNS (interface name -> online status)
+    val interfaceOnlineStatus: Map<String, Boolean> = emptyMap(),
 )
 
 /**
@@ -107,9 +111,11 @@ class InterfaceManagementViewModel
         private val interfaceRepository: InterfaceRepository,
         private val configManager: InterfaceConfigManager,
         private val bleStatusRepository: BleStatusRepository,
+        private val reticulumProtocol: ReticulumProtocol,
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceMgmtVM"
+            private const val STATUS_POLL_INTERVAL_MS = 3000L
         }
 
         private val _state = MutableStateFlow(InterfaceManagementState())
@@ -126,6 +132,7 @@ class InterfaceManagementViewModel
             loadInterfaces()
             observeBluetoothState()
             checkExternalPendingChanges()
+            startPollingInterfaceStatus()
         }
 
         /**
@@ -135,6 +142,44 @@ class InterfaceManagementViewModel
             if (configManager.checkAndClearPendingChanges()) {
                 Log.d(TAG, "Found pending changes from external source")
                 _state.value = _state.value.copy(hasPendingChanges = true)
+            }
+        }
+
+        /**
+         * Start polling for interface online status from Python/RNS.
+         */
+        private fun startPollingInterfaceStatus() {
+            viewModelScope.launch {
+                while (true) {
+                    try {
+                        fetchInterfaceStatus()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error polling interface status", e)
+                    }
+                    delay(STATUS_POLL_INTERVAL_MS)
+                }
+            }
+        }
+
+        /**
+         * Fetch interface online status from Reticulum.
+         */
+        @Suppress("UNCHECKED_CAST")
+        private suspend fun fetchInterfaceStatus() {
+            try {
+                val debugInfo = reticulumProtocol.getDebugInfo()
+                val interfacesData = debugInfo["interfaces"] as? List<Map<String, Any>> ?: return
+
+                val statusMap = mutableMapOf<String, Boolean>()
+                for (ifaceMap in interfacesData) {
+                    val name = ifaceMap["name"] as? String ?: continue
+                    val online = ifaceMap["online"] as? Boolean ?: false
+                    statusMap[name] = online
+                }
+
+                _state.value = _state.value.copy(interfaceOnlineStatus = statusMap)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch interface status", e)
             }
         }
 

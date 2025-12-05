@@ -51,6 +51,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -336,6 +337,8 @@ fun ReticulumInfoCard(debugInfo: DebugInfo) {
 
 @Composable
 fun InterfacesCard(interfaces: List<InterfaceInfo>) {
+    var selectedInterface by remember { mutableStateOf<InterfaceInfo?>(null) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -363,15 +366,63 @@ fun InterfacesCard(interfaces: List<InterfaceInfo>) {
                 )
             } else {
                 interfaces.forEach { iface ->
-                    InterfaceRow(iface)
+                    InterfaceRow(
+                        iface = iface,
+                        onClick = if (!iface.online) {
+                            { selectedInterface = iface }
+                        } else null,
+                    )
                 }
             }
         }
     }
+
+    // Error dialog for offline interfaces
+    selectedInterface?.let { iface ->
+        AlertDialog(
+            onDismissRequest = { selectedInterface = null },
+            icon = {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            title = { Text("Interface Offline") },
+            text = {
+                Column {
+                    Text(
+                        text = iface.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "This interface is currently offline and not passing traffic.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Check that the device is powered on, in range, and properly configured.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = { selectedInterface = null }) {
+                    Text("OK")
+                }
+            },
+        )
+    }
 }
 
 @Composable
-fun InterfaceRow(iface: InterfaceInfo) {
+fun InterfaceRow(
+    iface: InterfaceInfo,
+    onClick: (() -> Unit)? = null,
+) {
     Row(
         modifier =
             Modifier
@@ -379,6 +430,13 @@ fun InterfaceRow(iface: InterfaceInfo) {
                 .background(
                     MaterialTheme.colorScheme.surfaceVariant,
                     RoundedCornerShape(8.dp),
+                )
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(onClick = onClick)
+                    } else {
+                        Modifier
+                    }
                 )
                 .padding(12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -400,7 +458,7 @@ fun InterfaceRow(iface: InterfaceInfo) {
 
         Icon(
             imageVector = if (iface.online) Icons.Default.CheckCircle else Icons.Default.Warning,
-            contentDescription = if (iface.online) "Online" else "Offline",
+            contentDescription = if (iface.online) "Online" else "Offline - tap for details",
             tint =
                 if (iface.online) {
                     MaterialTheme.colorScheme.primary

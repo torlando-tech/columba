@@ -425,6 +425,29 @@ class ReticulumServiceBinder(
         return bridge.getRssi()
     }
 
+    override fun reconnectRNodeInterface() {
+        Log.i(TAG, "reconnectRNodeInterface() called - attempting to reconnect RNode")
+        scope.launch(Dispatchers.IO) {
+            try {
+                wrapperManager.withWrapper { wrapper ->
+                    val result = wrapper.callAttr("initialize_rnode_interface")
+                    @Suppress("UNCHECKED_CAST")
+                    val resultDict = result?.asMap() as? Map<com.chaquo.python.PyObject, com.chaquo.python.PyObject>
+                    val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false
+                    if (success) {
+                        val message = resultDict?.entries?.find { it.key.toString() == "message" }?.value?.toString()
+                        Log.i(TAG, "RNode interface reconnected: ${message ?: "success"}")
+                    } else {
+                        val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"
+                        Log.e(TAG, "Failed to reconnect RNode interface: $error")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error reconnecting RNode interface", e)
+            }
+        }
+    }
+
     // ===========================================
     // Private Helpers
     // ===========================================

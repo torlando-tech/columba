@@ -88,6 +88,9 @@ fun InterfaceManagementScreen(
     // State for delete confirmation dialog
     var interfaceToDelete by remember { mutableStateOf<InterfaceEntity?>(null) }
 
+    // State for error dialog
+    var errorDialogInterface by remember { mutableStateOf<InterfaceEntity?>(null) }
+
     // State for interface type selection
     var showTypeSelector by remember { mutableStateOf(false) }
 
@@ -232,6 +235,7 @@ fun InterfaceManagementScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(state.interfaces) { iface ->
+                                val isOnline = state.interfaceOnlineStatus[iface.name]
                                 InterfaceCard(
                                     interfaceEntity = iface,
                                     onToggle = { enabled ->
@@ -249,6 +253,10 @@ fun InterfaceManagementScreen(
                                     onDelete = { interfaceToDelete = iface },
                                     bluetoothState = state.bluetoothState,
                                     blePermissionsGranted = state.blePermissionsGranted,
+                                    isOnline = isOnline,
+                                    onErrorClick = {
+                                        errorDialogInterface = iface
+                                    },
                                 )
                             }
                         }
@@ -330,6 +338,23 @@ fun InterfaceManagementScreen(
         )
     }
 
+    // Interface Error Dialog
+    errorDialogInterface?.let { iface ->
+        val isOnline = state.interfaceOnlineStatus[iface.name]
+        val errorMessage = iface.getErrorMessage(
+            state.bluetoothState,
+            state.blePermissionsGranted,
+            isOnline,
+        )
+        if (errorMessage != null) {
+            InterfaceErrorDialog(
+                interfaceName = iface.name,
+                errorMessage = errorMessage,
+                onDismiss = { errorDialogInterface = null },
+            )
+        }
+    }
+
     // Apply Changes Blocking Dialog
     if (state.isApplyingChanges) {
         ApplyChangesDialog()
@@ -381,10 +406,12 @@ fun InterfaceCard(
     onDelete: () -> Unit,
     bluetoothState: Int,
     blePermissionsGranted: Boolean,
+    isOnline: Boolean? = null,
+    onErrorClick: (() -> Unit)? = null,
 ) {
     // Determine if toggle should be enabled and if there's an error
     val toggleEnabled = interfaceEntity.shouldToggleBeEnabled(bluetoothState, blePermissionsGranted)
-    val errorMessage = interfaceEntity.getErrorMessage(bluetoothState, blePermissionsGranted)
+    val errorMessage = interfaceEntity.getErrorMessage(bluetoothState, blePermissionsGranted, isOnline)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -452,26 +479,54 @@ fun InterfaceCard(
 
                 // Error Badge (only show if interface is enabled and there's an error)
                 if (interfaceEntity.enabled && errorMessage != null) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        shape = RoundedCornerShape(4.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                    if (onErrorClick != null) {
+                        // Clickable error badge
+                        Surface(
+                            onClick = onErrorClick,
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = RoundedCornerShape(4.dp),
                         ) {
-                            Icon(
-                                Icons.Default.Warning,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                            )
-                            Text(
-                                text = errorMessage,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = "Tap for details",
+                                    modifier = Modifier.size(12.dp),
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                                Text(
+                                    text = errorMessage,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                            }
+                        }
+                    } else {
+                        // Non-clickable error badge
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = RoundedCornerShape(4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                                Text(
+                                    text = errorMessage,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                            }
                         }
                     }
                 }
@@ -860,4 +915,46 @@ private fun InterfaceTypeOption(
             )
         }
     }
+}
+
+/**
+ * Dialog to show detailed interface error information.
+ */
+@Composable
+fun InterfaceErrorDialog(
+    interfaceName: String,
+    errorMessage: String,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+            )
+        },
+        title = { Text("Interface Issue") },
+        text = {
+            Column {
+                Text(
+                    text = interfaceName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = errorMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("OK")
+            }
+        },
+    )
 }

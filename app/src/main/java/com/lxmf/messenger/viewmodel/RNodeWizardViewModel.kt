@@ -26,10 +26,12 @@ import com.lxmf.messenger.data.model.DiscoveredRNode
 import com.lxmf.messenger.data.model.RNodeRegionalPreset
 import com.lxmf.messenger.data.model.RNodeRegionalPresets
 import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.reticulum.ble.util.BlePairingHandler
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.service.InterfaceConfigManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +73,8 @@ data class RNodeWizardState(
     val manualBluetoothType: BluetoothType = BluetoothType.CLASSIC,
     val isPairingInProgress: Boolean = false,
     val pairingError: String? = null,
+    val pairingTimeRemaining: Int = 0,
+    val lastPairingDeviceAddress: String? = null,
 
     // Companion Device Association (Android 12+)
     val isAssociating: Boolean = false,
@@ -126,6 +130,9 @@ class RNodeWizardViewModel
             private const val SCAN_DURATION_MS = 10000L
             private const val PREFS_NAME = "rnode_device_types"
             private const val KEY_DEVICE_TYPES = "device_type_cache"
+            private const val PAIRING_START_TIMEOUT_MS = 5_000L // 5s to start pairing
+            private const val PIN_ENTRY_TIMEOUT_MS = 60_000L // 60s for user to enter PIN
+            private const val RSSI_UPDATE_INTERVAL_MS = 3000L // Update RSSI every 3s
         }
 
         private val _state = MutableStateFlow(RNodeWizardState())
@@ -133,6 +140,12 @@ class RNodeWizardViewModel
 
         private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
+
+        // RSSI update throttling - track last update time per device
+        private val lastRssiUpdate = mutableMapOf<String, Long>()
+
+        // RSSI polling for connected RNode (edit mode)
+        private var rssiPollingJob: Job? = null
 
         // Device type cache - persists detected BLE vs Classic types
         private val deviceTypePrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -198,6 +211,8 @@ class RNodeWizardViewModel
                         config.spreadingFactor,
                     )
 
+                    val isBle = config.connectionMode == "ble"
+
                     _state.update { state ->
                         state.copy(
                             editingInterfaceId = interfaceId,
@@ -206,7 +221,7 @@ class RNodeWizardViewModel
                             selectedDevice = DiscoveredRNode(
                                 name = config.targetDeviceName,
                                 address = "",
-                                type = if (config.connectionMode == "ble") BluetoothType.BLE else BluetoothType.CLASSIC,
+                                type = if (isBle) BluetoothType.BLE else BluetoothType.CLASSIC,
                                 rssi = null,
                                 isPaired = true,
                             ),
@@ -227,11 +242,46 @@ class RNodeWizardViewModel
                         )
                     }
 
+                    // Start RSSI polling for BLE devices
+                    if (isBle) {
+                        startRssiPolling()
+                    }
+
                     Log.d(TAG, "Loaded existing config for interface $interfaceId")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load existing config", e)
                 }
             }
+        }
+
+        /**
+         * Start polling RSSI from the active RNode BLE connection.
+         * Updates the selected device's RSSI every 3 seconds.
+         */
+        private fun startRssiPolling() {
+            rssiPollingJob?.cancel()
+            rssiPollingJob = viewModelScope.launch {
+                while (true) {
+                    delay(RSSI_UPDATE_INTERVAL_MS)
+                    val rssi = configManager.getRNodeRssi()
+                    if (rssi > -100) {
+                        _state.update { state ->
+                            state.copy(
+                                selectedDevice = state.selectedDevice?.copy(rssi = rssi),
+                            )
+                        }
+                        Log.v(TAG, "RNode RSSI updated: $rssi dBm")
+                    }
+                }
+            }
+        }
+
+        /**
+         * Stop RSSI polling.
+         */
+        private fun stopRssiPolling() {
+            rssiPollingJob?.cancel()
+            rssiPollingJob = null
         }
 
         // ========== NAVIGATION ==========
@@ -326,6 +376,7 @@ class RNodeWizardViewModel
                                         type = deviceType,
                                         rssi = null,
                                         isPaired = true,
+                                        bluetoothDevice = device,
                                     )
 
                                     if (cachedType != null) {
@@ -341,18 +392,15 @@ class RNodeWizardViewModel
                     Log.e(TAG, "Missing permission for bonded devices check", e)
                 }
 
-                // Update selectedDevice if we found a matching device with correct type
-                // This handles the edit mode case where device was loaded from config with wrong type
+                // Update selectedDevice if we found a matching device during scan
+                // This handles edit mode where device was loaded from config without RSSI/address
                 val currentSelected = _state.value.selectedDevice
                 val updatedSelected = if (currentSelected != null) {
                     // Try to find matching device by name (we may not have address from saved config)
                     devices.values.find { it.name == currentSelected.name }?.let { foundDevice ->
-                        if (foundDevice.type != currentSelected.type && foundDevice.type != BluetoothType.UNKNOWN) {
-                            Log.d(TAG, "Updating selected device type: ${currentSelected.type} -> ${foundDevice.type}")
-                            foundDevice
-                        } else {
-                            currentSelected
-                        }
+                        // Always use the scanned device - it has live RSSI and proper address
+                        Log.d(TAG, "Updating selected device from scan: rssi=${foundDevice.rssi}")
+                        foundDevice
                     } ?: currentSelected
                 } else {
                     null
@@ -416,15 +464,23 @@ class RNodeWizardViewModel
             val callback = object : ScanCallback() {
                 override fun onScanResult(callbackType: Int, result: ScanResult) {
                     val name = result.device.name ?: return
-                    if (name.startsWith("RNode ") && !foundDevices.contains(result.device.address)) {
-                        foundDevices.add(result.device.address)
+                    if (!name.startsWith("RNode ")) return
+
+                    val address = result.device.address
+                    if (foundDevices.contains(address)) {
+                        // Update RSSI for existing device (throttled to every 3s)
+                        updateDeviceRssi(address, result.rssi)
+                    } else {
+                        // New device - add to list
+                        foundDevices.add(address)
                         onDeviceFound(
                             DiscoveredRNode(
                                 name = name,
-                                address = result.device.address,
+                                address = address,
                                 type = BluetoothType.BLE,
                                 rssi = result.rssi,
                                 isPaired = result.device.bondState == BluetoothDevice.BOND_BONDED,
+                                bluetoothDevice = result.device,
                             ),
                         )
                     }
@@ -449,6 +505,31 @@ class RNodeWizardViewModel
                 it.copy(
                     selectedDevice = device,
                     showManualEntry = false,
+                )
+            }
+        }
+
+        /**
+         * Update RSSI for an already-discovered device (throttled to every 3 seconds).
+         */
+        private fun updateDeviceRssi(address: String, rssi: Int) {
+            val now = System.currentTimeMillis()
+            val lastUpdate = lastRssiUpdate[address] ?: 0L
+            if (now - lastUpdate < RSSI_UPDATE_INTERVAL_MS) return
+
+            lastRssiUpdate[address] = now
+            _state.update { state ->
+                // Update RSSI in discovered devices list
+                val updatedDevices = state.discoveredDevices.map { device ->
+                    if (device.address == address) device.copy(rssi = rssi) else device
+                }
+                // Also update selectedDevice if it matches
+                val updatedSelected = state.selectedDevice?.let { selected ->
+                    if (selected.address == address) selected.copy(rssi = rssi) else selected
+                }
+                state.copy(
+                    discoveredDevices = updatedDevices,
+                    selectedDevice = updatedSelected,
                 )
             }
         }
@@ -652,27 +733,71 @@ class RNodeWizardViewModel
             _state.update { it.copy(manualBluetoothType = type) }
         }
 
+        // Pairing handler to auto-confirm Just Works pairing
+        private var pairingHandler: BlePairingHandler? = null
+
         @SuppressLint("MissingPermission")
         fun initiateBluetoothPairing(device: DiscoveredRNode) {
             viewModelScope.launch {
-                _state.update { it.copy(isPairingInProgress = true, pairingError = null) }
+                _state.update {
+                    it.copy(
+                        isPairingInProgress = true,
+                        pairingError = null,
+                        pairingTimeRemaining = 0,
+                        lastPairingDeviceAddress = device.address,
+                    )
+                }
+
+                // Register pairing handler (helps with Just Works devices, not PIN-based)
+                pairingHandler = BlePairingHandler(context).also { it.register() }
 
                 try {
-                    val btDevice = bluetoothAdapter?.getRemoteDevice(device.address)
+                    // Use the actual BluetoothDevice from scan (preserves BLE transport context)
+                    // Fall back to getRemoteDevice() for manually entered devices
+                    val btDevice = device.bluetoothDevice
+                        ?: bluetoothAdapter?.getRemoteDevice(device.address)
                     if (btDevice != null && btDevice.bondState != BluetoothDevice.BOND_BONDED) {
                         // Initiate pairing - this will trigger system pairing dialog
                         btDevice.createBond()
 
-                        // Wait for pairing to complete (with timeout)
-                        var attempts = 0
-                        while (btDevice.bondState == BluetoothDevice.BOND_BONDING && attempts < 30) {
-                            delay(1000)
-                            attempts++
+                        // Phase 1: Wait for pairing to START (transition from BOND_NONE)
+                        val startTime = System.currentTimeMillis()
+                        var pairingStarted = false
+                        while (System.currentTimeMillis() - startTime < PAIRING_START_TIMEOUT_MS) {
+                            val bondState = btDevice.bondState
+                            if (bondState == BluetoothDevice.BOND_BONDING) {
+                                pairingStarted = true
+                                break
+                            }
+                            if (bondState == BluetoothDevice.BOND_BONDED) {
+                                pairingStarted = true
+                                break
+                            }
+                            delay(200)
                         }
 
+                        if (!pairingStarted && btDevice.bondState == BluetoothDevice.BOND_NONE) {
+                            // Pairing never started - device not in pairing mode
+                            _state.update {
+                                it.copy(
+                                    pairingError = "RNode is not in pairing mode. Press the " +
+                                        "pairing button until a PIN code appears on the display.",
+                                )
+                            }
+                            return@launch
+                        }
+
+                        // Phase 2: Wait for user to enter PIN (longer timeout)
+                        val pinStartTime = System.currentTimeMillis()
+                        while (btDevice.bondState == BluetoothDevice.BOND_BONDING) {
+                            val elapsed = System.currentTimeMillis() - pinStartTime
+                            if (elapsed >= PIN_ENTRY_TIMEOUT_MS) break
+                            delay(500)
+                        }
+
+                        // Check final result
                         when (btDevice.bondState) {
                             BluetoothDevice.BOND_BONDED -> {
-                                // Update the device in our list
                                 val updatedDevice = device.copy(isPaired = true)
                                 _state.update { state ->
                                     state.copy(
@@ -682,9 +807,20 @@ class RNodeWizardViewModel
                                         },
                                     )
                                 }
+                                Log.d(TAG, "Pairing successful for ${device.name}")
                             }
                             BluetoothDevice.BOND_NONE -> {
-                                _state.update { it.copy(pairingError = "Pairing failed or was cancelled") }
+                                _state.update {
+                                    it.copy(
+                                        pairingError = "Pairing was cancelled or the PIN was " +
+                                            "incorrect. Try again and enter the PIN shown " +
+                                            "on the RNode.",
+                                    )
+                                }
+                            }
+                            BluetoothDevice.BOND_BONDING -> {
+                                // Still bonding after long timeout - very unusual
+                                Log.w(TAG, "Pairing still in progress after timeout")
                             }
                         }
                     }
@@ -692,13 +828,25 @@ class RNodeWizardViewModel
                     Log.e(TAG, "Pairing failed", e)
                     _state.update { it.copy(pairingError = e.message ?: "Pairing failed") }
                 } finally {
-                    _state.update { it.copy(isPairingInProgress = false) }
+                    pairingHandler?.unregister()
+                    pairingHandler = null
+                    _state.update { it.copy(isPairingInProgress = false, pairingTimeRemaining = 0) }
                 }
             }
         }
 
         fun clearPairingError() {
             _state.update { it.copy(pairingError = null) }
+        }
+
+        /**
+         * Retry pairing with the last device that failed pairing.
+         */
+        fun retryPairing() {
+            val address = _state.value.lastPairingDeviceAddress ?: return
+            val device = _state.value.discoveredDevices.find { it.address == address } ?: return
+            clearPairingError()
+            initiateBluetoothPairing(device)
         }
 
         // ========== STEP 2: REGION SELECTION ==========

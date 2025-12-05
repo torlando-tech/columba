@@ -104,26 +104,23 @@ class BlePairingHandler(private val context: Context) {
 
                 // Auto-confirm pairing based on variant type
                 when (pairingVariant) {
-                    PAIRING_VARIANT_CONSENT,
-                    PAIRING_VARIANT_PASSKEY_CONFIRMATION,
-                    -> {
-                        // "Just Works" or numeric comparison - auto-confirm
+                    PAIRING_VARIANT_CONSENT -> {
+                        // "Just Works" pairing - auto-confirm
                         confirmPairing(device, deviceName)
                     }
 
-                    PAIRING_VARIANT_PIN -> {
-                        // PIN pairing - set PIN to empty/0 and confirm
-                        try {
-                            device.setPin(byteArrayOf())
-                            confirmPairing(device, deviceName)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to set PIN for pairing", e)
-                        }
+                    PAIRING_VARIANT_PIN,
+                    PAIRING_VARIANT_PASSKEY_CONFIRMATION,
+                    -> {
+                        // PIN or passkey required - let system dialog handle it
+                        // RNode displays a PIN that user must enter manually
+                        Log.i(TAG, "PIN/passkey pairing required for $deviceName - showing system dialog")
+                        // Don't abort broadcast - let system show the PIN entry dialog
                     }
 
                     else -> {
-                        Log.d(TAG, "Unknown pairing variant $pairingVariant, attempting confirmation anyway")
-                        confirmPairing(device, deviceName)
+                        // Unknown variant - let system handle it to be safe
+                        Log.d(TAG, "Unknown pairing variant $pairingVariant, letting system handle")
                     }
                 }
             }

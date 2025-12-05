@@ -125,6 +125,17 @@ class InterfaceManagementViewModel
             Log.d(TAG, "ViewModel initialized")
             loadInterfaces()
             observeBluetoothState()
+            checkExternalPendingChanges()
+        }
+
+        /**
+         * Check if there are pending changes set by external sources (e.g., RNode wizard).
+         */
+        private fun checkExternalPendingChanges() {
+            if (configManager.checkAndClearPendingChanges()) {
+                Log.d(TAG, "Found pending changes from external source")
+                _state.value = _state.value.copy(hasPendingChanges = true)
+            }
         }
 
         /**

@@ -8,9 +8,17 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.companion.AssociationInfo
+import android.companion.AssociationRequest
+import android.companion.BluetoothDeviceFilter
+import android.companion.BluetoothLeDeviceFilter
+import android.companion.CompanionDeviceManager
 import android.content.Context
+import android.content.IntentSender
+import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
+import java.util.regex.Pattern
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.BluetoothType
@@ -63,6 +71,11 @@ data class RNodeWizardState(
     val manualBluetoothType: BluetoothType = BluetoothType.CLASSIC,
     val isPairingInProgress: Boolean = false,
     val pairingError: String? = null,
+
+    // Companion Device Association (Android 12+)
+    val isAssociating: Boolean = false,
+    val pendingAssociationIntent: IntentSender? = null,
+    val associationError: String? = null,
 
     // Step 2: Region Selection
     val searchQuery: String = "",
@@ -434,6 +447,167 @@ class RNodeWizardViewModel
             }
         }
 
+        // ========== COMPANION DEVICE ASSOCIATION (Android 12+) ==========
+
+        private val companionDeviceManager: CompanionDeviceManager? =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as? CompanionDeviceManager
+            } else {
+                null
+            }
+
+        /**
+         * Check if CompanionDeviceManager is available.
+         */
+        fun isCompanionDeviceAvailable(): Boolean {
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && companionDeviceManager != null
+        }
+
+        /**
+         * Request device association via CompanionDeviceManager.
+         * On Android 12+, this shows a native system picker for the device.
+         *
+         * @param device The device to associate
+         * @param onFallback Called if CDM is not available (pre-Android 12)
+         */
+        @SuppressLint("MissingPermission")
+        fun requestDeviceAssociation(device: DiscoveredRNode, onFallback: () -> Unit) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || companionDeviceManager == null) {
+                // Fall back to direct selection on older Android
+                onFallback()
+                return
+            }
+
+            Log.d(TAG, "Requesting CDM association for ${device.name} (${device.type})")
+            _state.update { it.copy(isAssociating = true, associationError = null) }
+
+            try {
+                val request = buildAssociationRequest(device)
+
+                companionDeviceManager.associate(
+                    request,
+                    object : CompanionDeviceManager.Callback() {
+                        override fun onAssociationPending(intentSender: IntentSender) {
+                            Log.d(TAG, "Association pending - providing IntentSender to UI")
+                            _state.update {
+                                it.copy(
+                                    pendingAssociationIntent = intentSender,
+                                    isAssociating = true,
+                                )
+                            }
+                        }
+
+                        @Suppress("OVERRIDE_DEPRECATION")
+                        override fun onDeviceFound(intentSender: IntentSender) {
+                            // Legacy callback for older API - same handling
+                            Log.d(TAG, "Device found (legacy) - providing IntentSender to UI")
+                            _state.update {
+                                it.copy(
+                                    pendingAssociationIntent = intentSender,
+                                    isAssociating = true,
+                                )
+                            }
+                        }
+
+                        override fun onAssociationCreated(associationInfo: AssociationInfo) {
+                            Log.d(TAG, "Association created: ${associationInfo.id}")
+                            // Device is now associated - select it
+                            _state.update {
+                                it.copy(
+                                    selectedDevice = device,
+                                    isAssociating = false,
+                                    pendingAssociationIntent = null,
+                                    showManualEntry = false,
+                                )
+                            }
+                            // Cache the device type since it's now confirmed
+                            cacheDeviceType(device.address, device.type)
+                        }
+
+                        override fun onFailure(error: CharSequence?) {
+                            Log.e(TAG, "CDM association failed: $error")
+                            _state.update {
+                                it.copy(
+                                    isAssociating = false,
+                                    pendingAssociationIntent = null,
+                                    associationError = error?.toString() ?: "Association failed",
+                                )
+                            }
+                        }
+                    },
+                    null, // Handler - use main thread
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start CDM association", e)
+                _state.update {
+                    it.copy(
+                        isAssociating = false,
+                        associationError = e.message ?: "Failed to start association",
+                    )
+                }
+            }
+        }
+
+        /**
+         * Build an AssociationRequest for the given device.
+         */
+        @SuppressLint("NewApi")
+        private fun buildAssociationRequest(device: DiscoveredRNode): AssociationRequest {
+            val builder = AssociationRequest.Builder()
+            val escapedName = Pattern.quote(device.name)
+
+            if (device.type == BluetoothType.BLE) {
+                // BLE device filter with NUS service UUID
+                val bleFilter = BluetoothLeDeviceFilter.Builder()
+                    .setNamePattern(Pattern.compile(escapedName))
+                    .setScanFilter(
+                        ScanFilter.Builder()
+                            .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
+                            .build(),
+                    )
+                    .build()
+                builder.addDeviceFilter(bleFilter)
+            } else {
+                // Classic Bluetooth device filter
+                val classicFilter = BluetoothDeviceFilter.Builder()
+                    .setNamePattern(Pattern.compile(escapedName))
+                    .build()
+                builder.addDeviceFilter(classicFilter)
+            }
+
+            // Request single device since we're filtering for a specific device name
+            builder.setSingleDevice(true)
+
+            return builder.build()
+        }
+
+        /**
+         * Called when the UI has launched the association IntentSender.
+         */
+        fun onAssociationIntentLaunched() {
+            _state.update { it.copy(pendingAssociationIntent = null) }
+        }
+
+        /**
+         * Called when the user cancels the association picker.
+         */
+        fun onAssociationCancelled() {
+            Log.d(TAG, "User cancelled association")
+            _state.update {
+                it.copy(
+                    isAssociating = false,
+                    pendingAssociationIntent = null,
+                )
+            }
+        }
+
+        /**
+         * Clear association error.
+         */
+        fun clearAssociationError() {
+            _state.update { it.copy(associationError = null) }
+        }
+
         fun showManualEntry() {
             _state.update {
                 it.copy(
@@ -733,6 +907,9 @@ class RNodeWizardViewModel
                         interfaceRepository.insertInterface(config)
                         Log.d(TAG, "Created new RNode interface")
                     }
+
+                    // Mark pending changes for InterfaceManagementScreen to show "Apply" button
+                    configManager.setPendingChanges(true)
 
                     _state.update { it.copy(saveSuccess = true, isSaving = false) }
                 } catch (e: Exception) {

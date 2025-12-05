@@ -567,6 +567,7 @@ class PythonReticulumProtocol(
                             iface.stAlock?.let { ifaceJson.put("st_alock", it) }
                             iface.ltAlock?.let { ifaceJson.put("lt_alock", it) }
                             ifaceJson.put("mode", iface.mode)
+                            ifaceJson.put("enable_framebuffer", iface.enableFramebuffer)
                         }
                         is InterfaceConfig.AndroidBLE -> {
                             Log.d(TAG, "buildConfigJson: AndroidBLE - ${iface.name}")

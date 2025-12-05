@@ -563,19 +563,24 @@ class ColumbaRNodeInterface:
         RNS.log(f"{self} Sent 64x64 image to RNode framebuffer", RNS.LOG_DEBUG)
 
     def _display_logo(self):
-        """Display the Columba logo on RNode if framebuffer is enabled."""
-        if not self.enable_framebuffer:
-            return
-
-        try:
-            from columba_logo import columba_fb_data
-            self.display_image(columba_fb_data)
-            self.enable_external_framebuffer()
-            RNS.log(f"{self} Displayed Columba logo on RNode", RNS.LOG_DEBUG)
-        except ImportError:
-            RNS.log(f"{self} columba_logo module not found, skipping logo display", RNS.LOG_WARNING)
-        except Exception as e:
-            RNS.log(f"{self} Failed to display logo: {e}", RNS.LOG_WARNING)
+        """Display or disable the Columba logo on RNode based on settings."""
+        if self.enable_framebuffer:
+            try:
+                from columba_logo import columba_fb_data
+                self.display_image(columba_fb_data)
+                self.enable_external_framebuffer()
+                RNS.log(f"{self} Displayed Columba logo on RNode", RNS.LOG_DEBUG)
+            except ImportError:
+                RNS.log(f"{self} columba_logo module not found, skipping logo display", RNS.LOG_WARNING)
+            except Exception as e:
+                RNS.log(f"{self} Failed to display logo: {e}", RNS.LOG_WARNING)
+        else:
+            # Explicitly disable external framebuffer to restore normal RNode UI
+            try:
+                self.disable_external_framebuffer()
+                RNS.log(f"{self} Disabled external framebuffer on RNode", RNS.LOG_DEBUG)
+            except Exception as e:
+                RNS.log(f"{self} Failed to disable framebuffer: {e}", RNS.LOG_WARNING)
 
     def _read_loop(self):
         """Background thread for reading and parsing KISS frames."""

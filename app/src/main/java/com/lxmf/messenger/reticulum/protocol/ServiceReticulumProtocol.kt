@@ -690,6 +690,7 @@ class ServiceReticulumProtocol(
                     iface.stAlock?.let { ifaceJson.put("st_alock", it) }
                     iface.ltAlock?.let { ifaceJson.put("lt_alock", it) }
                     ifaceJson.put("mode", iface.mode)
+                    ifaceJson.put("enable_framebuffer", iface.enableFramebuffer)
                 }
                 is InterfaceConfig.UDP -> {
                     ifaceJson.put("type", "UDP")

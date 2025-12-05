@@ -761,7 +761,11 @@ class KotlinRNodeBridge(
      */
     fun writeSync(data: ByteArray): Int {
         if (!isConnected.get()) {
-            Log.w(TAG, "Cannot write - not connected")
+            Log.w(
+                TAG,
+                "Cannot write - not connected (mode=$connectionMode, " +
+                    "bleConnected=$bleConnected, bleServicesDiscovered=$bleServicesDiscovered)",
+            )
             return -1
         }
 

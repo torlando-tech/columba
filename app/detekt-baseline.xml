@@ -1,11 +1,12 @@
 <?xml version="1.0" ?>
 <SmellBaseline>
-  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:MainActivity.kt$!isOnWelcomeScreen &amp;&amp; !isOnMessagingScreen &amp;&amp; !isOnAnnounceDetailScreen &amp;&amp; !isOnInterfaceManagementScreen &amp;&amp; !isOnBleConnectionStatusScreen &amp;&amp; !isOnThemeManagementScreen &amp;&amp; !isOnThemeEditorScreen</ID>
+    <ID>ComplexCondition:MainActivity.kt$!isOnWelcomeScreen &amp;&amp; !isOnMessagingScreen &amp;&amp; !isOnAnnounceDetailScreen &amp;&amp; !isOnInterfaceManagementScreen &amp;&amp; !isOnBleConnectionStatusScreen &amp;&amp; !isOnThemeManagementScreen &amp;&amp; !isOnThemeEditorScreen &amp;&amp; !isOnRNodeWizardScreen</ID>
     <ID>CyclomaticComplexMethod:ColumbaApplication.kt$ColumbaApplication$override fun onCreate()</ID>
     <ID>CyclomaticComplexMethod:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
     <ID>CyclomaticComplexMethod:DebugViewModel.kt$DebugViewModel$private fun fetchDebugInfo()</ID>
+    <ID>CyclomaticComplexMethod:InterfaceDatabase.kt$InterfaceDatabase.Callback$private fun configToEntity( config: InterfaceConfig, displayOrder: Int, ): InterfaceEntity</ID>
     <ID>CyclomaticComplexMethod:InterfaceManagementViewModel.kt$InterfaceManagementViewModel$private fun validateConfig(): Boolean</ID>
     <ID>CyclomaticComplexMethod:InterfaceRepository.kt$InterfaceRepository$fun entityToConfig(entity: InterfaceEntity): InterfaceConfig</ID>
     <ID>CyclomaticComplexMethod:MessageCollector.kt$MessageCollector$fun startCollecting()</ID>
@@ -25,17 +26,17 @@
     <ID>LargeClass:ThemeEditorViewModelTest.kt$ThemeEditorViewModelTest</ID>
     <ID>LongMethod:ColumbaApplication.kt$ColumbaApplication$override fun onCreate()</ID>
     <ID>LongMethod:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
-    <ID>LongMethod:InterfaceConfigManager.kt$InterfaceConfigManager$suspend fun applyInterfaceChanges(): Result&lt;Unit&gt;</ID>
     <ID>LongMethod:InterfaceRepository.kt$InterfaceRepository$fun entityToConfig(entity: InterfaceEntity): InterfaceConfig</ID>
     <ID>LongMethod:MessageCollector.kt$MessageCollector$fun startCollecting()</ID>
     <ID>LongMethod:MessagingViewModel.kt$MessagingViewModel$fun sendMessage( destinationHash: String, content: String, )</ID>
     <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$override suspend fun initialize(config: ReticulumConfig): Result&lt;Unit&gt;</ID>
     <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun buildConfigJson(config: ReticulumConfig): String</ID>
     <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun validateReticulumConfig(config: ReticulumConfig)</ID>
+    <ID>LongMethod:RNodeWizardViewModel.kt$RNodeWizardViewModel$@SuppressLint("MissingPermission") fun startDeviceScan()</ID>
     <ID>LongMethod:ThemeEditorViewModel.kt$ThemeEditorViewModel$fun saveAndApplyTheme()</ID>
     <ID>LongMethod:ThemeEditorViewModel.kt$ThemeEditorViewModel$fun saveTheme()</ID>
     <ID>LongParameterList:BleTestFixtures.kt$BleTestFixtures$( identityHash: String = "abcd1234efgh5678ijkl9012mnop3456", peerName: String = "RNS-TestPeer", currentMac: String = "AA:BB:CC:DD:EE:FF", connectionType: ConnectionType = ConnectionType.BOTH, rssi: Int = -70, mtu: Int = 512, connectedAt: Long = System.currentTimeMillis() - 60000, // 1 minute ago firstSeen: Long = System.currentTimeMillis() - 300000, // 5 minutes ago lastSeen: Long = System.currentTimeMillis(), bytesReceived: Long = 1024, bytesSent: Long = 2048, packetsReceived: Long = 10, packetsSent: Long = 20, successRate: Double = 1.0, )</ID>
-    <ID>LongParameterList:ReticulumServiceBinder.kt$ReticulumServiceBinder$( private val state: ServiceState, private val wrapperManager: PythonWrapperManager, private val identityManager: IdentityManager, private val routingManager: RoutingManager, private val messagingManager: MessagingManager, private val pollingManager: PollingManager, private val broadcaster: CallbackBroadcaster, private val lockManager: LockManager, private val notificationManager: ServiceNotificationManager, private val bleCoordinator: BleCoordinator, private val scope: CoroutineScope, private val onInitialized: () -&gt; Unit, private val onShutdown: () -&gt; Unit, private val onForceExit: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:ReticulumServiceBinder.kt$ReticulumServiceBinder$( private val context: Context, private val state: ServiceState, private val wrapperManager: PythonWrapperManager, private val identityManager: IdentityManager, private val routingManager: RoutingManager, private val messagingManager: MessagingManager, private val pollingManager: PollingManager, private val broadcaster: CallbackBroadcaster, private val lockManager: LockManager, private val notificationManager: ServiceNotificationManager, private val bleCoordinator: BleCoordinator, private val scope: CoroutineScope, private val onInitialized: () -&gt; Unit, private val onShutdown: () -&gt; Unit, private val onForceExit: () -&gt; Unit, )</ID>
     <ID>LoopWithTooManyJumpStatements:ConfigFileParser.kt$ConfigFileParser$for</ID>
     <ID>LoopWithTooManyJumpStatements:SettingsViewModel.kt$SettingsViewModel$while</ID>
     <ID>MaxLineLength:AnnounceStreamScreen.kt$tint = if (announce.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface</ID>
@@ -53,8 +54,6 @@
     <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.d("ColumbaApplication", "Battery optimization detected - will show exemption dialog")</ID>
     <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.d("ColumbaApplication", "Existing identity found - marking onboarding complete for upgrade")</ID>
     <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.d("ColumbaApplication", "Main app process detected ($processName) - proceeding with auto-initialization")</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.d("ColumbaApplication", "Service already initialized and ready - skipping auto-init")</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.d("ColumbaApplication", "Skipping auto-init - config changes are being applied")</ID>
     <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.e("ColumbaApplication", "Failed to initialize Reticulum: ${error.message}", error)</ID>
     <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.e("ColumbaApplication", "Failed to launch battery exemption request", e)</ID>
     <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.e("ColumbaApplication", "Failed to restore peer identities", error)</ID>
@@ -66,7 +65,6 @@
     <ID>MaxLineLength:ConfigFileParser.kt$ConfigFileParser$Log.e(TAG, "Config file too large: ${configFile.length()} bytes (max: ${ValidationConstants.MAX_CONFIG_FILE_SIZE})")</ID>
     <ID>MaxLineLength:ConfigFileParser.kt$ConfigFileParser$Log.e(TAG, "Too many interfaces in config file (max: ${ValidationConstants.MAX_INTERFACE_COUNT})")</ID>
     <ID>MaxLineLength:ConfigFileParser.kt$ConfigFileParser$throw IllegalArgumentException("Config file exceeds maximum size of ${ValidationConstants.MAX_CONFIG_FILE_SIZE} bytes")</ID>
-    <ID>MaxLineLength:ContactsScreen.kt$tint = if (contact.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant</ID>
     <ID>MaxLineLength:ContactsScreen.kt$val lxmaUrl = "lxma://$deepLinkDestinationHash:${deepLinkPublicKey?.joinToString("") { "%02x".format(it) }}"</ID>
     <ID>MaxLineLength:DebugViewModel.kt$DebugViewModel$?:</ID>
     <ID>MaxLineLength:DebugViewModel.kt$DebugViewModel$Log.w(TAG, "Error loading identity data (attempt $attempt/$maxAttempts), retrying in ${delay}ms: ${e.message}")</ID>
@@ -77,7 +75,6 @@
     <ID>MaxLineLength:IdentityScreen.kt$"This will stop the background Reticulum service. You will not receive messages until you restart the app or manually restart the service."</ID>
     <ID>MaxLineLength:InputValidatorTest.kt$InputValidatorTest$val invalidIdentity = "0123456789abcdef0123456789abcdef:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"</ID>
     <ID>MaxLineLength:InputValidatorTest.kt$InputValidatorTest$val invalidIdentity = "lxma://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"</ID>
-    <ID>MaxLineLength:InputValidatorTest.kt$InputValidatorTest$val validIdentity = "lxma://0123456789abcdef0123456789abcdef:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"</ID>
     <ID>MaxLineLength:InterfaceConfigDialog.kt$"Optional: For debugging only. Keep short (max 8 chars recommended) or leave empty to maximize BLE advertisement reliability."</ID>
     <ID>MaxLineLength:InterfaceConfigDialog.kt$imageVector = if (showAdvanced) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown</ID>
     <ID>MaxLineLength:InterfaceConfigManager.kt$InterfaceConfigManager$val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager</ID>
@@ -93,7 +90,7 @@
     <ID>MaxLineLength:InterfaceManagementViewModel.kt$InterfaceManagementViewModel$Log.d(TAG, "State updated - BT state: ${_state.value.bluetoothState}, permissions: ${_state.value.blePermissionsGranted}")</ID>
     <ID>MaxLineLength:InterfaceManagementViewModel.kt$InterfaceManagementViewModel$_configState.value = _configState.value.copy(maxConnectionsError = "Max connections must be 1-7")</ID>
     <ID>MaxLineLength:MainActivity.kt$// Check if we're on the messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, or welcome screen</ID>
-    <ID>MaxLineLength:MainActivity.kt$// Only show NavigationBar when NOT on messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, or welcome screen</ID>
+    <ID>MaxLineLength:MainActivity.kt$// Only show NavigationBar when NOT on messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, welcome screen, or RNode wizard</ID>
     <ID>MaxLineLength:MainActivity.kt$if</ID>
     <ID>MaxLineLength:MainScreen.kt$text = "This is a demonstration of the Kotlin UI layer communicating with the Reticulum abstraction layer."</ID>
     <ID>MaxLineLength:MessageCollector.kt$MessageCollector$Log.d(TAG, "Skipping duplicate message ${receivedMessage.messageHash.take(16)} (from replay buffer)")</ID>
@@ -109,7 +106,6 @@
     <ID>MaxLineLength:MessagingViewModelTest.kt$MessagingViewModelTest$viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, activeConversationManager)</ID>
     <ID>MaxLineLength:MessagingViewModelTest.kt$MessagingViewModelTest$}</ID>
     <ID>MaxLineLength:MyIdentityScreen.kt$"Your LXMF destination hash is derived from your identity and is used for sending and receiving messages.\n\n"</ID>
-    <ID>MaxLineLength:NetworkCard.kt$text = "Configure how your device connects to the Reticulum network. Add TCP connections, auto-discovery, or LoRa radio interfaces."</ID>
     <ID>MaxLineLength:NetworkCard.kt$text = "Monitor your Reticulum network status, active interfaces, BLE connections, and connection diagnostics."</ID>
     <ID>MaxLineLength:NotificationSettingsScreen.kt$if</ID>
     <ID>MaxLineLength:PollingManager.kt$PollingManager$Log.d(TAG, "Event notification received but no messages in queue (may have been polled already)")</ID>
@@ -125,6 +121,7 @@
     <ID>MaxLineLength:QrScannerScreen.kt$onQrScanned("lxma://$pendingContactHash:${pendingContactPubKey?.joinToString("") { "%02x".format(it) }}")</ID>
     <ID>MaxLineLength:QrScannerScreen.kt$qrData = "lxma://$pendingContactHash:${pendingContactPubKey?.joinToString("") { "%02x".format(it) }}"</ID>
     <ID>MaxLineLength:ReticulumServiceBinder.kt$ReticulumServiceBinder$Log.w(TAG, "isInitialized() = false (wrapper=${state.wrapper != null}, status=${state.networkStatus.get()})")</ID>
+    <ID>MaxLineLength:ReticulumServiceBinder.kt$ReticulumServiceBinder$val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"</ID>
     <ID>MaxLineLength:ServiceNotificationManager.kt$ServiceNotificationManager$Log.e(TAG, "Foreground service time limit exhausted. Service will run in background with limited capabilities.")</ID>
     <ID>MaxLineLength:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$"Missing identity fields in response. hash=$hashStr, publicKey=$publicKeyStr, privateKey=$privateKeyStr"</ID>
     <ID>MaxLineLength:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$Log.e(TAG, "restorePeerIdentities: [$index] Failed to encode public key to base64 for hash $hashStr")</ID>
@@ -139,6 +136,7 @@
     <ID>MaxLineLength:ThemeSelectionCard.kt$text = "Choose your preferred color theme. Dark and light modes adapt automatically based on your system settings."</ID>
     <ID>MaxLineLength:ValidationConstants.kt$ValidationConstants$"^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4})$"</ID>
     <ID>NestedBlockDepth:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
+    <ID>NestedBlockDepth:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun buildConfigJson(config: ReticulumConfig): String</ID>
     <ID>NestedBlockDepth:SettingsViewModel.kt$SettingsViewModel$private suspend fun loadIdentityInfo(): Pair&lt;String?, String?&gt;</ID>
     <ID>ReturnCount:BatteryOptimizationManager.kt$BatteryOptimizationManager$fun shouldPromptForExemption(context: Context): Boolean</ID>
     <ID>ReturnCount:DebugViewModel.kt$DebugViewModel$fun generateShareText(displayName: String): String?</ID>
@@ -148,6 +146,7 @@
     <ID>ReturnCount:MessageMapper.kt$private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap?</ID>
     <ID>ReturnCount:NodeTypeDetector.kt$NodeTypeDetector$fun detectNodeType( appData: ByteArray?, aspect: String? = null, ): NodeType</ID>
     <ID>ReturnCount:NotificationHelper.kt$NotificationHelper$suspend fun notifyMessageReceived( destinationHash: String, peerName: String, messagePreview: String, isFavorite: Boolean, )</ID>
+    <ID>ReturnCount:RNodeWizardViewModel.kt$RNodeWizardViewModel$private fun validateConfigurationSilent(): Boolean</ID>
     <ID>SwallowedException:ColumbaApplication.kt$ColumbaApplication$e: ClassNotFoundException</ID>
     <ID>SwallowedException:IdentityManagerViewModel.kt$IdentityManagerViewModel$e: Exception</ID>
     <ID>SwallowedException:IdentityQrCodeUtils.kt$IdentityQrCodeUtils$e: Exception</ID>
@@ -197,6 +196,7 @@
     <ID>TooManyFunctions:InputValidator.kt$InputValidator</ID>
     <ID>TooManyFunctions:InterfaceManagementViewModel.kt$InterfaceManagementViewModel : ViewModel</ID>
     <ID>TooManyFunctions:PythonReticulumProtocol.kt$PythonReticulumProtocol : ReticulumProtocol</ID>
+    <ID>TooManyFunctions:RNodeWizardViewModel.kt$RNodeWizardViewModel : ViewModel</ID>
     <ID>TooManyFunctions:ReticulumServiceBinder.kt$ReticulumServiceBinder : Stub</ID>
     <ID>TooManyFunctions:ServiceReticulumProtocol.kt$ServiceReticulumProtocol : ReticulumProtocol</ID>
     <ID>TooManyFunctions:SettingsRepository.kt$SettingsRepository</ID>
@@ -213,7 +213,6 @@
     <ID>UnusedPrivateMember:MessageCollector.kt$MessageCollector$private fun getPeerName(peerHash: String): String</ID>
     <ID>UnusedPrivateMember:MessagingViewModel.kt$MessagingViewModel$private fun DataMessage.toReticulumMessage()</ID>
     <ID>UnusedPrivateMember:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$private fun ByteArray.toHexString(): String</ID>
-    <ID>UnusedPrivateProperty:ContactsScreen.kt$val scope = rememberCoroutineScope()</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$private val settingsRepository: SettingsRepository</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val destHash = _publicKey.value ?: return null</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val isReady = status is com.lxmf.messenger.reticulum.model.NetworkStatus.READY</ID>
@@ -231,7 +230,7 @@
     <ID>UnusedPrivateProperty:QrScannerScreen.kt$var showPermissionRationale by remember { mutableStateOf(false) }</ID>
     <ID>UnusedPrivateProperty:ThemeEditorViewModel.kt$ThemeEditorViewModel.Companion$private const val TAG = "ThemeEditorViewModel"</ID>
     <ID>UseCheckOrError:AppRestarter.kt$AppRestarter$throw IllegalStateException("Unable to get launch intent for app")</ID>
-    <ID>UseCheckOrError:InterfaceRepository.kt$InterfaceRepository$throw IllegalStateException("Empty RNode port path")</ID>
+    <ID>UseCheckOrError:InterfaceRepository.kt$InterfaceRepository$throw IllegalStateException("Empty RNode target device name")</ID>
     <ID>UseCheckOrError:InterfaceRepository.kt$InterfaceRepository$throw IllegalStateException("Invalid data port: $dataPort")</ID>
     <ID>UseCheckOrError:InterfaceRepository.kt$InterfaceRepository$throw IllegalStateException("Invalid device name: $deviceName")</ID>
     <ID>UseCheckOrError:InterfaceRepository.kt$InterfaceRepository$throw IllegalStateException("Invalid discovery port: $discoveryPort")</ID>

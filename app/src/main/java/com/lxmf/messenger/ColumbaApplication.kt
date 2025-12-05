@@ -119,15 +119,38 @@ class ColumbaApplication : Application() {
                             .getBoolean("is_applying_config", false)
 
                     if (isApplyingConfig) {
-                        android.util.Log.d("ColumbaApplication", "Skipping auto-init - config changes are being applied")
-                        // Just bind to service, but don't initialize
-                        // InterfaceConfigManager will handle initialization with the new config
+                        android.util.Log.d("ColumbaApplication", "Config apply flag is set - checking service status...")
+                        // Bind to service to check status
                         (reticulumProtocol as ServiceReticulumProtocol).bindService()
-                        return@launch
+
+                        // Check if service is actually being configured, or if the flag is stale
+                        // from a crashed/failed previous config apply
+                        val status = (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
+                        android.util.Log.d("ColumbaApplication", "Service status with config flag set: $status")
+
+                        if (status == "SHUTDOWN" || status == null || status.startsWith("ERROR:")) {
+                            // Service is not running/ready - the flag is stale from a failed config apply
+                            // Clear it and proceed with normal initialization
+                            android.util.Log.w(
+                                "ColumbaApplication",
+                                "Stale config apply flag detected (service status: $status) - clearing and proceeding with init",
+                            )
+                            getSharedPreferences("columba_prefs", MODE_PRIVATE)
+                                .edit()
+                                .putBoolean("is_applying_config", false)
+                                .commit()
+                            // Fall through to normal initialization below
+                        } else {
+                            // Service is INITIALIZING or READY - InterfaceConfigManager is handling it
+                            android.util.Log.d("ColumbaApplication", "Config apply in progress - skipping auto-init")
+                            return@launch
+                        }
                     }
 
-                    // Bind to service first
-                    (reticulumProtocol as ServiceReticulumProtocol).bindService()
+                    // Bind to service first (skip if already bound above for config flag check)
+                    if (!isApplyingConfig) {
+                        (reticulumProtocol as ServiceReticulumProtocol).bindService()
+                    }
                     android.util.Log.d("ColumbaApplication", "Successfully bound to ReticulumService")
 
                     // Check if service is already initialized (handle service process surviving app restart)

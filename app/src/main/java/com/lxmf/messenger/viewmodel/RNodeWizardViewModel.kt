@@ -98,6 +98,7 @@ data class RNodeWizardState(
     val ltAlock: String = "",
     val interfaceMode: String = "full",
     val showAdvancedSettings: Boolean = false,
+    val enableFramebuffer: Boolean = true, // Display logo on RNode OLED
 
     // Validation errors
     val nameError: String? = null,
@@ -239,6 +240,7 @@ class RNodeWizardViewModel
                             stAlock = config.stAlock?.toString() ?: "",
                             ltAlock = config.ltAlock?.toString() ?: "",
                             interfaceMode = config.mode,
+                            enableFramebuffer = config.enableFramebuffer,
                         )
                     }
 
@@ -943,6 +945,10 @@ class RNodeWizardViewModel
             _state.update { it.copy(showAdvancedSettings = !it.showAdvancedSettings) }
         }
 
+        fun updateEnableFramebuffer(enabled: Boolean) {
+            _state.update { it.copy(enableFramebuffer = enabled) }
+        }
+
         /**
          * Validate configuration silently (without updating error messages).
          */
@@ -1063,6 +1069,7 @@ class RNodeWizardViewModel
                         stAlock = state.stAlock.toDoubleOrNull(),
                         ltAlock = state.ltAlock.toDoubleOrNull(),
                         mode = state.interfaceMode,
+                        enableFramebuffer = state.enableFramebuffer,
                     )
 
                     if (state.editingInterfaceId != null) {

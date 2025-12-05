@@ -245,6 +245,7 @@ class InterfaceRepository
                             stAlock = if (json.has("st_alock")) json.getDouble("st_alock") else null,
                             ltAlock = if (json.has("lt_alock")) json.getDouble("lt_alock") else null,
                             mode = json.optString("mode", "full"),
+                            enableFramebuffer = json.optBoolean("enable_framebuffer", true),
                         )
                     }
 

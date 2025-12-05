@@ -418,6 +418,13 @@ class ReticulumServiceBinder(
             }.toString()
         }
 
+    override fun getRNodeRssi(): Int {
+        val bridge = rnodeBridge ?: return -100
+        // Trigger an RSSI read and return current value
+        bridge.requestRssiUpdate()
+        return bridge.getRssi()
+    }
+
     // ===========================================
     // Private Helpers
     // ===========================================

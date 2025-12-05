@@ -1332,6 +1332,21 @@ class ServiceReticulumProtocol(
     }
 
     /**
+     * Get the current RSSI of the active RNode BLE connection.
+     *
+     * @return RSSI in dBm, or -100 if not connected or not available
+     */
+    fun getRNodeRssi(): Int {
+        return try {
+            val service = this.service ?: return -100
+            service.rNodeRssi
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting RNode RSSI", e)
+            -100
+        }
+    }
+
+    /**
      * Trigger an auto-announce with the provided display name.
      * This is a convenience method used by the auto-announce feature that handles
      * retrieving the LXMF identity and destination automatically.

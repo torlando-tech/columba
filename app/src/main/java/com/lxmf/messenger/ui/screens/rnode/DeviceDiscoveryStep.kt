@@ -35,6 +35,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -156,7 +157,7 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
             Spacer(Modifier.height(16.dp))
         }
 
-        // Pairing error
+        // Pairing error with retry button
         state.pairingError?.let { error ->
             Card(
                 colors = CardDefaults.cardColors(
@@ -164,19 +165,62 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                 ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Row(
+                Column(
                     modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = error,
                         color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { viewModel.clearPairingError() }) {
-                        Text("Dismiss")
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.End,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        TextButton(onClick = { viewModel.clearPairingError() }) {
+                            Text("Dismiss")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Button(onClick = { viewModel.retryPairing() }) {
+                            Text("Retry")
+                        }
                     }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // Pairing in progress indicator
+        if (state.isPairingInProgress) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = "Pairing...",
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Enter the PIN code shown on your RNode display",
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
             Spacer(Modifier.height(16.dp))

@@ -1,5 +1,7 @@
 package com.lxmf.messenger.data.model
 
+import android.bluetooth.BluetoothDevice
+
 /**
  * Bluetooth connection type for RNode devices.
  */
@@ -11,6 +13,9 @@ enum class BluetoothType {
 
 /**
  * Discovered Bluetooth RNode device from scanning.
+ *
+ * @property bluetoothDevice The actual BluetoothDevice from the scan result.
+ *                           Required for proper BLE bonding - using getRemoteDevice() loses transport context.
  */
 data class DiscoveredRNode(
     val name: String,
@@ -18,6 +23,7 @@ data class DiscoveredRNode(
     val type: BluetoothType,
     val rssi: Int?,       // Signal strength (BLE only)
     val isPaired: Boolean,
+    val bluetoothDevice: BluetoothDevice? = null,
 )
 
 /**

@@ -246,4 +246,12 @@ interface IReticulumService {
      * @return JSON string: {"found": true, "public_key": "hex..."} or {"found": false}
      */
     String recallIdentity(in byte[] destHash);
+
+    /**
+     * Get the current RSSI of the active RNode BLE connection.
+     * Triggers an RSSI read and returns the current value.
+     *
+     * @return RSSI in dBm, or -100 if not connected or not available
+     */
+    int getRNodeRssi();
 }

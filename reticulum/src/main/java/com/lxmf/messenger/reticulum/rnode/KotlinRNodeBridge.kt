@@ -128,6 +128,8 @@ class KotlinRNodeBridge(
     private var bleConnected = false
     @Volatile
     private var bleServicesDiscovered = false
+    @Volatile
+    private var bleRssi: Int = -100  // Current RSSI (-100 = unknown)
 
     // Common state
     private var connectedDeviceName: String? = null
@@ -531,6 +533,15 @@ class KotlinRNodeBridge(
                 Log.e(TAG, "BLE write failed: $status")
             }
         }
+
+        override fun onReadRemoteRssi(gatt: BluetoothGatt, rssi: Int, status: Int) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                bleRssi = rssi
+                Log.v(TAG, "BLE RSSI: $rssi dBm")
+            } else {
+                Log.w(TAG, "Failed to read RSSI: status=$status")
+            }
+        }
     }
 
     /**
@@ -617,6 +628,37 @@ class KotlinRNodeBridge(
      */
     fun getConnectedDeviceName(): String? {
         return if (isConnected.get()) connectedDeviceName else null
+    }
+
+    /**
+     * Get the current RSSI (signal strength) of the BLE connection.
+     *
+     * @return RSSI in dBm, or -100 if not connected or not available
+     */
+    fun getRssi(): Int {
+        return if (isConnected.get() && connectionMode == RNodeConnectionMode.BLE) {
+            bleRssi
+        } else {
+            -100
+        }
+    }
+
+    /**
+     * Request an RSSI reading from the BLE connection.
+     * The result will be available via getRssi() after the callback completes.
+     *
+     * @return true if the request was initiated, false if not connected via BLE
+     */
+    fun requestRssiUpdate(): Boolean {
+        if (!isConnected.get() || connectionMode != RNodeConnectionMode.BLE) {
+            return false
+        }
+        return try {
+            bluetoothGatt?.readRemoteRssi() ?: false
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Missing permission to read RSSI", e)
+            false
+        }
     }
 
     /**

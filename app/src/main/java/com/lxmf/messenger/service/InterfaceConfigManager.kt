@@ -329,4 +329,17 @@ class InterfaceConfigManager
             }
             return hasPending
         }
+
+        /**
+         * Get the current RSSI of the active RNode BLE connection.
+         *
+         * @return RSSI in dBm, or -100 if not connected or not available
+         */
+        fun getRNodeRssi(): Int {
+            return if (reticulumProtocol is ServiceReticulumProtocol) {
+                reticulumProtocol.getRNodeRssi()
+            } else {
+                -100
+            }
+        }
     }

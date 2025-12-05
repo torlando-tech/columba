@@ -331,7 +331,7 @@ class RNodeWizardViewModel
                                     if (cachedType != null) {
                                         Log.d(TAG, "Using cached type for $name: $cachedType")
                                     } else {
-                                        Log.d(TAG, "Unknown type for bonded device $name (not found in BLE scan, no cache)")
+                                        Log.d(TAG, "Unknown type for bonded device $name (no cache)")
                                     }
                                 }
                             }
@@ -369,7 +369,8 @@ class RNodeWizardViewModel
                 if (devices.isEmpty()) {
                     _state.update {
                         it.copy(
-                            scanError = "No RNode devices found. Make sure your RNode is powered on and Bluetooth is enabled.",
+                            scanError = "No RNode devices found. " +
+                                "Make sure your RNode is powered on and Bluetooth is enabled.",
                         )
                     }
                 }
@@ -384,11 +385,16 @@ class RNodeWizardViewModel
             cacheDeviceType(device.address, type)
             val updatedDevice = device.copy(type = type)
             _state.update { state ->
+                val newSelected = if (state.selectedDevice?.address == device.address) {
+                    updatedDevice
+                } else {
+                    state.selectedDevice
+                }
                 state.copy(
                     discoveredDevices = state.discoveredDevices.map {
                         if (it.address == device.address) updatedDevice else it
                     },
-                    selectedDevice = if (state.selectedDevice?.address == device.address) updatedDevice else state.selectedDevice,
+                    selectedDevice = newSelected,
                 )
             }
         }

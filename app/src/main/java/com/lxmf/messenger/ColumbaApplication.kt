@@ -124,7 +124,7 @@ class ColumbaApplication : Application() {
                             .getBoolean("is_applying_config", false)
 
                     if (isApplyingConfig) {
-                        android.util.Log.d("ColumbaApplication", "Config apply flag is set - checking service status...")
+                        android.util.Log.d("ColumbaApp", "Config apply flag set - checking service...")
                         // Bind to service to check status
                         (reticulumProtocol as ServiceReticulumProtocol).bindService()
 
@@ -137,8 +137,8 @@ class ColumbaApplication : Application() {
                             // Service is not running/ready - the flag is stale from a failed config apply
                             // Clear it and proceed with normal initialization
                             android.util.Log.w(
-                                "ColumbaApplication",
-                                "Stale config apply flag detected (service status: $status) - clearing and proceeding with init",
+                                "ColumbaApp",
+                                "Stale config flag (status: $status) - clearing",
                             )
                             getSharedPreferences("columba_prefs", MODE_PRIVATE)
                                 .edit()

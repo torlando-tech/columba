@@ -364,8 +364,8 @@ fun InterfaceManagementScreen(
                 if (type == "RNode") {
                     onNavigateToRNodeWizard(null)
                 } else {
-                    viewModel.updateConfigState { it.copy(type = type) }
                     viewModel.showAddDialog()
+                    viewModel.updateConfigState { it.copy(type = type) }
                 }
             },
             onDismiss = { showTypeSelector = false },

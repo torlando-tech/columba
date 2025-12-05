@@ -106,6 +106,11 @@ class ColumbaApplication : Application() {
             }
         }
 
+        // Register existing companion device associations (Android 12+)
+        // This ensures RNodeCompanionService is bound when associated devices connect,
+        // even for associations created before this code was added
+        registerExistingCompanionDevices()
+
         // Initialize Python environment
         PythonBridge.initialize(this)
 
@@ -416,5 +421,51 @@ class ColumbaApplication : Application() {
      */
     private fun ByteArray.toHexString(): String {
         return joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Register existing companion device associations for device presence monitoring.
+     * This ensures that RNodeCompanionService is bound when associated devices connect,
+     * even for associations that were created before startObservingDevicePresence() was added.
+     *
+     * Only runs on Android 12+ (API 31+) where CompanionDeviceManager is available.
+     */
+    private fun registerExistingCompanionDevices() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+            return
+        }
+
+        try {
+            val companionDeviceManager = getSystemService(android.companion.CompanionDeviceManager::class.java)
+                ?: return
+
+            val associations = companionDeviceManager.myAssociations
+            if (associations.isEmpty()) {
+                android.util.Log.d("ColumbaApplication", "No companion device associations found")
+                return
+            }
+
+            android.util.Log.d("ColumbaApplication", "Found ${associations.size} companion device association(s)")
+
+            for (association in associations) {
+                try {
+                    val macAddress = association.deviceMacAddress?.toString()
+                    if (macAddress != null) {
+                        companionDeviceManager.startObservingDevicePresence(macAddress)
+                        android.util.Log.d(
+                            "ColumbaApplication",
+                            "Registered device presence observer for: ${association.displayName ?: macAddress}",
+                        )
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w(
+                        "ColumbaApplication",
+                        "Failed to register device presence for association ${association.id}: ${e.message}",
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("ColumbaApplication", "Failed to register companion devices: ${e.message}")
+        }
     }
 }

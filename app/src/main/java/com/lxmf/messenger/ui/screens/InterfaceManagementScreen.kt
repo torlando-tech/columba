@@ -806,7 +806,6 @@ fun InterfaceTypeSelector(
                     title = "RNode LoRa",
                     description = "Long-range radio via RNode hardware",
                     onClick = { onTypeSelected("RNode") },
-                    isHighlighted = true,
                 )
             }
         },

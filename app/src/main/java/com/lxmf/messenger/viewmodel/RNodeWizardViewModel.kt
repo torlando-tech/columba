@@ -511,6 +511,19 @@ class RNodeWizardViewModel
 
                         override fun onAssociationCreated(associationInfo: AssociationInfo) {
                             Log.d(TAG, "Association created: ${associationInfo.id}")
+
+                            // Start observing device presence so Android binds our
+                            // RNodeCompanionService when the device connects
+                            try {
+                                companionDeviceManager?.startObservingDevicePresence(
+                                    associationInfo.deviceMacAddress?.toString()
+                                        ?: device.address,
+                                )
+                                Log.d(TAG, "Started observing device presence")
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to start observing device presence", e)
+                            }
+
                             // Device is now associated - select it
                             _state.update {
                                 it.copy(

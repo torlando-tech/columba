@@ -162,6 +162,7 @@ fun FrequencySlotStep(viewModel: RNodeWizardViewModel) {
             bandwidth = bandwidth,
             numSlots = numSlots,
             selectedSlot = state.selectedSlot,
+            customFrequency = state.customFrequency,
             meshtasticSlots = meshtasticSlots,
             onSlotSelected = { viewModel.selectSlot(it) },
         )
@@ -359,6 +360,7 @@ private fun FrequencySpectrumBar(
     bandwidth: Int,
     numSlots: Int,
     selectedSlot: Int,
+    customFrequency: Long?,
     meshtasticSlots: List<CommunitySlot>,
     onSlotSelected: (Int) -> Unit,
 ) {
@@ -366,9 +368,11 @@ private fun FrequencySpectrumBar(
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
     val errorColor = MaterialTheme.colorScheme.error
     val onSurface = MaterialTheme.colorScheme.onSurface
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
 
     // Guard against edge cases (single slot or invalid state)
     val effectiveNumSlots = maxOf(1, numSlots)
+    val frequencyRange = (frequencyEnd - frequencyStart).toFloat()
 
     Box(
         modifier = Modifier
@@ -416,18 +420,35 @@ private fun FrequencySpectrumBar(
                 )
             }
 
-            // Draw selected slot indicator
-            val selectedX = selectedSlot * slotWidth + slotWidth / 2
-            drawCircle(
-                color = primaryColor,
-                radius = 12.dp.toPx(),
-                center = Offset(selectedX, size.height / 2),
-            )
-            drawCircle(
-                color = Color.White,
-                radius = 6.dp.toPx(),
-                center = Offset(selectedX, size.height / 2),
-            )
+            // Draw selected indicator - either slot-based or custom frequency position
+            if (customFrequency != null && frequencyRange > 0) {
+                // Custom frequency - calculate position based on actual frequency
+                val ratio = (customFrequency - frequencyStart).toFloat() / frequencyRange
+                val customX = ratio * size.width
+                drawCircle(
+                    color = tertiaryColor,
+                    radius = 12.dp.toPx(),
+                    center = Offset(customX, size.height / 2),
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 6.dp.toPx(),
+                    center = Offset(customX, size.height / 2),
+                )
+            } else {
+                // Slot-based selection
+                val selectedX = selectedSlot * slotWidth + slotWidth / 2
+                drawCircle(
+                    color = primaryColor,
+                    radius = 12.dp.toPx(),
+                    center = Offset(selectedX, size.height / 2),
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 6.dp.toPx(),
+                    center = Offset(selectedX, size.height / 2),
+                )
+            }
         }
 
         // Legend for Meshtastic slots

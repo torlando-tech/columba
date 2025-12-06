@@ -84,7 +84,7 @@ class MessagingViewModel
                 }
                 .stateIn(
                     scope = viewModelScope,
-                    started = SharingStarted.Eagerly,
+                    started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = null,
                 )
 

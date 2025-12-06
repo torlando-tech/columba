@@ -24,6 +24,9 @@ import androidx.room.Index
     indices = [
         Index("conversationHash", "identityHash"), // Composite index for FK
         Index("identityHash"),
+        Index("timestamp"), // For ordering by timestamp
+        Index("conversationHash", "identityHash", "timestamp"), // For queries with ordering
+        Index("conversationHash", "identityHash", "isFromMe", "isRead"), // For unread count queries
     ], // Indexes for faster queries
 )
 data class MessageEntity(

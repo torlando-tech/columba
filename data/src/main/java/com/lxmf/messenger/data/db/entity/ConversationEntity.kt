@@ -15,7 +15,10 @@ import androidx.room.Index
             onDelete = ForeignKey.CASCADE, // Delete conversations when identity deleted
         ),
     ],
-    indices = [Index("identityHash")], // Index for faster queries
+    indices = [
+        Index("identityHash"), // Index for faster queries
+        Index("identityHash", "lastMessageTimestamp"), // For queries with filter and ordering
+    ],
 )
 data class ConversationEntity(
     val peerHash: String, // Destination hash of peer

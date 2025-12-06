@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.FrequencySlotCalculator
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
+import androidx.compose.material.icons.filled.Warning
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +58,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
     ) {
@@ -149,6 +152,45 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                 }
             }
             Spacer(Modifier.height(8.dp))
+
+            // Duty cycle warning for restricted regions
+            if (region.hasDutyCycleLimit) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "Duty Cycle Limit: ${region.dutyCycle}%",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                            Text(
+                                if (region.dutyCycle <= 1) {
+                                    "This region has very strict limits. Configure airtime limits in Advanced Settings to ensure compliance."
+                                } else {
+                                    "This region requires limiting transmission time. Configure airtime limits in Advanced Settings."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
         }
 
         // Modem preset summary
@@ -279,7 +321,13 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
         }
         Spacer(Modifier.height(8.dp))
 
+        // Region limits for validation hints
+        val regionLimits = viewModel.getRegionLimits()
+
         // Frequency and Bandwidth row
+        val minFreqMhz = regionLimits?.let { it.minFrequency / 1_000_000.0 }
+        val maxFreqMhz = regionLimits?.let { it.maxFrequency / 1_000_000.0 }
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -291,7 +339,21 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 isError = state.frequencyError != null,
-                supportingText = state.frequencyError?.let { { Text(it) } },
+                supportingText = {
+                    Text(
+                        state.frequencyError
+                            ?: if (minFreqMhz != null && maxFreqMhz != null) {
+                                "%.1f-%.1f MHz".format(minFreqMhz, maxFreqMhz)
+                            } else {
+                                ""
+                            },
+                        color = if (state.frequencyError != null) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                },
             )
             OutlinedTextField(
                 value = state.bandwidth,
@@ -308,6 +370,8 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
         Spacer(Modifier.height(8.dp))
 
         // SF, CR, TX Power row
+        val maxTxPower = regionLimits?.maxTxPower ?: 22
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -341,8 +405,17 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 isError = state.txPowerError != null,
-                supportingText = state.txPowerError?.let { { Text(it) } },
-                placeholder = { Text("0-22") },
+                supportingText = {
+                    Text(
+                        state.txPowerError ?: "Max: $maxTxPower dBm",
+                        color = if (state.txPowerError != null) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                },
+                placeholder = { Text("0-$maxTxPower") },
             )
         }
 

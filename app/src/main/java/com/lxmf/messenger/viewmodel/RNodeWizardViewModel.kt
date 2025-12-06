@@ -550,8 +550,11 @@ class RNodeWizardViewModel
                 "nz_865" -> emptyList()
 
                 // Asia-Pacific 920 MHz bands
-                "jp_920", "kr_920", "tw_920", "th_920", "sg_923", "my_919", "ph_915" ->
+                "jp_920", "kr_920", "tw_920", "th_920", "sg_923", "my_919" ->
                     listOf("MY", "SG", "TH")
+
+                // Philippines 915-918 MHz - no presets defined (different band from AS923)
+                "ph_915" -> emptyList()
 
                 else -> emptyList()
             }

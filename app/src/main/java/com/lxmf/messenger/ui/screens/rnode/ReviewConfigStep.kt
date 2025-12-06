@@ -301,124 +301,6 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
             Spacer(Modifier.height(8.dp))
         }
 
-        Spacer(Modifier.height(8.dp))
-
-        // Radio settings header
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Default.Radio,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "Radio Settings",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-
-        // Region limits for validation hints
-        val regionLimits = viewModel.getRegionLimits()
-
-        // Frequency and Bandwidth row
-        val minFreqMhz = regionLimits?.let { it.minFrequency / 1_000_000.0 }
-        val maxFreqMhz = regionLimits?.let { it.maxFrequency / 1_000_000.0 }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedTextField(
-                value = state.frequency,
-                onValueChange = { viewModel.updateFrequency(it) },
-                label = { Text("Frequency (Hz)") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                isError = state.frequencyError != null,
-                supportingText = {
-                    Text(
-                        state.frequencyError
-                            ?: if (minFreqMhz != null && maxFreqMhz != null) {
-                                "%.1f-%.1f MHz".format(minFreqMhz, maxFreqMhz)
-                            } else {
-                                ""
-                            },
-                        color = if (state.frequencyError != null) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                },
-            )
-            OutlinedTextField(
-                value = state.bandwidth,
-                onValueChange = { viewModel.updateBandwidth(it) },
-                label = { Text("Bandwidth (Hz)") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                isError = state.bandwidthError != null,
-                supportingText = state.bandwidthError?.let { { Text(it) } },
-            )
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        // SF, CR, TX Power row
-        val maxTxPower = regionLimits?.maxTxPower ?: 22
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedTextField(
-                value = state.spreadingFactor,
-                onValueChange = { viewModel.updateSpreadingFactor(it) },
-                label = { Text("SF") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                isError = state.spreadingFactorError != null,
-                supportingText = state.spreadingFactorError?.let { { Text(it) } },
-                placeholder = { Text("7-12") },
-            )
-            OutlinedTextField(
-                value = state.codingRate,
-                onValueChange = { viewModel.updateCodingRate(it) },
-                label = { Text("CR") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                isError = state.codingRateError != null,
-                supportingText = state.codingRateError?.let { { Text(it) } },
-                placeholder = { Text("5-8") },
-            )
-            OutlinedTextField(
-                value = state.txPower,
-                onValueChange = { viewModel.updateTxPower(it) },
-                label = { Text("TX (dBm)") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                isError = state.txPowerError != null,
-                supportingText = {
-                    Text(
-                        state.txPowerError ?: "Max: $maxTxPower dBm",
-                        color = if (state.txPowerError != null) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                },
-                placeholder = { Text("0-$maxTxPower") },
-            )
-        }
-
         Spacer(Modifier.height(16.dp))
 
         // Advanced settings (expandable)
@@ -434,8 +316,116 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
             Text("Advanced Settings")
         }
 
+        // Region limits for validation hints
+        val regionLimits = viewModel.getRegionLimits()
+
         AnimatedVisibility(visible = state.showAdvancedSettings) {
             Column {
+                Spacer(Modifier.height(16.dp))
+
+                // Radio settings header
+                Text(
+                    "Radio Settings",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+
+                // Frequency and Bandwidth row
+                val minFreqMhz = regionLimits?.let { it.minFrequency / 1_000_000.0 }
+                val maxFreqMhz = regionLimits?.let { it.maxFrequency / 1_000_000.0 }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedTextField(
+                        value = state.frequency,
+                        onValueChange = { viewModel.updateFrequency(it) },
+                        label = { Text("Frequency (Hz)") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = state.frequencyError != null,
+                        supportingText = {
+                            Text(
+                                state.frequencyError
+                                    ?: if (minFreqMhz != null && maxFreqMhz != null) {
+                                        "%.1f-%.1f MHz".format(minFreqMhz, maxFreqMhz)
+                                    } else {
+                                        ""
+                                    },
+                                color = if (state.frequencyError != null) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        },
+                    )
+                    OutlinedTextField(
+                        value = state.bandwidth,
+                        onValueChange = { viewModel.updateBandwidth(it) },
+                        label = { Text("Bandwidth (Hz)") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = state.bandwidthError != null,
+                        supportingText = state.bandwidthError?.let { { Text(it) } },
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // SF, CR, TX Power row
+                val maxTxPower = regionLimits?.maxTxPower ?: 22
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedTextField(
+                        value = state.spreadingFactor,
+                        onValueChange = { viewModel.updateSpreadingFactor(it) },
+                        label = { Text("SF") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = state.spreadingFactorError != null,
+                        supportingText = state.spreadingFactorError?.let { { Text(it) } },
+                        placeholder = { Text("7-12") },
+                    )
+                    OutlinedTextField(
+                        value = state.codingRate,
+                        onValueChange = { viewModel.updateCodingRate(it) },
+                        label = { Text("CR") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = state.codingRateError != null,
+                        supportingText = state.codingRateError?.let { { Text(it) } },
+                        placeholder = { Text("5-8") },
+                    )
+                    OutlinedTextField(
+                        value = state.txPower,
+                        onValueChange = { viewModel.updateTxPower(it) },
+                        label = { Text("TX (dBm)") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = state.txPowerError != null,
+                        supportingText = {
+                            Text(
+                                state.txPowerError ?: "Max: $maxTxPower dBm",
+                                color = if (state.txPowerError != null) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        },
+                        placeholder = { Text("0-$maxTxPower") },
+                    )
+                }
+
                 Spacer(Modifier.height(16.dp))
 
                 // Airtime limits

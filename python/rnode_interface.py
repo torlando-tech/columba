@@ -578,6 +578,8 @@ class ColumbaRNodeInterface:
             line_end = line_start + KISS.FB_BYTES_PER_LINE
             line_data = bytes(imagedata[line_start:line_end])
             self.write_framebuffer(line, line_data)
+            # Small delay to prevent BLE write throttling
+            time.sleep(0.015)
 
         RNS.log(f"{self} Sent 64x64 image to RNode framebuffer", RNS.LOG_DEBUG)
 
@@ -587,6 +589,8 @@ class ColumbaRNodeInterface:
             try:
                 from columba_logo import columba_fb_data
                 self.display_image(columba_fb_data)
+                # Delay before enable command to ensure framebuffer data is processed
+                time.sleep(0.05)
                 self.enable_external_framebuffer()
                 RNS.log(f"{self} Displayed Columba logo on RNode", RNS.LOG_DEBUG)
             except ImportError:

@@ -32,7 +32,10 @@ import java.io.BufferedOutputStream
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Connection mode for RNode devices.
@@ -155,6 +158,12 @@ class KotlinRNodeBridge(
     // Read buffer for non-blocking reads
     private val readBuffer = ConcurrentLinkedQueue<Byte>()
     private val writeMutex = Mutex()
+
+    // BLE write synchronization - Android BLE is async, we must wait for each write to complete
+    @Volatile
+    private var bleWriteLatch: CountDownLatch? = null
+    private val bleWriteStatus = AtomicInteger(BluetoothGatt.GATT_SUCCESS)
+    private val bleWriteLock = Object()
 
     // Python callbacks
     @Volatile
@@ -609,6 +618,11 @@ class KotlinRNodeBridge(
             characteristic: BluetoothGattCharacteristic,
             status: Int,
         ) {
+            // Signal write completion to waiting thread
+            bleWriteStatus.set(status)
+            synchronized(bleWriteLock) {
+                bleWriteLatch?.countDown()
+            }
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 Log.e(TAG, "BLE write failed: $status")
             }
@@ -884,6 +898,10 @@ class KotlinRNodeBridge(
 
     /**
      * Synchronous write via BLE.
+     *
+     * Android BLE is asynchronous - writeCharacteristic() only queues the write.
+     * We must wait for onCharacteristicWrite() callback before sending the next write,
+     * otherwise the Android BLE stack will silently drop operations.
      */
     private fun writeSyncBle(data: ByteArray): Int {
         val gatt = bluetoothGatt ?: run {
@@ -903,21 +921,49 @@ class KotlinRNodeBridge(
 
                 for (chunk in data.toList().chunked(maxPayload)) {
                     val chunkData = chunk.toByteArray()
+
+                    // Create latch BEFORE starting write so callback can find it
+                    val latch = CountDownLatch(1)
+                    synchronized(bleWriteLock) {
+                        bleWriteLatch = latch
+                        bleWriteStatus.set(BluetoothGatt.GATT_SUCCESS)
+                    }
+
                     rxChar.value = chunkData
                     if (!gatt.writeCharacteristic(rxChar)) {
-                        Log.e(TAG, "BLE write failed")
+                        Log.e(TAG, "BLE write failed to queue")
+                        synchronized(bleWriteLock) {
+                            bleWriteLatch = null
+                        }
                         return@synchronized -1
                     }
-                    totalWritten += chunkData.size
-                    if (data.size > maxPayload) {
-                        Thread.sleep(10)
+
+                    // Wait for onCharacteristicWrite callback (up to 5 seconds)
+                    val completed = latch.await(5, TimeUnit.SECONDS)
+                    synchronized(bleWriteLock) {
+                        bleWriteLatch = null
                     }
+
+                    if (!completed) {
+                        Log.e(TAG, "BLE write timed out waiting for callback")
+                        return@synchronized -1
+                    }
+
+                    if (bleWriteStatus.get() != BluetoothGatt.GATT_SUCCESS) {
+                        Log.e(TAG, "BLE write callback reported failure: ${bleWriteStatus.get()}")
+                        return@synchronized -1
+                    }
+
+                    totalWritten += chunkData.size
                 }
 
                 Log.v(TAG, "Wrote ${totalWritten} bytes (BLE sync)")
                 totalWritten
             } catch (e: Exception) {
                 Log.e(TAG, "BLE write failed", e)
+                synchronized(bleWriteLock) {
+                    bleWriteLatch = null
+                }
                 -1
             }
         }

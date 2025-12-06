@@ -555,8 +555,11 @@ class RNodeWizardViewModel
                 // NZ 865 MHz - no presets defined (different band from AU)
                 "nz_865" -> emptyList()
 
-                // Asia-Pacific 920 MHz bands
-                "jp_920", "kr_920", "tw_920", "th_920", "sg_923", "my_919" ->
+                // Japan 920.8-927.8 MHz - no presets defined (AS923 presets at 920.5 MHz are outside range)
+                "jp_920" -> return emptyList()
+
+                // Asia-Pacific 920 MHz bands (AS923)
+                "kr_920", "tw_920", "th_920", "sg_923", "my_919" ->
                     listOf("MY", "SG", "TH")
 
                 // Philippines 915-918 MHz - no presets defined (different band from AS923)

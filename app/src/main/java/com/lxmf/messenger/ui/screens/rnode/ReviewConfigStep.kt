@@ -384,7 +384,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 isError = state.spreadingFactorError != null,
                 supportingText = state.spreadingFactorError?.let { { Text(it) } },
-                placeholder = { Text("5-12") },
+                placeholder = { Text("7-12") },
             )
             OutlinedTextField(
                 value = state.codingRate,

@@ -1220,15 +1220,39 @@ class RNodeWizardViewModel
         }
 
         fun updateBandwidth(value: String) {
-            _state.update { it.copy(bandwidth = value, bandwidthError = null) }
+            val bw = value.toIntOrNull()
+            val error = when {
+                value.isBlank() -> null // Allow empty while typing
+                bw == null -> "Invalid number"
+                bw < 7800 -> "Must be >= 7.8 kHz"
+                bw > 1625000 -> "Must be <= 1625 kHz"
+                else -> null
+            }
+            _state.update { it.copy(bandwidth = value, bandwidthError = error) }
         }
 
         fun updateSpreadingFactor(value: String) {
-            _state.update { it.copy(spreadingFactor = value, spreadingFactorError = null) }
+            val sf = value.toIntOrNull()
+            val error = when {
+                value.isBlank() -> null // Allow empty while typing
+                sf == null -> "Invalid number"
+                sf < 7 -> "Must be >= 7"
+                sf > 12 -> "Must be <= 12"
+                else -> null
+            }
+            _state.update { it.copy(spreadingFactor = value, spreadingFactorError = error) }
         }
 
         fun updateCodingRate(value: String) {
-            _state.update { it.copy(codingRate = value, codingRateError = null) }
+            val cr = value.toIntOrNull()
+            val error = when {
+                value.isBlank() -> null // Allow empty while typing
+                cr == null -> "Invalid number"
+                cr < 5 -> "Must be >= 5"
+                cr > 8 -> "Must be <= 8"
+                else -> null
+            }
+            _state.update { it.copy(codingRate = value, codingRateError = error) }
         }
 
         fun updateTxPower(value: String) {
@@ -1332,7 +1356,7 @@ class RNodeWizardViewModel
 
             // Validate spreading factor
             val sf = state.spreadingFactor.toIntOrNull()
-            if (sf == null || sf < 5 || sf > 12) return false
+            if (sf == null || sf < 7 || sf > 12) return false
 
             // Validate coding rate
             val cr = state.codingRate.toIntOrNull()
@@ -1394,8 +1418,8 @@ class RNodeWizardViewModel
 
             // Validate spreading factor
             val sf = state.spreadingFactor.toIntOrNull()
-            if (sf == null || sf < 5 || sf > 12) {
-                _state.update { it.copy(spreadingFactorError = "SF must be 5-12") }
+            if (sf == null || sf < 7 || sf > 12) {
+                _state.update { it.copy(spreadingFactorError = "SF must be 7-12") }
                 isValid = false
             }
 

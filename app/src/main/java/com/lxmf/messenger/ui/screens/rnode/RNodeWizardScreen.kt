@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens.rnode
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -51,6 +52,15 @@ fun RNodeWizardScreen(
     viewModel: RNodeWizardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+
+    // Handle system back button - go to previous step or exit wizard
+    BackHandler {
+        if (state.currentStep == WizardStep.DEVICE_DISCOVERY) {
+            onNavigateBack()
+        } else {
+            viewModel.goToPreviousStep()
+        }
+    }
 
     // Load existing config if editing
     LaunchedEffect(editingInterfaceId) {

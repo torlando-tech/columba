@@ -173,30 +173,34 @@ data class FrequencyRegion(
  * Standard frequency regions/bands for LoRa.
  *
  * Reference: https://meshtastic.org/docs/configuration/radio/lora/#region
+ * EU 868 sub-bands: https://www.thethingsnetwork.org/docs/lorawan/regional-parameters/eu868/
  *
  * SLOT COUNTS (with LongFast 250kHz bandwidth):
- * ┌─────────────┬─────────────────────┬───────┬─────────┬────────┬───────────┐
- * │ Region      │ Frequency Range     │ Slots │ Max dBm │ Duty % │ Default   │
- * ├─────────────┼─────────────────────┼───────┼─────────┼────────┼───────────┤
- * │ US/Americas │ 902-928 MHz         │ 104   │ 30      │ 100%   │ Slot 50   │
- * │ Brazil      │ 902-907.5 MHz       │ 22    │ 30      │ 100%   │ Slot 10   │
- * │ EU 868      │ 869.4-869.65 MHz    │ 1     │ 27      │ 10%    │ Slot 0    │
- * │ EU 433      │ 433-434.8 MHz       │ 6     │ 12      │ 10%    │ Slot 3    │
- * │ Russia      │ 868.7-869.2 MHz     │ 2     │ 20      │ 100%   │ Slot 0    │
- * │ Ukraine     │ 868-868.6 MHz       │ 2     │ 14      │ 1%     │ Slot 0    │
- * │ Australia   │ 915-928 MHz         │ 52    │ 30      │ 100%   │ Slot 50   │
- * │ NZ 865      │ 864-868 MHz         │ 16    │ 36      │ 100%   │ Slot 8    │
- * │ Japan       │ 920.8-927.8 MHz     │ 28    │ 16      │ 100%   │ Slot 14   │
- * │ Korea       │ 920-923 MHz         │ 12    │ 14      │ 100%   │ Slot 6    │
- * │ Taiwan      │ 920-925 MHz         │ 20    │ 27      │ 100%   │ Slot 10   │
- * │ China       │ 470-510 MHz         │ 160   │ 19      │ 100%   │ Slot 80   │
- * │ India       │ 865-867 MHz         │ 8     │ 30      │ 100%   │ Slot 4    │
- * │ Thailand    │ 920-925 MHz         │ 20    │ 16      │ 100%   │ Slot 10   │
- * │ Singapore   │ 917-925 MHz         │ 32    │ 20      │ 100%   │ Slot 16   │
- * │ Malaysia    │ 919-924 MHz         │ 20    │ 27      │ 100%   │ Slot 10   │
- * │ Philippines │ 915-918 MHz         │ 12    │ 20      │ 100%   │ Slot 6    │
- * │ 2.4 GHz     │ 2400-2483.5 MHz     │ 334   │ 10      │ 100%   │ Slot 50   │
- * └─────────────┴─────────────────────┴───────┴─────────┴────────┴───────────┘
+ * ┌──────────────┬─────────────────────┬───────┬─────────┬────────┬───────────┐
+ * │ Region       │ Frequency Range     │ Slots │ Max dBm │ Duty % │ Default   │
+ * ├──────────────┼─────────────────────┼───────┼─────────┼────────┼───────────┤
+ * │ US/Americas  │ 902-928 MHz         │ 104   │ 30      │ 100%   │ Slot 50   │
+ * │ Brazil       │ 902-907.5 MHz       │ 22    │ 30      │ 100%   │ Slot 10   │
+ * │ EU 868 L     │ 865-868 MHz         │ 12    │ 14      │ 1%     │ Slot 6    │
+ * │ EU 868 M     │ 868-868.6 MHz       │ 2     │ 14      │ 1%     │ Slot 1    │
+ * │ EU 868 P     │ 869.4-869.65 MHz    │ 1     │ 27      │ 10%    │ Slot 0    │
+ * │ EU 868 Q     │ 869.7-870 MHz       │ 1     │ 14      │ 1%     │ Slot 0    │
+ * │ EU 433       │ 433-434.8 MHz       │ 6     │ 12      │ 10%    │ Slot 3    │
+ * │ Russia       │ 868.7-869.2 MHz     │ 2     │ 20      │ 100%   │ Slot 0    │
+ * │ Ukraine      │ 868-868.6 MHz       │ 2     │ 14      │ 1%     │ Slot 0    │
+ * │ Australia    │ 915-928 MHz         │ 52    │ 30      │ 100%   │ Slot 50   │
+ * │ NZ 865       │ 864-868 MHz         │ 16    │ 36      │ 100%   │ Slot 8    │
+ * │ Japan        │ 920.8-927.8 MHz     │ 28    │ 16      │ 100%   │ Slot 14   │
+ * │ Korea        │ 920-923 MHz         │ 12    │ 14      │ 100%   │ Slot 6    │
+ * │ Taiwan       │ 920-925 MHz         │ 20    │ 27      │ 100%   │ Slot 10   │
+ * │ China        │ 470-510 MHz         │ 160   │ 19      │ 100%   │ Slot 80   │
+ * │ India        │ 865-867 MHz         │ 8     │ 30      │ 100%   │ Slot 4    │
+ * │ Thailand     │ 920-925 MHz         │ 20    │ 16      │ 100%   │ Slot 10   │
+ * │ Singapore    │ 917-925 MHz         │ 32    │ 20      │ 100%   │ Slot 16   │
+ * │ Malaysia     │ 919-924 MHz         │ 20    │ 27      │ 100%   │ Slot 10   │
+ * │ Philippines  │ 915-918 MHz         │ 12    │ 20      │ 100%   │ Slot 6    │
+ * │ 2.4 GHz      │ 2400-2483.5 MHz     │ 334   │ 10      │ 100%   │ Slot 50   │
+ * └──────────────┴─────────────────────┴───────┴─────────┴────────┴───────────┘
  */
 object FrequencyRegions {
     val regions = listOf(
@@ -222,16 +226,56 @@ object FrequencyRegions {
             description = "902-907.5 MHz (limited band)",
         ),
 
-        // ==================== EUROPE ====================
+        // ==================== EUROPE 868 MHz SUB-BANDS ====================
+        // Per ERC 70-03: https://www.thethingsnetwork.org/docs/lorawan/regional-parameters/eu868/
+        // Sub-band K (863-865 MHz, 0.1%) and N (868.7-869.2 MHz, 0.1%) omitted as too restrictive
+
+        // Sub-band L: 865-868 MHz (1% duty cycle)
         FrequencyRegion(
-            id = "eu_868",
-            name = "Europe (868 MHz)",
+            id = "eu_868_l",
+            name = "Europe 865-868 MHz (1%)",
+            frequencyStart = 865_000_000,
+            frequencyEnd = 868_000_000,
+            maxTxPower = 14,
+            defaultTxPower = 14,
+            dutyCycle = 1,
+            description = "Sub-band L: 1% duty cycle, 25 mW (UK, IT, NL presets)",
+        ),
+
+        // Sub-band M: 868-868.6 MHz (1% duty cycle) - LoRaWAN default channels
+        FrequencyRegion(
+            id = "eu_868_m",
+            name = "Europe 868 MHz (1%)",
+            frequencyStart = 868_000_000,
+            frequencyEnd = 868_600_000,
+            maxTxPower = 14,
+            defaultTxPower = 14,
+            dutyCycle = 1,
+            description = "Sub-band M: 1% duty cycle, 25 mW (LoRaWAN default)",
+        ),
+
+        // Sub-band P: 869.4-869.65 MHz (10% duty cycle, 500 mW) - Meshtastic default
+        FrequencyRegion(
+            id = "eu_868_p",
+            name = "Europe 869.5 MHz (10%)",
             frequencyStart = 869_400_000,
             frequencyEnd = 869_650_000,
             maxTxPower = 27,
             defaultTxPower = 14,
             dutyCycle = 10,
-            description = "869.4-869.65 MHz, 10% duty cycle",
+            description = "Sub-band P: 10% duty cycle, 500 mW (best for LoRa)",
+        ),
+
+        // Sub-band Q: 869.7-870 MHz (1% duty cycle)
+        FrequencyRegion(
+            id = "eu_868_q",
+            name = "Europe 869.7-870 MHz (1%)",
+            frequencyStart = 869_700_000,
+            frequencyEnd = 870_000_000,
+            maxTxPower = 14,
+            defaultTxPower = 14,
+            dutyCycle = 1,
+            description = "Sub-band Q: 1% duty cycle, 25 mW",
         ),
         FrequencyRegion(
             id = "eu_433",
@@ -485,8 +529,14 @@ object FrequencySlotCalculator {
             "us_915" -> minOf(50, numSlots - 1)
             "br_902" -> minOf(10, numSlots - 1) // Smaller band
 
-            // Europe: Limited bands, use first available
-            "eu_868", "ru_868", "ua_868" -> 0
+            // EU 868 sub-bands: Use middle of available slots
+            "eu_868_l" -> minOf(6, numSlots - 1)  // ~866.5 MHz
+            "eu_868_m" -> minOf(1, numSlots - 1)  // ~868.3 MHz
+            "eu_868_p" -> 0  // Only 1 slot with 250kHz BW
+            "eu_868_q" -> 0  // Small band
+
+            // Russia/Ukraine 868 MHz
+            "ru_868", "ua_868" -> 0
 
             // Europe 433: Middle of band
             "eu_433" -> minOf(3, numSlots - 1)

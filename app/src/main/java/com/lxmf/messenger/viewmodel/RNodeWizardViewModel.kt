@@ -468,13 +468,41 @@ class RNodeWizardViewModel
                     .take(5)
             }
 
+            // EU 868 sub-bands: Filter presets by frequency within the sub-band range
+            when (region.id) {
+                // Sub-band L: 865-868 MHz (UK, Italy Brescia/Treviso, Netherlands Rotterdam, Belgium Duffel)
+                "eu_868_l" -> {
+                    return RNodeRegionalPresets.presets
+                        .filter { it.frequency in 865_000_000..867_999_999 }
+                        .take(5)
+                }
+                // Sub-band M: 868-868.6 MHz (Spain Madrid, Switzerland Bern, Belgium/Germany/etc defaults)
+                "eu_868_m" -> {
+                    return RNodeRegionalPresets.presets
+                        .filter { it.frequency in 868_000_000..868_599_999 }
+                        .take(5)
+                }
+                // Sub-band P: 869.4-869.65 MHz (Germany Darmstadt/Wiesbaden, Italy Salerno)
+                "eu_868_p" -> {
+                    return RNodeRegionalPresets.presets
+                        .filter { it.frequency in 869_400_000..869_650_000 }
+                        .take(5)
+                }
+                // Sub-band Q: 869.7-870 MHz
+                "eu_868_q" -> {
+                    return RNodeRegionalPresets.presets
+                        .filter { it.frequency in 869_700_000..869_999_999 }
+                        .take(5)
+                }
+            }
+
             // Map region IDs to country codes for presets in the same frequency band
             val countryCodes = when (region.id) {
                 // Americas 915 MHz
                 "us_915", "br_902" -> listOf("US")
 
-                // Europe 868 MHz
-                "eu_868", "ru_868", "ua_868" -> listOf("DE", "GB", "NL", "BE", "FI", "NO", "SE", "CH", "ES", "IT")
+                // Russia and Ukraine 868 MHz
+                "ru_868", "ua_868" -> listOf("DE", "GB", "NL", "BE", "FI", "NO", "SE", "CH", "ES", "IT")
 
                 // Australia/NZ 915 MHz
                 "au_915", "nz_865" -> listOf("AU")

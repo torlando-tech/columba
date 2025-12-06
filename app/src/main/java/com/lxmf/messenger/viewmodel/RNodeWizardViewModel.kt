@@ -23,6 +23,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.DiscoveredRNode
+import com.lxmf.messenger.data.model.CommunitySlots
+import com.lxmf.messenger.data.model.FrequencyRegion
+import com.lxmf.messenger.data.model.FrequencyRegions
+import com.lxmf.messenger.data.model.FrequencySlotCalculator
+import com.lxmf.messenger.data.model.ModemPreset
 import com.lxmf.messenger.data.model.RNodeRegionalPreset
 import com.lxmf.messenger.data.model.RNodeRegionalPresets
 import com.lxmf.messenger.repository.InterfaceRepository
@@ -48,8 +53,21 @@ import javax.inject.Inject
 enum class WizardStep {
     DEVICE_DISCOVERY,
     REGION_SELECTION,
+    MODEM_PRESET,
+    FREQUENCY_SLOT,
     REVIEW_CONFIGURE,
 }
+
+/**
+ * Regulatory limits for a frequency region.
+ * Used to validate user input against regional regulations.
+ */
+data class RegionLimits(
+    val maxTxPower: Int,
+    val minFrequency: Long,
+    val maxFrequency: Long,
+    val dutyCycle: Int,
+)
 
 /**
  * State for the RNode setup wizard.
@@ -81,19 +99,27 @@ data class RNodeWizardState(
     val pendingAssociationIntent: IntentSender? = null,
     val associationError: String? = null,
 
-    // Step 2: Region Selection
+    // Step 2: Region/Frequency Selection
     val searchQuery: String = "",
     val selectedCountry: String? = null,
-    val selectedPreset: RNodeRegionalPreset? = null,
+    val selectedPreset: RNodeRegionalPreset? = null,  // Legacy: popular local presets
+    val selectedFrequencyRegion: FrequencyRegion? = null,  // New: frequency band selection
     val isCustomMode: Boolean = false,
+    val showPopularPresets: Boolean = false,  // Collapsible section for local presets
 
-    // Step 3: Review & Configure
+    // Step 3: Modem Preset Selection
+    val selectedModemPreset: ModemPreset = ModemPreset.DEFAULT,
+
+    // Step 4: Frequency Slot Selection
+    val selectedSlot: Int = 20,  // Default Meshtastic slot
+
+    // Step 5: Review & Configure
     val interfaceName: String = "RNode LoRa",
-    val frequency: String = "915000000",
-    val bandwidth: String = "125000",
-    val spreadingFactor: String = "8",
-    val codingRate: String = "5",
-    val txPower: String = "22",
+    val frequency: String = "914875000",  // US default
+    val bandwidth: String = "250000",     // Long Fast default
+    val spreadingFactor: String = "11",   // Long Fast default
+    val codingRate: String = "5",         // Long Fast default (4/5)
+    val txPower: String = "17",           // Safe default for all devices
     val stAlock: String = "",
     val ltAlock: String = "",
     val interfaceMode: String = "full",
@@ -157,8 +183,9 @@ class RNodeWizardViewModel
         private fun getCachedDeviceType(address: String): BluetoothType? {
             val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
             return try {
-                val typeStr = org.json.JSONObject(json).optString(address, null)
-                when (typeStr) {
+                val jsonObj = org.json.JSONObject(json)
+                if (!jsonObj.has(address)) return null
+                when (jsonObj.optString(address)) {
                     "CLASSIC" -> BluetoothType.CLASSIC
                     "BLE" -> BluetoothType.BLE
                     else -> null
@@ -293,9 +320,26 @@ class RNodeWizardViewModel
         }
 
         fun goToNextStep() {
-            val nextStep = when (_state.value.currentStep) {
+            val currentState = _state.value
+            val nextStep = when (currentState.currentStep) {
                 WizardStep.DEVICE_DISCOVERY -> WizardStep.REGION_SELECTION
-                WizardStep.REGION_SELECTION -> WizardStep.REVIEW_CONFIGURE
+                WizardStep.REGION_SELECTION -> {
+                    // Apply frequency region settings when moving to modem step
+                    applyFrequencyRegionSettings()
+                    WizardStep.MODEM_PRESET
+                }
+                WizardStep.MODEM_PRESET -> {
+                    // Apply modem preset settings when moving to slot step
+                    applyModemPresetSettings()
+                    // Initialize slot to default for this region/bandwidth
+                    initializeDefaultSlot()
+                    WizardStep.FREQUENCY_SLOT
+                }
+                WizardStep.FREQUENCY_SLOT -> {
+                    // Apply slot to frequency when moving to review
+                    applySlotToFrequency()
+                    WizardStep.REVIEW_CONFIGURE
+                }
                 WizardStep.REVIEW_CONFIGURE -> WizardStep.REVIEW_CONFIGURE // Already at end
             }
             _state.update { it.copy(currentStep = nextStep) }
@@ -305,7 +349,9 @@ class RNodeWizardViewModel
             val prevStep = when (_state.value.currentStep) {
                 WizardStep.DEVICE_DISCOVERY -> WizardStep.DEVICE_DISCOVERY // Already at start
                 WizardStep.REGION_SELECTION -> WizardStep.DEVICE_DISCOVERY
-                WizardStep.REVIEW_CONFIGURE -> WizardStep.REGION_SELECTION
+                WizardStep.MODEM_PRESET -> WizardStep.REGION_SELECTION
+                WizardStep.FREQUENCY_SLOT -> WizardStep.MODEM_PRESET
+                WizardStep.REVIEW_CONFIGURE -> WizardStep.FREQUENCY_SLOT
             }
             _state.update { it.copy(currentStep = prevStep) }
         }
@@ -317,10 +363,135 @@ class RNodeWizardViewModel
                     state.selectedDevice != null ||
                         (state.showManualEntry && state.manualDeviceName.isNotBlank())
                 WizardStep.REGION_SELECTION ->
-                    state.selectedPreset != null || state.isCustomMode
+                    state.selectedFrequencyRegion != null || state.selectedPreset != null || state.isCustomMode
+                WizardStep.MODEM_PRESET ->
+                    true // Modem preset always has a default selection
+                WizardStep.FREQUENCY_SLOT ->
+                    true // Slot always has a valid selection
                 WizardStep.REVIEW_CONFIGURE ->
                     state.interfaceName.isNotBlank() && validateConfigurationSilent()
             }
+        }
+
+        private fun applyFrequencyRegionSettings() {
+            val region = _state.value.selectedFrequencyRegion ?: return
+            _state.update {
+                it.copy(
+                    frequency = region.frequency.toString(),
+                    txPower = region.defaultTxPower.toString(),
+                )
+            }
+        }
+
+        private fun applyModemPresetSettings() {
+            val preset = _state.value.selectedModemPreset
+            _state.update {
+                it.copy(
+                    bandwidth = preset.bandwidth.toString(),
+                    spreadingFactor = preset.spreadingFactor.toString(),
+                    codingRate = preset.codingRate.toString(),
+                )
+            }
+        }
+
+        private fun initializeDefaultSlot() {
+            val region = _state.value.selectedFrequencyRegion ?: return
+            val bandwidth = _state.value.selectedModemPreset.bandwidth
+            val defaultSlot = FrequencySlotCalculator.getDefaultSlot(region, bandwidth)
+            _state.update { it.copy(selectedSlot = defaultSlot) }
+        }
+
+        private fun applySlotToFrequency() {
+            val region = _state.value.selectedFrequencyRegion ?: return
+            val bandwidth = _state.value.selectedModemPreset.bandwidth
+            val slot = _state.value.selectedSlot
+            val frequency = FrequencySlotCalculator.calculateFrequency(region, bandwidth, slot)
+            _state.update { it.copy(frequency = frequency.toString()) }
+        }
+
+        // ========== STEP 4: FREQUENCY SLOT SELECTION ==========
+
+        /**
+         * Get the number of available frequency slots for the current region/bandwidth.
+         */
+        fun getNumSlots(): Int {
+            val region = _state.value.selectedFrequencyRegion ?: return 0
+            val bandwidth = _state.value.selectedModemPreset.bandwidth
+            return FrequencySlotCalculator.getNumSlots(region, bandwidth)
+        }
+
+        /**
+         * Calculate the frequency for a given slot.
+         */
+        fun getFrequencyForSlot(slot: Int): Long {
+            val region = _state.value.selectedFrequencyRegion ?: return 0
+            val bandwidth = _state.value.selectedModemPreset.bandwidth
+            return FrequencySlotCalculator.calculateFrequency(region, bandwidth, slot)
+        }
+
+        /**
+         * Get community slots for the current region.
+         */
+        fun getCommunitySlots(): List<com.lxmf.messenger.data.model.CommunitySlot> {
+            val region = _state.value.selectedFrequencyRegion ?: return emptyList()
+            return CommunitySlots.forRegion(region.id)
+        }
+
+        /**
+         * Select a frequency slot.
+         */
+        fun selectSlot(slot: Int) {
+            val numSlots = getNumSlots()
+            if (slot in 0 until numSlots) {
+                _state.update { it.copy(selectedSlot = slot) }
+            }
+        }
+
+        /**
+         * Get popular RNode presets for the current region.
+         * These are community-tested configurations that can be used as slot suggestions.
+         */
+        fun getPopularPresetsForRegion(): List<RNodeRegionalPreset> {
+            val region = _state.value.selectedFrequencyRegion ?: return emptyList()
+
+            // For 433 MHz bands, filter specifically for 433 MHz presets
+            if (region.id == "eu_433") {
+                return RNodeRegionalPresets.presets
+                    .filter { it.frequency in 430_000_000..440_000_000 }
+                    .take(5)
+            }
+
+            // For 2.4 GHz, filter for 2.4 GHz presets
+            if (region.id == "lora_24") {
+                return RNodeRegionalPresets.presets
+                    .filter { it.frequency in 2_400_000_000..2_500_000_000 }
+                    .take(5)
+            }
+
+            // Map region IDs to country codes for presets in the same frequency band
+            val countryCodes = when (region.id) {
+                // Americas 915 MHz
+                "us_915", "br_902" -> listOf("US")
+
+                // Europe 868 MHz
+                "eu_868", "ru_868", "ua_868" -> listOf("DE", "GB", "NL", "BE", "FI", "NO", "SE", "CH", "ES", "IT")
+
+                // Australia/NZ 915 MHz
+                "au_915", "nz_865" -> listOf("AU")
+
+                // Asia-Pacific 920 MHz bands
+                "jp_920", "kr_920", "tw_920", "th_920", "sg_923", "my_919", "ph_915" ->
+                    listOf("MY", "SG", "TH")
+
+                else -> emptyList()
+            }
+
+            // Filter presets by country and exclude 433 MHz / 2.4 GHz presets from non-matching regions
+            return RNodeRegionalPresets.presets
+                .filter { it.countryCode in countryCodes }
+                .filter { it.frequency !in 430_000_000..440_000_000 }  // Exclude 433 MHz
+                .filter { it.frequency !in 2_400_000_000..2_500_000_000 }  // Exclude 2.4 GHz
+                .take(5)
         }
 
         // ========== STEP 1: DEVICE DISCOVERY ==========
@@ -887,9 +1058,50 @@ class RNodeWizardViewModel
                 it.copy(
                     isCustomMode = true,
                     selectedPreset = null,
+                    selectedFrequencyRegion = null,
                 )
             }
         }
+
+        // ========== FREQUENCY REGION SELECTION ==========
+
+        fun selectFrequencyRegion(region: FrequencyRegion) {
+            _state.update {
+                it.copy(
+                    selectedFrequencyRegion = region,
+                    selectedPreset = null,  // Clear any popular preset selection
+                    isCustomMode = false,
+                )
+            }
+        }
+
+        fun getFrequencyRegions(): List<FrequencyRegion> = FrequencyRegions.regions
+
+        /**
+         * Get the regulatory limits for the currently selected region.
+         * Returns null if no region is selected.
+         */
+        fun getRegionLimits(): RegionLimits? {
+            val region = _state.value.selectedFrequencyRegion ?: return null
+            return RegionLimits(
+                maxTxPower = region.maxTxPower,
+                minFrequency = region.frequencyStart,
+                maxFrequency = region.frequencyEnd,
+                dutyCycle = region.dutyCycle,
+            )
+        }
+
+        fun togglePopularPresets() {
+            _state.update { it.copy(showPopularPresets = !it.showPopularPresets) }
+        }
+
+        // ========== MODEM PRESET SELECTION ==========
+
+        fun selectModemPreset(preset: ModemPreset) {
+            _state.update { it.copy(selectedModemPreset = preset) }
+        }
+
+        fun getModemPresets(): List<ModemPreset> = ModemPreset.entries
 
         fun getFilteredCountries(): List<String> {
             val query = _state.value.searchQuery.lowercase()
@@ -903,7 +1115,7 @@ class RNodeWizardViewModel
             return RNodeRegionalPresets.getPresetsForCountry(country)
         }
 
-        // ========== STEP 3: REVIEW & CONFIGURE ==========
+        // ========== STEP 4: REVIEW & CONFIGURE ==========
 
         fun updateInterfaceName(name: String) {
             _state.update { it.copy(interfaceName = name, nameError = null) }
@@ -950,6 +1162,25 @@ class RNodeWizardViewModel
         }
 
         /**
+         * Get the maximum TX power for the selected region (or default fallback).
+         */
+        private fun getMaxTxPower(): Int {
+            return _state.value.selectedFrequencyRegion?.maxTxPower ?: 22
+        }
+
+        /**
+         * Get the frequency range for the selected region (or default fallback).
+         */
+        private fun getFrequencyRange(): Pair<Long, Long> {
+            val region = _state.value.selectedFrequencyRegion
+            return if (region != null) {
+                region.frequencyStart to region.frequencyEnd
+            } else {
+                137_000_000L to 3_000_000_000L
+            }
+        }
+
+        /**
          * Validate configuration silently (without updating error messages).
          */
         private fun validateConfigurationSilent(): Boolean {
@@ -958,9 +1189,10 @@ class RNodeWizardViewModel
             // Validate name
             if (state.interfaceName.isBlank()) return false
 
-            // Validate frequency (137 MHz - 3 GHz)
+            // Validate frequency against region limits
             val freq = state.frequency.toLongOrNull()
-            if (freq == null || freq < 137000000 || freq > 3000000000) return false
+            val (minFreq, maxFreq) = getFrequencyRange()
+            if (freq == null || freq < minFreq || freq > maxFreq) return false
 
             // Validate bandwidth
             val bw = state.bandwidth.toIntOrNull()
@@ -974,9 +1206,10 @@ class RNodeWizardViewModel
             val cr = state.codingRate.toIntOrNull()
             if (cr == null || cr < 5 || cr > 8) return false
 
-            // Validate TX power
+            // Validate TX power against region max
             val txp = state.txPower.toIntOrNull()
-            if (txp == null || txp < 0 || txp > 22) return false
+            val maxPower = getMaxTxPower()
+            if (txp == null || txp < 0 || txp > maxPower) return false
 
             return true
         }
@@ -987,6 +1220,7 @@ class RNodeWizardViewModel
         private fun validateConfiguration(): Boolean {
             var isValid = true
             val state = _state.value
+            val region = state.selectedFrequencyRegion
 
             // Validate name
             if (state.interfaceName.isBlank()) {
@@ -994,10 +1228,15 @@ class RNodeWizardViewModel
                 isValid = false
             }
 
-            // Validate frequency (137 MHz - 3 GHz)
+            // Validate frequency against region limits
             val freq = state.frequency.toLongOrNull()
-            if (freq == null || freq < 137000000 || freq > 3000000000) {
-                _state.update { it.copy(frequencyError = "Frequency must be 137-3000 MHz") }
+            val (minFreq, maxFreq) = getFrequencyRange()
+            if (freq == null || freq < minFreq || freq > maxFreq) {
+                val minMhz = minFreq / 1_000_000.0
+                val maxMhz = maxFreq / 1_000_000.0
+                _state.update {
+                    it.copy(frequencyError = "Frequency must be %.1f-%.1f MHz".format(minMhz, maxMhz))
+                }
                 isValid = false
             }
 
@@ -1022,10 +1261,14 @@ class RNodeWizardViewModel
                 isValid = false
             }
 
-            // Validate TX power
+            // Validate TX power against region's regulatory max
             val txp = state.txPower.toIntOrNull()
-            if (txp == null || txp < 0 || txp > 22) {
-                _state.update { it.copy(txPowerError = "TX power must be 0-22 dBm") }
+            val maxPower = getMaxTxPower()
+            if (txp == null || txp < 0 || txp > maxPower) {
+                val regionName = region?.name ?: "this region"
+                _state.update {
+                    it.copy(txPowerError = "TX power must be 0-$maxPower dBm for $regionName")
+                }
                 isValid = false
             }
 

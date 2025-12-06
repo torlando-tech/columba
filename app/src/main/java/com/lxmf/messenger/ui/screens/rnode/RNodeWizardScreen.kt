@@ -75,6 +75,8 @@ fun RNodeWizardScreen(
                             WizardStep.DEVICE_DISCOVERY ->
                                 if (state.isEditMode) "Change RNode Device" else "Select RNode Device"
                             WizardStep.REGION_SELECTION -> "Choose Region"
+                            WizardStep.MODEM_PRESET -> "Select Modem Preset"
+                            WizardStep.FREQUENCY_SLOT -> "Select Frequency Slot"
                             WizardStep.REVIEW_CONFIGURE -> "Review Settings"
                         },
                     )
@@ -130,6 +132,8 @@ fun RNodeWizardScreen(
             when (step) {
                 WizardStep.DEVICE_DISCOVERY -> DeviceDiscoveryStep(viewModel)
                 WizardStep.REGION_SELECTION -> RegionSelectionStep(viewModel)
+                WizardStep.MODEM_PRESET -> ModemPresetStep(viewModel)
+                WizardStep.FREQUENCY_SLOT -> FrequencySlotStep(viewModel)
                 WizardStep.REVIEW_CONFIGURE -> ReviewConfigStep(viewModel)
             }
         }
@@ -208,6 +212,8 @@ private fun WizardBottomBar(
                     when (currentStep) {
                         WizardStep.DEVICE_DISCOVERY -> "Next"
                         WizardStep.REGION_SELECTION -> "Next"
+                        WizardStep.MODEM_PRESET -> "Next"
+                        WizardStep.FREQUENCY_SLOT -> "Next"
                         WizardStep.REVIEW_CONFIGURE -> if (isEditMode) "Update" else "Save"
                     },
                 )

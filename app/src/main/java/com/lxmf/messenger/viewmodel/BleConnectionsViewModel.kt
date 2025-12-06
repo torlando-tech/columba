@@ -1,5 +1,8 @@
 package com.lxmf.messenger.viewmodel
 
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
+import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -151,6 +154,33 @@ class BleConnectionsViewModel
                 } catch (e: Exception) {
                     Log.e(TAG, "Error disconnecting peer $address", e)
                 }
+            }
+        }
+
+        /**
+         * Get an Intent to request enabling Bluetooth.
+         * For Android 12+, this is the recommended way to enable Bluetooth.
+         *
+         * @return Intent to enable Bluetooth, or null if not available
+         */
+        fun getEnableBluetoothIntent(): Intent? {
+            return try {
+                Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create enable Bluetooth intent", e)
+                null
+            }
+        }
+
+        /**
+         * Get an Intent to open Bluetooth settings.
+         * This allows the user to disable Bluetooth manually.
+         *
+         * @return Intent to open Bluetooth settings
+         */
+        fun getBluetoothSettingsIntent(): Intent {
+            return Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
         }
 

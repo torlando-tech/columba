@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens
 
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,15 +49,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -67,8 +64,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.model.BleConnectionInfo
 import com.lxmf.messenger.data.model.ConnectionType
 import com.lxmf.messenger.data.model.SignalQuality
-import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
-import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
+import com.lxmf.messenger.ui.components.BluetoothPermissionController
+import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.ui.components.PermissionDeniedCard
 import com.lxmf.messenger.viewmodel.BleConnectionsUiState
 import com.lxmf.messenger.viewmodel.BleConnectionsViewModel
@@ -82,33 +79,29 @@ fun BleConnectionStatusScreen(
     onBackClick: () -> Unit,
     viewModel: BleConnectionsViewModel = hiltViewModel(),
 ) {
-    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
 
-    // Permission state
-    var showPermissionBottomSheet by remember { mutableStateOf(false) }
-    var permissionStatus by remember { mutableStateOf<BlePermissionManager.PermissionStatus?>(null) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    // Permission launcher
-    val permissionLauncher =
+    // Bluetooth enable launcher
+    val bluetoothEnableLauncher =
         rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestMultiplePermissions(),
-        ) { permissions ->
-            // Re-check permission status after result
-            permissionStatus = BlePermissionManager.checkPermissionStatus(context)
+            contract = ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            // Bluetooth state will be updated automáticamente via flow
+            Log.d("BleConnectionStatus", "Bluetooth enable result: ${result.resultCode}")
         }
 
-    // Check permissions on screen load
-    LaunchedEffect(Unit) {
-        permissionStatus = BlePermissionManager.checkPermissionStatus(context)
-        when (permissionStatus) {
-            is BlePermissionManager.PermissionStatus.Denied -> {
-                showPermissionBottomSheet = true
-            }
-            else -> {}
-        }
-    }
+    val btController: BluetoothPermissionController =
+        rememberBluetoothPermissionController(
+            onEnableRequested = { _ ->
+                viewModel.getEnableBluetoothIntent()?.let { intent ->
+                    bluetoothEnableLauncher.launch(intent)
+                }
+            },
+            onOpenSettingsRequested = { ctx ->
+                val intent = viewModel.getBluetoothSettingsIntent()
+                ctx.startActivity(intent)
+            },
+        )
 
     Scaffold(
         topBar = {
@@ -179,6 +172,20 @@ fun BleConnectionStatusScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+
+                        // Button to enable Bluetooth
+                        Button(
+                            onClick = btController.onEnableClick,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bluetooth,
+                                contentDescription = null,
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Turn ON")
+                        }
+
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors =
@@ -197,7 +204,7 @@ fun BleConnectionStatusScreen(
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 )
                                 Text(
-                                    text = "Enable Bluetooth in your device settings to discover and connect to nearby BLE peers.",
+                                    text = "Enable Bluetooth to discover and connect to nearby BLE peers.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 )
@@ -218,24 +225,44 @@ fun BleConnectionStatusScreen(
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.padding(32.dp),
                         ) {
                             Icon(
-                                imageVector = Icons.Default.BluetoothDisabled,
+                                imageVector = Icons.Default.BluetoothConnected,
                                 contentDescription = null,
                                 modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                             Text(
-                                text = "No Active Connections",
+                                text = "Bluetooth is turned on",
                                 style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = "No active connections",
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
                                 text = "BLE peers will appear here when connected",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+
+                            // Button to open Bluetooth settings
+                            OutlinedButton(
+                                onClick = btController.onOpenSettingsClick,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Bluetooth Settings")
+                            }
                         }
                     }
                 } else {
@@ -325,32 +352,6 @@ fun BleConnectionStatusScreen(
             }
         }
 
-        // Show permission denied card overlay if permissions are permanently denied
-        if (permissionStatus is BlePermissionManager.PermissionStatus.PermanentlyDenied) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                        .padding(16.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                PermissionDeniedCard()
-            }
-        }
-
-        // Bluetooth permission bottom sheet
-        if (showPermissionBottomSheet) {
-            BlePermissionBottomSheet(
-                onDismiss = { showPermissionBottomSheet = false },
-                onRequestPermissions = {
-                    showPermissionBottomSheet = false
-                    val permissions = BlePermissionManager.getRequiredPermissions()
-                    permissionLauncher.launch(permissions.toTypedArray())
-                },
-                sheetState = sheetState,
-            )
-        }
     }
 }
 

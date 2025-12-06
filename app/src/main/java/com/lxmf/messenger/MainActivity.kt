@@ -1,10 +1,12 @@
 package com.lxmf.messenger
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -303,6 +305,18 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
     var showPermissionBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // Shared flag with BluetoothPermissionController to know if we've already
+    // triggered a runtime permission request in a previous run.
+    val bluetoothPrefs =
+        remember(context) {
+            context.getSharedPreferences("bluetooth_permission_prefs", Context.MODE_PRIVATE)
+        }
+    var hasRequestedBluetoothOnce by remember {
+        mutableStateOf(
+            bluetoothPrefs.getBoolean("hasRequestedBluetoothPermissions", false),
+        )
+    }
+
     // Permission launcher
     val permissionLauncher =
         rememberLauncherForActivityResult(
@@ -340,10 +354,13 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                 // User denied some permissions - they can still use the app,
                 // but BLE features won't work
                 Log.d("ColumbaNavigation", "Some permissions denied")
+                hasRequestedBluetoothOnce = true
+                bluetoothPrefs.edit().putBoolean("hasRequestedBluetoothPermissions", true).apply()
             }
         }
 
-    // Check permissions on first launch
+    // Check permissions on first launch.
+    // Always show the bottom sheet if BLE permissions are missing.
     LaunchedEffect(Unit) {
         if (!BlePermissionManager.hasAllPermissions(context)) {
             showPermissionBottomSheet = true
@@ -698,14 +715,38 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
 
                 // Bluetooth permission bottom sheet
                 if (showPermissionBottomSheet) {
+                    val currentStatus =
+                        if (BlePermissionManager.hasAllPermissions(context)) {
+                            BlePermissionManager.PermissionStatus.Granted
+                        } else {
+                            BlePermissionManager.checkPermissionStatus(context)
+                        }
+
+                    val useAppSettings =
+                        hasRequestedBluetoothOnce &&
+                            currentStatus is BlePermissionManager.PermissionStatus.Denied
+
                     BlePermissionBottomSheet(
                         onDismiss = { showPermissionBottomSheet = false },
                         onRequestPermissions = {
                             showPermissionBottomSheet = false
-                            val permissions = BlePermissionManager.getRequiredPermissions()
-                            permissionLauncher.launch(permissions.toTypedArray())
+                            if (useAppSettings) {
+                                // Open app settings so the user can manually enable permissions.
+                                val intent =
+                                    Intent(
+                                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                        Uri.fromParts("package", context.packageName, null),
+                                    ).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                context.startActivity(intent)
+                            } else {
+                                val permissions = BlePermissionManager.getRequiredPermissions()
+                                permissionLauncher.launch(permissions.toTypedArray())
+                            }
                         },
                         sheetState = sheetState,
+                        primaryActionLabel = if (useAppSettings) "Open Settings" else "Grant Permissions",
                     )
                 }
             }

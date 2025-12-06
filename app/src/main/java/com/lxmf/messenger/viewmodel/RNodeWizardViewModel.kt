@@ -537,8 +537,11 @@ class RNodeWizardViewModel
 
             // Map region IDs to country codes for presets in the same frequency band
             val countryCodes = when (region.id) {
-                // Americas 915 MHz
-                "us_915", "br_902" -> listOf("US")
+                // US 915 MHz
+                "us_915" -> listOf("US")
+
+                // Brazil 902-907.5 MHz - no presets defined (US presets are at 914 MHz)
+                "br_902" -> return emptyList()
 
                 // Russia and Ukraine 868 MHz
                 "ru_868", "ua_868" -> listOf("DE", "GB", "NL", "BE", "FI", "NO", "SE", "CH", "ES", "IT")

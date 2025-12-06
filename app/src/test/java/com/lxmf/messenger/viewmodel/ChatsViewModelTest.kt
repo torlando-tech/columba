@@ -110,7 +110,7 @@ class ChatsViewModelTest {
             // WhileSubscribed requires active collector - test() provides one
             newViewModel.conversations.test {
                 // Skip initial value (emptyList), wait for actual data from repository
-                val initial = awaitItem() // This will be initialValue (emptyList)
+                awaitItem() // Consume initialValue (emptyList)
                 advanceUntilIdle() // Let WhileSubscribed start the upstream flow
                 val conversations = awaitItem() // This will be the actual data
                 assertEquals(2, conversations.size)
@@ -137,7 +137,7 @@ class ChatsViewModelTest {
 
             newViewModel.conversations.test {
                 // Skip initial value, wait for actual data from repository
-                val initial = awaitItem() // This will be initialValue (emptyList)
+                awaitItem() // Consume initialValue (emptyList)
                 advanceUntilIdle() // Let WhileSubscribed start the upstream flow
                 val conversations = awaitItem() // This will be the actual data
                 assertEquals(3, conversations.size)
@@ -237,7 +237,7 @@ class ChatsViewModelTest {
 
             newViewModel.conversations.test {
                 // Skip initial value, wait for actual data from repository
-                val initial = awaitItem() // This will be initialValue (emptyList)
+                awaitItem() // Consume initialValue (emptyList)
                 advanceUntilIdle() // Let WhileSubscribed start the upstream flow
                 val result = awaitItem() // This will be the actual data
                 assertEquals(3, result.size)
@@ -265,7 +265,7 @@ class ChatsViewModelTest {
 
             newViewModel.conversations.test {
                 // Skip initial value, wait for actual data from repository
-                val initial = awaitItem() // This will be initialValue (emptyList)
+                awaitItem() // Consume initialValue (emptyList)
                 advanceUntilIdle() // Let WhileSubscribed start the upstream flow
                 val result = awaitItem() // This will be the actual data
                 assertEquals(3, result.size)

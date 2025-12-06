@@ -32,12 +32,12 @@
     <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$override suspend fun initialize(config: ReticulumConfig): Result&lt;Unit&gt;</ID>
     <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun buildConfigJson(config: ReticulumConfig): String</ID>
     <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun validateReticulumConfig(config: ReticulumConfig)</ID>
-    <ID>LongMethod:RNodeWizardViewModel.kt$RNodeWizardViewModel$@SuppressLint("MissingPermission") fun startDeviceScan()</ID>
     <ID>LongMethod:ThemeEditorViewModel.kt$ThemeEditorViewModel$fun saveAndApplyTheme()</ID>
     <ID>LongMethod:ThemeEditorViewModel.kt$ThemeEditorViewModel$fun saveTheme()</ID>
     <ID>LongParameterList:BleTestFixtures.kt$BleTestFixtures$( identityHash: String = "abcd1234efgh5678ijkl9012mnop3456", peerName: String = "RNS-TestPeer", currentMac: String = "AA:BB:CC:DD:EE:FF", connectionType: ConnectionType = ConnectionType.BOTH, rssi: Int = -70, mtu: Int = 512, connectedAt: Long = System.currentTimeMillis() - 60000, // 1 minute ago firstSeen: Long = System.currentTimeMillis() - 300000, // 5 minutes ago lastSeen: Long = System.currentTimeMillis(), bytesReceived: Long = 1024, bytesSent: Long = 2048, packetsReceived: Long = 10, packetsSent: Long = 20, successRate: Double = 1.0, )</ID>
     <ID>LongParameterList:ReticulumServiceBinder.kt$ReticulumServiceBinder$( private val context: Context, private val state: ServiceState, private val wrapperManager: PythonWrapperManager, private val identityManager: IdentityManager, private val routingManager: RoutingManager, private val messagingManager: MessagingManager, private val pollingManager: PollingManager, private val broadcaster: CallbackBroadcaster, private val lockManager: LockManager, private val notificationManager: ServiceNotificationManager, private val bleCoordinator: BleCoordinator, private val scope: CoroutineScope, private val onInitialized: () -&gt; Unit, private val onShutdown: () -&gt; Unit, private val onForceExit: () -&gt; Unit, )</ID>
     <ID>LoopWithTooManyJumpStatements:ConfigFileParser.kt$ConfigFileParser$for</ID>
+    <ID>LoopWithTooManyJumpStatements:RNodeWizardViewModel.kt$RNodeWizardViewModel$while</ID>
     <ID>LoopWithTooManyJumpStatements:SettingsViewModel.kt$SettingsViewModel$while</ID>
     <ID>MaxLineLength:AnnounceStreamScreen.kt$tint = if (announce.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface</ID>
     <ID>MaxLineLength:AnnounceStreamViewModel.kt$AnnounceStreamViewModel$Log.d(TAG, "Saving announce: $peerName ($hashHex) with interface: ${announce.receivingInterface}")</ID>
@@ -146,7 +146,8 @@
     <ID>ReturnCount:MessageMapper.kt$private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap?</ID>
     <ID>ReturnCount:NodeTypeDetector.kt$NodeTypeDetector$fun detectNodeType( appData: ByteArray?, aspect: String? = null, ): NodeType</ID>
     <ID>ReturnCount:NotificationHelper.kt$NotificationHelper$suspend fun notifyMessageReceived( destinationHash: String, peerName: String, messagePreview: String, isFavorite: Boolean, )</ID>
-    <ID>ReturnCount:RNodeWizardViewModel.kt$RNodeWizardViewModel$private fun validateConfigurationSilent(): Boolean</ID>
+    <ID>ReturnCount:RNodeConfigValidator.kt$RNodeConfigValidator$fun validateConfigSilent( name: String, frequency: String, bandwidth: String, spreadingFactor: String, codingRate: String, txPower: String, stAlock: String, ltAlock: String, region: FrequencyRegion?, ): Boolean</ID>
+    <ID>ReturnCount:RNodeWizardViewModel.kt$RNodeWizardViewModel$fun getPopularPresetsForRegion(): List&lt;RNodeRegionalPreset&gt;</ID>
     <ID>SwallowedException:ColumbaApplication.kt$ColumbaApplication$e: ClassNotFoundException</ID>
     <ID>SwallowedException:IdentityManagerViewModel.kt$IdentityManagerViewModel$e: Exception</ID>
     <ID>SwallowedException:IdentityQrCodeUtils.kt$IdentityQrCodeUtils$e: Exception</ID>
@@ -212,6 +213,7 @@
     <ID>UnusedPrivateMember:InterfaceDatabase.kt$InterfaceDatabase.Callback$private suspend fun populateDatabase(interfaceDao: InterfaceDao)</ID>
     <ID>UnusedPrivateMember:MessageCollector.kt$MessageCollector$private fun getPeerName(peerHash: String): String</ID>
     <ID>UnusedPrivateMember:MessagingViewModel.kt$MessagingViewModel$private fun DataMessage.toReticulumMessage()</ID>
+    <ID>UnusedPrivateMember:RNodeWizardViewModel.kt$RNodeWizardViewModel$private fun stopRssiPolling()</ID>
     <ID>UnusedPrivateMember:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$private fun ByteArray.toHexString(): String</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$private val settingsRepository: SettingsRepository</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val destHash = _publicKey.value ?: return null</ID>

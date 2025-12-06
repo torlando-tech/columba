@@ -3,6 +3,7 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ArrayPrimitive:NotificationSettingsViewModel.kt$NotificationSettingsViewModel$Array&lt;Boolean&gt;</ID>
+    <ID>ComplexCondition:InterfaceManagementScreen.kt$interfaceEntity.type == "RNode" &amp;&amp; interfaceEntity.enabled &amp;&amp; isOnline == false &amp;&amp; onReconnect != null</ID>
     <ID>ComplexCondition:MainActivity.kt$!isOnWelcomeScreen &amp;&amp; !isOnMessagingScreen &amp;&amp; !isOnAnnounceDetailScreen &amp;&amp; !isOnInterfaceManagementScreen &amp;&amp; !isOnBleConnectionStatusScreen &amp;&amp; !isOnThemeManagementScreen &amp;&amp; !isOnThemeEditorScreen &amp;&amp; !isOnRNodeWizardScreen</ID>
     <ID>CyclomaticComplexMethod:ColumbaApplication.kt$ColumbaApplication$override fun onCreate()</ID>
     <ID>CyclomaticComplexMethod:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
@@ -14,6 +15,10 @@
     <ID>CyclomaticComplexMethod:NodeTypeDetector.kt$NodeTypeDetector$fun detectNodeType( appData: ByteArray?, aspect: String? = null, ): NodeType</ID>
     <ID>CyclomaticComplexMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$override suspend fun getDebugInfo(): Map&lt;String, Any&gt;</ID>
     <ID>CyclomaticComplexMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun validateReticulumConfig(config: ReticulumConfig)</ID>
+    <ID>CyclomaticComplexMethod:RNodeConfigValidator.kt$RNodeConfigValidator$fun validateConfig( name: String, frequency: String, bandwidth: String, spreadingFactor: String, codingRate: String, txPower: String, stAlock: String, ltAlock: String, region: FrequencyRegion?, ): ConfigValidationResult</ID>
+    <ID>CyclomaticComplexMethod:RNodeRegionalPreset.kt$FrequencySlotCalculator$fun getDefaultSlot(region: FrequencyRegion, bandwidth: Int): Int</ID>
+    <ID>CyclomaticComplexMethod:RNodeWizardViewModel.kt$RNodeWizardViewModel$@SuppressLint("MissingPermission") fun initiateBluetoothPairing(device: DiscoveredRNode)</ID>
+    <ID>CyclomaticComplexMethod:RNodeWizardViewModel.kt$RNodeWizardViewModel$fun getPopularPresetsForRegion(): List&lt;RNodeRegionalPreset&gt;</ID>
     <ID>CyclomaticComplexMethod:ReticulumServiceBinder.kt$ReticulumServiceBinder$override fun getDebugInfo(): String</ID>
     <ID>ImplicitDefaultLocale:ThemeColorGenerator.kt$ThemeColorGenerator$String.format("#%06X", argb and 0xFFFFFF)</ID>
     <ID>ImplicitDefaultLocale:ThemeColorGenerator.kt$ThemeColorGenerator$String.format("#%08X", argb)</ID>
@@ -46,98 +51,17 @@
     <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$override suspend fun initialize(config: ReticulumConfig): Result&lt;Unit&gt;</ID>
     <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun buildConfigJson(config: ReticulumConfig): String</ID>
     <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun validateReticulumConfig(config: ReticulumConfig)</ID>
-    <ID>LongMethod:RNodeWizardViewModel.kt$RNodeWizardViewModel$@SuppressLint("MissingPermission") fun startDeviceScan()</ID>
+    <ID>LongMethod:RNodeWizardViewModel.kt$RNodeWizardViewModel$@SuppressLint("MissingPermission") fun initiateBluetoothPairing(device: DiscoveredRNode)</ID>
     <ID>LongMethod:ThemeEditorViewModel.kt$ThemeEditorViewModel$fun saveAndApplyTheme()</ID>
     <ID>LongMethod:ThemeEditorViewModel.kt$ThemeEditorViewModel$fun saveTheme()</ID>
+    <ID>LongParameterList:RNodeConfigValidator.kt$RNodeConfigValidator$( name: String, frequency: String, bandwidth: String, spreadingFactor: String, codingRate: String, txPower: String, stAlock: String, ltAlock: String, region: FrequencyRegion?, )</ID>
     <ID>LongParameterList:ReticulumServiceBinder.kt$ReticulumServiceBinder$( private val context: Context, private val state: ServiceState, private val wrapperManager: PythonWrapperManager, private val identityManager: IdentityManager, private val routingManager: RoutingManager, private val messagingManager: MessagingManager, private val pollingManager: PollingManager, private val broadcaster: CallbackBroadcaster, private val lockManager: LockManager, private val notificationManager: ServiceNotificationManager, private val bleCoordinator: BleCoordinator, private val scope: CoroutineScope, private val onInitialized: () -&gt; Unit, private val onShutdown: () -&gt; Unit, private val onForceExit: () -&gt; Unit, )</ID>
     <ID>LoopWithTooManyJumpStatements:ConfigFileParser.kt$ConfigFileParser$for</ID>
+    <ID>LoopWithTooManyJumpStatements:RNodeWizardViewModel.kt$RNodeWizardViewModel$while</ID>
     <ID>LoopWithTooManyJumpStatements:SettingsViewModel.kt$SettingsViewModel$while</ID>
-    <ID>MaxLineLength:AnnounceStreamScreen.kt$tint = if (announce.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface</ID>
-    <ID>MaxLineLength:AnnounceStreamViewModel.kt$AnnounceStreamViewModel$Log.d(TAG, "Saving announce: $peerName ($hashHex) with interface: ${announce.receivingInterface}")</ID>
-    <ID>MaxLineLength:AnnounceStreamViewModel.kt$AnnounceStreamViewModel$Log.e(TAG, "Service entered ERROR state: $status, not starting announce collection")</ID>
-    <ID>MaxLineLength:AutoAnnounceManager.kt$AutoAnnounceManager$Log.d(TAG, "Settings changed: enabled=$enabled, interval=${intervalMinutes}min, displayName=$displayName")</ID>
-    <ID>MaxLineLength:BatteryOptimizationCard.kt$text = "Battery optimization is enabled. Android may kill the background service during Deep Doze mode, causing gaps in message delivery."</ID>
-    <ID>MaxLineLength:BleConnectionStatusScreen.kt$text = "Enable Bluetooth in your device settings to discover and connect to nearby BLE peers."</ID>
-    <ID>MaxLineLength:BleConnectionsViewModel.kt$BleConnectionsViewModel$Log.d(TAG, "Updating UI state: ${connections.size} total, $centralCount central, $peripheralCount peripheral")</ID>
-    <ID>MaxLineLength:ChatsScreen.kt$Text("Are you sure you want to delete your conversation with $peerName? This will permanently delete all messages.")</ID>
-    <ID>MaxLineLength:ChatsScreen.kt$text = "${conversations.size} ${if (conversations.size == 1) "conversation" else "conversations"}"</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.d("ColumbaApplication", "$context process detected ($processName) - skipping auto-initialization")</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.d("ColumbaApplication", "Battery optimization detected - will show exemption dialog")</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.d("ColumbaApplication", "Existing identity found - marking onboarding complete for upgrade")</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.d("ColumbaApplication", "Main app process detected ($processName) - proceeding with auto-initialization")</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.e("ColumbaApplication", "Failed to initialize Reticulum: ${error.message}", error)</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.e("ColumbaApplication", "Failed to launch battery exemption request", e)</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.e("ColumbaApplication", "Failed to restore peer identities", error)</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$android.util.Log.i("ColumbaApplication", "Launched battery exemption request")</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$com.lxmf.messenger.util.BatteryOptimizationManager</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$com.lxmf.messenger.util.BatteryOptimizationManager.recordPromptShown(this@ColumbaApplication)</ID>
-    <ID>MaxLineLength:ColumbaApplication.kt$ColumbaApplication$if</ID>
-    <ID>MaxLineLength:ConfigFileParser.kt$ConfigFileParser$"Config file contains too many interfaces (max: ${ValidationConstants.MAX_INTERFACE_COUNT})"</ID>
-    <ID>MaxLineLength:ConfigFileParser.kt$ConfigFileParser$Log.e(TAG, "Config file too large: ${configFile.length()} bytes (max: ${ValidationConstants.MAX_CONFIG_FILE_SIZE})")</ID>
-    <ID>MaxLineLength:ConfigFileParser.kt$ConfigFileParser$Log.e(TAG, "Too many interfaces in config file (max: ${ValidationConstants.MAX_INTERFACE_COUNT})")</ID>
-    <ID>MaxLineLength:ConfigFileParser.kt$ConfigFileParser$throw IllegalArgumentException("Config file exceeds maximum size of ${ValidationConstants.MAX_CONFIG_FILE_SIZE} bytes")</ID>
-    <ID>MaxLineLength:ContactsScreen.kt$val lxmaUrl = "lxma://$deepLinkDestinationHash:${deepLinkPublicKey?.joinToString("") { "%02x".format(it) }}"</ID>
-    <ID>MaxLineLength:DebugViewModel.kt$DebugViewModel$?:</ID>
-    <ID>MaxLineLength:DebugViewModel.kt$DebugViewModel$Log.w(TAG, "Error loading identity data (attempt $attempt/$maxAttempts), retrying in ${delay}ms: ${e.message}")</ID>
-    <ID>MaxLineLength:IdentityManagerScreen.kt$Text("Enter a display name for this identity. You can use this to manage different personas or use cases.")</ID>
-    <ID>MaxLineLength:IdentityManagerScreen.kt$Text("Export this identity first if you want to back it up.", style = MaterialTheme.typography.bodySmall)</ID>
-    <ID>MaxLineLength:IdentityScreen.kt$"This will stop the background Reticulum service. You will not receive messages until you restart the app or manually restart the service."</ID>
-    <ID>MaxLineLength:InterfaceConfigDialog.kt$"Optional: For debugging only. Keep short (max 8 chars recommended) or leave empty to maximize BLE advertisement reliability."</ID>
-    <ID>MaxLineLength:InterfaceConfigDialog.kt$imageVector = if (showAdvanced) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown</ID>
-    <ID>MaxLineLength:InterfaceConfigManager.kt$InterfaceConfigManager$val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager</ID>
-    <ID>MaxLineLength:InterfaceDatabase.kt$InterfaceDatabase.Callback$"""{"group_id":"","discovery_scope":"link","discovery_port":48555,"data_port":49555,"mode":"full"}"""</ID>
-    <ID>MaxLineLength:InterfaceDatabase.kt$InterfaceDatabase.Callback$"""{"target_host":"dublin.connect.reticulum.network","target_port":4965,"kiss_framing":false,"mode":"full"}"""</ID>
-    <ID>MaxLineLength:InterfaceDatabase.kt$InterfaceDatabase.Callback$"""{"target_host":"reticulum.betweentheborders.com","target_port":4242,"kiss_framing":false,"mode":"full"}"""</ID>
-    <ID>MaxLineLength:InterfaceDatabase.kt$InterfaceDatabase.Callback$android.util.Log.d("InterfaceDatabase", "Imported ${interfaces.size} interface(s) from config file")</ID>
-    <ID>MaxLineLength:InterfaceDatabase.kt$InterfaceDatabase.Callback$android.util.Log.w("InterfaceDatabase", "Config file exists but no interfaces found, creating default")</ID>
-    <ID>MaxLineLength:InterfaceDatabase.kt$InterfaceDatabase.Companion.&lt;no name provided&gt;$"""{"target_host":"reticulum.betweentheborders.com","target_port":4242,"kiss_framing":false,"mode":"full"}"""</ID>
-    <ID>MaxLineLength:InterfaceDatabase.kt$InterfaceDatabase.Companion.&lt;no name provided&gt;$val cursor = db.query("SELECT COUNT(*) FROM interfaces WHERE name = 'RNS Testnet BetweenTheBorders'")</ID>
-    <ID>MaxLineLength:InterfaceManagementUtils.kt$"shouldToggleBeEnabled(${this.name}): isBLE=$isBle, btState=$bluetoothState, btOn=$btOn, permissions=$permissionsGranted, result=$result"</ID>
-    <ID>MaxLineLength:InterfaceManagementViewModel.kt$InterfaceManagementViewModel$Log.d(TAG, "Setting adapter state to: $adapterState, permissions: ${_state.value.blePermissionsGranted}")</ID>
-    <ID>MaxLineLength:InterfaceManagementViewModel.kt$InterfaceManagementViewModel$Log.d(TAG, "State updated - BT state: ${_state.value.bluetoothState}, permissions: ${_state.value.blePermissionsGranted}")</ID>
-    <ID>MaxLineLength:InterfaceManagementViewModel.kt$InterfaceManagementViewModel$_configState.value = _configState.value.copy(maxConnectionsError = "Max connections must be 1-7")</ID>
-    <ID>MaxLineLength:MainActivity.kt$// Check if we're on the messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, or welcome screen</ID>
     <ID>MaxLineLength:MainActivity.kt$// Only show NavigationBar when NOT on messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, welcome screen, or RNode wizard</ID>
     <ID>MaxLineLength:MainActivity.kt$if</ID>
-    <ID>MaxLineLength:MainScreen.kt$text = "This is a demonstration of the Kotlin UI layer communicating with the Reticulum abstraction layer."</ID>
-    <ID>MaxLineLength:MessageCollector.kt$MessageCollector$Log.d(TAG, "Skipping duplicate message ${receivedMessage.messageHash.take(16)} (from replay buffer)")</ID>
-    <ID>MaxLineLength:MessageCollector.kt$MessageCollector$Log.d(TAG, "Stored public key for peer identity: $identityHash (${publicKey.size} bytes)")</ID>
-    <ID>MaxLineLength:MessageCollector.kt$MessageCollector$timestamp = System.currentTimeMillis()</ID>
-    <ID>MaxLineLength:MessagingManager.kt$MessagingManager$if (imageData != null) " with image attachment (${imageData.size} bytes, format=$imageFormat)" else ""</ID>
-    <ID>MaxLineLength:MessagingViewModel.kt$MessagingViewModel$Log.d(TAG, "Loaded LXMF identity for messaging: ${identity.hash.take(8).joinToString("") { "%02x".format(it) }}")</ID>
-    <ID>MaxLineLength:MessagingViewModel.kt$MessagingViewModel$Log.d(TAG, "Sending LXMF message to $destinationHash (${sanitized.length} chars, hasImage=${imageData != null})...")</ID>
-    <ID>MaxLineLength:MessagingViewModel.kt$MessagingViewModel$Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")</ID>
-    <ID>MaxLineLength:MessagingViewModel.kt$MessagingViewModel$private suspend</ID>
-    <ID>MaxLineLength:MyIdentityScreen.kt$"Your LXMF destination hash is derived from your identity and is used for sending and receiving messages.\n\n"</ID>
-    <ID>MaxLineLength:NetworkCard.kt$text = "Monitor your Reticulum network status, active interfaces, BLE connections, and connection diagnostics."</ID>
-    <ID>MaxLineLength:NotificationSettingsScreen.kt$if</ID>
-    <ID>MaxLineLength:PollingManager.kt$PollingManager$Log.d(TAG, "Event notification received but no messages in queue (may have been polled already)")</ID>
-    <ID>MaxLineLength:PollingManager.kt$PollingManager$Log.d(TAG, "Message polling iteration $pollCount, wrapper=${state.wrapper != null}, conversationActive=${state.isConversationActive.get()}")</ID>
-    <ID>MaxLineLength:PollingManager.kt$PollingManager$Log.d(TAG, "Next message check in ${nextInterval}ms (conversation=${state.isConversationActive.get()})")</ID>
-    <ID>MaxLineLength:PollingManager.kt$PollingManager$val currentPoller = if (state.isConversationActive.get()) conversationPoller else messagesPoller</ID>
-    <ID>MaxLineLength:PythonReticulumProtocol.kt$PythonReticulumProtocol$Log.d(TAG, "Announce event emitted: ${destinationHash.take(8).joinToString("") { "%02x".format(it) }}, type: $nodeType")</ID>
-    <ID>MaxLineLength:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw IllegalArgumentException("Interface $index (${iface.name}): Invalid data port - ${portResult.message}")</ID>
-    <ID>MaxLineLength:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw IllegalArgumentException("Interface $index (${iface.name}): Invalid listen IP - ${hostResult.message}")</ID>
-    <ID>MaxLineLength:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw IllegalArgumentException("Interface $index (${iface.name}): Invalid listen port - ${portResult.message}")</ID>
-    <ID>MaxLineLength:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw IllegalArgumentException("Interface $index (${iface.name}): Invalid target host - ${hostResult.message}")</ID>
-    <ID>MaxLineLength:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw IllegalArgumentException("Interface $index (${iface.name}): Invalid target port - ${portResult.message}")</ID>
-    <ID>MaxLineLength:QrScannerScreen.kt$onQrScanned("lxma://$pendingContactHash:${pendingContactPubKey?.joinToString("") { "%02x".format(it) }}")</ID>
-    <ID>MaxLineLength:QrScannerScreen.kt$qrData = "lxma://$pendingContactHash:${pendingContactPubKey?.joinToString("") { "%02x".format(it) }}"</ID>
-    <ID>MaxLineLength:ReticulumServiceBinder.kt$ReticulumServiceBinder$Log.w(TAG, "isInitialized() = false (wrapper=${state.wrapper != null}, status=${state.networkStatus.get()})")</ID>
-    <ID>MaxLineLength:ReticulumServiceBinder.kt$ReticulumServiceBinder$val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"</ID>
-    <ID>MaxLineLength:ServiceNotificationManager.kt$ServiceNotificationManager$Log.e(TAG, "Foreground service time limit exhausted. Service will run in background with limited capabilities.")</ID>
-    <ID>MaxLineLength:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$"Missing identity fields in response. hash=$hashStr, publicKey=$publicKeyStr, privateKey=$privateKeyStr"</ID>
-    <ID>MaxLineLength:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$Log.e(TAG, "restorePeerIdentities: [$index] Failed to encode public key to base64 for hash $hashStr")</ID>
-    <ID>MaxLineLength:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$put("identity_hash", hashStr)</ID>
-    <ID>MaxLineLength:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")</ID>
-    <ID>MaxLineLength:ServiceReticulumProtocol.kt$ServiceReticulumProtocol.&lt;no name provided&gt;$Log.d(TAG, "Announce received via service: ${destinationHash.take(8).joinToString("") { "%02x".format(it) }}")</ID>
     <ID>MaxLineLength:SettingsViewModel.kt$SettingsViewModel$"Settings updated: displayName=${newState.displayName}, autoAnnounce=${newState.autoAnnounceEnabled}, interval=${newState.autoAnnounceIntervalMinutes}min, theme=${newState.selectedTheme}, customThemes=${newState.customThemes.size}"</ID>
-    <ID>MaxLineLength:SettingsViewModel.kt$SettingsViewModel$Log.d(TAG, "Loaded active identity: ${activeIdentity?.displayName} (${activeIdentity?.identityHash?.take(8)})")</ID>
-    <ID>MaxLineLength:ThemeEditorScreen.kt$color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline</ID>
-    <ID>MaxLineLength:ThemeEditorScreen.kt$text = if (state.useHarmonizedColors) "Auto-generating harmonized colors from primary" else "Customize each color individually"</ID>
-    <ID>MaxLineLength:ThemeEditorViewModel.kt$ThemeEditorViewModel$val (primary, secondary, tertiary) = ThemeColorGenerator.suggestComplementaryColors(currentState.primarySeedColor.toArgb())</ID>
-    <ID>MaxLineLength:ThemeSelectionCard.kt$text = "Choose your preferred color theme. Dark and light modes adapt automatically based on your system settings."</ID>
-    <ID>MaxLineLength:ValidationConstants.kt$ValidationConstants$"^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4})$"</ID>
     <ID>NestedBlockDepth:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
     <ID>NestedBlockDepth:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun buildConfigJson(config: ReticulumConfig): String</ID>
     <ID>NestedBlockDepth:SettingsViewModel.kt$SettingsViewModel$private suspend fun loadIdentityInfo(): Pair&lt;String?, String?&gt;</ID>
@@ -151,10 +75,13 @@
     <ID>ReturnCount:IdentityQrCodeUtils.kt$IdentityQrCodeUtils$fun decodeFromQrString(qrString: String): IdentityData?</ID>
     <ID>ReturnCount:InputValidator.kt$InputValidator$fun String.safeHexToBytes(): Result&lt;ByteArray&gt;</ID>
     <ID>ReturnCount:InputValidator.kt$InputValidator$fun validateIdentityString(identityString: String): ValidationResult&lt;Pair&lt;ByteArray, ByteArray&gt;&gt;</ID>
+    <ID>ReturnCount:InterfaceManagementUtils.kt$fun InterfaceEntity.getErrorMessage( bluetoothState: Int, permissionsGranted: Boolean, isOnline: Boolean? = null, ): String?</ID>
     <ID>ReturnCount:MessageMapper.kt$private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap?</ID>
     <ID>ReturnCount:NodeTypeDetector.kt$NodeTypeDetector$fun detectNodeType( appData: ByteArray?, aspect: String? = null, ): NodeType</ID>
     <ID>ReturnCount:NotificationHelper.kt$NotificationHelper$suspend fun notifyMessageReceived( destinationHash: String, peerName: String, messagePreview: String, isFavorite: Boolean, )</ID>
-    <ID>ReturnCount:RNodeWizardViewModel.kt$RNodeWizardViewModel$private fun validateConfigurationSilent(): Boolean</ID>
+    <ID>ReturnCount:RNodeConfigValidator.kt$RNodeConfigValidator$fun validateConfigSilent( name: String, frequency: String, bandwidth: String, spreadingFactor: String, codingRate: String, txPower: String, stAlock: String, ltAlock: String, region: FrequencyRegion?, ): Boolean</ID>
+    <ID>ReturnCount:RNodeRegionalPreset.kt$FrequencySlotCalculator$fun calculateSlotFromFrequency(region: FrequencyRegion, bandwidth: Int, frequency: Long): Int?</ID>
+    <ID>ReturnCount:RNodeWizardViewModel.kt$RNodeWizardViewModel$fun getPopularPresetsForRegion(): List&lt;RNodeRegionalPreset&gt;</ID>
     <ID>SwallowedException:ColumbaApplication.kt$ColumbaApplication$e: ClassNotFoundException</ID>
     <ID>SwallowedException:IdentityManagerViewModel.kt$IdentityManagerViewModel$e: Exception</ID>
     <ID>SwallowedException:IdentityQrCodeUtils.kt$IdentityQrCodeUtils$e: Exception</ID>
@@ -209,6 +136,7 @@
     <ID>UnnecessarySafeCall:MessagingManager.kt$MessagingManager$identityObj.optString("private_key")?.let { android.util.Base64.decode(it, android.util.Base64.NO_WRAP) }</ID>
     <ID>UnnecessarySafeCall:MessagingManager.kt$MessagingManager$identityObj.optString("public_key")?.let { android.util.Base64.decode(it, android.util.Base64.NO_WRAP) }</ID>
     <ID>UnnecessarySafeCall:RNodeWizardViewModel.kt$RNodeWizardViewModel.&lt;no name provided&gt;$companionDeviceManager?.startObservingDevicePresence( associationInfo.deviceMacAddress?.toString() ?: device.address, )</ID>
+    <ID>UnnecessarySafeCall:ReviewConfigStep.kt$state.selectedModemPreset?.let { preset -&gt; Card( modifier = Modifier.fillMaxWidth(), ) { Row( modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, ) { Icon( if (preset.displayName.startsWith("Short")) { Icons.Default.Speed } else { Icons.Default.Radio }, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, ) Spacer(Modifier.width(12.dp)) Column { Text( "Modem Preset", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, ) Text( preset.displayName, style = MaterialTheme.typography.titleMedium, ) Text( "SF${preset.spreadingFactor} • ${preset.bandwidth / 1000} kHz • 4/${preset.codingRate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, ) } } } Spacer(Modifier.height(8.dp)) }</ID>
     <ID>UnnecessarySafeCall:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$result.optString("destination_hash")?.toByteArrayFromBase64()</ID>
     <ID>UnnecessarySafeCall:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$result.optString("message_hash")?.toByteArrayFromBase64()</ID>
     <ID>UnnecessarySafeCall:ServiceReticulumProtocol.kt$ServiceReticulumProtocol.&lt;no name provided&gt;$json.optString("app_data")?.toByteArrayFromBase64()</ID>
@@ -230,6 +158,7 @@
     <ID>UnsafeCallOnNullableType:QrCodeComposables.kt$qrBitmap!!</ID>
     <ID>UnsafeCallOnNullableType:QrScannerScreen.kt$errorMessage!!</ID>
     <ID>UnsafeCallOnNullableType:QrScannerScreen.kt$pendingContactHash!!</ID>
+    <ID>UnsafeCallOnNullableType:RNodeCompanionService.kt$RNodeCompanionService$pendingReconnect!!</ID>
     <ID>UnsafeCallOnNullableType:ReticulumService.kt$ReticulumService$intent.getStringExtra("test_identity_char_uuid")!!</ID>
     <ID>UnsafeCallOnNullableType:ReticulumService.kt$ReticulumService$intent.getStringExtra("test_rx_char_uuid")!!</ID>
     <ID>UnsafeCallOnNullableType:ReticulumService.kt$ReticulumService$intent.getStringExtra("test_tx_char_uuid")!!</ID>
@@ -237,6 +166,7 @@
     <ID>UnusedParameter:ContactsScreen.kt$contactName: String</ID>
     <ID>UnusedParameter:ContactsScreen.kt$onNavigateToConversation: (destinationHash: String) -&gt; Unit = {}</ID>
     <ID>UnusedParameter:DebugViewModel.kt$DebugViewModel$identity: com.lxmf.messenger.reticulum.model.Identity</ID>
+    <ID>UnusedParameter:FrequencySlotStep.kt$bandwidth: Int</ID>
     <ID>UnusedParameter:IdentityManagerViewModel.kt$IdentityManagerViewModel$identityHash: String</ID>
     <ID>UnusedParameter:IdentityScreen.kt$identityHash: String?</ID>
     <ID>UnusedParameter:MyIdentityScreen.kt$onNavigateToIdentityManager: () -&gt; Unit = {}</ID>
@@ -246,6 +176,7 @@
     <ID>UnusedPrivateMember:InterfaceDatabase.kt$InterfaceDatabase.Callback$private suspend fun populateDatabase(interfaceDao: InterfaceDao)</ID>
     <ID>UnusedPrivateMember:MessageCollector.kt$MessageCollector$private fun getPeerName(peerHash: String): String</ID>
     <ID>UnusedPrivateMember:MessagingViewModel.kt$MessagingViewModel$private fun DataMessage.toReticulumMessage()</ID>
+    <ID>UnusedPrivateMember:RNodeWizardViewModel.kt$RNodeWizardViewModel$private fun stopRssiPolling()</ID>
     <ID>UnusedPrivateMember:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$private fun ByteArray.toHexString(): String</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$private val settingsRepository: SettingsRepository</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val destHash = _publicKey.value ?: return null</ID>

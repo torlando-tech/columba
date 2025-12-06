@@ -593,89 +593,127 @@ class RNodeWizardViewModel
                 val devices = mutableMapOf<String, DiscoveredRNode>()
 
                 // 1. BLE scan FIRST - this definitively identifies BLE devices
-                // RNodes use EITHER Classic OR BLE, never both (determined by board type)
-                try {
-                    scanForBleRNodes { bleDevice ->
-                        bleDeviceAddresses.add(bleDevice.address)
-                        devices[bleDevice.address] = bleDevice
-                        // Cache this device as BLE since we definitively detected it
-                        cacheDeviceType(bleDevice.address, BluetoothType.BLE)
-                        _state.update { it.copy(discoveredDevices = devices.values.toList()) }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "BLE scan failed", e)
-                }
+                performBleScan(bleDeviceAddresses, devices)
 
                 // 2. Check bonded devices - classify based on BLE scan results and cache
-                try {
-                    bluetoothAdapter?.bondedDevices?.forEach { device ->
-                        if (device.name?.startsWith("RNode ") == true) {
-                            val address = device.address
-                            val name = device.name ?: address
+                addBondedRNodes(bleDeviceAddresses, devices)
 
-                            when {
-                                // Found in BLE scan - definitely BLE, update paired status
-                                bleDeviceAddresses.contains(address) -> {
-                                    devices[address]?.let { existing ->
-                                        devices[address] = existing.copy(isPaired = true)
-                                    }
-                                }
-                                // Check cache for previously detected type
-                                else -> {
-                                    val cachedType = getCachedDeviceType(address)
-                                    val deviceType = cachedType ?: BluetoothType.UNKNOWN
+                // 3. Update selectedDevice if found during scan (for edit mode)
+                val updatedSelected = updateSelectedFromScan(devices.values)
 
-                                    devices[address] = DiscoveredRNode(
-                                        name = name,
-                                        address = address,
-                                        type = deviceType,
-                                        rssi = null,
-                                        isPaired = true,
-                                        bluetoothDevice = device,
-                                    )
+                // 4. Finalize scan state
+                finalizeScan(devices.values.toList(), updatedSelected)
+            }
+        }
 
-                                    if (cachedType != null) {
-                                        Log.d(TAG, "Using cached type for $name: $cachedType")
-                                    } else {
-                                        Log.d(TAG, "Unknown type for bonded device $name (no cache)")
-                                    }
-                                }
-                            }
-                        }
+        /**
+         * Perform BLE scan for RNode devices.
+         * RNodes use EITHER Classic OR BLE, never both (determined by board type).
+         */
+        @SuppressLint("MissingPermission")
+        private suspend fun performBleScan(
+            bleDeviceAddresses: MutableSet<String>,
+            devices: MutableMap<String, DiscoveredRNode>,
+        ) {
+            try {
+                scanForBleRNodes { bleDevice ->
+                    bleDeviceAddresses.add(bleDevice.address)
+                    devices[bleDevice.address] = bleDevice
+                    cacheDeviceType(bleDevice.address, BluetoothType.BLE)
+                    _state.update { it.copy(discoveredDevices = devices.values.toList()) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "BLE scan failed", e)
+            }
+        }
+
+        /**
+         * Add bonded RNode devices, classifying them based on BLE scan results and cache.
+         */
+        @SuppressLint("MissingPermission")
+        private fun addBondedRNodes(
+            bleDeviceAddresses: Set<String>,
+            devices: MutableMap<String, DiscoveredRNode>,
+        ) {
+            try {
+                bluetoothAdapter?.bondedDevices?.forEach { device ->
+                    if (device.name?.startsWith("RNode ") == true) {
+                        classifyBondedDevice(device, bleDeviceAddresses, devices)
                     }
-                } catch (e: SecurityException) {
-                    Log.e(TAG, "Missing permission for bonded devices check", e)
                 }
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Missing permission for bonded devices check", e)
+            }
+        }
 
-                // Update selectedDevice if we found a matching device during scan
-                // This handles edit mode where device was loaded from config without RSSI/address
-                val currentSelected = _state.value.selectedDevice
-                val updatedSelected = if (currentSelected != null) {
-                    // Try to find matching device by name (we may not have address from saved config)
-                    devices.values.find { it.name == currentSelected.name }?.let { foundDevice ->
-                        // Always use the scanned device - it has live RSSI and proper address
-                        Log.d(TAG, "Updating selected device from scan: rssi=${foundDevice.rssi}")
-                        foundDevice
-                    } ?: currentSelected
+        /**
+         * Classify a bonded device as BLE or Classic based on scan results and cache.
+         */
+        @SuppressLint("MissingPermission")
+        private fun classifyBondedDevice(
+            device: BluetoothDevice,
+            bleDeviceAddresses: Set<String>,
+            devices: MutableMap<String, DiscoveredRNode>,
+        ) {
+            val address = device.address
+            val name = device.name ?: address
+
+            if (bleDeviceAddresses.contains(address)) {
+                // Found in BLE scan - definitely BLE, update paired status
+                devices[address]?.let { existing ->
+                    devices[address] = existing.copy(isPaired = true)
+                }
+            } else {
+                // Use cached type or mark as unknown
+                val cachedType = getCachedDeviceType(address)
+                val deviceType = cachedType ?: BluetoothType.UNKNOWN
+
+                devices[address] = DiscoveredRNode(
+                    name = name,
+                    address = address,
+                    type = deviceType,
+                    rssi = null,
+                    isPaired = true,
+                    bluetoothDevice = device,
+                )
+
+                if (cachedType != null) {
+                    Log.d(TAG, "Using cached type for $name: $cachedType")
                 } else {
-                    null
+                    Log.d(TAG, "Unknown type for bonded device $name (no cache)")
                 }
+            }
+        }
 
+        /**
+         * Update selected device from scan results.
+         * Handles edit mode where device was loaded from config without RSSI/address.
+         */
+        private fun updateSelectedFromScan(devices: Collection<DiscoveredRNode>): DiscoveredRNode? {
+            val currentSelected = _state.value.selectedDevice ?: return null
+            return devices.find { it.name == currentSelected.name }?.also { foundDevice ->
+                Log.d(TAG, "Updating selected device from scan: rssi=${foundDevice.rssi}")
+            } ?: currentSelected
+        }
+
+        /**
+         * Finalize scan by updating state with results.
+         */
+        private fun finalizeScan(devices: List<DiscoveredRNode>, selectedDevice: DiscoveredRNode?) {
+            _state.update {
+                it.copy(
+                    discoveredDevices = devices,
+                    isScanning = false,
+                    selectedDevice = selectedDevice,
+                )
+            }
+
+            if (devices.isEmpty()) {
                 _state.update {
                     it.copy(
-                        discoveredDevices = devices.values.toList(),
-                        isScanning = false,
-                        selectedDevice = updatedSelected,
+                        scanError = "No RNode devices found. " +
+                            "Make sure your RNode is powered on and Bluetooth is enabled.",
                     )
-                }
-
-                if (devices.isEmpty()) {
-                    _state.update {
-                        it.copy(
-                            scanError = "No RNode devices found. " +
-                                "Make sure your RNode is powered on and Bluetooth is enabled.",
-                        )
-                    }
                 }
             }
         }
@@ -1204,105 +1242,42 @@ class RNodeWizardViewModel
         }
 
         fun updateFrequency(value: String) {
-            val (minFreq, maxFreq) = getFrequencyRange()
-            val freq = value.toLongOrNull()
-            val error = when {
-                value.isBlank() -> null // Allow empty while typing
-                freq == null -> "Invalid number"
-                freq < minFreq || freq > maxFreq -> {
-                    val minMhz = minFreq / 1_000_000.0
-                    val maxMhz = maxFreq / 1_000_000.0
-                    "Must be %.1f-%.1f MHz".format(minMhz, maxMhz)
-                }
-                else -> null
-            }
-            _state.update { it.copy(frequency = value, frequencyError = error) }
+            val region = _state.value.selectedFrequencyRegion
+            val result = RNodeConfigValidator.validateFrequency(value, region)
+            _state.update { it.copy(frequency = value, frequencyError = result.errorMessage) }
         }
 
         fun updateBandwidth(value: String) {
-            val bw = value.toIntOrNull()
-            val error = when {
-                value.isBlank() -> null // Allow empty while typing
-                bw == null -> "Invalid number"
-                bw < 7800 -> "Must be >= 7.8 kHz"
-                bw > 1625000 -> "Must be <= 1625 kHz"
-                else -> null
-            }
-            _state.update { it.copy(bandwidth = value, bandwidthError = error) }
+            val result = RNodeConfigValidator.validateBandwidth(value)
+            _state.update { it.copy(bandwidth = value, bandwidthError = result.errorMessage) }
         }
 
         fun updateSpreadingFactor(value: String) {
-            val sf = value.toIntOrNull()
-            val error = when {
-                value.isBlank() -> null // Allow empty while typing
-                sf == null -> "Invalid number"
-                sf < 7 -> "Must be >= 7"
-                sf > 12 -> "Must be <= 12"
-                else -> null
-            }
-            _state.update { it.copy(spreadingFactor = value, spreadingFactorError = error) }
+            val result = RNodeConfigValidator.validateSpreadingFactor(value)
+            _state.update { it.copy(spreadingFactor = value, spreadingFactorError = result.errorMessage) }
         }
 
         fun updateCodingRate(value: String) {
-            val cr = value.toIntOrNull()
-            val error = when {
-                value.isBlank() -> null // Allow empty while typing
-                cr == null -> "Invalid number"
-                cr < 5 -> "Must be >= 5"
-                cr > 8 -> "Must be <= 8"
-                else -> null
-            }
-            _state.update { it.copy(codingRate = value, codingRateError = error) }
+            val result = RNodeConfigValidator.validateCodingRate(value)
+            _state.update { it.copy(codingRate = value, codingRateError = result.errorMessage) }
         }
 
         fun updateTxPower(value: String) {
-            val maxPower = getMaxTxPower()
-            val txp = value.toIntOrNull()
-            val error = when {
-                value.isBlank() -> null // Allow empty while typing
-                txp == null -> "Invalid number"
-                txp < 0 -> "Must be >= 0"
-                txp > maxPower -> "Max: $maxPower dBm"
-                else -> null
-            }
-            _state.update { it.copy(txPower = value, txPowerError = error) }
+            val region = _state.value.selectedFrequencyRegion
+            val result = RNodeConfigValidator.validateTxPower(value, region)
+            _state.update { it.copy(txPower = value, txPowerError = result.errorMessage) }
         }
 
         fun updateStAlock(value: String) {
-            val maxAirtime = getMaxAirtimeLimit()
-            val parsed = value.toDoubleOrNull()
-            val error = when {
-                value.isBlank() -> null // Empty is allowed (no limit)
-                parsed == null -> "Invalid number"
-                parsed < 0 -> "Must be >= 0"
-                parsed > 100 -> "Must be <= 100%"
-                maxAirtime != null && parsed > maxAirtime -> "Max: $maxAirtime% (regional limit)"
-                else -> null
-            }
-            _state.update { it.copy(stAlock = value, stAlockError = error) }
+            val region = _state.value.selectedFrequencyRegion
+            val result = RNodeConfigValidator.validateAirtimeLimit(value, region)
+            _state.update { it.copy(stAlock = value, stAlockError = result.errorMessage) }
         }
 
         fun updateLtAlock(value: String) {
-            val maxAirtime = getMaxAirtimeLimit()
-            val parsed = value.toDoubleOrNull()
-            val error = when {
-                value.isBlank() -> null // Empty is allowed (no limit)
-                parsed == null -> "Invalid number"
-                parsed < 0 -> "Must be >= 0"
-                parsed > 100 -> "Must be <= 100%"
-                maxAirtime != null && parsed > maxAirtime -> "Max: $maxAirtime% (regional limit)"
-                else -> null
-            }
-            _state.update { it.copy(ltAlock = value, ltAlockError = error) }
-        }
-
-        /**
-         * Get the maximum airtime limit for the current region.
-         * Returns null if there's no limit (100% duty cycle).
-         */
-        private fun getMaxAirtimeLimit(): Double? {
-            val region = _state.value.selectedFrequencyRegion ?: return null
-            return if (region.dutyCycle < 100) region.dutyCycle.toDouble() else null
+            val region = _state.value.selectedFrequencyRegion
+            val result = RNodeConfigValidator.validateAirtimeLimit(value, region)
+            _state.update { it.copy(ltAlock = value, ltAlockError = result.errorMessage) }
         }
 
         fun updateInterfaceMode(mode: String) {
@@ -1321,19 +1296,14 @@ class RNodeWizardViewModel
          * Get the maximum TX power for the selected region (or default fallback).
          */
         private fun getMaxTxPower(): Int {
-            return _state.value.selectedFrequencyRegion?.maxTxPower ?: 22
+            return RNodeConfigValidator.getMaxTxPower(_state.value.selectedFrequencyRegion)
         }
 
         /**
          * Get the frequency range for the selected region (or default fallback).
          */
         private fun getFrequencyRange(): Pair<Long, Long> {
-            val region = _state.value.selectedFrequencyRegion
-            return if (region != null) {
-                region.frequencyStart to region.frequencyEnd
-            } else {
-                137_000_000L to 3_000_000_000L
-            }
+            return RNodeConfigValidator.getFrequencyRange(_state.value.selectedFrequencyRegion)
         }
 
         /**
@@ -1341,107 +1311,50 @@ class RNodeWizardViewModel
          */
         private fun validateConfigurationSilent(): Boolean {
             val state = _state.value
-
-            // Validate name
-            if (state.interfaceName.isBlank()) return false
-
-            // Validate frequency against region limits
-            val freq = state.frequency.toLongOrNull()
-            val (minFreq, maxFreq) = getFrequencyRange()
-            if (freq == null || freq < minFreq || freq > maxFreq) return false
-
-            // Validate bandwidth
-            val bw = state.bandwidth.toIntOrNull()
-            if (bw == null || bw < 7800 || bw > 1625000) return false
-
-            // Validate spreading factor
-            val sf = state.spreadingFactor.toIntOrNull()
-            if (sf == null || sf < 7 || sf > 12) return false
-
-            // Validate coding rate
-            val cr = state.codingRate.toIntOrNull()
-            if (cr == null || cr < 5 || cr > 8) return false
-
-            // Validate TX power against region max
-            val txp = state.txPower.toIntOrNull()
-            val maxPower = getMaxTxPower()
-            if (txp == null || txp < 0 || txp > maxPower) return false
-
-            // Validate airtime limits against region duty cycle
-            val maxAirtime = getMaxAirtimeLimit()
-            if (state.stAlock.isNotBlank()) {
-                val stAlock = state.stAlock.toDoubleOrNull()
-                if (stAlock == null || stAlock < 0 || stAlock > 100) return false
-                if (maxAirtime != null && stAlock > maxAirtime) return false
-            }
-            if (state.ltAlock.isNotBlank()) {
-                val ltAlock = state.ltAlock.toDoubleOrNull()
-                if (ltAlock == null || ltAlock < 0 || ltAlock > 100) return false
-                if (maxAirtime != null && ltAlock > maxAirtime) return false
-            }
-
-            return true
+            return RNodeConfigValidator.validateConfigSilent(
+                name = state.interfaceName,
+                frequency = state.frequency,
+                bandwidth = state.bandwidth,
+                spreadingFactor = state.spreadingFactor,
+                codingRate = state.codingRate,
+                txPower = state.txPower,
+                stAlock = state.stAlock,
+                ltAlock = state.ltAlock,
+                region = state.selectedFrequencyRegion,
+            )
         }
 
         /**
          * Validate configuration with error messages.
          */
         private fun validateConfiguration(): Boolean {
-            var isValid = true
             val state = _state.value
-            val region = state.selectedFrequencyRegion
+            val result = RNodeConfigValidator.validateConfig(
+                name = state.interfaceName,
+                frequency = state.frequency,
+                bandwidth = state.bandwidth,
+                spreadingFactor = state.spreadingFactor,
+                codingRate = state.codingRate,
+                txPower = state.txPower,
+                stAlock = state.stAlock,
+                ltAlock = state.ltAlock,
+                region = state.selectedFrequencyRegion,
+            )
 
-            // Validate name
-            if (state.interfaceName.isBlank()) {
-                _state.update { it.copy(nameError = "Interface name is required") }
-                isValid = false
+            _state.update {
+                it.copy(
+                    nameError = result.nameError,
+                    frequencyError = result.frequencyError,
+                    bandwidthError = result.bandwidthError,
+                    spreadingFactorError = result.spreadingFactorError,
+                    codingRateError = result.codingRateError,
+                    txPowerError = result.txPowerError,
+                    stAlockError = result.stAlockError,
+                    ltAlockError = result.ltAlockError,
+                )
             }
 
-            // Validate frequency against region limits
-            val freq = state.frequency.toLongOrNull()
-            val (minFreq, maxFreq) = getFrequencyRange()
-            if (freq == null || freq < minFreq || freq > maxFreq) {
-                val minMhz = minFreq / 1_000_000.0
-                val maxMhz = maxFreq / 1_000_000.0
-                _state.update {
-                    it.copy(frequencyError = "Frequency must be %.1f-%.1f MHz".format(minMhz, maxMhz))
-                }
-                isValid = false
-            }
-
-            // Validate bandwidth
-            val bw = state.bandwidth.toIntOrNull()
-            if (bw == null || bw < 7800 || bw > 1625000) {
-                _state.update { it.copy(bandwidthError = "Bandwidth must be 7.8-1625 kHz") }
-                isValid = false
-            }
-
-            // Validate spreading factor
-            val sf = state.spreadingFactor.toIntOrNull()
-            if (sf == null || sf < 7 || sf > 12) {
-                _state.update { it.copy(spreadingFactorError = "SF must be 7-12") }
-                isValid = false
-            }
-
-            // Validate coding rate
-            val cr = state.codingRate.toIntOrNull()
-            if (cr == null || cr < 5 || cr > 8) {
-                _state.update { it.copy(codingRateError = "CR must be 5-8") }
-                isValid = false
-            }
-
-            // Validate TX power against region's regulatory max
-            val txp = state.txPower.toIntOrNull()
-            val maxPower = getMaxTxPower()
-            if (txp == null || txp < 0 || txp > maxPower) {
-                val regionName = region?.name ?: "this region"
-                _state.update {
-                    it.copy(txPowerError = "TX power must be 0-$maxPower dBm for $regionName")
-                }
-                isValid = false
-            }
-
-            return isValid
+            return result.isValid
         }
 
         fun saveConfiguration() {

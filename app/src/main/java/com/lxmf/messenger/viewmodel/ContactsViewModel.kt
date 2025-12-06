@@ -74,7 +74,7 @@ class ContactsViewModel
                 .getEnrichedContacts()
                 .stateIn(
                     scope = viewModelScope,
-                    started = SharingStarted.Eagerly,
+                    started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = emptyList(),
                 )
 
@@ -96,7 +96,7 @@ class ContactsViewModel
                 }
             }.stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.Eagerly,
+                started = SharingStarted.WhileSubscribed(5000L),
                 initialValue = emptyList(),
             )
 
@@ -111,7 +111,7 @@ class ContactsViewModel
                 }
                 .stateIn(
                     scope = viewModelScope,
-                    started = SharingStarted.Eagerly,
+                    started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = ContactGroups(emptyList(), emptyList()),
                 )
 
@@ -120,7 +120,7 @@ class ContactsViewModel
             contactRepository.getContactCountFlow()
                 .stateIn(
                     scope = viewModelScope,
-                    started = SharingStarted.Eagerly,
+                    started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = 0,
                 )
 

@@ -11,6 +11,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -103,12 +104,15 @@ class ChatsViewModelTest {
             val testConversations = listOf(testConversation1, testConversation2)
             every { repository.getConversations() } returns flowOf(testConversations)
 
-            // NOW create ViewModel - it will immediately start collecting
+            // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk())
-            advanceUntilIdle() // Let the flow collect
 
+            // WhileSubscribed requires active collector - test() provides one
             newViewModel.conversations.test {
-                val conversations = awaitItem()
+                // Skip initial value (emptyList), wait for actual data from repository
+                awaitItem() // Consume initialValue (emptyList)
+                advanceUntilIdle() // Let WhileSubscribed start the upstream flow
+                val conversations = awaitItem() // This will be the actual data
                 assertEquals(2, conversations.size)
                 assertEquals("Alice", conversations[0].peerName)
                 assertEquals("Bob", conversations[1].peerName)
@@ -130,10 +134,12 @@ class ChatsViewModelTest {
 
             // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk())
-            advanceUntilIdle()
 
             newViewModel.conversations.test {
-                val conversations = awaitItem()
+                // Skip initial value, wait for actual data from repository
+                awaitItem() // Consume initialValue (emptyList)
+                advanceUntilIdle() // Let WhileSubscribed start the upstream flow
+                val conversations = awaitItem() // This will be the actual data
                 assertEquals(3, conversations.size)
                 assertEquals("Charlie", conversations[0].peerName) // Most recent
                 assertEquals("Bob", conversations[1].peerName)
@@ -228,10 +234,12 @@ class ChatsViewModelTest {
 
             // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk())
-            advanceUntilIdle()
 
             newViewModel.conversations.test {
-                val result = awaitItem()
+                // Skip initial value, wait for actual data from repository
+                awaitItem() // Consume initialValue (emptyList)
+                advanceUntilIdle() // Let WhileSubscribed start the upstream flow
+                val result = awaitItem() // This will be the actual data
                 assertEquals(3, result.size)
                 assertEquals(5, result[0].unreadCount)
                 assertEquals(0, result[1].unreadCount)
@@ -254,10 +262,12 @@ class ChatsViewModelTest {
 
             // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk())
-            advanceUntilIdle()
 
             newViewModel.conversations.test {
-                val result = awaitItem()
+                // Skip initial value, wait for actual data from repository
+                awaitItem() // Consume initialValue (emptyList)
+                advanceUntilIdle() // Let WhileSubscribed start the upstream flow
+                val result = awaitItem() // This will be the actual data
                 assertEquals(3, result.size)
                 assertNull(result[0].peerPublicKey)
                 assertNotNull(result[1].peerPublicKey)
@@ -266,12 +276,17 @@ class ChatsViewModelTest {
         }
 
     @Test
-    fun `conversations flow is eagerly started`() =
+    fun `conversations flow starts when subscribed`() =
         runTest {
-            // Advance dispatcher to execute StateFlow initialization
-            testDispatcher.scheduler.advanceUntilIdle()
-
-            // Verify that getConversations is called immediately on ViewModel creation
-            verify { conversationRepository.getConversations() }
+            // WhileSubscribed starts only when there's an active subscriber
+            viewModel.conversations.test {
+                advanceUntilIdle()
+                
+                // Verify that getConversations is called when we subscribe
+                verify { conversationRepository.getConversations() }
+                
+                // Verify we receive initial empty state
+                assertEquals(emptyList<Conversation>(), awaitItem())
+            }
         }
 }

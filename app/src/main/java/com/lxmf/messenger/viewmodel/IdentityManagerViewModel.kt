@@ -40,7 +40,7 @@ class IdentityManagerViewModel
         val identities: StateFlow<List<LocalIdentityEntity>> =
             identityRepository.allIdentities.stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.Eagerly,
+                started = SharingStarted.WhileSubscribed(5000L),
                 initialValue = emptyList(),
             )
 
@@ -50,7 +50,7 @@ class IdentityManagerViewModel
         val activeIdentity: StateFlow<LocalIdentityEntity?> =
             identityRepository.activeIdentity.stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.Eagerly,
+                started = SharingStarted.WhileSubscribed(5000L),
                 initialValue = null,
             )
 

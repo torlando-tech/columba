@@ -809,9 +809,70 @@ object DatabaseModule {
     // preventing peer name updates from showing when they re-announce.
     // Only clears customNickname where it matches the current announce peerName (i.e., was auto-populated)
     // AND the contact was added via ANNOUNCE or CONVERSATION. User-customized nicknames are preserved.
+    // Also handles edge case where contacts table might not have been properly migrated from 17->18
     private val MIGRATION_18_19 =
         object : Migration(18, 19) {
             override fun migrate(database: SupportSQLiteDatabase) {
+                // Check if contacts table has the correct structure (has status column)
+                // If not, apply the 17->18 migration first
+                val cursor = database.query("PRAGMA table_info(contacts)")
+                var hasStatusColumn = false
+                
+                try {
+                    while (cursor.moveToNext()) {
+                        val columnName = cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                        if (columnName == "status") {
+                            hasStatusColumn = true
+                            break
+                        }
+                    }
+                } finally {
+                    cursor.close()
+                }
+                
+                // If contacts table is missing status column, apply 17->18 migration first
+                if (!hasStatusColumn) {
+                    // Step 1: Rename old table
+                    database.execSQL("ALTER TABLE contacts RENAME TO contacts_old")
+                    
+                    // Step 2: Create new table with nullable publicKey and status column
+                    database.execSQL(
+                        """
+                        CREATE TABLE contacts (
+                            destinationHash TEXT NOT NULL,
+                            identityHash TEXT NOT NULL,
+                            publicKey BLOB,
+                            customNickname TEXT,
+                            notes TEXT,
+                            tags TEXT,
+                            addedTimestamp INTEGER NOT NULL,
+                            addedVia TEXT NOT NULL,
+                            lastInteractionTimestamp INTEGER NOT NULL,
+                            isPinned INTEGER NOT NULL,
+                            status TEXT NOT NULL DEFAULT 'ACTIVE',
+                            PRIMARY KEY(destinationHash, identityHash),
+                            FOREIGN KEY(identityHash) REFERENCES local_identities(identityHash) ON DELETE CASCADE
+                        )
+                        """.trimIndent(),
+                    )
+                    
+                    // Step 3: Copy data from old table (existing contacts get 'ACTIVE' status)
+                    database.execSQL(
+                        """
+                        INSERT INTO contacts (destinationHash, identityHash, publicKey, customNickname, notes, tags, addedTimestamp, addedVia, lastInteractionTimestamp, isPinned, status)
+                        SELECT destinationHash, identityHash, publicKey, customNickname, notes, tags, addedTimestamp, addedVia, lastInteractionTimestamp, isPinned, 'ACTIVE'
+                        FROM contacts_old
+                        """.trimIndent(),
+                    )
+                    
+                    // Step 4: Drop old table
+                    database.execSQL("DROP TABLE contacts_old")
+                    
+                    // Step 5: Recreate index
+                    database.execSQL("CREATE INDEX IF NOT EXISTS index_contacts_identityHash ON contacts(identityHash)")
+                }
+                
+                // Now safe to do the UPDATE operation
                 database.execSQL(
                     """
                     UPDATE contacts
@@ -828,6 +889,104 @@ object DatabaseModule {
             }
         }
 
+    // Migration from version 19 to 20: Add database indices for query optimization
+    // Also handles edge case where contacts table might not have been properly migrated from 17->18
+    private val MIGRATION_19_20 =
+        object : Migration(19, 20) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Check if contacts table needs to be fixed (missing status column or publicKey is NOT NULL)
+                // This handles edge cases where database version is 19 but structure is from version 17
+                val cursor = database.query("PRAGMA table_info(contacts)")
+                var hasStatusColumn = false
+                var publicKeyIsNullable = false
+                
+                try {
+                    while (cursor.moveToNext()) {
+                        val columnName = cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                        val notNull = cursor.getInt(cursor.getColumnIndexOrThrow("notnull"))
+                        
+                        if (columnName == "status") {
+                            hasStatusColumn = true
+                        }
+                        if (columnName == "publicKey" && notNull == 0) {
+                            publicKeyIsNullable = true
+                        }
+                    }
+                } finally {
+                    cursor.close()
+                }
+                
+                // If contacts table is missing status column or publicKey is NOT NULL, fix it
+                if (!hasStatusColumn || !publicKeyIsNullable) {
+                    // Step 1: Rename old table
+                    database.execSQL("ALTER TABLE contacts RENAME TO contacts_old")
+                    
+                    // Step 2: Create new table with nullable publicKey and status column
+                    database.execSQL(
+                        """
+                        CREATE TABLE contacts (
+                            destinationHash TEXT NOT NULL,
+                            identityHash TEXT NOT NULL,
+                            publicKey BLOB,
+                            customNickname TEXT,
+                            notes TEXT,
+                            tags TEXT,
+                            addedTimestamp INTEGER NOT NULL,
+                            addedVia TEXT NOT NULL,
+                            lastInteractionTimestamp INTEGER NOT NULL,
+                            isPinned INTEGER NOT NULL,
+                            status TEXT NOT NULL DEFAULT 'ACTIVE',
+                            PRIMARY KEY(destinationHash, identityHash),
+                            FOREIGN KEY(identityHash) REFERENCES local_identities(identityHash) ON DELETE CASCADE
+                        )
+                        """.trimIndent(),
+                    )
+                    
+                    // Step 3: Copy data from old table (existing contacts get 'ACTIVE' status)
+                    database.execSQL(
+                        """
+                        INSERT INTO contacts (destinationHash, identityHash, publicKey, customNickname, notes, tags, addedTimestamp, addedVia, lastInteractionTimestamp, isPinned, status)
+                        SELECT destinationHash, identityHash, publicKey, customNickname, notes, tags, addedTimestamp, addedVia, lastInteractionTimestamp, isPinned, 'ACTIVE'
+                        FROM contacts_old
+                        """.trimIndent(),
+                    )
+                    
+                    // Step 4: Drop old table
+                    database.execSQL("DROP TABLE contacts_old")
+                    
+                    // Step 5: Recreate index
+                    database.execSQL("CREATE INDEX IF NOT EXISTS index_contacts_identityHash ON contacts(identityHash)")
+                }
+                
+                // MessageEntity indices
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_messages_timestamp ON messages(timestamp)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_messages_conversationHash_identityHash_timestamp ON messages(conversationHash, identityHash, timestamp)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_messages_conversationHash_identityHash_isFromMe_isRead ON messages(conversationHash, identityHash, isFromMe, isRead)")
+
+                // ConversationEntity indices
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_conversations_identityHash_lastMessageTimestamp ON conversations(identityHash, lastMessageTimestamp)")
+
+                // AnnounceEntity indices
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_announces_lastSeenTimestamp ON announces(lastSeenTimestamp)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_announces_isFavorite_favoritedTimestamp ON announces(isFavorite, favoritedTimestamp)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_announces_nodeType_lastSeenTimestamp ON announces(nodeType, lastSeenTimestamp)")
+
+                // ContactEntity indices
+                // Drop old indices that are no longer used (if they exist from previous schema)
+                database.execSQL("DROP INDEX IF EXISTS index_contacts_identityHash_isPinned_customNickname")
+                database.execSQL("DROP INDEX IF EXISTS index_contacts_destinationHash")
+                // Create new indices
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_contacts_identityHash_isPinned ON contacts(identityHash, isPinned)")
+
+                // LocalIdentityEntity indices
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_local_identities_lastUsedTimestamp ON local_identities(lastUsedTimestamp)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_local_identities_isActive ON local_identities(isActive)")
+
+                // CustomThemeEntity indices
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_custom_themes_createdTimestamp ON custom_themes(createdTimestamp)")
+            }
+        }
+
     @Provides
     @Singleton
     fun provideColumbaDatabase(
@@ -838,7 +997,7 @@ object DatabaseModule {
             ColumbaDatabase::class.java,
             "columba_database",
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20)
             .build()
     }
 

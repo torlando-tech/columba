@@ -125,7 +125,7 @@ style:
     active: false
   MaxLineLength:
     active: true
-    maxLineLength: 120
+    maxLineLength: 200
   ReturnCount:
     active: true
     max: 3

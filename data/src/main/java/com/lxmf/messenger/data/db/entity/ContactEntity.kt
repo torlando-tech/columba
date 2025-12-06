@@ -50,7 +50,10 @@ enum class ContactStatus {
             onDelete = ForeignKey.CASCADE, // Delete contacts when identity deleted
         ),
     ],
-    indices = [Index("identityHash")], // Index for faster queries
+    indices = [
+        Index("identityHash"), // Index for faster queries
+        Index("identityHash", "isPinned"), // For queries filtering by identity and sorting by pinned status
+    ],
 )
 data class ContactEntity(
     val destinationHash: String, // Hex string of destination hash

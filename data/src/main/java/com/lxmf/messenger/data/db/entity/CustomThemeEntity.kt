@@ -1,6 +1,7 @@
 package com.lxmf.messenger.data.db.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -9,7 +10,12 @@ import androidx.room.PrimaryKey
  * Stores all Material 3 color roles for both light and dark modes.
  * Themes can be created from scratch, duplicated from presets, or imported.
  */
-@Entity(tableName = "custom_themes")
+@Entity(
+    tableName = "custom_themes",
+    indices = [
+        Index("createdTimestamp"), // For ordering
+    ],
+)
 data class CustomThemeEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,

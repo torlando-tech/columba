@@ -1,9 +1,17 @@
 package com.lxmf.messenger.data.db.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "announces")
+@Entity(
+    tableName = "announces",
+    indices = [
+        Index("lastSeenTimestamp"), // For ordering by date
+        Index("isFavorite", "favoritedTimestamp"), // For favorite queries
+        Index("nodeType", "lastSeenTimestamp"), // For filtering by type and ordering
+    ],
+)
 data class AnnounceEntity(
     @PrimaryKey
     val destinationHash: String,

@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -43,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.BluetoothType
+import com.lxmf.messenger.data.model.FrequencySlotCalculator
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -112,7 +115,120 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
 
         Spacer(Modifier.height(16.dp))
 
-        // Region summary (if preset selected)
+        // Frequency region summary
+        state.selectedFrequencyRegion?.let { region ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.SignalCellularAlt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            "Frequency Region",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            region.name,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            "${region.frequency / 1_000_000.0} MHz • ${region.maxTxPower} dBm max • ${region.dutyCycleDisplay}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // Modem preset summary
+        state.selectedModemPreset?.let { preset ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        if (preset.displayName.startsWith("Short")) {
+                            Icons.Default.Speed
+                        } else {
+                            Icons.Default.Radio
+                        },
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            "Modem Preset",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            preset.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            "SF${preset.spreadingFactor} • ${preset.bandwidth / 1000} kHz • 4/${preset.codingRate}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // Frequency slot summary
+        state.selectedFrequencyRegion?.let { region ->
+            val frequency = viewModel.getFrequencyForSlot(state.selectedSlot)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.Radio,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            "Frequency Slot",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "Slot ${state.selectedSlot}",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            FrequencySlotCalculator.formatFrequency(frequency),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // Popular preset summary (if using city-specific preset)
         state.selectedPreset?.let { preset ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -129,7 +245,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text(
-                            "Region",
+                            "Popular Preset",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -140,8 +256,10 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     }
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
         }
+
+        Spacer(Modifier.height(8.dp))
 
         // Radio settings header
         Row(

@@ -7,6 +7,7 @@ import com.lxmf.messenger.IReticulumService
 import com.lxmf.messenger.IReticulumServiceCallback
 import android.content.Context
 import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
+import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
 import com.lxmf.messenger.service.manager.IdentityManager
@@ -95,6 +96,16 @@ class ReticulumServiceBinder(
                         // (ColumbaRNodeInterface needs kotlin_rnode_bridge during initialization)
                         try {
                             rnodeBridge = KotlinRNodeBridge(context)
+
+                            // Register error listener to surface RNode errors to UI
+                            rnodeBridge?.addErrorListener(object : RNodeErrorListener {
+                                override fun onRNodeError(errorCode: Int, errorMessage: String) {
+                                    Log.w(TAG, "RNode error surfaced to service: ($errorCode) $errorMessage")
+                                    // Broadcast error as status change so UI can display it
+                                    broadcaster.broadcastStatusChange("RNODE_ERROR:$errorMessage")
+                                }
+                            })
+
                             wrapper.callAttr("set_rnode_bridge", rnodeBridge)
                             Log.d(TAG, "RNode bridge set before Python initialization")
                         } catch (e: Exception) {

@@ -45,6 +45,20 @@ enum class RNodeConnectionMode {
 }
 
 /**
+ * Listener interface for RNode error events.
+ * Implement this to receive errors from RNode devices (e.g., for UI display).
+ */
+interface RNodeErrorListener {
+    /**
+     * Called when RNode reports an error.
+     *
+     * @param errorCode The error code from RNode (e.g., 0x40 for invalid config)
+     * @param errorMessage Human-readable error message
+     */
+    fun onRNodeError(errorCode: Int, errorMessage: String)
+}
+
+/**
  * Kotlin RNode Bridge for Bluetooth communication.
  *
  * This bridge provides serial communication with RNode devices over both
@@ -149,6 +163,12 @@ class KotlinRNodeBridge(
     @Volatile
     private var onConnectionStateChanged: PyObject? = null
 
+    @Volatile
+    private var onErrorReceived: PyObject? = null
+
+    // Kotlin error listeners (for UI notification)
+    private val errorListeners = mutableListOf<RNodeErrorListener>()
+
     /**
      * Set callback for received data.
      * Called on background thread when data arrives from RNode.
@@ -166,6 +186,66 @@ class KotlinRNodeBridge(
      */
     fun setOnConnectionStateChanged(callback: PyObject) {
         onConnectionStateChanged = callback
+    }
+
+    /**
+     * Set callback for RNode error events.
+     * Called when RNode reports an error (e.g., invalid configuration).
+     *
+     * @param callback Python callable: callback(error_code: int, error_message: str)
+     */
+    fun setOnErrorReceived(callback: PyObject) {
+        onErrorReceived = callback
+    }
+
+    /**
+     * Register a Kotlin listener for RNode error events.
+     * Listeners will be called on a background thread when errors occur.
+     *
+     * @param listener The listener to register
+     */
+    fun addErrorListener(listener: RNodeErrorListener) {
+        synchronized(errorListeners) {
+            if (!errorListeners.contains(listener)) {
+                errorListeners.add(listener)
+            }
+        }
+    }
+
+    /**
+     * Unregister a Kotlin error listener.
+     *
+     * @param listener The listener to remove
+     */
+    fun removeErrorListener(listener: RNodeErrorListener) {
+        synchronized(errorListeners) {
+            errorListeners.remove(listener)
+        }
+    }
+
+    /**
+     * Notify error callbacks (both Python and Kotlin).
+     * Called from Python via the bridge to surface errors to Kotlin layer.
+     *
+     * @param errorCode The error code from RNode
+     * @param errorMessage Human-readable error message
+     */
+    fun notifyError(errorCode: Int, errorMessage: String) {
+        Log.w(TAG, "RNode error ($errorCode): $errorMessage")
+
+        // Notify Python callback if set
+        onErrorReceived?.callAttr("__call__", errorCode, errorMessage)
+
+        // Notify Kotlin listeners
+        synchronized(errorListeners) {
+            errorListeners.forEach { listener ->
+                try {
+                    listener.onRNodeError(errorCode, errorMessage)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error listener threw exception", e)
+                }
+            }
+        }
     }
 
     /**

@@ -543,8 +543,11 @@ class RNodeWizardViewModel
                 // Brazil 902-907.5 MHz - no presets defined (US presets are at 914 MHz)
                 "br_902" -> return emptyList()
 
-                // Russia and Ukraine 868 MHz
-                "ru_868", "ua_868" -> listOf("DE", "GB", "NL", "BE", "FI", "NO", "SE", "CH", "ES", "IT")
+                // Russia 868.7-869.2 MHz - no presets defined (narrow band, no matching EU presets)
+                "ru_868" -> return emptyList()
+
+                // Ukraine 868-868.6 MHz - no presets defined
+                "ua_868" -> return emptyList()
 
                 // Australia 915 MHz
                 "au_915" -> listOf("AU")

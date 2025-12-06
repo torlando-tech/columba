@@ -6,9 +6,9 @@ import android.bluetooth.BluetoothDevice
  * Bluetooth connection type for RNode devices.
  */
 enum class BluetoothType {
-    CLASSIC,  // Bluetooth Classic (SPP/RFCOMM)
-    BLE,      // Bluetooth Low Energy (Nordic UART Service)
-    UNKNOWN,  // Not yet determined
+    CLASSIC, // Bluetooth Classic (SPP/RFCOMM)
+    BLE, // Bluetooth Low Energy (Nordic UART Service)
+    UNKNOWN, // Not yet determined
 }
 
 /**
@@ -21,7 +21,7 @@ data class DiscoveredRNode(
     val name: String,
     val address: String,
     val type: BluetoothType,
-    val rssi: Int?,       // Signal strength (BLE only)
+    val rssi: Int?, // Signal strength (BLE only)
     val isPaired: Boolean,
     val bluetoothDevice: BluetoothDevice? = null,
 )
@@ -32,14 +32,14 @@ data class DiscoveredRNode(
  */
 data class RNodeRegionalPreset(
     val id: String,
-    val countryCode: String,      // ISO 3166-1 alpha-2 (e.g., "US", "DE")
+    val countryCode: String, // ISO 3166-1 alpha-2 (e.g., "US", "DE")
     val countryName: String,
-    val cityOrRegion: String?,    // null for country-wide default
-    val frequency: Long,          // Center frequency in Hz
-    val bandwidth: Int,           // Bandwidth in Hz
-    val spreadingFactor: Int,     // LoRa SF (5-12)
-    val codingRate: Int,          // LoRa CR (5-8)
-    val txPower: Int,             // Transmission power in dBm
+    val cityOrRegion: String?, // null for country-wide default
+    val frequency: Long, // Center frequency in Hz
+    val bandwidth: Int, // Bandwidth in Hz
+    val spreadingFactor: Int, // LoRa SF (5-12)
+    val codingRate: Int, // LoRa CR (5-8)
+    val txPower: Int, // Transmission power in dBm
     val description: String,
 )
 
@@ -124,7 +124,11 @@ enum class ModemPreset(
         val DEFAULT = LONG_FAST
 
         /** Find preset matching given parameters, or null if no match */
-        fun findByParams(spreadingFactor: Int, bandwidth: Int, codingRate: Int): ModemPreset? {
+        fun findByParams(
+            spreadingFactor: Int,
+            bandwidth: Int,
+            codingRate: Int,
+        ): ModemPreset? {
             return entries.find {
                 it.spreadingFactor == spreadingFactor &&
                     it.bandwidth == bandwidth &&
@@ -203,237 +207,230 @@ data class FrequencyRegion(
  * └──────────────┴─────────────────────┴───────┴─────────┴────────┴───────────┘
  */
 object FrequencyRegions {
-    val regions = listOf(
-        // ==================== AMERICAS ====================
-        FrequencyRegion(
-            id = "us_915",
-            name = "US / Americas (915 MHz)",
-            frequencyStart = 902_000_000,
-            frequencyEnd = 928_000_000,
-            maxTxPower = 30,
-            defaultTxPower = 17,
-            dutyCycle = 100,
-            description = "902-928 MHz ISM band",
-        ),
-        FrequencyRegion(
-            id = "br_902",
-            name = "Brazil (902 MHz)",
-            frequencyStart = 902_000_000,
-            frequencyEnd = 907_500_000,
-            maxTxPower = 30,
-            defaultTxPower = 17,
-            dutyCycle = 100,
-            description = "902-907.5 MHz (limited band)",
-        ),
-
-        // ==================== EUROPE 868 MHz SUB-BANDS ====================
-        // Per ERC 70-03: https://www.thethingsnetwork.org/docs/lorawan/regional-parameters/eu868/
-        // Sub-band K (863-865 MHz, 0.1%) and N (868.7-869.2 MHz, 0.1%) omitted as too restrictive
-
-        // Sub-band L: 865-868 MHz (1% duty cycle)
-        FrequencyRegion(
-            id = "eu_868_l",
-            name = "Europe 865-868 MHz (1%)",
-            frequencyStart = 865_000_000,
-            frequencyEnd = 868_000_000,
-            maxTxPower = 14,
-            defaultTxPower = 14,
-            dutyCycle = 1,
-            description = "Sub-band L: 1% duty cycle, 25 mW (UK, IT, NL presets)",
-        ),
-
-        // Sub-band M: 868-868.6 MHz (1% duty cycle) - LoRaWAN default channels
-        FrequencyRegion(
-            id = "eu_868_m",
-            name = "Europe 868 MHz (1%)",
-            frequencyStart = 868_000_000,
-            frequencyEnd = 868_600_000,
-            maxTxPower = 14,
-            defaultTxPower = 14,
-            dutyCycle = 1,
-            description = "Sub-band M: 1% duty cycle, 25 mW (LoRaWAN default)",
-        ),
-
-        // Sub-band P: 869.4-869.65 MHz (10% duty cycle, 500 mW) - Meshtastic default
-        FrequencyRegion(
-            id = "eu_868_p",
-            name = "Europe 869.5 MHz (10%)",
-            frequencyStart = 869_400_000,
-            frequencyEnd = 869_650_000,
-            maxTxPower = 27,
-            defaultTxPower = 14,
-            dutyCycle = 10,
-            description = "Sub-band P: 10% duty cycle, 500 mW (best for LoRa)",
-        ),
-
-        // Sub-band Q: 869.7-870 MHz (1% duty cycle)
-        FrequencyRegion(
-            id = "eu_868_q",
-            name = "Europe 869.7-870 MHz (1%)",
-            frequencyStart = 869_700_000,
-            frequencyEnd = 870_000_000,
-            maxTxPower = 14,
-            defaultTxPower = 14,
-            dutyCycle = 1,
-            description = "Sub-band Q: 1% duty cycle, 25 mW",
-        ),
-        FrequencyRegion(
-            id = "eu_433",
-            name = "Europe (433 MHz)",
-            frequencyStart = 433_050_000,
-            frequencyEnd = 434_790_000,
-            maxTxPower = 12,
-            defaultTxPower = 10,
-            dutyCycle = 10,
-            description = "433-434 MHz ISM, 10% duty cycle",
-        ),
-        FrequencyRegion(
-            id = "ru_868",
-            name = "Russia (868 MHz)",
-            frequencyStart = 868_700_000,
-            frequencyEnd = 869_200_000,
-            maxTxPower = 20,
-            defaultTxPower = 14,
-            dutyCycle = 100,
-            description = "868.7-869.2 MHz",
-        ),
-        FrequencyRegion(
-            id = "ua_868",
-            name = "Ukraine (868 MHz)",
-            frequencyStart = 868_000_000,
-            frequencyEnd = 868_600_000,
-            maxTxPower = 14,
-            defaultTxPower = 10,
-            dutyCycle = 1,
-            description = "868-868.6 MHz, 1% duty cycle (very restrictive)",
-        ),
-
-        // ==================== ASIA-PACIFIC ====================
-        FrequencyRegion(
-            id = "au_915",
-            name = "Australia / NZ (915 MHz)",
-            frequencyStart = 915_000_000,
-            frequencyEnd = 928_000_000,
-            maxTxPower = 30,
-            defaultTxPower = 17,
-            dutyCycle = 100,
-            description = "915-928 MHz ISM band",
-        ),
-        FrequencyRegion(
-            id = "nz_865",
-            name = "New Zealand (865 MHz)",
-            frequencyStart = 864_000_000,
-            frequencyEnd = 868_000_000,
-            maxTxPower = 36,
-            defaultTxPower = 17,
-            dutyCycle = 100,
-            description = "864-868 MHz alternative band",
-        ),
-        FrequencyRegion(
-            id = "jp_920",
-            name = "Japan (920 MHz)",
-            frequencyStart = 920_800_000,
-            frequencyEnd = 927_800_000,
-            maxTxPower = 16,
-            defaultTxPower = 13,
-            dutyCycle = 100,
-            description = "920.8-927.8 MHz ARIB STD-T108",
-        ),
-        FrequencyRegion(
-            id = "kr_920",
-            name = "Korea (920 MHz)",
-            frequencyStart = 920_000_000,
-            frequencyEnd = 923_000_000,
-            maxTxPower = 14,
-            defaultTxPower = 10,
-            dutyCycle = 100,
-            description = "920-923 MHz",
-        ),
-        FrequencyRegion(
-            id = "tw_920",
-            name = "Taiwan (920 MHz)",
-            frequencyStart = 920_000_000,
-            frequencyEnd = 925_000_000,
-            maxTxPower = 27,
-            defaultTxPower = 17,
-            dutyCycle = 100,
-            description = "920-925 MHz LP0002",
-        ),
-        FrequencyRegion(
-            id = "cn_470",
-            name = "China (470 MHz)",
-            frequencyStart = 470_000_000,
-            frequencyEnd = 510_000_000,
-            maxTxPower = 19,
-            defaultTxPower = 17,
-            dutyCycle = 100,
-            description = "470-510 MHz",
-        ),
-        FrequencyRegion(
-            id = "in_865",
-            name = "India (865 MHz)",
-            frequencyStart = 865_000_000,
-            frequencyEnd = 867_000_000,
-            maxTxPower = 30,
-            defaultTxPower = 17,
-            dutyCycle = 100,
-            description = "865-867 MHz",
-        ),
-
-        // ==================== SOUTHEAST ASIA ====================
-        FrequencyRegion(
-            id = "th_920",
-            name = "Thailand (920 MHz)",
-            frequencyStart = 920_000_000,
-            frequencyEnd = 925_000_000,
-            maxTxPower = 16,
-            defaultTxPower = 14,
-            dutyCycle = 100,
-            description = "920-925 MHz NBTC",
-        ),
-        FrequencyRegion(
-            id = "sg_923",
-            name = "Singapore (923 MHz)",
-            frequencyStart = 917_000_000,
-            frequencyEnd = 925_000_000,
-            maxTxPower = 20,
-            defaultTxPower = 17,
-            dutyCycle = 100,
-            description = "917-925 MHz IMDA",
-        ),
-        FrequencyRegion(
-            id = "my_919",
-            name = "Malaysia (919 MHz)",
-            frequencyStart = 919_000_000,
-            frequencyEnd = 924_000_000,
-            maxTxPower = 27,
-            defaultTxPower = 17,
-            dutyCycle = 100,
-            description = "919-924 MHz MCMC",
-        ),
-        FrequencyRegion(
-            id = "ph_915",
-            name = "Philippines (915 MHz)",
-            frequencyStart = 915_000_000,
-            frequencyEnd = 918_000_000,
-            maxTxPower = 20,
-            defaultTxPower = 17,
-            dutyCycle = 100,
-            description = "915-918 MHz NTC",
-        ),
-
-        // ==================== 2.4 GHz WORLDWIDE ====================
-        FrequencyRegion(
-            id = "lora_24",
-            name = "2.4 GHz (Worldwide)",
-            frequencyStart = 2_400_000_000,
-            frequencyEnd = 2_483_500_000,
-            maxTxPower = 10,
-            defaultTxPower = 10,
-            dutyCycle = 100,
-            description = "2.4 GHz ISM (worldwide, short range)",
-        ),
-    )
+    val regions =
+        listOf(
+            // ==================== AMERICAS ====================
+            FrequencyRegion(
+                id = "us_915",
+                name = "US / Americas (915 MHz)",
+                frequencyStart = 902_000_000,
+                frequencyEnd = 928_000_000,
+                maxTxPower = 30,
+                defaultTxPower = 17,
+                dutyCycle = 100,
+                description = "902-928 MHz ISM band",
+            ),
+            FrequencyRegion(
+                id = "br_902",
+                name = "Brazil (902 MHz)",
+                frequencyStart = 902_000_000,
+                frequencyEnd = 907_500_000,
+                maxTxPower = 30,
+                defaultTxPower = 17,
+                dutyCycle = 100,
+                description = "902-907.5 MHz (limited band)",
+            ),
+            // ==================== EUROPE 868 MHz SUB-BANDS ====================
+            // Per ERC 70-03: https://www.thethingsnetwork.org/docs/lorawan/regional-parameters/eu868/
+            // Sub-band K (863-865 MHz, 0.1%) and N (868.7-869.2 MHz, 0.1%) omitted as too restrictive
+            // Sub-band L: 865-868 MHz (1% duty cycle)
+            FrequencyRegion(
+                id = "eu_868_l",
+                name = "Europe 865-868 MHz (1%)",
+                frequencyStart = 865_000_000,
+                frequencyEnd = 868_000_000,
+                maxTxPower = 14,
+                defaultTxPower = 14,
+                dutyCycle = 1,
+                description = "Sub-band L: 1% duty cycle, 25 mW (UK, IT, NL presets)",
+            ),
+            // Sub-band M: 868-868.6 MHz (1% duty cycle) - LoRaWAN default channels
+            FrequencyRegion(
+                id = "eu_868_m",
+                name = "Europe 868 MHz (1%)",
+                frequencyStart = 868_000_000,
+                frequencyEnd = 868_600_000,
+                maxTxPower = 14,
+                defaultTxPower = 14,
+                dutyCycle = 1,
+                description = "Sub-band M: 1% duty cycle, 25 mW (LoRaWAN default)",
+            ),
+            // Sub-band P: 869.4-869.65 MHz (10% duty cycle, 500 mW) - Meshtastic default
+            FrequencyRegion(
+                id = "eu_868_p",
+                name = "Europe 869.5 MHz (10%)",
+                frequencyStart = 869_400_000,
+                frequencyEnd = 869_650_000,
+                maxTxPower = 27,
+                defaultTxPower = 14,
+                dutyCycle = 10,
+                description = "Sub-band P: 10% duty cycle, 500 mW (best for LoRa)",
+            ),
+            // Sub-band Q: 869.7-870 MHz (1% duty cycle)
+            FrequencyRegion(
+                id = "eu_868_q",
+                name = "Europe 869.7-870 MHz (1%)",
+                frequencyStart = 869_700_000,
+                frequencyEnd = 870_000_000,
+                maxTxPower = 14,
+                defaultTxPower = 14,
+                dutyCycle = 1,
+                description = "Sub-band Q: 1% duty cycle, 25 mW",
+            ),
+            FrequencyRegion(
+                id = "eu_433",
+                name = "Europe (433 MHz)",
+                frequencyStart = 433_050_000,
+                frequencyEnd = 434_790_000,
+                maxTxPower = 12,
+                defaultTxPower = 10,
+                dutyCycle = 10,
+                description = "433-434 MHz ISM, 10% duty cycle",
+            ),
+            FrequencyRegion(
+                id = "ru_868",
+                name = "Russia (868 MHz)",
+                frequencyStart = 868_700_000,
+                frequencyEnd = 869_200_000,
+                maxTxPower = 20,
+                defaultTxPower = 14,
+                dutyCycle = 100,
+                description = "868.7-869.2 MHz",
+            ),
+            FrequencyRegion(
+                id = "ua_868",
+                name = "Ukraine (868 MHz)",
+                frequencyStart = 868_000_000,
+                frequencyEnd = 868_600_000,
+                maxTxPower = 14,
+                defaultTxPower = 10,
+                dutyCycle = 1,
+                description = "868-868.6 MHz, 1% duty cycle (very restrictive)",
+            ),
+            // ==================== ASIA-PACIFIC ====================
+            FrequencyRegion(
+                id = "au_915",
+                name = "Australia / NZ (915 MHz)",
+                frequencyStart = 915_000_000,
+                frequencyEnd = 928_000_000,
+                maxTxPower = 30,
+                defaultTxPower = 17,
+                dutyCycle = 100,
+                description = "915-928 MHz ISM band",
+            ),
+            FrequencyRegion(
+                id = "nz_865",
+                name = "New Zealand (865 MHz)",
+                frequencyStart = 864_000_000,
+                frequencyEnd = 868_000_000,
+                maxTxPower = 36,
+                defaultTxPower = 17,
+                dutyCycle = 100,
+                description = "864-868 MHz alternative band",
+            ),
+            FrequencyRegion(
+                id = "jp_920",
+                name = "Japan (920 MHz)",
+                frequencyStart = 920_800_000,
+                frequencyEnd = 927_800_000,
+                maxTxPower = 16,
+                defaultTxPower = 13,
+                dutyCycle = 100,
+                description = "920.8-927.8 MHz ARIB STD-T108",
+            ),
+            FrequencyRegion(
+                id = "kr_920",
+                name = "Korea (920 MHz)",
+                frequencyStart = 920_000_000,
+                frequencyEnd = 923_000_000,
+                maxTxPower = 14,
+                defaultTxPower = 10,
+                dutyCycle = 100,
+                description = "920-923 MHz",
+            ),
+            FrequencyRegion(
+                id = "tw_920",
+                name = "Taiwan (920 MHz)",
+                frequencyStart = 920_000_000,
+                frequencyEnd = 925_000_000,
+                maxTxPower = 27,
+                defaultTxPower = 17,
+                dutyCycle = 100,
+                description = "920-925 MHz LP0002",
+            ),
+            FrequencyRegion(
+                id = "cn_470",
+                name = "China (470 MHz)",
+                frequencyStart = 470_000_000,
+                frequencyEnd = 510_000_000,
+                maxTxPower = 19,
+                defaultTxPower = 17,
+                dutyCycle = 100,
+                description = "470-510 MHz",
+            ),
+            FrequencyRegion(
+                id = "in_865",
+                name = "India (865 MHz)",
+                frequencyStart = 865_000_000,
+                frequencyEnd = 867_000_000,
+                maxTxPower = 30,
+                defaultTxPower = 17,
+                dutyCycle = 100,
+                description = "865-867 MHz",
+            ),
+            // ==================== SOUTHEAST ASIA ====================
+            FrequencyRegion(
+                id = "th_920",
+                name = "Thailand (920 MHz)",
+                frequencyStart = 920_000_000,
+                frequencyEnd = 925_000_000,
+                maxTxPower = 16,
+                defaultTxPower = 14,
+                dutyCycle = 100,
+                description = "920-925 MHz NBTC",
+            ),
+            FrequencyRegion(
+                id = "sg_923",
+                name = "Singapore (923 MHz)",
+                frequencyStart = 917_000_000,
+                frequencyEnd = 925_000_000,
+                maxTxPower = 20,
+                defaultTxPower = 17,
+                dutyCycle = 100,
+                description = "917-925 MHz IMDA",
+            ),
+            FrequencyRegion(
+                id = "my_919",
+                name = "Malaysia (919 MHz)",
+                frequencyStart = 919_000_000,
+                frequencyEnd = 924_000_000,
+                maxTxPower = 27,
+                defaultTxPower = 17,
+                dutyCycle = 100,
+                description = "919-924 MHz MCMC",
+            ),
+            FrequencyRegion(
+                id = "ph_915",
+                name = "Philippines (915 MHz)",
+                frequencyStart = 915_000_000,
+                frequencyEnd = 918_000_000,
+                maxTxPower = 20,
+                defaultTxPower = 17,
+                dutyCycle = 100,
+                description = "915-918 MHz NTC",
+            ),
+            // ==================== 2.4 GHz WORLDWIDE ====================
+            FrequencyRegion(
+                id = "lora_24",
+                name = "2.4 GHz (Worldwide)",
+                frequencyStart = 2_400_000_000,
+                frequencyEnd = 2_483_500_000,
+                maxTxPower = 10,
+                defaultTxPower = 10,
+                dutyCycle = 100,
+                description = "2.4 GHz ISM (worldwide, short range)",
+            ),
+        )
 
     /** Find region by ID */
     fun findById(id: String): FrequencyRegion? = regions.find { it.id == id }
@@ -454,31 +451,33 @@ data class CommunitySlot(
  * Well-known community frequency slots.
  */
 object CommunitySlots {
-    val slots = listOf(
-        CommunitySlot(
-            name = "Meshtastic Default",
-            regionId = "us_915",
-            slot = 20,
-            description = "⚠️ Avoid - Meshtastic interference",
-        ),
-        CommunitySlot(
-            name = "Meshtastic NoVa",
-            regionId = "us_915",
-            slot = 9,
-            description = "⚠️ Avoid - Northern Virginia Meshtastic mesh",
-        ),
-    )
+    val slots =
+        listOf(
+            CommunitySlot(
+                name = "Meshtastic Default",
+                regionId = "us_915",
+                slot = 20,
+                description = "⚠️ Avoid - Meshtastic interference",
+            ),
+            CommunitySlot(
+                name = "Meshtastic NoVa",
+                regionId = "us_915",
+                slot = 9,
+                description = "⚠️ Avoid - Northern Virginia Meshtastic mesh",
+            ),
+        )
 
     /** Slots to avoid due to Meshtastic interference */
     val meshtasticSlots = setOf(20, 9)
 
     /** Get community slots for a region */
-    fun forRegion(regionId: String): List<CommunitySlot> =
-        slots.filter { it.regionId == regionId }
+    fun forRegion(regionId: String): List<CommunitySlot> = slots.filter { it.regionId == regionId }
 
     /** Check if a slot overlaps with known Meshtastic frequencies */
-    fun isMeshtasticSlot(regionId: String, slot: Int): Boolean =
-        regionId == "us_915" && slot in meshtasticSlots
+    fun isMeshtasticSlot(
+        regionId: String,
+        slot: Int,
+    ): Boolean = regionId == "us_915" && slot in meshtasticSlots
 }
 
 /**
@@ -494,7 +493,6 @@ object CommunitySlots {
  * - Slot 9 = 904.375 MHz (NoVa)
  */
 object FrequencySlotCalculator {
-
     /**
      * Calculate the frequency for a given slot.
      *
@@ -503,14 +501,21 @@ object FrequencySlotCalculator {
      * @param slot Slot number (0-indexed)
      * @return Frequency in Hz
      */
-    fun calculateFrequency(region: FrequencyRegion, bandwidth: Int, slot: Int): Long {
+    fun calculateFrequency(
+        region: FrequencyRegion,
+        bandwidth: Int,
+        slot: Int,
+    ): Long {
         return region.frequencyStart + (bandwidth / 2) + (slot.toLong() * bandwidth)
     }
 
     /**
      * Get the number of available slots for a region/bandwidth combination.
      */
-    fun getNumSlots(region: FrequencyRegion, bandwidth: Int): Int {
+    fun getNumSlots(
+        region: FrequencyRegion,
+        bandwidth: Int,
+    ): Int {
         val rangeHz = region.frequencyEnd - region.frequencyStart
         return (rangeHz / bandwidth).toInt()
     }
@@ -520,7 +525,11 @@ object FrequencySlotCalculator {
      * Avoids Meshtastic frequencies (slots 9 and 20 for US) to prevent interference.
      * For regions with many slots, defaults to ~middle of the band.
      */
-    fun getDefaultSlot(region: FrequencyRegion, bandwidth: Int): Int {
+    @Suppress("CyclomaticComplexMethod")
+    fun getDefaultSlot(
+        region: FrequencyRegion,
+        bandwidth: Int,
+    ): Int {
         val numSlots = getNumSlots(region, bandwidth)
         if (numSlots <= 1) return 0
 
@@ -530,10 +539,10 @@ object FrequencySlotCalculator {
             "br_902" -> minOf(10, numSlots - 1) // Smaller band
 
             // EU 868 sub-bands: Use middle of available slots
-            "eu_868_l" -> minOf(6, numSlots - 1)  // ~866.5 MHz
-            "eu_868_m" -> minOf(1, numSlots - 1)  // ~868.3 MHz
-            "eu_868_p" -> 0  // Only 1 slot with 250kHz BW
-            "eu_868_q" -> 0  // Small band
+            "eu_868_l" -> minOf(6, numSlots - 1) // ~866.5 MHz
+            "eu_868_m" -> minOf(1, numSlots - 1) // ~868.3 MHz
+            "eu_868_p" -> 0 // Only 1 slot with 250kHz BW
+            "eu_868_q" -> 0 // Small band
 
             // Russia/Ukraine 868 MHz
             "ru_868", "ua_868" -> 0
@@ -568,7 +577,12 @@ object FrequencySlotCalculator {
      * Reverse-calculate slot from a frequency.
      * Returns null if frequency doesn't align with a valid slot.
      */
-    fun calculateSlotFromFrequency(region: FrequencyRegion, bandwidth: Int, frequency: Long): Int? {
+    @Suppress("ReturnCount")
+    fun calculateSlotFromFrequency(
+        region: FrequencyRegion,
+        bandwidth: Int,
+        frequency: Long,
+    ): Int? {
         val offset = frequency - region.frequencyStart - (bandwidth / 2)
         if (offset < 0) return null
 
@@ -603,506 +617,492 @@ object FrequencySlotCalculator {
  * Data sourced from: https://github.com/markqvist/Reticulum/wiki/Popular-RNode-Settings
  */
 object RNodeRegionalPresets {
-
-    val presets: List<RNodeRegionalPreset> = listOf(
-        // ==================== AUSTRALIA ====================
-        RNodeRegionalPreset(
-            id = "au_default",
-            countryCode = "AU",
-            countryName = "Australia",
-            cityOrRegion = null,
-            frequency = 925875000,
-            bandwidth = 250000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 17,
-            description = "915-928 MHz AU band (default)",
-        ),
-        RNodeRegionalPreset(
-            id = "au_sydney",
-            countryCode = "AU",
-            countryName = "Australia",
-            cityOrRegion = "Sydney",
-            frequency = 925875000,
-            bandwidth = 250000,
-            spreadingFactor = 11,
-            codingRate = 5,
-            txPower = 17,
-            description = "Sydney long-range configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "au_brisbane",
-            countryCode = "AU",
-            countryName = "Australia",
-            cityOrRegion = "Brisbane",
-            frequency = 925875000,
-            bandwidth = 250000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 17,
-            description = "Brisbane configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "au_western_sydney",
-            countryCode = "AU",
-            countryName = "Australia",
-            cityOrRegion = "Western Sydney",
-            frequency = 925875000,
-            bandwidth = 250000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 17,
-            description = "Western Sydney configuration",
-        ),
-
-        // ==================== BELGIUM ====================
-        RNodeRegionalPreset(
-            id = "be_default",
-            countryCode = "BE",
-            countryName = "Belgium",
-            cityOrRegion = null,
-            frequency = 868100000,
-            bandwidth = 125000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 14,
-            description = "868 MHz EU band",
-        ),
-        RNodeRegionalPreset(
-            id = "be_duffel",
-            countryCode = "BE",
-            countryName = "Belgium",
-            cityOrRegion = "Duffel",
-            frequency = 867200000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 14,
-            description = "Duffel configuration",
-        ),
-
-        // ==================== FINLAND ====================
-        RNodeRegionalPreset(
-            id = "fi_default",
-            countryCode = "FI",
-            countryName = "Finland",
-            cityOrRegion = null,
-            frequency = 868100000,
-            bandwidth = 125000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 14,
-            description = "868 MHz EU band",
-        ),
-        RNodeRegionalPreset(
-            id = "fi_turku",
-            countryCode = "FI",
-            countryName = "Finland",
-            cityOrRegion = "Turku",
-            frequency = 869420000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 14,
-            description = "Turku configuration",
-        ),
-
-        // ==================== GERMANY ====================
-        RNodeRegionalPreset(
-            id = "de_default",
-            countryCode = "DE",
-            countryName = "Germany",
-            cityOrRegion = null,
-            frequency = 868100000,
-            bandwidth = 125000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 14,
-            description = "868 MHz EU band",
-        ),
-        RNodeRegionalPreset(
-            id = "de_darmstadt",
-            countryCode = "DE",
-            countryName = "Germany",
-            cityOrRegion = "Darmstadt",
-            frequency = 869400000,
-            bandwidth = 250000,
-            spreadingFactor = 7,
-            codingRate = 5,
-            txPower = 14,
-            description = "Darmstadt configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "de_wiesbaden",
-            countryCode = "DE",
-            countryName = "Germany",
-            cityOrRegion = "Wiesbaden",
-            frequency = 869525000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 14,
-            description = "Wiesbaden configuration",
-        ),
-
-        // ==================== ITALY ====================
-        RNodeRegionalPreset(
-            id = "it_default",
-            countryCode = "IT",
-            countryName = "Italy",
-            cityOrRegion = null,
-            frequency = 868100000,
-            bandwidth = 125000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 14,
-            description = "868 MHz EU band",
-        ),
-        RNodeRegionalPreset(
-            id = "it_salerno",
-            countryCode = "IT",
-            countryName = "Italy",
-            cityOrRegion = "Salerno",
-            frequency = 869525000,
-            bandwidth = 250000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 14,
-            description = "Salerno configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "it_brescia",
-            countryCode = "IT",
-            countryName = "Italy",
-            cityOrRegion = "Brescia",
-            frequency = 867200000,
-            bandwidth = 125000,
-            spreadingFactor = 7,
-            codingRate = 5,
-            txPower = 14,
-            description = "Brescia configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "it_treviso",
-            countryCode = "IT",
-            countryName = "Italy",
-            cityOrRegion = "Treviso",
-            frequency = 867200000,
-            bandwidth = 125000,
-            spreadingFactor = 7,
-            codingRate = 5,
-            txPower = 14,
-            description = "Treviso configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "it_genova",
-            countryCode = "IT",
-            countryName = "Italy",
-            cityOrRegion = "Genova",
-            frequency = 433600000,
-            bandwidth = 125000,
-            spreadingFactor = 12,
-            codingRate = 5,
-            txPower = 14,
-            description = "Genova 433 MHz configuration",
-        ),
-
-        // ==================== MALAYSIA ====================
-        RNodeRegionalPreset(
-            id = "my_default",
-            countryCode = "MY",
-            countryName = "Malaysia",
-            cityOrRegion = null,
-            frequency = 920500000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 17,
-            description = "920 MHz AS923 band",
-        ),
-
-        // ==================== NETHERLANDS ====================
-        RNodeRegionalPreset(
-            id = "nl_default",
-            countryCode = "NL",
-            countryName = "Netherlands",
-            cityOrRegion = null,
-            frequency = 868100000,
-            bandwidth = 125000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 14,
-            description = "868 MHz EU band",
-        ),
-        RNodeRegionalPreset(
-            id = "nl_rotterdam",
-            countryCode = "NL",
-            countryName = "Netherlands",
-            cityOrRegion = "Rotterdam Nesselande",
-            frequency = 867200000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 14,
-            description = "Rotterdam Nesselande configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "be_brugge",
-            countryCode = "BE",
-            countryName = "Belgium",
-            cityOrRegion = "Brugge",
-            frequency = 869400000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 14,
-            description = "Brugge (Bruges) configuration",
-        ),
-
-        // ==================== NORWAY ====================
-        RNodeRegionalPreset(
-            id = "no_default",
-            countryCode = "NO",
-            countryName = "Norway",
-            cityOrRegion = null,
-            frequency = 869525000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 14,
-            description = "868 MHz EU band",
-        ),
-
-        // ==================== SINGAPORE ====================
-        RNodeRegionalPreset(
-            id = "sg_default",
-            countryCode = "SG",
-            countryName = "Singapore",
-            cityOrRegion = null,
-            frequency = 920500000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 17,
-            description = "920 MHz AS923 band",
-        ),
-
-        // ==================== SPAIN ====================
-        RNodeRegionalPreset(
-            id = "es_default",
-            countryCode = "ES",
-            countryName = "Spain",
-            cityOrRegion = null,
-            frequency = 868100000,
-            bandwidth = 125000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 14,
-            description = "868 MHz EU band",
-        ),
-        RNodeRegionalPreset(
-            id = "es_madrid",
-            countryCode = "ES",
-            countryName = "Spain",
-            cityOrRegion = "Madrid",
-            frequency = 868200000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 14,
-            description = "Madrid configuration",
-        ),
-
-        // ==================== SWEDEN ====================
-        RNodeRegionalPreset(
-            id = "se_default",
-            countryCode = "SE",
-            countryName = "Sweden",
-            cityOrRegion = null,
-            frequency = 868100000,
-            bandwidth = 125000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 14,
-            description = "868 MHz EU band",
-        ),
-        RNodeRegionalPreset(
-            id = "se_gothenburg",
-            countryCode = "SE",
-            countryName = "Sweden",
-            cityOrRegion = "Gothenburg/Borås/Älvsered",
-            frequency = 869525000,
-            bandwidth = 250000,
-            spreadingFactor = 10,
-            codingRate = 5,
-            txPower = 14,
-            description = "Gothenburg area configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "se_433",
-            countryCode = "SE",
-            countryName = "Sweden",
-            cityOrRegion = "Gothenburg/Borås/Älvsered (433 MHz)",
-            frequency = 433575000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 12,
-            description = "433 MHz band shared by Gothenburg, Borås, Älvsered",
-        ),
-        RNodeRegionalPreset(
-            id = "se_morbylanga",
-            countryCode = "SE",
-            countryName = "Sweden",
-            cityOrRegion = "Mörbylånga/Bredinge",
-            frequency = 866000000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 14,
-            description = "Mörbylånga/Bredinge configuration",
-        ),
-
-        // ==================== SWITZERLAND ====================
-        RNodeRegionalPreset(
-            id = "ch_default",
-            countryCode = "CH",
-            countryName = "Switzerland",
-            cityOrRegion = null,
-            frequency = 868100000,
-            bandwidth = 125000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 14,
-            description = "868 MHz EU band",
-        ),
-        RNodeRegionalPreset(
-            id = "ch_bern",
-            countryCode = "CH",
-            countryName = "Switzerland",
-            cityOrRegion = "Bern",
-            frequency = 868000000,
-            bandwidth = 250000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 14,
-            description = "Bern configuration",
-        ),
-
-        // ==================== THAILAND ====================
-        RNodeRegionalPreset(
-            id = "th_default",
-            countryCode = "TH",
-            countryName = "Thailand",
-            cityOrRegion = null,
-            frequency = 920500000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 17,
-            description = "920 MHz AS923 band",
-        ),
-
-        // ==================== UNITED KINGDOM ====================
-        RNodeRegionalPreset(
-            id = "gb_default",
-            countryCode = "GB",
-            countryName = "United Kingdom",
-            cityOrRegion = null,
-            frequency = 867500000,
-            bandwidth = 125000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 14,
-            description = "868 MHz UK band",
-        ),
-        RNodeRegionalPreset(
-            id = "gb_st_helens",
-            countryCode = "GB",
-            countryName = "United Kingdom",
-            cityOrRegion = "St. Helens",
-            frequency = 867500000,
-            bandwidth = 125000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 14,
-            description = "St. Helens configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "gb_edinburgh",
-            countryCode = "GB",
-            countryName = "United Kingdom",
-            cityOrRegion = "Edinburgh",
-            frequency = 867500000,
-            bandwidth = 125000,
-            spreadingFactor = 9,
-            codingRate = 5,
-            txPower = 14,
-            description = "Edinburgh 868 MHz configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "gb_edinburgh_2g4",
-            countryCode = "GB",
-            countryName = "United Kingdom",
-            cityOrRegion = "Edinburgh (2.4 GHz)",
-            frequency = 2427000000,
-            bandwidth = 812500,
-            spreadingFactor = 7,
-            codingRate = 5,
-            txPower = 14,
-            description = "Edinburgh 2.4 GHz configuration",
-        ),
-
-        // ==================== UNITED STATES ====================
-        RNodeRegionalPreset(
-            id = "us_default",
-            countryCode = "US",
-            countryName = "United States",
-            cityOrRegion = null,
-            frequency = 914875000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 17,
-            description = "915 MHz ISM band (default)",
-        ),
-        RNodeRegionalPreset(
-            id = "us_portsmouth",
-            countryCode = "US",
-            countryName = "United States",
-            cityOrRegion = "Portsmouth, NH",
-            frequency = 914875000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 17,
-            description = "Portsmouth, NH configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "us_olympia",
-            countryCode = "US",
-            countryName = "United States",
-            cityOrRegion = "Olympia, WA",
-            frequency = 914875000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 17,
-            description = "Olympia, WA configuration",
-        ),
-        RNodeRegionalPreset(
-            id = "us_chicago",
-            countryCode = "US",
-            countryName = "United States",
-            cityOrRegion = "Chicago, IL",
-            frequency = 914875000,
-            bandwidth = 125000,
-            spreadingFactor = 8,
-            codingRate = 5,
-            txPower = 17,
-            description = "Chicago, IL configuration",
-        ),
-    )
+    val presets: List<RNodeRegionalPreset> =
+        listOf(
+            // ==================== AUSTRALIA ====================
+            RNodeRegionalPreset(
+                id = "au_default",
+                countryCode = "AU",
+                countryName = "Australia",
+                cityOrRegion = null,
+                frequency = 925875000,
+                bandwidth = 250000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 17,
+                description = "915-928 MHz AU band (default)",
+            ),
+            RNodeRegionalPreset(
+                id = "au_sydney",
+                countryCode = "AU",
+                countryName = "Australia",
+                cityOrRegion = "Sydney",
+                frequency = 925875000,
+                bandwidth = 250000,
+                spreadingFactor = 11,
+                codingRate = 5,
+                txPower = 17,
+                description = "Sydney long-range configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "au_brisbane",
+                countryCode = "AU",
+                countryName = "Australia",
+                cityOrRegion = "Brisbane",
+                frequency = 925875000,
+                bandwidth = 250000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 17,
+                description = "Brisbane configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "au_western_sydney",
+                countryCode = "AU",
+                countryName = "Australia",
+                cityOrRegion = "Western Sydney",
+                frequency = 925875000,
+                bandwidth = 250000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 17,
+                description = "Western Sydney configuration",
+            ),
+            // ==================== BELGIUM ====================
+            RNodeRegionalPreset(
+                id = "be_default",
+                countryCode = "BE",
+                countryName = "Belgium",
+                cityOrRegion = null,
+                frequency = 868100000,
+                bandwidth = 125000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 14,
+                description = "868 MHz EU band",
+            ),
+            RNodeRegionalPreset(
+                id = "be_duffel",
+                countryCode = "BE",
+                countryName = "Belgium",
+                cityOrRegion = "Duffel",
+                frequency = 867200000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 14,
+                description = "Duffel configuration",
+            ),
+            // ==================== FINLAND ====================
+            RNodeRegionalPreset(
+                id = "fi_default",
+                countryCode = "FI",
+                countryName = "Finland",
+                cityOrRegion = null,
+                frequency = 868100000,
+                bandwidth = 125000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 14,
+                description = "868 MHz EU band",
+            ),
+            RNodeRegionalPreset(
+                id = "fi_turku",
+                countryCode = "FI",
+                countryName = "Finland",
+                cityOrRegion = "Turku",
+                frequency = 869420000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 14,
+                description = "Turku configuration",
+            ),
+            // ==================== GERMANY ====================
+            RNodeRegionalPreset(
+                id = "de_default",
+                countryCode = "DE",
+                countryName = "Germany",
+                cityOrRegion = null,
+                frequency = 868100000,
+                bandwidth = 125000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 14,
+                description = "868 MHz EU band",
+            ),
+            RNodeRegionalPreset(
+                id = "de_darmstadt",
+                countryCode = "DE",
+                countryName = "Germany",
+                cityOrRegion = "Darmstadt",
+                frequency = 869400000,
+                bandwidth = 250000,
+                spreadingFactor = 7,
+                codingRate = 5,
+                txPower = 14,
+                description = "Darmstadt configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "de_wiesbaden",
+                countryCode = "DE",
+                countryName = "Germany",
+                cityOrRegion = "Wiesbaden",
+                frequency = 869525000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 14,
+                description = "Wiesbaden configuration",
+            ),
+            // ==================== ITALY ====================
+            RNodeRegionalPreset(
+                id = "it_default",
+                countryCode = "IT",
+                countryName = "Italy",
+                cityOrRegion = null,
+                frequency = 868100000,
+                bandwidth = 125000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 14,
+                description = "868 MHz EU band",
+            ),
+            RNodeRegionalPreset(
+                id = "it_salerno",
+                countryCode = "IT",
+                countryName = "Italy",
+                cityOrRegion = "Salerno",
+                frequency = 869525000,
+                bandwidth = 250000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 14,
+                description = "Salerno configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "it_brescia",
+                countryCode = "IT",
+                countryName = "Italy",
+                cityOrRegion = "Brescia",
+                frequency = 867200000,
+                bandwidth = 125000,
+                spreadingFactor = 7,
+                codingRate = 5,
+                txPower = 14,
+                description = "Brescia configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "it_treviso",
+                countryCode = "IT",
+                countryName = "Italy",
+                cityOrRegion = "Treviso",
+                frequency = 867200000,
+                bandwidth = 125000,
+                spreadingFactor = 7,
+                codingRate = 5,
+                txPower = 14,
+                description = "Treviso configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "it_genova",
+                countryCode = "IT",
+                countryName = "Italy",
+                cityOrRegion = "Genova",
+                frequency = 433600000,
+                bandwidth = 125000,
+                spreadingFactor = 12,
+                codingRate = 5,
+                txPower = 14,
+                description = "Genova 433 MHz configuration",
+            ),
+            // ==================== MALAYSIA ====================
+            RNodeRegionalPreset(
+                id = "my_default",
+                countryCode = "MY",
+                countryName = "Malaysia",
+                cityOrRegion = null,
+                frequency = 920500000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 17,
+                description = "920 MHz AS923 band",
+            ),
+            // ==================== NETHERLANDS ====================
+            RNodeRegionalPreset(
+                id = "nl_default",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                cityOrRegion = null,
+                frequency = 868100000,
+                bandwidth = 125000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 14,
+                description = "868 MHz EU band",
+            ),
+            RNodeRegionalPreset(
+                id = "nl_rotterdam",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                cityOrRegion = "Rotterdam Nesselande",
+                frequency = 867200000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 14,
+                description = "Rotterdam Nesselande configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "be_brugge",
+                countryCode = "BE",
+                countryName = "Belgium",
+                cityOrRegion = "Brugge",
+                frequency = 869400000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 14,
+                description = "Brugge (Bruges) configuration",
+            ),
+            // ==================== NORWAY ====================
+            RNodeRegionalPreset(
+                id = "no_default",
+                countryCode = "NO",
+                countryName = "Norway",
+                cityOrRegion = null,
+                frequency = 869525000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 14,
+                description = "868 MHz EU band",
+            ),
+            // ==================== SINGAPORE ====================
+            RNodeRegionalPreset(
+                id = "sg_default",
+                countryCode = "SG",
+                countryName = "Singapore",
+                cityOrRegion = null,
+                frequency = 920500000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 17,
+                description = "920 MHz AS923 band",
+            ),
+            // ==================== SPAIN ====================
+            RNodeRegionalPreset(
+                id = "es_default",
+                countryCode = "ES",
+                countryName = "Spain",
+                cityOrRegion = null,
+                frequency = 868100000,
+                bandwidth = 125000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 14,
+                description = "868 MHz EU band",
+            ),
+            RNodeRegionalPreset(
+                id = "es_madrid",
+                countryCode = "ES",
+                countryName = "Spain",
+                cityOrRegion = "Madrid",
+                frequency = 868200000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 14,
+                description = "Madrid configuration",
+            ),
+            // ==================== SWEDEN ====================
+            RNodeRegionalPreset(
+                id = "se_default",
+                countryCode = "SE",
+                countryName = "Sweden",
+                cityOrRegion = null,
+                frequency = 868100000,
+                bandwidth = 125000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 14,
+                description = "868 MHz EU band",
+            ),
+            RNodeRegionalPreset(
+                id = "se_gothenburg",
+                countryCode = "SE",
+                countryName = "Sweden",
+                cityOrRegion = "Gothenburg/Borås/Älvsered",
+                frequency = 869525000,
+                bandwidth = 250000,
+                spreadingFactor = 10,
+                codingRate = 5,
+                txPower = 14,
+                description = "Gothenburg area configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "se_433",
+                countryCode = "SE",
+                countryName = "Sweden",
+                cityOrRegion = "Gothenburg/Borås/Älvsered (433 MHz)",
+                frequency = 433575000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 12,
+                description = "433 MHz band shared by Gothenburg, Borås, Älvsered",
+            ),
+            RNodeRegionalPreset(
+                id = "se_morbylanga",
+                countryCode = "SE",
+                countryName = "Sweden",
+                cityOrRegion = "Mörbylånga/Bredinge",
+                frequency = 866000000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 14,
+                description = "Mörbylånga/Bredinge configuration",
+            ),
+            // ==================== SWITZERLAND ====================
+            RNodeRegionalPreset(
+                id = "ch_default",
+                countryCode = "CH",
+                countryName = "Switzerland",
+                cityOrRegion = null,
+                frequency = 868100000,
+                bandwidth = 125000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 14,
+                description = "868 MHz EU band",
+            ),
+            RNodeRegionalPreset(
+                id = "ch_bern",
+                countryCode = "CH",
+                countryName = "Switzerland",
+                cityOrRegion = "Bern",
+                frequency = 868000000,
+                bandwidth = 250000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 14,
+                description = "Bern configuration",
+            ),
+            // ==================== THAILAND ====================
+            RNodeRegionalPreset(
+                id = "th_default",
+                countryCode = "TH",
+                countryName = "Thailand",
+                cityOrRegion = null,
+                frequency = 920500000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 17,
+                description = "920 MHz AS923 band",
+            ),
+            // ==================== UNITED KINGDOM ====================
+            RNodeRegionalPreset(
+                id = "gb_default",
+                countryCode = "GB",
+                countryName = "United Kingdom",
+                cityOrRegion = null,
+                frequency = 867500000,
+                bandwidth = 125000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 14,
+                description = "868 MHz UK band",
+            ),
+            RNodeRegionalPreset(
+                id = "gb_st_helens",
+                countryCode = "GB",
+                countryName = "United Kingdom",
+                cityOrRegion = "St. Helens",
+                frequency = 867500000,
+                bandwidth = 125000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 14,
+                description = "St. Helens configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "gb_edinburgh",
+                countryCode = "GB",
+                countryName = "United Kingdom",
+                cityOrRegion = "Edinburgh",
+                frequency = 867500000,
+                bandwidth = 125000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 14,
+                description = "Edinburgh 868 MHz configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "gb_edinburgh_2g4",
+                countryCode = "GB",
+                countryName = "United Kingdom",
+                cityOrRegion = "Edinburgh (2.4 GHz)",
+                frequency = 2427000000,
+                bandwidth = 812500,
+                spreadingFactor = 7,
+                codingRate = 5,
+                txPower = 14,
+                description = "Edinburgh 2.4 GHz configuration",
+            ),
+            // ==================== UNITED STATES ====================
+            RNodeRegionalPreset(
+                id = "us_default",
+                countryCode = "US",
+                countryName = "United States",
+                cityOrRegion = null,
+                frequency = 914875000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 17,
+                description = "915 MHz ISM band (default)",
+            ),
+            RNodeRegionalPreset(
+                id = "us_portsmouth",
+                countryCode = "US",
+                countryName = "United States",
+                cityOrRegion = "Portsmouth, NH",
+                frequency = 914875000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 17,
+                description = "Portsmouth, NH configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "us_olympia",
+                countryCode = "US",
+                countryName = "United States",
+                cityOrRegion = "Olympia, WA",
+                frequency = 914875000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 17,
+                description = "Olympia, WA configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "us_chicago",
+                countryCode = "US",
+                countryName = "United States",
+                cityOrRegion = "Chicago, IL",
+                frequency = 914875000,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 17,
+                description = "Chicago, IL configuration",
+            ),
+        )
 
     /**
      * Get presets grouped by country name.

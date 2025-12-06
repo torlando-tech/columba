@@ -16,8 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SignalCellularAlt
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -46,9 +46,10 @@ fun ModemPresetStep(viewModel: RNodeWizardViewModel) {
     val presets = viewModel.getModemPresets()
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(16.dp),
     ) {
         // Header
         Text(
@@ -59,8 +60,9 @@ fun ModemPresetStep(viewModel: RNodeWizardViewModel) {
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text = "Choose a preset that matches your range and speed needs. " +
-                "These are compatible with Meshtastic naming conventions.",
+            text =
+                "Choose a preset that matches your range and speed needs. " +
+                    "These are compatible with Meshtastic naming conventions.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -92,11 +94,12 @@ private fun ModemPresetCard(
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    val containerColor = if (isSelected) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
+    val containerColor =
+        if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
 
     Card(
         onClick = onClick,
@@ -104,25 +107,28 @@ private fun ModemPresetCard(
         colors = CardDefaults.cardColors(containerColor = containerColor),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Range indicator icon
             Icon(
-                imageVector = when {
-                    preset.name.startsWith("SHORT") -> Icons.Default.Speed
-                    preset.name.startsWith("LONG") -> Icons.Default.SignalCellularAlt
-                    else -> Icons.Default.SignalCellularAlt
-                },
+                imageVector =
+                    when {
+                        preset.name.startsWith("SHORT") -> Icons.Default.Speed
+                        preset.name.startsWith("LONG") -> Icons.Default.SignalCellularAlt
+                        else -> Icons.Default.SignalCellularAlt
+                    },
                 contentDescription = null,
                 modifier = Modifier.size(32.dp),
-                tint = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                tint =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
             )
 
             Spacer(Modifier.width(16.dp))
@@ -187,9 +193,10 @@ private fun ModemPresetCard(
 @Composable
 private fun SettingsChip(label: String) {
     Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
     ) {
         Text(
             text = label,

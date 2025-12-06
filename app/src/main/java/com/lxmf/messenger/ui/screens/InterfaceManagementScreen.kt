@@ -257,11 +257,12 @@ fun InterfaceManagementScreen(
                                     onErrorClick = {
                                         errorDialogInterface = iface
                                     },
-                                    onReconnect = if (iface.type == "RNode") {
-                                        { viewModel.reconnectRNodeInterface() }
-                                    } else {
-                                        null
-                                    },
+                                    onReconnect =
+                                        if (iface.type == "RNode") {
+                                            { viewModel.reconnectRNodeInterface() }
+                                        } else {
+                                            null
+                                        },
                                 )
                             }
                         }
@@ -346,11 +347,12 @@ fun InterfaceManagementScreen(
     // Interface Error Dialog
     errorDialogInterface?.let { iface ->
         val isOnline = state.interfaceOnlineStatus[iface.name]
-        val errorMessage = iface.getErrorMessage(
-            state.bluetoothState,
-            state.blePermissionsGranted,
-            isOnline,
-        )
+        val errorMessage =
+            iface.getErrorMessage(
+                state.bluetoothState,
+                state.blePermissionsGranted,
+                isOnline,
+            )
         if (errorMessage != null) {
             InterfaceErrorDialog(
                 interfaceName = iface.name,
@@ -538,16 +540,17 @@ fun InterfaceCard(
                 }
 
                 // Reconnect button for offline RNode interfaces
-                if (interfaceEntity.type == "RNode" &&
+                val showReconnect = interfaceEntity.type == "RNode" &&
                     interfaceEntity.enabled &&
                     isOnline == false &&
                     onReconnect != null
-                ) {
+                if (showReconnect) {
                     TextButton(
                         onClick = onReconnect,
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary,
-                        ),
+                        colors =
+                            ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary,
+                            ),
                     ) {
                         Text("Reconnect", style = MaterialTheme.typography.labelMedium)
                     }
@@ -904,13 +907,15 @@ private fun InterfaceTypeOption(
 ) {
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isHighlighted) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            },
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isHighlighted) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+            ),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
@@ -920,20 +925,22 @@ private fun InterfaceTypeOption(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium,
-                color = if (isHighlighted) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                color =
+                    if (isHighlighted) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (isHighlighted) {
-                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                },
+                color =
+                    if (isHighlighted) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    },
             )
         }
     }

@@ -148,5 +148,3 @@ fun rememberBluetoothPermissionController(
 
     return controller
 }
-
-

@@ -1,11 +1,11 @@
 package com.lxmf.messenger.service.binder
 
+import android.content.Context
 import android.util.Log
 import com.lxmf.messenger.IInitializationCallback
 import com.lxmf.messenger.IReadinessCallback
 import com.lxmf.messenger.IReticulumService
 import com.lxmf.messenger.IReticulumServiceCallback
-import android.content.Context
 import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
 import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
 import com.lxmf.messenger.service.manager.BleCoordinator
@@ -98,13 +98,18 @@ class ReticulumServiceBinder(
                             rnodeBridge = KotlinRNodeBridge(context)
 
                             // Register error listener to surface RNode errors to UI
-                            rnodeBridge?.addErrorListener(object : RNodeErrorListener {
-                                override fun onRNodeError(errorCode: Int, errorMessage: String) {
-                                    Log.w(TAG, "RNode error surfaced to service: ($errorCode) $errorMessage")
-                                    // Broadcast error as status change so UI can display it
-                                    broadcaster.broadcastStatusChange("RNODE_ERROR:$errorMessage")
-                                }
-                            })
+                            rnodeBridge?.addErrorListener(
+                                object : RNodeErrorListener {
+                                    override fun onRNodeError(
+                                        errorCode: Int,
+                                        errorMessage: String,
+                                    ) {
+                                        Log.w(TAG, "RNode error surfaced to service: ($errorCode) $errorMessage")
+                                        // Broadcast error as status change so UI can display it
+                                        broadcaster.broadcastStatusChange("RNODE_ERROR:$errorMessage")
+                                    }
+                                },
+                            )
 
                             wrapper.callAttr("set_rnode_bridge", rnodeBridge)
                             Log.d(TAG, "RNode bridge set before Python initialization")
@@ -442,6 +447,7 @@ class ReticulumServiceBinder(
             try {
                 wrapperManager.withWrapper { wrapper ->
                     val result = wrapper.callAttr("initialize_rnode_interface")
+
                     @Suppress("UNCHECKED_CAST")
                     val resultDict = result?.asMap() as? Map<com.chaquo.python.PyObject, com.chaquo.python.PyObject>
                     val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false
@@ -472,6 +478,7 @@ class ReticulumServiceBinder(
         try {
             wrapperManager.withWrapper { wrapper ->
                 val result = wrapper.callAttr("initialize_rnode_interface")
+
                 @Suppress("UNCHECKED_CAST")
                 val resultDict = result?.asMap() as? Map<com.chaquo.python.PyObject, com.chaquo.python.PyObject>
                 val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false

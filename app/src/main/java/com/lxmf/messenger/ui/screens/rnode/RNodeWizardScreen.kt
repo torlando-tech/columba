@@ -127,9 +127,10 @@ fun RNodeWizardScreen(
     ) { paddingValues ->
         AnimatedContent(
             targetState = state.currentStep,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
             transitionSpec = {
                 if (targetState.ordinal > initialState.ordinal) {
                     slideInHorizontally { it } togetherWith slideOutHorizontally { -it }
@@ -177,10 +178,11 @@ private fun WizardBottomBar(
         tonalElevation = 3.dp,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -191,16 +193,17 @@ private fun WizardBottomBar(
             ) {
                 WizardStep.entries.forEachIndexed { _, step ->
                     Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                when {
-                                    step == currentStep -> MaterialTheme.colorScheme.primary
-                                    step.ordinal < currentStep.ordinal -> MaterialTheme.colorScheme.primaryContainer
-                                    else -> MaterialTheme.colorScheme.surfaceVariant
-                                },
-                            ),
+                        modifier =
+                            Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    when {
+                                        step == currentStep -> MaterialTheme.colorScheme.primary
+                                        step.ordinal < currentStep.ordinal -> MaterialTheme.colorScheme.primaryContainer
+                                        else -> MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                ),
                     )
                 }
             }

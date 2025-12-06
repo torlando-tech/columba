@@ -18,12 +18,11 @@ import android.content.IntentSender
 import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
-import java.util.regex.Pattern
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.BluetoothType
-import com.lxmf.messenger.data.model.DiscoveredRNode
 import com.lxmf.messenger.data.model.CommunitySlots
+import com.lxmf.messenger.data.model.DiscoveredRNode
 import com.lxmf.messenger.data.model.FrequencyRegion
 import com.lxmf.messenger.data.model.FrequencyRegions
 import com.lxmf.messenger.data.model.FrequencySlotCalculator
@@ -45,6 +44,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.util.regex.Pattern
 import javax.inject.Inject
 
 /**
@@ -76,11 +76,9 @@ data class RegionLimits(
 data class RNodeWizardState(
     // Wizard navigation
     val currentStep: WizardStep = WizardStep.DEVICE_DISCOVERY,
-
     // Edit mode
     val editingInterfaceId: Long? = null,
     val isEditMode: Boolean = false,
-
     // Step 1: Device Discovery
     val isScanning: Boolean = false,
     val discoveredDevices: List<DiscoveredRNode> = emptyList(),
@@ -93,41 +91,35 @@ data class RNodeWizardState(
     val pairingError: String? = null,
     val pairingTimeRemaining: Int = 0,
     val lastPairingDeviceAddress: String? = null,
-
     // Companion Device Association (Android 12+)
     val isAssociating: Boolean = false,
     val pendingAssociationIntent: IntentSender? = null,
     val associationError: String? = null,
-
     // Step 2: Region/Frequency Selection
     val searchQuery: String = "",
     val selectedCountry: String? = null,
-    val selectedPreset: RNodeRegionalPreset? = null,  // Legacy: popular local presets
-    val selectedFrequencyRegion: FrequencyRegion? = null,  // New: frequency band selection
+    val selectedPreset: RNodeRegionalPreset? = null, // Legacy: popular local presets
+    val selectedFrequencyRegion: FrequencyRegion? = null, // New: frequency band selection
     val isCustomMode: Boolean = false,
-    val showPopularPresets: Boolean = false,  // Collapsible section for local presets
-
+    val showPopularPresets: Boolean = false, // Collapsible section for local presets
     // Step 3: Modem Preset Selection
     val selectedModemPreset: ModemPreset = ModemPreset.DEFAULT,
-
     // Step 4: Frequency Slot Selection
-    val selectedSlot: Int = 20,  // Default Meshtastic slot
-    val customFrequency: Long? = null,  // Set when a preset is selected that doesn't align with slots
-    val selectedSlotPreset: RNodeRegionalPreset? = null,  // The preset selected on slot page
-
+    val selectedSlot: Int = 20, // Default Meshtastic slot
+    val customFrequency: Long? = null, // Set when a preset is selected that doesn't align with slots
+    val selectedSlotPreset: RNodeRegionalPreset? = null, // The preset selected on slot page
     // Step 5: Review & Configure
     val interfaceName: String = "RNode LoRa",
-    val frequency: String = "914875000",  // US default
-    val bandwidth: String = "250000",     // Long Fast default
-    val spreadingFactor: String = "11",   // Long Fast default
-    val codingRate: String = "5",         // Long Fast default (4/5)
-    val txPower: String = "17",           // Safe default for all devices
+    val frequency: String = "914875000", // US default
+    val bandwidth: String = "250000", // Long Fast default
+    val spreadingFactor: String = "11", // Long Fast default
+    val codingRate: String = "5", // Long Fast default (4/5)
+    val txPower: String = "17", // Safe default for all devices
     val stAlock: String = "",
     val ltAlock: String = "",
     val interfaceMode: String = "full",
     val showAdvancedSettings: Boolean = false,
     val enableFramebuffer: Boolean = true, // Display logo on RNode OLED
-
     // Validation errors
     val nameError: String? = null,
     val frequencyError: String? = null,
@@ -137,7 +129,6 @@ data class RNodeWizardState(
     val codingRateError: String? = null,
     val stAlockError: String? = null,
     val ltAlockError: String? = null,
-
     // Save state
     val isSaving: Boolean = false,
     val saveError: String? = null,
@@ -148,6 +139,7 @@ data class RNodeWizardState(
  * ViewModel for the RNode setup wizard.
  */
 @HiltViewModel
+@Suppress("LargeClass")
 class RNodeWizardViewModel
     @Inject
     constructor(
@@ -203,7 +195,10 @@ class RNodeWizardViewModel
         /**
          * Cache the Bluetooth type for a device address.
          */
-        private fun cacheDeviceType(address: String, type: BluetoothType) {
+        private fun cacheDeviceType(
+            address: String,
+            type: BluetoothType,
+        ) {
             if (type == BluetoothType.UNKNOWN) return // Don't cache unknown
             try {
                 val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
@@ -237,11 +232,12 @@ class RNodeWizardViewModel
                     }
 
                     // Find matching preset if any
-                    val matchingPreset = RNodeRegionalPresets.findMatchingPreset(
-                        config.frequency,
-                        config.bandwidth,
-                        config.spreadingFactor,
-                    )
+                    val matchingPreset =
+                        RNodeRegionalPresets.findMatchingPreset(
+                            config.frequency,
+                            config.bandwidth,
+                            config.spreadingFactor,
+                        )
 
                     val isBle = config.connectionMode == "ble"
 
@@ -250,13 +246,14 @@ class RNodeWizardViewModel
                             editingInterfaceId = interfaceId,
                             isEditMode = true,
                             // Pre-populate device
-                            selectedDevice = DiscoveredRNode(
-                                name = config.targetDeviceName,
-                                address = "",
-                                type = if (isBle) BluetoothType.BLE else BluetoothType.CLASSIC,
-                                rssi = null,
-                                isPaired = true,
-                            ),
+                            selectedDevice =
+                                DiscoveredRNode(
+                                    name = config.targetDeviceName,
+                                    address = "",
+                                    type = if (isBle) BluetoothType.BLE else BluetoothType.CLASSIC,
+                                    rssi = null,
+                                    isPaired = true,
+                                ),
                             // Pre-populate region
                             selectedPreset = matchingPreset,
                             selectedCountry = matchingPreset?.countryName,
@@ -293,20 +290,21 @@ class RNodeWizardViewModel
          */
         private fun startRssiPolling() {
             rssiPollingJob?.cancel()
-            rssiPollingJob = viewModelScope.launch {
-                while (true) {
-                    delay(RSSI_UPDATE_INTERVAL_MS)
-                    val rssi = configManager.getRNodeRssi()
-                    if (rssi > -100) {
-                        _state.update { state ->
-                            state.copy(
-                                selectedDevice = state.selectedDevice?.copy(rssi = rssi),
-                            )
+            rssiPollingJob =
+                viewModelScope.launch {
+                    while (true) {
+                        delay(RSSI_UPDATE_INTERVAL_MS)
+                        val rssi = configManager.getRNodeRssi()
+                        if (rssi > -100) {
+                            _state.update { state ->
+                                state.copy(
+                                    selectedDevice = state.selectedDevice?.copy(rssi = rssi),
+                                )
+                            }
+                            Log.v(TAG, "RNode RSSI updated: $rssi dBm")
                         }
-                        Log.v(TAG, "RNode RSSI updated: $rssi dBm")
                     }
                 }
-            }
         }
 
         /**
@@ -325,38 +323,40 @@ class RNodeWizardViewModel
 
         fun goToNextStep() {
             val currentState = _state.value
-            val nextStep = when (currentState.currentStep) {
-                WizardStep.DEVICE_DISCOVERY -> WizardStep.REGION_SELECTION
-                WizardStep.REGION_SELECTION -> {
-                    // Apply frequency region settings when moving to modem step
-                    applyFrequencyRegionSettings()
-                    WizardStep.MODEM_PRESET
+            val nextStep =
+                when (currentState.currentStep) {
+                    WizardStep.DEVICE_DISCOVERY -> WizardStep.REGION_SELECTION
+                    WizardStep.REGION_SELECTION -> {
+                        // Apply frequency region settings when moving to modem step
+                        applyFrequencyRegionSettings()
+                        WizardStep.MODEM_PRESET
+                    }
+                    WizardStep.MODEM_PRESET -> {
+                        // Apply modem preset settings when moving to slot step
+                        applyModemPresetSettings()
+                        // Initialize slot to default for this region/bandwidth
+                        initializeDefaultSlot()
+                        WizardStep.FREQUENCY_SLOT
+                    }
+                    WizardStep.FREQUENCY_SLOT -> {
+                        // Apply slot to frequency when moving to review
+                        applySlotToFrequency()
+                        WizardStep.REVIEW_CONFIGURE
+                    }
+                    WizardStep.REVIEW_CONFIGURE -> WizardStep.REVIEW_CONFIGURE // Already at end
                 }
-                WizardStep.MODEM_PRESET -> {
-                    // Apply modem preset settings when moving to slot step
-                    applyModemPresetSettings()
-                    // Initialize slot to default for this region/bandwidth
-                    initializeDefaultSlot()
-                    WizardStep.FREQUENCY_SLOT
-                }
-                WizardStep.FREQUENCY_SLOT -> {
-                    // Apply slot to frequency when moving to review
-                    applySlotToFrequency()
-                    WizardStep.REVIEW_CONFIGURE
-                }
-                WizardStep.REVIEW_CONFIGURE -> WizardStep.REVIEW_CONFIGURE // Already at end
-            }
             _state.update { it.copy(currentStep = nextStep) }
         }
 
         fun goToPreviousStep() {
-            val prevStep = when (_state.value.currentStep) {
-                WizardStep.DEVICE_DISCOVERY -> WizardStep.DEVICE_DISCOVERY // Already at start
-                WizardStep.REGION_SELECTION -> WizardStep.DEVICE_DISCOVERY
-                WizardStep.MODEM_PRESET -> WizardStep.REGION_SELECTION
-                WizardStep.FREQUENCY_SLOT -> WizardStep.MODEM_PRESET
-                WizardStep.REVIEW_CONFIGURE -> WizardStep.FREQUENCY_SLOT
-            }
+            val prevStep =
+                when (_state.value.currentStep) {
+                    WizardStep.DEVICE_DISCOVERY -> WizardStep.DEVICE_DISCOVERY // Already at start
+                    WizardStep.REGION_SELECTION -> WizardStep.DEVICE_DISCOVERY
+                    WizardStep.MODEM_PRESET -> WizardStep.REGION_SELECTION
+                    WizardStep.FREQUENCY_SLOT -> WizardStep.MODEM_PRESET
+                    WizardStep.REVIEW_CONFIGURE -> WizardStep.FREQUENCY_SLOT
+                }
             _state.update { it.copy(currentStep = prevStep) }
         }
 
@@ -382,11 +382,12 @@ class RNodeWizardViewModel
 
             // Apply duty cycle as airtime limits if the region has restrictions
             // stAlock = short-term airtime lock, ltAlock = long-term airtime lock
-            val airtimeLimit = if (region.dutyCycle < 100) {
-                region.dutyCycle.toDouble().toString()
-            } else {
-                "" // No limit
-            }
+            val airtimeLimit =
+                if (region.dutyCycle < 100) {
+                    region.dutyCycle.toDouble().toString()
+                } else {
+                    "" // No limit
+                }
 
             _state.update {
                 it.copy(
@@ -421,10 +422,11 @@ class RNodeWizardViewModel
             val region = state.selectedFrequencyRegion ?: return
 
             // Use custom frequency if a preset was selected, otherwise calculate from slot
-            val frequency = state.customFrequency ?: run {
-                val bandwidth = state.selectedModemPreset.bandwidth
-                FrequencySlotCalculator.calculateFrequency(region, bandwidth, state.selectedSlot)
-            }
+            val frequency =
+                state.customFrequency ?: run {
+                    val bandwidth = state.selectedModemPreset.bandwidth
+                    FrequencySlotCalculator.calculateFrequency(region, bandwidth, state.selectedSlot)
+                }
             _state.update { it.copy(frequency = frequency.toString()) }
         }
 
@@ -490,6 +492,7 @@ class RNodeWizardViewModel
          * Get popular RNode presets for the current region.
          * These are community-tested configurations that can be used as slot suggestions.
          */
+        @Suppress("CyclomaticComplexMethod", "ReturnCount")
         fun getPopularPresetsForRegion(): List<RNodeRegionalPreset> {
             val region = _state.value.selectedFrequencyRegion ?: return emptyList()
 
@@ -536,43 +539,44 @@ class RNodeWizardViewModel
             }
 
             // Map region IDs to country codes for presets in the same frequency band
-            val countryCodes = when (region.id) {
-                // US 915 MHz
-                "us_915" -> listOf("US")
+            val countryCodes =
+                when (region.id) {
+                    // US 915 MHz
+                    "us_915" -> listOf("US")
 
-                // Brazil 902-907.5 MHz - no presets defined (US presets are at 914 MHz)
-                "br_902" -> return emptyList()
+                    // Brazil 902-907.5 MHz - no presets defined (US presets are at 914 MHz)
+                    "br_902" -> return emptyList()
 
-                // Russia 868.7-869.2 MHz - no presets defined (narrow band, no matching EU presets)
-                "ru_868" -> return emptyList()
+                    // Russia 868.7-869.2 MHz - no presets defined (narrow band, no matching EU presets)
+                    "ru_868" -> return emptyList()
 
-                // Ukraine 868-868.6 MHz - no presets defined
-                "ua_868" -> return emptyList()
+                    // Ukraine 868-868.6 MHz - no presets defined
+                    "ua_868" -> return emptyList()
 
-                // Australia 915 MHz
-                "au_915" -> listOf("AU")
+                    // Australia 915 MHz
+                    "au_915" -> listOf("AU")
 
-                // NZ 865 MHz - no presets defined (different band from AU)
-                "nz_865" -> emptyList()
+                    // NZ 865 MHz - no presets defined (different band from AU)
+                    "nz_865" -> emptyList()
 
-                // Japan 920.8-927.8 MHz - no presets defined (AS923 presets at 920.5 MHz are outside range)
-                "jp_920" -> return emptyList()
+                    // Japan 920.8-927.8 MHz - no presets defined (AS923 presets at 920.5 MHz are outside range)
+                    "jp_920" -> return emptyList()
 
-                // Asia-Pacific 920 MHz bands (AS923)
-                "kr_920", "tw_920", "th_920", "sg_923", "my_919" ->
-                    listOf("MY", "SG", "TH")
+                    // Asia-Pacific 920 MHz bands (AS923)
+                    "kr_920", "tw_920", "th_920", "sg_923", "my_919" ->
+                        listOf("MY", "SG", "TH")
 
-                // Philippines 915-918 MHz - no presets defined (different band from AS923)
-                "ph_915" -> emptyList()
+                    // Philippines 915-918 MHz - no presets defined (different band from AS923)
+                    "ph_915" -> emptyList()
 
-                else -> emptyList()
-            }
+                    else -> emptyList()
+                }
 
             // Filter presets by country and exclude 433 MHz / 2.4 GHz presets from non-matching regions
             return RNodeRegionalPresets.presets
                 .filter { it.countryCode in countryCodes }
-                .filter { it.frequency !in 430_000_000..440_000_000 }  // Exclude 433 MHz
-                .filter { it.frequency !in 2_400_000_000..2_500_000_000 }  // Exclude 2.4 GHz
+                .filter { it.frequency !in 430_000_000..440_000_000 } // Exclude 433 MHz
+                .filter { it.frequency !in 2_400_000_000..2_500_000_000 } // Exclude 2.4 GHz
                 .take(5)
         }
 
@@ -668,14 +672,15 @@ class RNodeWizardViewModel
                 val cachedType = getCachedDeviceType(address)
                 val deviceType = cachedType ?: BluetoothType.UNKNOWN
 
-                devices[address] = DiscoveredRNode(
-                    name = name,
-                    address = address,
-                    type = deviceType,
-                    rssi = null,
-                    isPaired = true,
-                    bluetoothDevice = device,
-                )
+                devices[address] =
+                    DiscoveredRNode(
+                        name = name,
+                        address = address,
+                        type = deviceType,
+                        rssi = null,
+                        isPaired = true,
+                        bluetoothDevice = device,
+                    )
 
                 if (cachedType != null) {
                     Log.d(TAG, "Using cached type for $name: $cachedType")
@@ -699,7 +704,10 @@ class RNodeWizardViewModel
         /**
          * Finalize scan by updating state with results.
          */
-        private fun finalizeScan(devices: List<DiscoveredRNode>, selectedDevice: DiscoveredRNode?) {
+        private fun finalizeScan(
+            devices: List<DiscoveredRNode>,
+            selectedDevice: DiscoveredRNode?,
+        ) {
             _state.update {
                 it.copy(
                     discoveredDevices = devices,
@@ -711,8 +719,9 @@ class RNodeWizardViewModel
             if (devices.isEmpty()) {
                 _state.update {
                     it.copy(
-                        scanError = "No RNode devices found. " +
-                            "Make sure your RNode is powered on and Bluetooth is enabled.",
+                        scanError =
+                            "No RNode devices found. " +
+                                "Make sure your RNode is powered on and Bluetooth is enabled.",
                     )
                 }
             }
@@ -722,19 +731,24 @@ class RNodeWizardViewModel
          * Set the Bluetooth type for a device (user manual selection).
          * This caches the selection for future scans.
          */
-        fun setDeviceType(device: DiscoveredRNode, type: BluetoothType) {
+        fun setDeviceType(
+            device: DiscoveredRNode,
+            type: BluetoothType,
+        ) {
             cacheDeviceType(device.address, type)
             val updatedDevice = device.copy(type = type)
             _state.update { state ->
-                val newSelected = if (state.selectedDevice?.address == device.address) {
-                    updatedDevice
-                } else {
-                    state.selectedDevice
-                }
+                val newSelected =
+                    if (state.selectedDevice?.address == device.address) {
+                        updatedDevice
+                    } else {
+                        state.selectedDevice
+                    }
                 state.copy(
-                    discoveredDevices = state.discoveredDevices.map {
-                        if (it.address == device.address) updatedDevice else it
-                    },
+                    discoveredDevices =
+                        state.discoveredDevices.map {
+                            if (it.address == device.address) updatedDevice else it
+                        },
                     selectedDevice = newSelected,
                 )
             }
@@ -744,45 +758,51 @@ class RNodeWizardViewModel
         private suspend fun scanForBleRNodes(onDeviceFound: (DiscoveredRNode) -> Unit) {
             val scanner = bluetoothAdapter?.bluetoothLeScanner ?: return
 
-            val filter = ScanFilter.Builder()
-                .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
-                .build()
+            val filter =
+                ScanFilter.Builder()
+                    .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
+                    .build()
 
-            val settings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                .build()
+            val settings =
+                ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                    .build()
 
             val foundDevices = mutableSetOf<String>()
 
-            val callback = object : ScanCallback() {
-                override fun onScanResult(callbackType: Int, result: ScanResult) {
-                    val name = result.device.name ?: return
-                    if (!name.startsWith("RNode ")) return
+            val callback =
+                object : ScanCallback() {
+                    override fun onScanResult(
+                        callbackType: Int,
+                        result: ScanResult,
+                    ) {
+                        val name = result.device.name ?: return
+                        if (!name.startsWith("RNode ")) return
 
-                    val address = result.device.address
-                    if (foundDevices.contains(address)) {
-                        // Update RSSI for existing device (throttled to every 3s)
-                        updateDeviceRssi(address, result.rssi)
-                    } else {
-                        // New device - add to list
-                        foundDevices.add(address)
-                        onDeviceFound(
-                            DiscoveredRNode(
-                                name = name,
-                                address = address,
-                                type = BluetoothType.BLE,
-                                rssi = result.rssi,
-                                isPaired = result.device.bondState == BluetoothDevice.BOND_BONDED,
-                                bluetoothDevice = result.device,
-                            ),
-                        )
+                        val address = result.device.address
+                        if (foundDevices.contains(address)) {
+                            // Update RSSI for existing device (throttled to every 3s)
+                            updateDeviceRssi(address, result.rssi)
+                        } else {
+                            // New device - add to list
+                            foundDevices.add(address)
+                            onDeviceFound(
+                                DiscoveredRNode(
+                                    name = name,
+                                    address = address,
+                                    type = BluetoothType.BLE,
+                                    rssi = result.rssi,
+                                    isPaired = result.device.bondState == BluetoothDevice.BOND_BONDED,
+                                    bluetoothDevice = result.device,
+                                ),
+                            )
+                        }
+                    }
+
+                    override fun onScanFailed(errorCode: Int) {
+                        Log.e(TAG, "BLE scan failed: $errorCode")
                     }
                 }
-
-                override fun onScanFailed(errorCode: Int) {
-                    Log.e(TAG, "BLE scan failed: $errorCode")
-                }
-            }
 
             try {
                 scanner.startScan(listOf(filter), settings, callback)
@@ -805,7 +825,10 @@ class RNodeWizardViewModel
         /**
          * Update RSSI for an already-discovered device (throttled to every 3 seconds).
          */
-        private fun updateDeviceRssi(address: String, rssi: Int) {
+        private fun updateDeviceRssi(
+            address: String,
+            rssi: Int,
+        ) {
             val now = System.currentTimeMillis()
             val lastUpdate = lastRssiUpdate[address] ?: 0L
             if (now - lastUpdate < RSSI_UPDATE_INTERVAL_MS) return
@@ -813,13 +836,15 @@ class RNodeWizardViewModel
             lastRssiUpdate[address] = now
             _state.update { state ->
                 // Update RSSI in discovered devices list
-                val updatedDevices = state.discoveredDevices.map { device ->
-                    if (device.address == address) device.copy(rssi = rssi) else device
-                }
+                val updatedDevices =
+                    state.discoveredDevices.map { device ->
+                        if (device.address == address) device.copy(rssi = rssi) else device
+                    }
                 // Also update selectedDevice if it matches
-                val updatedSelected = state.selectedDevice?.let { selected ->
-                    if (selected.address == address) selected.copy(rssi = rssi) else selected
-                }
+                val updatedSelected =
+                    state.selectedDevice?.let { selected ->
+                        if (selected.address == address) selected.copy(rssi = rssi) else selected
+                    }
                 state.copy(
                     discoveredDevices = updatedDevices,
                     selectedDevice = updatedSelected,
@@ -851,7 +876,10 @@ class RNodeWizardViewModel
          * @param onFallback Called if CDM is not available (pre-Android 12)
          */
         @SuppressLint("MissingPermission")
-        fun requestDeviceAssociation(device: DiscoveredRNode, onFallback: () -> Unit) {
+        fun requestDeviceAssociation(
+            device: DiscoveredRNode,
+            onFallback: () -> Unit,
+        ) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || companionDeviceManager == null) {
                 // Fall back to direct selection on older Android
                 onFallback()
@@ -951,20 +979,22 @@ class RNodeWizardViewModel
 
             if (device.type == BluetoothType.BLE) {
                 // BLE device filter with NUS service UUID
-                val bleFilter = BluetoothLeDeviceFilter.Builder()
-                    .setNamePattern(Pattern.compile(escapedName))
-                    .setScanFilter(
-                        ScanFilter.Builder()
-                            .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
-                            .build(),
-                    )
-                    .build()
+                val bleFilter =
+                    BluetoothLeDeviceFilter.Builder()
+                        .setNamePattern(Pattern.compile(escapedName))
+                        .setScanFilter(
+                            ScanFilter.Builder()
+                                .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
+                                .build(),
+                        )
+                        .build()
                 builder.addDeviceFilter(bleFilter)
             } else {
                 // Classic Bluetooth device filter
-                val classicFilter = BluetoothDeviceFilter.Builder()
-                    .setNamePattern(Pattern.compile(escapedName))
-                    .build()
+                val classicFilter =
+                    BluetoothDeviceFilter.Builder()
+                        .setNamePattern(Pattern.compile(escapedName))
+                        .build()
                 builder.addDeviceFilter(classicFilter)
             }
 
@@ -1030,6 +1060,7 @@ class RNodeWizardViewModel
         private var pairingHandler: BlePairingHandler? = null
 
         @SuppressLint("MissingPermission")
+        @Suppress("LongMethod", "CyclomaticComplexMethod")
         fun initiateBluetoothPairing(device: DiscoveredRNode) {
             viewModelScope.launch {
                 _state.update {
@@ -1047,8 +1078,9 @@ class RNodeWizardViewModel
                 try {
                     // Use the actual BluetoothDevice from scan (preserves BLE transport context)
                     // Fall back to getRemoteDevice() for manually entered devices
-                    val btDevice = device.bluetoothDevice
-                        ?: bluetoothAdapter?.getRemoteDevice(device.address)
+                    val btDevice =
+                        device.bluetoothDevice
+                            ?: bluetoothAdapter?.getRemoteDevice(device.address)
                     if (btDevice != null && btDevice.bondState != BluetoothDevice.BOND_BONDED) {
                         // Initiate pairing - this will trigger system pairing dialog
                         btDevice.createBond()
@@ -1073,8 +1105,9 @@ class RNodeWizardViewModel
                             // Pairing never started - device not in pairing mode
                             _state.update {
                                 it.copy(
-                                    pairingError = "RNode is not in pairing mode. Press the " +
-                                        "pairing button until a PIN code appears on the display.",
+                                    pairingError =
+                                        "RNode is not in pairing mode. Press the " +
+                                            "pairing button until a PIN code appears on the display.",
                                 )
                             }
                             return@launch
@@ -1095,9 +1128,10 @@ class RNodeWizardViewModel
                                 _state.update { state ->
                                     state.copy(
                                         selectedDevice = updatedDevice,
-                                        discoveredDevices = state.discoveredDevices.map {
-                                            if (it.address == device.address) updatedDevice else it
-                                        },
+                                        discoveredDevices =
+                                            state.discoveredDevices.map {
+                                                if (it.address == device.address) updatedDevice else it
+                                            },
                                     )
                                 }
                                 Log.d(TAG, "Pairing successful for ${device.name}")
@@ -1105,9 +1139,10 @@ class RNodeWizardViewModel
                             BluetoothDevice.BOND_NONE -> {
                                 _state.update {
                                     it.copy(
-                                        pairingError = "Pairing was cancelled or the PIN was " +
-                                            "incorrect. Try again and enter the PIN shown " +
-                                            "on the RNode.",
+                                        pairingError =
+                                            "Pairing was cancelled or the PIN was " +
+                                                "incorrect. Try again and enter the PIN shown " +
+                                                "on the RNode.",
                                     )
                                 }
                             }
@@ -1189,7 +1224,7 @@ class RNodeWizardViewModel
             _state.update {
                 it.copy(
                     selectedFrequencyRegion = region,
-                    selectedPreset = null,  // Clear any popular preset selection
+                    selectedPreset = null, // Clear any popular preset selection
                     isCustomMode = false,
                 )
             }
@@ -1329,17 +1364,18 @@ class RNodeWizardViewModel
          */
         private fun validateConfiguration(): Boolean {
             val state = _state.value
-            val result = RNodeConfigValidator.validateConfig(
-                name = state.interfaceName,
-                frequency = state.frequency,
-                bandwidth = state.bandwidth,
-                spreadingFactor = state.spreadingFactor,
-                codingRate = state.codingRate,
-                txPower = state.txPower,
-                stAlock = state.stAlock,
-                ltAlock = state.ltAlock,
-                region = state.selectedFrequencyRegion,
-            )
+            val result =
+                RNodeConfigValidator.validateConfig(
+                    name = state.interfaceName,
+                    frequency = state.frequency,
+                    bandwidth = state.bandwidth,
+                    spreadingFactor = state.spreadingFactor,
+                    codingRate = state.codingRate,
+                    txPower = state.txPower,
+                    stAlock = state.stAlock,
+                    ltAlock = state.ltAlock,
+                    region = state.selectedFrequencyRegion,
+                )
 
             _state.update {
                 it.copy(
@@ -1367,35 +1403,39 @@ class RNodeWizardViewModel
                     val state = _state.value
 
                     // Determine device name and connection mode
-                    val (deviceName, connectionMode) = if (state.selectedDevice != null) {
-                        state.selectedDevice.name to when (state.selectedDevice.type) {
-                            BluetoothType.CLASSIC -> "classic"
-                            BluetoothType.BLE -> "ble"
-                            BluetoothType.UNKNOWN -> "classic" // Default to classic
+                    val (deviceName, connectionMode) =
+                        if (state.selectedDevice != null) {
+                            state.selectedDevice.name to
+                                when (state.selectedDevice.type) {
+                                    BluetoothType.CLASSIC -> "classic"
+                                    BluetoothType.BLE -> "ble"
+                                    BluetoothType.UNKNOWN -> "classic" // Default to classic
+                                }
+                        } else {
+                            state.manualDeviceName to
+                                when (state.manualBluetoothType) {
+                                    BluetoothType.CLASSIC -> "classic"
+                                    BluetoothType.BLE -> "ble"
+                                    BluetoothType.UNKNOWN -> "classic"
+                                }
                         }
-                    } else {
-                        state.manualDeviceName to when (state.manualBluetoothType) {
-                            BluetoothType.CLASSIC -> "classic"
-                            BluetoothType.BLE -> "ble"
-                            BluetoothType.UNKNOWN -> "classic"
-                        }
-                    }
 
-                    val config = InterfaceConfig.RNode(
-                        name = state.interfaceName.trim(),
-                        enabled = true,
-                        targetDeviceName = deviceName,
-                        connectionMode = connectionMode,
-                        frequency = state.frequency.toLongOrNull() ?: 915000000,
-                        bandwidth = state.bandwidth.toIntOrNull() ?: 125000,
-                        txPower = state.txPower.toIntOrNull() ?: 7,
-                        spreadingFactor = state.spreadingFactor.toIntOrNull() ?: 8,
-                        codingRate = state.codingRate.toIntOrNull() ?: 5,
-                        stAlock = state.stAlock.toDoubleOrNull(),
-                        ltAlock = state.ltAlock.toDoubleOrNull(),
-                        mode = state.interfaceMode,
-                        enableFramebuffer = state.enableFramebuffer,
-                    )
+                    val config =
+                        InterfaceConfig.RNode(
+                            name = state.interfaceName.trim(),
+                            enabled = true,
+                            targetDeviceName = deviceName,
+                            connectionMode = connectionMode,
+                            frequency = state.frequency.toLongOrNull() ?: 915000000,
+                            bandwidth = state.bandwidth.toIntOrNull() ?: 125000,
+                            txPower = state.txPower.toIntOrNull() ?: 7,
+                            spreadingFactor = state.spreadingFactor.toIntOrNull() ?: 8,
+                            codingRate = state.codingRate.toIntOrNull() ?: 5,
+                            stAlock = state.stAlock.toDoubleOrNull(),
+                            ltAlock = state.ltAlock.toDoubleOrNull(),
+                            mode = state.interfaceMode,
+                            enableFramebuffer = state.enableFramebuffer,
+                        )
 
                     if (state.editingInterfaceId != null) {
                         // Update existing interface

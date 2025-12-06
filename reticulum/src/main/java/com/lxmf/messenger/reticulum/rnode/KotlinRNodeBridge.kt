@@ -43,6 +43,7 @@ import java.util.concurrent.atomic.AtomicInteger
 enum class RNodeConnectionMode {
     /** Bluetooth Classic (SPP/RFCOMM) - wider compatibility */
     CLASSIC,
+
     /** Bluetooth Low Energy (GATT) - lower power */
     BLE,
 }
@@ -58,7 +59,10 @@ interface RNodeErrorListener {
      * @param errorCode The error code from RNode (e.g., 0x40 for invalid config)
      * @param errorMessage Human-readable error message
      */
-    fun onRNodeError(errorCode: Int, errorMessage: String)
+    fun onRNodeError(
+        errorCode: Int,
+        errorMessage: String,
+    )
 }
 
 /**
@@ -85,6 +89,7 @@ interface RNodeErrorListener {
  * @property context Application context for Bluetooth access
  */
 @SuppressLint("MissingPermission")
+@Suppress("LargeClass")
 class KotlinRNodeBridge(
     private val context: Context,
 ) {
@@ -96,8 +101,8 @@ class KotlinRNodeBridge(
 
         // Nordic UART Service UUIDs (BLE)
         private val NUS_SERVICE_UUID: UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
-        private val NUS_RX_CHAR_UUID: UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")  // Write to RNode
-        private val NUS_TX_CHAR_UUID: UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")  // Read from RNode
+        private val NUS_RX_CHAR_UUID: UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e") // Write to RNode
+        private val NUS_TX_CHAR_UUID: UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e") // Read from RNode
         private val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
         // Buffer sizes
@@ -137,16 +142,20 @@ class KotlinRNodeBridge(
     private var bluetoothGatt: BluetoothGatt? = null
     private var bleRxCharacteristic: BluetoothGattCharacteristic? = null
     private var bleTxCharacteristic: BluetoothGattCharacteristic? = null
-    private var bleMtu: Int = 20  // Default BLE MTU (will be negotiated higher)
+    private var bleMtu: Int = 20 // Default BLE MTU (will be negotiated higher)
     private val bleScanner: BluetoothLeScanner? by lazy { bluetoothAdapter?.bluetoothLeScanner }
+
     @Volatile
     private var bleScanResult: BluetoothDevice? = null
+
     @Volatile
     private var bleConnected = false
+
     @Volatile
     private var bleServicesDiscovered = false
+
     @Volatile
-    private var bleRssi: Int = -100  // Current RSSI (-100 = unknown)
+    private var bleRssi: Int = -100 // Current RSSI (-100 = unknown)
 
     // Common state
     private var connectedDeviceName: String? = null
@@ -239,7 +248,10 @@ class KotlinRNodeBridge(
      * @param errorCode The error code from RNode
      * @param errorMessage Human-readable error message
      */
-    fun notifyError(errorCode: Int, errorMessage: String) {
+    fun notifyError(
+        errorCode: Int,
+        errorMessage: String,
+    ) {
         Log.w(TAG, "RNode error ($errorCode): $errorMessage")
 
         // Notify Python callback if set
@@ -264,10 +276,11 @@ class KotlinRNodeBridge(
      * @return List of device names (e.g., ["RNode 5A3F", "RNode B2C1"])
      */
     fun getPairedRNodes(): List<String> {
-        val adapter = bluetoothAdapter ?: run {
-            Log.w(TAG, "Bluetooth adapter not available")
-            return emptyList()
-        }
+        val adapter =
+            bluetoothAdapter ?: run {
+                Log.w(TAG, "Bluetooth adapter not available")
+                return emptyList()
+            }
 
         if (!adapter.isEnabled) {
             Log.w(TAG, "Bluetooth is disabled")
@@ -308,15 +321,20 @@ class KotlinRNodeBridge(
      * @param mode Connection mode: "classic" for Bluetooth Classic, "ble" for BLE
      * @return true if connection successful, false otherwise
      */
-    fun connect(deviceName: String, mode: String): Boolean {
-        val requestedMode = when (mode.lowercase()) {
-            "classic", "spp", "rfcomm" -> RNodeConnectionMode.CLASSIC
-            "ble", "gatt" -> RNodeConnectionMode.BLE
-            else -> {
-                Log.e(TAG, "Unknown connection mode: $mode. Use 'classic' or 'ble'")
-                return false
+    @Suppress("ReturnCount")
+    fun connect(
+        deviceName: String,
+        mode: String,
+    ): Boolean {
+        val requestedMode =
+            when (mode.lowercase()) {
+                "classic", "spp", "rfcomm" -> RNodeConnectionMode.CLASSIC
+                "ble", "gatt" -> RNodeConnectionMode.BLE
+                else -> {
+                    Log.e(TAG, "Unknown connection mode: $mode. Use 'classic' or 'ble'")
+                    return false
+                }
             }
-        }
 
         if (isConnected.get()) {
             Log.w(TAG, "Already connected to $connectedDeviceName")
@@ -326,10 +344,11 @@ class KotlinRNodeBridge(
             disconnect() // Disconnect from current device first
         }
 
-        val adapter = bluetoothAdapter ?: run {
-            Log.e(TAG, "Bluetooth adapter not available")
-            return false
-        }
+        val adapter =
+            bluetoothAdapter ?: run {
+                Log.e(TAG, "Bluetooth adapter not available")
+                return false
+            }
 
         if (!adapter.isEnabled) {
             Log.e(TAG, "Bluetooth is disabled")
@@ -345,14 +364,18 @@ class KotlinRNodeBridge(
     /**
      * Connect via Bluetooth Classic (SPP/RFCOMM).
      */
-    private fun connectClassic(deviceName: String, adapter: BluetoothAdapter): Boolean {
+    private fun connectClassic(
+        deviceName: String,
+        adapter: BluetoothAdapter,
+    ): Boolean {
         // Find the device by name in bonded devices
-        val device: BluetoothDevice? = try {
-            adapter.bondedDevices.find { it.name == deviceName }
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Missing BLUETOOTH_CONNECT permission", e)
-            null
-        }
+        val device: BluetoothDevice? =
+            try {
+                adapter.bondedDevices.find { it.name == deviceName }
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Missing BLUETOOTH_CONNECT permission", e)
+                null
+            }
 
         if (device == null) {
             Log.e(TAG, "Device not found: $deviceName. Make sure it's paired in system Bluetooth settings.")
@@ -406,16 +429,21 @@ class KotlinRNodeBridge(
     /**
      * Connect via Bluetooth Low Energy (GATT).
      */
-    private fun connectBle(deviceName: String, adapter: BluetoothAdapter): Boolean {
+    @Suppress("ReturnCount")
+    private fun connectBle(
+        deviceName: String,
+        adapter: BluetoothAdapter,
+    ): Boolean {
         Log.i(TAG, "Connecting to $deviceName via BLE...")
 
         // First check bonded devices
-        var device: BluetoothDevice? = try {
-            adapter.bondedDevices.find { it.name == deviceName }
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Missing BLUETOOTH_CONNECT permission", e)
-            null
-        }
+        var device: BluetoothDevice? =
+            try {
+                adapter.bondedDevices.find { it.name == deviceName }
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Missing BLUETOOTH_CONNECT permission", e)
+                null
+            }
 
         // If not bonded, try to scan for the device
         if (device == null) {
@@ -478,35 +506,42 @@ class KotlinRNodeBridge(
      * Scan for a BLE device by name.
      */
     private fun scanForBleDevice(deviceName: String): BluetoothDevice? {
-        val scanner = bleScanner ?: run {
-            Log.e(TAG, "BLE scanner not available")
-            return null
-        }
+        val scanner =
+            bleScanner ?: run {
+                Log.e(TAG, "BLE scanner not available")
+                return null
+            }
 
         bleScanResult = null
 
-        val scanCallback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult) {
-                val name = result.device.name ?: return
-                if (name == deviceName) {
-                    Log.d(TAG, "Found BLE device: $name (${result.device.address})")
-                    bleScanResult = result.device
+        val scanCallback =
+            object : ScanCallback() {
+                override fun onScanResult(
+                    callbackType: Int,
+                    result: ScanResult,
+                ) {
+                    val name = result.device.name ?: return
+                    if (name == deviceName) {
+                        Log.d(TAG, "Found BLE device: $name (${result.device.address})")
+                        bleScanResult = result.device
+                    }
+                }
+
+                override fun onScanFailed(errorCode: Int) {
+                    Log.e(TAG, "BLE scan failed: $errorCode")
                 }
             }
 
-            override fun onScanFailed(errorCode: Int) {
-                Log.e(TAG, "BLE scan failed: $errorCode")
-            }
-        }
-
         // Start scan with filter for Nordic UART Service
-        val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
-            .build()
+        val filter =
+            ScanFilter.Builder()
+                .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
+                .build()
 
-        val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            .build()
+        val settings =
+            ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .build()
 
         try {
             scanner.startScan(listOf(filter), settings, scanCallback)
@@ -528,115 +563,131 @@ class KotlinRNodeBridge(
     /**
      * BLE GATT callback for connection events.
      */
-    private val gattCallback = object : BluetoothGattCallback() {
-        override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> {
-                    Log.i(TAG, "BLE connected, discovering services...")
-                    bleConnected = true
-                    // Request higher MTU for better throughput
-                    gatt.requestMtu(512)
-                }
-                BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.i(TAG, "BLE disconnected")
-                    bleConnected = false
-                    if (isConnected.get() && connectionMode == RNodeConnectionMode.BLE) {
-                        handleDisconnect()
+    private val gattCallback =
+        object : BluetoothGattCallback() {
+            override fun onConnectionStateChange(
+                gatt: BluetoothGatt,
+                status: Int,
+                newState: Int,
+            ) {
+                when (newState) {
+                    BluetoothProfile.STATE_CONNECTED -> {
+                        Log.i(TAG, "BLE connected, discovering services...")
+                        bleConnected = true
+                        // Request higher MTU for better throughput
+                        gatt.requestMtu(512)
+                    }
+                    BluetoothProfile.STATE_DISCONNECTED -> {
+                        Log.i(TAG, "BLE disconnected")
+                        bleConnected = false
+                        if (isConnected.get() && connectionMode == RNodeConnectionMode.BLE) {
+                            handleDisconnect()
+                        }
                     }
                 }
             }
-        }
 
-        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                bleMtu = mtu
-                Log.d(TAG, "BLE MTU changed to $mtu")
-            }
-            // Discover services after MTU negotiation
-            gatt.discoverServices()
-        }
-
-        override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                Log.e(TAG, "Service discovery failed: $status")
-                return
+            override fun onMtuChanged(
+                gatt: BluetoothGatt,
+                mtu: Int,
+                status: Int,
+            ) {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    bleMtu = mtu
+                    Log.d(TAG, "BLE MTU changed to $mtu")
+                }
+                // Discover services after MTU negotiation
+                gatt.discoverServices()
             }
 
-            Log.d(TAG, "BLE services discovered")
+            override fun onServicesDiscovered(
+                gatt: BluetoothGatt,
+                status: Int,
+            ) {
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    Log.e(TAG, "Service discovery failed: $status")
+                    return
+                }
 
-            // Find Nordic UART Service
-            val nusService = gatt.getService(NUS_SERVICE_UUID)
-            if (nusService == null) {
-                Log.e(TAG, "Nordic UART Service not found")
-                return
+                Log.d(TAG, "BLE services discovered")
+
+                // Find Nordic UART Service
+                val nusService = gatt.getService(NUS_SERVICE_UUID)
+                if (nusService == null) {
+                    Log.e(TAG, "Nordic UART Service not found")
+                    return
+                }
+
+                // Get characteristics
+                bleRxCharacteristic = nusService.getCharacteristic(NUS_RX_CHAR_UUID)
+                bleTxCharacteristic = nusService.getCharacteristic(NUS_TX_CHAR_UUID)
+
+                if (bleRxCharacteristic == null || bleTxCharacteristic == null) {
+                    Log.e(TAG, "NUS characteristics not found")
+                    return
+                }
+
+                // Enable notifications on TX characteristic (data from RNode)
+                gatt.setCharacteristicNotification(bleTxCharacteristic, true)
+                val descriptor = bleTxCharacteristic!!.getDescriptor(CCCD_UUID)
+                descriptor?.let {
+                    it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    gatt.writeDescriptor(it)
+                }
+
+                bleServicesDiscovered = true
+                Log.i(TAG, "BLE NUS service ready")
             }
 
-            // Get characteristics
-            bleRxCharacteristic = nusService.getCharacteristic(NUS_RX_CHAR_UUID)
-            bleTxCharacteristic = nusService.getCharacteristic(NUS_TX_CHAR_UUID)
+            override fun onCharacteristicChanged(
+                gatt: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic,
+            ) {
+                if (characteristic.uuid == NUS_TX_CHAR_UUID) {
+                    val data = characteristic.value
+                    if (data != null && data.isNotEmpty()) {
+                        Log.v(TAG, "BLE received ${data.size} bytes")
 
-            if (bleRxCharacteristic == null || bleTxCharacteristic == null) {
-                Log.e(TAG, "NUS characteristics not found")
-                return
-            }
+                        // Add to read buffer
+                        for (byte in data) {
+                            readBuffer.offer(byte)
+                        }
 
-            // Enable notifications on TX characteristic (data from RNode)
-            gatt.setCharacteristicNotification(bleTxCharacteristic, true)
-            val descriptor = bleTxCharacteristic!!.getDescriptor(CCCD_UUID)
-            descriptor?.let {
-                it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                gatt.writeDescriptor(it)
-            }
-
-            bleServicesDiscovered = true
-            Log.i(TAG, "BLE NUS service ready")
-        }
-
-        override fun onCharacteristicChanged(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic,
-        ) {
-            if (characteristic.uuid == NUS_TX_CHAR_UUID) {
-                val data = characteristic.value
-                if (data != null && data.isNotEmpty()) {
-                    Log.v(TAG, "BLE received ${data.size} bytes")
-
-                    // Add to read buffer
-                    for (byte in data) {
-                        readBuffer.offer(byte)
+                        // Notify Python callback
+                        onDataReceived?.callAttr("__call__", data)
                     }
+                }
+            }
 
-                    // Notify Python callback
-                    onDataReceived?.callAttr("__call__", data)
+            @Deprecated("Deprecated in API 33")
+            override fun onCharacteristicWrite(
+                gatt: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic,
+                status: Int,
+            ) {
+                // Signal write completion to waiting thread
+                bleWriteStatus.set(status)
+                synchronized(bleWriteLock) {
+                    bleWriteLatch?.countDown()
+                }
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    Log.e(TAG, "BLE write failed: $status")
+                }
+            }
+
+            override fun onReadRemoteRssi(
+                gatt: BluetoothGatt,
+                rssi: Int,
+                status: Int,
+            ) {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    bleRssi = rssi
+                    Log.v(TAG, "BLE RSSI: $rssi dBm")
+                } else {
+                    Log.w(TAG, "Failed to read RSSI: status=$status")
                 }
             }
         }
-
-        @Deprecated("Deprecated in API 33")
-        override fun onCharacteristicWrite(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic,
-            status: Int,
-        ) {
-            // Signal write completion to waiting thread
-            bleWriteStatus.set(status)
-            synchronized(bleWriteLock) {
-                bleWriteLatch?.countDown()
-            }
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                Log.e(TAG, "BLE write failed: $status")
-            }
-        }
-
-        override fun onReadRemoteRssi(gatt: BluetoothGatt, rssi: Int, status: Int) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                bleRssi = rssi
-                Log.v(TAG, "BLE RSSI: $rssi dBm")
-            } else {
-                Log.w(TAG, "Failed to read RSSI: status=$status")
-            }
-        }
-    }
 
     /**
      * Clean up BLE resources.
@@ -807,20 +858,22 @@ class KotlinRNodeBridge(
      * Write data via BLE.
      */
     private suspend fun writeBle(data: ByteArray): Int {
-        val gatt = bluetoothGatt ?: run {
-            Log.e(TAG, "GATT is null")
-            return -1
-        }
+        val gatt =
+            bluetoothGatt ?: run {
+                Log.e(TAG, "GATT is null")
+                return -1
+            }
 
-        val rxChar = bleRxCharacteristic ?: run {
-            Log.e(TAG, "RX characteristic is null")
-            return -1
-        }
+        val rxChar =
+            bleRxCharacteristic ?: run {
+                Log.e(TAG, "RX characteristic is null")
+                return -1
+            }
 
         return try {
             withContext(Dispatchers.IO) {
                 // BLE has MTU limits - may need to chunk data
-                val maxPayload = bleMtu - 3  // MTU minus ATT header
+                val maxPayload = bleMtu - 3 // MTU minus ATT header
                 var totalWritten = 0
 
                 for (chunk in data.toList().chunked(maxPayload)) {
@@ -837,7 +890,7 @@ class KotlinRNodeBridge(
                     }
                 }
 
-                Log.v(TAG, "Wrote ${totalWritten} bytes (BLE)")
+                Log.v(TAG, "Wrote $totalWritten bytes (BLE)")
                 totalWritten
             }
         } catch (e: Exception) {
@@ -904,15 +957,17 @@ class KotlinRNodeBridge(
      * otherwise the Android BLE stack will silently drop operations.
      */
     private fun writeSyncBle(data: ByteArray): Int {
-        val gatt = bluetoothGatt ?: run {
-            Log.e(TAG, "GATT is null")
-            return -1
-        }
+        val gatt =
+            bluetoothGatt ?: run {
+                Log.e(TAG, "GATT is null")
+                return -1
+            }
 
-        val rxChar = bleRxCharacteristic ?: run {
-            Log.e(TAG, "RX characteristic is null")
-            return -1
-        }
+        val rxChar =
+            bleRxCharacteristic ?: run {
+                Log.e(TAG, "RX characteristic is null")
+                return -1
+            }
 
         return synchronized(this) {
             try {
@@ -957,7 +1012,7 @@ class KotlinRNodeBridge(
                     totalWritten += chunkData.size
                 }
 
-                Log.v(TAG, "Wrote ${totalWritten} bytes (BLE sync)")
+                Log.v(TAG, "Wrote $totalWritten bytes (BLE sync)")
                 totalWritten
             } catch (e: Exception) {
                 Log.e(TAG, "BLE write failed", e)
@@ -1010,7 +1065,10 @@ class KotlinRNodeBridge(
      * @param timeoutMs Timeout in milliseconds
      * @return Bytes read, or empty array on timeout/error
      */
-    fun readBlocking(maxBytes: Int, timeoutMs: Long): ByteArray {
+    fun readBlocking(
+        maxBytes: Int,
+        timeoutMs: Long,
+    ): ByteArray {
         if (!isConnected.get()) {
             return ByteArray(0)
         }

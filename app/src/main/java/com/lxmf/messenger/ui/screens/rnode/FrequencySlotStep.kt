@@ -36,7 +36,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,10 +73,11 @@ fun FrequencySlotStep(viewModel: RNodeWizardViewModel) {
     val hasCustomFrequency = state.customFrequency != null
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
     ) {
         // Header
         Text(
@@ -88,8 +88,9 @@ fun FrequencySlotStep(viewModel: RNodeWizardViewModel) {
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text = "Choose a frequency slot within the ${region.name} band. " +
-                "Avoid Meshtastic frequencies to prevent interference.",
+            text =
+                "Choose a frequency slot within the ${region.name} band. " +
+                    "Avoid Meshtastic frequencies to prevent interference.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -99,12 +100,14 @@ fun FrequencySlotStep(viewModel: RNodeWizardViewModel) {
         // Warning when Meshtastic slot selected
         AnimatedVisibility(visible = isMeshtasticSlot) {
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -140,9 +143,10 @@ fun FrequencySlotStep(viewModel: RNodeWizardViewModel) {
             frequency = state.customFrequency ?: currentFreq,
             numSlots = numSlots,
             isWarning = isMeshtasticSlot,
-            presetName = state.selectedSlotPreset?.let {
-                it.cityOrRegion ?: it.countryName
-            },
+            presetName =
+                state.selectedSlotPreset?.let {
+                    it.cityOrRegion ?: it.countryName
+                },
         )
 
         Spacer(Modifier.height(24.dp))
@@ -224,13 +228,15 @@ fun FrequencySlotStep(viewModel: RNodeWizardViewModel) {
             Spacer(Modifier.height(8.dp))
 
             popularPresets.forEach { preset ->
-                val presetSlot = FrequencySlotCalculator.calculateSlotFromFrequency(
-                    region,
-                    bandwidth,
-                    preset.frequency,
-                )
-                val isSelected = state.selectedSlotPreset?.id == preset.id ||
-                    (presetSlot != null && state.selectedSlot == presetSlot && state.customFrequency == null)
+                val presetSlot =
+                    FrequencySlotCalculator.calculateSlotFromFrequency(
+                        region,
+                        bandwidth,
+                        preset.frequency,
+                    )
+                val isSelected =
+                    state.selectedSlotPreset?.id == preset.id ||
+                        (presetSlot != null && state.selectedSlot == presetSlot && state.customFrequency == null)
                 PopularPresetCard(
                     preset = preset,
                     slot = presetSlot,
@@ -293,26 +299,30 @@ private fun CurrentSlotCard(
     presetName: String? = null,
 ) {
     Card(
-        colors = CardDefaults.cardColors(
-            containerColor = if (isWarning) {
-                MaterialTheme.colorScheme.errorContainer
-            } else {
-                MaterialTheme.colorScheme.primaryContainer
-            },
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isWarning) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer
+                    },
+            ),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            val contentColor = if (isWarning) {
-                MaterialTheme.colorScheme.onErrorContainer
-            } else {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            }
+            val contentColor =
+                if (isWarning) {
+                    MaterialTheme.colorScheme.onErrorContainer
+                } else {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                }
 
             // Show preset name if custom frequency, otherwise show slot number
             if (presetName != null) {
@@ -341,11 +351,12 @@ private fun CurrentSlotCard(
 
             // Show appropriate subtitle
             Text(
-                text = if (presetName != null) {
-                    "Community preset frequency"
-                } else {
-                    "of $numSlots available slots"
-                },
+                text =
+                    if (presetName != null) {
+                        "Community preset frequency"
+                    } else {
+                        "of $numSlots available slots"
+                    },
                 style = MaterialTheme.typography.bodySmall,
                 color = contentColor.copy(alpha = 0.6f),
             )
@@ -353,6 +364,7 @@ private fun CurrentSlotCard(
     }
 }
 
+@Suppress("UnusedParameter")
 @Composable
 private fun FrequencySpectrumBar(
     frequencyStart: Long,
@@ -375,18 +387,19 @@ private fun FrequencySpectrumBar(
     val frequencyRange = (frequencyEnd - frequencyStart).toFloat()
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(60.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(surfaceVariant)
-            .pointerInput(effectiveNumSlots) {
-                detectTapGestures { offset ->
-                    val slotWidth = size.width.toFloat() / effectiveNumSlots
-                    val tappedSlot = (offset.x / slotWidth).toInt().coerceIn(0, effectiveNumSlots - 1)
-                    onSlotSelected(tappedSlot)
-                }
-            },
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(surfaceVariant)
+                .pointerInput(effectiveNumSlots) {
+                    detectTapGestures { offset ->
+                        val slotWidth = size.width.toFloat() / effectiveNumSlots
+                        val tappedSlot = (offset.x / slotWidth).toInt().coerceIn(0, effectiveNumSlots - 1)
+                        onSlotSelected(tappedSlot)
+                    }
+                },
     ) {
         Canvas(
             modifier = Modifier.fillMaxSize(),
@@ -394,11 +407,12 @@ private fun FrequencySpectrumBar(
             val slotWidth = size.width / effectiveNumSlots
 
             // Draw slot markers (small ticks at regular intervals)
-            val tickInterval = when {
-                numSlots > 50 -> 10
-                numSlots > 20 -> 5
-                else -> 1
-            }
+            val tickInterval =
+                when {
+                    numSlots > 50 -> 10
+                    numSlots > 20 -> 5
+                    else -> 1
+                }
 
             for (i in 0 until numSlots step tickInterval) {
                 val x = i * slotWidth + slotWidth / 2
@@ -454,15 +468,17 @@ private fun FrequencySpectrumBar(
         // Legend for Meshtastic slots
         if (meshtasticSlots.isNotEmpty()) {
             Row(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp),
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(errorColor.copy(alpha = 0.6f), CircleShape),
+                    modifier =
+                        Modifier
+                            .size(8.dp)
+                            .background(errorColor.copy(alpha = 0.6f), CircleShape),
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
@@ -491,9 +507,10 @@ private fun SlotPicker(
             FilledIconButton(
                 onClick = { if (slot > 0) onSlotChange(slot - 1) },
                 enabled = slot > 0,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ),
+                colors =
+                    IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ),
             ) {
                 Icon(Icons.Default.Remove, contentDescription = "Decrease slot")
             }
@@ -513,9 +530,10 @@ private fun SlotPicker(
             FilledIconButton(
                 onClick = { if (slot < maxSlot) onSlotChange(slot + 1) },
                 enabled = slot < maxSlot,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ),
+                colors =
+                    IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ),
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Increase slot")
             }
@@ -574,19 +592,22 @@ private fun PopularPresetCard(
 ) {
     OutlinedCard(
         onClick = onSelect,
-        colors = CardDefaults.outlinedCardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surface
-            },
-        ),
+        colors =
+            CardDefaults.outlinedCardColors(
+                containerColor =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+            ),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -642,19 +663,22 @@ private fun MeshtasticSlotCard(
     frequency: Long,
 ) {
     Card(
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.errorContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            },
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    },
+            ),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -672,11 +696,12 @@ private fun MeshtasticSlotCard(
                     Text(
                         text = slot.name,
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                        color =
+                            if (isSelected) {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(

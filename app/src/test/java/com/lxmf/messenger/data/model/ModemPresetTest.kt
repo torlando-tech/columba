@@ -13,103 +13,113 @@ class ModemPresetTest {
 
     @Test
     fun `findByParams finds SHORT_TURBO`() {
-        val preset = ModemPreset.findByParams(
-            spreadingFactor = 7,
-            bandwidth = 500_000,
-            codingRate = 5,
-        )
+        val preset =
+            ModemPreset.findByParams(
+                spreadingFactor = 7,
+                bandwidth = 500_000,
+                codingRate = 5,
+            )
         assertEquals(ModemPreset.SHORT_TURBO, preset)
     }
 
     @Test
     fun `findByParams finds SHORT_FAST`() {
-        val preset = ModemPreset.findByParams(
-            spreadingFactor = 7,
-            bandwidth = 250_000,
-            codingRate = 5,
-        )
+        val preset =
+            ModemPreset.findByParams(
+                spreadingFactor = 7,
+                bandwidth = 250_000,
+                codingRate = 5,
+            )
         assertEquals(ModemPreset.SHORT_FAST, preset)
     }
 
     @Test
     fun `findByParams finds SHORT_SLOW`() {
-        val preset = ModemPreset.findByParams(
-            spreadingFactor = 8,
-            bandwidth = 250_000,
-            codingRate = 5,
-        )
+        val preset =
+            ModemPreset.findByParams(
+                spreadingFactor = 8,
+                bandwidth = 250_000,
+                codingRate = 5,
+            )
         assertEquals(ModemPreset.SHORT_SLOW, preset)
     }
 
     @Test
     fun `findByParams finds MEDIUM_FAST`() {
-        val preset = ModemPreset.findByParams(
-            spreadingFactor = 9,
-            bandwidth = 250_000,
-            codingRate = 5,
-        )
+        val preset =
+            ModemPreset.findByParams(
+                spreadingFactor = 9,
+                bandwidth = 250_000,
+                codingRate = 5,
+            )
         assertEquals(ModemPreset.MEDIUM_FAST, preset)
     }
 
     @Test
     fun `findByParams finds MEDIUM_SLOW`() {
-        val preset = ModemPreset.findByParams(
-            spreadingFactor = 10,
-            bandwidth = 250_000,
-            codingRate = 5,
-        )
+        val preset =
+            ModemPreset.findByParams(
+                spreadingFactor = 10,
+                bandwidth = 250_000,
+                codingRate = 5,
+            )
         assertEquals(ModemPreset.MEDIUM_SLOW, preset)
     }
 
     @Test
     fun `findByParams finds LONG_FAST`() {
-        val preset = ModemPreset.findByParams(
-            spreadingFactor = 11,
-            bandwidth = 250_000,
-            codingRate = 5,
-        )
+        val preset =
+            ModemPreset.findByParams(
+                spreadingFactor = 11,
+                bandwidth = 250_000,
+                codingRate = 5,
+            )
         assertEquals(ModemPreset.LONG_FAST, preset)
     }
 
     @Test
     fun `findByParams finds LONG_MODERATE`() {
-        val preset = ModemPreset.findByParams(
-            spreadingFactor = 11,
-            bandwidth = 125_000,
-            codingRate = 8,
-        )
+        val preset =
+            ModemPreset.findByParams(
+                spreadingFactor = 11,
+                bandwidth = 125_000,
+                codingRate = 8,
+            )
         assertEquals(ModemPreset.LONG_MODERATE, preset)
     }
 
     @Test
     fun `findByParams finds LONG_SLOW`() {
-        val preset = ModemPreset.findByParams(
-            spreadingFactor = 12,
-            bandwidth = 125_000,
-            codingRate = 8,
-        )
+        val preset =
+            ModemPreset.findByParams(
+                spreadingFactor = 12,
+                bandwidth = 125_000,
+                codingRate = 8,
+            )
         assertEquals(ModemPreset.LONG_SLOW, preset)
     }
 
     @Test
     fun `findByParams returns null for non-matching params`() {
         // Invalid combination - no preset has SF=12 with 500kHz bandwidth
-        val preset = ModemPreset.findByParams(
-            spreadingFactor = 12,
-            bandwidth = 500_000,
-            codingRate = 5,
-        )
+        val preset =
+            ModemPreset.findByParams(
+                spreadingFactor = 12,
+                bandwidth = 500_000,
+                codingRate = 5,
+            )
         assertNull(preset)
     }
 
     @Test
     fun `findByParams returns null for partial match`() {
         // SF and BW match LONG_FAST, but CR is wrong
-        val preset = ModemPreset.findByParams(
-            spreadingFactor = 11,
-            bandwidth = 250_000,
-            codingRate = 8, // Should be 5 for LONG_FAST
-        )
+        val preset =
+            ModemPreset.findByParams(
+                spreadingFactor = 11,
+                bandwidth = 250_000,
+                codingRate = 8, // Should be 5 for LONG_FAST
+            )
         assertNull(preset)
     }
 

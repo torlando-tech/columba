@@ -126,15 +126,16 @@ class FrequencyRegionTest {
 
     @Test
     fun `findById all 21 regions are findable`() {
-        val expectedIds = listOf(
-            "us_915", "br_902",
-            "eu_868_l", "eu_868_m", "eu_868_p", "eu_868_q", "eu_433",
-            "ru_868", "ua_868",
-            "au_915", "nz_865",
-            "jp_920", "kr_920", "tw_920", "cn_470", "in_865",
-            "th_920", "sg_923", "my_919", "ph_915",
-            "lora_24",
-        )
+        val expectedIds =
+            listOf(
+                "us_915", "br_902",
+                "eu_868_l", "eu_868_m", "eu_868_p", "eu_868_q", "eu_433",
+                "ru_868", "ua_868",
+                "au_915", "nz_865",
+                "jp_920", "kr_920", "tw_920", "cn_470", "in_865",
+                "th_920", "sg_923", "my_919", "ph_915",
+                "lora_24",
+            )
 
         expectedIds.forEach { id ->
             assertNotNull("Region with ID '$id' should exist", FrequencyRegions.findById(id))

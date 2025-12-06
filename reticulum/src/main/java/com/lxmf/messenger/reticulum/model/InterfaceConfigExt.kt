@@ -29,13 +29,17 @@ fun InterfaceConfig.toJsonString(): String {
 
         is InterfaceConfig.RNode ->
             JSONObject().apply {
-                put("port", port)
+                put("target_device_name", targetDeviceName)
+                put("connection_mode", connectionMode)
                 put("frequency", frequency)
                 put("bandwidth", bandwidth)
                 put("tx_power", txPower)
                 put("spreading_factor", spreadingFactor)
                 put("coding_rate", codingRate)
+                stAlock?.let { put("st_alock", it) }
+                ltAlock?.let { put("lt_alock", it) }
                 put("mode", mode)
+                put("enable_framebuffer", enableFramebuffer)
             }.toString()
 
         is InterfaceConfig.UDP ->

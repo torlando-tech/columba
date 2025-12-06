@@ -178,15 +178,16 @@ class InterfaceConfigManager
 
                 // Load active identity and ensure its file exists (recover from keyData if needed)
                 val activeIdentity = identityRepository.getActiveIdentitySync()
-                val identityPath = if (activeIdentity != null) {
-                    identityRepository.ensureIdentityFileExists(activeIdentity)
-                        .onFailure { error ->
-                            Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
-                        }
-                        .getOrNull()
-                } else {
-                    null
-                }
+                val identityPath =
+                    if (activeIdentity != null) {
+                        identityRepository.ensureIdentityFileExists(activeIdentity)
+                            .onFailure { error ->
+                                Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
+                            }
+                            .getOrNull()
+                    } else {
+                        null
+                    }
                 val displayName = activeIdentity?.displayName
                 Log.d(TAG, "Active identity: ${activeIdentity?.displayName ?: "none"}, verified path: $identityPath")
 
@@ -265,9 +266,10 @@ class InterfaceConfigManager
 
                     if (announces.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
                         // Map announces to peer identity format (destinationHash, publicKey)
-                        val announcePeerIdentities = announces.map { announce ->
-                            announce.destinationHash to announce.publicKey
-                        }
+                        val announcePeerIdentities =
+                            announces.map { announce ->
+                                announce.destinationHash to announce.publicKey
+                            }
                         reticulumProtocol.restorePeerIdentities(announcePeerIdentities)
                             .onSuccess { count ->
                                 Log.d(TAG, "✓ Restored $count announce peer identities")

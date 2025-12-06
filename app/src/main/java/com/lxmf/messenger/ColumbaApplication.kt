@@ -167,8 +167,9 @@ class ColumbaApplication : Application() {
 
                         // Verify service identity matches database active identity
                         // This catches mismatches from interrupted identity switches or data imports
-                        val serviceIdentity = (reticulumProtocol as ServiceReticulumProtocol)
-                            .getLxmfIdentity().getOrNull()
+                        val serviceIdentity =
+                            (reticulumProtocol as ServiceReticulumProtocol)
+                                .getLxmfIdentity().getOrNull()
                         val serviceIdentityHash = serviceIdentity?.hash?.toHexString()
 
                         val activeIdentity = identityRepository.getActiveIdentitySync()
@@ -436,8 +437,9 @@ class ColumbaApplication : Application() {
         }
 
         try {
-            val companionDeviceManager = getSystemService(android.companion.CompanionDeviceManager::class.java)
-                ?: return
+            val companionDeviceManager =
+                getSystemService(android.companion.CompanionDeviceManager::class.java)
+                    ?: return
 
             val associations = companionDeviceManager.myAssociations
             if (associations.isEmpty()) {

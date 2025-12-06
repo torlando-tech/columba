@@ -20,8 +20,9 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SignalCellularAlt
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -48,7 +49,6 @@ import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.FrequencySlotCalculator
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
-import androidx.compose.material.icons.filled.Warning
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,17 +56,19 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
     val state by viewModel.state.collectAsState()
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .imePadding()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
     ) {
         // Device summary
         Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-            ),
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
@@ -156,9 +158,10 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
             // Duty cycle warning for restricted regions
             if (region.hasDutyCycleLimit) {
                 Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                    ),
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                        ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
@@ -354,11 +357,12 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                                     } else {
                                         ""
                                     },
-                                color = if (state.frequencyError != null) {
-                                    MaterialTheme.colorScheme.error
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
+                                color =
+                                    if (state.frequencyError != null) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                             )
                         },
                     )
@@ -415,11 +419,12 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         supportingText = {
                             Text(
                                 state.txPowerError ?: "Max: $maxTxPower dBm",
-                                color = if (state.txPowerError != null) {
-                                    MaterialTheme.colorScheme.error
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
+                                color =
+                                    if (state.txPowerError != null) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                             )
                         },
                         placeholder = { Text("0-$maxTxPower") },
@@ -475,11 +480,12 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         "Limits duty cycle to prevent overuse. Leave empty for no limit."
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (maxAirtime != null) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color =
+                        if (maxAirtime != null) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                 )
 
                 Spacer(Modifier.height(16.dp))
@@ -531,13 +537,14 @@ private fun InterfaceModeSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    val modes = listOf(
-        "full" to "Full (all features enabled)",
-        "gateway" to "Gateway (path discovery for others)",
-        "access_point" to "Access Point (quiet unless active)",
-        "roaming" to "Roaming (mobile relative to others)",
-        "boundary" to "Boundary (network edge)",
-    )
+    val modes =
+        listOf(
+            "full" to "Full (all features enabled)",
+            "gateway" to "Gateway (path discovery for others)",
+            "access_point" to "Access Point (quiet unless active)",
+            "roaming" to "Roaming (mobile relative to others)",
+            "boundary" to "Boundary (network edge)",
+        )
 
     val selectedLabel = modes.find { it.first == selectedMode }?.second ?: "Full"
 
@@ -558,9 +565,10 @@ private fun InterfaceModeSelector(
                 onValueChange = { },
                 readOnly = true,
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable),
             )
 
             ExposedDropdownMenu(

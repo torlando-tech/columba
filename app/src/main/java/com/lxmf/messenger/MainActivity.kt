@@ -43,10 +43,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.lifecycleScope
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -68,9 +66,9 @@ import com.lxmf.messenger.ui.screens.ChatsScreen
 import com.lxmf.messenger.ui.screens.ContactsScreen
 import com.lxmf.messenger.ui.screens.IdentityManagerScreen
 import com.lxmf.messenger.ui.screens.IdentityScreen
-import com.lxmf.messenger.ui.screens.MigrationScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
 import com.lxmf.messenger.ui.screens.MessagingScreen
+import com.lxmf.messenger.ui.screens.MigrationScreen
 import com.lxmf.messenger.ui.screens.MyIdentityScreen
 import com.lxmf.messenger.ui.screens.NotificationSettingsScreen
 import com.lxmf.messenger.ui.screens.QrScannerScreen
@@ -82,6 +80,7 @@ import com.lxmf.messenger.ui.theme.ColumbaTheme
 import com.lxmf.messenger.viewmodel.ContactsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 /**
  * Main activity for the Columba LXMF Messenger application.
@@ -562,12 +561,13 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
 
                     composable(
                         route = "rnode_wizard?interfaceId={interfaceId}",
-                        arguments = listOf(
-                            navArgument("interfaceId") {
-                                type = NavType.LongType
-                                defaultValue = -1L
-                            },
-                        ),
+                        arguments =
+                            listOf(
+                                navArgument("interfaceId") {
+                                    type = NavType.LongType
+                                    defaultValue = -1L
+                                },
+                            ),
                     ) { backStackEntry ->
                         val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
                         com.lxmf.messenger.ui.screens.rnode.RNodeWizardScreen(

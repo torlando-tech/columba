@@ -11,7 +11,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -281,10 +280,10 @@ class ChatsViewModelTest {
             // WhileSubscribed starts only when there's an active subscriber
             viewModel.conversations.test {
                 advanceUntilIdle()
-                
+
                 // Verify that getConversations is called when we subscribe
                 verify { conversationRepository.getConversations() }
-                
+
                 // Verify we receive initial empty state
                 assertEquals(emptyList<Conversation>(), awaitItem())
             }

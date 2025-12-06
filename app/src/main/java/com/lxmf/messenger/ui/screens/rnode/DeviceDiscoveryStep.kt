@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SignalCellular4Bar
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,7 +36,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -63,23 +63,25 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
     val context = LocalContext.current
 
     // Permission launcher
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions(),
-    ) { permissions ->
-        if (permissions.values.all { it }) {
-            viewModel.startDeviceScan()
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestMultiplePermissions(),
+        ) { permissions ->
+            if (permissions.values.all { it }) {
+                viewModel.startDeviceScan()
+            }
         }
-    }
 
     // Companion Device Association launcher (Android 12+)
-    val associationLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartIntentSenderForResult(),
-    ) { result ->
-        if (result.resultCode != Activity.RESULT_OK) {
-            viewModel.onAssociationCancelled()
+    val associationLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartIntentSenderForResult(),
+        ) { result ->
+            if (result.resultCode != Activity.RESULT_OK) {
+                viewModel.onAssociationCancelled()
+            }
+            // If RESULT_OK, the CDM callback onAssociationCreated will handle the selection
         }
-        // If RESULT_OK, the CDM callback onAssociationCreated will handle the selection
-    }
 
     // Launch the association intent when provided by ViewModel
     LaunchedEffect(state.pendingAssociationIntent) {
@@ -92,7 +94,8 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
 
     // Auto-start scan when entering this step (always scan to detect correct device types)
     LaunchedEffect(Unit) {
-        val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val requiredPermissions =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 arrayOf(
                     Manifest.permission.BLUETOOTH_SCAN,
                     Manifest.permission.BLUETOOTH_CONNECT,
@@ -113,9 +116,10 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(16.dp),
     ) {
         // Scanning indicator
         if (state.isScanning) {
@@ -143,9 +147,10 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
         // Error message
         state.scanError?.let { error ->
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                ),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
@@ -160,9 +165,10 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
         // Pairing error with retry button
         state.pairingError?.let { error ->
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                ),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
@@ -193,9 +199,10 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
         // Pairing in progress indicator
         if (state.isPairingInProgress) {
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                ),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
@@ -229,9 +236,10 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
         // Association error
         state.associationError?.let { error ->
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                ),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
@@ -283,10 +291,11 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
             modifier = Modifier.weight(1f),
         ) {
             items(
-                items = state.discoveredDevices.filter {
-                    // In edit mode, don't show the current device in the list
-                    !(state.isEditMode && it.name == state.selectedDevice?.name)
-                },
+                items =
+                    state.discoveredDevices.filter {
+                        // In edit mode, don't show the current device in the list
+                        !(state.isEditMode && it.name == state.selectedDevice?.name)
+                    },
                 key = { it.address },
             ) { device ->
                 BluetoothDeviceCard(
@@ -392,21 +401,23 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                         selected = state.manualBluetoothType == BluetoothType.CLASSIC,
                         onClick = { viewModel.updateManualBluetoothType(BluetoothType.CLASSIC) },
                         label = { Text("Bluetooth Classic") },
-                        leadingIcon = if (state.manualBluetoothType == BluetoothType.CLASSIC) {
-                            { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
-                        } else {
-                            null
-                        },
+                        leadingIcon =
+                            if (state.manualBluetoothType == BluetoothType.CLASSIC) {
+                                { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
+                            } else {
+                                null
+                            },
                     )
                     FilterChip(
                         selected = state.manualBluetoothType == BluetoothType.BLE,
                         onClick = { viewModel.updateManualBluetoothType(BluetoothType.BLE) },
                         label = { Text("Bluetooth LE") },
-                        leadingIcon = if (state.manualBluetoothType == BluetoothType.BLE) {
-                            { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
-                        } else {
-                            null
-                        },
+                        leadingIcon =
+                            if (state.manualBluetoothType == BluetoothType.BLE) {
+                                { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
+                            } else {
+                                null
+                            },
                     )
                 }
 
@@ -448,22 +459,25 @@ private fun BluetoothDeviceCard(
                 onSelect()
             }
         },
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else if (device.type == BluetoothType.UNKNOWN) {
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-            } else {
-                MaterialTheme.colorScheme.surface
-            },
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else if (device.type == BluetoothType.UNKNOWN) {
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+            ),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -471,156 +485,164 @@ private fun BluetoothDeviceCard(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f),
                 ) {
-                Icon(
-                    Icons.Default.Bluetooth,
-                    contentDescription = null,
-                    tint = if (isSelected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        device.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
+                    Icon(
+                        Icons.Default.Bluetooth,
+                        contentDescription = null,
+                        tint =
+                            if (isSelected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                     )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        // Bluetooth type badge with warning for UNKNOWN
-                        if (device.type == BluetoothType.UNKNOWN) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Icon(
-                                    Icons.Default.Warning,
-                                    contentDescription = "Unknown type",
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                                Text(
-                                    "Unknown type",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        } else {
-                            Text(
-                                when (device.type) {
-                                    BluetoothType.CLASSIC -> "Classic"
-                                    BluetoothType.BLE -> "BLE"
-                                    BluetoothType.UNKNOWN -> "Unknown"
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            device.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color =
+                                if (isSelected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
                                 } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                    MaterialTheme.colorScheme.onSurface
                                 },
-                            )
-                        }
-
-                        // Signal strength (BLE only)
-                        device.rssi?.let { rssi ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.SignalCellular4Bar,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(12.dp),
-                                    tint = if (isSelected) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                )
-                                Spacer(Modifier.width(2.dp))
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // Bluetooth type badge with warning for UNKNOWN
+                            if (device.type == BluetoothType.UNKNOWN) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.Warning,
+                                        contentDescription = "Unknown type",
+                                        modifier = Modifier.size(14.dp),
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                    Text(
+                                        "Unknown type",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            } else {
                                 Text(
-                                    "${rssi}dBm",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isSelected) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    when (device.type) {
+                                        BluetoothType.CLASSIC -> "Classic"
+                                        BluetoothType.BLE -> "BLE"
+                                        BluetoothType.UNKNOWN -> "Unknown"
                                     },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color =
+                                        if (isSelected) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
                                 )
                             }
-                        }
 
-                        // Paired status
-                        if (device.isPaired) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.Link,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(12.dp),
-                                    tint = if (isSelected) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                )
-                                Spacer(Modifier.width(2.dp))
-                                Text(
-                                    "Paired",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isSelected) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                )
+                            // Signal strength (BLE only)
+                            device.rssi?.let { rssi ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.SignalCellular4Bar,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(12.dp),
+                                        tint =
+                                            if (isSelected) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                    )
+                                    Spacer(Modifier.width(2.dp))
+                                    Text(
+                                        "${rssi}dBm",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color =
+                                            if (isSelected) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                    )
+                                }
+                            }
+
+                            // Paired status
+                            if (device.isPaired) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Link,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(12.dp),
+                                        tint =
+                                            if (isSelected) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                    )
+                                    Spacer(Modifier.width(2.dp))
+                                    Text(
+                                        "Paired",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color =
+                                            if (isSelected) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Selection indicator, association progress, or pair button
-            when {
-                isSelected -> {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = "Selected",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                isAssociating -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
-                    )
-                }
-                !device.isPaired -> {
-                    if (isPairingInProgress) {
+                // Selection indicator, association progress, or pair button
+                when {
+                    isSelected -> {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    isAssociating -> {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
                             strokeWidth = 2.dp,
                         )
-                    } else {
-                        TextButton(onClick = onPair) {
-                            Text("Pair")
+                    }
+                    !device.isPaired -> {
+                        if (isPairingInProgress) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            TextButton(onClick = onPair) {
+                                Text("Pair")
+                            }
                         }
                     }
                 }
-            }
             }
 
             // Type selector for UNKNOWN devices
             AnimatedVisibility(visible = device.type == BluetoothType.UNKNOWN && showTypeSelector) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 16.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 16.dp),
                 ) {
                     Text(
                         "Select connection type:",

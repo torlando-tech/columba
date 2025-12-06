@@ -33,7 +33,6 @@ import com.lxmf.messenger.IReticulumService
  */
 @RequiresApi(Build.VERSION_CODES.S)
 class RNodeCompanionService : CompanionDeviceService() {
-
     companion object {
         private const val TAG = "RNodeCompanionService"
         private const val RECONNECT_DELAY_MS = 2000L // Wait 2s before reconnecting to ensure device is stable
@@ -44,22 +43,26 @@ class RNodeCompanionService : CompanionDeviceService() {
     private var reticulumService: IReticulumService? = null
     private var isServiceBound = false
 
-    private val serviceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            Log.d(TAG, "Connected to ReticulumBridgeService")
-            reticulumService = IReticulumService.Stub.asInterface(binder)
-            isServiceBound = true
+    private val serviceConnection =
+        object : ServiceConnection {
+            override fun onServiceConnected(
+                name: ComponentName?,
+                binder: IBinder?,
+            ) {
+                Log.d(TAG, "Connected to ReticulumBridgeService")
+                reticulumService = IReticulumService.Stub.asInterface(binder)
+                isServiceBound = true
 
-            // Now that we're connected, trigger the reconnection
-            triggerReconnection()
-        }
+                // Now that we're connected, trigger the reconnection
+                triggerReconnection()
+            }
 
-        override fun onServiceDisconnected(name: ComponentName?) {
-            Log.d(TAG, "Disconnected from ReticulumBridgeService")
-            reticulumService = null
-            isServiceBound = false
+            override fun onServiceDisconnected(name: ComponentName?) {
+                Log.d(TAG, "Disconnected from ReticulumBridgeService")
+                reticulumService = null
+                isServiceBound = false
+            }
         }
-    }
 
     override fun onCreate() {
         super.onCreate()
@@ -153,10 +156,11 @@ class RNodeCompanionService : CompanionDeviceService() {
 
         Log.d(TAG, "Scheduling RNode reconnection in ${RECONNECT_DELAY_MS}ms")
 
-        pendingReconnect = Runnable {
-            Log.d(TAG, "Executing scheduled RNode reconnection")
-            bindAndReconnect()
-        }
+        pendingReconnect =
+            Runnable {
+                Log.d(TAG, "Executing scheduled RNode reconnection")
+                bindAndReconnect()
+            }
 
         handler.postDelayed(pendingReconnect!!, RECONNECT_DELAY_MS)
     }

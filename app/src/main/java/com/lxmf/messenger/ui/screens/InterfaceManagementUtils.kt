@@ -44,6 +44,7 @@ fun InterfaceEntity.canOperate(
  * @param isOnline Whether the interface is currently online (from debug info)
  * @return Error message string, or null if no error
  */
+@Suppress("ReturnCount")
 fun InterfaceEntity.getErrorMessage(
     bluetoothState: Int,
     permissionsGranted: Boolean,

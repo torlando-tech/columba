@@ -115,11 +115,12 @@ class RNodeRegionalPresetsTest {
     @Test
     fun `findMatchingPreset finds exact match`() {
         // Australia default: 925875000, 250000, SF9
-        val preset = RNodeRegionalPresets.findMatchingPreset(
-            frequency = 925_875_000,
-            bandwidth = 250_000,
-            spreadingFactor = 9,
-        )
+        val preset =
+            RNodeRegionalPresets.findMatchingPreset(
+                frequency = 925_875_000,
+                bandwidth = 250_000,
+                spreadingFactor = 9,
+            )
 
         assertNotNull(preset)
         assertEquals("au_default", preset!!.id)
@@ -128,11 +129,12 @@ class RNodeRegionalPresetsTest {
     @Test
     fun `findMatchingPreset finds Sydney preset`() {
         // Sydney uses SF11 for long range
-        val preset = RNodeRegionalPresets.findMatchingPreset(
-            frequency = 925_875_000,
-            bandwidth = 250_000,
-            spreadingFactor = 11,
-        )
+        val preset =
+            RNodeRegionalPresets.findMatchingPreset(
+                frequency = 925_875_000,
+                bandwidth = 250_000,
+                spreadingFactor = 11,
+            )
 
         assertNotNull(preset)
         assertEquals("au_sydney", preset!!.id)
@@ -141,11 +143,12 @@ class RNodeRegionalPresetsTest {
     @Test
     fun `findMatchingPreset returns null for no match`() {
         // Non-existent combination
-        val preset = RNodeRegionalPresets.findMatchingPreset(
-            frequency = 999_000_000,
-            bandwidth = 250_000,
-            spreadingFactor = 7,
-        )
+        val preset =
+            RNodeRegionalPresets.findMatchingPreset(
+                frequency = 999_000_000,
+                bandwidth = 250_000,
+                spreadingFactor = 7,
+            )
 
         assertNull(preset)
     }
@@ -153,11 +156,12 @@ class RNodeRegionalPresetsTest {
     @Test
     fun `findMatchingPreset returns null for partial match`() {
         // Correct frequency and bandwidth, wrong SF
-        val preset = RNodeRegionalPresets.findMatchingPreset(
-            frequency = 925_875_000,
-            bandwidth = 250_000,
-            spreadingFactor = 12, // No Australian preset uses SF12 at 250kHz
-        )
+        val preset =
+            RNodeRegionalPresets.findMatchingPreset(
+                frequency = 925_875_000,
+                bandwidth = 250_000,
+                spreadingFactor = 12, // No Australian preset uses SF12 at 250kHz
+            )
 
         assertNull(preset)
     }

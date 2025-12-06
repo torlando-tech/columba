@@ -12,27 +12,29 @@ import org.junit.Test
  */
 class RNodeConfigValidatorTest {
     // Test regions
-    private val usRegion = FrequencyRegion(
-        id = "us_915",
-        name = "US / Americas (915 MHz)",
-        description = "902-928 MHz",
-        frequencyStart = 902_000_000L,
-        frequencyEnd = 928_000_000L,
-        maxTxPower = 30,
-        defaultTxPower = 17,
-        dutyCycle = 100,
-    )
+    private val usRegion =
+        FrequencyRegion(
+            id = "us_915",
+            name = "US / Americas (915 MHz)",
+            description = "902-928 MHz",
+            frequencyStart = 902_000_000L,
+            frequencyEnd = 928_000_000L,
+            maxTxPower = 30,
+            defaultTxPower = 17,
+            dutyCycle = 100,
+        )
 
-    private val euRegion = FrequencyRegion(
-        id = "eu_868_p",
-        name = "EU (868 MHz) - 10% duty",
-        description = "869.4-869.65 MHz, 10% duty cycle",
-        frequencyStart = 869_400_000L,
-        frequencyEnd = 869_650_000L,
-        maxTxPower = 14,
-        defaultTxPower = 14,
-        dutyCycle = 10,
-    )
+    private val euRegion =
+        FrequencyRegion(
+            id = "eu_868_p",
+            name = "EU (868 MHz) - 10% duty",
+            description = "869.4-869.65 MHz, 10% duty cycle",
+            frequencyStart = 869_400_000L,
+            frequencyEnd = 869_650_000L,
+            maxTxPower = 14,
+            defaultTxPower = 14,
+            dutyCycle = 10,
+        )
 
     // ========== validateName Tests ==========
 
@@ -276,65 +278,69 @@ class RNodeConfigValidatorTest {
 
     @Test
     fun `validateConfigSilent all valid`() {
-        val result = RNodeConfigValidator.validateConfigSilent(
-            name = "RNode LoRa",
-            frequency = "915000000",
-            bandwidth = "250000",
-            spreadingFactor = "11",
-            codingRate = "5",
-            txPower = "17",
-            stAlock = "",
-            ltAlock = "",
-            region = usRegion,
-        )
+        val result =
+            RNodeConfigValidator.validateConfigSilent(
+                name = "RNode LoRa",
+                frequency = "915000000",
+                bandwidth = "250000",
+                spreadingFactor = "11",
+                codingRate = "5",
+                txPower = "17",
+                stAlock = "",
+                ltAlock = "",
+                region = usRegion,
+            )
         assertTrue(result)
     }
 
     @Test
     fun `validateConfigSilent blank name fails`() {
-        val result = RNodeConfigValidator.validateConfigSilent(
-            name = "",
-            frequency = "915000000",
-            bandwidth = "250000",
-            spreadingFactor = "11",
-            codingRate = "5",
-            txPower = "17",
-            stAlock = "",
-            ltAlock = "",
-            region = usRegion,
-        )
+        val result =
+            RNodeConfigValidator.validateConfigSilent(
+                name = "",
+                frequency = "915000000",
+                bandwidth = "250000",
+                spreadingFactor = "11",
+                codingRate = "5",
+                txPower = "17",
+                stAlock = "",
+                ltAlock = "",
+                region = usRegion,
+            )
         assertFalse(result)
     }
 
     @Test
     fun `validateConfigSilent blank frequency fails`() {
-        val result = RNodeConfigValidator.validateConfigSilent(
-            name = "RNode",
-            frequency = "",
-            bandwidth = "250000",
-            spreadingFactor = "11",
-            codingRate = "5",
-            txPower = "17",
-            stAlock = "",
-            ltAlock = "",
-            region = usRegion,
-        )
+        val result =
+            RNodeConfigValidator.validateConfigSilent(
+                name = "RNode",
+                frequency = "",
+                bandwidth = "250000",
+                spreadingFactor = "11",
+                codingRate = "5",
+                txPower = "17",
+                stAlock = "",
+                ltAlock = "",
+                region = usRegion,
+            )
         assertFalse(result)
     }
 
     @Test
     fun `validateConfigSilent invalid txPower fails`() {
-        val result = RNodeConfigValidator.validateConfigSilent(
-            name = "RNode",
-            frequency = "915000000",
-            bandwidth = "250000",
-            spreadingFactor = "11",
-            codingRate = "5",
-            txPower = "50", // Too high
-            stAlock = "",
-            ltAlock = "",
-            region = usRegion,
-        )
+        val result =
+            RNodeConfigValidator.validateConfigSilent(
+                name = "RNode",
+                frequency = "915000000",
+                bandwidth = "250000",
+                spreadingFactor = "11",
+                codingRate = "5",
+                txPower = "50", // Too high
+                stAlock = "",
+                ltAlock = "",
+                region = usRegion,
+            )
         assertFalse(result)
     }
 
@@ -342,17 +348,18 @@ class RNodeConfigValidatorTest {
 
     @Test
     fun `validateConfig all valid returns valid result`() {
-        val result = RNodeConfigValidator.validateConfig(
-            name = "RNode LoRa",
-            frequency = "915000000",
-            bandwidth = "250000",
-            spreadingFactor = "11",
-            codingRate = "5",
-            txPower = "17",
-            stAlock = "",
-            ltAlock = "",
-            region = usRegion,
-        )
+        val result =
+            RNodeConfigValidator.validateConfig(
+                name = "RNode LoRa",
+                frequency = "915000000",
+                bandwidth = "250000",
+                spreadingFactor = "11",
+                codingRate = "5",
+                txPower = "17",
+                stAlock = "",
+                ltAlock = "",
+                region = usRegion,
+            )
         assertTrue(result.isValid)
         assertNull(result.nameError)
         assertNull(result.frequencyError)
@@ -366,34 +373,36 @@ class RNodeConfigValidatorTest {
 
     @Test
     fun `validateConfig blank name returns error`() {
-        val result = RNodeConfigValidator.validateConfig(
-            name = "",
-            frequency = "915000000",
-            bandwidth = "250000",
-            spreadingFactor = "11",
-            codingRate = "5",
-            txPower = "17",
-            stAlock = "",
-            ltAlock = "",
-            region = usRegion,
-        )
+        val result =
+            RNodeConfigValidator.validateConfig(
+                name = "",
+                frequency = "915000000",
+                bandwidth = "250000",
+                spreadingFactor = "11",
+                codingRate = "5",
+                txPower = "17",
+                stAlock = "",
+                ltAlock = "",
+                region = usRegion,
+            )
         assertFalse(result.isValid)
         assertTrue(result.nameError!!.contains("required"))
     }
 
     @Test
     fun `validateConfig blank frequency returns error with range`() {
-        val result = RNodeConfigValidator.validateConfig(
-            name = "RNode",
-            frequency = "",
-            bandwidth = "250000",
-            spreadingFactor = "11",
-            codingRate = "5",
-            txPower = "17",
-            stAlock = "",
-            ltAlock = "",
-            region = usRegion,
-        )
+        val result =
+            RNodeConfigValidator.validateConfig(
+                name = "RNode",
+                frequency = "",
+                bandwidth = "250000",
+                spreadingFactor = "11",
+                codingRate = "5",
+                txPower = "17",
+                stAlock = "",
+                ltAlock = "",
+                region = usRegion,
+            )
         assertFalse(result.isValid)
         assertTrue(result.frequencyError!!.contains("902"))
         assertTrue(result.frequencyError!!.contains("928"))
@@ -401,17 +410,18 @@ class RNodeConfigValidatorTest {
 
     @Test
     fun `validateConfig multiple errors`() {
-        val result = RNodeConfigValidator.validateConfig(
-            name = "",
-            frequency = "",
-            bandwidth = "",
-            spreadingFactor = "",
-            codingRate = "",
-            txPower = "",
-            stAlock = "",
-            ltAlock = "",
-            region = usRegion,
-        )
+        val result =
+            RNodeConfigValidator.validateConfig(
+                name = "",
+                frequency = "",
+                bandwidth = "",
+                spreadingFactor = "",
+                codingRate = "",
+                txPower = "",
+                stAlock = "",
+                ltAlock = "",
+                region = usRegion,
+            )
         assertFalse(result.isValid)
         assertTrue(result.nameError != null)
         assertTrue(result.frequencyError != null)

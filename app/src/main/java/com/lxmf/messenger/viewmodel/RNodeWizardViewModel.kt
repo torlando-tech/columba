@@ -1122,7 +1122,19 @@ class RNodeWizardViewModel
         }
 
         fun updateFrequency(value: String) {
-            _state.update { it.copy(frequency = value, frequencyError = null) }
+            val (minFreq, maxFreq) = getFrequencyRange()
+            val freq = value.toLongOrNull()
+            val error = when {
+                value.isBlank() -> null // Allow empty while typing
+                freq == null -> "Invalid number"
+                freq < minFreq || freq > maxFreq -> {
+                    val minMhz = minFreq / 1_000_000.0
+                    val maxMhz = maxFreq / 1_000_000.0
+                    "Must be %.1f-%.1f MHz".format(minMhz, maxMhz)
+                }
+                else -> null
+            }
+            _state.update { it.copy(frequency = value, frequencyError = error) }
         }
 
         fun updateBandwidth(value: String) {
@@ -1138,7 +1150,16 @@ class RNodeWizardViewModel
         }
 
         fun updateTxPower(value: String) {
-            _state.update { it.copy(txPower = value, txPowerError = null) }
+            val maxPower = getMaxTxPower()
+            val txp = value.toIntOrNull()
+            val error = when {
+                value.isBlank() -> null // Allow empty while typing
+                txp == null -> "Invalid number"
+                txp < 0 -> "Must be >= 0"
+                txp > maxPower -> "Max: $maxPower dBm"
+                else -> null
+            }
+            _state.update { it.copy(txPower = value, txPowerError = error) }
         }
 
         fun updateStAlock(value: String) {

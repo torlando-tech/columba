@@ -363,9 +363,9 @@ class RNodeWizardViewModel
                     state.selectedDevice != null ||
                         (state.showManualEntry && state.manualDeviceName.isNotBlank())
                 WizardStep.REGION_SELECTION ->
-                    state.selectedFrequencyRegion != null || state.selectedPreset != null || state.isCustomMode
+                    state.selectedFrequencyRegion != null // Must select a region
                 WizardStep.MODEM_PRESET ->
-                    true // Modem preset always has a default selection
+                    state.selectedModemPreset != null // Must select a modem preset
                 WizardStep.FREQUENCY_SLOT ->
                     true // Slot always has a valid selection
                 WizardStep.REVIEW_CONFIGURE ->

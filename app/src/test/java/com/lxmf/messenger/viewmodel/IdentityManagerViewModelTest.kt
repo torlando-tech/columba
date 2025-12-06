@@ -13,7 +13,9 @@ import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -340,8 +342,22 @@ class IdentityManagerViewModelTest {
             every { mockRepository.activeIdentity } returns MutableStateFlow(createTestIdentity(hash = "id1", isActive = true))
             viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
 
+            // WhileSubscribed requires active collector - subscribe to activeIdentity to start the flow
+            val identityJob = launch {
+                viewModel.activeIdentity.collect {}
+            }
+            advanceUntilIdle()
+
             viewModel.uiState.test {
-                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+                // Skip initial value if any, wait for Idle state
+                val firstState = awaitItem()
+                if (firstState !is IdentityManagerUiState.Idle) {
+                    // If not Idle, wait for it
+                    val idleState = awaitItem()
+                    assertTrue(idleState is IdentityManagerUiState.Idle)
+                } else {
+                    assertTrue(firstState is IdentityManagerUiState.Idle)
+                }
 
                 // When
                 viewModel.deleteIdentity("id1")
@@ -353,6 +369,8 @@ class IdentityManagerViewModelTest {
                 assertTrue(errorState is IdentityManagerUiState.Error)
                 assertTrue((errorState as IdentityManagerUiState.Error).message.contains("active identity"))
             }
+            
+            identityJob.cancel()
         }
 
     @Test

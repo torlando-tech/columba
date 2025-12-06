@@ -179,9 +179,9 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                             )
                             Text(
                                 if (region.dutyCycle <= 1) {
-                                    "This region has very strict limits. Configure airtime limits in Advanced Settings to ensure compliance."
+                                    "This region has very strict limits. Airtime limits (${region.dutyCycle}%) applied automatically in Advanced Settings."
                                 } else {
-                                    "This region requires limiting transmission time. Configure airtime limits in Advanced Settings."
+                                    "This region requires limiting transmission time. Airtime limits (${region.dutyCycle}%) applied automatically in Advanced Settings."
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer,

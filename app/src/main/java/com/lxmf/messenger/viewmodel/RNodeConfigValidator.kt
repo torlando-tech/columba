@@ -26,6 +26,21 @@ data class ConfigValidationResult(
 )
 
 /**
+ * Input parameters for RNode configuration validation.
+ */
+data class RNodeConfigInput(
+    val name: String,
+    val frequency: String,
+    val bandwidth: String,
+    val spreadingFactor: String,
+    val codingRate: String,
+    val txPower: String,
+    val stAlock: String,
+    val ltAlock: String,
+    val region: FrequencyRegion?,
+)
+
+/**
  * Validates RNode configuration parameters.
  *
  * Extracted from RNodeWizardViewModel to reduce class complexity and improve testability.
@@ -59,7 +74,10 @@ object RNodeConfigValidator {
     /**
      * Validate frequency against region limits.
      */
-    fun validateFrequency(value: String, region: FrequencyRegion?): FieldValidation {
+    fun validateFrequency(
+        value: String,
+        region: FrequencyRegion?,
+    ): FieldValidation {
         val freq = value.toLongOrNull()
         val minFreq = region?.frequencyStart ?: DEFAULT_MIN_FREQ
         val maxFreq = region?.frequencyEnd ?: DEFAULT_MAX_FREQ
@@ -121,7 +139,10 @@ object RNodeConfigValidator {
     /**
      * Validate TX power against region limits.
      */
-    fun validateTxPower(value: String, region: FrequencyRegion?): FieldValidation {
+    fun validateTxPower(
+        value: String,
+        region: FrequencyRegion?,
+    ): FieldValidation {
         val maxPower = region?.maxTxPower ?: DEFAULT_MAX_TX_POWER
         val txp = value.toIntOrNull()
         return when {
@@ -136,10 +157,14 @@ object RNodeConfigValidator {
     /**
      * Validate airtime limit against region duty cycle.
      */
-    fun validateAirtimeLimit(value: String, region: FrequencyRegion?): FieldValidation {
-        val maxAirtime = region?.let {
-            if (it.dutyCycle < 100) it.dutyCycle.toDouble() else null
-        }
+    fun validateAirtimeLimit(
+        value: String,
+        region: FrequencyRegion?,
+    ): FieldValidation {
+        val maxAirtime =
+            region?.let {
+                if (it.dutyCycle < 100) it.dutyCycle.toDouble() else null
+            }
         val parsed = value.toDoubleOrNull()
         return when {
             value.isBlank() -> FieldValidation(true) // Empty is allowed (no limit)
@@ -155,6 +180,30 @@ object RNodeConfigValidator {
     /**
      * Validate the full configuration silently (no error messages, just pass/fail).
      */
+    @Suppress("ReturnCount")
+    fun validateConfigSilent(config: RNodeConfigInput): Boolean {
+        if (!validateName(config.name).isValid) return false
+        if (!validateFrequency(config.frequency, config.region).isValid) return false
+        // For silent validation, require non-empty values
+        if (config.frequency.isBlank()) return false
+        if (!validateBandwidth(config.bandwidth).isValid) return false
+        if (config.bandwidth.isBlank()) return false
+        if (!validateSpreadingFactor(config.spreadingFactor).isValid) return false
+        if (config.spreadingFactor.isBlank()) return false
+        if (!validateCodingRate(config.codingRate).isValid) return false
+        if (config.codingRate.isBlank()) return false
+        if (!validateTxPower(config.txPower, config.region).isValid) return false
+        if (config.txPower.isBlank()) return false
+        if (!validateAirtimeLimit(config.stAlock, config.region).isValid) return false
+        if (!validateAirtimeLimit(config.ltAlock, config.region).isValid) return false
+        return true
+    }
+
+    /**
+     * Validate the full configuration silently (no error messages, just pass/fail).
+     * Convenience overload with individual parameters.
+     */
+    @Suppress("LongParameterList")
     fun validateConfigSilent(
         name: String,
         frequency: String,
@@ -165,93 +214,76 @@ object RNodeConfigValidator {
         stAlock: String,
         ltAlock: String,
         region: FrequencyRegion?,
-    ): Boolean {
-        if (!validateName(name).isValid) return false
-        if (!validateFrequency(frequency, region).isValid) return false
-        // For silent validation, require non-empty values
-        if (frequency.isBlank()) return false
-        if (!validateBandwidth(bandwidth).isValid) return false
-        if (bandwidth.isBlank()) return false
-        if (!validateSpreadingFactor(spreadingFactor).isValid) return false
-        if (spreadingFactor.isBlank()) return false
-        if (!validateCodingRate(codingRate).isValid) return false
-        if (codingRate.isBlank()) return false
-        if (!validateTxPower(txPower, region).isValid) return false
-        if (txPower.isBlank()) return false
-        if (!validateAirtimeLimit(stAlock, region).isValid) return false
-        if (!validateAirtimeLimit(ltAlock, region).isValid) return false
-        return true
-    }
+    ): Boolean = validateConfigSilent(
+        RNodeConfigInput(name, frequency, bandwidth, spreadingFactor, codingRate, txPower, stAlock, ltAlock, region),
+    )
 
     /**
      * Validate the full configuration with error messages.
      */
-    fun validateConfig(
-        name: String,
-        frequency: String,
-        bandwidth: String,
-        spreadingFactor: String,
-        codingRate: String,
-        txPower: String,
-        stAlock: String,
-        ltAlock: String,
-        region: FrequencyRegion?,
-    ): ConfigValidationResult {
-        val nameResult = validateName(name)
-        val freqResult = validateFrequency(frequency, region)
-        val bwResult = validateBandwidth(bandwidth)
-        val sfResult = validateSpreadingFactor(spreadingFactor)
-        val crResult = validateCodingRate(codingRate)
-        val txpResult = validateTxPower(txPower, region)
-        val stAlockResult = validateAirtimeLimit(stAlock, region)
-        val ltAlockResult = validateAirtimeLimit(ltAlock, region)
+    @Suppress("CyclomaticComplexMethod")
+    fun validateConfig(config: RNodeConfigInput): ConfigValidationResult {
+        val nameResult = validateName(config.name)
+        val freqResult = validateFrequency(config.frequency, config.region)
+        val bwResult = validateBandwidth(config.bandwidth)
+        val sfResult = validateSpreadingFactor(config.spreadingFactor)
+        val crResult = validateCodingRate(config.codingRate)
+        val txpResult = validateTxPower(config.txPower, config.region)
+        val stAlockResult = validateAirtimeLimit(config.stAlock, config.region)
+        val ltAlockResult = validateAirtimeLimit(config.ltAlock, config.region)
 
         // For full validation, also check that required fields are not empty
-        val frequencyError = if (frequency.isBlank()) {
-            val minFreq = region?.frequencyStart ?: DEFAULT_MIN_FREQ
-            val maxFreq = region?.frequencyEnd ?: DEFAULT_MAX_FREQ
-            "Frequency must be %.1f-%.1f MHz".format(
-                minFreq / 1_000_000.0,
-                maxFreq / 1_000_000.0,
-            )
-        } else {
-            freqResult.errorMessage
-        }
+        val frequencyError =
+            if (config.frequency.isBlank()) {
+                val minFreq = config.region?.frequencyStart ?: DEFAULT_MIN_FREQ
+                val maxFreq = config.region?.frequencyEnd ?: DEFAULT_MAX_FREQ
+                "Frequency must be %.1f-%.1f MHz".format(
+                    minFreq / 1_000_000.0,
+                    maxFreq / 1_000_000.0,
+                )
+            } else {
+                freqResult.errorMessage
+            }
 
-        val bandwidthError = if (bandwidth.isBlank()) {
-            "Bandwidth must be 7.8-1625 kHz"
-        } else {
-            bwResult.errorMessage
-        }
+        val bandwidthError =
+            if (config.bandwidth.isBlank()) {
+                "Bandwidth must be 7.8-1625 kHz"
+            } else {
+                bwResult.errorMessage
+            }
 
-        val sfError = if (spreadingFactor.isBlank()) {
-            "SF must be $MIN_SF-$MAX_SF"
-        } else {
-            sfResult.errorMessage
-        }
+        val sfError =
+            if (config.spreadingFactor.isBlank()) {
+                "SF must be $MIN_SF-$MAX_SF"
+            } else {
+                sfResult.errorMessage
+            }
 
-        val crError = if (codingRate.isBlank()) {
-            "CR must be $MIN_CR-$MAX_CR"
-        } else {
-            crResult.errorMessage
-        }
+        val crError =
+            if (config.codingRate.isBlank()) {
+                "CR must be $MIN_CR-$MAX_CR"
+            } else {
+                crResult.errorMessage
+            }
 
-        val txPowerError = if (txPower.isBlank()) {
-            val maxPower = region?.maxTxPower ?: DEFAULT_MAX_TX_POWER
-            val regionName = region?.name ?: "this region"
-            "TX power must be $MIN_TX_POWER-$maxPower dBm for $regionName"
-        } else {
-            txpResult.errorMessage
-        }
+        val txPowerError =
+            if (config.txPower.isBlank()) {
+                val maxPower = config.region?.maxTxPower ?: DEFAULT_MAX_TX_POWER
+                val regionName = config.region?.name ?: "this region"
+                "TX power must be $MIN_TX_POWER-$maxPower dBm for $regionName"
+            } else {
+                txpResult.errorMessage
+            }
 
-        val isValid = nameResult.isValid &&
-            frequency.isNotBlank() && freqResult.isValid &&
-            bandwidth.isNotBlank() && bwResult.isValid &&
-            spreadingFactor.isNotBlank() && sfResult.isValid &&
-            codingRate.isNotBlank() && crResult.isValid &&
-            txPower.isNotBlank() && txpResult.isValid &&
-            stAlockResult.isValid &&
-            ltAlockResult.isValid
+        val isValid =
+            nameResult.isValid &&
+                config.frequency.isNotBlank() && freqResult.isValid &&
+                config.bandwidth.isNotBlank() && bwResult.isValid &&
+                config.spreadingFactor.isNotBlank() && sfResult.isValid &&
+                config.codingRate.isNotBlank() && crResult.isValid &&
+                config.txPower.isNotBlank() && txpResult.isValid &&
+                stAlockResult.isValid &&
+                ltAlockResult.isValid
 
         return ConfigValidationResult(
             isValid = isValid,
@@ -265,6 +297,25 @@ object RNodeConfigValidator {
             ltAlockError = ltAlockResult.errorMessage,
         )
     }
+
+    /**
+     * Validate the full configuration with error messages.
+     * Convenience overload with individual parameters.
+     */
+    @Suppress("LongParameterList")
+    fun validateConfig(
+        name: String,
+        frequency: String,
+        bandwidth: String,
+        spreadingFactor: String,
+        codingRate: String,
+        txPower: String,
+        stAlock: String,
+        ltAlock: String,
+        region: FrequencyRegion?,
+    ): ConfigValidationResult = validateConfig(
+        RNodeConfigInput(name, frequency, bandwidth, spreadingFactor, codingRate, txPower, stAlock, ltAlock, region),
+    )
 
     /**
      * Get the maximum TX power for a region.

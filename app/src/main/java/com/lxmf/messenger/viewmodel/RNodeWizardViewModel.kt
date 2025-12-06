@@ -377,10 +377,21 @@ class RNodeWizardViewModel
 
         private fun applyFrequencyRegionSettings() {
             val region = _state.value.selectedFrequencyRegion ?: return
+
+            // Apply duty cycle as airtime limits if the region has restrictions
+            // stAlock = short-term airtime lock, ltAlock = long-term airtime lock
+            val airtimeLimit = if (region.dutyCycle < 100) {
+                region.dutyCycle.toDouble().toString()
+            } else {
+                "" // No limit
+            }
+
             _state.update {
                 it.copy(
                     frequency = region.frequency.toString(),
                     txPower = region.defaultTxPower.toString(),
+                    stAlock = airtimeLimit,
+                    ltAlock = airtimeLimit,
                 )
             }
         }

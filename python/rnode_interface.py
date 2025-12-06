@@ -82,6 +82,22 @@ class KISS:
     ERROR_QUEUE_FULL = 0x04
     ERROR_INVALID_CONFIG = 0x40
 
+    # Human-readable error messages
+    ERROR_MESSAGES = {
+        0x01: "Radio initialization failed",
+        0x02: "Transmission failed",
+        0x04: "Data queue overflowed",
+        0x40: (
+            "Invalid configuration - TX power may exceed device limits. "
+            "Try reducing TX power (common limits: SX1262=22dBm, SX1276=17dBm)"
+        ),
+    }
+
+    @staticmethod
+    def get_error_message(error_code):
+        """Get human-readable error message for error code."""
+        return KISS.ERROR_MESSAGES.get(error_code, f"Unknown error (0x{error_code:02X})")
+
     @staticmethod
     def escape(data):
         """Escape special bytes in KISS data."""
@@ -235,6 +251,9 @@ class ColumbaRNodeInterface:
         self._reconnecting = False
         self._max_reconnect_attempts = 30  # Try for ~5 minutes (30 * 10s)
         self._reconnect_interval = 10.0  # Seconds between reconnection attempts
+
+        # Error callback for surfacing RNode errors to UI
+        self._on_error_callback = None
 
         # Validate configuration
         self._validate_config()
@@ -677,7 +696,14 @@ class ColumbaRNodeInterface:
                                 self.detected = True
                                 RNS.log("RNode detected!", RNS.LOG_DEBUG)
                         elif command == KISS.CMD_ERROR:
-                            RNS.log(f"RNode error: {hex(byte)}", RNS.LOG_ERROR)
+                            error_message = KISS.get_error_message(byte)
+                            RNS.log(f"RNode error (0x{byte:02X}): {error_message}", RNS.LOG_ERROR)
+                            # Surface error to UI via callback
+                            if self._on_error_callback:
+                                try:
+                                    self._on_error_callback(byte, error_message)
+                                except Exception as cb_err:
+                                    RNS.log(f"Error callback failed: {cb_err}", RNS.LOG_ERROR)
                         elif command == KISS.CMD_READY:
                             pass  # Device ready
 
@@ -726,6 +752,17 @@ class ColumbaRNodeInterface:
             self.detected = False
             # Start auto-reconnection if not already reconnecting
             self._start_reconnection_loop()
+
+    def setOnErrorReceived(self, callback):
+        """
+        Set callback for RNode error events.
+
+        The callback will be called when the RNode reports an error,
+        with signature: callback(error_code: int, error_message: str)
+
+        @param callback: Callable that receives (error_code, error_message)
+        """
+        self._on_error_callback = callback
 
     def _start_reconnection_loop(self):
         """Start a background thread to attempt reconnection."""

@@ -1,6 +1,7 @@
 package com.lxmf.messenger.data.db.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -16,7 +17,13 @@ import androidx.room.PrimaryKey
  * @property lastUsedTimestamp Unix timestamp when the identity was last active
  * @property isActive True if this is the currently active identity (only one should be active)
  */
-@Entity(tableName = "local_identities")
+@Entity(
+    tableName = "local_identities",
+    indices = [
+        Index("lastUsedTimestamp"), // For ordering
+        Index("isActive"), // For active identity queries
+    ],
+)
 data class LocalIdentityEntity(
     @PrimaryKey
     val identityHash: String,

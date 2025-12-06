@@ -2954,6 +2954,17 @@ class ReticulumWrapper:
                 config=self._pending_rnode_config
             )
 
+            # Set up error callback to surface RNode errors to Kotlin/UI
+            def on_rnode_error(error_code, error_message):
+                log_error("ReticulumWrapper", "RNodeError", f"RNode error ({error_code}): {error_message}")
+                if self.kotlin_rnode_bridge:
+                    try:
+                        self.kotlin_rnode_bridge.notifyError(error_code, error_message)
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "RNodeError", f"Failed to notify Kotlin: {e}")
+
+            self.rnode_interface.setOnErrorReceived(on_rnode_error)
+
             # Start the interface
             log_info("ReticulumWrapper", "initialize_rnode_interface", "Starting ColumbaRNodeInterface...")
             if not self.rnode_interface.start():

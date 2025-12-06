@@ -135,6 +135,8 @@ data class RNodeWizardState(
     val txPowerError: String? = null,
     val spreadingFactorError: String? = null,
     val codingRateError: String? = null,
+    val stAlockError: String? = null,
+    val ltAlockError: String? = null,
 
     // Save state
     val isSaving: Boolean = false,
@@ -1228,11 +1230,40 @@ class RNodeWizardViewModel
         }
 
         fun updateStAlock(value: String) {
-            _state.update { it.copy(stAlock = value) }
+            val maxAirtime = getMaxAirtimeLimit()
+            val parsed = value.toDoubleOrNull()
+            val error = when {
+                value.isBlank() -> null // Empty is allowed (no limit)
+                parsed == null -> "Invalid number"
+                parsed < 0 -> "Must be >= 0"
+                parsed > 100 -> "Must be <= 100%"
+                maxAirtime != null && parsed > maxAirtime -> "Max: $maxAirtime% (regional limit)"
+                else -> null
+            }
+            _state.update { it.copy(stAlock = value, stAlockError = error) }
         }
 
         fun updateLtAlock(value: String) {
-            _state.update { it.copy(ltAlock = value) }
+            val maxAirtime = getMaxAirtimeLimit()
+            val parsed = value.toDoubleOrNull()
+            val error = when {
+                value.isBlank() -> null // Empty is allowed (no limit)
+                parsed == null -> "Invalid number"
+                parsed < 0 -> "Must be >= 0"
+                parsed > 100 -> "Must be <= 100%"
+                maxAirtime != null && parsed > maxAirtime -> "Max: $maxAirtime% (regional limit)"
+                else -> null
+            }
+            _state.update { it.copy(ltAlock = value, ltAlockError = error) }
+        }
+
+        /**
+         * Get the maximum airtime limit for the current region.
+         * Returns null if there's no limit (100% duty cycle).
+         */
+        private fun getMaxAirtimeLimit(): Double? {
+            val region = _state.value.selectedFrequencyRegion ?: return null
+            return if (region.dutyCycle < 100) region.dutyCycle.toDouble() else null
         }
 
         fun updateInterfaceMode(mode: String) {
@@ -1296,6 +1327,19 @@ class RNodeWizardViewModel
             val txp = state.txPower.toIntOrNull()
             val maxPower = getMaxTxPower()
             if (txp == null || txp < 0 || txp > maxPower) return false
+
+            // Validate airtime limits against region duty cycle
+            val maxAirtime = getMaxAirtimeLimit()
+            if (state.stAlock.isNotBlank()) {
+                val stAlock = state.stAlock.toDoubleOrNull()
+                if (stAlock == null || stAlock < 0 || stAlock > 100) return false
+                if (maxAirtime != null && stAlock > maxAirtime) return false
+            }
+            if (state.ltAlock.isNotBlank()) {
+                val ltAlock = state.ltAlock.toDoubleOrNull()
+                if (ltAlock == null || ltAlock < 0 || ltAlock > 100) return false
+                if (maxAirtime != null && ltAlock > maxAirtime) return false
+            }
 
             return true
         }

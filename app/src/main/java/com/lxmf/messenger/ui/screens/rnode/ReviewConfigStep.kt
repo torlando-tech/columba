@@ -445,6 +445,10 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(4.dp))
+
+                val maxAirtime = regionLimits?.dutyCycle?.takeIf { it < 100 }
+                val airtimePlaceholder = maxAirtime?.let { "Max: $it%" } ?: "Optional"
+
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -452,28 +456,40 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         value = state.stAlock,
                         onValueChange = { viewModel.updateStAlock(it) },
                         label = { Text("Short-term (%)") },
-                        placeholder = { Text("Optional") },
+                        placeholder = { Text(airtimePlaceholder) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        isError = state.stAlockError != null,
+                        supportingText = state.stAlockError?.let { { Text(it) } },
                     )
                     OutlinedTextField(
                         value = state.ltAlock,
                         onValueChange = { viewModel.updateLtAlock(it) },
                         label = { Text("Long-term (%)") },
-                        placeholder = { Text("Optional") },
+                        placeholder = { Text(airtimePlaceholder) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        isError = state.ltAlockError != null,
+                        supportingText = state.ltAlockError?.let { { Text(it) } },
                     )
                 }
 
                 Spacer(Modifier.height(4.dp))
 
                 Text(
-                    "Limits duty cycle to prevent overuse. Leave empty for no limit.",
+                    if (maxAirtime != null) {
+                        "Regional duty cycle limit: $maxAirtime%. Values above this are not allowed."
+                    } else {
+                        "Limits duty cycle to prevent overuse. Leave empty for no limit."
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (maxAirtime != null) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
 
                 Spacer(Modifier.height(16.dp))

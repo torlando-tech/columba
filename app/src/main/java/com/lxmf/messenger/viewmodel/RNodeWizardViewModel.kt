@@ -543,8 +543,11 @@ class RNodeWizardViewModel
                 // Russia and Ukraine 868 MHz
                 "ru_868", "ua_868" -> listOf("DE", "GB", "NL", "BE", "FI", "NO", "SE", "CH", "ES", "IT")
 
-                // Australia/NZ 915 MHz
-                "au_915", "nz_865" -> listOf("AU")
+                // Australia 915 MHz
+                "au_915" -> listOf("AU")
+
+                // NZ 865 MHz - no presets defined (different band from AU)
+                "nz_865" -> emptyList()
 
                 // Asia-Pacific 920 MHz bands
                 "jp_920", "kr_920", "tw_920", "th_920", "sg_923", "my_919", "ph_915" ->

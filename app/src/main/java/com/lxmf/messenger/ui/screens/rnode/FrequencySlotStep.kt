@@ -71,6 +71,7 @@ fun FrequencySlotStep(viewModel: RNodeWizardViewModel) {
 
     // Check if current slot overlaps with Meshtastic
     val isMeshtasticSlot = CommunitySlots.isMeshtasticSlot(region.id, state.selectedSlot)
+    val hasCustomFrequency = state.customFrequency != null
 
     Column(
         modifier = Modifier
@@ -135,10 +136,13 @@ fun FrequencySlotStep(viewModel: RNodeWizardViewModel) {
 
         // Current selection display
         CurrentSlotCard(
-            slot = state.selectedSlot,
-            frequency = currentFreq,
+            slot = if (hasCustomFrequency) null else state.selectedSlot,
+            frequency = state.customFrequency ?: currentFreq,
             numSlots = numSlots,
             isWarning = isMeshtasticSlot,
+            presetName = state.selectedSlotPreset?.let {
+                it.cityOrRegion ?: it.countryName
+            },
         )
 
         Spacer(Modifier.height(24.dp))
@@ -224,12 +228,20 @@ fun FrequencySlotStep(viewModel: RNodeWizardViewModel) {
                     bandwidth,
                     preset.frequency,
                 )
+                val isSelected = state.selectedSlotPreset?.id == preset.id ||
+                    (presetSlot != null && state.selectedSlot == presetSlot && state.customFrequency == null)
                 PopularPresetCard(
                     preset = preset,
                     slot = presetSlot,
-                    isSelected = presetSlot != null && state.selectedSlot == presetSlot,
+                    isSelected = isSelected,
                     onSelect = {
-                        presetSlot?.let { viewModel.selectSlot(it) }
+                        if (presetSlot != null) {
+                            // Frequency aligns with a slot - use slot selection
+                            viewModel.selectSlot(presetSlot)
+                        } else {
+                            // Frequency doesn't align - use direct frequency selection
+                            viewModel.selectPresetFrequency(preset)
+                        }
                     },
                 )
                 Spacer(Modifier.height(8.dp))
@@ -273,10 +285,11 @@ fun FrequencySlotStep(viewModel: RNodeWizardViewModel) {
 
 @Composable
 private fun CurrentSlotCard(
-    slot: Int,
+    slot: Int?,
     frequency: Long,
     numSlots: Int,
     isWarning: Boolean,
+    presetName: String? = null,
 ) {
     Card(
         colors = CardDefaults.cardColors(
@@ -300,12 +313,23 @@ private fun CurrentSlotCard(
                 MaterialTheme.colorScheme.onPrimaryContainer
             }
 
-            Text(
-                text = "Slot $slot",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = contentColor,
-            )
+            // Show preset name if custom frequency, otherwise show slot number
+            if (presetName != null) {
+                Text(
+                    text = presetName,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = contentColor,
+                )
+            } else if (slot != null) {
+                Text(
+                    text = "Slot $slot",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = contentColor,
+                )
+            }
+
             Spacer(Modifier.height(4.dp))
             Text(
                 text = FrequencySlotCalculator.formatFrequency(frequency),
@@ -313,8 +337,14 @@ private fun CurrentSlotCard(
                 color = contentColor.copy(alpha = 0.8f),
             )
             Spacer(Modifier.height(8.dp))
+
+            // Show appropriate subtitle
             Text(
-                text = "of $numSlots available slots",
+                text = if (presetName != null) {
+                    "Community preset frequency"
+                } else {
+                    "of $numSlots available slots"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = contentColor.copy(alpha = 0.6f),
             )
@@ -523,7 +553,6 @@ private fun PopularPresetCard(
 ) {
     OutlinedCard(
         onClick = onSelect,
-        enabled = slot != null,
         colors = CardDefaults.outlinedCardColors(
             containerColor = if (isSelected) {
                 MaterialTheme.colorScheme.primaryContainer

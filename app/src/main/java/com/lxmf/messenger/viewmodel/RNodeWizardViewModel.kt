@@ -112,6 +112,8 @@ data class RNodeWizardState(
 
     // Step 4: Frequency Slot Selection
     val selectedSlot: Int = 20,  // Default Meshtastic slot
+    val customFrequency: Long? = null,  // Set when a preset is selected that doesn't align with slots
+    val selectedSlotPreset: RNodeRegionalPreset? = null,  // The preset selected on slot page
 
     // Step 5: Review & Configure
     val interfaceName: String = "RNode LoRa",
@@ -402,10 +404,14 @@ class RNodeWizardViewModel
         }
 
         private fun applySlotToFrequency() {
-            val region = _state.value.selectedFrequencyRegion ?: return
-            val bandwidth = _state.value.selectedModemPreset.bandwidth
-            val slot = _state.value.selectedSlot
-            val frequency = FrequencySlotCalculator.calculateFrequency(region, bandwidth, slot)
+            val state = _state.value
+            val region = state.selectedFrequencyRegion ?: return
+
+            // Use custom frequency if a preset was selected, otherwise calculate from slot
+            val frequency = state.customFrequency ?: run {
+                val bandwidth = state.selectedModemPreset.bandwidth
+                FrequencySlotCalculator.calculateFrequency(region, bandwidth, state.selectedSlot)
+            }
             _state.update { it.copy(frequency = frequency.toString()) }
         }
 
@@ -439,11 +445,31 @@ class RNodeWizardViewModel
 
         /**
          * Select a frequency slot.
+         * Clears any custom frequency selection.
          */
         fun selectSlot(slot: Int) {
             val numSlots = getNumSlots()
             if (slot in 0 until numSlots) {
-                _state.update { it.copy(selectedSlot = slot) }
+                _state.update {
+                    it.copy(
+                        selectedSlot = slot,
+                        customFrequency = null,
+                        selectedSlotPreset = null,
+                    )
+                }
+            }
+        }
+
+        /**
+         * Select a preset frequency directly (bypassing slot calculation).
+         * Used when a preset's frequency doesn't align with slot boundaries.
+         */
+        fun selectPresetFrequency(preset: RNodeRegionalPreset) {
+            _state.update {
+                it.copy(
+                    customFrequency = preset.frequency,
+                    selectedSlotPreset = preset,
+                )
             }
         }
 

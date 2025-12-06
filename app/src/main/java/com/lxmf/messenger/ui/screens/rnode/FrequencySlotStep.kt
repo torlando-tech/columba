@@ -337,16 +337,19 @@ private fun FrequencySpectrumBar(
     val errorColor = MaterialTheme.colorScheme.error
     val onSurface = MaterialTheme.colorScheme.onSurface
 
+    // Guard against edge cases (single slot or invalid state)
+    val effectiveNumSlots = maxOf(1, numSlots)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(60.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(surfaceVariant)
-            .pointerInput(numSlots) {
+            .pointerInput(effectiveNumSlots) {
                 detectTapGestures { offset ->
-                    val slotWidth = size.width.toFloat() / numSlots
-                    val tappedSlot = (offset.x / slotWidth).toInt().coerceIn(0, numSlots - 1)
+                    val slotWidth = size.width.toFloat() / effectiveNumSlots
+                    val tappedSlot = (offset.x / slotWidth).toInt().coerceIn(0, effectiveNumSlots - 1)
                     onSlotSelected(tappedSlot)
                 }
             },
@@ -354,7 +357,7 @@ private fun FrequencySpectrumBar(
         Canvas(
             modifier = Modifier.fillMaxSize(),
         ) {
-            val slotWidth = size.width / numSlots
+            val slotWidth = size.width / effectiveNumSlots
 
             // Draw slot markers (small ticks at regular intervals)
             val tickInterval = when {
@@ -467,31 +470,45 @@ private fun SlotPicker(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        // Only show slider if there are multiple slots available
+        // (Slider requires steps >= 0, and single-slot bands don't need a slider)
+        if (maxSlot > 0) {
+            Spacer(Modifier.height(16.dp))
 
-        // Slider for quick navigation
-        Slider(
-            value = slot.toFloat(),
-            onValueChange = { onSlotChange(it.toInt()) },
-            valueRange = 0f..maxSlot.toFloat(),
-            steps = maxSlot - 1,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        // Slider labels
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "0",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // Slider for quick navigation
+            Slider(
+                value = slot.toFloat(),
+                onValueChange = { onSlotChange(it.toInt()) },
+                valueRange = 0f..maxSlot.toFloat(),
+                steps = maxSlot - 1,
+                modifier = Modifier.fillMaxWidth(),
             )
+
+            // Slider labels
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "0",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "$maxSlot",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            // Single slot available - show informational message
+            Spacer(Modifier.height(8.dp))
             Text(
-                text = "$maxSlot",
-                style = MaterialTheme.typography.labelSmall,
+                text = "Only one frequency slot available for this region/preset combination",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }

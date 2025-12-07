@@ -160,6 +160,12 @@ class ServiceReticulumProtocol(
                         } else {
                             null
                         }
+                    val displayName =
+                        if (json.has("display_name") && !json.isNull("display_name")) {
+                            json.optString("display_name").takeIf { it.isNotBlank() }
+                        } else {
+                            null
+                        }
 
                     Log.i(
                         TAG,
@@ -189,6 +195,7 @@ class ServiceReticulumProtocol(
                                 nodeType = nodeType,
                                 receivingInterface = receivingInterface,
                                 aspect = aspect,
+                                displayName = displayName,
                             )
 
                         Log.i(TAG, "   NodeType detected: $nodeType, Aspect: $aspect")

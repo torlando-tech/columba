@@ -286,6 +286,7 @@ class PollingManager(
             val timestamp = event.getDictValue("timestamp")?.toLong() ?: System.currentTimeMillis()
             val aspect = event.getDictValue("aspect")?.toString()
             val receivingInterface = event.getDictValue("interface")?.toString()
+            val displayName = event.getDictValue("display_name")?.toString()?.takeIf { it != "None" }
 
             Log.i(TAG, "  Hash: ${destinationHash?.take(8)?.joinToString("") { "%02x".format(it) }}")
             Log.i(TAG, "  Hops: $hops, Interface: $receivingInterface, Aspect: $aspect")
@@ -303,6 +304,9 @@ class PollingManager(
                     }
                     if (receivingInterface != null && receivingInterface != "None") {
                         put("interface", receivingInterface)
+                    }
+                    if (displayName != null) {
+                        put("display_name", displayName)
                     }
                 }
 

@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +50,7 @@ import com.lxmf.messenger.util.formatTimeSince
  * Shared peer card component used by both AnnounceStreamScreen and SavedPeersScreen.
  */
 @OptIn(ExperimentalFoundationApi::class)
+@androidx.compose.runtime.Stable
 @Composable
 fun PeerCard(
     announce: Announce,
@@ -113,15 +115,23 @@ fun PeerCard(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
 
-                    // Destination hash (abbreviated)
+                    // Destination hash (abbreviated) - use remember to avoid recalculating
+                    val abbreviatedHash = remember(announce.destinationHash) {
+                        formatHashString(announce.destinationHash)
+                    }
                     Text(
-                        text = formatHashString(announce.destinationHash),
+                        text = abbreviatedHash,
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
 
-                    // Time since last seen
+                    // Time since last seen - use remember to avoid recalculating on every recomposition
+                    val timeSinceText = remember(announce.lastSeenTimestamp) {
+                        // Round timestamp to nearest minute to reduce unnecessary recalculations
+                        val roundedTimestamp = (announce.lastSeenTimestamp / 60_000) * 60_000
+                        formatTimeSince(roundedTimestamp)
+                    }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -133,7 +143,7 @@ fun PeerCard(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = formatTimeSince(announce.lastSeenTimestamp),
+                            text = timeSinceText,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -180,12 +190,15 @@ fun SignalStrengthIndicator(
     hops: Int,
     modifier: Modifier = Modifier,
 ) {
-    val (strength, color, _) =
+    // Use remember to avoid recalculating on every recomposition
+    val hopsKey = remember(hops) { hops }
+    val (strength, color, _) = remember(hopsKey) {
         when {
-            hops <= 1 -> Triple(3, MeshConnected, "Excellent")
-            hops <= 3 -> Triple(2, MeshLimited, "Good")
+            hopsKey <= 1 -> Triple(3, MeshConnected, "Excellent")
+            hopsKey <= 3 -> Triple(2, MeshLimited, "Good")
             else -> Triple(1, MeshOffline, "Weak")
         }
+    }
 
     Column(
         modifier = modifier,

@@ -79,7 +79,9 @@ class InterfaceRepositoryTest {
         name = name,
         type = "RNode",
         enabled = enabled,
-        configJson = """{"port":"/dev/ttyUSB0","frequency":915000000,"bandwidth":125000,"tx_power":7,"spreading_factor":7,"coding_rate":5,"mode":"full"}""",
+        configJson = """{"target_device_name":"RNode-BT","connection_mode":"ble",""" +
+            """"frequency":915000000,"bandwidth":125000,"tx_power":7,""" +
+            """"spreading_factor":7,"coding_rate":5,"mode":"full","enable_framebuffer":true}""",
         displayOrder = 2,
     )
 
@@ -99,14 +101,14 @@ class InterfaceRepositoryTest {
     // ========== Corruption Handling Tests ==========
 
     @Test
-    fun `enabledInterfaces skips RNode with missing port field`() = runTest {
-        // Given: One valid interface and one RNode with missing port
+    fun `enabledInterfaces skips RNode with missing target_device_name field`() = runTest {
+        // Given: One valid interface and one RNode with missing target_device_name
         val corruptedRNode = InterfaceEntity(
             id = 1,
             name = "Corrupted RNode",
             type = "RNode",
             enabled = true,
-            configJson = """{"frequency":915000000,"bandwidth":125000}""", // Missing "port"
+            configJson = """{"frequency":915000000,"bandwidth":125000}""", // Missing "target_device_name"
             displayOrder = 0,
         )
         val validAuto = createValidAutoInterfaceEntity(id = 2)
@@ -130,13 +132,13 @@ class InterfaceRepositoryTest {
     }
 
     @Test
-    fun `enabledInterfaces skips RNode with empty port field`() = runTest {
+    fun `enabledInterfaces skips RNode with empty target_device_name field`() = runTest {
         val corruptedRNode = InterfaceEntity(
             id = 1,
-            name = "Empty Port RNode",
+            name = "Empty Device Name RNode",
             type = "RNode",
             enabled = true,
-            configJson = """{"port":"","frequency":915000000}""", // Empty port
+            configJson = """{"target_device_name":"","frequency":915000000}""", // Empty target_device_name
             displayOrder = 0,
         )
         val validTcp = createValidTcpClientEntity(id = 2)
@@ -240,7 +242,7 @@ class InterfaceRepositoryTest {
             name = "Corrupted",
             type = "RNode",
             enabled = true,
-            configJson = """{"no_port":"here"}""",
+            configJson = """{"no_device":"here"}""",
             displayOrder = 0,
         )
         val valid = createValidAutoInterfaceEntity(id = 2)
@@ -266,7 +268,7 @@ class InterfaceRepositoryTest {
             name = "Corrupted1",
             type = "RNode",
             enabled = true,
-            configJson = """{}""", // Missing port
+            configJson = """{}""", // Missing target_device_name
             displayOrder = 0,
         )
         val corrupted2 = InterfaceEntity(
@@ -400,7 +402,7 @@ class InterfaceRepositoryTest {
             assertEquals(1, interfaces.size)
             val config = interfaces[0] as InterfaceConfig.RNode
             assertEquals("RNode LoRa", config.name)
-            assertEquals("/dev/ttyUSB0", config.port)
+            assertEquals("RNode-BT", config.targetDeviceName)
             assertEquals(915000000L, config.frequency)
             assertEquals(125000, config.bandwidth)
             assertEquals(7, config.txPower)
@@ -439,7 +441,7 @@ class InterfaceRepositoryTest {
             name = "Bad RNode",
             type = "RNode",
             enabled = true,
-            configJson = """{"frequency":915000000}""", // Missing port
+            configJson = """{"frequency":915000000}""", // Missing target_device_name
             displayOrder = 1,
         )
         val validTcp = createValidTcpClientEntity(id = 3)

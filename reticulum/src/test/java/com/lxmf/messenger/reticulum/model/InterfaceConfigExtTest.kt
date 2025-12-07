@@ -131,24 +131,48 @@ class InterfaceConfigExtTest {
         val config = InterfaceConfig.RNode(
             name = "Test RNode",
             enabled = true,
-            port = "/dev/ttyUSB0",
+            targetDeviceName = "RNode-BT",
+            connectionMode = "ble",
             frequency = 868000000L,
             bandwidth = 250000,
             txPower = 14,
             spreadingFactor = 9,
             codingRate = 7,
+            stAlock = 5.0,
+            ltAlock = 10.0,
             mode = "roaming",
+            enableFramebuffer = true,
         )
 
         val json = JSONObject(config.toJsonString())
 
-        assertEquals("/dev/ttyUSB0", json.getString("port"))
+        assertEquals("RNode-BT", json.getString("target_device_name"))
+        assertEquals("ble", json.getString("connection_mode"))
         assertEquals(868000000L, json.getLong("frequency"))
         assertEquals(250000, json.getInt("bandwidth"))
         assertEquals(14, json.getInt("tx_power"))
         assertEquals(9, json.getInt("spreading_factor"))
         assertEquals(7, json.getInt("coding_rate"))
+        assertEquals(5.0, json.getDouble("st_alock"), 0.01)
+        assertEquals(10.0, json.getDouble("lt_alock"), 0.01)
         assertEquals("roaming", json.getString("mode"))
+        assertTrue(json.getBoolean("enable_framebuffer"))
+    }
+
+    @Test
+    fun `RNode toJsonString omits null airtime limits`() {
+        val config = InterfaceConfig.RNode(
+            name = "Test RNode",
+            enabled = true,
+            targetDeviceName = "RNode-BT",
+            stAlock = null,
+            ltAlock = null,
+        )
+
+        val json = JSONObject(config.toJsonString())
+
+        assertFalse(json.has("st_alock"))
+        assertFalse(json.has("lt_alock"))
     }
 
     @Test
@@ -220,7 +244,7 @@ class InterfaceConfigExtTest {
 
     @Test
     fun `typeName returns correct type for RNode`() {
-        val config = InterfaceConfig.RNode(port = "/dev/ttyUSB0")
+        val config = InterfaceConfig.RNode(targetDeviceName = "RNode-BT")
         assertEquals("RNode", config.typeName)
     }
 

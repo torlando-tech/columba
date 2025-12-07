@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
+import com.lxmf.messenger.service.manager.parseIdentityResultJson
 import org.json.JSONObject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -790,30 +791,7 @@ class ServiceReticulumProtocol(
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             val resultJson = service.createIdentityWithName(displayName)
-
-            val result = JSONObject(resultJson)
-            val map = mutableMapOf<String, Any>()
-
-            if (result.has("identity_hash")) {
-                map["identity_hash"] = result.getString("identity_hash")
-            }
-            if (result.has("destination_hash")) {
-                map["destination_hash"] = result.getString("destination_hash")
-            }
-            if (result.has("file_path")) {
-                map["file_path"] = result.getString("file_path")
-            }
-            if (result.has("key_data")) {
-                // Decode base64 back to ByteArray
-                result.getString("key_data").toByteArrayFromBase64()?.let { keyData ->
-                    map["key_data"] = keyData
-                }
-            }
-            if (result.has("error")) {
-                map["error"] = result.getString("error")
-            }
-
-            map
+            parseIdentityResultJson(resultJson)
         }.getOrElse { e ->
             Log.e(TAG, "Failed to create identity with name", e)
             mapOf("error" to (e.message ?: "Unknown error"))
@@ -849,30 +827,7 @@ class ServiceReticulumProtocol(
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             val resultJson = service.importIdentityFile(fileData, displayName)
-
-            val result = JSONObject(resultJson)
-            val map = mutableMapOf<String, Any>()
-
-            if (result.has("identity_hash")) {
-                map["identity_hash"] = result.getString("identity_hash")
-            }
-            if (result.has("destination_hash")) {
-                map["destination_hash"] = result.getString("destination_hash")
-            }
-            if (result.has("file_path")) {
-                map["file_path"] = result.getString("file_path")
-            }
-            if (result.has("key_data")) {
-                // Decode base64 back to ByteArray
-                result.getString("key_data").toByteArrayFromBase64()?.let { keyData ->
-                    map["key_data"] = keyData
-                }
-            }
-            if (result.has("error")) {
-                map["error"] = result.getString("error")
-            }
-
-            map
+            parseIdentityResultJson(resultJson)
         }.getOrElse { e ->
             Log.e(TAG, "Failed to import identity file", e)
             mapOf("error" to (e.message ?: "Unknown error"))

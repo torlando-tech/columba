@@ -288,58 +288,27 @@ fun ContactsScreen(
                         groupedContacts.pinned,
                         key = { contact -> "pinned_${contact.destinationHash}" },
                     ) { contact ->
-                        // Per-card menu state and haptic feedback
-                        val hapticFeedback = LocalHapticFeedback.current
-                        var showMenu by remember { mutableStateOf(false) }
-
-                        // Wrap card and menu in Box to anchor menu to card
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            ContactListItem(
-                                contact = contact,
-                                onClick = {
-                                    // Show bottom sheet for pending/unresolved contacts
-                                    if (contact.status == ContactStatus.PENDING_IDENTITY ||
-                                        contact.status == ContactStatus.UNRESOLVED
-                                    ) {
-                                        pendingContactToShow = contact
-                                        showPendingContactSheet = true
-                                    } else {
-                                        onContactClick(contact.destinationHash, contact.displayName)
-                                    }
-                                },
-                                onPinClick = { viewModel.togglePin(contact.destinationHash) },
-                                onLongPress = {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    showMenu = true
-                                },
-                            )
-
-                            // Context menu anchored to this card
-                            ContactContextMenu(
-                                expanded = showMenu,
-                                onDismiss = { showMenu = false },
-                                isPinned = contact.isPinned,
-                                contactName = contact.displayName,
-                                onPin = {
-                                    viewModel.togglePin(contact.destinationHash)
-                                    showMenu = false
-                                },
-                                onEditNickname = {
-                                    editNicknameContactHash = contact.destinationHash
-                                    editNicknameCurrentValue = contact.customNickname
-                                    showEditNicknameDialog = true
-                                    showMenu = false
-                                },
-                                onViewDetails = {
-                                    onViewPeerDetails(contact.destinationHash)
-                                    showMenu = false
-                                },
-                                onRemove = {
-                                    viewModel.deleteContact(contact.destinationHash)
-                                    showMenu = false
-                                },
-                            )
-                        }
+                        ContactListItemWithMenu(
+                            contact = contact,
+                            onClick = {
+                                if (contact.status == ContactStatus.PENDING_IDENTITY ||
+                                    contact.status == ContactStatus.UNRESOLVED
+                                ) {
+                                    pendingContactToShow = contact
+                                    showPendingContactSheet = true
+                                } else {
+                                    onContactClick(contact.destinationHash, contact.displayName)
+                                }
+                            },
+                            onPinToggle = { viewModel.togglePin(contact.destinationHash) },
+                            onEditNickname = {
+                                editNicknameContactHash = contact.destinationHash
+                                editNicknameCurrentValue = contact.customNickname
+                                showEditNicknameDialog = true
+                            },
+                            onViewDetails = { onViewPeerDetails(contact.destinationHash) },
+                            onRemove = { viewModel.deleteContact(contact.destinationHash) },
+                        )
                     }
                 }
 
@@ -359,58 +328,27 @@ fun ContactsScreen(
                         groupedContacts.all,
                         key = { contact -> contact.destinationHash },
                     ) { contact ->
-                        // Per-card menu state and haptic feedback
-                        val hapticFeedback = LocalHapticFeedback.current
-                        var showMenu by remember { mutableStateOf(false) }
-
-                        // Wrap card and menu in Box to anchor menu to card
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            ContactListItem(
-                                contact = contact,
-                                onClick = {
-                                    // Show bottom sheet for pending/unresolved contacts
-                                    if (contact.status == ContactStatus.PENDING_IDENTITY ||
-                                        contact.status == ContactStatus.UNRESOLVED
-                                    ) {
-                                        pendingContactToShow = contact
-                                        showPendingContactSheet = true
-                                    } else {
-                                        onContactClick(contact.destinationHash, contact.displayName)
-                                    }
-                                },
-                                onPinClick = { viewModel.togglePin(contact.destinationHash) },
-                                onLongPress = {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    showMenu = true
-                                },
-                            )
-
-                            // Context menu anchored to this card
-                            ContactContextMenu(
-                                expanded = showMenu,
-                                onDismiss = { showMenu = false },
-                                isPinned = contact.isPinned,
-                                contactName = contact.displayName,
-                                onPin = {
-                                    viewModel.togglePin(contact.destinationHash)
-                                    showMenu = false
-                                },
-                                onEditNickname = {
-                                    editNicknameContactHash = contact.destinationHash
-                                    editNicknameCurrentValue = contact.customNickname
-                                    showEditNicknameDialog = true
-                                    showMenu = false
-                                },
-                                onViewDetails = {
-                                    onViewPeerDetails(contact.destinationHash)
-                                    showMenu = false
-                                },
-                                onRemove = {
-                                    viewModel.deleteContact(contact.destinationHash)
-                                    showMenu = false
-                                },
-                            )
-                        }
+                        ContactListItemWithMenu(
+                            contact = contact,
+                            onClick = {
+                                if (contact.status == ContactStatus.PENDING_IDENTITY ||
+                                    contact.status == ContactStatus.UNRESOLVED
+                                ) {
+                                    pendingContactToShow = contact
+                                    showPendingContactSheet = true
+                                } else {
+                                    onContactClick(contact.destinationHash, contact.displayName)
+                                }
+                            },
+                            onPinToggle = { viewModel.togglePin(contact.destinationHash) },
+                            onEditNickname = {
+                                editNicknameContactHash = contact.destinationHash
+                                editNicknameCurrentValue = contact.customNickname
+                                showEditNicknameDialog = true
+                            },
+                            onViewDetails = { onViewPeerDetails(contact.destinationHash) },
+                            onRemove = { viewModel.deleteContact(contact.destinationHash) },
+                        )
                     }
                 }
             }
@@ -566,6 +504,58 @@ fun ContactsScreen(
             },
             onRemoveContact = {
                 viewModel.deleteContact(pendingContactToShow!!.destinationHash)
+            },
+        )
+    }
+}
+
+/**
+ * Contact list item with integrated context menu.
+ * Extracted to reduce duplication between pinned and all contacts sections.
+ */
+@Composable
+private fun ContactListItemWithMenu(
+    contact: EnrichedContact,
+    onClick: () -> Unit,
+    onPinToggle: () -> Unit,
+    onEditNickname: () -> Unit,
+    onViewDetails: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val hapticFeedback = LocalHapticFeedback.current
+    var showMenu by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        ContactListItem(
+            contact = contact,
+            onClick = onClick,
+            onPinClick = onPinToggle,
+            onLongPress = {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                showMenu = true
+            },
+        )
+
+        ContactContextMenu(
+            expanded = showMenu,
+            onDismiss = { showMenu = false },
+            isPinned = contact.isPinned,
+            contactName = contact.displayName,
+            onPin = {
+                onPinToggle()
+                showMenu = false
+            },
+            onEditNickname = {
+                onEditNickname()
+                showMenu = false
+            },
+            onViewDetails = {
+                onViewDetails()
+                showMenu = false
+            },
+            onRemove = {
+                onRemove()
+                showMenu = false
             },
         )
     }

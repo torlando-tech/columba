@@ -1,6 +1,5 @@
 package com.lxmf.messenger.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -73,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.ui.components.Identicon
+import com.lxmf.messenger.ui.components.SearchableTopAppBar
 import com.lxmf.messenger.viewmodel.ChatsViewModel
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -101,66 +101,15 @@ fun ChatsScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            Column {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(
-                                text = "Chats",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                text = "${conversations.size} ${if (conversations.size == 1) "conversation" else "conversations"}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { isSearching = !isSearching }) {
-                            Icon(
-                                imageVector = if (isSearching) Icons.Default.Close else Icons.Default.Search,
-                                contentDescription = if (isSearching) "Close search" else "Search",
-                            )
-                        }
-                    },
-                    colors =
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        ),
-                )
-
-                // Search bar
-                AnimatedVisibility(visible = isSearching) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { viewModel.searchQuery.value = it },
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                        placeholder = { Text("Search conversations...") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = null)
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.searchQuery.value = "" }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Clear search")
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        colors =
-                            OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                            ),
-                    )
-                }
-            }
+            SearchableTopAppBar(
+                title = "Chats",
+                subtitle = "${conversations.size} ${if (conversations.size == 1) "conversation" else "conversations"}",
+                isSearching = isSearching,
+                searchQuery = searchQuery,
+                onSearchQueryChange = { viewModel.searchQuery.value = it },
+                onSearchToggle = { isSearching = !isSearching },
+                searchPlaceholder = "Search conversations...",
+            )
         },
     ) { paddingValues ->
         if (conversations.isEmpty()) {

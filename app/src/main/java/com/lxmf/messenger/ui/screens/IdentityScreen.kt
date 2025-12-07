@@ -75,6 +75,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.model.SignalQuality
 import com.lxmf.messenger.ui.components.BluetoothPermissionController
+import com.lxmf.messenger.ui.components.HashSection
+import com.lxmf.messenger.ui.components.IdentityQrCodeDialogContent
 import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.ui.components.QrCodeImage
 import com.lxmf.messenger.util.IdentityQrCodeUtils
@@ -869,7 +871,6 @@ fun BleConnectionsCard(
 /**
  * Full-screen dialog showing complete identity details and QR code.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IdentityDetailsDialog(
     displayName: String,
@@ -880,198 +881,65 @@ fun IdentityDetailsDialog(
     onShareClick: () -> Unit,
     onNavigateToQrScanner: () -> Unit = {},
 ) {
-    val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+    IdentityQrCodeDialogContent(
+        displayName = displayName,
+        qrCodeData = qrCodeData,
+        onDismiss = onDismiss,
     ) {
-        Surface(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surface),
-            color = MaterialTheme.colorScheme.surface,
+        // Action Buttons Row
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = { Text("Your Identity") },
-                        navigationIcon = {
-                            IconButton(onClick = onDismiss) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Close",
-                                )
-                            }
-                        },
-                        colors =
-                            TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            ),
-                    )
-                },
-            ) { paddingValues ->
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
-                            .verticalScroll(rememberScrollState())
-                            .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(24.dp),
-                ) {
-                    // Display Name
-                    Text(
-                        text = displayName,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-
-                    // QR Code
-                    if (qrCodeData != null) {
-                        QrCodeImage(
-                            data = qrCodeData,
-                            size = 280.dp,
-                        )
-
-                        Text(
-                            text = "Scan this QR code to add me as a contact",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
-                    // Action Buttons Row
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        // Share Button
-                        Button(
-                            onClick = onShareClick,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Share")
-                        }
-
-                        // Scan QR Button
-                        OutlinedButton(
-                            onClick = onNavigateToQrScanner,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.QrCodeScanner,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Scan")
-                        }
-                    }
-
-                    Divider()
-
-                    // Identity Hash
-                    if (identityHash != null) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                text = "Identity Hash",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = identityHash,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    IconButton(
-                                        onClick = {
-                                            clipboardManager.setText(AnnotatedString(identityHash))
-                                        },
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ContentCopy,
-                                            contentDescription = "Copy",
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Destination Hash
-                    if (destinationHash != null) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                text = "Destination Hash (LXMF)",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = destinationHash,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    IconButton(
-                                        onClick = {
-                                            clipboardManager.setText(AnnotatedString(destinationHash))
-                                        },
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ContentCopy,
-                                            contentDescription = "Copy",
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(32.dp))
-                }
+            // Share Button
+            Button(
+                onClick = onShareClick,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Share")
             }
+
+            // Scan QR Button
+            OutlinedButton(
+                onClick = onNavigateToQrScanner,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.QrCodeScanner,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Scan")
+            }
+        }
+
+        Divider()
+
+        // Identity Hash
+        if (identityHash != null) {
+            HashSection(
+                title = "Identity Hash",
+                hash = identityHash,
+                onCopy = { clipboardManager.setText(AnnotatedString(identityHash)) },
+            )
+        }
+
+        // Destination Hash
+        if (destinationHash != null) {
+            HashSection(
+                title = "Destination Hash (LXMF)",
+                hash = destinationHash,
+                onCopy = { clipboardManager.setText(AnnotatedString(destinationHash)) },
+            )
         }
     }
 }

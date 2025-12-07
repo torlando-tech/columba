@@ -318,8 +318,8 @@ class PollingManager(
      */
     private fun handleMessageEvent(event: PyObject) {
         try {
-            val messageHash = event.getDictValue("message_hash")?.toString() ?: ""
-            val content = event.getDictValue("content")?.toString() ?: ""
+            val messageHash = event.getDictValue("message_hash")?.toString().orEmpty()
+            val content = event.getDictValue("content")?.toString().orEmpty()
             val sourceHash = event.getDictValue("source_hash")?.toJava(ByteArray::class.java) as? ByteArray
             val destHash = event.getDictValue("destination_hash")?.toJava(ByteArray::class.java) as? ByteArray
             val timestamp = event.getDictValue("timestamp")?.toLong() ?: System.currentTimeMillis()

@@ -133,12 +133,12 @@ class DebugViewModel
 
                     // Extract interface information
                     @Suppress("UNCHECKED_CAST")
-                    val interfacesData = pythonDebugInfo["interfaces"] as? List<Map<String, Any>> ?: emptyList()
+                    val interfacesData = (pythonDebugInfo["interfaces"] as? List<Map<String, Any>>).orEmpty()
                     val interfaces =
                         interfacesData.map { ifaceMap ->
                             InterfaceInfo(
-                                name = ifaceMap["name"] as? String ?: "",
-                                type = ifaceMap["type"] as? String ?: "",
+                                name = (ifaceMap["name"] as? String).orEmpty(),
+                                type = (ifaceMap["type"] as? String).orEmpty(),
                                 online = ifaceMap["online"] as? Boolean ?: false,
                             )
                         }
@@ -167,7 +167,7 @@ class DebugViewModel
                         DebugInfo(
                             initialized = pythonDebugInfo["initialized"] as? Boolean ?: false,
                             reticulumAvailable = pythonDebugInfo["reticulum_available"] as? Boolean ?: false,
-                            storagePath = pythonDebugInfo["storage_path"] as? String ?: "",
+                            storagePath = (pythonDebugInfo["storage_path"] as? String).orEmpty(),
                             interfaceCount = interfaces.size,
                             interfaces = interfaces,
                             transportEnabled = pythonDebugInfo["transport_enabled"] as? Boolean ?: false,
@@ -274,7 +274,7 @@ class DebugViewModel
          * Get the LXMF delivery destination for test announces.
          * This reuses the destination already created by the LXMF router.
          */
-        private suspend fun getOrCreateDestination(
+        private fun getOrCreateDestination(
             identity: com.lxmf.messenger.reticulum.model.Identity,
         ): com.lxmf.messenger.reticulum.model.Destination {
             // Return cached destination if available

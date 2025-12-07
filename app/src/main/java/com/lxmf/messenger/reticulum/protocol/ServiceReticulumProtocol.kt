@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
+import com.lxmf.messenger.service.manager.parseIdentityResultJson
 import org.json.JSONObject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -149,7 +150,7 @@ class ServiceReticulumProtocol(
                     val destinationHash = json.optString("destination_hash").toByteArrayFromBase64()
                     val identityHash = json.optString("identity_hash").toByteArrayFromBase64()
                     val publicKey = json.optString("public_key").toByteArrayFromBase64()
-                    val appData = json.optString("app_data")?.toByteArrayFromBase64()
+                    val appData = json.optString("app_data").toByteArrayFromBase64()
                     val hops = json.optInt("hops", 0)
                     val timestamp = json.optLong("timestamp", System.currentTimeMillis())
                     val aspect = if (json.has("aspect") && !json.isNull("aspect")) json.optString("aspect") else null
@@ -221,8 +222,8 @@ class ServiceReticulumProtocol(
 
                     val messageHash = json.optString("message_hash", "")
                     val content = json.optString("content", "")
-                    val sourceHash = json.optString("source_hash")?.toByteArrayFromBase64() ?: byteArrayOf()
-                    val destHash = json.optString("destination_hash")?.toByteArrayFromBase64() ?: byteArrayOf()
+                    val sourceHash = json.optString("source_hash").toByteArrayFromBase64() ?: byteArrayOf()
+                    val destHash = json.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
                     val timestamp = json.optLong("timestamp", System.currentTimeMillis())
                     // Extract LXMF fields (attachments, images, etc.) if present
                     val fieldsJson = json.optJSONObject("fields")?.toString()
@@ -495,7 +496,7 @@ class ServiceReticulumProtocol(
      * Get the current service status.
      * @return Result with status string: "SHUTDOWN", "INITIALIZING", "READY", or "ERROR:message"
      */
-    suspend fun getStatus(): Result<String> {
+    fun getStatus(): Result<String> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             service.getStatus()
@@ -506,7 +507,7 @@ class ServiceReticulumProtocol(
      * Check if the service is initialized and ready to use.
      * @return Result with true if initialized, false otherwise
      */
-    suspend fun isInitialized(): Result<Boolean> {
+    fun isInitialized(): Result<Boolean> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             service.isInitialized()
@@ -790,30 +791,7 @@ class ServiceReticulumProtocol(
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             val resultJson = service.createIdentityWithName(displayName)
-
-            val result = JSONObject(resultJson)
-            val map = mutableMapOf<String, Any>()
-
-            if (result.has("identity_hash")) {
-                map["identity_hash"] = result.getString("identity_hash")
-            }
-            if (result.has("destination_hash")) {
-                map["destination_hash"] = result.getString("destination_hash")
-            }
-            if (result.has("file_path")) {
-                map["file_path"] = result.getString("file_path")
-            }
-            if (result.has("key_data")) {
-                // Decode base64 back to ByteArray
-                result.getString("key_data").toByteArrayFromBase64()?.let { keyData ->
-                    map["key_data"] = keyData
-                }
-            }
-            if (result.has("error")) {
-                map["error"] = result.getString("error")
-            }
-
-            map
+            parseIdentityResultJson(resultJson)
         }.getOrElse { e ->
             Log.e(TAG, "Failed to create identity with name", e)
             mapOf("error" to (e.message ?: "Unknown error"))
@@ -849,30 +827,7 @@ class ServiceReticulumProtocol(
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             val resultJson = service.importIdentityFile(fileData, displayName)
-
-            val result = JSONObject(resultJson)
-            val map = mutableMapOf<String, Any>()
-
-            if (result.has("identity_hash")) {
-                map["identity_hash"] = result.getString("identity_hash")
-            }
-            if (result.has("destination_hash")) {
-                map["destination_hash"] = result.getString("destination_hash")
-            }
-            if (result.has("file_path")) {
-                map["file_path"] = result.getString("file_path")
-            }
-            if (result.has("key_data")) {
-                // Decode base64 back to ByteArray
-                result.getString("key_data").toByteArrayFromBase64()?.let { keyData ->
-                    map["key_data"] = keyData
-                }
-            }
-            if (result.has("error")) {
-                map["error"] = result.getString("error")
-            }
-
-            map
+            parseIdentityResultJson(resultJson)
         }.getOrElse { e ->
             Log.e(TAG, "Failed to import identity file", e)
             mapOf("error" to (e.message ?: "Unknown error"))
@@ -1114,9 +1069,9 @@ class ServiceReticulumProtocol(
                 throw RuntimeException(error)
             }
 
-            val msgHash = result.optString("message_hash")?.toByteArrayFromBase64() ?: byteArrayOf()
+            val msgHash = result.optString("message_hash").toByteArrayFromBase64() ?: byteArrayOf()
             val timestamp = result.optLong("timestamp", System.currentTimeMillis())
-            val destHash = result.optString("destination_hash")?.toByteArrayFromBase64() ?: byteArrayOf()
+            val destHash = result.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
 
             MessageReceipt(
                 messageHash = msgHash,
@@ -1134,7 +1089,7 @@ class ServiceReticulumProtocol(
      * Restore peer identities from stored public keys to enable message sending to known peers.
      * This should be called after initialization to restore identities from the database.
      */
-    suspend fun restorePeerIdentities(peerIdentities: List<Pair<String, ByteArray>>): Result<Int> {
+    fun restorePeerIdentities(peerIdentities: List<Pair<String, ByteArray>>): Result<Int> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
@@ -1188,23 +1143,20 @@ class ServiceReticulumProtocol(
         }
     }
 
-    suspend fun getLxmfDestination(): Result<com.lxmf.messenger.reticulum.model.Destination> {
+    @Suppress("ThrowsCount") // Multiple validation checks require distinct error messages
+    fun getLxmfDestination(): Result<com.lxmf.messenger.reticulum.model.Destination> {
         return runCatching {
-            val service = this.service ?: throw IllegalStateException("Service not bound")
+            val service = checkNotNull(this.service) { "Service not bound" }
 
             val resultJson = service.lxmfDestination
             val result = JSONObject(resultJson)
 
-            if (result.has("error")) {
-                throw RuntimeException(result.optString("error", "Unknown error"))
-            }
+            require(!result.has("error")) { result.optString("error", "Unknown error") }
 
             val hashStr = result.optString("hash", null)
             val hexHash = result.optString("hex_hash", null)
 
-            if (hashStr == null || hexHash == null) {
-                throw RuntimeException("Missing LXMF destination fields")
-            }
+            require(hashStr != null && hexHash != null) { "Missing LXMF destination fields" }
 
             // Get the identity to construct full destination object
             val identity = getLxmfIdentity().getOrThrow()
@@ -1221,23 +1173,22 @@ class ServiceReticulumProtocol(
         }
     }
 
-    suspend fun getLxmfIdentity(): Result<Identity> {
+    @Suppress("ThrowsCount") // Multiple validation checks require distinct error messages
+    fun getLxmfIdentity(): Result<Identity> {
         return runCatching {
-            val service = this.service ?: throw IllegalStateException("Service not bound")
+            val service = checkNotNull(this.service) { "Service not bound" }
 
             val resultJson = service.lxmfIdentity
             val result = JSONObject(resultJson)
 
-            if (result.has("error")) {
-                throw RuntimeException(result.optString("error", "Unknown error"))
-            }
+            require(!result.has("error")) { result.optString("error", "Unknown error") }
 
             val hashStr = result.optString("hash", null)
             val publicKeyStr = result.optString("public_key", null)
             val privateKeyStr = result.optString("private_key", null)
 
-            if (hashStr == null || publicKeyStr == null || privateKeyStr == null) {
-                throw RuntimeException("Missing LXMF identity fields")
+            require(hashStr != null && publicKeyStr != null && privateKeyStr != null) {
+                "Missing LXMF identity fields"
             }
 
             Identity(

@@ -4,6 +4,8 @@ import android.util.Log
 import com.lxmf.messenger.data.database.dao.InterfaceDao
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
+import com.lxmf.messenger.reticulum.model.toJsonString
+import com.lxmf.messenger.reticulum.model.typeName
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import kotlinx.coroutines.flow.Flow
@@ -25,17 +27,31 @@ class InterfaceRepository
     ) {
         /**
          * Get all configured interfaces as InterfaceConfig objects.
+         * Corrupted interfaces are logged and skipped.
          */
         val allInterfaces: Flow<List<InterfaceConfig>> =
             interfaceDao.getAllInterfaces()
-                .map { entities -> entities.map { entityToConfig(it) } }
+                .map { entities -> entities.mapNotNull { safeEntityToConfig(it) } }
 
         /**
          * Get all enabled interfaces as InterfaceConfig objects.
+         * Corrupted interfaces are logged and skipped.
          */
         val enabledInterfaces: Flow<List<InterfaceConfig>> =
             interfaceDao.getEnabledInterfaces()
-                .map { entities -> entities.map { entityToConfig(it) } }
+                .map { entities -> entities.mapNotNull { safeEntityToConfig(it) } }
+
+        /**
+         * Safely convert an entity to config, returning null on error.
+         */
+        private fun safeEntityToConfig(entity: InterfaceEntity): InterfaceConfig? {
+            return try {
+                entityToConfig(entity)
+            } catch (e: Exception) {
+                Log.e(TAG, "Skipping corrupted interface '${entity.name}': ${e.message}")
+                null
+            }
+        }
 
         /**
          * Get all interface entities (for UI display).
@@ -121,66 +137,14 @@ class InterfaceRepository
         private fun configToEntity(
             config: InterfaceConfig,
             displayOrder: Int = 0,
-        ): InterfaceEntity {
-            val configJson =
-                when (config) {
-                    is InterfaceConfig.AutoInterface ->
-                        JSONObject().apply {
-                            put("group_id", config.groupId)
-                            put("discovery_scope", config.discoveryScope)
-                            put("discovery_port", config.discoveryPort)
-                            put("data_port", config.dataPort)
-                            put("mode", config.mode)
-                        }.toString()
-
-                    is InterfaceConfig.TCPClient ->
-                        JSONObject().apply {
-                            put("target_host", config.targetHost)
-                            put("target_port", config.targetPort)
-                            put("kiss_framing", config.kissFraming)
-                            put("mode", config.mode)
-                            config.networkName?.let { put("network_name", it) }
-                            config.passphrase?.let { put("passphrase", it) }
-                        }.toString()
-
-                    is InterfaceConfig.RNode ->
-                        JSONObject().apply {
-                            put("port", config.port)
-                            put("frequency", config.frequency)
-                            put("bandwidth", config.bandwidth)
-                            put("tx_power", config.txPower)
-                            put("spreading_factor", config.spreadingFactor)
-                            put("coding_rate", config.codingRate)
-                            put("mode", config.mode)
-                        }.toString()
-
-                    is InterfaceConfig.UDP ->
-                        JSONObject().apply {
-                            put("listen_ip", config.listenIp)
-                            put("listen_port", config.listenPort)
-                            put("forward_ip", config.forwardIp)
-                            put("forward_port", config.forwardPort)
-                            put("mode", config.mode)
-                        }.toString()
-
-                    is InterfaceConfig.AndroidBLE ->
-                        JSONObject().apply {
-                            put("device_name", config.deviceName)
-                            put("max_connections", config.maxConnections)
-                            put("mode", config.mode)
-                        }.toString()
-                }
-
-            val typeName = config::class.simpleName ?: "Unknown"
-
-            return InterfaceEntity(
+        ): InterfaceEntity =
+            InterfaceEntity(
                 name = config.name,
-                type = typeName,
+                type = config.typeName,
                 enabled = config.enabled,
-                configJson = configJson,
+                configJson = config.toJsonString(),
                 displayOrder = displayOrder,
             )
-        }
 
         /**
          * Convert InterfaceEntity to InterfaceConfig for use in application logic.
@@ -200,11 +164,11 @@ class InterfaceRepository
                         // Validate ports
                         if (discoveryPort !in 1..65535) {
                             Log.e(TAG, "Invalid discovery port in database: $discoveryPort")
-                            throw IllegalStateException("Invalid discovery port: $discoveryPort")
+                            error("Invalid discovery port: $discoveryPort")
                         }
                         if (dataPort !in 1..65535) {
                             Log.e(TAG, "Invalid data port in database: $dataPort")
-                            throw IllegalStateException("Invalid data port: $dataPort")
+                            error("Invalid data port: $dataPort")
                         }
 
                         InterfaceConfig.AutoInterface(
@@ -226,7 +190,7 @@ class InterfaceRepository
                         when (val hostResult = InputValidator.validateHostname(targetHost)) {
                             is ValidationResult.Error -> {
                                 Log.e(TAG, "Invalid target host in database: $targetHost - ${hostResult.message}")
-                                throw IllegalStateException("Invalid target host: $targetHost")
+                                error("Invalid target host: $targetHost")
                             }
                             else -> {}
                         }
@@ -234,7 +198,7 @@ class InterfaceRepository
                         // Validate port
                         if (targetPort !in 1..65535) {
                             Log.e(TAG, "Invalid target port in database: $targetPort")
-                            throw IllegalStateException("Invalid target port: $targetPort")
+                            error("Invalid target port: $targetPort")
                         }
 
                         InterfaceConfig.TCPClient(
@@ -250,12 +214,12 @@ class InterfaceRepository
                     }
 
                     "RNode" -> {
-                        val port = json.getString("port")
+                        val port = json.optString("port", "")
 
                         // Validate port path (basic check - should be non-empty)
                         if (port.isBlank()) {
-                            Log.e(TAG, "Empty RNode port path in database")
-                            throw IllegalStateException("Empty RNode port path")
+                            Log.e(TAG, "Missing or empty RNode port path in database for '${entity.name}'")
+                            error("Missing or empty RNode port path")
                         }
 
                         InterfaceConfig.RNode(
@@ -281,7 +245,7 @@ class InterfaceRepository
                         when (val listenIpResult = InputValidator.validateHostname(listenIp)) {
                             is ValidationResult.Error -> {
                                 Log.e(TAG, "Invalid listen IP in database: $listenIp - ${listenIpResult.message}")
-                                throw IllegalStateException("Invalid listen IP: $listenIp")
+                                error("Invalid listen IP: $listenIp")
                             }
                             else -> {}
                         }
@@ -289,7 +253,7 @@ class InterfaceRepository
                         when (val forwardIpResult = InputValidator.validateHostname(forwardIp)) {
                             is ValidationResult.Error -> {
                                 Log.e(TAG, "Invalid forward IP in database: $forwardIp - ${forwardIpResult.message}")
-                                throw IllegalStateException("Invalid forward IP: $forwardIp")
+                                error("Invalid forward IP: $forwardIp")
                             }
                             else -> {}
                         }
@@ -297,11 +261,11 @@ class InterfaceRepository
                         // Validate ports
                         if (listenPort !in 1..65535) {
                             Log.e(TAG, "Invalid listen port in database: $listenPort")
-                            throw IllegalStateException("Invalid listen port: $listenPort")
+                            error("Invalid listen port: $listenPort")
                         }
                         if (forwardPort !in 1..65535) {
                             Log.e(TAG, "Invalid forward port in database: $forwardPort")
-                            throw IllegalStateException("Invalid forward port: $forwardPort")
+                            error("Invalid forward port: $forwardPort")
                         }
 
                         InterfaceConfig.UDP(
@@ -325,7 +289,7 @@ class InterfaceRepository
                             when (val nameResult = InputValidator.validateDeviceName(deviceName)) {
                                 is ValidationResult.Error -> {
                                     Log.e(TAG, "Invalid device name in database: $deviceName - ${nameResult.message}")
-                                    throw IllegalStateException("Invalid device name: $deviceName")
+                                    error("Invalid device name: $deviceName")
                                 }
                                 else -> {}
                             }
@@ -347,7 +311,7 @@ class InterfaceRepository
                 }
             } catch (e: JSONException) {
                 Log.e(TAG, "Corrupted JSON in database for interface '${entity.name}': ${e.message}", e)
-                throw IllegalStateException("Corrupted interface configuration for '${entity.name}'", e)
+                error("Corrupted interface configuration for '${entity.name}': ${e.message}")
             }
         }
 

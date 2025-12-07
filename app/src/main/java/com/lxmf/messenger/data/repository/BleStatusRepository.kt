@@ -98,7 +98,7 @@ class BleStatusRepository
          *
          * @return List of BleConnectionInfo for all connected peers
          */
-        suspend fun getConnectedPeers(): List<BleConnectionInfo> {
+        fun getConnectedPeers(): List<BleConnectionInfo> {
             return try {
                 // Get connection details from service via IPC
                 if (reticulumProtocol !is ServiceReticulumProtocol) {
@@ -170,7 +170,7 @@ class BleStatusRepository
          *
          * @return Number of currently connected peers
          */
-        suspend fun getConnectedPeerCount(): Int {
+        fun getConnectedPeerCount(): Int {
             return try {
                 getConnectedPeers().size
             } catch (e: Exception) {
@@ -184,7 +184,7 @@ class BleStatusRepository
          *
          * @param address The MAC address of the peer to disconnect
          */
-        suspend fun disconnectPeer(address: String) {
+        fun disconnectPeer(address: String) {
             try {
                 // Manual disconnect not yet implemented
                 Log.w(TAG, "Manual peer disconnect not yet supported")

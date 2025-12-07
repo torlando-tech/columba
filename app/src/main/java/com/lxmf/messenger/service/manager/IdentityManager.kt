@@ -17,13 +17,6 @@ import org.json.JSONObject
 class IdentityManager(private val wrapperManager: PythonWrapperManager) {
     companion object {
         private const val TAG = "IdentityManager"
-
-        /**
-         * Helper to convert ByteArray to Base64 string for JSON serialization.
-         */
-        private fun ByteArray?.toBase64(): String? {
-            return this?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
-        }
     }
 
     /**
@@ -44,9 +37,9 @@ class IdentityManager(private val wrapperManager: PythonWrapperManager) {
                 Log.d(TAG, "Identity created - hash=${hash?.size ?: 0} bytes")
 
                 JSONObject().apply {
-                    put("hash", hash.toBase64())
-                    put("public_key", publicKey.toBase64())
-                    put("private_key", privateKey.toBase64())
+                    put("hash", hash.toBase64String())
+                    put("public_key", publicKey.toBase64String())
+                    put("private_key", privateKey.toBase64String())
                 }.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "Error creating identity", e)
@@ -74,22 +67,20 @@ class IdentityManager(private val wrapperManager: PythonWrapperManager) {
                     }.toString()
                 }
 
-                // Extract fields and properly convert to JSON
+                // Extract fields from PyObject
                 val identityHash = result.getDictValue("identity_hash")?.toString()
                 val destinationHash = result.getDictValue("destination_hash")?.toString()
                 val filePath = result.getDictValue("file_path")?.toString()
                 val keyData = result.getDictValue("key_data")?.toJava(ByteArray::class.java) as? ByteArray
                 val name = result.getDictValue("display_name")?.toString()
 
-                JSONObject().apply {
-                    put("identity_hash", identityHash)
-                    put("destination_hash", destinationHash)
-                    put("file_path", filePath)
-                    if (keyData != null) {
-                        put("key_data", keyData.toBase64())
-                    }
-                    put("display_name", name)
-                }.toString()
+                buildIdentityResultJson(
+                    identityHash = identityHash,
+                    destinationHash = destinationHash,
+                    filePath = filePath,
+                    keyDataBase64 = keyData.toBase64String(),
+                    displayName = name,
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Error creating identity with name", e)
                 errorJson(e.message)
@@ -113,9 +104,9 @@ class IdentityManager(private val wrapperManager: PythonWrapperManager) {
                 val privateKey = result.getDictValue("private_key")?.toJava(ByteArray::class.java) as? ByteArray
 
                 JSONObject().apply {
-                    put("hash", hash.toBase64())
-                    put("public_key", publicKey.toBase64())
-                    put("private_key", privateKey.toBase64())
+                    put("hash", hash.toBase64String())
+                    put("public_key", publicKey.toBase64String())
+                    put("private_key", privateKey.toBase64String())
                 }.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading identity", e)
@@ -199,22 +190,20 @@ class IdentityManager(private val wrapperManager: PythonWrapperManager) {
                     }.toString()
                 }
 
-                // Extract fields and properly convert to JSON
+                // Extract fields from PyObject
                 val identityHash = result.getDictValue("identity_hash")?.toString()
                 val destinationHash = result.getDictValue("destination_hash")?.toString()
                 val filePath = result.getDictValue("file_path")?.toString()
                 val keyData = result.getDictValue("key_data")?.toJava(ByteArray::class.java) as? ByteArray
                 val name = result.getDictValue("display_name")?.toString()
 
-                JSONObject().apply {
-                    put("identity_hash", identityHash)
-                    put("destination_hash", destinationHash)
-                    put("file_path", filePath)
-                    if (keyData != null) {
-                        put("key_data", keyData.toBase64())
-                    }
-                    put("display_name", name)
-                }.toString()
+                buildIdentityResultJson(
+                    identityHash = identityHash,
+                    destinationHash = destinationHash,
+                    filePath = filePath,
+                    keyDataBase64 = keyData.toBase64String(),
+                    displayName = name,
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Error importing identity file", e)
                 errorJson(e.message)
@@ -303,9 +292,9 @@ class IdentityManager(private val wrapperManager: PythonWrapperManager) {
                 val privateKey = result.getDictValue("private_key")?.toJava(ByteArray::class.java) as? ByteArray
 
                 JSONObject().apply {
-                    put("hash", hash.toBase64())
-                    put("public_key", publicKey.toBase64())
-                    put("private_key", privateKey.toBase64())
+                    put("hash", hash.toBase64String())
+                    put("public_key", publicKey.toBase64String())
+                    put("private_key", privateKey.toBase64String())
                 }.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting LXMF identity", e)
@@ -334,7 +323,7 @@ class IdentityManager(private val wrapperManager: PythonWrapperManager) {
                 val hexHash = result.getDictValue("hex_hash")?.toString()
 
                 JSONObject().apply {
-                    put("hash", hash.toBase64())
+                    put("hash", hash.toBase64String())
                     put("hex_hash", hexHash)
                 }.toString()
             } catch (e: Exception) {

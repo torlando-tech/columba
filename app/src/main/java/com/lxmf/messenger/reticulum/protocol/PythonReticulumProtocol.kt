@@ -207,9 +207,10 @@ class PythonReticulumProtocol(
             Log.d(TAG, "Step 8: Calling Python initialize()")
             _networkStatus.value = NetworkStatus.INITIALIZING
 
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
             val result =
                 try {
-                    wrapper!!.callAttr("initialize", configJson)
+                    currentWrapper.callAttr("initialize", configJson)
                 } catch (e: Exception) {
                     Log.e(TAG, "Python initialize() call failed: ${e.message}", e)
                     _networkStatus.value = NetworkStatus.ERROR("Python error: ${e.message}")
@@ -249,7 +250,8 @@ class PythonReticulumProtocol(
     private fun acquireWifiLocks() {
         try {
             // Acquire multicast lock - CRITICAL for receiving UDP multicast packets
-            if (multicastLock == null || !multicastLock!!.isHeld) {
+            val currentMulticastLock = multicastLock
+            if (currentMulticastLock == null || !currentMulticastLock.isHeld) {
                 multicastLock = wifiManager.createMulticastLock("ReticulumMulticast")
                 multicastLock?.setReferenceCounted(false)
                 multicastLock?.acquire()
@@ -257,7 +259,8 @@ class PythonReticulumProtocol(
             }
 
             // Acquire WiFi lock for reliability
-            if (wifiLock == null || !wifiLock!!.isHeld) {
+            val currentWifiLock = wifiLock
+            if (currentWifiLock == null || !currentWifiLock.isHeld) {
                 wifiLock =
                     wifiManager.createWifiLock(
                         WifiManager.WIFI_MODE_FULL_HIGH_PERF,
@@ -486,6 +489,7 @@ class PythonReticulumProtocol(
         Log.d(TAG, "Reticulum configuration validation passed")
     }
 
+    @Suppress("NestedBlockDepth") // Interface serialization requires nested when/try structure
     private fun buildConfigJson(config: ReticulumConfig): String {
         Log.d(TAG, "buildConfigJson: Starting")
         try {
@@ -536,6 +540,8 @@ class PythonReticulumProtocol(
                             ifaceJson.put("target_port", iface.targetPort)
                             ifaceJson.put("kiss_framing", iface.kissFraming)
                             ifaceJson.put("mode", iface.mode)
+                            iface.networkName?.let { ifaceJson.put("network_name", it) }
+                            iface.passphrase?.let { ifaceJson.put("passphrase", it) }
                         }
                         is InterfaceConfig.UDP -> {
                             Log.d(TAG, "buildConfigJson: UDP - ${iface.name}")
@@ -652,7 +658,8 @@ class PythonReticulumProtocol(
     override suspend fun createIdentity(): Result<Identity> {
         return runCatching {
             Log.d(TAG, "Creating identity")
-            val result = wrapper!!.callAttr("create_identity")
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("create_identity")
 
             val hash = result.getDictValue("hash")?.toJava(ByteArray::class.java) as ByteArray
             val publicKey = result.getDictValue("public_key")?.toJava(ByteArray::class.java) as ByteArray
@@ -669,7 +676,8 @@ class PythonReticulumProtocol(
     override suspend fun loadIdentity(path: String): Result<Identity> {
         return runCatching {
             Log.d(TAG, "Loading identity from $path")
-            val result = wrapper!!.callAttr("load_identity", path)
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("load_identity", path)
 
             val hash = result.getDictValue("hash")?.toJava(ByteArray::class.java) as ByteArray
             val publicKey = result.getDictValue("public_key")?.toJava(ByteArray::class.java) as ByteArray
@@ -689,7 +697,8 @@ class PythonReticulumProtocol(
     ): Result<Unit> {
         return runCatching {
             Log.d(TAG, "Saving identity to $path")
-            val result = wrapper!!.callAttr("save_identity", identity.privateKey, path)
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("save_identity", identity.privateKey, path)
 
             val success = result.getDictValue("success")?.toBoolean() ?: false
             if (!success) {
@@ -707,7 +716,8 @@ class PythonReticulumProtocol(
     override suspend fun createIdentityWithName(displayName: String): Map<String, Any> {
         return runCatching {
             Log.d(TAG, "Creating identity with display name: $displayName")
-            val result = wrapper!!.callAttr("create_identity", displayName)
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("create_identity", displayName)
 
             // Convert PyObject dict to Kotlin Map
             val map = mutableMapOf<String, Any>()
@@ -738,7 +748,8 @@ class PythonReticulumProtocol(
     override suspend fun deleteIdentityFile(identityHash: String): Map<String, Any> {
         return runCatching {
             Log.d(TAG, "Deleting identity file: $identityHash")
-            val result = wrapper!!.callAttr("delete_identity_file", identityHash)
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("delete_identity_file", identityHash)
 
             // Convert PyObject dict to Kotlin Map
             val map = mutableMapOf<String, Any>()
@@ -763,7 +774,8 @@ class PythonReticulumProtocol(
     ): Map<String, Any> {
         return runCatching {
             Log.d(TAG, "Importing identity file with display name: $displayName")
-            val result = wrapper!!.callAttr("import_identity_file", fileData, displayName)
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("import_identity_file", fileData, displayName)
 
             // Convert PyObject dict to Kotlin Map
             val map = mutableMapOf<String, Any>()
@@ -797,7 +809,8 @@ class PythonReticulumProtocol(
     ): ByteArray {
         return runCatching {
             Log.d(TAG, "Exporting identity file: $identityHash from $filePath")
-            val result = wrapper!!.callAttr("export_identity_file", identityHash, filePath)
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("export_identity_file", identityHash, filePath)
 
             // Convert PyObject bytes to Kotlin ByteArray
             result.toJava(ByteArray::class.java)
@@ -814,7 +827,8 @@ class PythonReticulumProtocol(
     ): Map<String, Any> {
         return runCatching {
             Log.d(TAG, "Recovering identity file: $identityHash to $filePath")
-            val result = wrapper!!.callAttr("recover_identity_file", identityHash, keyData, filePath)
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("recover_identity_file", identityHash, keyData, filePath)
             result.asMap().mapKeys { it.key.toString() }.mapValues { it.value as Any }
         }.getOrElse { e ->
             Log.e(TAG, "Failed to recover identity file", e)
@@ -848,8 +862,9 @@ class PythonReticulumProtocol(
                 aspectsList.callAttr("append", aspect)
             }
 
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
             val result =
-                wrapper!!.callAttr(
+                currentWrapper.callAttr(
                     "create_destination",
                     identityDict,
                     direction.toDirectionString(),
@@ -859,7 +874,7 @@ class PythonReticulumProtocol(
                 )
 
             val hash = result.getDictValue("hash")?.toJava(ByteArray::class.java) as ByteArray
-            val hexHash = result.getDictValue("hex_hash")?.toString() ?: ""
+            val hexHash = result.getDictValue("hex_hash")?.toString().orEmpty()
 
             Destination(
                 hash = hash,
@@ -879,7 +894,8 @@ class PythonReticulumProtocol(
     ): Result<Unit> {
         return runCatching {
             Log.d(TAG, "Announcing destination: ${destination.hexHash}")
-            val result = wrapper!!.callAttr("announce_destination", destination.hash, appData)
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("announce_destination", destination.hash, appData)
 
             val success = result.getDictValue("success")?.toBoolean() ?: false
             if (!success) {
@@ -896,8 +912,9 @@ class PythonReticulumProtocol(
     ): Result<PacketReceipt> {
         return runCatching {
             Log.d(TAG, "Sending packet to ${destination.hexHash}")
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
             val result =
-                wrapper!!.callAttr(
+                currentWrapper.callAttr(
                     "send_packet",
                     destination.hash,
                     data,
@@ -952,7 +969,8 @@ class PythonReticulumProtocol(
 
     override suspend fun requestPath(destinationHash: ByteArray): Result<Unit> {
         return runCatching {
-            val result = wrapper!!.callAttr("request_path", destinationHash)
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("request_path", destinationHash)
 
             val success = result.getDictValue("success")?.toBoolean() ?: false
             if (!success) {
@@ -1019,7 +1037,7 @@ class PythonReticulumProtocol(
             // Extract basic info
             debugInfo["initialized"] = result.getDictValue("initialized")?.toBoolean() ?: false
             debugInfo["reticulum_available"] = result.getDictValue("reticulum_available")?.toBoolean() ?: false
-            debugInfo["storage_path"] = result.getDictValue("storage_path")?.toString() ?: ""
+            debugInfo["storage_path"] = result.getDictValue("storage_path")?.toString().orEmpty()
             debugInfo["identity_count"] = result.getDictValue("identity_count")?.toInt() ?: 0
             debugInfo["destination_count"] = result.getDictValue("destination_count")?.toInt() ?: 0
             debugInfo["pending_announces"] = result.getDictValue("pending_announces")?.toInt() ?: 0
@@ -1034,8 +1052,8 @@ class PythonReticulumProtocol(
                     val iface = ifaceObj as? PyObject ?: continue
                     val ifaceMap =
                         mapOf(
-                            "name" to (iface.getDictValue("name")?.toString() ?: ""),
-                            "type" to (iface.getDictValue("type")?.toString() ?: ""),
+                            "name" to iface.getDictValue("name")?.toString().orEmpty(),
+                            "type" to iface.getDictValue("type")?.toString().orEmpty(),
                             "online" to (iface.getDictValue("online")?.toBoolean() ?: false),
                         )
                     interfacesList.add(ifaceMap)

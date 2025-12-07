@@ -103,7 +103,7 @@ class InterfaceConfigManager
                 val reticulumProcessName = "${context.packageName}:reticulum"
                 try {
                     val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
-                    val runningProcesses = activityManager.runningAppProcesses ?: emptyList()
+                    val runningProcesses = activityManager.runningAppProcesses.orEmpty()
                     val reticulumProcess = runningProcesses.find { it.processName == reticulumProcessName }
 
                     if (reticulumProcess != null) {
@@ -128,7 +128,7 @@ class InterfaceConfigManager
                         verifyAttempts++
 
                         val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
-                        val runningProcesses = activityManager.runningAppProcesses ?: emptyList()
+                        val runningProcesses = activityManager.runningAppProcesses.orEmpty()
                         val stillRunning = runningProcesses.any { it.processName == reticulumProcessName }
 
                         if (!stillRunning) {

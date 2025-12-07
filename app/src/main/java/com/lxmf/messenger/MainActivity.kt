@@ -668,8 +668,8 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                                 navArgument("peerName") { type = NavType.StringType },
                             ),
                     ) { backStackEntry ->
-                        val destinationHash = backStackEntry.arguments?.getString("destinationHash") ?: ""
-                        val peerName = backStackEntry.arguments?.getString("peerName") ?: ""
+                        val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
+                        val peerName = backStackEntry.arguments?.getString("peerName").orEmpty()
 
                         MessagingScreen(
                             destinationHash = destinationHash,
@@ -689,7 +689,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                                 navArgument("destinationHash") { type = NavType.StringType },
                             ),
                     ) { backStackEntry ->
-                        val destinationHash = backStackEntry.arguments?.getString("destinationHash") ?: ""
+                        val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
 
                         AnnounceDetailScreen(
                             destinationHash = destinationHash,

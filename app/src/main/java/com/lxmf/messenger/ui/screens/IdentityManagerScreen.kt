@@ -360,7 +360,7 @@ private fun IdentityList(
                 start = 16.dp,
                 end = 16.dp,
                 top = 16.dp,
-                bottom = 88.dp, // Extra padding for FAB and bottom nav
+                bottom = 160.dp, // Extra padding for FAB, bottom nav, and dropdown menu
             ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

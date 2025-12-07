@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -52,7 +53,7 @@ class InterfaceRepositoryTest {
         name = name,
         type = "AutoInterface",
         enabled = enabled,
-        configJson = """{"group_id":"default","discovery_scope":"link","discovery_port":48555,"data_port":49555,"mode":"full"}""",
+        configJson = """{"group_id":"default","discovery_scope":"link","mode":"full"}""",
         displayOrder = 0,
     )
 
@@ -307,8 +308,8 @@ class InterfaceRepositoryTest {
             assertEquals("Auto Discovery", config.name)
             assertEquals("default", config.groupId)
             assertEquals("link", config.discoveryScope)
-            assertEquals(48555, config.discoveryPort)
-            assertEquals(49555, config.dataPort)
+            assertNull(config.discoveryPort)
+            assertNull(config.dataPort)
 
             cancelAndIgnoreRemainingEvents()
         }

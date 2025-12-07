@@ -158,17 +158,27 @@ class InterfaceRepository
 
                 when (entity.type) {
                     "AutoInterface" -> {
-                        val discoveryPort = json.optInt("discovery_port", 48555)
-                        val dataPort = json.optInt("data_port", 49555)
-
-                        // Validate ports
-                        if (discoveryPort !in 1..65535) {
-                            Log.e(TAG, "Invalid discovery port in database: $discoveryPort")
-                            error("Invalid discovery port: $discoveryPort")
+                        // Ports are optional - null means use RNS defaults
+                        val discoveryPort = if (json.has("discovery_port")) {
+                            val port = json.getInt("discovery_port")
+                            if (port !in 1..65535) {
+                                Log.e(TAG, "Invalid discovery port in database: $port")
+                                error("Invalid discovery port: $port")
+                            }
+                            port
+                        } else {
+                            null
                         }
-                        if (dataPort !in 1..65535) {
-                            Log.e(TAG, "Invalid data port in database: $dataPort")
-                            error("Invalid data port: $dataPort")
+
+                        val dataPort = if (json.has("data_port")) {
+                            val port = json.getInt("data_port")
+                            if (port !in 1..65535) {
+                                Log.e(TAG, "Invalid data port in database: $port")
+                                error("Invalid data port: $port")
+                            }
+                            port
+                        } else {
+                            null
                         }
 
                         InterfaceConfig.AutoInterface(

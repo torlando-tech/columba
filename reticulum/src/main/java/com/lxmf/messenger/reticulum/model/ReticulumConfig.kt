@@ -25,8 +25,8 @@ sealed class InterfaceConfig {
      * @param enabled Whether this interface should be initialized
      * @param groupId Custom network identifier (empty for default)
      * @param discoveryScope Discovery scope: "link", "admin", "site", "organisation", or "global"
-     * @param discoveryPort UDP port for peer discovery announcements (default: 48555)
-     * @param dataPort UDP port for data communication (default: 49555)
+     * @param discoveryPort UDP port for peer discovery announcements (null = RNS default 29716)
+     * @param dataPort UDP port for data communication (null = RNS default 42671)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
      */
     data class AutoInterface(
@@ -34,8 +34,8 @@ sealed class InterfaceConfig {
         override val enabled: Boolean = true,
         val groupId: String = "",
         val discoveryScope: String = "link",
-        val discoveryPort: Int = 48555,
-        val dataPort: Int = 49555,
+        val discoveryPort: Int? = null,
+        val dataPort: Int? = null,
         val mode: String = "full",
     ) : InterfaceConfig()
 

@@ -33,10 +33,10 @@ data class InterfaceEntity(
      * {
      *   "group_id": "custom_network",
      *   "discovery_scope": "link",
-     *   "discovery_port": 48555,
-     *   "data_port": 49555,
      *   "mode": "full"
      * }
+     * Note: discovery_port and data_port are optional. If omitted, RNS uses
+     * its defaults (29716 for discovery, 42671 for data).
      *
      * TCPClient:
      * {

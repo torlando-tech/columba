@@ -12,8 +12,8 @@ fun InterfaceConfig.toJsonString(): String {
             JSONObject().apply {
                 put("group_id", groupId)
                 put("discovery_scope", discoveryScope)
-                put("discovery_port", discoveryPort)
-                put("data_port", dataPort)
+                discoveryPort?.let { put("discovery_port", it) }
+                dataPort?.let { put("data_port", it) }
                 put("mode", mode)
             }.toString()
 

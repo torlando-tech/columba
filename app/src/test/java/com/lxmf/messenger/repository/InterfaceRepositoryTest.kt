@@ -41,19 +41,6 @@ class InterfaceRepositoryTest {
         clearAllMocks()
     }
 
-    /**
-     * Helper to create repository with specific mock data.
-     * Must be called after setting up mocks since flows are captured at construction.
-     */
-    private fun createRepository(
-        allInterfaces: List<InterfaceEntity> = emptyList(),
-        enabledInterfaces: List<InterfaceEntity> = emptyList(),
-    ): InterfaceRepository {
-        every { mockDao.getAllInterfaces() } returns flowOf(allInterfaces)
-        every { mockDao.getEnabledInterfaces() } returns flowOf(enabledInterfaces)
-        return InterfaceRepository(mockDao)
-    }
-
     // ========== Helper Functions ==========
 
     private fun createValidAutoInterfaceEntity(

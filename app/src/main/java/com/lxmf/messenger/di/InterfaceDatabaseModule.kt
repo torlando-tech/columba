@@ -61,7 +61,7 @@ object InterfaceDatabaseModule {
             "interface_database",
         )
             .addCallback(InterfaceDatabase.Callback(context, database, applicationScope))
-            .addMigrations(InterfaceDatabase.MIGRATION_1_2)
+            .addMigrations(InterfaceDatabase.MIGRATION_1_2, InterfaceDatabase.MIGRATION_2_3)
             .build()
     }
 

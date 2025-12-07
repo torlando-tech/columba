@@ -34,6 +34,59 @@ class InterfaceConfigExtTest {
     }
 
     @Test
+    fun `AutoInterface toJsonString omits both ports when null`() {
+        val config = InterfaceConfig.AutoInterface(
+            name = "Test Auto",
+            enabled = true,
+            groupId = "test-group",
+            discoveryScope = "link",
+            discoveryPort = null,
+            dataPort = null,
+            mode = "full",
+        )
+
+        val json = JSONObject(config.toJsonString())
+
+        assertFalse("discovery_port should be omitted when null", json.has("discovery_port"))
+        assertFalse("data_port should be omitted when null", json.has("data_port"))
+        assertEquals("test-group", json.getString("group_id"))
+        assertEquals("link", json.getString("discovery_scope"))
+        assertEquals("full", json.getString("mode"))
+    }
+
+    @Test
+    fun `AutoInterface toJsonString includes only discoveryPort when dataPort is null`() {
+        val config = InterfaceConfig.AutoInterface(
+            name = "Test Auto",
+            enabled = true,
+            discoveryPort = 29716,
+            dataPort = null,
+        )
+
+        val json = JSONObject(config.toJsonString())
+
+        assertTrue("discovery_port should be present", json.has("discovery_port"))
+        assertEquals(29716, json.getInt("discovery_port"))
+        assertFalse("data_port should be omitted when null", json.has("data_port"))
+    }
+
+    @Test
+    fun `AutoInterface toJsonString includes only dataPort when discoveryPort is null`() {
+        val config = InterfaceConfig.AutoInterface(
+            name = "Test Auto",
+            enabled = true,
+            discoveryPort = null,
+            dataPort = 42671,
+        )
+
+        val json = JSONObject(config.toJsonString())
+
+        assertFalse("discovery_port should be omitted when null", json.has("discovery_port"))
+        assertTrue("data_port should be present", json.has("data_port"))
+        assertEquals(42671, json.getInt("data_port"))
+    }
+
+    @Test
     fun `TCPClient toJsonString contains all fields`() {
         val config = InterfaceConfig.TCPClient(
             name = "Test TCP",

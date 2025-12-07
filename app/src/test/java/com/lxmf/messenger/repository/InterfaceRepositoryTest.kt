@@ -316,6 +316,58 @@ class InterfaceRepositoryTest {
     }
 
     @Test
+    fun `entityToConfig parses AutoInterface with only discovery_port`() = runTest {
+        val entity = InterfaceEntity(
+            id = 1,
+            name = "Auto With Discovery Port",
+            type = "AutoInterface",
+            enabled = true,
+            configJson = """{"group_id":"","discovery_scope":"link","discovery_port":29716,"mode":"full"}""",
+            displayOrder = 0,
+        )
+        every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+        every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(entity))
+        val repository = InterfaceRepository(mockDao)
+
+        repository.enabledInterfaces.test {
+            val interfaces = awaitItem()
+
+            assertEquals(1, interfaces.size)
+            val config = interfaces[0] as InterfaceConfig.AutoInterface
+            assertEquals(29716, config.discoveryPort)
+            assertNull(config.dataPort)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `entityToConfig parses AutoInterface with only data_port`() = runTest {
+        val entity = InterfaceEntity(
+            id = 1,
+            name = "Auto With Data Port",
+            type = "AutoInterface",
+            enabled = true,
+            configJson = """{"group_id":"","discovery_scope":"link","data_port":42671,"mode":"full"}""",
+            displayOrder = 0,
+        )
+        every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+        every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(entity))
+        val repository = InterfaceRepository(mockDao)
+
+        repository.enabledInterfaces.test {
+            val interfaces = awaitItem()
+
+            assertEquals(1, interfaces.size)
+            val config = interfaces[0] as InterfaceConfig.AutoInterface
+            assertNull(config.discoveryPort)
+            assertEquals(42671, config.dataPort)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `enabledInterfaces correctly converts valid TCPClient`() = runTest {
         val entity = createValidTcpClientEntity()
         every { mockDao.getAllInterfaces() } returns flowOf(emptyList())

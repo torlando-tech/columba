@@ -60,6 +60,10 @@ class SettingsRepository
 
             // Theme preference
             val THEME_PREFERENCE = stringPreferencesKey("app_theme")
+
+            // Shared instance preferences
+            val PREFER_OWN_INSTANCE = booleanPreferencesKey("prefer_own_instance")
+            val IS_SHARED_INSTANCE = booleanPreferencesKey("is_shared_instance")
         }
 
         // Notification preferences
@@ -404,6 +408,53 @@ class SettingsRepository
         suspend fun saveThemePreferenceByIdentifier(identifier: String) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.THEME_PREFERENCE] = identifier
+            }
+        }
+
+        // Shared instance preference
+
+        /**
+         * Flow of the prefer own instance setting.
+         * When true, Columba will create its own RNS instance even if a shared one is available.
+         * Defaults to false (prefer shared instance if available).
+         */
+        val preferOwnInstanceFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.PREFER_OWN_INSTANCE] ?: false
+                }
+
+        /**
+         * Save the prefer own instance setting.
+         *
+         * @param preferOwn Whether to prefer Columba's own instance over a shared one
+         */
+        suspend fun savePreferOwnInstance(preferOwn: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.PREFER_OWN_INSTANCE] = preferOwn
+            }
+        }
+
+        /**
+         * Flow of whether Columba is currently connected to a shared RNS instance.
+         * Set by the service when it initializes/connects.
+         * Defaults to false.
+         */
+        val isSharedInstanceFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.IS_SHARED_INSTANCE] ?: false
+                }
+
+        /**
+         * Save the current shared instance status.
+         * Called by the service when the RNS instance type is determined.
+         *
+         * @param isShared Whether currently connected to a shared instance
+         */
+        suspend fun saveIsSharedInstance(isShared: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.IS_SHARED_INSTANCE] = isShared
             }
         }
 

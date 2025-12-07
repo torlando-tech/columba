@@ -36,6 +36,10 @@ data class SettingsState(
     val selectedTheme: AppTheme = PresetTheme.VIBRANT,
     val customThemes: List<AppTheme> = emptyList(),
     val isRestarting: Boolean = false,
+    // Shared instance state
+    val isSharedInstance: Boolean = false,
+    val preferOwnInstance: Boolean = false,
+    val isSharedInstanceBannerExpanded: Boolean = true,
 )
 
 @HiltViewModel
@@ -101,6 +105,8 @@ class SettingsViewModel
                         settingsRepository.lastAutoAnnounceTimeFlow,
                         settingsRepository.themePreferenceFlow,
                         customThemesFlow,
+                        settingsRepository.preferOwnInstanceFlow,
+                        settingsRepository.isSharedInstanceFlow,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as com.lxmf.messenger.data.db.entity.LocalIdentityEntity?
@@ -120,6 +126,12 @@ class SettingsViewModel
                         @Suppress("UNCHECKED_CAST")
                         val customThemes = flows[5] as List<AppTheme>
 
+                        @Suppress("UNCHECKED_CAST")
+                        val preferOwnInstance = flows[6] as Boolean
+
+                        @Suppress("UNCHECKED_CAST")
+                        val isSharedInstance = flows[7] as Boolean
+
                         val displayName = activeIdentity?.displayName ?: defaultName
 
                         SettingsState(
@@ -138,6 +150,10 @@ class SettingsViewModel
                             showQrDialog = _state.value.showQrDialog,
                             selectedTheme = selectedTheme,
                             customThemes = customThemes,
+                            // Shared instance state from repository (set by service)
+                            isSharedInstance = isSharedInstance,
+                            preferOwnInstance = preferOwnInstance,
+                            isSharedInstanceBannerExpanded = _state.value.isSharedInstanceBannerExpanded,
                         )
                     }.collect { newState ->
                         _state.value = newState
@@ -460,5 +476,29 @@ class SettingsViewModel
                     _state.value = _state.value.copy(isRestarting = false)
                 }
             }
+        }
+
+        // Shared instance methods
+
+        /**
+         * Toggle the prefer own instance setting.
+         * When enabled, Columba will use its own RNS instance even if a shared one is available.
+         */
+        fun togglePreferOwnInstance(preferOwn: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.savePreferOwnInstance(preferOwn)
+                Log.d(TAG, "Prefer own instance set to: $preferOwn")
+                // Restart service to apply the change
+                if (!_state.value.isRestarting) {
+                    restartService()
+                }
+            }
+        }
+
+        /**
+         * Toggle the shared instance banner expansion state.
+         */
+        fun toggleSharedInstanceBannerExpanded(expanded: Boolean) {
+            _state.value = _state.value.copy(isSharedInstanceBannerExpanded = expanded)
         }
     }

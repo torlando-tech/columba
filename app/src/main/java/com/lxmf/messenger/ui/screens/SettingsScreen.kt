@@ -32,6 +32,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.DataMigrationCard
 import com.lxmf.messenger.ui.screens.settings.cards.IdentityCard
 import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
+import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
 import com.lxmf.messenger.viewmodel.DebugViewModel
@@ -86,9 +87,19 @@ fun SettingsScreen(
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
+                // Shared instance banner (only shown when connected to a shared instance)
+                if (state.isSharedInstance) {
+                    SharedInstanceBannerCard(
+                        isExpanded = state.isSharedInstanceBannerExpanded,
+                        onExpandToggle = { viewModel.toggleSharedInstanceBannerExpanded(it) },
+                        onUseOwnInstance = { viewModel.togglePreferOwnInstance(true) },
+                    )
+                }
+
                 NetworkCard(
                     onViewStatus = onNavigateToNetworkStatus,
                     onManageInterfaces = onNavigateToInterfaces,
+                    isSharedInstance = state.isSharedInstance,
                 )
 
                 IdentityCard(

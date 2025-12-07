@@ -1143,23 +1143,20 @@ class ServiceReticulumProtocol(
         }
     }
 
+    @Suppress("ThrowsCount") // Multiple validation checks require distinct error messages
     fun getLxmfDestination(): Result<com.lxmf.messenger.reticulum.model.Destination> {
         return runCatching {
-            val service = this.service ?: throw IllegalStateException("Service not bound")
+            val service = checkNotNull(this.service) { "Service not bound" }
 
             val resultJson = service.lxmfDestination
             val result = JSONObject(resultJson)
 
-            if (result.has("error")) {
-                throw RuntimeException(result.optString("error", "Unknown error"))
-            }
+            require(!result.has("error")) { result.optString("error", "Unknown error") }
 
             val hashStr = result.optString("hash", null)
             val hexHash = result.optString("hex_hash", null)
 
-            if (hashStr == null || hexHash == null) {
-                throw RuntimeException("Missing LXMF destination fields")
-            }
+            require(hashStr != null && hexHash != null) { "Missing LXMF destination fields" }
 
             // Get the identity to construct full destination object
             val identity = getLxmfIdentity().getOrThrow()
@@ -1176,23 +1173,22 @@ class ServiceReticulumProtocol(
         }
     }
 
+    @Suppress("ThrowsCount") // Multiple validation checks require distinct error messages
     fun getLxmfIdentity(): Result<Identity> {
         return runCatching {
-            val service = this.service ?: throw IllegalStateException("Service not bound")
+            val service = checkNotNull(this.service) { "Service not bound" }
 
             val resultJson = service.lxmfIdentity
             val result = JSONObject(resultJson)
 
-            if (result.has("error")) {
-                throw RuntimeException(result.optString("error", "Unknown error"))
-            }
+            require(!result.has("error")) { result.optString("error", "Unknown error") }
 
             val hashStr = result.optString("hash", null)
             val publicKeyStr = result.optString("public_key", null)
             val privateKeyStr = result.optString("private_key", null)
 
-            if (hashStr == null || publicKeyStr == null || privateKeyStr == null) {
-                throw RuntimeException("Missing LXMF identity fields")
+            require(hashStr != null && publicKeyStr != null && privateKeyStr != null) {
+                "Missing LXMF identity fields"
             }
 
             Identity(

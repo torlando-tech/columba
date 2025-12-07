@@ -309,6 +309,7 @@ private fun CustomThemeData.toEntity(): CustomThemeEntity {
  * Build a CustomThemeEntity from components.
  * Used by saveTheme, updateTheme, and toEntity to avoid duplication.
  */
+@Suppress("LongParameterList") // Entity builder requires all fields
 private fun buildThemeEntity(
     id: Long,
     name: String,

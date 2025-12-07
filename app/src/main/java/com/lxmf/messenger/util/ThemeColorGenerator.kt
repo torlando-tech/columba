@@ -29,63 +29,7 @@ object ThemeColorGenerator {
         val secondary = generateHarmonizedColor(seedColor, 60f, isDark) // 60° hue shift
         val tertiary = generateHarmonizedColor(seedColor, 120f, isDark) // 120° hue shift
 
-        val error = if (isDark) 0xFFF2B8B5.toInt() else 0xFFB3261E.toInt()
-
-        return if (isDark) {
-            darkColorScheme(
-                primary = Color(primary),
-                onPrimary = Color(getContrastingColor(primary, true)),
-                primaryContainer = Color(darkenColor(primary, 0.3f)),
-                onPrimaryContainer = Color(lightenColor(primary, 0.4f)),
-                secondary = Color(secondary),
-                onSecondary = Color(getContrastingColor(secondary, true)),
-                secondaryContainer = Color(darkenColor(secondary, 0.3f)),
-                onSecondaryContainer = Color(lightenColor(secondary, 0.4f)),
-                tertiary = Color(tertiary),
-                onTertiary = Color(getContrastingColor(tertiary, true)),
-                tertiaryContainer = Color(darkenColor(tertiary, 0.3f)),
-                onTertiaryContainer = Color(lightenColor(tertiary, 0.4f)),
-                error = Color(error),
-                onError = Color(0xFF601410),
-                errorContainer = Color(0xFF8C1D18),
-                onErrorContainer = Color(0xFFF9DEDC),
-                background = Color(0xFF1A1C1E),
-                onBackground = Color(0xFFE2E2E6),
-                surface = Color(0xFF1A1C1E),
-                onSurface = Color(0xFFE2E2E6),
-                surfaceVariant = Color(0xFF43474E),
-                onSurfaceVariant = Color(0xFFC3C7CF),
-                outline = Color(0xFF8D9199),
-                outlineVariant = Color(0xFF43474E),
-            )
-        } else {
-            lightColorScheme(
-                primary = Color(primary),
-                onPrimary = Color(Color.White.toArgb()),
-                primaryContainer = Color(lightenColor(primary, 0.3f)),
-                onPrimaryContainer = Color(darkenColor(primary, 0.4f)),
-                secondary = Color(secondary),
-                onSecondary = Color(Color.White.toArgb()),
-                secondaryContainer = Color(lightenColor(secondary, 0.3f)),
-                onSecondaryContainer = Color(darkenColor(secondary, 0.4f)),
-                tertiary = Color(tertiary),
-                onTertiary = Color(Color.White.toArgb()),
-                tertiaryContainer = Color(lightenColor(tertiary, 0.3f)),
-                onTertiaryContainer = Color(darkenColor(tertiary, 0.4f)),
-                error = Color(error),
-                onError = Color(Color.White.toArgb()),
-                errorContainer = Color(0xFFF9DEDC),
-                onErrorContainer = Color(0xFF410E0B),
-                background = Color(0xFFFEFBFF),
-                onBackground = Color(0xFF1A1C1E),
-                surface = Color(0xFFFEFBFF),
-                onSurface = Color(0xFF1A1C1E),
-                surfaceVariant = Color(0xFFE1E2EC),
-                onSurfaceVariant = Color(0xFF43474E),
-                outline = Color(0xFF74777F),
-                outlineVariant = Color(0xFFC3C7CF),
-            )
-        }
+        return buildColorScheme(primary, secondary, tertiary, isDark)
     }
 
     /**
@@ -109,6 +53,19 @@ object ThemeColorGenerator {
         val secondary = if (isDark) lightenColor(secondarySeed, 0.2f) else darkenColor(secondarySeed, 0.1f)
         val tertiary = if (isDark) lightenColor(tertiarySeed, 0.2f) else darkenColor(tertiarySeed, 0.1f)
 
+        return buildColorScheme(primary, secondary, tertiary, isDark)
+    }
+
+    /**
+     * Build a Material 3 color scheme from pre-computed primary, secondary, and tertiary colors.
+     * This is the shared implementation used by both generateColorScheme overloads.
+     */
+    private fun buildColorScheme(
+        primary: Int,
+        secondary: Int,
+        tertiary: Int,
+        isDark: Boolean,
+    ): ColorScheme {
         val error = if (isDark) 0xFFF2B8B5.toInt() else 0xFFB3261E.toInt()
 
         return if (isDark) {

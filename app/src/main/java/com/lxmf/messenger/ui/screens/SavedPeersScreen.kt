@@ -1,14 +1,10 @@
 package com.lxmf.messenger.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,17 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,19 +32,16 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.repository.Announce
-import com.lxmf.messenger.ui.components.Identicon
+import com.lxmf.messenger.ui.components.PeerCard
 import com.lxmf.messenger.viewmodel.SavedPeersViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -201,7 +188,6 @@ fun SavedPeersScreen(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SavedPeerCard(
     announce: Announce,
@@ -209,122 +195,13 @@ fun SavedPeerCard(
     onFavoriteClick: () -> Unit = {},
     onLongPress: () -> Unit = {},
 ) {
-    Card(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongPress,
-                ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
-    ) {
-        Box {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .padding(end = 32.dp),
-                // Extra padding for star button
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                // Identicon (reusing from AnnounceStreamScreen)
-                Identicon(
-                    hash = announce.publicKey,
-                    size = 56.dp,
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                )
-
-                // Peer information
-                Column(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .align(Alignment.CenterVertically),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    // Peer name
-                    Text(
-                        text = announce.peerName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-
-                    // Destination hash (abbreviated)
-                    Text(
-                        text = formatHashString(announce.destinationHash),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-
-                    // Time since last seen
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccessTime,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = formatTimeSince(announce.lastSeenTimestamp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                // Badge and signal strength indicator
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                ) {
-                    // Node type badge
-                    NodeTypeBadge(nodeType = announce.nodeType)
-
-                    // Signal strength indicator
-                    SignalStrengthIndicator(hops = announce.hops)
-                }
-            }
-
-            // Star button overlay (always filled since these are saved peers)
-            IconButton(
-                onClick = onFavoriteClick,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp),
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                            ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "Remove from saved",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-        }
-    }
+    PeerCard(
+        announce = announce,
+        onClick = onClick,
+        onFavoriteClick = onFavoriteClick,
+        onLongPress = onLongPress,
+        showFavoriteToggle = false, // Always show filled star for saved peers
+    )
 }
 
 @Composable
@@ -352,25 +229,5 @@ fun EmptySavedPeersState(modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
         )
-    }
-}
-
-private fun formatHashString(hashString: String): String {
-    // Take first 16 characters (8 bytes worth) of hex string
-    return hashString.take(16)
-}
-
-private fun formatTimeSince(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diffMillis = now - timestamp
-    val diffMinutes = diffMillis / (60 * 1000)
-    val diffHours = diffMinutes / 60
-    val diffDays = diffHours / 24
-
-    return when {
-        diffMinutes < 1 -> "just now"
-        diffMinutes < 60 -> "$diffMinutes ${if (diffMinutes == 1L) "minute" else "minutes"} ago"
-        diffHours < 24 -> "$diffHours ${if (diffHours == 1L) "hour" else "hours"} ago"
-        else -> "$diffDays ${if (diffDays == 1L) "day" else "days"} ago"
     }
 }

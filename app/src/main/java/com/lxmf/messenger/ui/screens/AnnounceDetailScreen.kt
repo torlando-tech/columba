@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.ui.components.Identicon
+import com.lxmf.messenger.ui.components.NodeTypeBadge
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)

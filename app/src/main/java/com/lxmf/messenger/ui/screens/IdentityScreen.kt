@@ -75,6 +75,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.model.SignalQuality
 import com.lxmf.messenger.ui.components.BluetoothPermissionController
+import com.lxmf.messenger.ui.components.HashSection
 import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.ui.components.QrCodeImage
 import com.lxmf.messenger.util.IdentityQrCodeUtils
@@ -985,88 +986,20 @@ fun IdentityDetailsDialog(
 
                     // Identity Hash
                     if (identityHash != null) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                text = "Identity Hash",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = identityHash,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    IconButton(
-                                        onClick = {
-                                            clipboardManager.setText(AnnotatedString(identityHash))
-                                        },
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ContentCopy,
-                                            contentDescription = "Copy",
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        HashSection(
+                            title = "Identity Hash",
+                            hash = identityHash,
+                            onCopy = { clipboardManager.setText(AnnotatedString(identityHash)) },
+                        )
                     }
 
                     // Destination Hash
                     if (destinationHash != null) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                text = "Destination Hash (LXMF)",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = destinationHash,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    IconButton(
-                                        onClick = {
-                                            clipboardManager.setText(AnnotatedString(destinationHash))
-                                        },
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ContentCopy,
-                                            contentDescription = "Copy",
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        HashSection(
+                            title = "Destination Hash (LXMF)",
+                            hash = destinationHash,
+                            onCopy = { clipboardManager.setText(AnnotatedString(destinationHash)) },
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))

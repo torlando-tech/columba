@@ -1,5 +1,6 @@
 package com.lxmf.messenger.viewmodel
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.SavedStateHandle
@@ -15,6 +16,37 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/**
+ * Convert a Compose ColorScheme to ThemeColorSet (ARGB ints).
+ */
+private fun ColorScheme.toThemeColorSet(): ThemeColorSet =
+    ThemeColorSet(
+        primary = primary.toArgb(),
+        onPrimary = onPrimary.toArgb(),
+        primaryContainer = primaryContainer.toArgb(),
+        onPrimaryContainer = onPrimaryContainer.toArgb(),
+        secondary = secondary.toArgb(),
+        onSecondary = onSecondary.toArgb(),
+        secondaryContainer = secondaryContainer.toArgb(),
+        onSecondaryContainer = onSecondaryContainer.toArgb(),
+        tertiary = tertiary.toArgb(),
+        onTertiary = onTertiary.toArgb(),
+        tertiaryContainer = tertiaryContainer.toArgb(),
+        onTertiaryContainer = onTertiaryContainer.toArgb(),
+        error = error.toArgb(),
+        onError = onError.toArgb(),
+        errorContainer = errorContainer.toArgb(),
+        onErrorContainer = onErrorContainer.toArgb(),
+        background = background.toArgb(),
+        onBackground = onBackground.toArgb(),
+        surface = surface.toArgb(),
+        onSurface = onSurface.toArgb(),
+        surfaceVariant = surfaceVariant.toArgb(),
+        onSurfaceVariant = onSurfaceVariant.toArgb(),
+        outline = outline.toArgb(),
+        outlineVariant = outlineVariant.toArgb(),
+    )
 
 /**
  * Color role selection for theme editing
@@ -253,61 +285,8 @@ class ThemeEditorViewModel
                         )
 
                     // Convert ColorScheme to ThemeColorSet (ARGB ints)
-                    val lightColors =
-                        ThemeColorSet(
-                            primary = lightScheme.primary.toArgb(),
-                            onPrimary = lightScheme.onPrimary.toArgb(),
-                            primaryContainer = lightScheme.primaryContainer.toArgb(),
-                            onPrimaryContainer = lightScheme.onPrimaryContainer.toArgb(),
-                            secondary = lightScheme.secondary.toArgb(),
-                            onSecondary = lightScheme.onSecondary.toArgb(),
-                            secondaryContainer = lightScheme.secondaryContainer.toArgb(),
-                            onSecondaryContainer = lightScheme.onSecondaryContainer.toArgb(),
-                            tertiary = lightScheme.tertiary.toArgb(),
-                            onTertiary = lightScheme.onTertiary.toArgb(),
-                            tertiaryContainer = lightScheme.tertiaryContainer.toArgb(),
-                            onTertiaryContainer = lightScheme.onTertiaryContainer.toArgb(),
-                            error = lightScheme.error.toArgb(),
-                            onError = lightScheme.onError.toArgb(),
-                            errorContainer = lightScheme.errorContainer.toArgb(),
-                            onErrorContainer = lightScheme.onErrorContainer.toArgb(),
-                            background = lightScheme.background.toArgb(),
-                            onBackground = lightScheme.onBackground.toArgb(),
-                            surface = lightScheme.surface.toArgb(),
-                            onSurface = lightScheme.onSurface.toArgb(),
-                            surfaceVariant = lightScheme.surfaceVariant.toArgb(),
-                            onSurfaceVariant = lightScheme.onSurfaceVariant.toArgb(),
-                            outline = lightScheme.outline.toArgb(),
-                            outlineVariant = lightScheme.outlineVariant.toArgb(),
-                        )
-
-                    val darkColors =
-                        ThemeColorSet(
-                            primary = darkScheme.primary.toArgb(),
-                            onPrimary = darkScheme.onPrimary.toArgb(),
-                            primaryContainer = darkScheme.primaryContainer.toArgb(),
-                            onPrimaryContainer = darkScheme.onPrimaryContainer.toArgb(),
-                            secondary = darkScheme.secondary.toArgb(),
-                            onSecondary = darkScheme.onSecondary.toArgb(),
-                            secondaryContainer = darkScheme.secondaryContainer.toArgb(),
-                            onSecondaryContainer = darkScheme.onSecondaryContainer.toArgb(),
-                            tertiary = darkScheme.tertiary.toArgb(),
-                            onTertiary = darkScheme.onTertiary.toArgb(),
-                            tertiaryContainer = darkScheme.tertiaryContainer.toArgb(),
-                            onTertiaryContainer = darkScheme.onTertiaryContainer.toArgb(),
-                            error = darkScheme.error.toArgb(),
-                            onError = darkScheme.onError.toArgb(),
-                            errorContainer = darkScheme.errorContainer.toArgb(),
-                            onErrorContainer = darkScheme.onErrorContainer.toArgb(),
-                            background = darkScheme.background.toArgb(),
-                            onBackground = darkScheme.onBackground.toArgb(),
-                            surface = darkScheme.surface.toArgb(),
-                            onSurface = darkScheme.onSurface.toArgb(),
-                            surfaceVariant = darkScheme.surfaceVariant.toArgb(),
-                            onSurfaceVariant = darkScheme.onSurfaceVariant.toArgb(),
-                            outline = darkScheme.outline.toArgb(),
-                            outlineVariant = darkScheme.outlineVariant.toArgb(),
-                        )
+                    val lightColors = lightScheme.toThemeColorSet()
+                    val darkColors = darkScheme.toThemeColorSet()
 
                     // Save or update theme
                     if (_state.value.themeId != null) {
@@ -383,61 +362,8 @@ class ThemeEditorViewModel
                         )
 
                     // Convert to ThemeColorSet
-                    val lightColors =
-                        ThemeColorSet(
-                            primary = lightScheme.primary.toArgb(),
-                            onPrimary = lightScheme.onPrimary.toArgb(),
-                            primaryContainer = lightScheme.primaryContainer.toArgb(),
-                            onPrimaryContainer = lightScheme.onPrimaryContainer.toArgb(),
-                            secondary = lightScheme.secondary.toArgb(),
-                            onSecondary = lightScheme.onSecondary.toArgb(),
-                            secondaryContainer = lightScheme.secondaryContainer.toArgb(),
-                            onSecondaryContainer = lightScheme.onSecondaryContainer.toArgb(),
-                            tertiary = lightScheme.tertiary.toArgb(),
-                            onTertiary = lightScheme.onTertiary.toArgb(),
-                            tertiaryContainer = lightScheme.tertiaryContainer.toArgb(),
-                            onTertiaryContainer = lightScheme.onTertiaryContainer.toArgb(),
-                            error = lightScheme.error.toArgb(),
-                            onError = lightScheme.onError.toArgb(),
-                            errorContainer = lightScheme.errorContainer.toArgb(),
-                            onErrorContainer = lightScheme.onErrorContainer.toArgb(),
-                            background = lightScheme.background.toArgb(),
-                            onBackground = lightScheme.onBackground.toArgb(),
-                            surface = lightScheme.surface.toArgb(),
-                            onSurface = lightScheme.onSurface.toArgb(),
-                            surfaceVariant = lightScheme.surfaceVariant.toArgb(),
-                            onSurfaceVariant = lightScheme.onSurfaceVariant.toArgb(),
-                            outline = lightScheme.outline.toArgb(),
-                            outlineVariant = lightScheme.outlineVariant.toArgb(),
-                        )
-
-                    val darkColors =
-                        ThemeColorSet(
-                            primary = darkScheme.primary.toArgb(),
-                            onPrimary = darkScheme.onPrimary.toArgb(),
-                            primaryContainer = darkScheme.primaryContainer.toArgb(),
-                            onPrimaryContainer = darkScheme.onPrimaryContainer.toArgb(),
-                            secondary = darkScheme.secondary.toArgb(),
-                            onSecondary = darkScheme.onSecondary.toArgb(),
-                            secondaryContainer = darkScheme.secondaryContainer.toArgb(),
-                            onSecondaryContainer = darkScheme.onSecondaryContainer.toArgb(),
-                            tertiary = darkScheme.tertiary.toArgb(),
-                            onTertiary = darkScheme.onTertiary.toArgb(),
-                            tertiaryContainer = darkScheme.tertiaryContainer.toArgb(),
-                            onTertiaryContainer = darkScheme.onTertiaryContainer.toArgb(),
-                            error = darkScheme.error.toArgb(),
-                            onError = darkScheme.onError.toArgb(),
-                            errorContainer = darkScheme.errorContainer.toArgb(),
-                            onErrorContainer = darkScheme.onErrorContainer.toArgb(),
-                            background = darkScheme.background.toArgb(),
-                            onBackground = darkScheme.onBackground.toArgb(),
-                            surface = darkScheme.surface.toArgb(),
-                            onSurface = darkScheme.onSurface.toArgb(),
-                            surfaceVariant = darkScheme.surfaceVariant.toArgb(),
-                            onSurfaceVariant = darkScheme.onSurfaceVariant.toArgb(),
-                            outline = darkScheme.outline.toArgb(),
-                            outlineVariant = darkScheme.outlineVariant.toArgb(),
-                        )
+                    val lightColors = lightScheme.toThemeColorSet()
+                    val darkColors = darkScheme.toThemeColorSet()
 
                     // Save the theme and get its ID
                     val savedThemeId =

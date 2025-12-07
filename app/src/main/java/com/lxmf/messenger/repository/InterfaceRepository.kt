@@ -25,17 +25,31 @@ class InterfaceRepository
     ) {
         /**
          * Get all configured interfaces as InterfaceConfig objects.
+         * Corrupted interfaces are logged and skipped.
          */
         val allInterfaces: Flow<List<InterfaceConfig>> =
             interfaceDao.getAllInterfaces()
-                .map { entities -> entities.map { entityToConfig(it) } }
+                .map { entities -> entities.mapNotNull { safeEntityToConfig(it) } }
 
         /**
          * Get all enabled interfaces as InterfaceConfig objects.
+         * Corrupted interfaces are logged and skipped.
          */
         val enabledInterfaces: Flow<List<InterfaceConfig>> =
             interfaceDao.getEnabledInterfaces()
-                .map { entities -> entities.map { entityToConfig(it) } }
+                .map { entities -> entities.mapNotNull { safeEntityToConfig(it) } }
+
+        /**
+         * Safely convert an entity to config, returning null on error.
+         */
+        private fun safeEntityToConfig(entity: InterfaceEntity): InterfaceConfig? {
+            return try {
+                entityToConfig(entity)
+            } catch (e: Exception) {
+                Log.e(TAG, "Skipping corrupted interface '${entity.name}': ${e.message}")
+                null
+            }
+        }
 
         /**
          * Get all interface entities (for UI display).
@@ -200,11 +214,11 @@ class InterfaceRepository
                         // Validate ports
                         if (discoveryPort !in 1..65535) {
                             Log.e(TAG, "Invalid discovery port in database: $discoveryPort")
-                            throw IllegalStateException("Invalid discovery port: $discoveryPort")
+                            error("Invalid discovery port: $discoveryPort")
                         }
                         if (dataPort !in 1..65535) {
                             Log.e(TAG, "Invalid data port in database: $dataPort")
-                            throw IllegalStateException("Invalid data port: $dataPort")
+                            error("Invalid data port: $dataPort")
                         }
 
                         InterfaceConfig.AutoInterface(
@@ -226,7 +240,7 @@ class InterfaceRepository
                         when (val hostResult = InputValidator.validateHostname(targetHost)) {
                             is ValidationResult.Error -> {
                                 Log.e(TAG, "Invalid target host in database: $targetHost - ${hostResult.message}")
-                                throw IllegalStateException("Invalid target host: $targetHost")
+                                error("Invalid target host: $targetHost")
                             }
                             else -> {}
                         }
@@ -234,7 +248,7 @@ class InterfaceRepository
                         // Validate port
                         if (targetPort !in 1..65535) {
                             Log.e(TAG, "Invalid target port in database: $targetPort")
-                            throw IllegalStateException("Invalid target port: $targetPort")
+                            error("Invalid target port: $targetPort")
                         }
 
                         InterfaceConfig.TCPClient(
@@ -250,12 +264,12 @@ class InterfaceRepository
                     }
 
                     "RNode" -> {
-                        val port = json.getString("port")
+                        val port = json.optString("port", "")
 
                         // Validate port path (basic check - should be non-empty)
                         if (port.isBlank()) {
-                            Log.e(TAG, "Empty RNode port path in database")
-                            throw IllegalStateException("Empty RNode port path")
+                            Log.e(TAG, "Missing or empty RNode port path in database for '${entity.name}'")
+                            error("Missing or empty RNode port path")
                         }
 
                         InterfaceConfig.RNode(
@@ -281,7 +295,7 @@ class InterfaceRepository
                         when (val listenIpResult = InputValidator.validateHostname(listenIp)) {
                             is ValidationResult.Error -> {
                                 Log.e(TAG, "Invalid listen IP in database: $listenIp - ${listenIpResult.message}")
-                                throw IllegalStateException("Invalid listen IP: $listenIp")
+                                error("Invalid listen IP: $listenIp")
                             }
                             else -> {}
                         }
@@ -289,7 +303,7 @@ class InterfaceRepository
                         when (val forwardIpResult = InputValidator.validateHostname(forwardIp)) {
                             is ValidationResult.Error -> {
                                 Log.e(TAG, "Invalid forward IP in database: $forwardIp - ${forwardIpResult.message}")
-                                throw IllegalStateException("Invalid forward IP: $forwardIp")
+                                error("Invalid forward IP: $forwardIp")
                             }
                             else -> {}
                         }
@@ -297,11 +311,11 @@ class InterfaceRepository
                         // Validate ports
                         if (listenPort !in 1..65535) {
                             Log.e(TAG, "Invalid listen port in database: $listenPort")
-                            throw IllegalStateException("Invalid listen port: $listenPort")
+                            error("Invalid listen port: $listenPort")
                         }
                         if (forwardPort !in 1..65535) {
                             Log.e(TAG, "Invalid forward port in database: $forwardPort")
-                            throw IllegalStateException("Invalid forward port: $forwardPort")
+                            error("Invalid forward port: $forwardPort")
                         }
 
                         InterfaceConfig.UDP(
@@ -325,7 +339,7 @@ class InterfaceRepository
                             when (val nameResult = InputValidator.validateDeviceName(deviceName)) {
                                 is ValidationResult.Error -> {
                                     Log.e(TAG, "Invalid device name in database: $deviceName - ${nameResult.message}")
-                                    throw IllegalStateException("Invalid device name: $deviceName")
+                                    error("Invalid device name: $deviceName")
                                 }
                                 else -> {}
                             }
@@ -347,7 +361,7 @@ class InterfaceRepository
                 }
             } catch (e: JSONException) {
                 Log.e(TAG, "Corrupted JSON in database for interface '${entity.name}': ${e.message}", e)
-                throw IllegalStateException("Corrupted interface configuration for '${entity.name}'", e)
+                error("Corrupted interface configuration for '${entity.name}': ${e.message}")
             }
         }
 

@@ -58,12 +58,13 @@ class PythonWrapperManager(
      * @param beforeInit Optional callback to run after wrapper is created but before Python initialize()
      *                   Used to set up bridges (BLE, Reticulum) that Python initialization depends on
      * @param onSuccess Suspend callback on successful initialization (allows calling suspend functions)
+     *                  Receives isSharedInstance boolean indicating if connected to a shared RNS instance
      * @param onError Called on error with error message
      */
     suspend fun initialize(
         configJson: String,
         beforeInit: ((PyObject) -> Unit)? = null,
-        onSuccess: suspend () -> Unit,
+        onSuccess: suspend (isSharedInstance: Boolean) -> Unit,
         onError: (String) -> Unit,
     ) {
         // Acquire lock to prevent concurrent initialization races
@@ -127,8 +128,10 @@ class PythonWrapperManager(
                 val success = result.getDictValue("success")?.toBoolean() ?: false
 
                 if (success) {
-                    Log.d(TAG, "Reticulum initialized successfully")
-                    onSuccess()
+                    // Parse is_shared_instance from Python result
+                    val isSharedInstance = result.getDictValue("is_shared_instance")?.toBoolean() ?: false
+                    Log.d(TAG, "Reticulum initialized successfully (shared instance: $isSharedInstance)")
+                    onSuccess(isSharedInstance)
                 } else {
                     val error = result.getDictValue("error")?.toString() ?: "Unknown error"
                     Log.e(TAG, "Reticulum initialization failed: $error")

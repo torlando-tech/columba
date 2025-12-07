@@ -562,7 +562,27 @@ class ServiceReticulumProtocol(
                 val callback =
                     object : IInitializationCallback.Stub() {
                         override fun onInitializationComplete(result: String) {
-                            Log.d(TAG, "Initialization successful")
+                            Log.d(TAG, "Initialization successful: $result")
+
+                            // Parse and save shared instance status
+                            try {
+                                val jsonResult = JSONObject(result)
+                                val isSharedInstance = jsonResult.optBoolean("is_shared_instance", false)
+                                Log.d(TAG, "Shared instance mode: $isSharedInstance")
+
+                                // Save to settings repository (launch in scope since we're in callback)
+                                protocolScope.launch {
+                                    try {
+                                        settingsRepository.saveIsSharedInstance(isSharedInstance)
+                                        Log.d(TAG, "Saved shared instance status to settings")
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Failed to save shared instance status", e)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to parse initialization result", e)
+                            }
+
                             continuation.resume(Unit)
                         }
 
@@ -652,6 +672,9 @@ class ServiceReticulumProtocol(
             interfacesArray.put(ifaceJson)
         }
         json.put("enabledInterfaces", interfacesArray)
+
+        // Shared instance preference
+        json.put("prefer_own_instance", config.preferOwnInstance)
 
         return json.toString()
     }

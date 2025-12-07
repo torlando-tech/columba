@@ -7,6 +7,12 @@ data class ReticulumConfig(
     val displayName: String? = null,
     val logLevel: LogLevel = LogLevel.INFO,
     val allowAnonymous: Boolean = false,
+    /**
+     * When false (default), Columba will attempt to connect to a shared RNS instance
+     * (e.g., from Sideband) if one is available on the device.
+     * When true, Columba will always create its own RNS instance.
+     */
+    val preferOwnInstance: Boolean = false,
 )
 
 /**

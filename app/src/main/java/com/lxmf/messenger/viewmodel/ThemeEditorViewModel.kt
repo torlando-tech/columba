@@ -289,9 +289,10 @@ class ThemeEditorViewModel
                     val darkColors = darkScheme.toThemeColorSet()
 
                     // Save or update theme
-                    if (_state.value.themeId != null) {
+                    val existingThemeId = _state.value.themeId
+                    if (existingThemeId != null) {
                         customThemeRepository.updateTheme(
-                            id = _state.value.themeId!!,
+                            id = existingThemeId,
                             name = _state.value.themeName,
                             description = _state.value.themeDescription,
                             seedPrimary = primaryArgb,
@@ -366,10 +367,11 @@ class ThemeEditorViewModel
                     val darkColors = darkScheme.toThemeColorSet()
 
                     // Save the theme and get its ID
+                    val currentThemeId = _state.value.themeId
                     val savedThemeId =
-                        if (_state.value.themeId != null) {
+                        if (currentThemeId != null) {
                             customThemeRepository.updateTheme(
-                                id = _state.value.themeId!!,
+                                id = currentThemeId,
                                 name = _state.value.themeName,
                                 description = _state.value.themeDescription,
                                 seedPrimary = primaryArgb,
@@ -379,7 +381,7 @@ class ThemeEditorViewModel
                                 darkColors = darkColors,
                                 baseTheme = null,
                             )
-                            _state.value.themeId!!
+                            currentThemeId
                         } else {
                             customThemeRepository.saveTheme(
                                 name = _state.value.themeName,

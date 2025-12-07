@@ -216,7 +216,7 @@ object ConfigFileParser {
         return InterfaceConfig.AutoInterface(
             name = name,
             enabled = true,
-            groupId = params["group_id"] ?: "",
+            groupId = params["group_id"].orEmpty(),
             discoveryScope = params["discovery_scope"] ?: "link",
             discoveryPort = params["discovery_port"]?.toIntOrNull() ?: 48555,
             dataPort = params["data_port"]?.toIntOrNull() ?: 49555,

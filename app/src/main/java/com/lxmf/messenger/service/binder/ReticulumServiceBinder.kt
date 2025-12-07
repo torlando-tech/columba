@@ -324,7 +324,7 @@ class ReticulumServiceBinder(
             val debugInfo = JSONObject()
             debugInfo.put("initialized", result.getDictValue("initialized")?.toBoolean() ?: false)
             debugInfo.put("reticulum_available", result.getDictValue("reticulum_available")?.toBoolean() ?: false)
-            debugInfo.put("storage_path", result.getDictValue("storage_path")?.toString() ?: "")
+            debugInfo.put("storage_path", result.getDictValue("storage_path")?.toString().orEmpty())
             debugInfo.put("identity_count", result.getDictValue("identity_count")?.toInt() ?: 0)
             debugInfo.put("destination_count", result.getDictValue("destination_count")?.toInt() ?: 0)
             debugInfo.put("pending_announces", result.getDictValue("pending_announces")?.toInt() ?: 0)
@@ -343,8 +343,8 @@ class ReticulumServiceBinder(
                 for (ifaceObj in interfacesList) {
                     val iface = ifaceObj as? com.chaquo.python.PyObject ?: continue
                     val ifaceJson = JSONObject()
-                    ifaceJson.put("name", iface.getDictValue("name")?.toString() ?: "")
-                    ifaceJson.put("type", iface.getDictValue("type")?.toString() ?: "")
+                    ifaceJson.put("name", iface.getDictValue("name")?.toString().orEmpty())
+                    ifaceJson.put("type", iface.getDictValue("type")?.toString().orEmpty())
                     ifaceJson.put("online", iface.getDictValue("online")?.toBoolean() ?: false)
                     interfacesJson.put(ifaceJson)
                 }
@@ -375,7 +375,7 @@ class ReticulumServiceBinder(
             if (result != null) {
                 val found = result.getDictValue("found")?.toBoolean() ?: false
                 if (found) {
-                    val publicKey = result.getDictValue("public_key")?.toString() ?: ""
+                    val publicKey = result.getDictValue("public_key")?.toString().orEmpty()
                     Log.d(TAG, "Identity found for ${destHashHex.take(16)}...")
                     JSONObject().apply {
                         put("found", true)

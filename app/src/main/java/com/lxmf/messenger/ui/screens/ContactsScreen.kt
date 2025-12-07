@@ -405,9 +405,11 @@ fun ContactsScreen(
     }
 
     // Deep link confirmation dialog
-    if (showDeepLinkConfirmation && deepLinkDestinationHash != null) {
+    val deepLinkHash = deepLinkDestinationHash
+    val deepLinkKey = deepLinkPublicKey
+    if (showDeepLinkConfirmation && deepLinkHash != null) {
         AddContactConfirmationDialog(
-            destinationHash = deepLinkDestinationHash!!,
+            destinationHash = deepLinkHash,
             onDismiss = {
                 showDeepLinkConfirmation = false
                 deepLinkDestinationHash = null
@@ -416,7 +418,7 @@ fun ContactsScreen(
             },
             onConfirm = { nickname ->
                 // Add the contact
-                val lxmaUrl = "lxma://$deepLinkDestinationHash:${deepLinkPublicKey?.joinToString("") { "%02x".format(it) }}"
+                val lxmaUrl = "lxma://$deepLinkHash:${deepLinkKey?.joinToString("") { "%02x".format(it) }}"
                 viewModel.addContactFromQrCode(lxmaUrl, nickname)
                 showDeepLinkConfirmation = false
                 deepLinkDestinationHash = null
@@ -473,9 +475,10 @@ fun ContactsScreen(
     }
 
     // Edit nickname dialog
-    if (showEditNicknameDialog && editNicknameContactHash != null) {
+    val nicknameContactHash = editNicknameContactHash
+    if (showEditNicknameDialog && nicknameContactHash != null) {
         EditNicknameDialog(
-            destinationHash = editNicknameContactHash!!,
+            destinationHash = nicknameContactHash,
             currentNickname = editNicknameCurrentValue,
             onDismiss = {
                 showEditNicknameDialog = false
@@ -483,7 +486,7 @@ fun ContactsScreen(
                 editNicknameCurrentValue = null
             },
             onConfirm = { newNickname ->
-                viewModel.updateNickname(editNicknameContactHash!!, newNickname)
+                viewModel.updateNickname(nicknameContactHash, newNickname)
                 showEditNicknameDialog = false
                 editNicknameContactHash = null
                 editNicknameCurrentValue = null
@@ -492,18 +495,19 @@ fun ContactsScreen(
     }
 
     // Pending/unresolved contact bottom sheet
-    if (showPendingContactSheet && pendingContactToShow != null) {
+    val pendingContact = pendingContactToShow
+    if (showPendingContactSheet && pendingContact != null) {
         PendingContactBottomSheet(
-            contact = pendingContactToShow!!,
+            contact = pendingContact,
             onDismiss = {
                 showPendingContactSheet = false
                 pendingContactToShow = null
             },
             onRetrySearch = {
-                viewModel.retryIdentityResolution(pendingContactToShow!!.destinationHash)
+                viewModel.retryIdentityResolution(pendingContact.destinationHash)
             },
             onRemoveContact = {
-                viewModel.deleteContact(pendingContactToShow!!.destinationHash)
+                viewModel.deleteContact(pendingContact.destinationHash)
             },
         )
     }
@@ -1015,12 +1019,14 @@ fun ManualEntryDialog(
                     maxLines = 4,
                     modifier = Modifier.fillMaxWidth(),
                     isError = errorMessage != null,
-                    supportingText =
-                        if (errorMessage != null) {
-                            { Text(errorMessage!!, color = MaterialTheme.colorScheme.error) }
+                    supportingText = {
+                        val error = errorMessage
+                        if (error != null) {
+                            Text(error, color = MaterialTheme.colorScheme.error)
                         } else {
-                            { Text("Full lxma:// URL or 32-character hex address") }
-                        },
+                            Text("Full lxma:// URL or 32-character hex address")
+                        }
+                    },
                 )
 
                 OutlinedTextField(
@@ -1214,7 +1220,7 @@ fun EditNicknameDialog(
     onDismiss: () -> Unit,
     onConfirm: (String?) -> Unit,
 ) {
-    var nickname by remember { mutableStateOf(currentNickname ?: "") }
+    var nickname by remember { mutableStateOf(currentNickname.orEmpty()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,

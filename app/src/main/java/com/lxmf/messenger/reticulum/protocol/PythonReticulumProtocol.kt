@@ -859,7 +859,7 @@ class PythonReticulumProtocol(
                 )
 
             val hash = result.getDictValue("hash")?.toJava(ByteArray::class.java) as ByteArray
-            val hexHash = result.getDictValue("hex_hash")?.toString() ?: ""
+            val hexHash = result.getDictValue("hex_hash")?.toString().orEmpty()
 
             Destination(
                 hash = hash,
@@ -1019,7 +1019,7 @@ class PythonReticulumProtocol(
             // Extract basic info
             debugInfo["initialized"] = result.getDictValue("initialized")?.toBoolean() ?: false
             debugInfo["reticulum_available"] = result.getDictValue("reticulum_available")?.toBoolean() ?: false
-            debugInfo["storage_path"] = result.getDictValue("storage_path")?.toString() ?: ""
+            debugInfo["storage_path"] = result.getDictValue("storage_path")?.toString().orEmpty()
             debugInfo["identity_count"] = result.getDictValue("identity_count")?.toInt() ?: 0
             debugInfo["destination_count"] = result.getDictValue("destination_count")?.toInt() ?: 0
             debugInfo["pending_announces"] = result.getDictValue("pending_announces")?.toInt() ?: 0
@@ -1034,8 +1034,8 @@ class PythonReticulumProtocol(
                     val iface = ifaceObj as? PyObject ?: continue
                     val ifaceMap =
                         mapOf(
-                            "name" to (iface.getDictValue("name")?.toString() ?: ""),
-                            "type" to (iface.getDictValue("type")?.toString() ?: ""),
+                            "name" to iface.getDictValue("name")?.toString().orEmpty(),
+                            "type" to iface.getDictValue("type")?.toString().orEmpty(),
                             "online" to (iface.getDictValue("online")?.toBoolean() ?: false),
                         )
                     interfacesList.add(ifaceMap)

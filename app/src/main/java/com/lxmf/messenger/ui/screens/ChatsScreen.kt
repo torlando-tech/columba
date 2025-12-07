@@ -203,12 +203,13 @@ fun ChatsScreen(
         }
 
         // Delete confirmation dialog
-        if (showDeleteDialog && selectedConversation != null) {
+        val conversationToDelete = selectedConversation
+        if (showDeleteDialog && conversationToDelete != null) {
             DeleteConversationDialog(
-                peerName = selectedConversation!!.peerName,
+                peerName = conversationToDelete.peerName,
                 onConfirm = {
-                    val deletedName = selectedConversation!!.peerName
-                    viewModel.deleteConversation(selectedConversation!!.peerHash)
+                    val deletedName = conversationToDelete.peerName
+                    viewModel.deleteConversation(conversationToDelete.peerHash)
                     showDeleteDialog = false
                     selectedConversation = null
                     scope.launch {

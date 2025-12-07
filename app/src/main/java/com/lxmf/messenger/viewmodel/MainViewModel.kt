@@ -75,7 +75,8 @@ class MainViewModel
 
         fun testSendPacket() {
             viewModelScope.launch {
-                if (currentIdentity == null) {
+                val identity = currentIdentity
+                if (identity == null) {
                     _uiState.value = UiState.Error("Please create an identity first")
                     return@launch
                 }
@@ -84,7 +85,7 @@ class MainViewModel
 
                 // Create a test destination
                 reticulumProtocol.createDestination(
-                    identity = currentIdentity!!,
+                    identity = identity,
                     direction = Direction.OUT,
                     type = DestinationType.SINGLE,
                     appName = "columba.test",

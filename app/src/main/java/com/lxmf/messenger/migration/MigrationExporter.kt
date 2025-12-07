@@ -213,7 +213,7 @@ class MigrationExporter
                     identityHash = identity.identityHash,
                     displayName = identity.displayName,
                     destinationHash = identity.destinationHash,
-                    keyData = keyData?.let { Base64.encodeToString(it, Base64.NO_WRAP) } ?: "",
+                    keyData = keyData?.let { Base64.encodeToString(it, Base64.NO_WRAP) }.orEmpty(),
                     createdTimestamp = identity.createdTimestamp,
                     lastUsedTimestamp = identity.lastUsedTimestamp,
                     isActive = identity.isActive,

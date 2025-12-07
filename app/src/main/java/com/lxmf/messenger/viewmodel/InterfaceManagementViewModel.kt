@@ -542,8 +542,8 @@ class InterfaceManagementViewModel
                         enabled = config.enabled,
                         targetHost = config.targetHost,
                         targetPort = config.targetPort.toString(),
-                        networkName = config.networkName ?: "",
-                        passphrase = config.passphrase ?: "",
+                        networkName = config.networkName.orEmpty(),
+                        passphrase = config.passphrase.orEmpty(),
                         mode = config.mode,
                     )
 

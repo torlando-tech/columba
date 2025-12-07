@@ -140,6 +140,7 @@ class ServiceReticulumProtocol(
     // Service callback implementation
     private val serviceCallback =
         object : IReticulumServiceCallback.Stub() {
+            @Suppress("LongMethod")
             override fun onAnnounce(announceJson: String) {
                 try {
                     Log.i(TAG, "🔔 ServiceCallback.onAnnounce() CALLED - announce received from ReticulumService!")
@@ -163,6 +164,24 @@ class ServiceReticulumProtocol(
                     val displayName =
                         if (json.has("display_name") && !json.isNull("display_name")) {
                             json.optString("display_name").takeIf { it.isNotBlank() }
+                        } else {
+                            null
+                        }
+                    val stampCost =
+                        if (json.has("stamp_cost") && !json.isNull("stamp_cost")) {
+                            json.optInt("stamp_cost")
+                        } else {
+                            null
+                        }
+                    val stampCostFlexibility =
+                        if (json.has("stamp_cost_flexibility") && !json.isNull("stamp_cost_flexibility")) {
+                            json.optInt("stamp_cost_flexibility")
+                        } else {
+                            null
+                        }
+                    val peeringCost =
+                        if (json.has("peering_cost") && !json.isNull("peering_cost")) {
+                            json.optInt("peering_cost")
                         } else {
                             null
                         }
@@ -196,6 +215,9 @@ class ServiceReticulumProtocol(
                                 receivingInterface = receivingInterface,
                                 aspect = aspect,
                                 displayName = displayName,
+                                stampCost = stampCost,
+                                stampCostFlexibility = stampCostFlexibility,
+                                peeringCost = peeringCost,
                             )
 
                         Log.i(TAG, "   NodeType detected: $nodeType, Aspect: $aspect")

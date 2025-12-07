@@ -607,6 +607,10 @@ class PythonReticulumProtocol(
             val receivingInterface = event.getDictValue("interface")?.toString()
             // Display name pre-parsed by LXMF.display_name_from_app_data() in Python
             val displayName = event.getDictValue("display_name")?.toString()
+            // Stamp costs pre-parsed by LXMF stamp cost functions in Python
+            val stampCost = event.getDictValue("stamp_cost")?.toInt()
+            val stampCostFlexibility = event.getDictValue("stamp_cost_flexibility")?.toInt()
+            val peeringCost = event.getDictValue("peering_cost")?.toInt()
 
             if (destinationHash != null && identityHash != null && publicKey != null) {
                 val identity =
@@ -629,6 +633,9 @@ class PythonReticulumProtocol(
                         nodeType = nodeType,
                         receivingInterface = receivingInterface,
                         displayName = displayName,
+                        stampCost = stampCost,
+                        stampCostFlexibility = stampCostFlexibility,
+                        peeringCost = peeringCost,
                     )
 
                 // Emit to flow

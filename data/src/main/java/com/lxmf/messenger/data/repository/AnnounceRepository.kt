@@ -26,7 +26,11 @@ data class Announce(
     val aspect: String? = null, // Destination aspect (e.g., "lxmf.delivery", "call.audio")
     val isFavorite: Boolean = false,
     val favoritedTimestamp: Long? = null,
+    val stampCost: Int? = null, // Stamp cost for message delivery
+    val stampCostFlexibility: Int? = null, // Flexibility range for propagation nodes
+    val peeringCost: Int? = null, // Peering cost for propagation nodes
 ) {
+    @Suppress("CyclomaticComplexMethod")
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -48,6 +52,9 @@ data class Announce(
         if (receivingInterface != other.receivingInterface) return false
         if (isFavorite != other.isFavorite) return false
         if (favoritedTimestamp != other.favoritedTimestamp) return false
+        if (stampCost != other.stampCost) return false
+        if (stampCostFlexibility != other.stampCostFlexibility) return false
+        if (peeringCost != other.peeringCost) return false
 
         return true
     }
@@ -63,6 +70,9 @@ data class Announce(
         result = 31 * result + (receivingInterface?.hashCode() ?: 0)
         result = 31 * result + isFavorite.hashCode()
         result = 31 * result + (favoritedTimestamp?.hashCode() ?: 0)
+        result = 31 * result + (stampCost?.hashCode() ?: 0)
+        result = 31 * result + (stampCostFlexibility?.hashCode() ?: 0)
+        result = 31 * result + (peeringCost?.hashCode() ?: 0)
         return result
     }
 }
@@ -171,6 +181,7 @@ class AnnounceRepository
          * @param nodeType Type of node ("NODE", "PEER", or "PROPAGATION_NODE")
          * @param receivingInterface Name of the interface through which the announce was received
          */
+        @Suppress("LongParameterList")
         suspend fun saveAnnounce(
             destinationHash: String,
             peerName: String,
@@ -181,6 +192,9 @@ class AnnounceRepository
             nodeType: String,
             receivingInterface: String? = null,
             aspect: String? = null,
+            stampCost: Int? = null,
+            stampCostFlexibility: Int? = null,
+            peeringCost: Int? = null,
         ) {
             // Preserve favorite status if announce already exists
             val existing = announceDao.getAnnounce(destinationHash)
@@ -198,6 +212,9 @@ class AnnounceRepository
                     aspect = aspect,
                     isFavorite = existing?.isFavorite ?: false,
                     favoritedTimestamp = existing?.favoritedTimestamp,
+                    stampCost = stampCost,
+                    stampCostFlexibility = stampCostFlexibility,
+                    peeringCost = peeringCost,
                 )
             announceDao.upsertAnnounce(entity)
         }
@@ -316,5 +333,8 @@ class AnnounceRepository
                 aspect = aspect,
                 isFavorite = isFavorite,
                 favoritedTimestamp = favoritedTimestamp,
+                stampCost = stampCost,
+                stampCostFlexibility = stampCostFlexibility,
+                peeringCost = peeringCost,
             )
     }

@@ -25,6 +25,9 @@ data class AnnounceEntity(
     val aspect: String? = null,
     val isFavorite: Boolean = false,
     val favoritedTimestamp: Long? = null,
+    val stampCost: Int? = null,
+    val stampCostFlexibility: Int? = null,
+    val peeringCost: Int? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -48,6 +51,9 @@ data class AnnounceEntity(
         if (aspect != other.aspect) return false
         if (isFavorite != other.isFavorite) return false
         if (favoritedTimestamp != other.favoritedTimestamp) return false
+        if (stampCost != other.stampCost) return false
+        if (stampCostFlexibility != other.stampCostFlexibility) return false
+        if (peeringCost != other.peeringCost) return false
 
         return true
     }
@@ -64,6 +70,9 @@ data class AnnounceEntity(
         result = 31 * result + (aspect?.hashCode() ?: 0)
         result = 31 * result + isFavorite.hashCode()
         result = 31 * result + (favoritedTimestamp?.hashCode() ?: 0)
+        result = 31 * result + (stampCost?.hashCode() ?: 0)
+        result = 31 * result + (stampCostFlexibility?.hashCode() ?: 0)
+        result = 31 * result + (peeringCost?.hashCode() ?: 0)
         return result
     }
 }

@@ -224,6 +224,9 @@ class AnnounceStreamViewModel
                             nodeType = announce.nodeType.name,
                             receivingInterface = announce.receivingInterface,
                             aspect = announce.aspect,
+                            stampCost = announce.stampCost,
+                            stampCostFlexibility = announce.stampCostFlexibility,
+                            peeringCost = announce.peeringCost,
                         )
                         Log.d(TAG, "Saved/updated announce in database: $peerName ($hashHex)")
 

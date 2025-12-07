@@ -218,8 +218,8 @@ object ConfigFileParser {
             enabled = true,
             groupId = params["group_id"].orEmpty(),
             discoveryScope = params["discovery_scope"] ?: "link",
-            discoveryPort = params["discovery_port"]?.toIntOrNull() ?: 48555,
-            dataPort = params["data_port"]?.toIntOrNull() ?: 49555,
+            discoveryPort = params["discovery_port"]?.toIntOrNull(),
+            dataPort = params["data_port"]?.toIntOrNull(),
             mode = params["mode"] ?: "full",
         )
     }

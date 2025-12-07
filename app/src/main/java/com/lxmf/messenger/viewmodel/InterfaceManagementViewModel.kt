@@ -58,8 +58,8 @@ data class InterfaceConfigState(
     // AutoInterface fields
     val groupId: String = "",
     val discoveryScope: String = "link",
-    val discoveryPort: String = "48555",
-    val dataPort: String = "49555",
+    val discoveryPort: String = "",
+    val dataPort: String = "",
     // TCPClient fields
     val targetHost: String = "",
     val targetPort: String = "4242",
@@ -422,6 +422,7 @@ class InterfaceManagementViewModel
         /**
          * Validate the current configuration using InputValidator.
          */
+        @Suppress("LongMethod", "CyclomaticComplexMethod")
         private fun validateConfig(): Boolean {
             val config = _configState.value
             var isValid = true
@@ -464,26 +465,34 @@ class InterfaceManagementViewModel
                 }
 
                 "AutoInterface" -> {
-                    // VALIDATION: Validate discovery port
-                    when (val portResult = InputValidator.validatePort(config.discoveryPort)) {
-                        is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(discoveryPortError = portResult.message)
-                            isValid = false
+                    // VALIDATION: Validate discovery port (empty = use RNS default)
+                    if (config.discoveryPort.isNotBlank()) {
+                        when (val portResult = InputValidator.validatePort(config.discoveryPort)) {
+                            is ValidationResult.Error -> {
+                                _configState.value = _configState.value.copy(discoveryPortError = portResult.message)
+                                isValid = false
+                            }
+                            is ValidationResult.Success -> {
+                                _configState.value = _configState.value.copy(discoveryPortError = null)
+                            }
                         }
-                        is ValidationResult.Success -> {
-                            _configState.value = _configState.value.copy(discoveryPortError = null)
-                        }
+                    } else {
+                        _configState.value = _configState.value.copy(discoveryPortError = null)
                     }
 
-                    // VALIDATION: Validate data port
-                    when (val portResult = InputValidator.validatePort(config.dataPort)) {
-                        is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(dataPortError = portResult.message)
-                            isValid = false
+                    // VALIDATION: Validate data port (empty = use RNS default)
+                    if (config.dataPort.isNotBlank()) {
+                        when (val portResult = InputValidator.validatePort(config.dataPort)) {
+                            is ValidationResult.Error -> {
+                                _configState.value = _configState.value.copy(dataPortError = portResult.message)
+                                isValid = false
+                            }
+                            is ValidationResult.Success -> {
+                                _configState.value = _configState.value.copy(dataPortError = null)
+                            }
                         }
-                        is ValidationResult.Success -> {
-                            _configState.value = _configState.value.copy(dataPortError = null)
-                        }
+                    } else {
+                        _configState.value = _configState.value.copy(dataPortError = null)
                     }
                 }
 
@@ -530,8 +539,8 @@ class InterfaceManagementViewModel
                         enabled = config.enabled,
                         groupId = config.groupId,
                         discoveryScope = config.discoveryScope,
-                        discoveryPort = config.discoveryPort.toString(),
-                        dataPort = config.dataPort.toString(),
+                        discoveryPort = config.discoveryPort?.toString() ?: "",
+                        dataPort = config.dataPort?.toString() ?: "",
                         mode = config.mode,
                     )
 
@@ -572,8 +581,8 @@ class InterfaceManagementViewModel
                         enabled = state.enabled,
                         groupId = state.groupId.trim(),
                         discoveryScope = state.discoveryScope,
-                        discoveryPort = state.discoveryPort.toIntOrNull() ?: 48555,
-                        dataPort = state.dataPort.toIntOrNull() ?: 49555,
+                        discoveryPort = state.discoveryPort.takeIf { it.isNotBlank() }?.toIntOrNull(),
+                        dataPort = state.dataPort.takeIf { it.isNotBlank() }?.toIntOrNull(),
                         mode = state.mode,
                     )
 

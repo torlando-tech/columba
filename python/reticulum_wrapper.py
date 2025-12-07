@@ -311,12 +311,13 @@ class ReticulumWrapper:
                 if discovery_scope != "link":
                     config_lines.append(f"    discovery_scope = {discovery_scope}")
 
-                discovery_port = iface.get("discovery_port", 48555)
-                if discovery_port != 48555:
+                # Only write ports if explicitly set (None = use RNS defaults)
+                discovery_port = iface.get("discovery_port")
+                if discovery_port is not None:
                     config_lines.append(f"    discovery_port = {discovery_port}")
 
-                data_port = iface.get("data_port", 49555)
-                if data_port != 49555:
+                data_port = iface.get("data_port")
+                if data_port is not None:
                     config_lines.append(f"    data_port = {data_port}")
 
                 mode = iface.get("mode", "full")

@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -52,7 +53,7 @@ class InterfaceRepositoryTest {
         name = name,
         type = "AutoInterface",
         enabled = enabled,
-        configJson = """{"group_id":"default","discovery_scope":"link","discovery_port":48555,"data_port":49555,"mode":"full"}""",
+        configJson = """{"group_id":"default","discovery_scope":"link","mode":"full"}""",
         displayOrder = 0,
     )
 
@@ -307,8 +308,60 @@ class InterfaceRepositoryTest {
             assertEquals("Auto Discovery", config.name)
             assertEquals("default", config.groupId)
             assertEquals("link", config.discoveryScope)
-            assertEquals(48555, config.discoveryPort)
-            assertEquals(49555, config.dataPort)
+            assertNull(config.discoveryPort)
+            assertNull(config.dataPort)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `entityToConfig parses AutoInterface with only discovery_port`() = runTest {
+        val entity = InterfaceEntity(
+            id = 1,
+            name = "Auto With Discovery Port",
+            type = "AutoInterface",
+            enabled = true,
+            configJson = """{"group_id":"","discovery_scope":"link","discovery_port":29716,"mode":"full"}""",
+            displayOrder = 0,
+        )
+        every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+        every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(entity))
+        val repository = InterfaceRepository(mockDao)
+
+        repository.enabledInterfaces.test {
+            val interfaces = awaitItem()
+
+            assertEquals(1, interfaces.size)
+            val config = interfaces[0] as InterfaceConfig.AutoInterface
+            assertEquals(29716, config.discoveryPort)
+            assertNull(config.dataPort)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `entityToConfig parses AutoInterface with only data_port`() = runTest {
+        val entity = InterfaceEntity(
+            id = 1,
+            name = "Auto With Data Port",
+            type = "AutoInterface",
+            enabled = true,
+            configJson = """{"group_id":"","discovery_scope":"link","data_port":42671,"mode":"full"}""",
+            displayOrder = 0,
+        )
+        every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+        every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(entity))
+        val repository = InterfaceRepository(mockDao)
+
+        repository.enabledInterfaces.test {
+            val interfaces = awaitItem()
+
+            assertEquals(1, interfaces.size)
+            val config = interfaces[0] as InterfaceConfig.AutoInterface
+            assertNull(config.discoveryPort)
+            assertEquals(42671, config.dataPort)
 
             cancelAndIgnoreRemainingEvents()
         }

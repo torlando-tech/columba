@@ -170,7 +170,7 @@ abstract class InterfaceDatabase : RoomDatabase() {
                     "Auto Discovery",
                     "AutoInterface",
                     1, // true
-                    """{"group_id":"","discovery_scope":"link","discovery_port":48555,"data_port":49555,"mode":"full"}""",
+                    """{"group_id":"","discovery_scope":"link","mode":"full"}""",
                     0,
                 ),
             )
@@ -281,8 +281,6 @@ abstract class InterfaceDatabase : RoomDatabase() {
                         {
                             "group_id": "",
                             "discovery_scope": "link",
-                            "discovery_port": 48555,
-                            "data_port": 49555,
                             "mode": "full"
                         }
                         """.trimIndent(),

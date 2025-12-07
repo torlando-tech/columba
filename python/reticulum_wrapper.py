@@ -1022,12 +1022,32 @@ class ReticulumWrapper:
                 log_debug("ReticulumWrapper", "_announce_handler",
                          f"Could not extract interface: {e}")
 
+            # Extract display name using LXMF's canonical implementation
+            # Use the correct function based on aspect:
+            # - lxmf.delivery: display_name_from_app_data() for peer names
+            # - lxmf.propagation: pn_name_from_app_data() for propagation node names
+            display_name = None
+            if LXMF is not None and app_data:
+                try:
+                    if aspect == "lxmf.propagation":
+                        display_name = LXMF.pn_name_from_app_data(app_data)
+                        log_debug("ReticulumWrapper", "_announce_handler",
+                                  f"LXMF.pn_name_from_app_data returned: {display_name}")
+                    else:
+                        display_name = LXMF.display_name_from_app_data(app_data)
+                        log_debug("ReticulumWrapper", "_announce_handler",
+                                  f"LXMF.display_name_from_app_data returned: {display_name}")
+                except Exception as e:
+                    log_debug("ReticulumWrapper", "_announce_handler",
+                              f"LXMF name extraction failed: {e}")
+
             # Create announce event dict (Transport already stores identity/app_data)
             announce_event = {
                 'destination_hash': destination_hash,
                 'identity_hash': destination_hash,  # For single destinations
                 'public_key': announced_identity.get_public_key() if announced_identity else b'',
                 'app_data': app_data if app_data else b'',
+                'display_name': display_name,  # Pre-parsed by LXMF (may be None)
                 'aspect': aspect,  # Include aspect (e.g., "lxmf.delivery", "call.audio")
                 'hops': hops,
                 'timestamp': int(time.time() * 1000),  # milliseconds

@@ -15,6 +15,7 @@ data class AnnounceEvent(
     val nodeType: NodeType = NodeType.NODE,
     val receivingInterface: String? = null,
     val aspect: String? = null, // Aspect of the destination (e.g., "lxmf.delivery", "call.audio")
+    val displayName: String? = null, // Pre-parsed by LXMF.display_name_from_app_data() in Python
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -35,6 +36,7 @@ data class AnnounceEvent(
         if (nodeType != other.nodeType) return false
         if (receivingInterface != other.receivingInterface) return false
         if (aspect != other.aspect) return false
+        if (displayName != other.displayName) return false
 
         return true
     }
@@ -48,6 +50,7 @@ data class AnnounceEvent(
         result = 31 * result + nodeType.hashCode()
         result = 31 * result + (receivingInterface?.hashCode() ?: 0)
         result = 31 * result + (aspect?.hashCode() ?: 0)
+        result = 31 * result + (displayName?.hashCode() ?: 0)
         return result
     }
 }

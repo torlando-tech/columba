@@ -489,6 +489,7 @@ class PythonReticulumProtocol(
         Log.d(TAG, "Reticulum configuration validation passed")
     }
 
+    @Suppress("NestedBlockDepth") // Interface serialization requires nested when/try structure
     private fun buildConfigJson(config: ReticulumConfig): String {
         Log.d(TAG, "buildConfigJson: Starting")
         try {

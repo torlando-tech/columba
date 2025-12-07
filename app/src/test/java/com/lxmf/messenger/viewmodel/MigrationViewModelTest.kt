@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -246,8 +247,8 @@ class MigrationViewModelTest {
 
         // Wait for all coroutines including IO dispatcher to complete
         advanceUntilIdle()
-        // Additional yield to allow IO dispatcher work to complete
-        kotlinx.coroutines.delay(100)
+        // Use real delay to wait for Dispatchers.IO work (virtual delay doesn't wait for real threads)
+        withContext(Dispatchers.Default) { kotlinx.coroutines.delay(200) }
         advanceUntilIdle()
 
         // Verify service restart was called
@@ -256,8 +257,8 @@ class MigrationViewModelTest {
         // Final state should be ImportComplete (after restart)
         viewModel.uiState.test {
             var state = awaitItem()
-            // Skip intermediate states if needed (RestartingService)
-            if (state is MigrationUiState.RestartingService) {
+            // Skip intermediate states if needed (Importing, RestartingService)
+            while (state is MigrationUiState.Importing || state is MigrationUiState.RestartingService) {
                 state = awaitItem()
             }
             assertTrue("Expected ImportComplete but was $state", state is MigrationUiState.ImportComplete)
@@ -298,14 +299,15 @@ class MigrationViewModelTest {
 
         // Wait for all coroutines including IO dispatcher to complete
         advanceUntilIdle()
-        kotlinx.coroutines.delay(100)
+        // Use real delay to wait for Dispatchers.IO work
+        withContext(Dispatchers.Default) { kotlinx.coroutines.delay(200) }
         advanceUntilIdle()
 
         // Import should complete successfully (after restart)
         viewModel.uiState.test {
             var state = awaitItem()
-            // Skip intermediate states if needed (RestartingService)
-            if (state is MigrationUiState.RestartingService) {
+            // Skip intermediate states if needed (Importing, RestartingService)
+            while (state is MigrationUiState.Importing || state is MigrationUiState.RestartingService) {
                 state = awaitItem()
             }
             assertTrue("Expected ImportComplete but was $state", state is MigrationUiState.ImportComplete)

@@ -102,7 +102,6 @@ fun QrScannerScreen(
     var hasCameraPermission by remember {
         mutableStateOf(CameraPermissionManager.hasPermission(context))
     }
-    val showPermissionRationale by remember { mutableStateOf(false) }
     var showPermissionDenied by remember { mutableStateOf(false) }
     var torchEnabled by remember { mutableStateOf(false) }
     var scanSuccess by remember { mutableStateOf(false) }

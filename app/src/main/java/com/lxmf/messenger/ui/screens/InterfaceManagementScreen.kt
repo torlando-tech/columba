@@ -355,8 +355,6 @@ fun InterfaceCard(
     bluetoothState: Int,
     blePermissionsGranted: Boolean,
 ) {
-    val expanded by remember { mutableStateOf(false) }
-
     // Determine if toggle should be enabled and if there's an error
     val toggleEnabled = interfaceEntity.shouldToggleBeEnabled(bluetoothState, blePermissionsGranted)
     val errorMessage = interfaceEntity.getErrorMessage(bluetoothState, blePermissionsGranted)

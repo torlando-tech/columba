@@ -420,7 +420,7 @@ class IdentityManagerViewModel
         /**
          * Get statistics for an identity (for the delete confirmation dialog).
          */
-        suspend fun getIdentityStats(identityHash: String): IdentityStats {
+        fun getIdentityStats(identityHash: String): IdentityStats {
             // Future: Query conversation/contact/message counts for this identity
             return IdentityStats(
                 conversationCount = 0,

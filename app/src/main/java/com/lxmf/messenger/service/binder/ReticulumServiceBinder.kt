@@ -452,7 +452,7 @@ class ReticulumServiceBinder(
         }
     }
 
-    private suspend fun announceLxmfDestination() {
+    private fun announceLxmfDestination() {
         try {
             val destResult =
                 wrapperManager.withWrapper { wrapper ->

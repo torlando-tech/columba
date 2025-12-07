@@ -80,12 +80,14 @@ fun InterfaceConfigDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = configState.nameError != null,
-                    supportingText =
-                        if (configState.nameError != null) {
-                            { Text(configState.nameError!!) }
+                    supportingText = {
+                        val nameError = configState.nameError
+                        if (nameError != null) {
+                            Text(nameError)
                         } else {
-                            { Text("${configState.name.length}/${ValidationConstants.MAX_INTERFACE_NAME_LENGTH}") }
-                        },
+                            Text("${configState.name.length}/${ValidationConstants.MAX_INTERFACE_NAME_LENGTH}")
+                        }
+                    },
                 )
 
                 // Interface Type Selector

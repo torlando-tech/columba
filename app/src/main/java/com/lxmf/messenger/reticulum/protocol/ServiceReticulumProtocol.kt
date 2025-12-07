@@ -150,7 +150,7 @@ class ServiceReticulumProtocol(
                     val destinationHash = json.optString("destination_hash").toByteArrayFromBase64()
                     val identityHash = json.optString("identity_hash").toByteArrayFromBase64()
                     val publicKey = json.optString("public_key").toByteArrayFromBase64()
-                    val appData = json.optString("app_data")?.toByteArrayFromBase64()
+                    val appData = json.optString("app_data").toByteArrayFromBase64()
                     val hops = json.optInt("hops", 0)
                     val timestamp = json.optLong("timestamp", System.currentTimeMillis())
                     val aspect = if (json.has("aspect") && !json.isNull("aspect")) json.optString("aspect") else null
@@ -222,8 +222,8 @@ class ServiceReticulumProtocol(
 
                     val messageHash = json.optString("message_hash", "")
                     val content = json.optString("content", "")
-                    val sourceHash = json.optString("source_hash")?.toByteArrayFromBase64() ?: byteArrayOf()
-                    val destHash = json.optString("destination_hash")?.toByteArrayFromBase64() ?: byteArrayOf()
+                    val sourceHash = json.optString("source_hash").toByteArrayFromBase64() ?: byteArrayOf()
+                    val destHash = json.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
                     val timestamp = json.optLong("timestamp", System.currentTimeMillis())
                     // Extract LXMF fields (attachments, images, etc.) if present
                     val fieldsJson = json.optJSONObject("fields")?.toString()
@@ -496,7 +496,7 @@ class ServiceReticulumProtocol(
      * Get the current service status.
      * @return Result with status string: "SHUTDOWN", "INITIALIZING", "READY", or "ERROR:message"
      */
-    suspend fun getStatus(): Result<String> {
+    fun getStatus(): Result<String> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             service.getStatus()
@@ -507,7 +507,7 @@ class ServiceReticulumProtocol(
      * Check if the service is initialized and ready to use.
      * @return Result with true if initialized, false otherwise
      */
-    suspend fun isInitialized(): Result<Boolean> {
+    fun isInitialized(): Result<Boolean> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             service.isInitialized()
@@ -1069,9 +1069,9 @@ class ServiceReticulumProtocol(
                 throw RuntimeException(error)
             }
 
-            val msgHash = result.optString("message_hash")?.toByteArrayFromBase64() ?: byteArrayOf()
+            val msgHash = result.optString("message_hash").toByteArrayFromBase64() ?: byteArrayOf()
             val timestamp = result.optLong("timestamp", System.currentTimeMillis())
-            val destHash = result.optString("destination_hash")?.toByteArrayFromBase64() ?: byteArrayOf()
+            val destHash = result.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
 
             MessageReceipt(
                 messageHash = msgHash,
@@ -1089,7 +1089,7 @@ class ServiceReticulumProtocol(
      * Restore peer identities from stored public keys to enable message sending to known peers.
      * This should be called after initialization to restore identities from the database.
      */
-    suspend fun restorePeerIdentities(peerIdentities: List<Pair<String, ByteArray>>): Result<Int> {
+    fun restorePeerIdentities(peerIdentities: List<Pair<String, ByteArray>>): Result<Int> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
@@ -1143,7 +1143,7 @@ class ServiceReticulumProtocol(
         }
     }
 
-    suspend fun getLxmfDestination(): Result<com.lxmf.messenger.reticulum.model.Destination> {
+    fun getLxmfDestination(): Result<com.lxmf.messenger.reticulum.model.Destination> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
@@ -1176,7 +1176,7 @@ class ServiceReticulumProtocol(
         }
     }
 
-    suspend fun getLxmfIdentity(): Result<Identity> {
+    fun getLxmfIdentity(): Result<Identity> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 

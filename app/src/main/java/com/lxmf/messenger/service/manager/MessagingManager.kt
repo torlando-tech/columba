@@ -169,15 +169,15 @@ class MessagingManager(private val wrapperManager: PythonWrapperManager) {
                 // Parse identity JSON and decode Base64 ByteArrays
                 val identityObj = JSONObject(identityJson)
                 val identityHash =
-                    identityObj.optString("hash")?.let {
+                    identityObj.optString("hash").takeIf { it.isNotEmpty() }?.let {
                         android.util.Base64.decode(it, android.util.Base64.NO_WRAP)
                     }
                 val identityPublicKey =
-                    identityObj.optString("public_key")?.let {
+                    identityObj.optString("public_key").takeIf { it.isNotEmpty() }?.let {
                         android.util.Base64.decode(it, android.util.Base64.NO_WRAP)
                     }
                 val identityPrivateKey =
-                    identityObj.optString("private_key")?.let {
+                    identityObj.optString("private_key").takeIf { it.isNotEmpty() }?.let {
                         android.util.Base64.decode(it, android.util.Base64.NO_WRAP)
                     }
 

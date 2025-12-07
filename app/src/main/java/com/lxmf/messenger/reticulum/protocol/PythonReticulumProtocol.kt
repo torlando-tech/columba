@@ -539,6 +539,8 @@ class PythonReticulumProtocol(
                             ifaceJson.put("target_port", iface.targetPort)
                             ifaceJson.put("kiss_framing", iface.kissFraming)
                             ifaceJson.put("mode", iface.mode)
+                            iface.networkName?.let { ifaceJson.put("network_name", it) }
+                            iface.passphrase?.let { ifaceJson.put("passphrase", it) }
                         }
                         is InterfaceConfig.UDP -> {
                             Log.d(TAG, "buildConfigJson: UDP - ${iface.name}")

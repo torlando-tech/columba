@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.ui.components.Identicon
 import com.lxmf.messenger.ui.components.NodeTypeBadge
+import com.lxmf.messenger.util.formatTimeSince
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -403,21 +404,6 @@ private fun InfoCard(
                 }
             }
         }
-    }
-}
-
-private fun formatTimeSince(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diffMillis = now - timestamp
-    val diffMinutes = diffMillis / (60 * 1000)
-    val diffHours = diffMinutes / 60
-    val diffDays = diffHours / 24
-
-    return when {
-        diffMinutes < 1 -> "just now"
-        diffMinutes < 60 -> "$diffMinutes ${if (diffMinutes == 1L) "minute" else "minutes"} ago"
-        diffHours < 24 -> "$diffHours ${if (diffHours == 1L) "hour" else "hours"} ago"
-        else -> "$diffDays ${if (diffDays == 1L) "day" else "days"} ago"
     }
 }
 

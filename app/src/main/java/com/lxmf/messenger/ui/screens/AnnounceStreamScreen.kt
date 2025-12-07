@@ -88,8 +88,8 @@ import com.lxmf.messenger.ui.components.OtherBadge
 import com.lxmf.messenger.ui.components.PeerCard
 import com.lxmf.messenger.ui.components.SignalStrengthIndicator
 import com.lxmf.messenger.ui.components.formatHashString
-import com.lxmf.messenger.ui.components.formatTimeSince
 import com.lxmf.messenger.ui.theme.MeshConnected
+import com.lxmf.messenger.util.formatTimeSince
 import com.lxmf.messenger.ui.theme.MeshLimited
 import com.lxmf.messenger.ui.theme.MeshOffline
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel

@@ -4,6 +4,8 @@ import android.util.Log
 import com.lxmf.messenger.data.database.dao.InterfaceDao
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
+import com.lxmf.messenger.reticulum.model.toJsonString
+import com.lxmf.messenger.reticulum.model.typeName
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import kotlinx.coroutines.flow.Flow
@@ -135,66 +137,14 @@ class InterfaceRepository
         private fun configToEntity(
             config: InterfaceConfig,
             displayOrder: Int = 0,
-        ): InterfaceEntity {
-            val configJson =
-                when (config) {
-                    is InterfaceConfig.AutoInterface ->
-                        JSONObject().apply {
-                            put("group_id", config.groupId)
-                            put("discovery_scope", config.discoveryScope)
-                            put("discovery_port", config.discoveryPort)
-                            put("data_port", config.dataPort)
-                            put("mode", config.mode)
-                        }.toString()
-
-                    is InterfaceConfig.TCPClient ->
-                        JSONObject().apply {
-                            put("target_host", config.targetHost)
-                            put("target_port", config.targetPort)
-                            put("kiss_framing", config.kissFraming)
-                            put("mode", config.mode)
-                            config.networkName?.let { put("network_name", it) }
-                            config.passphrase?.let { put("passphrase", it) }
-                        }.toString()
-
-                    is InterfaceConfig.RNode ->
-                        JSONObject().apply {
-                            put("port", config.port)
-                            put("frequency", config.frequency)
-                            put("bandwidth", config.bandwidth)
-                            put("tx_power", config.txPower)
-                            put("spreading_factor", config.spreadingFactor)
-                            put("coding_rate", config.codingRate)
-                            put("mode", config.mode)
-                        }.toString()
-
-                    is InterfaceConfig.UDP ->
-                        JSONObject().apply {
-                            put("listen_ip", config.listenIp)
-                            put("listen_port", config.listenPort)
-                            put("forward_ip", config.forwardIp)
-                            put("forward_port", config.forwardPort)
-                            put("mode", config.mode)
-                        }.toString()
-
-                    is InterfaceConfig.AndroidBLE ->
-                        JSONObject().apply {
-                            put("device_name", config.deviceName)
-                            put("max_connections", config.maxConnections)
-                            put("mode", config.mode)
-                        }.toString()
-                }
-
-            val typeName = config::class.simpleName ?: "Unknown"
-
-            return InterfaceEntity(
+        ): InterfaceEntity =
+            InterfaceEntity(
                 name = config.name,
-                type = typeName,
+                type = config.typeName,
                 enabled = config.enabled,
-                configJson = configJson,
+                configJson = config.toJsonString(),
                 displayOrder = displayOrder,
             )
-        }
 
         /**
          * Convert InterfaceEntity to InterfaceConfig for use in application logic.

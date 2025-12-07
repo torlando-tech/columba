@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.ui.theme.MeshConnected
+import com.lxmf.messenger.util.formatTimeSince
 import com.lxmf.messenger.ui.theme.MeshLimited
 import com.lxmf.messenger.ui.theme.MeshOffline
 
@@ -297,20 +298,3 @@ fun formatHashString(hashString: String): String {
     return hashString.take(16)
 }
 
-/**
- * Format a timestamp as a human-readable "time since" string.
- */
-fun formatTimeSince(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diffMillis = now - timestamp
-    val diffMinutes = diffMillis / (60 * 1000)
-    val diffHours = diffMinutes / 60
-    val diffDays = diffHours / 24
-
-    return when {
-        diffMinutes < 1 -> "just now"
-        diffMinutes < 60 -> "$diffMinutes ${if (diffMinutes == 1L) "minute" else "minutes"} ago"
-        diffHours < 24 -> "$diffHours ${if (diffHours == 1L) "hour" else "hours"} ago"
-        else -> "$diffDays ${if (diffDays == 1L) "day" else "days"} ago"
-    }
-}

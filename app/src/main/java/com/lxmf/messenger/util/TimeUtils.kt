@@ -22,3 +22,28 @@ fun formatRelativeTime(timestamp: Long): String {
         else -> "${days / 7} ${if (days / 7 == 1L) "week" else "weeks"} ago"
     }
 }
+
+/**
+ * Format a timestamp as a human-readable "time since" string.
+ * Used by PeerCard and AnnounceDetailScreen for announce timestamps.
+ *
+ * @param timestamp The timestamp to format (milliseconds since epoch)
+ * @param now The current time for comparison (defaults to System.currentTimeMillis())
+ * @return A human-readable string like "just now", "5 minutes ago", "2 hours ago", or "3 days ago"
+ */
+fun formatTimeSince(
+    timestamp: Long,
+    now: Long = System.currentTimeMillis(),
+): String {
+    val diffMillis = now - timestamp
+    val diffMinutes = diffMillis / (60 * 1000)
+    val diffHours = diffMinutes / 60
+    val diffDays = diffHours / 24
+
+    return when {
+        diffMinutes < 1 -> "just now"
+        diffMinutes < 60 -> "$diffMinutes ${if (diffMinutes == 1L) "minute" else "minutes"} ago"
+        diffHours < 24 -> "$diffHours ${if (diffHours == 1L) "hour" else "hours"} ago"
+        else -> "$diffDays ${if (diffDays == 1L) "day" else "days"} ago"
+    }
+}

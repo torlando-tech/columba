@@ -99,8 +99,10 @@ fun SettingsScreen(
                         isExpanded = state.isSharedInstanceBannerExpanded,
                         preferOwnInstance = state.preferOwnInstance,
                         isUsingSharedInstance = state.isSharedInstance,
+                        rpcKey = state.rpcKey,
                         onExpandToggle = { viewModel.toggleSharedInstanceBannerExpanded(it) },
                         onTogglePreferOwnInstance = { viewModel.togglePreferOwnInstance(it) },
+                        onRpcKeyChange = { viewModel.saveRpcKey(it) },
                     )
                 }
 

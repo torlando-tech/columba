@@ -190,9 +190,15 @@ class InterfaceConfigManager
                 val displayName = activeIdentity?.displayName
                 Log.d(TAG, "Active identity: ${activeIdentity?.displayName ?: "none"}, verified path: $identityPath")
 
-                // Load shared instance preference
+                // Load shared instance preferences
                 val preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first()
                 Log.d(TAG, "Prefer own instance: $preferOwnInstance")
+
+                // Load RPC key for shared instance authentication
+                val rpcKey = settingsRepository.rpcKeyFlow.first()
+                if (rpcKey != null) {
+                    Log.d(TAG, "RPC key configured for shared instance auth")
+                }
 
                 val config =
                     ReticulumConfig(
@@ -203,6 +209,7 @@ class InterfaceConfigManager
                         logLevel = LogLevel.DEBUG,
                         allowAnonymous = false,
                         preferOwnInstance = preferOwnInstance,
+                        rpcKey = rpcKey,
                     )
 
                 reticulumProtocol.initialize(config)

@@ -676,6 +676,9 @@ class ServiceReticulumProtocol(
         // Shared instance preference
         json.put("prefer_own_instance", config.preferOwnInstance)
 
+        // RPC key for shared instance authentication (optional)
+        config.rpcKey?.let { json.put("rpc_key", it) }
+
         return json.toString()
     }
 

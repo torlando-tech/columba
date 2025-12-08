@@ -64,6 +64,7 @@ class SettingsRepository
             // Shared instance preferences
             val PREFER_OWN_INSTANCE = booleanPreferencesKey("prefer_own_instance")
             val IS_SHARED_INSTANCE = booleanPreferencesKey("is_shared_instance")
+            val RPC_KEY = stringPreferencesKey("rpc_key")
         }
 
         // Notification preferences
@@ -455,6 +456,33 @@ class SettingsRepository
         suspend fun saveIsSharedInstance(isShared: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.IS_SHARED_INSTANCE] = isShared
+            }
+        }
+
+        /**
+         * Flow of RPC authentication key for shared instance communication.
+         * Required on Android when connecting to another app's shared instance (e.g., Sideband)
+         * because apps have separate config directories with different RPC keys.
+         * Export from Sideband: Connectivity → Share Instance Access
+         */
+        val rpcKeyFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.RPC_KEY]
+                }
+
+        /**
+         * Save the RPC key for shared instance authentication.
+         *
+         * @param rpcKey Hexadecimal RPC key string, or null to clear
+         */
+        suspend fun saveRpcKey(rpcKey: String?) {
+            context.dataStore.edit { preferences ->
+                if (rpcKey != null) {
+                    preferences[PreferencesKeys.RPC_KEY] = rpcKey
+                } else {
+                    preferences.remove(PreferencesKeys.RPC_KEY)
+                }
             }
         }
 

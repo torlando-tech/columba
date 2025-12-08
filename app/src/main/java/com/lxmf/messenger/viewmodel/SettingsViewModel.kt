@@ -40,6 +40,7 @@ data class SettingsState(
     val isSharedInstance: Boolean = false,
     val preferOwnInstance: Boolean = false,
     val isSharedInstanceBannerExpanded: Boolean = true,
+    val rpcKey: String? = null,
 )
 
 @HiltViewModel
@@ -107,6 +108,7 @@ class SettingsViewModel
                         customThemesFlow,
                         settingsRepository.preferOwnInstanceFlow,
                         settingsRepository.isSharedInstanceFlow,
+                        settingsRepository.rpcKeyFlow,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as com.lxmf.messenger.data.db.entity.LocalIdentityEntity?
@@ -132,6 +134,9 @@ class SettingsViewModel
                         @Suppress("UNCHECKED_CAST")
                         val isSharedInstance = flows[7] as Boolean
 
+                        @Suppress("UNCHECKED_CAST")
+                        val rpcKey = flows[8] as String?
+
                         val displayName = activeIdentity?.displayName ?: defaultName
 
                         SettingsState(
@@ -154,6 +159,7 @@ class SettingsViewModel
                             isSharedInstance = isSharedInstance,
                             preferOwnInstance = preferOwnInstance,
                             isSharedInstanceBannerExpanded = _state.value.isSharedInstanceBannerExpanded,
+                            rpcKey = rpcKey,
                         )
                     }.collect { newState ->
                         _state.value = newState
@@ -500,5 +506,20 @@ class SettingsViewModel
          */
         fun toggleSharedInstanceBannerExpanded(expanded: Boolean) {
             _state.value = _state.value.copy(isSharedInstanceBannerExpanded = expanded)
+        }
+
+        /**
+         * Save the RPC key for shared instance authentication.
+         * When the key changes, restart the service to apply it.
+         */
+        fun saveRpcKey(rpcKey: String?) {
+            viewModelScope.launch {
+                settingsRepository.saveRpcKey(rpcKey)
+                Log.d(TAG, "RPC key ${if (rpcKey != null) "updated" else "cleared"}")
+                // Restart service to apply the change
+                if (!_state.value.isRestarting && _state.value.isSharedInstance) {
+                    restartService()
+                }
+            }
         }
     }

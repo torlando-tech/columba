@@ -7,7 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,6 +20,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,8 +45,10 @@ fun SharedInstanceBannerCard(
     isExpanded: Boolean,
     preferOwnInstance: Boolean,
     isUsingSharedInstance: Boolean,
+    rpcKey: String?,
     onExpandToggle: (Boolean) -> Unit,
     onTogglePreferOwnInstance: (Boolean) -> Unit,
+    onRpcKeyChange: (String?) -> Unit,
 ) {
     Card(
         modifier =
@@ -154,6 +159,36 @@ fun SharedInstanceBannerCard(
                         Switch(
                             checked = preferOwnInstance,
                             onCheckedChange = onTogglePreferOwnInstance,
+                        )
+                    }
+
+                    // RPC Key input (only when using shared instance)
+                    if (isUsingSharedInstance && !preferOwnInstance) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "RPC Key (from Sideband → Connectivity)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        OutlinedTextField(
+                            value = rpcKey ?: "",
+                            onValueChange = { newValue ->
+                                onRpcKeyChange(newValue.ifEmpty { null })
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                Text(
+                                    "Paste RPC key here...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            text = "Required for full shared instance functionality",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                         )
                     }
 

@@ -296,13 +296,16 @@ class ReticulumWrapper:
                         f"Error checking shared instance: {e}")
             return False
 
-    def _create_config_file(self, interfaces: List[Dict], use_shared_instance: bool = False):
+    def _create_config_file(self, interfaces: List[Dict], use_shared_instance: bool = False, rpc_key: str = None):
         """
         Create an RNS config file with the specified interfaces.
 
         Args:
             interfaces: List of interface configuration dictionaries
             use_shared_instance: If True, configure as client to shared instance (no local interfaces)
+            rpc_key: Optional RPC key (hex string) for shared instance authentication.
+                     Required on Android when connecting to another app's shared instance
+                     (e.g., Sideband) because apps have separate config directories.
         """
         from datetime import datetime
 
@@ -336,10 +339,20 @@ class ReticulumWrapper:
                 "  share_instance = yes",
                 "  shared_instance_type = tcp",
                 "  shared_instance_port = 37428",
+            ]
+            # Add RPC key if provided (required on Android for inter-app shared instance)
+            # Export from Sideband: Connectivity → Share Instance Access
+            if rpc_key:
+                config_lines.append(f"  rpc_key = {rpc_key}")
+                log_info("ReticulumWrapper", "_create_config_file", "Added RPC key to config")
+            else:
+                log_warning("ReticulumWrapper", "_create_config_file",
+                           "No RPC key provided - RPC calls to shared instance may fail")
+            config_lines.extend([
                 "",
                 "# No interfaces defined - using shared instance's interfaces",
                 "[interfaces]"
-            ]
+            ])
         else:
             # Standalone mode - create our own RNS instance with specified interfaces
             config_lines = [
@@ -631,6 +644,15 @@ class ReticulumWrapper:
             prefer_own_instance = config.get('prefer_own_instance', False)
             log_info("ReticulumWrapper", "initialize", f"Prefer own instance: {prefer_own_instance}")
 
+            # Extract rpc_key for shared instance authentication (optional)
+            # On Android, apps have separate config directories, so RPC key must be shared
+            # Export from Sideband: Connectivity → Share Instance Access
+            rpc_key = config.get('rpc_key', None)
+            if rpc_key:
+                log_info("ReticulumWrapper", "initialize", "RPC key provided for shared instance auth")
+            else:
+                log_debug("ReticulumWrapper", "initialize", "No RPC key provided")
+
             # Check for shared instance if user doesn't prefer their own
             use_shared_instance = False
             if not prefer_own_instance:
@@ -652,7 +674,7 @@ class ReticulumWrapper:
             # Respect user's choice - if they want 0 interfaces, allow it
             # RNS will run without interfaces (no network connectivity)
 
-            if not self._create_config_file(enabled_interfaces, use_shared_instance=use_shared_instance):
+            if not self._create_config_file(enabled_interfaces, use_shared_instance=use_shared_instance, rpc_key=rpc_key):
                 return {"success": False, "error": "Failed to create config file"}
 
             # Set log level
@@ -920,17 +942,13 @@ class ReticulumWrapper:
                         raise Exception(f"Failed to load identity from {identity_path}: {e}")
 
             if not default_identity:
-                # SAFETY CHECK: If a specific identity file path was provided but doesn't exist,
-                # do NOT silently create a new identity - this indicates a data inconsistency
-                # that Kotlin should handle (e.g., recover from keyData backup)
+                # If a specific identity file path was provided but doesn't exist, fail clearly
+                # (Kotlin should have recovered the file from keyData before calling initialize)
                 if identity_file_path:
-                    log_error("ReticulumWrapper", "initialize", f"CRITICAL: Specified identity file not found: {identity_path}")
-                    log_error("ReticulumWrapper", "initialize", "Refusing to create new identity - Kotlin must recover file first")
                     raise Exception(f"identity_file_missing:{identity_path}")
 
-                # Create a new identity only for first install (no specific path provided)
-                # This happens on first install when no identity exists yet
-                log_info("ReticulumWrapper", "initialize", f"Identity not found at {identity_path}, creating new identity")
+                # Create a new identity only if no specific path was requested
+                log_info("ReticulumWrapper", "initialize", f"No identity found, creating new identity at {identity_path}")
                 default_identity = RNS.Identity()
                 try:
                     # Ensure the directory exists

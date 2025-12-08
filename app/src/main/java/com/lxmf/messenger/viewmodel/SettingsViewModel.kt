@@ -155,6 +155,7 @@ class SettingsViewModel
                             showQrDialog = _state.value.showQrDialog,
                             selectedTheme = selectedTheme,
                             customThemes = customThemes,
+                            isRestarting = _state.value.isRestarting,
                             // Shared instance state from repository (set by service)
                             isSharedInstance = isSharedInstance,
                             preferOwnInstance = preferOwnInstance,

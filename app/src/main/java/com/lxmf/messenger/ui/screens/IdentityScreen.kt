@@ -97,6 +97,7 @@ fun IdentityScreen(
     onBackClick: () -> Unit = {},
     viewModel: DebugViewModel = hiltViewModel(),
     bleConnectionsViewModel: com.lxmf.messenger.viewmodel.BleConnectionsViewModel = hiltViewModel(),
+    settingsViewModel: com.lxmf.messenger.viewmodel.SettingsViewModel = hiltViewModel(),
     onNavigateToBleStatus: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -105,6 +106,7 @@ fun IdentityScreen(
     val testResult by viewModel.testAnnounceResult.collectAsState()
     val bleConnectionsState by bleConnectionsViewModel.uiState.collectAsState()
     val isRestarting by viewModel.isRestarting.collectAsState()
+    val settingsState by settingsViewModel.state.collectAsState()
 
     // Bluetooth enable launcher
     val bluetoothEnableLauncher =
@@ -165,6 +167,7 @@ fun IdentityScreen(
                 onViewDetails = onNavigateToBleStatus,
                 onEnableBluetooth = btController.onEnableClick,
                 onOpenBluetoothSettings = btController.onOpenSettingsClick,
+                isSharedInstance = settingsState.isSharedInstance,
             )
 
             // Status Card
@@ -178,6 +181,7 @@ fun IdentityScreen(
             ServiceControlCard(
                 onShutdown = { viewModel.shutdownService() },
                 onRestart = { viewModel.restartService() },
+                isSharedInstance = settingsState.isSharedInstance,
             )
 
             // Interfaces Card
@@ -619,6 +623,7 @@ fun BleConnectionsCard(
     onViewDetails: () -> Unit,
     onEnableBluetooth: () -> Unit = {},
     onOpenBluetoothSettings: () -> Unit = {},
+    isSharedInstance: Boolean = false,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -639,7 +644,14 @@ fun BleConnectionsCard(
 
             Divider()
 
-            when (uiState) {
+            if (isSharedInstance) {
+                Text(
+                    text = "BLE connections are not available while using a shared Reticulum instance. " +
+                        "Only Columba's own instance can initiate Bluetooth LE connections.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else when (uiState) {
                 is BleConnectionsUiState.Loading -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -946,11 +958,13 @@ fun IdentityDetailsDialog(
 
 /**
  * Service control card with shutdown and restart buttons.
+ * Disabled when using a shared instance since Columba doesn't own the service.
  */
 @Composable
 private fun ServiceControlCard(
     onShutdown: () -> Unit,
     onRestart: () -> Unit,
+    isSharedInstance: Boolean = false,
 ) {
     var showShutdownDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
@@ -981,11 +995,20 @@ private fun ServiceControlCard(
                 )
             }
 
-            Text(
-                text = "Manually stop or restart the background Reticulum service.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (isSharedInstance) {
+                Text(
+                    text = "Service control is disabled while using a shared Reticulum instance. " +
+                        "The network service is managed by another app (e.g., Sideband).",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text(
+                    text = "Manually stop or restart the background Reticulum service.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -994,6 +1017,7 @@ private fun ServiceControlCard(
                 OutlinedButton(
                     onClick = { showShutdownDialog = true },
                     modifier = Modifier.weight(1f),
+                    enabled = !isSharedInstance,
                 ) {
                     Icon(Icons.Default.Close, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
@@ -1003,6 +1027,7 @@ private fun ServiceControlCard(
                 Button(
                     onClick = onRestart,
                     modifier = Modifier.weight(1f),
+                    enabled = !isSharedInstance,
                 ) {
                     Icon(Icons.Default.Send, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))

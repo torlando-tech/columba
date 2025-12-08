@@ -7,10 +7,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -87,12 +90,17 @@ fun SettingsScreen(
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Shared instance banner (only shown when connected to a shared instance)
-                if (state.isSharedInstance) {
+                // Shared instance banner - show when:
+                // 1. Connected to shared instance (isSharedInstance=true)
+                // 2. User opted for own instance (preferOwnInstance=true) - so they can toggle back
+                // 3. Service is restarting (keep visible during transition)
+                if (state.isSharedInstance || state.preferOwnInstance || state.isRestarting) {
                     SharedInstanceBannerCard(
                         isExpanded = state.isSharedInstanceBannerExpanded,
+                        preferOwnInstance = state.preferOwnInstance,
+                        isUsingSharedInstance = state.isSharedInstance,
                         onExpandToggle = { viewModel.toggleSharedInstanceBannerExpanded(it) },
-                        onUseOwnInstance = { viewModel.togglePreferOwnInstance(true) },
+                        onTogglePreferOwnInstance = { viewModel.togglePreferOwnInstance(it) },
                     )
                 }
 
@@ -166,5 +174,41 @@ fun SettingsScreen(
                 },
             )
         }
+
+        // Service Restart Dialog
+        if (state.isRestarting) {
+            ServiceRestartDialog()
+        }
     }
+}
+
+@Composable
+private fun ServiceRestartDialog() {
+    AlertDialog(
+        onDismissRequest = { /* Cannot dismiss - blocking */ },
+        icon = {
+            CircularProgressIndicator(
+                modifier = Modifier.size(48.dp),
+            )
+        },
+        title = { Text("Restarting Service") },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "Restarting Reticulum network...",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "This may take a few seconds",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { /* No button - auto dismisses when done */ },
+    )
 }

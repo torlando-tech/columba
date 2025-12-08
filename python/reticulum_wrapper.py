@@ -316,6 +316,9 @@ class ReticulumWrapper:
 
         if use_shared_instance:
             # Shared instance client mode - connect to existing RNS instance via TCP
+            # CRITICAL: On Android, we MUST use TCP because domain sockets don't work
+            # between different apps due to sandboxing. Without shared_instance_type = tcp,
+            # RNS defaults to domain sockets and won't find Sideband's shared instance.
             config_lines = [
                 "################################################################################",
                 "# SHARED INSTANCE MODE",
@@ -331,6 +334,7 @@ class ReticulumWrapper:
                 "[reticulum]",
                 "  enable_transport = yes",
                 "  share_instance = yes",
+                "  shared_instance_type = tcp",
                 "  shared_instance_port = 37428",
                 "",
                 "# No interfaces defined - using shared instance's interfaces",
@@ -363,8 +367,10 @@ class ReticulumWrapper:
                 "[interfaces]"
             ]
 
-        # Add each interface
-        for iface in interfaces:
+        # Add each interface (only for standalone mode - shared instance uses external interfaces)
+        if use_shared_instance:
+            log_debug("ReticulumWrapper", "_create_config_file", "Skipping interface definitions - using shared instance")
+        for iface in ([] if use_shared_instance else interfaces):
             iface_type = iface.get("type")
             iface_name = iface.get("name", "Unnamed Interface")
             log_debug("ReticulumWrapper", "_create_config_file", f"Adding interface: {iface_name} ({iface_type})")

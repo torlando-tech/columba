@@ -189,11 +189,13 @@ class MessageCollector
                         }
 
                         // Extract name from app_data using smart parser
+                        // Prefers displayName from Python's LXMF.display_name_from_app_data()
                         val appData = announce.appData
                         val peerName =
                             com.lxmf.messenger.reticulum.util.AppDataParser.extractPeerName(
                                 appData,
                                 peerHash,
+                                announce.displayName,
                             )
 
                         // Cache and update peer name if successfully extracted
@@ -218,6 +220,9 @@ class MessageCollector
                                 nodeType = announce.nodeType.name,
                                 receivingInterface = announce.receivingInterface,
                                 aspect = announce.aspect,
+                                stampCost = announce.stampCost,
+                                stampCostFlexibility = announce.stampCostFlexibility,
+                                peeringCost = announce.peeringCost,
                             )
                             Log.d(TAG, "Persisted announce to database: $peerName ($peerHash)")
 

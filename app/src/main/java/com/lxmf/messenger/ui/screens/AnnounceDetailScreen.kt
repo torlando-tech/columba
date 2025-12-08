@@ -22,8 +22,10 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PersonRemove
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -275,6 +277,37 @@ fun AnnounceDetailScreen(
                     content = formatTimeSince(announceNonNull.lastSeenTimestamp),
                     subtitle = formatFullTimestamp(announceNonNull.lastSeenTimestamp),
                 )
+
+                // Display stamp cost for propagation nodes (with flexibility)
+                if (announceNonNull.nodeType == "PROPAGATION_NODE") {
+                    announceNonNull.stampCost?.let { cost ->
+                        val flexText = announceNonNull.stampCostFlexibility?.let { " (\u00B1$it)" } ?: ""
+                        InfoCard(
+                            icon = Icons.Default.Lock,
+                            title = "Stamp Cost",
+                            content = "$cost$flexText",
+                            subtitle = "Required proof-of-work difficulty",
+                        )
+                    }
+                    announceNonNull.peeringCost?.let { cost ->
+                        InfoCard(
+                            icon = Icons.Default.Share,
+                            title = "Peering Cost",
+                            content = cost.toString(),
+                            subtitle = "Cost for node peering",
+                        )
+                    }
+                } else {
+                    // Display stamp cost for regular peers
+                    announceNonNull.stampCost?.let { cost ->
+                        InfoCard(
+                            icon = Icons.Default.Lock,
+                            title = "Stamp Cost",
+                            content = cost.toString(),
+                            subtitle = "Required proof-of-work difficulty",
+                        )
+                    }
+                }
             }
         }
     }

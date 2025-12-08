@@ -202,10 +202,12 @@ class AnnounceStreamViewModel
                     Log.d(TAG, "Received announce: ${hashHex.take(16)}")
 
                     // Extract peer name from app_data using smart parser
+                    // Prefers displayName from Python's LXMF.display_name_from_app_data()
                     val peerName =
                         com.lxmf.messenger.reticulum.util.AppDataParser.extractPeerName(
                             announce.appData,
                             hashHex,
+                            announce.displayName,
                         )
 
                     // Upsert to database - updates timestamp if exists, inserts if new
@@ -222,6 +224,9 @@ class AnnounceStreamViewModel
                             nodeType = announce.nodeType.name,
                             receivingInterface = announce.receivingInterface,
                             aspect = announce.aspect,
+                            stampCost = announce.stampCost,
+                            stampCostFlexibility = announce.stampCostFlexibility,
+                            peeringCost = announce.peeringCost,
                         )
                         Log.d(TAG, "Saved/updated announce in database: $peerName ($hashHex)")
 

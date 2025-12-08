@@ -603,8 +603,14 @@ class PythonReticulumProtocol(
             val appData = event.getDictValue("app_data")?.toJava(ByteArray::class.java) as? ByteArray
             val hops = event.getDictValue("hops")?.toInt() ?: 0
             val timestamp = event.getDictValue("timestamp")?.toLong() ?: System.currentTimeMillis()
-            val aspect = event.getDictValue("aspect")?.toString() // Try to get aspect if provided
-            val receivingInterface = event.getDictValue("interface")?.toString() // Get interface name if provided
+            val aspect = event.getDictValue("aspect")?.toString()
+            val receivingInterface = event.getDictValue("interface")?.toString()
+            // Display name pre-parsed by LXMF.display_name_from_app_data() in Python
+            val displayName = event.getDictValue("display_name")?.toString()
+            // Stamp costs pre-parsed by LXMF stamp cost functions in Python
+            val stampCost = event.getDictValue("stamp_cost")?.toInt()
+            val stampCostFlexibility = event.getDictValue("stamp_cost_flexibility")?.toInt()
+            val peeringCost = event.getDictValue("peering_cost")?.toInt()
 
             if (destinationHash != null && identityHash != null && publicKey != null) {
                 val identity =
@@ -626,11 +632,15 @@ class PythonReticulumProtocol(
                         timestamp = timestamp,
                         nodeType = nodeType,
                         receivingInterface = receivingInterface,
+                        displayName = displayName,
+                        stampCost = stampCost,
+                        stampCostFlexibility = stampCostFlexibility,
+                        peeringCost = peeringCost,
                     )
 
                 // Emit to flow
                 announceFlow.tryEmit(announceEvent)
-                Log.d(TAG, "Announce event emitted: ${destinationHash.take(8).joinToString("") { "%02x".format(it) }}, type: $nodeType")
+                Log.d(TAG, "Announce event emitted: ${destinationHash.take(8).joinToString("") { "%02x".format(it) }}, type: $nodeType, name: $displayName")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling announce event", e)

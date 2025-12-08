@@ -1022,12 +1022,59 @@ class ReticulumWrapper:
                 log_debug("ReticulumWrapper", "_announce_handler",
                          f"Could not extract interface: {e}")
 
+            # Extract display name using LXMF's canonical implementation
+            # Use the correct function based on aspect:
+            # - lxmf.delivery: display_name_from_app_data() for peer names
+            # - lxmf.propagation: pn_name_from_app_data() for propagation node names
+            display_name = None
+            if LXMF is not None and app_data:
+                try:
+                    if aspect == "lxmf.propagation":
+                        display_name = LXMF.pn_name_from_app_data(app_data)
+                        log_debug("ReticulumWrapper", "_announce_handler",
+                                  f"LXMF.pn_name_from_app_data returned: {display_name}")
+                    else:
+                        display_name = LXMF.display_name_from_app_data(app_data)
+                        log_debug("ReticulumWrapper", "_announce_handler",
+                                  f"LXMF.display_name_from_app_data returned: {display_name}")
+                except Exception as e:
+                    log_debug("ReticulumWrapper", "_announce_handler",
+                              f"LXMF name extraction failed: {e}")
+
+            # Extract stamp cost using LXMF's canonical functions
+            stamp_cost = None
+            stamp_cost_flexibility = None
+            peering_cost = None
+            if LXMF is not None and app_data:
+                try:
+                    if aspect == "lxmf.propagation":
+                        stamp_cost = LXMF.pn_stamp_cost_from_app_data(app_data)
+                        # Also extract flexibility and peering cost for propagation nodes
+                        if LXMF.pn_announce_data_is_valid(app_data):
+                            from RNS.vendor import umsgpack
+                            data = umsgpack.unpackb(app_data)
+                            stamp_cost_flexibility = int(data[5][1])
+                            peering_cost = int(data[5][2])
+                        log_debug("ReticulumWrapper", "_announce_handler",
+                                  f"PN stamp cost: {stamp_cost}, flex: {stamp_cost_flexibility}, peer: {peering_cost}")
+                    else:
+                        stamp_cost = LXMF.stamp_cost_from_app_data(app_data)
+                        log_debug("ReticulumWrapper", "_announce_handler",
+                                  f"Peer stamp cost: {stamp_cost}")
+                except Exception as e:
+                    log_debug("ReticulumWrapper", "_announce_handler",
+                              f"Stamp cost extraction failed: {e}")
+
             # Create announce event dict (Transport already stores identity/app_data)
             announce_event = {
                 'destination_hash': destination_hash,
                 'identity_hash': destination_hash,  # For single destinations
                 'public_key': announced_identity.get_public_key() if announced_identity else b'',
                 'app_data': app_data if app_data else b'',
+                'display_name': display_name,  # Pre-parsed by LXMF (may be None)
+                'stamp_cost': stamp_cost,  # Pre-parsed by LXMF (may be None)
+                'stamp_cost_flexibility': stamp_cost_flexibility,  # For propagation nodes
+                'peering_cost': peering_cost,  # For propagation nodes
                 'aspect': aspect,  # Include aspect (e.g., "lxmf.delivery", "call.audio")
                 'hops': hops,
                 'timestamp': int(time.time() * 1000),  # milliseconds

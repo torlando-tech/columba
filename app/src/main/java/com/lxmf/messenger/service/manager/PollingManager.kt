@@ -37,6 +37,17 @@ class PollingManager(
         private fun ByteArray?.toBase64(): String? {
             return this?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
         }
+
+        /**
+         * Safely parse PyObject to Int, handling Python None and parse errors.
+         * Returns null if the value is None, not a number, or cannot be parsed.
+         */
+        private fun PyObject?.toIntOrNull(): Int? {
+            return this?.let {
+                val str = it.toString()
+                if (str == "None") null else str.toIntOrNull()
+            }
+        }
     }
 
     // Smart pollers for adaptive polling
@@ -274,6 +285,7 @@ class PollingManager(
     /**
      * Handle incoming announce event.
      */
+    @Suppress("CyclomaticComplexMethod")
     fun handleAnnounceEvent(event: PyObject) {
         try {
             Log.d(TAG, "handleAnnounceEvent() called - processing announce from Python")
@@ -286,6 +298,10 @@ class PollingManager(
             val timestamp = event.getDictValue("timestamp")?.toLong() ?: System.currentTimeMillis()
             val aspect = event.getDictValue("aspect")?.toString()
             val receivingInterface = event.getDictValue("interface")?.toString()
+            val displayName = event.getDictValue("display_name")?.toString()?.takeIf { it != "None" }
+            val stampCost = event.getDictValue("stamp_cost").toIntOrNull()
+            val stampCostFlexibility = event.getDictValue("stamp_cost_flexibility").toIntOrNull()
+            val peeringCost = event.getDictValue("peering_cost").toIntOrNull()
 
             Log.i(TAG, "  Hash: ${destinationHash?.take(8)?.joinToString("") { "%02x".format(it) }}")
             Log.i(TAG, "  Hops: $hops, Interface: $receivingInterface, Aspect: $aspect")
@@ -303,6 +319,18 @@ class PollingManager(
                     }
                     if (receivingInterface != null && receivingInterface != "None") {
                         put("interface", receivingInterface)
+                    }
+                    if (displayName != null) {
+                        put("display_name", displayName)
+                    }
+                    if (stampCost != null) {
+                        put("stamp_cost", stampCost)
+                    }
+                    if (stampCostFlexibility != null) {
+                        put("stamp_cost_flexibility", stampCostFlexibility)
+                    }
+                    if (peeringCost != null) {
+                        put("peering_cost", peeringCost)
                     }
                 }
 

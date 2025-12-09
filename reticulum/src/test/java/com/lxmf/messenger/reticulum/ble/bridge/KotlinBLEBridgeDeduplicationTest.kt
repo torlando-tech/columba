@@ -231,7 +231,6 @@ class KotlinBLEBridgeDeduplicationTest {
     fun `pendingCentralConnections prevents stale detection during identity race`() {
         val bridge = createBridgeWithMocks()
         val oldMac = "AA:BB:CC:DD:EE:01"
-        val newMac = "AA:BB:CC:DD:EE:02"
         val identityHash = "ab5609dfffb33b21a102e1ff81196be5"
 
         // Given: Identity mapping exists for old MAC (simulating prior connection)

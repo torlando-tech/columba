@@ -22,6 +22,7 @@ import com.chaquo.python.PyObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -1352,9 +1353,6 @@ class KotlinRNodeBridge(
      */
     fun shutdown() {
         disconnect()
-        scope.launch {
-            // Give time for cleanup
-            delay(100)
-        }
+        scope.cancel()
     }
 }

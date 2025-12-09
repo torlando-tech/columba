@@ -325,7 +325,11 @@ class RNodeWizardViewModel
             val currentState = _state.value
             val nextStep =
                 when (currentState.currentStep) {
-                    WizardStep.DEVICE_DISCOVERY -> WizardStep.REGION_SELECTION
+                    WizardStep.DEVICE_DISCOVERY -> {
+                        // Stop RSSI polling when leaving device discovery to prevent memory leaks
+                        stopRssiPolling()
+                        WizardStep.REGION_SELECTION
+                    }
                     WizardStep.REGION_SELECTION -> {
                         // Apply frequency region settings when moving to modem step
                         applyFrequencyRegionSettings()
@@ -588,6 +592,12 @@ class RNodeWizardViewModel
 
         @SuppressLint("MissingPermission")
         fun startDeviceScan() {
+            // Check for Bluetooth availability early before starting scan
+            if (bluetoothAdapter == null) {
+                setScanError("Bluetooth not available on this device")
+                return
+            }
+
             viewModelScope.launch {
                 _state.update {
                     it.copy(

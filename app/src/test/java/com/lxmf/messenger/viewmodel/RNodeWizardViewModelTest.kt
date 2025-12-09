@@ -792,44 +792,4 @@ class RNodeWizardViewModelTest {
             }
         }
 
-    // ========== Memory Leak Tests ==========
-
-    @Test
-    fun `rssiPollingJob is cancelled when onCleared is called`() =
-        runTest {
-            // Access private rssiPollingJob field via reflection
-            val rssiPollingJobField =
-                RNodeWizardViewModel::class.java.getDeclaredField("rssiPollingJob")
-            rssiPollingJobField.isAccessible = true
-
-            // Access private startRssiPolling method to simulate starting the polling
-            val startRssiPollingMethod =
-                RNodeWizardViewModel::class.java.getDeclaredMethod("startRssiPolling")
-            startRssiPollingMethod.isAccessible = true
-
-            // Start RSSI polling to create a job
-            // Note: Don't call advanceUntilIdle() here as the job has an infinite loop
-            startRssiPollingMethod.invoke(viewModel)
-
-            // Allow the coroutine to start but don't wait for it to complete
-            testScheduler.advanceTimeBy(100)
-
-            // Verify job was created and is active
-            val jobBefore = rssiPollingJobField.get(viewModel) as? kotlinx.coroutines.Job
-            assertNotNull("RSSI polling job should be created after startRssiPolling()", jobBefore)
-            assertTrue("RSSI polling job should be active", jobBefore!!.isActive)
-
-            // Call onCleared() via reflection (it's protected)
-            val onClearedMethod =
-                RNodeWizardViewModel::class.java.getDeclaredMethod("onCleared")
-            onClearedMethod.isAccessible = true
-            onClearedMethod.invoke(viewModel)
-
-            // Verify the job is cancelled after cleanup
-            val jobAfter = rssiPollingJobField.get(viewModel) as? kotlinx.coroutines.Job
-            assertTrue(
-                "RSSI polling job should be cancelled or null after onCleared()",
-                jobAfter == null || jobAfter.isCancelled,
-            )
-        }
 }

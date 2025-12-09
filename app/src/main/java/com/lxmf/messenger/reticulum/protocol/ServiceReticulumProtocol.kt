@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import com.lxmf.messenger.service.manager.parseIdentityResultJson
@@ -57,6 +58,7 @@ class ServiceReticulumProtocol(
 ) : ReticulumProtocol {
     companion object {
         private const val TAG = "ServiceReticulumProtocol"
+        private const val BIND_TIMEOUT_MS = 30_000L // 30s timeout for service binding
     }
 
     private var service: IReticulumService? = null
@@ -433,65 +435,70 @@ class ServiceReticulumProtocol(
      * instead of arbitrary delays. Target: < 100ms from bind to ready.
      *
      * Thread-safe: Uses bindLock to synchronize with readinessCallback.
+     *
+     * @throws TimeoutCancellationException if service doesn't become ready within BIND_TIMEOUT_MS
      */
     suspend fun bindService() =
-        suspendCancellableCoroutine { continuation ->
-            try {
-                bindStartTime = System.currentTimeMillis()
-                Log.d(TAG, "Binding to ReticulumService...")
+        withTimeout(BIND_TIMEOUT_MS) {
+            suspendCancellableCoroutine { continuation ->
+                try {
+                    bindStartTime = System.currentTimeMillis()
+                    Log.d(TAG, "Binding to ReticulumService (timeout: ${BIND_TIMEOUT_MS}ms)...")
 
-                // Thread-safe: Check if callback already fired before storing continuation
-                synchronized(bindLock) {
-                    if (serviceReadyBeforeContinuationSet) {
-                        // Callback already fired - resume immediately
-                        serviceReadyBeforeContinuationSet = false
-                        Log.d(TAG, "Service was already ready - resuming immediately")
-                        continuation.resume(Unit)
-                        return@suspendCancellableCoroutine
+                    // Thread-safe: Check if callback already fired before storing continuation
+                    synchronized(bindLock) {
+                        if (serviceReadyBeforeContinuationSet) {
+                            // Callback already fired - resume immediately
+                            serviceReadyBeforeContinuationSet = false
+                            Log.d(TAG, "Service was already ready - resuming immediately")
+                            continuation.resume(Unit)
+                            return@suspendCancellableCoroutine
+                        }
+                        // Store continuation for readiness callback
+                        readinessContinuation = continuation
                     }
-                    // Store continuation for readiness callback
-                    readinessContinuation = continuation
-                }
 
-                // Start service first (use startForegroundService for Android O+)
-                val startIntent =
-                    Intent(context, ReticulumService::class.java).apply {
-                        action = ReticulumService.ACTION_START
+                    // Start service first (use startForegroundService for Android O+)
+                    val startIntent =
+                        Intent(context, ReticulumService::class.java).apply {
+                            action = ReticulumService.ACTION_START
+                        }
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        context.startForegroundService(startIntent)
+                    } else {
+                        context.startService(startIntent)
                     }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    context.startForegroundService(startIntent)
-                } else {
-                    context.startService(startIntent)
-                }
 
-                // Bind to service
-                val bindIntent = Intent(context, ReticulumService::class.java)
-                val bound =
-                    context.bindService(
-                        bindIntent,
-                        serviceConnection,
-                        Context.BIND_AUTO_CREATE,
-                    )
+                    // Bind to service
+                    val bindIntent = Intent(context, ReticulumService::class.java)
+                    val bound =
+                        context.bindService(
+                            bindIntent,
+                            serviceConnection,
+                            Context.BIND_AUTO_CREATE,
+                        )
 
-                if (!bound) {
+                    if (!bound) {
+                        synchronized(bindLock) {
+                            readinessContinuation = null
+                        }
+                        continuation.resumeWithException(RuntimeException("Failed to bind to service"))
+                    }
+                    // Note: Continuation will be resumed by readinessCallback.onServiceReady()
+                    // when the service is actually ready for IPC calls
+                } catch (e: Exception) {
                     synchronized(bindLock) {
                         readinessContinuation = null
                     }
-                    continuation.resumeWithException(RuntimeException("Failed to bind to service"))
+                    continuation.resumeWithException(e)
                 }
-                // Note: Continuation will be resumed by readinessCallback.onServiceReady()
-                // when the service is actually ready for IPC calls
-            } catch (e: Exception) {
-                synchronized(bindLock) {
-                    readinessContinuation = null
-                }
-                continuation.resumeWithException(e)
-            }
 
-            // Cleanup on cancellation
-            continuation.invokeOnCancellation {
-                synchronized(bindLock) {
-                    readinessContinuation = null
+                // Cleanup on cancellation (including timeout)
+                continuation.invokeOnCancellation {
+                    Log.d(TAG, "bindService continuation cancelled")
+                    synchronized(bindLock) {
+                        readinessContinuation = null
+                    }
                 }
             }
         }
@@ -591,7 +598,27 @@ class ServiceReticulumProtocol(
                 val callback =
                     object : IInitializationCallback.Stub() {
                         override fun onInitializationComplete(result: String) {
-                            Log.d(TAG, "Initialization successful")
+                            Log.d(TAG, "Initialization successful: $result")
+
+                            // Parse and save shared instance status
+                            try {
+                                val jsonResult = JSONObject(result)
+                                val isSharedInstance = jsonResult.optBoolean("is_shared_instance", false)
+                                Log.d(TAG, "Shared instance mode: $isSharedInstance")
+
+                                // Save to settings repository (launch in scope since we're in callback)
+                                protocolScope.launch {
+                                    try {
+                                        settingsRepository.saveIsSharedInstance(isSharedInstance)
+                                        Log.d(TAG, "Saved shared instance status to settings")
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Failed to save shared instance status", e)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to parse initialization result", e)
+                            }
+
                             continuation.resume(Unit)
                         }
 
@@ -681,6 +708,12 @@ class ServiceReticulumProtocol(
             interfacesArray.put(ifaceJson)
         }
         json.put("enabledInterfaces", interfacesArray)
+
+        // Shared instance preference
+        json.put("prefer_own_instance", config.preferOwnInstance)
+
+        // RPC key for shared instance authentication (optional)
+        config.rpcKey?.let { json.put("rpc_key", it) }
 
         return json.toString()
     }

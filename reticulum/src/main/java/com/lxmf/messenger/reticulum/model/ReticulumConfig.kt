@@ -7,6 +7,20 @@ data class ReticulumConfig(
     val displayName: String? = null,
     val logLevel: LogLevel = LogLevel.INFO,
     val allowAnonymous: Boolean = false,
+    /**
+     * When false (default), Columba will attempt to connect to a shared RNS instance
+     * (e.g., from Sideband) if one is available on the device.
+     * When true, Columba will always create its own RNS instance.
+     */
+    val preferOwnInstance: Boolean = false,
+    /**
+     * RPC authentication key for shared instance communication.
+     * Required on Android when connecting to another app's shared instance (e.g., Sideband)
+     * because apps have separate config directories with different RPC keys.
+     * Export from Sideband: Connectivity → Share Instance Access
+     * Format: Hexadecimal string (e.g., "e5c032d3ec4e64a6aca9927ba8ab73336780f6d71790")
+     */
+    val rpcKey: String? = null,
 )
 
 /**

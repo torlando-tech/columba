@@ -27,10 +27,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+/**
+ * Network settings card for viewing status and managing interfaces.
+ *
+ * @param onViewStatus Callback when "View Network Status" is clicked
+ * @param onManageInterfaces Callback when "Manage Interfaces" is clicked
+ * @param isSharedInstance When true, interface management is disabled because
+ *                         Columba is connected to a shared RNS instance
+ */
 @Composable
 fun NetworkCard(
     onViewStatus: () -> Unit,
     onManageInterfaces: () -> Unit,
+    isSharedInstance: Boolean = false,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -71,16 +80,25 @@ fun NetworkCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            // Description for Manage Interfaces
+            // Description for Manage Interfaces (changes when using shared instance)
             Text(
                 text =
-                    "Configure how your device connects to the Reticulum network. " +
-                        "Add TCP connections, auto-discovery, or BLE interfaces.",
+                    if (isSharedInstance) {
+                        "Interface management is disabled while using a shared system instance."
+                    } else {
+                        "Configure how your device connects to the Reticulum network. " +
+                            "Add TCP connections, auto-discovery, or BLE interfaces."
+                    },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color =
+                    if (isSharedInstance) {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
             )
 
-            // Primary action - View Network Status
+            // Primary action - View Network Status (always enabled)
             Button(
                 onClick = onViewStatus,
                 modifier = Modifier.fillMaxWidth(),
@@ -98,10 +116,11 @@ fun NetworkCard(
                 Text("View Network Status")
             }
 
-            // Secondary action - Manage Interfaces
+            // Secondary action - Manage Interfaces (disabled when using shared instance)
             OutlinedButton(
                 onClick = onManageInterfaces,
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !isSharedInstance,
             ) {
                 Icon(
                     imageVector = Icons.Default.Settings,

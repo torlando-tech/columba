@@ -9,6 +9,7 @@ import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.LogLevel
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
@@ -41,6 +42,7 @@ class InterfaceConfigManager
         private val conversationRepository: ConversationRepository,
         private val messageCollector: MessageCollector,
         private val database: ColumbaDatabase,
+        private val settingsRepository: SettingsRepository,
     ) {
         companion object {
             private const val TAG = "InterfaceConfigManager"
@@ -188,6 +190,16 @@ class InterfaceConfigManager
                 val displayName = activeIdentity?.displayName
                 Log.d(TAG, "Active identity: ${activeIdentity?.displayName ?: "none"}, verified path: $identityPath")
 
+                // Load shared instance preferences
+                val preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first()
+                Log.d(TAG, "Prefer own instance: $preferOwnInstance")
+
+                // Load RPC key for shared instance authentication
+                val rpcKey = settingsRepository.rpcKeyFlow.first()
+                if (rpcKey != null) {
+                    Log.d(TAG, "RPC key configured for shared instance auth")
+                }
+
                 val config =
                     ReticulumConfig(
                         storagePath = context.filesDir.absolutePath + "/reticulum",
@@ -196,6 +208,8 @@ class InterfaceConfigManager
                         displayName = displayName,
                         logLevel = LogLevel.DEBUG,
                         allowAnonymous = false,
+                        preferOwnInstance = preferOwnInstance,
+                        rpcKey = rpcKey,
                     )
 
                 reticulumProtocol.initialize(config)

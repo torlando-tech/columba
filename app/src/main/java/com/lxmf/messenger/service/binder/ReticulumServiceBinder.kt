@@ -85,7 +85,7 @@ class ReticulumServiceBinder(
                             Log.w(TAG, "Failed to set BLE bridge before init: ${e.message}", e)
                         }
                     },
-                    onSuccess = {
+                    onSuccess = { isSharedInstance ->
                         // Execute directly - we're already in a coroutine from the outer scope.launch
                         // Wrap in try-catch to ensure callback is always called and locks are released on error
                         try {
@@ -102,10 +102,11 @@ class ReticulumServiceBinder(
                             // Announce LXMF destination
                             announceLxmfDestination()
 
-                            // Notify success
+                            // Notify success with shared instance status
                             callback.onInitializationComplete(
                                 JSONObject().apply {
                                     put("success", true)
+                                    put("is_shared_instance", isSharedInstance)
                                 }.toString(),
                             )
 

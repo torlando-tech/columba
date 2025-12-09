@@ -189,19 +189,38 @@ class ColumbaApplication : Application() {
                     // Load active identity from database
                     android.util.Log.d("ColumbaApplication", "Loading active identity from database...")
                     val activeIdentity = identityRepository.getActiveIdentitySync()
-                    val identityPath = activeIdentity?.filePath
+
+                    // Ensure identity file exists (recover from keyData if missing)
+                    var identityPath: String? = null
                     val displayName = activeIdentity?.displayName
-                    if (identityPath != null) {
+                    if (activeIdentity != null) {
                         android.util.Log.d(
                             "ColumbaApplication",
                             "Active identity: ${activeIdentity.displayName} " +
                                 "(${activeIdentity.identityHash.take(8)}...)",
                         )
-                        android.util.Log.d("ColumbaApplication", "Identity file path: $identityPath")
+                        val fileResult = identityRepository.ensureIdentityFileExists(activeIdentity)
+                        if (fileResult.isSuccess) {
+                            identityPath = fileResult.getOrNull()
+                            android.util.Log.d("ColumbaApplication", "Identity file verified/recovered: $identityPath")
+                        } else {
+                            android.util.Log.e(
+                                "ColumbaApplication",
+                                "Could not ensure identity file exists: ${fileResult.exceptionOrNull()}",
+                            )
+                            // identityPath remains null - Python will create new default
+                        }
                         android.util.Log.d("ColumbaApplication", "Display name: $displayName")
                     } else {
                         android.util.Log.d("ColumbaApplication", "No active identity found, Python will create default")
                     }
+
+                    // Load shared instance preferences
+                    val preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first()
+                    android.util.Log.d("ColumbaApplication", "Prefer own instance: $preferOwnInstance")
+
+                    // Load RPC key for shared instance authentication
+                    val rpcKey = settingsRepository.rpcKeyFlow.first()
 
                     // Auto-initialize Reticulum with config from database
                     android.util.Log.d("ColumbaApplication", "Auto-initializing Reticulum...")
@@ -213,6 +232,8 @@ class ColumbaApplication : Application() {
                             displayName = displayName,
                             logLevel = LogLevel.DEBUG,
                             allowAnonymous = false,
+                            preferOwnInstance = preferOwnInstance,
+                            rpcKey = rpcKey,
                         )
 
                     reticulumProtocol.initialize(config)

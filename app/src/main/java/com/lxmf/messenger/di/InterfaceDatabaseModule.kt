@@ -8,6 +8,7 @@ import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.service.MessageCollector
@@ -76,6 +77,7 @@ object InterfaceDatabaseModule {
     /**
      * Provides the InterfaceConfigManager for applying configuration changes.
      */
+    @Suppress("LongParameterList") // Hilt DI requires all dependencies as parameters
     @Provides
     @Singleton
     fun provideInterfaceConfigManager(
@@ -86,6 +88,7 @@ object InterfaceDatabaseModule {
         conversationRepository: ConversationRepository,
         messageCollector: MessageCollector,
         database: ColumbaDatabase,
+        settingsRepository: SettingsRepository,
     ): InterfaceConfigManager {
         return InterfaceConfigManager(
             context = context,
@@ -95,6 +98,7 @@ object InterfaceDatabaseModule {
             conversationRepository = conversationRepository,
             messageCollector = messageCollector,
             database = database,
+            settingsRepository = settingsRepository,
         )
     }
 }

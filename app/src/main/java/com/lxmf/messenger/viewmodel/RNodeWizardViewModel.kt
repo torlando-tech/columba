@@ -392,9 +392,13 @@ class RNodeWizardViewModel
             _state.update {
                 it.copy(
                     frequency = region.frequency.toString(),
+                    frequencyError = null, // Clear any previous validation error
                     txPower = region.defaultTxPower.toString(),
+                    txPowerError = null, // Clear any previous validation error
                     stAlock = airtimeLimit,
+                    stAlockError = null, // Clear any previous validation error
                     ltAlock = airtimeLimit,
+                    ltAlockError = null, // Clear any previous validation error
                 )
             }
         }
@@ -427,7 +431,7 @@ class RNodeWizardViewModel
                     val bandwidth = state.selectedModemPreset.bandwidth
                     FrequencySlotCalculator.calculateFrequency(region, bandwidth, state.selectedSlot)
                 }
-            _state.update { it.copy(frequency = frequency.toString()) }
+            _state.update { it.copy(frequency = frequency.toString(), frequencyError = null) }
         }
 
         // ========== STEP 4: FREQUENCY SLOT SELECTION ==========
@@ -1198,12 +1202,17 @@ class RNodeWizardViewModel
                 it.copy(
                     selectedPreset = preset,
                     isCustomMode = false,
-                    // Apply preset values
+                    // Apply preset values and clear any validation errors
                     frequency = preset.frequency.toString(),
+                    frequencyError = null,
                     bandwidth = preset.bandwidth.toString(),
+                    bandwidthError = null,
                     spreadingFactor = preset.spreadingFactor.toString(),
+                    spreadingFactorError = null,
                     codingRate = preset.codingRate.toString(),
+                    codingRateError = null,
                     txPower = preset.txPower.toString(),
+                    txPowerError = null,
                 )
             }
         }

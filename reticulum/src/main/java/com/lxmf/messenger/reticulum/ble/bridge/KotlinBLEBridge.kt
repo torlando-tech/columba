@@ -1496,6 +1496,11 @@ class KotlinBLEBridge(
                         val centralAddr = if (isCentralConnection) address else existingAddress
                         val peripheralAddr = if (isCentralConnection) existingAddress else address
 
+                        // Add cooldown to prevent immediate reconnection regardless of which connection is kept
+                        // This fixes asymmetry where cooldown was only set when keeping peripheral
+                        recentlyDeduplicatedIdentities[identityHash] = System.currentTimeMillis()
+                        Log.d(TAG, "Added $identityHash to deduplication cooldown (60s)")
+
                         if (weKeepCentral) {
                             Log.i(TAG, "Identity sorting (MAC rotation): keeping central at $centralAddr, closing peripheral at $peripheralAddr")
                             Log.d(TAG, "  (local=$localIdentityHex < peer=$identityHash)")
@@ -1520,10 +1525,6 @@ class KotlinBLEBridge(
                             }
                             // Also clean up pending central tracking
                             pendingCentralConnections.remove(centralAddr)
-                            // Prevent scanner from reconnecting as central for a while
-                            // (we're already connected as peripheral to this identity)
-                            recentlyDeduplicatedIdentities[identityHash] = System.currentTimeMillis()
-                            Log.d(TAG, "Added $identityHash to deduplication cooldown (60s)")
                         }
 
                         // Update identity mapping to remaining address

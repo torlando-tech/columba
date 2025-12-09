@@ -107,10 +107,36 @@ class KISS:
 
     @staticmethod
     def unescape(data):
-        """Unescape KISS data."""
-        data = data.replace(bytes([0xDB, 0xDC]), bytes([0xC0]))
-        data = data.replace(bytes([0xDB, 0xDD]), bytes([0xDB]))
-        return data
+        """
+        Unescape KISS data.
+
+        Handles escape sequences:
+        - 0xDB 0xDC -> 0xC0 (FEND)
+        - 0xDB 0xDD -> 0xDB (FESC)
+        - Invalid escape (0xDB followed by other) -> skipped entirely
+        - Trailing 0xDB -> skipped
+        """
+        result = bytearray()
+        i = 0
+        while i < len(data):
+            if data[i] == 0xDB:  # FESC - escape character
+                if i + 1 >= len(data):
+                    # Trailing FESC at end of data - skip it
+                    break
+                next_byte = data[i + 1]
+                if next_byte == 0xDC:
+                    result.append(0xC0)  # TFEND -> FEND
+                    i += 2
+                elif next_byte == 0xDD:
+                    result.append(0xDB)  # TFESC -> FESC
+                    i += 2
+                else:
+                    # Invalid escape sequence - skip both bytes
+                    i += 2
+            else:
+                result.append(data[i])
+                i += 1
+        return bytes(result)
 
 
 class ColumbaRNodeInterface:

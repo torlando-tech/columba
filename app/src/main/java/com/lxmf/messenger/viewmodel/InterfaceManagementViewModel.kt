@@ -116,7 +116,8 @@ class InterfaceManagementViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceMgmtVM"
-            private const val STATUS_POLL_INTERVAL_MS = 3000L
+            // Made internal var (not const) to allow disabling polling in tests
+            internal var STATUS_POLL_INTERVAL_MS = 3000L
         }
 
         private val _state = MutableStateFlow(InterfaceManagementState())
@@ -149,8 +150,13 @@ class InterfaceManagementViewModel
 
         /**
          * Start polling for interface online status from Python/RNS.
+         * Polling is skipped when STATUS_POLL_INTERVAL_MS is 0 (for testing).
          */
         private fun startPollingInterfaceStatus() {
+            if (STATUS_POLL_INTERVAL_MS <= 0) {
+                Log.d(TAG, "Polling disabled (interval <= 0)")
+                return
+            }
             viewModelScope.launch {
                 while (true) {
                     try {

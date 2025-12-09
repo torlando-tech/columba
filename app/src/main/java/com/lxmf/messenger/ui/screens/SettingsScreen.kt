@@ -18,12 +18,18 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -56,8 +62,25 @@ fun SettingsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show Snackbar when shared instance becomes available (ephemeral notification)
+    LaunchedEffect(state.sharedInstanceAvailable) {
+        if (state.sharedInstanceAvailable && !state.preferOwnInstance) {
+            val result = snackbarHostState.showSnackbar(
+                message = "Shared instance available",
+                actionLabel = "Switch",
+                duration = SnackbarDuration.Indefinite,
+            )
+            when (result) {
+                SnackbarResult.ActionPerformed -> viewModel.switchToSharedInstance()
+                SnackbarResult.Dismissed -> viewModel.dismissSharedInstanceAvailable()
+            }
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Settings") },
@@ -90,19 +113,27 @@ fun SettingsScreen(
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Shared instance banner - show when:
-                // 1. Connected to shared instance (isSharedInstance=true)
-                // 2. User opted for own instance (preferOwnInstance=true) - so they can toggle back
-                // 3. Service is restarting (keep visible during transition)
-                if (state.isSharedInstance || state.preferOwnInstance || state.isRestarting) {
+                // Shared instance banner - show when shared instance is relevant:
+                // 1. Connected to shared instance
+                // 2. Shared instance available (detected while running own)
+                // 3. Shared instance was lost (show warning)
+                // 4. Service is restarting (keep visible during transition)
+                // Hidden when: running own instance with no shared instance detected
+                if (state.isSharedInstance || state.sharedInstanceAvailable ||
+                    state.sharedInstanceLost || state.isRestarting
+                ) {
                     SharedInstanceBannerCard(
                         isExpanded = state.isSharedInstanceBannerExpanded,
                         preferOwnInstance = state.preferOwnInstance,
                         isUsingSharedInstance = state.isSharedInstance,
                         rpcKey = state.rpcKey,
+                        sharedInstanceLost = state.sharedInstanceLost,
+                        sharedInstanceAvailable = state.sharedInstanceAvailable,
                         onExpandToggle = { viewModel.toggleSharedInstanceBannerExpanded(it) },
                         onTogglePreferOwnInstance = { viewModel.togglePreferOwnInstance(it) },
                         onRpcKeyChange = { viewModel.saveRpcKey(it) },
+                        onSwitchToOwnInstance = { viewModel.switchToOwnInstanceAfterLoss() },
+                        onDismissLostWarning = { viewModel.dismissSharedInstanceLostWarning() },
                     )
                 }
 

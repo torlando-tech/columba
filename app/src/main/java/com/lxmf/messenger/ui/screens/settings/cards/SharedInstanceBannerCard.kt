@@ -16,10 +16,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -46,10 +50,26 @@ fun SharedInstanceBannerCard(
     preferOwnInstance: Boolean,
     isUsingSharedInstance: Boolean,
     rpcKey: String?,
+    sharedInstanceLost: Boolean = false,
+    sharedInstanceAvailable: Boolean = false, // Used for toggle enable logic
     onExpandToggle: (Boolean) -> Unit,
     onTogglePreferOwnInstance: (Boolean) -> Unit,
     onRpcKeyChange: (String?) -> Unit,
+    onSwitchToOwnInstance: () -> Unit = {},
+    onDismissLostWarning: () -> Unit = {},
 ) {
+    // Use error color when shared instance is lost, primary otherwise
+    val containerColor = if (sharedInstanceLost) {
+        MaterialTheme.colorScheme.errorContainer
+    } else {
+        MaterialTheme.colorScheme.primaryContainer
+    }
+    val contentColor = if (sharedInstanceLost) {
+        MaterialTheme.colorScheme.onErrorContainer
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    }
+
     Card(
         modifier =
             Modifier
@@ -58,7 +78,7 @@ fun SharedInstanceBannerCard(
         shape = RoundedCornerShape(12.dp),
         colors =
             CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                containerColor = containerColor,
             ),
     ) {
         Column(
@@ -77,21 +97,26 @@ fun SharedInstanceBannerCard(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Link,
+                        imageVector = if (sharedInstanceLost) {
+                            Icons.Default.LinkOff
+                        } else {
+                            Icons.Default.Link
+                        },
                         contentDescription = "Instance Mode",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = contentColor,
                     )
                     Text(
-                        text = if (isUsingSharedInstance) {
-                            "Connected to Shared Instance"
-                        } else {
-                            "Using Columba's Own Instance"
+                        text = when {
+                            sharedInstanceLost -> "Shared Instance Disconnected"
+                            isUsingSharedInstance -> "Connected to Shared Instance"
+                            else -> "Using Columba's Own Instance"
                         },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = contentColor,
                     )
                 }
                 Icon(
@@ -102,7 +127,7 @@ fun SharedInstanceBannerCard(
                             Icons.Default.KeyboardArrowDown
                         },
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    tint = contentColor,
                 )
             }
 
@@ -115,89 +140,161 @@ fun SharedInstanceBannerCard(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text(
-                        text = if (isUsingSharedInstance) {
-                            "Another app (e.g., Sideband) is managing the Reticulum network " +
-                                "on this device. Columba is using that connection."
-                        } else {
-                            "Columba is running its own Reticulum instance. Toggle off to use " +
-                                "a shared instance if available."
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-
-                    // Bullet points (only when using shared instance)
-                    if (isUsingSharedInstance) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                    // Show different content based on state
+                    if (sharedInstanceLost) {
+                        // Lost state - show warning and action buttons
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Text(
-                                text = "• Network interfaces are managed by the other app",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "Warning",
+                                tint = contentColor,
                             )
                             Text(
-                                text = "• Your identities and messages remain private to Columba",
+                                text = "The shared Reticulum instance (e.g., Sideband) appears " +
+                                    "to be offline. Columba cannot send or receive messages.",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                color = contentColor,
                             )
                         }
-                    }
 
-                    // Toggle for using own instance
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
                         Text(
-                            text = "Use Columba's own instance",
+                            text = "You can switch to Columba's own instance to restore " +
+                                "connectivity, or wait for the shared instance to come back online.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = contentColor,
                         )
-                        Switch(
-                            checked = preferOwnInstance,
-                            onCheckedChange = onTogglePreferOwnInstance,
-                        )
-                    }
 
-                    // RPC Key input (only when using shared instance)
-                    if (isUsingSharedInstance && !preferOwnInstance) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "RPC Key (from Sideband → Connectivity)",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                        OutlinedTextField(
-                            value = rpcKey ?: "",
-                            onValueChange = { newValue ->
-                                onRpcKeyChange(newValue.ifEmpty { null })
-                            },
+                        // Action buttons
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            placeholder = {
-                                Text(
-                                    "Paste RPC key here...",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            },
-                            singleLine = true,
-                            textStyle = MaterialTheme.typography.bodySmall,
-                        )
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = onDismissLostWarning,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text("Wait")
+                            }
+                            Button(
+                                onClick = onSwitchToOwnInstance,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text("Use Own Instance")
+                            }
+                        }
+                    } else {
+                        // Normal state
                         Text(
-                            text = "Required for full shared instance functionality",
+                            text = if (isUsingSharedInstance) {
+                                "Another app (e.g., Sideband) is managing the Reticulum network " +
+                                    "on this device. Columba is using that connection."
+                            } else {
+                                "Columba is running its own Reticulum instance. Toggle off to use " +
+                                    "a shared instance if available."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = contentColor,
+                        )
+
+                        // Bullet points (only when using shared instance)
+                        if (isUsingSharedInstance) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = "• Network interfaces are managed by the other app",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = contentColor,
+                                )
+                                Text(
+                                    text = "• Your identities and messages remain private to Columba",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = contentColor,
+                                )
+                                Text(
+                                    text = "• BLE connections to other Columba users require " +
+                                        "Columba's own instance",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = contentColor,
+                                )
+                            }
+                        }
+
+                        // Toggle for using own instance
+                        // Can only toggle OFF (to shared) if a shared instance is available
+                        val canSwitchToShared = isUsingSharedInstance || sharedInstanceAvailable
+                        // Enable toggle if: turning ON (always ok) OR turning OFF with shared available
+                        val toggleEnabled = !preferOwnInstance || canSwitchToShared
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = "Use Columba's own instance",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (toggleEnabled) {
+                                    contentColor
+                                } else {
+                                    contentColor.copy(alpha = 0.5f)
+                                },
+                            )
+                            Switch(
+                                checked = preferOwnInstance,
+                                onCheckedChange = onTogglePreferOwnInstance,
+                                enabled = toggleEnabled,
+                            )
+                        }
+
+                        // Show hint when toggle is disabled (ON but can't turn OFF)
+                        if (preferOwnInstance && !canSwitchToShared) {
+                            Text(
+                                text = "No shared instance detected",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = contentColor.copy(alpha = 0.7f),
+                            )
+                        }
+
+                        // RPC Key input (only when using shared instance)
+                        if (isUsingSharedInstance && !preferOwnInstance) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "RPC Key (from Sideband → Connectivity)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = contentColor,
+                            )
+                            OutlinedTextField(
+                                value = rpcKey ?: "",
+                                onValueChange = { newValue ->
+                                    onRpcKeyChange(newValue.ifEmpty { null })
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = {
+                                    Text(
+                                        "Paste RPC key here...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                },
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodySmall,
+                            )
+                            Text(
+                                text = "Required for full shared instance functionality",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = contentColor.copy(alpha = 0.7f),
+                            )
+                        }
+
+                        // Hint text
+                        Text(
+                            text = "Service will restart automatically",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                            color = contentColor.copy(alpha = 0.7f),
                         )
                     }
-
-                    // Hint text
-                    Text(
-                        text = "Service will restart automatically",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                    )
                 }
             }
         }

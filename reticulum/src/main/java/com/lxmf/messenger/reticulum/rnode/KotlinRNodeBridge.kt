@@ -109,9 +109,34 @@ class KotlinRNodeBridge(
         private const val READ_BUFFER_SIZE = 4096
         private const val STREAM_BUFFER_SIZE = 2048
 
-        // BLE timeouts
+        // BLE timeouts and retry settings
         private const val BLE_SCAN_TIMEOUT_MS = 10000L
         private const val BLE_CONNECT_TIMEOUT_MS = 15000L
+        private const val BLE_CONNECT_MAX_RETRIES = 3
+        private const val BLE_RETRY_DELAY_MS = 1000L
+
+        /**
+         * Convert GATT status code to human-readable string for debugging.
+         */
+        private fun gattStatusToString(status: Int): String =
+            when (status) {
+                BluetoothGatt.GATT_SUCCESS -> "SUCCESS(0)"
+                BluetoothGatt.GATT_READ_NOT_PERMITTED -> "READ_NOT_PERMITTED(2)"
+                BluetoothGatt.GATT_WRITE_NOT_PERMITTED -> "WRITE_NOT_PERMITTED(3)"
+                BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION -> "INSUFFICIENT_AUTH(5)"
+                BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED -> "REQUEST_NOT_SUPPORTED(6)"
+                BluetoothGatt.GATT_INSUFFICIENT_ENCRYPTION -> "INSUFFICIENT_ENCRYPTION(15)"
+                BluetoothGatt.GATT_INVALID_OFFSET -> "INVALID_OFFSET(7)"
+                BluetoothGatt.GATT_INVALID_ATTRIBUTE_LENGTH -> "INVALID_ATTR_LENGTH(13)"
+                BluetoothGatt.GATT_CONNECTION_CONGESTED -> "CONNECTION_CONGESTED(143)"
+                BluetoothGatt.GATT_FAILURE -> "FAILURE(257)"
+                8 -> "GATT_CONN_TIMEOUT(8)"
+                19 -> "GATT_CONN_TERMINATE_PEER_USER(19)"
+                22 -> "GATT_CONN_TERMINATE_LOCAL_HOST(22)"
+                34 -> "GATT_CONN_LMP_TIMEOUT(34)"
+                133 -> "GATT_ERROR(133)" // Common Android BLE bug
+                else -> "UNKNOWN($status)"
+            }
 
         @Volatile
         private var instance: KotlinRNodeBridge? = null
@@ -428,6 +453,7 @@ class KotlinRNodeBridge(
 
     /**
      * Connect via Bluetooth Low Energy (GATT).
+     * Includes retry logic to handle transient BLE failures (especially GATT error 133).
      */
     @Suppress("ReturnCount")
     private fun connectBle(
@@ -456,6 +482,34 @@ class KotlinRNodeBridge(
             return false
         }
 
+        // Retry loop for BLE connection (handles transient failures like GATT error 133)
+        for (attempt in 1..BLE_CONNECT_MAX_RETRIES) {
+            if (attempt > 1) {
+                Log.i(TAG, "BLE connection attempt $attempt/$BLE_CONNECT_MAX_RETRIES...")
+                Thread.sleep(BLE_RETRY_DELAY_MS)
+            }
+
+            val success = attemptBleConnection(device, deviceName)
+            if (success) {
+                return true
+            }
+
+            if (attempt < BLE_CONNECT_MAX_RETRIES) {
+                Log.w(TAG, "BLE connection failed, will retry...")
+            }
+        }
+
+        Log.e(TAG, "BLE connection failed after $BLE_CONNECT_MAX_RETRIES attempts")
+        return false
+    }
+
+    /**
+     * Single attempt to connect via BLE GATT.
+     */
+    private fun attemptBleConnection(
+        device: BluetoothDevice,
+        deviceName: String,
+    ): Boolean {
         return try {
             // Reset BLE state
             bleConnected = false
@@ -578,7 +632,7 @@ class KotlinRNodeBridge(
                         gatt.requestMtu(512)
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
-                        Log.i(TAG, "BLE disconnected")
+                        Log.i(TAG, "BLE disconnected (status=${gattStatusToString(status)})")
                         bleConnected = false
                         if (isConnected.get() && connectionMode == RNodeConnectionMode.BLE) {
                             handleDisconnect()

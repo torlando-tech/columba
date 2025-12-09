@@ -67,11 +67,12 @@ fun SettingsScreen(
     // Show Snackbar when shared instance becomes available (ephemeral notification)
     LaunchedEffect(state.sharedInstanceAvailable) {
         if (state.sharedInstanceAvailable && !state.preferOwnInstance) {
-            val result = snackbarHostState.showSnackbar(
-                message = "Shared instance available",
-                actionLabel = "Switch",
-                duration = SnackbarDuration.Indefinite,
-            )
+            val result =
+                snackbarHostState.showSnackbar(
+                    message = "Shared instance available",
+                    actionLabel = "Switch",
+                    duration = SnackbarDuration.Indefinite,
+                )
             when (result) {
                 SnackbarResult.ActionPerformed -> viewModel.switchToSharedInstance()
                 SnackbarResult.Dismissed -> viewModel.dismissSharedInstanceAvailable()
@@ -114,10 +115,11 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 // Show shared instance banner when relevant to the user
-                val showSharedInstanceBanner = state.isSharedInstance ||
-                    state.sharedInstanceAvailable ||
-                    state.sharedInstanceLost ||
-                    state.isRestarting
+                val showSharedInstanceBanner =
+                    state.isSharedInstance ||
+                        state.sharedInstanceAvailable ||
+                        state.sharedInstanceLost ||
+                        state.isRestarting
                 if (showSharedInstanceBanner) {
                     SharedInstanceBannerCard(
                         isExpanded = state.isSharedInstanceBannerExpanded,

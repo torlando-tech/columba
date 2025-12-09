@@ -37,8 +37,8 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,7 +55,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,7 +62,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -75,10 +73,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.model.SignalQuality
 import com.lxmf.messenger.ui.components.BluetoothPermissionController
-import com.lxmf.messenger.ui.components.HashSection
-import com.lxmf.messenger.ui.components.IdentityQrCodeDialogContent
-import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.ui.components.QrCodeImage
+import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.util.IdentityQrCodeUtils
 import com.lxmf.messenger.viewmodel.BleConnectionsUiState
 import com.lxmf.messenger.viewmodel.DebugInfo
@@ -336,6 +332,8 @@ fun ReticulumInfoCard(debugInfo: DebugInfo) {
 
 @Composable
 fun InterfacesCard(interfaces: List<InterfaceInfo>) {
+    var selectedInterface by remember { mutableStateOf<InterfaceInfo?>(null) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -363,15 +361,66 @@ fun InterfacesCard(interfaces: List<InterfaceInfo>) {
                 )
             } else {
                 interfaces.forEach { iface ->
-                    InterfaceRow(iface)
+                    InterfaceRow(
+                        iface = iface,
+                        onClick =
+                            if (!iface.online) {
+                                { selectedInterface = iface }
+                            } else {
+                                null
+                            },
+                    )
                 }
             }
         }
     }
+
+    // Error dialog for offline interfaces
+    selectedInterface?.let { iface ->
+        AlertDialog(
+            onDismissRequest = { selectedInterface = null },
+            icon = {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            title = { Text("Interface Offline") },
+            text = {
+                Column {
+                    Text(
+                        text = iface.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "This interface is currently offline and not passing traffic.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Check that the device is powered on, in range, and properly configured.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = { selectedInterface = null }) {
+                    Text("OK")
+                }
+            },
+        )
+    }
 }
 
 @Composable
-fun InterfaceRow(iface: InterfaceInfo) {
+fun InterfaceRow(
+    iface: InterfaceInfo,
+    onClick: (() -> Unit)? = null,
+) {
     Row(
         modifier =
             Modifier
@@ -379,6 +428,13 @@ fun InterfaceRow(iface: InterfaceInfo) {
                 .background(
                     MaterialTheme.colorScheme.surfaceVariant,
                     RoundedCornerShape(8.dp),
+                )
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(onClick = onClick)
+                    } else {
+                        Modifier
+                    },
                 )
                 .padding(12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -400,7 +456,7 @@ fun InterfaceRow(iface: InterfaceInfo) {
 
         Icon(
             imageVector = if (iface.online) Icons.Default.CheckCircle else Icons.Default.Warning,
-            contentDescription = if (iface.online) "Online" else "Offline",
+            contentDescription = if (iface.online) "Online" else "Offline - tap for details",
             tint =
                 if (iface.online) {
                     MaterialTheme.colorScheme.primary
@@ -646,30 +702,204 @@ fun BleConnectionsCard(
 
             if (isSharedInstance) {
                 Text(
-                    text = "BLE connections are not available while using a shared Reticulum instance. " +
-                        "Only Columba's own instance can initiate Bluetooth LE connections.",
+                    text =
+                        "BLE connections are not available while using a shared Reticulum instance. " +
+                            "Only Columba's own instance can initiate Bluetooth LE connections.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            } else when (uiState) {
-                is BleConnectionsUiState.Loading -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
+            } else {
+                when (uiState) {
+                    is BleConnectionsUiState.Loading -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Loading connections...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    is BleConnectionsUiState.Success -> {
+                        if (uiState.totalConnections == 0) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Bluetooth,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Bluetooth is turned on",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                                Text(
+                                    text = "No active BLE connections",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                OutlinedButton(
+                                    onClick = onOpenBluetoothSettings,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Bluetooth Settings")
+                                }
+                            }
+                        } else {
+                            // Summary stats
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                            RoundedCornerShape(8.dp),
+                                        )
+                                        .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = uiState.totalConnections.toString(),
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Text(
+                                        text = "Total",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = uiState.centralConnections.toString(),
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Text(
+                                        text = "Central",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = uiState.peripheralConnections.toString(),
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Text(
+                                        text = "Peripheral",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+
+                            // Signal quality indicator
+                            val avgSignalQuality =
+                                if (uiState.connections.isNotEmpty()) {
+                                    val avgRssi = uiState.connections.map { it.rssi }.average().toInt()
+                                    when {
+                                        avgRssi > -50 -> SignalQuality.EXCELLENT
+                                        avgRssi > -70 -> SignalQuality.GOOD
+                                        avgRssi > -85 -> SignalQuality.FAIR
+                                        else -> SignalQuality.POOR
+                                    }
+                                } else {
+                                    SignalQuality.GOOD
+                                }
+
+                            val (signalText, signalColor) =
+                                when (avgSignalQuality) {
+                                    SignalQuality.EXCELLENT -> "Excellent Signal" to MaterialTheme.colorScheme.primary
+                                    SignalQuality.GOOD -> "Good Signal" to MaterialTheme.colorScheme.primary
+                                    SignalQuality.FAIR -> "Fair Signal" to MaterialTheme.colorScheme.tertiary
+                                    SignalQuality.POOR -> "Poor Signal" to MaterialTheme.colorScheme.error
+                                }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = signalColor,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = signalText,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = signalColor,
+                                    )
+                                }
+                                TextButton(onClick = onViewDetails) {
+                                    Text("View Details")
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowForward,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    is BleConnectionsUiState.Error -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Error: ${uiState.message}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+
+                    is BleConnectionsUiState.PermissionsRequired -> {
                         Text(
-                            text = "Loading connections...",
+                            text = "Bluetooth permissions required",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                }
 
-                is BleConnectionsUiState.Success -> {
-                    if (uiState.totalConnections == 0) {
+                    is BleConnectionsUiState.BluetoothDisabled -> {
                         Column(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
@@ -677,201 +907,30 @@ fun BleConnectionsCard(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Bluetooth,
+                                    imageVector = Icons.Default.BluetoothDisabled,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(16.dp),
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Bluetooth is turned on",
+                                    text = "Bluetooth is turned off",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            Text(
-                                text = "No active BLE connections",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            OutlinedButton(
-                                onClick = onOpenBluetoothSettings,
+                            Button(
+                                onClick = onEnableBluetooth,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Settings,
+                                    imageVector = Icons.Default.Bluetooth,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Bluetooth Settings")
+                                Text("Turn ON")
                             }
-                        }
-                    } else {
-                        // Summary stats
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        MaterialTheme.colorScheme.surfaceVariant,
-                                        RoundedCornerShape(8.dp),
-                                    )
-                                    .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = uiState.totalConnections.toString(),
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(
-                                    text = "Total",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = uiState.centralConnections.toString(),
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(
-                                    text = "Central",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = uiState.peripheralConnections.toString(),
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(
-                                    text = "Peripheral",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-
-                        // Signal quality indicator
-                        val avgSignalQuality =
-                            if (uiState.connections.isNotEmpty()) {
-                                val avgRssi = uiState.connections.map { it.rssi }.average().toInt()
-                                when {
-                                    avgRssi > -50 -> SignalQuality.EXCELLENT
-                                    avgRssi > -70 -> SignalQuality.GOOD
-                                    avgRssi > -85 -> SignalQuality.FAIR
-                                    else -> SignalQuality.POOR
-                                }
-                            } else {
-                                SignalQuality.GOOD
-                            }
-
-                        val (signalText, signalColor) =
-                            when (avgSignalQuality) {
-                                SignalQuality.EXCELLENT -> "Excellent Signal" to MaterialTheme.colorScheme.primary
-                                SignalQuality.GOOD -> "Good Signal" to MaterialTheme.colorScheme.primary
-                                SignalQuality.FAIR -> "Fair Signal" to MaterialTheme.colorScheme.tertiary
-                                SignalQuality.POOR -> "Poor Signal" to MaterialTheme.colorScheme.error
-                            }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = signalColor,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = signalText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = signalColor,
-                                )
-                            }
-                            TextButton(onClick = onViewDetails) {
-                                Text("View Details")
-                                Icon(
-                                    imageVector = Icons.Default.ArrowForward,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                is BleConnectionsUiState.Error -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Error: ${uiState.message}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-
-                is BleConnectionsUiState.PermissionsRequired -> {
-                    Text(
-                        text = "Bluetooth permissions required",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                is BleConnectionsUiState.BluetoothDisabled -> {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.BluetoothDisabled,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Bluetooth is turned off",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Button(
-                            onClick = onEnableBluetooth,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Bluetooth,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Turn ON")
                         }
                     }
                 }
@@ -883,6 +942,7 @@ fun BleConnectionsCard(
 /**
  * Full-screen dialog showing complete identity details and QR code.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IdentityDetailsDialog(
     displayName: String,
@@ -893,65 +953,198 @@ fun IdentityDetailsDialog(
     onShareClick: () -> Unit,
     onNavigateToQrScanner: () -> Unit = {},
 ) {
+    val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
-    IdentityQrCodeDialogContent(
-        displayName = displayName,
-        qrCodeData = qrCodeData,
-        onDismiss = onDismiss,
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        // Action Buttons Row
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth(),
+        Surface(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface),
+            color = MaterialTheme.colorScheme.surface,
         ) {
-            // Share Button
-            Button(
-                onClick = onShareClick,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Share")
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { Text("Your Identity") },
+                        navigationIcon = {
+                            IconButton(onClick = onDismiss) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close",
+                                )
+                            }
+                        },
+                        colors =
+                            TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            ),
+                    )
+                },
+            ) { paddingValues ->
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                            .verticalScroll(rememberScrollState())
+                            .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(24.dp),
+                ) {
+                    // Display Name
+                    Text(
+                        text = displayName,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+
+                    // QR Code
+                    if (qrCodeData != null) {
+                        QrCodeImage(
+                            data = qrCodeData,
+                            size = 280.dp,
+                        )
+
+                        Text(
+                            text = "Scan this QR code to add me as a contact",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    // Action Buttons Row
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        // Share Button
+                        Button(
+                            onClick = onShareClick,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Share")
+                        }
+
+                        // Scan QR Button
+                        OutlinedButton(
+                            onClick = onNavigateToQrScanner,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.QrCodeScanner,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Scan")
+                        }
+                    }
+
+                    Divider()
+
+                    // Identity Hash
+                    if (identityHash != null) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = "Identity Hash",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = identityHash,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontFamily = FontFamily.Monospace,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            clipboardManager.setText(AnnotatedString(identityHash))
+                                        },
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ContentCopy,
+                                            contentDescription = "Copy",
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Destination Hash
+                    if (destinationHash != null) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = "Destination Hash (LXMF)",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = destinationHash,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontFamily = FontFamily.Monospace,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            clipboardManager.setText(AnnotatedString(destinationHash))
+                                        },
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ContentCopy,
+                                            contentDescription = "Copy",
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
             }
-
-            // Scan QR Button
-            OutlinedButton(
-                onClick = onNavigateToQrScanner,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.QrCodeScanner,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Scan")
-            }
-        }
-
-        Divider()
-
-        // Identity Hash
-        if (identityHash != null) {
-            HashSection(
-                title = "Identity Hash",
-                hash = identityHash,
-                onCopy = { clipboardManager.setText(AnnotatedString(identityHash)) },
-            )
-        }
-
-        // Destination Hash
-        if (destinationHash != null) {
-            HashSection(
-                title = "Destination Hash (LXMF)",
-                hash = destinationHash,
-                onCopy = { clipboardManager.setText(AnnotatedString(destinationHash)) },
-            )
         }
     }
 }
@@ -997,8 +1190,9 @@ private fun ServiceControlCard(
 
             if (isSharedInstance) {
                 Text(
-                    text = "Service control is disabled while using a shared Reticulum instance. " +
-                        "The network service is managed by another app (e.g., Sideband).",
+                    text =
+                        "Service control is disabled while using a shared Reticulum instance. " +
+                            "The network service is managed by another app (e.g., Sideband).",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

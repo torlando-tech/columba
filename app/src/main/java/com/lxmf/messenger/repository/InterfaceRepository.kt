@@ -159,27 +159,29 @@ class InterfaceRepository
                 when (entity.type) {
                     "AutoInterface" -> {
                         // Ports are optional - null means use RNS defaults
-                        val discoveryPort = if (json.has("discovery_port")) {
-                            val port = json.getInt("discovery_port")
-                            if (port !in 1..65535) {
-                                Log.e(TAG, "Invalid discovery port in database: $port")
-                                error("Invalid discovery port: $port")
+                        val discoveryPort =
+                            if (json.has("discovery_port")) {
+                                val port = json.getInt("discovery_port")
+                                if (port !in 1..65535) {
+                                    Log.e(TAG, "Invalid discovery port in database: $port")
+                                    error("Invalid discovery port: $port")
+                                }
+                                port
+                            } else {
+                                null
                             }
-                            port
-                        } else {
-                            null
-                        }
 
-                        val dataPort = if (json.has("data_port")) {
-                            val port = json.getInt("data_port")
-                            if (port !in 1..65535) {
-                                Log.e(TAG, "Invalid data port in database: $port")
-                                error("Invalid data port: $port")
+                        val dataPort =
+                            if (json.has("data_port")) {
+                                val port = json.getInt("data_port")
+                                if (port !in 1..65535) {
+                                    Log.e(TAG, "Invalid data port in database: $port")
+                                    error("Invalid data port: $port")
+                                }
+                                port
+                            } else {
+                                null
                             }
-                            port
-                        } else {
-                            null
-                        }
 
                         InterfaceConfig.AutoInterface(
                             name = entity.name,
@@ -224,24 +226,28 @@ class InterfaceRepository
                     }
 
                     "RNode" -> {
-                        val port = json.optString("port", "")
+                        val targetDeviceName = json.getString("target_device_name")
 
-                        // Validate port path (basic check - should be non-empty)
-                        if (port.isBlank()) {
-                            Log.e(TAG, "Missing or empty RNode port path in database for '${entity.name}'")
-                            error("Missing or empty RNode port path")
+                        // Validate device name (basic check - should be non-empty)
+                        if (targetDeviceName.isBlank()) {
+                            Log.e(TAG, "Empty RNode target device name in database")
+                            error("Empty RNode target device name")
                         }
 
                         InterfaceConfig.RNode(
                             name = entity.name,
                             enabled = entity.enabled,
-                            port = port,
+                            targetDeviceName = targetDeviceName,
+                            connectionMode = json.optString("connection_mode", "classic"),
                             frequency = json.optLong("frequency", 915000000),
                             bandwidth = json.optInt("bandwidth", 125000),
                             txPower = json.optInt("tx_power", 7),
                             spreadingFactor = json.optInt("spreading_factor", 7),
                             codingRate = json.optInt("coding_rate", 5),
+                            stAlock = if (json.has("st_alock")) json.getDouble("st_alock") else null,
+                            ltAlock = if (json.has("lt_alock")) json.getDouble("lt_alock") else null,
                             mode = json.optString("mode", "full"),
+                            enableFramebuffer = json.optBoolean("enable_framebuffer", true),
                         )
                     }
 

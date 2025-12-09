@@ -24,20 +24,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun DataMigrationCard(
-    onNavigateToMigration: () -> Unit,
-) {
+fun DataMigrationCard(onNavigateToMigration: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Header
@@ -59,8 +59,9 @@ fun DataMigrationCard(
 
             // Description
             Text(
-                text = "Export your data (identities, messages, contacts) to transfer to " +
-                    "another device or import from a previous backup.",
+                text =
+                    "Export your data (identities, messages, contacts) to transfer to " +
+                        "another device or import from a previous backup.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

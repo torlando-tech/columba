@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <SmellBaseline>
-  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ComplexCondition:KotlinBLEBridge.kt$KotlinBLEBridge$peer.isCentral &amp;&amp; !peer.isPeripheral || !peer.isCentral &amp;&amp; peer.isPeripheral</ID>
     <ID>ComplexCondition:KotlinBLEBridge.kt$KotlinBLEBridge$storedServiceUuid == null || storedRxCharUuid == null || storedTxCharUuid == null || storedIdentityCharUuid == null</ID>
@@ -14,6 +14,7 @@
     <ID>LongMethod:BleGattClient.kt$BleGattClient$private suspend fun handleServicesDiscovered( address: String, gatt: BluetoothGatt, status: Int, )</ID>
     <ID>LongMethod:BleOperationQueue.kt$BleOperationQueue$private suspend fun executeOperation(operation: BleOperation): OperationResult</ID>
     <ID>LongMethod:KotlinBLEBridge.kt$KotlinBLEBridge$private suspend fun handleIdentityReceived( address: String, identityHash: String, isCentralConnection: Boolean, )</ID>
+    <ID>LoopWithTooManyJumpStatements:KotlinRNodeBridge.kt$KotlinRNodeBridge$while</ID>
     <ID>MaxLineLength:AppDataParser.kt$AppDataParser$val printableRatio = str.count { it.isLetterOrDigit() || it.isWhitespace() || it in ".-_@#'\"()[]{},:;!?" } / str.length.toFloat()</ID>
     <ID>MaxLineLength:BleAdvertiser.kt$BleAdvertiser$"RNS-${identity.take(BleConstants.IDENTITY_BYTES_IN_ADVERTISED_NAME).joinToString("") { "%02x".format(it) }}"</ID>
     <ID>MaxLineLength:BleAdvertiser.kt$BleAdvertiser$.</ID>
@@ -56,6 +57,8 @@
     <ID>ReturnCount:KotlinBLEBridge.kt$KotlinBLEBridge$fun shouldConnect(peerAddress: String): Boolean</ID>
     <ID>ReturnCount:KotlinBLEBridge.kt$KotlinBLEBridge$suspend fun connect(address: String)</ID>
     <ID>ReturnCount:KotlinBLEBridge.kt$KotlinBLEBridge$suspend fun start( serviceUuid: String, rxCharUuid: String, txCharUuid: String, identityCharUuid: String, ): Result&lt;Unit&gt;</ID>
+    <ID>ReturnCount:KotlinRNodeBridge.kt$KotlinRNodeBridge$fun connect(deviceName: String, mode: String): Boolean</ID>
+    <ID>ReturnCount:KotlinRNodeBridge.kt$KotlinRNodeBridge$private fun connectBle(deviceName: String, adapter: BluetoothAdapter): Boolean</ID>
     <ID>SwallowedException:BleAdvertiser.kt$BleAdvertiser$e: SecurityException</ID>
     <ID>SwallowedException:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$e: Exception</ID>
     <ID>SwallowedException:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$e: RuntimeException</ID>
@@ -71,13 +74,13 @@
     <ID>TooManyFunctions:BleGattClient.kt$BleGattClient</ID>
     <ID>TooManyFunctions:BleGattServer.kt$BleGattServer</ID>
     <ID>TooManyFunctions:KotlinBLEBridge.kt$KotlinBLEBridge</ID>
+    <ID>TooManyFunctions:KotlinRNodeBridge.kt$KotlinRNodeBridge</ID>
     <ID>TooManyFunctions:MockReticulumProtocol.kt$MockReticulumProtocol : ReticulumProtocol</ID>
     <ID>TooManyFunctions:ReticulumProtocol.kt$ReticulumProtocol</ID>
     <ID>UnusedParameter:BleGattClient.kt$BleGattClient$characteristic: BluetoothGattCharacteristic</ID>
     <ID>UnusedParameter:BleGattServer.kt$BleGattServer$preparedWrite: Boolean</ID>
     <ID>UnusedParameter:BleOperationQueue.kt$BleOperationQueue$key: String</ID>
     <ID>UnusedPrivateMember:BleConnectionManager.kt$BleConnectionManager$private fun getIdentityMac(identityHash: String): String?</ID>
-    <ID>UnusedPrivateMember:KotlinBLEBridgeMacRotationTest.kt$KotlinBLEBridgeMacRotationTest$private fun setOnDisconnected(bridge: KotlinBLEBridge, callback: PyObject)</ID>
     <ID>UnusedPrivateProperty:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$val disconnectOp = queue.enqueue( BleOperationQueue.BleOperation.Disconnect(mockGatt), timeoutMs = 500, )</ID>
     <ID>UnusedPrivateProperty:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$val firstOpResult = try { queue.enqueue( BleOperationQueue.BleOperation.WriteCharacteristic( gatt = mockGatt, characteristic = mockChar, data = byteArrayOf(0x01), writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, ), timeoutMs = 1000, ) fail("Should have thrown exception") } catch (e: RuntimeException) { // Expected "exception_thrown" }</ID>
     <ID>UnusedPrivateProperty:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$var advertiserStopped = false</ID>

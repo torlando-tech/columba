@@ -204,7 +204,6 @@ abstract class InterfaceDatabase : RoomDatabase() {
                     2,
                 ),
             )
-
         }
 
         /**

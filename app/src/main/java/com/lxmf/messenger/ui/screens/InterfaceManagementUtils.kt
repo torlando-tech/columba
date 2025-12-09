@@ -10,9 +10,10 @@ import com.lxmf.messenger.data.database.entity.InterfaceEntity
 
 /**
  * Check if this interface is a BLE (Bluetooth Low Energy) interface.
+ * Both AndroidBLE and RNode interfaces use BLE for connectivity.
  */
 fun InterfaceEntity.isBleInterface(): Boolean {
-    return this.type == "AndroidBLE"
+    return this.type == "AndroidBLE" || this.type == "RNode"
 }
 
 /**
@@ -36,26 +37,33 @@ fun InterfaceEntity.canOperate(
 }
 
 /**
- * Get an error message explaining why this BLE interface cannot operate.
+ * Get an error message explaining why this interface has an issue.
  *
  * @param bluetoothState Current Bluetooth adapter state
  * @param permissionsGranted Whether BLE permissions are granted
+ * @param isOnline Whether the interface is currently online (from debug info)
  * @return Error message string, or null if no error
  */
+@Suppress("ReturnCount")
 fun InterfaceEntity.getErrorMessage(
     bluetoothState: Int,
     permissionsGranted: Boolean,
+    isOnline: Boolean? = null,
 ): String? {
-    if (!isBleInterface()) {
-        // Non-BLE interfaces don't have BT-related errors
-        return null
+    // Check BLE-related errors for BLE interfaces
+    if (isBleInterface()) {
+        when {
+            bluetoothState != BluetoothAdapter.STATE_ON -> return "Bluetooth Off"
+            !permissionsGranted -> return "Permission Required"
+        }
     }
 
-    return when {
-        bluetoothState != BluetoothAdapter.STATE_ON -> "Bluetooth Off"
-        !permissionsGranted -> "Permission Required"
-        else -> null
+    // Check online status for all enabled interfaces
+    if (enabled && isOnline == false) {
+        return "Interface Offline"
     }
+
+    return null
 }
 
 /**

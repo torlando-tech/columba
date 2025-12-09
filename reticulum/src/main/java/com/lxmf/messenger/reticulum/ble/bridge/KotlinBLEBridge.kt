@@ -163,6 +163,19 @@ class KotlinBLEBridge(
     // Cleared when Bluetooth is disabled to allow fresh connections
     private val processedIdentityCallbacks = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
+    // Track in-progress central connections (for race condition fix in stale detection)
+    // When identity arrives via central handshake, the peer isn't in connectedPeers yet.
+    // This set prevents treating such connections as "stale" during deduplication.
+    private val pendingCentralConnections = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    // Track identities that were recently deduplicated (central closed, peripheral kept)
+    // Maps identity hash -> timestamp when deduplicated
+    // Prevents scanner from reconnecting as central to a peer we just deduplicated
+    private val recentlyDeduplicatedIdentities = ConcurrentHashMap<String, Long>()
+
+    // How long to prevent reconnection after deduplication (60 seconds)
+    private val deduplicationCooldownMs = 60_000L
+
     /**
      * Data class for connections awaiting identity before Python notification.
      */
@@ -455,6 +468,8 @@ class KotlinBLEBridge(
             identityToAddress.clear()
             pendingConnections.clear()
             processedIdentityCallbacks.clear()
+            pendingCentralConnections.clear()
+            recentlyDeduplicatedIdentities.clear()
         } catch (e: Exception) {
             Log.e(TAG, "Error clearing state during cleanup", e)
         }
@@ -669,6 +684,44 @@ class KotlinBLEBridge(
     }
 
     /**
+     * Check if a discovered device should be skipped due to recent deduplication.
+     *
+     * Protocol v2.2 includes 3 bytes (6 hex chars) of identity in the advertised name.
+     * If the name matches an identity that was recently deduplicated (we're already
+     * connected as peripheral), skip the central connection attempt.
+     *
+     * @param deviceName Advertised device name (e.g., "RNS-272b4c" or "Reticulum-272b4c")
+     * @return true if the device should be skipped, false otherwise
+     */
+    @Suppress("ReturnCount")
+    private fun shouldSkipDiscoveredDevice(deviceName: String?): Boolean {
+        if (deviceName == null) return false
+
+        // Clean up old entries first
+        val now = System.currentTimeMillis()
+        recentlyDeduplicatedIdentities.entries.removeIf { now - it.value > deduplicationCooldownMs }
+
+        if (recentlyDeduplicatedIdentities.isEmpty()) return false
+
+        // Extract identity prefix from device name
+        // Protocol v2.2 format: "RNS-XXXXXX" or "Reticulum-XXXXXX" where X is hex
+        val identityPrefix =
+            when {
+                deviceName.startsWith("RNS-") -> deviceName.removePrefix("RNS-").lowercase()
+                deviceName.startsWith("Reticulum-") -> deviceName.removePrefix("Reticulum-").lowercase()
+                else -> return false
+            }
+
+        // Check if any recently deduplicated identity starts with this prefix
+        // (device name has 6 hex chars = 3 bytes, full identity is 32 hex chars)
+        val matchingIdentity = recentlyDeduplicatedIdentities.keys.find { it.startsWith(identityPrefix) }
+        if (matchingIdentity != null) {
+            Log.i(TAG, "Skipping discovered device with name '$deviceName' - matches recently deduplicated identity $matchingIdentity")
+        }
+        return matchingIdentity != null
+    }
+
+    /**
      * Determine if we should initiate connection to a peer based on MAC address sorting.
      *
      * Algorithm: Lower MAC address initiates connection (acts as central),
@@ -767,6 +820,11 @@ class KotlinBLEBridge(
                 Log.w(TAG, "Maximum central connections reached ($centralCount/${BleConstants.MAX_CONNECTIONS})")
                 return
             }
+
+            // Track as pending central connection (for race condition fix in stale detection)
+            // This prevents the connection from being treated as "stale" when identity arrives
+            // before handlePeerConnected() has added the peer to connectedPeers
+            pendingCentralConnections.add(address)
 
             // Connect via GATT client
             gattClient.connect(address)
@@ -1003,10 +1061,14 @@ class KotlinBLEBridge(
     private fun setupCallbacks() {
         // Scanner callbacks
         scanner.onDeviceDiscovered = { device: BleDevice ->
-            Log.d(TAG, "Device discovered: ${device.address} (${device.name}) RSSI=${device.rssi}")
-            // Convert List to Array for Python compatibility (Chaquopy converts arrays to Python lists)
-            val serviceUuidsArray = device.serviceUuids?.toTypedArray()
-            onDeviceDiscovered?.callAttr("__call__", device.address, device.name, device.rssi, serviceUuidsArray)
+            // Skip devices that match recently deduplicated identities
+            // (prevents reconnecting as central to a peer we're already connected to as peripheral)
+            if (!shouldSkipDiscoveredDevice(device.name)) {
+                Log.d(TAG, "Device discovered: ${device.address} (${device.name}) RSSI=${device.rssi}")
+                // Convert List to Array for Python compatibility (Chaquopy converts arrays to Python lists)
+                val serviceUuidsArray = device.serviceUuids?.toTypedArray()
+                onDeviceDiscovered?.callAttr("__call__", device.address, device.name, device.rssi, serviceUuidsArray)
+            }
         }
 
         // GATT Client callbacks (central mode)
@@ -1020,6 +1082,12 @@ class KotlinBLEBridge(
             scope.launch {
                 handlePeerDisconnected(address, isCentral = true)
             }
+        }
+
+        gattClient.onConnectionFailed = { address: String, error: String ->
+            // Clean up pending central tracking when connection fails
+            pendingCentralConnections.remove(address)
+            Log.d(TAG, "Central connection failed to $address: $error")
         }
 
         gattClient.onDataReceived = { address: String, data: ByteArray ->
@@ -1081,6 +1149,11 @@ class KotlinBLEBridge(
         mtu: Int,
         isCentral: Boolean,
     ) {
+        // Remove from pending central connections now that connection is established
+        if (isCentral) {
+            pendingCentralConnections.remove(address)
+        }
+
         // Track if we need to deduplicate (will do outside mutex)
         var needsDedupeInConnect = false
         var weKeepCentralInConnect = false
@@ -1217,6 +1290,8 @@ class KotlinBLEBridge(
 
             if (isCentral) {
                 peer.isCentral = false
+                // Also clean up pending central tracking
+                pendingCentralConnections.remove(address)
             } else {
                 peer.isPeripheral = false
             }
@@ -1237,6 +1312,8 @@ class KotlinBLEBridge(
                     if (!hasOtherAddress) {
                         // Identity fully disconnected - clean up reverse mapping
                         identityToAddress.remove(identityHash)
+                        // Allow reconnection as central again
+                        recentlyDeduplicatedIdentities.remove(identityHash)
                         Log.d(TAG, "Cleaned up all mappings for identity $identityHash")
                     } else {
                         Log.d(TAG, "Identity $identityHash still has other address mappings")
@@ -1358,14 +1435,21 @@ class KotlinBLEBridge(
         if (existingAddress != null && existingAddress != address) {
             // Same identity, different MAC - check if existing connection is still active
             val existingPeer = connectedPeers[existingAddress]
-            if (existingPeer != null && (existingPeer.isCentral || existingPeer.isPeripheral)) {
+            // Also check for in-progress central connections (race condition fix)
+            // When identity arrives before handlePeerConnected, peer isn't in connectedPeers yet
+            val isPendingCentral = pendingCentralConnections.contains(existingAddress)
+            val existingPeerHasConnection = existingPeer?.isCentral == true || existingPeer?.isPeripheral == true
+            val isActiveConnection = existingPeerHasConnection || isPendingCentral
+            if (isActiveConnection) {
                 // Only treat as duplicate if SAME connection direction
                 // Central-to-peripheral and peripheral-to-central are valid dual connections
+                val existingIsCentral = existingPeer?.isCentral == true || isPendingCentral
+                val existingIsPeripheral = existingPeer?.isPeripheral == true
                 val existingIsSameDirection =
                     if (isCentralConnection) {
-                        existingPeer.isCentral // We're central now, was existing also central?
+                        existingIsCentral // We're central now, was existing also central?
                     } else {
-                        existingPeer.isPeripheral // We're peripheral now, was existing also peripheral?
+                        existingIsPeripheral // We're peripheral now, was existing also peripheral?
                     }
 
                 if (existingIsSameDirection) {
@@ -1375,7 +1459,7 @@ class KotlinBLEBridge(
                     Log.i(TAG, "MAC rotation: identity $identityHash migrating from $existingAddress to $address")
 
                     // Disconnect old address (may already be dead, that's OK)
-                    if (existingPeer.isCentral) {
+                    if (existingIsCentral) {
                         gattClient.disconnect(existingAddress)
                     } else {
                         gattServer.disconnectCentral(existingAddress)
@@ -1389,13 +1473,15 @@ class KotlinBLEBridge(
                         // Don't remove addressToIdentity[existingAddress] - needed for address resolution
                         identityToAddress.remove(identityHash)
                     }
+                    // Also clean up pending central tracking
+                    pendingCentralConnections.remove(existingAddress)
 
                     // Fall through to accept the new connection
                 } else {
                     // VALID dual connection: same identity but opposite directions (MAC rotation case)
                     // Existing peer has one direction, new connection has opposite
                     Log.i(TAG, "Dual connection via MAC rotation: $identityHash has both central and peripheral")
-                    Log.d(TAG, "  Existing: $existingAddress (central=${existingPeer.isCentral}, peripheral=${existingPeer.isPeripheral})")
+                    Log.d(TAG, "  Existing: $existingAddress (central=$existingIsCentral, peripheral=$existingIsPeripheral)")
                     Log.d(TAG, "  New: $address (${if (isCentralConnection) "central" else "peripheral"})")
 
                     // Apply identity-based sorting to deduplicate
@@ -1432,6 +1518,12 @@ class KotlinBLEBridge(
                                 connectedPeers.remove(centralAddr)
                                 // Keep addressToIdentity[centralAddr] for identity-based resolution
                             }
+                            // Also clean up pending central tracking
+                            pendingCentralConnections.remove(centralAddr)
+                            // Prevent scanner from reconnecting as central for a while
+                            // (we're already connected as peripheral to this identity)
+                            recentlyDeduplicatedIdentities[identityHash] = System.currentTimeMillis()
+                            Log.d(TAG, "Added $identityHash to deduplication cooldown (60s)")
                         }
 
                         // Update identity mapping to remaining address
@@ -1583,6 +1675,8 @@ class KotlinBLEBridge(
                 identityToAddress.clear()
                 pendingConnections.clear()
                 processedIdentityCallbacks.clear()
+                pendingCentralConnections.clear()
+                recentlyDeduplicatedIdentities.clear()
 
                 // Stop BLE operations (but keep isStarted=true for auto-restart)
                 stopScanning()

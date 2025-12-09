@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.lxmf.messenger.reticulum"
+    namespace = "tech.torlando.columba.reticulum"
     compileSdk = 35
 
     defaultConfig {

@@ -24,6 +24,7 @@ data class MigrationBundle(
 ) {
     companion object {
         const val CURRENT_VERSION = 5
+
         // Minimum version we can import - older files may have incompatible structure
         const val MINIMUM_VERSION = 1
     }

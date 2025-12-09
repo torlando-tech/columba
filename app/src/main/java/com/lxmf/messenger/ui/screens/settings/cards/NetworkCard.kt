@@ -87,7 +87,7 @@ fun NetworkCard(
                         "Interface management is disabled while using a shared system instance."
                     } else {
                         "Configure how your device connects to the Reticulum network. " +
-                            "Add TCP connections, auto-discovery, or BLE interfaces."
+                            "Add TCP connections, auto-discovery, LoRa (via RNode), or BLE interfaces."
                     },
                 style = MaterialTheme.typography.bodyMedium,
                 color =

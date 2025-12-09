@@ -55,7 +55,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -65,8 +64,8 @@ import com.lxmf.messenger.data.model.BleConnectionInfo
 import com.lxmf.messenger.data.model.ConnectionType
 import com.lxmf.messenger.data.model.SignalQuality
 import com.lxmf.messenger.ui.components.BluetoothPermissionController
-import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.ui.components.PermissionDeniedCard
+import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.viewmodel.BleConnectionsUiState
 import com.lxmf.messenger.viewmodel.BleConnectionsViewModel
 import java.text.SimpleDateFormat
@@ -351,7 +350,6 @@ fun BleConnectionStatusScreen(
                 }
             }
         }
-
     }
 }
 

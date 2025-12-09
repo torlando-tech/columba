@@ -85,7 +85,9 @@ data class ContactEntity(
         if (publicKey != null) {
             if (other.publicKey == null) return false
             if (!publicKey.contentEquals(other.publicKey)) return false
-        } else if (other.publicKey != null) return false
+        } else if (other.publicKey != null) {
+            return false
+        }
         if (customNickname != other.customNickname) return false
         if (notes != other.notes) return false
         if (tags != other.tags) return false

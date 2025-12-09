@@ -31,31 +31,30 @@ data class AnnounceEntity(
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
-        if (javaClass != other?.javaClass) return false
+        if (other !is AnnounceEntity) return false
 
-        other as AnnounceEntity
+        return destinationHash == other.destinationHash &&
+            peerName == other.peerName &&
+            publicKey.contentEquals(other.publicKey) &&
+            appData.contentEqualsNullable(other.appData) &&
+            hops == other.hops &&
+            lastSeenTimestamp == other.lastSeenTimestamp &&
+            nodeType == other.nodeType &&
+            receivingInterface == other.receivingInterface &&
+            aspect == other.aspect &&
+            isFavorite == other.isFavorite &&
+            favoritedTimestamp == other.favoritedTimestamp &&
+            stampCost == other.stampCost &&
+            stampCostFlexibility == other.stampCostFlexibility &&
+            peeringCost == other.peeringCost
+    }
 
-        if (destinationHash != other.destinationHash) return false
-        if (peerName != other.peerName) return false
-        if (!publicKey.contentEquals(other.publicKey)) return false
-        if (appData != null) {
-            if (other.appData == null) return false
-            if (!appData.contentEquals(other.appData)) return false
-        } else if (other.appData != null) {
-            return false
+    private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean {
+        return when {
+            this == null && other == null -> true
+            this != null && other != null -> this.contentEquals(other)
+            else -> false
         }
-        if (hops != other.hops) return false
-        if (lastSeenTimestamp != other.lastSeenTimestamp) return false
-        if (nodeType != other.nodeType) return false
-        if (receivingInterface != other.receivingInterface) return false
-        if (aspect != other.aspect) return false
-        if (isFavorite != other.isFavorite) return false
-        if (favoritedTimestamp != other.favoritedTimestamp) return false
-        if (stampCost != other.stampCost) return false
-        if (stampCostFlexibility != other.stampCostFlexibility) return false
-        if (peeringCost != other.peeringCost) return false
-
-        return true
     }
 
     override fun hashCode(): Int {

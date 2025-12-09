@@ -100,7 +100,8 @@ print_success "Build complete: $APK_PATH"
 
 # Step 3: Check for connected devices
 print_info "Checking for connected devices..."
-DEVICE_COUNT=$(adb devices | grep -v "List of devices" | grep -c "device$" || true)
+DEVICES=$(adb devices | grep "device$" | awk '{print $1}')
+DEVICE_COUNT=$(echo "$DEVICES" | grep -c . || true)
 
 if [ "$DEVICE_COUNT" -eq 0 ]; then
     print_error "No Android devices found"
@@ -110,45 +111,59 @@ if [ "$DEVICE_COUNT" -eq 0 ]; then
     echo "  2. Device is authorized (check phone screen)"
     echo "  3. ADB can detect the device: adb devices"
     exit 1
-elif [ "$DEVICE_COUNT" -gt 1 ]; then
-    print_info "Multiple devices connected:"
-    adb devices
-    print_error "Please connect only one device or specify target with ADB_SERIAL environment variable"
-    exit 1
 fi
 
-DEVICE_INFO=$(adb devices | grep "device$" | head -n 1)
-print_success "Device connected: $DEVICE_INFO"
+print_success "Found $DEVICE_COUNT device(s)"
+echo ""
 
-# Step 4: Install APK
-print_info "Installing APK to device..."
-if ! adb install -r -d "$APK_PATH" 2>&1; then
-    echo ""
-    print_error "Installation failed (likely signature mismatch)"
-    echo ""
-    echo "This usually means the Gradle daemon has stale environment variables."
-    echo "Try: ./gradlew --stop && ./deploy.sh"
-    echo ""
-    echo "If you want to uninstall and lose app data, run:"
-    echo "  adb uninstall $PACKAGE_NAME && ./deploy.sh"
-    exit 1
-fi
-print_success "Installation complete"
+# Step 4: Deploy to each device
+FAILED_DEVICES=()
+for DEVICE_SERIAL in $DEVICES; do
+    print_header "Deploying to device: $DEVICE_SERIAL"
 
-# Step 5: Launch app (optional)
-if [ "$LAUNCH" = true ]; then
-    print_info "Launching app..."
-    adb shell am start -n "${PACKAGE_NAME}/${MAIN_ACTIVITY}"
-    print_success "App launched"
-
-    # Step 6: Show logs (optional)
-    if [ "$LOGS" = true ]; then
+    # Install APK
+    print_info "Installing APK to $DEVICE_SERIAL..."
+    if ! adb -s "$DEVICE_SERIAL" install -r -d "$APK_PATH" 2>&1; then
         echo ""
-        print_info "Showing logcat (Ctrl+C to exit)..."
+        print_error "Installation failed on $DEVICE_SERIAL (likely signature mismatch)"
         echo ""
-        adb logcat -c  # Clear logs
-        adb logcat | grep -E "(${PACKAGE_NAME}|BLE|Reticulum|RNS)"
+        echo "This usually means the Gradle daemon has stale environment variables."
+        echo "Try: ./gradlew --stop && ./deploy.sh"
+        echo ""
+        echo "If you want to uninstall and lose app data, run:"
+        echo "  adb -s $DEVICE_SERIAL uninstall $PACKAGE_NAME && ./deploy.sh"
+        FAILED_DEVICES+=("$DEVICE_SERIAL")
+        continue
     fi
+    print_success "Installation complete on $DEVICE_SERIAL"
+
+    # Launch app (optional)
+    if [ "$LAUNCH" = true ]; then
+        print_info "Launching app on $DEVICE_SERIAL..."
+        adb -s "$DEVICE_SERIAL" shell am start -n "${PACKAGE_NAME}/${MAIN_ACTIVITY}"
+        print_success "App launched on $DEVICE_SERIAL"
+
+        # Show logs (optional)
+        if [ "$LOGS" = true ]; then
+            echo ""
+            print_info "Showing logcat for $DEVICE_SERIAL (Ctrl+C to exit)..."
+            echo ""
+            adb -s "$DEVICE_SERIAL" logcat -c  # Clear logs
+            adb -s "$DEVICE_SERIAL" logcat | grep -E "(${PACKAGE_NAME}|BLE|Reticulum|RNS)"
+        fi
+    fi
+
+    echo ""
+done
+
+# Check if any deployments failed
+if [ ${#FAILED_DEVICES[@]} -gt 0 ]; then
+    echo ""
+    print_error "Deployment failed on ${#FAILED_DEVICES[@]} device(s):"
+    for FAILED_DEVICE in "${FAILED_DEVICES[@]}"; do
+        echo "  • $FAILED_DEVICE"
+    done
+    exit 1
 fi
 
 echo ""

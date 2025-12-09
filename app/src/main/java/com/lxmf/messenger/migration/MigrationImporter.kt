@@ -48,10 +48,11 @@ class MigrationImporter
             private const val ATTACHMENTS_PREFIX = "attachments/"
         }
 
-        private val json = Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-        }
+        private val json =
+            Json {
+                ignoreUnknownKeys = true
+                isLenient = true
+            }
 
         /**
          * Preview the contents of a migration file without importing.
@@ -59,10 +60,11 @@ class MigrationImporter
         suspend fun previewMigration(uri: Uri): Result<MigrationPreview> =
             withContext(Dispatchers.IO) {
                 try {
-                    val bundle = readMigrationBundle(uri)
-                        ?: return@withContext Result.failure(
-                            Exception("Failed to read migration file"),
-                        )
+                    val bundle =
+                        readMigrationBundle(uri)
+                            ?: return@withContext Result.failure(
+                                Exception("Failed to read migration file"),
+                            )
 
                     Result.success(
                         MigrationPreview(
@@ -101,8 +103,9 @@ class MigrationImporter
                     Log.i(TAG, "Starting migration import...")
                     onProgress(0.05f)
 
-                    val bundle = readMigrationBundle(uri)
-                        ?: return@withContext ImportResult.Error("Failed to read migration file")
+                    val bundle =
+                        readMigrationBundle(uri)
+                            ?: return@withContext ImportResult.Error("Failed to read migration file")
 
                     if (bundle.version > MigrationBundle.CURRENT_VERSION) {
                         return@withContext ImportResult.Error(
@@ -124,9 +127,10 @@ class MigrationImporter
                     val importedIdentityHashes = mutableSetOf<String>()
 
                     // Wrap main database operations in a transaction for atomicity
-                    val txResult = database.withTransaction {
-                        importDatabaseData(bundle, importedIdentityHashes, onProgress)
-                    }
+                    val txResult =
+                        database.withTransaction {
+                            importDatabaseData(bundle, importedIdentityHashes, onProgress)
+                        }
 
                     // Interface database is separate, import outside main transaction
                     val interfacesImported = importInterfaces(bundle.interfaces)
@@ -180,24 +184,27 @@ class MigrationImporter
             onProgress(0.4f)
 
             // Filter to only import data for valid identities
-            val validConversations = bundle.conversations.filter {
-                it.identityHash in importedIdentityHashes ||
-                    database.localIdentityDao().identityExists(it.identityHash)
-            }
+            val validConversations =
+                bundle.conversations.filter {
+                    it.identityHash in importedIdentityHashes ||
+                        database.localIdentityDao().identityExists(it.identityHash)
+                }
             importConversations(validConversations)
             onProgress(0.5f)
 
-            val validMessages = bundle.messages.filter {
-                it.identityHash in importedIdentityHashes ||
-                    database.localIdentityDao().identityExists(it.identityHash)
-            }
+            val validMessages =
+                bundle.messages.filter {
+                    it.identityHash in importedIdentityHashes ||
+                        database.localIdentityDao().identityExists(it.identityHash)
+                }
             val messages = importMessages(validMessages, onProgress)
             onProgress(0.7f)
 
-            val validContacts = bundle.contacts.filter {
-                it.identityHash in importedIdentityHashes ||
-                    database.localIdentityDao().identityExists(it.identityHash)
-            }
+            val validContacts =
+                bundle.contacts.filter {
+                    it.identityHash in importedIdentityHashes ||
+                        database.localIdentityDao().identityExists(it.identityHash)
+                }
             val contacts = importContacts(validContacts)
             onProgress(0.75f)
 
@@ -245,18 +252,19 @@ class MigrationImporter
         }
 
         private suspend fun importConversations(conversations: List<ConversationExport>): Int {
-            val entities = conversations.map { conv ->
-                ConversationEntity(
-                    peerHash = conv.peerHash,
-                    identityHash = conv.identityHash,
-                    peerName = conv.peerName,
-                    peerPublicKey = conv.peerPublicKey?.let { Base64.decode(it, Base64.NO_WRAP) },
-                    lastMessage = conv.lastMessage,
-                    lastMessageTimestamp = conv.lastMessageTimestamp,
-                    unreadCount = conv.unreadCount,
-                    lastSeenTimestamp = conv.lastSeenTimestamp,
-                )
-            }
+            val entities =
+                conversations.map { conv ->
+                    ConversationEntity(
+                        peerHash = conv.peerHash,
+                        identityHash = conv.identityHash,
+                        peerName = conv.peerName,
+                        peerPublicKey = conv.peerPublicKey?.let { Base64.decode(it, Base64.NO_WRAP) },
+                        lastMessage = conv.lastMessage,
+                        lastMessageTimestamp = conv.lastMessageTimestamp,
+                        unreadCount = conv.unreadCount,
+                        lastSeenTimestamp = conv.lastSeenTimestamp,
+                    )
+                }
             database.conversationDao().insertConversations(entities)
             Log.d(TAG, "Imported ${entities.size} conversations")
             return entities.size
@@ -266,19 +274,20 @@ class MigrationImporter
             messages: List<MessageExport>,
             onProgress: (Float) -> Unit,
         ): Int {
-            val entities = messages.map { msg ->
-                MessageEntity(
-                    id = msg.id,
-                    conversationHash = msg.conversationHash,
-                    identityHash = msg.identityHash,
-                    content = msg.content,
-                    timestamp = msg.timestamp,
-                    isFromMe = msg.isFromMe,
-                    status = msg.status,
-                    isRead = msg.isRead,
-                    fieldsJson = msg.fieldsJson,
-                )
-            }
+            val entities =
+                messages.map { msg ->
+                    MessageEntity(
+                        id = msg.id,
+                        conversationHash = msg.conversationHash,
+                        identityHash = msg.identityHash,
+                        content = msg.content,
+                        timestamp = msg.timestamp,
+                        isFromMe = msg.isFromMe,
+                        status = msg.status,
+                        isRead = msg.isRead,
+                        fieldsJson = msg.fieldsJson,
+                    )
+                }
             val batches = entities.chunked(100)
             batches.forEachIndexed { batchIndex, batch ->
                 // Use IGNORE strategy to preserve existing messages
@@ -291,54 +300,57 @@ class MigrationImporter
         }
 
         private suspend fun importContacts(contacts: List<ContactExport>): Int {
-            val entities = contacts.map { contact ->
-                ContactEntity(
-                    destinationHash = contact.destinationHash,
-                    identityHash = contact.identityHash,
-                    publicKey = Base64.decode(contact.publicKey, Base64.NO_WRAP),
-                    customNickname = contact.customNickname,
-                    notes = contact.notes,
-                    tags = contact.tags,
-                    addedTimestamp = contact.addedTimestamp,
-                    addedVia = contact.addedVia,
-                    lastInteractionTimestamp = contact.lastInteractionTimestamp,
-                    isPinned = contact.isPinned,
-                )
-            }
+            val entities =
+                contacts.map { contact ->
+                    ContactEntity(
+                        destinationHash = contact.destinationHash,
+                        identityHash = contact.identityHash,
+                        publicKey = Base64.decode(contact.publicKey, Base64.NO_WRAP),
+                        customNickname = contact.customNickname,
+                        notes = contact.notes,
+                        tags = contact.tags,
+                        addedTimestamp = contact.addedTimestamp,
+                        addedVia = contact.addedVia,
+                        lastInteractionTimestamp = contact.lastInteractionTimestamp,
+                        isPinned = contact.isPinned,
+                    )
+                }
             database.contactDao().insertContacts(entities)
             Log.d(TAG, "Imported ${entities.size} contacts")
             return entities.size
         }
 
         private suspend fun importAnnounces(announces: List<AnnounceExport>): Int {
-            val entities = announces.map { announce ->
-                AnnounceEntity(
-                    destinationHash = announce.destinationHash,
-                    peerName = announce.peerName,
-                    publicKey = Base64.decode(announce.publicKey, Base64.NO_WRAP),
-                    appData = announce.appData?.let { Base64.decode(it, Base64.NO_WRAP) },
-                    hops = announce.hops,
-                    lastSeenTimestamp = announce.lastSeenTimestamp,
-                    nodeType = announce.nodeType,
-                    receivingInterface = announce.receivingInterface,
-                    aspect = announce.aspect,
-                    isFavorite = announce.isFavorite,
-                    favoritedTimestamp = announce.favoritedTimestamp,
-                )
-            }
+            val entities =
+                announces.map { announce ->
+                    AnnounceEntity(
+                        destinationHash = announce.destinationHash,
+                        peerName = announce.peerName,
+                        publicKey = Base64.decode(announce.publicKey, Base64.NO_WRAP),
+                        appData = announce.appData?.let { Base64.decode(it, Base64.NO_WRAP) },
+                        hops = announce.hops,
+                        lastSeenTimestamp = announce.lastSeenTimestamp,
+                        nodeType = announce.nodeType,
+                        receivingInterface = announce.receivingInterface,
+                        aspect = announce.aspect,
+                        isFavorite = announce.isFavorite,
+                        favoritedTimestamp = announce.favoritedTimestamp,
+                    )
+                }
             database.announceDao().insertAnnounces(entities)
             Log.d(TAG, "Imported ${entities.size} announces")
             return entities.size
         }
 
         private suspend fun importPeerIdentities(peerIdentities: List<PeerIdentityExport>): Int {
-            val entities = peerIdentities.map { peer ->
-                PeerIdentityEntity(
-                    peerHash = peer.peerHash,
-                    publicKey = Base64.decode(peer.publicKey, Base64.NO_WRAP),
-                    lastSeenTimestamp = peer.lastSeenTimestamp,
-                )
-            }
+            val entities =
+                peerIdentities.map { peer ->
+                    PeerIdentityEntity(
+                        peerHash = peer.peerHash,
+                        publicKey = Base64.decode(peer.publicKey, Base64.NO_WRAP),
+                        lastSeenTimestamp = peer.lastSeenTimestamp,
+                    )
+                }
             database.peerIdentityDao().insertPeerIdentities(entities)
             Log.d(TAG, "Imported ${entities.size} peer identities")
             return entities.size
@@ -346,8 +358,9 @@ class MigrationImporter
 
         private suspend fun importInterfaces(interfaces: List<InterfaceExport>): Int {
             var imported = 0
-            val existingKeys = interfaceDatabase.interfaceDao().getAllInterfaces().first()
-                .map { "${it.name}|${it.type}" }.toSet()
+            val existingKeys =
+                interfaceDatabase.interfaceDao().getAllInterfaces().first()
+                    .map { "${it.name}|${it.type}" }.toSet()
 
             interfaces.forEach { iface ->
                 val key = "${iface.name}|${iface.type}"
@@ -393,7 +406,66 @@ class MigrationImporter
             return ThemeImportResult(imported, themeIdMap)
         }
 
-        private fun createThemeEntity(theme: CustomThemeExport) = theme.toEntity()
+        private fun createThemeEntity(theme: CustomThemeExport) =
+            CustomThemeEntity(
+                id = 0,
+                name = theme.name,
+                description = theme.description,
+                baseTheme = theme.baseTheme,
+                seedPrimary = theme.seedPrimary,
+                seedSecondary = theme.seedSecondary,
+                seedTertiary = theme.seedTertiary,
+                createdTimestamp = theme.createdTimestamp,
+                modifiedTimestamp = theme.modifiedTimestamp,
+                lightPrimary = theme.lightPrimary,
+                lightOnPrimary = theme.lightOnPrimary,
+                lightPrimaryContainer = theme.lightPrimaryContainer,
+                lightOnPrimaryContainer = theme.lightOnPrimaryContainer,
+                lightSecondary = theme.lightSecondary,
+                lightOnSecondary = theme.lightOnSecondary,
+                lightSecondaryContainer = theme.lightSecondaryContainer,
+                lightOnSecondaryContainer = theme.lightOnSecondaryContainer,
+                lightTertiary = theme.lightTertiary,
+                lightOnTertiary = theme.lightOnTertiary,
+                lightTertiaryContainer = theme.lightTertiaryContainer,
+                lightOnTertiaryContainer = theme.lightOnTertiaryContainer,
+                lightError = theme.lightError,
+                lightOnError = theme.lightOnError,
+                lightErrorContainer = theme.lightErrorContainer,
+                lightOnErrorContainer = theme.lightOnErrorContainer,
+                lightBackground = theme.lightBackground,
+                lightOnBackground = theme.lightOnBackground,
+                lightSurface = theme.lightSurface,
+                lightOnSurface = theme.lightOnSurface,
+                lightSurfaceVariant = theme.lightSurfaceVariant,
+                lightOnSurfaceVariant = theme.lightOnSurfaceVariant,
+                lightOutline = theme.lightOutline,
+                lightOutlineVariant = theme.lightOutlineVariant,
+                darkPrimary = theme.darkPrimary,
+                darkOnPrimary = theme.darkOnPrimary,
+                darkPrimaryContainer = theme.darkPrimaryContainer,
+                darkOnPrimaryContainer = theme.darkOnPrimaryContainer,
+                darkSecondary = theme.darkSecondary,
+                darkOnSecondary = theme.darkOnSecondary,
+                darkSecondaryContainer = theme.darkSecondaryContainer,
+                darkOnSecondaryContainer = theme.darkOnSecondaryContainer,
+                darkTertiary = theme.darkTertiary,
+                darkOnTertiary = theme.darkOnTertiary,
+                darkTertiaryContainer = theme.darkTertiaryContainer,
+                darkOnTertiaryContainer = theme.darkOnTertiaryContainer,
+                darkError = theme.darkError,
+                darkOnError = theme.darkOnError,
+                darkErrorContainer = theme.darkErrorContainer,
+                darkOnErrorContainer = theme.darkOnErrorContainer,
+                darkBackground = theme.darkBackground,
+                darkOnBackground = theme.darkOnBackground,
+                darkSurface = theme.darkSurface,
+                darkOnSurface = theme.darkOnSurface,
+                darkSurfaceVariant = theme.darkSurfaceVariant,
+                darkOnSurfaceVariant = theme.darkOnSurfaceVariant,
+                darkOutline = theme.darkOutline,
+                darkOutlineVariant = theme.darkOutlineVariant,
+            )
 
         /**
          * Read and parse the MigrationBundle from a ZIP file.
@@ -435,12 +507,13 @@ class MigrationImporter
             }
 
             // Decode the key data
-            val keyData = if (identityExport.keyData.isNotEmpty()) {
-                Base64.decode(identityExport.keyData, Base64.NO_WRAP)
-            } else {
-                Log.w(TAG, "No key data for identity ${identityExport.identityHash}")
-                return false
-            }
+            val keyData =
+                if (identityExport.keyData.isNotEmpty()) {
+                    Base64.decode(identityExport.keyData, Base64.NO_WRAP)
+                } else {
+                    Log.w(TAG, "No key data for identity ${identityExport.identityHash}")
+                    return false
+                }
 
             // Create the identity file path
             val identityDir = File(context.filesDir, "reticulum")
@@ -449,11 +522,12 @@ class MigrationImporter
 
             // Try to recover/import the identity via Reticulum
             try {
-                val result = reticulumProtocol.recoverIdentityFile(
-                    identityExport.identityHash,
-                    keyData,
-                    filePath,
-                )
+                val result =
+                    reticulumProtocol.recoverIdentityFile(
+                        identityExport.identityHash,
+                        keyData,
+                        filePath,
+                    )
                 val success = result["success"] as? Boolean ?: false
                 if (!success) {
                     Log.w(
@@ -467,16 +541,17 @@ class MigrationImporter
             }
 
             // Insert into database
-            val entity = LocalIdentityEntity(
-                identityHash = identityExport.identityHash,
-                displayName = identityExport.displayName,
-                destinationHash = identityExport.destinationHash,
-                filePath = filePath,
-                keyData = keyData,
-                createdTimestamp = identityExport.createdTimestamp,
-                lastUsedTimestamp = identityExport.lastUsedTimestamp,
-                isActive = identityExport.isActive,
-            )
+            val entity =
+                LocalIdentityEntity(
+                    identityHash = identityExport.identityHash,
+                    displayName = identityExport.displayName,
+                    destinationHash = identityExport.destinationHash,
+                    filePath = filePath,
+                    keyData = keyData,
+                    createdTimestamp = identityExport.createdTimestamp,
+                    lastUsedTimestamp = identityExport.lastUsedTimestamp,
+                    isActive = identityExport.isActive,
+                )
             database.localIdentityDao().insert(entity)
 
             // Write key file directly as backup
@@ -505,7 +580,10 @@ class MigrationImporter
             }
         }
 
-        private fun extractAttachmentsFromZip(inputStream: java.io.InputStream, destDir: File): Int {
+        private fun extractAttachmentsFromZip(
+            inputStream: java.io.InputStream,
+            destDir: File,
+        ): Int {
             var imported = 0
             val destDirCanonical = destDir.canonicalPath
             ZipInputStream(inputStream).use { zipIn ->
@@ -552,19 +630,20 @@ class MigrationImporter
             // Restore theme preference with ID remapping for custom themes
             try {
                 val themePreference = settings.themePreference
-                val remappedThemePref = if (themePreference.startsWith("custom:")) {
-                    // Extract old ID and map to new ID
-                    val oldId = themePreference.removePrefix("custom:").toLongOrNull()
-                    if (oldId != null && themeIdMap.containsKey(oldId)) {
-                        "custom:${themeIdMap[oldId]}"
+                val remappedThemePref =
+                    if (themePreference.startsWith("custom:")) {
+                        // Extract old ID and map to new ID
+                        val oldId = themePreference.removePrefix("custom:").toLongOrNull()
+                        if (oldId != null && themeIdMap.containsKey(oldId)) {
+                            "custom:${themeIdMap[oldId]}"
+                        } else {
+                            Log.w(TAG, "Custom theme ID $oldId not found in mapping, using default")
+                            null // Will use default theme
+                        }
                     } else {
-                        Log.w(TAG, "Custom theme ID $oldId not found in mapping, using default")
-                        null // Will use default theme
+                        // Preset theme (e.g., "preset:VIBRANT") - use as-is
+                        themePreference
                     }
-                } else {
-                    // Preset theme (e.g., "preset:VIBRANT") - use as-is
-                    themePreference
-                }
 
                 if (remappedThemePref != null) {
                     settingsRepository.saveThemePreferenceByIdentifier(remappedThemePref)

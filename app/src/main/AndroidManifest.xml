@@ -52,6 +52,12 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
+    <!-- Companion Device Manager (Android 12+) for RNode association -->
+    <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+    <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
+
     <application
         android:name=".ColumbaApplication"
         android:allowBackup="true"
@@ -89,6 +95,18 @@
             android:exported="false"
             android:process=":reticulum"
             android:foregroundServiceType="connectedDevice" />
+
+        <!-- RNode Companion Device Service (Android 12+) -->
+        <!-- Enables Android to recognize Columba as the companion app for RNode devices -->
+        <!-- System binds this service when associated RNode is in range/connected -->
+        <service
+            android:name=".service.RNodeCompanionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+            <intent-filter>
+                <action android:name="android.companion.CompanionDeviceService" />
+            </intent-filter>
+        </service>
 
         <!-- FileProvider for sharing identity files -->
         <provider

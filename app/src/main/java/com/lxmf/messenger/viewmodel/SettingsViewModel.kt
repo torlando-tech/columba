@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
-import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -574,22 +573,23 @@ class SettingsViewModel
             val rpcKeyPattern = Regex("""rpc_key\s*=\s*([a-fA-F0-9]+)""")
             val match = rpcKeyPattern.find(input)
 
-            val result = when {
-                match != null -> {
-                    val key = match.groupValues[1]
-                    Log.d(TAG, "Parsed RPC key from config format (${key.length} chars)")
-                    key
+            val result =
+                when {
+                    match != null -> {
+                        val key = match.groupValues[1]
+                        Log.d(TAG, "Parsed RPC key from config format (${key.length} chars)")
+                        key
+                    }
+                    input.trim().matches(Regex("^[a-fA-F0-9]+$")) -> {
+                        val trimmed = input.trim()
+                        Log.d(TAG, "Using raw hex RPC key (${trimmed.length} chars)")
+                        trimmed
+                    }
+                    else -> {
+                        Log.w(TAG, "Invalid RPC key format, ignoring")
+                        null
+                    }
                 }
-                input.trim().matches(Regex("^[a-fA-F0-9]+$")) -> {
-                    val trimmed = input.trim()
-                    Log.d(TAG, "Using raw hex RPC key (${trimmed.length} chars)")
-                    trimmed
-                }
-                else -> {
-                    Log.w(TAG, "Invalid RPC key format, ignoring")
-                    null
-                }
-            }
             return result
         }
 
@@ -600,58 +600,59 @@ class SettingsViewModel
          */
         private fun startSharedInstanceMonitor() {
             sharedInstanceMonitorJob?.cancel()
-            sharedInstanceMonitorJob = viewModelScope.launch {
-                // Wait for initial setup
-                delay(INIT_DELAY_MS * 2)
+            sharedInstanceMonitorJob =
+                viewModelScope.launch {
+                    // Wait for initial setup
+                    delay(INIT_DELAY_MS * 2)
 
-                while (true) {
-                    delay(SHARED_INSTANCE_MONITOR_INTERVAL_MS)
+                    while (true) {
+                        delay(SHARED_INSTANCE_MONITOR_INTERVAL_MS)
 
-                    val currentState = _state.value
+                        val currentState = _state.value
 
-                    // Only monitor when we're using a shared instance
-                    if (currentState.isSharedInstance && !currentState.preferOwnInstance) {
-                        // Probe the shared instance port directly - more reliable than networkStatus
-                        // because Python doesn't actively detect connection loss
-                        val isPortOpen = probeSharedInstancePort()
+                        // Only monitor when we're using a shared instance
+                        if (currentState.isSharedInstance && !currentState.preferOwnInstance) {
+                            // Probe the shared instance port directly - more reliable than networkStatus
+                            // because Python doesn't actively detect connection loss
+                            val isPortOpen = probeSharedInstancePort()
 
-                        if (!isPortOpen) {
-                            val now = System.currentTimeMillis()
-                            if (sharedInstanceDisconnectedTime == null) {
-                                sharedInstanceDisconnectedTime = now
-                                Log.d(TAG, "Shared instance port closed, starting timer...")
+                            if (!isPortOpen) {
+                                val now = System.currentTimeMillis()
+                                if (sharedInstanceDisconnectedTime == null) {
+                                    sharedInstanceDisconnectedTime = now
+                                    Log.d(TAG, "Shared instance port closed, starting timer...")
+                                } else {
+                                    val disconnectedDuration = now - sharedInstanceDisconnectedTime!!
+                                    if (disconnectedDuration >= SHARED_INSTANCE_LOST_THRESHOLD_MS &&
+                                        !currentState.sharedInstanceLost
+                                    ) {
+                                        Log.w(
+                                            TAG,
+                                            "Shared instance lost for ${disconnectedDuration / 1000}s, " +
+                                                "notifying user",
+                                        )
+                                        _state.value = currentState.copy(sharedInstanceLost = true)
+                                    }
+                                }
                             } else {
-                                val disconnectedDuration = now - sharedInstanceDisconnectedTime!!
-                                if (disconnectedDuration >= SHARED_INSTANCE_LOST_THRESHOLD_MS &&
-                                    !currentState.sharedInstanceLost
-                                ) {
-                                    Log.w(
-                                        TAG,
-                                        "Shared instance lost for ${disconnectedDuration / 1000}s, " +
-                                            "notifying user",
-                                    )
-                                    _state.value = currentState.copy(sharedInstanceLost = true)
+                                // Connection restored
+                                if (sharedInstanceDisconnectedTime != null) {
+                                    Log.d(TAG, "Shared instance port open again")
+                                    sharedInstanceDisconnectedTime = null
+                                    if (currentState.sharedInstanceLost) {
+                                        _state.value = currentState.copy(sharedInstanceLost = false)
+                                    }
                                 }
                             }
                         } else {
-                            // Connection restored
-                            if (sharedInstanceDisconnectedTime != null) {
-                                Log.d(TAG, "Shared instance port open again")
-                                sharedInstanceDisconnectedTime = null
-                                if (currentState.sharedInstanceLost) {
-                                    _state.value = currentState.copy(sharedInstanceLost = false)
-                                }
+                            // Not in shared instance mode, reset tracking
+                            sharedInstanceDisconnectedTime = null
+                            if (currentState.sharedInstanceLost) {
+                                _state.value = currentState.copy(sharedInstanceLost = false)
                             }
-                        }
-                    } else {
-                        // Not in shared instance mode, reset tracking
-                        sharedInstanceDisconnectedTime = null
-                        if (currentState.sharedInstanceLost) {
-                            _state.value = currentState.copy(sharedInstanceLost = false)
                         }
                     }
                 }
-            }
         }
 
         /**
@@ -685,37 +686,38 @@ class SettingsViewModel
          */
         private fun startSharedInstanceAvailabilityMonitor() {
             sharedInstanceAvailabilityJob?.cancel()
-            sharedInstanceAvailabilityJob = viewModelScope.launch {
-                // Wait for initial setup
-                delay(INIT_DELAY_MS * 4) // Give more time for service to fully start
+            sharedInstanceAvailabilityJob =
+                viewModelScope.launch {
+                    // Wait for initial setup
+                    delay(INIT_DELAY_MS * 4) // Give more time for service to fully start
 
-                while (true) {
-                    val currentState = _state.value
+                    while (true) {
+                        val currentState = _state.value
 
-                    // Probe when running our own instance (regardless of preference)
-                    // This allows the toggle to know if switching to shared is possible
-                    if (!currentState.isSharedInstance && !currentState.isRestarting) {
-                        val isAvailable = probeSharedInstancePort()
+                        // Probe when running our own instance (regardless of preference)
+                        // This allows the toggle to know if switching to shared is possible
+                        if (!currentState.isSharedInstance && !currentState.isRestarting) {
+                            val isAvailable = probeSharedInstancePort()
 
-                        if (isAvailable && !currentState.sharedInstanceAvailable) {
-                            Log.i(TAG, "Shared instance detected on port $SHARED_INSTANCE_PORT")
-                            _state.value = currentState.copy(sharedInstanceAvailable = true)
-                        } else if (!isAvailable && currentState.sharedInstanceAvailable) {
-                            // Shared instance went away
-                            Log.d(TAG, "Shared instance no longer available")
-                            _state.value = currentState.copy(sharedInstanceAvailable = false)
+                            if (isAvailable && !currentState.sharedInstanceAvailable) {
+                                Log.i(TAG, "Shared instance detected on port $SHARED_INSTANCE_PORT")
+                                _state.value = currentState.copy(sharedInstanceAvailable = true)
+                            } else if (!isAvailable && currentState.sharedInstanceAvailable) {
+                                // Shared instance went away
+                                Log.d(TAG, "Shared instance no longer available")
+                                _state.value = currentState.copy(sharedInstanceAvailable = false)
+                            }
+                        } else if (currentState.isSharedInstance) {
+                            // Already using shared instance, reset availability flag
+                            if (currentState.sharedInstanceAvailable) {
+                                _state.value = currentState.copy(sharedInstanceAvailable = false)
+                            }
                         }
-                    } else if (currentState.isSharedInstance) {
-                        // Already using shared instance, reset availability flag
-                        if (currentState.sharedInstanceAvailable) {
-                            _state.value = currentState.copy(sharedInstanceAvailable = false)
-                        }
+
+                        // Wait before next poll
+                        delay(SHARED_INSTANCE_MONITOR_INTERVAL_MS)
                     }
-
-                    // Wait before next poll
-                    delay(SHARED_INSTANCE_MONITOR_INTERVAL_MS)
                 }
-            }
         }
 
         /**
@@ -732,7 +734,9 @@ class SettingsViewModel
                     )
                     true
                 }
-            } catch (@Suppress("SwallowedException") e: Exception) {
+            } catch (
+                @Suppress("SwallowedException") e: Exception,
+            ) {
                 // Connection refused, timeout, etc. = no shared instance
                 // Not logging to avoid spamming logs during polling
                 false

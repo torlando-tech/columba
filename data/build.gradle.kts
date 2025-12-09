@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.lxmf.messenger.data"
+    namespace = "tech.torlando.columba.data"
     compileSdk = 35
 
     defaultConfig {

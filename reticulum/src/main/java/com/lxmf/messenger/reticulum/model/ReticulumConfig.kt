@@ -80,27 +80,36 @@ sealed class InterfaceConfig {
     /**
      * RNode - LoRa radio interface using RNode hardware.
      * Provides long-range, low-bandwidth communication.
+     * On Android, connects via Bluetooth (Classic SPP or BLE) to paired RNode device.
      *
      * @param name User-friendly name for this interface
      * @param enabled Whether this interface should be initialized
-     * @param port Serial port path (e.g., /dev/ttyUSB0) or BLE address
-     * @param frequency LoRa frequency in Hz
-     * @param bandwidth LoRa bandwidth in Hz
-     * @param txPower Transmission power in dBm
+     * @param targetDeviceName Bluetooth device name of the paired RNode
+     * @param connectionMode Bluetooth connection mode: "classic" (SPP/RFCOMM) or "ble" (GATT)
+     * @param frequency LoRa frequency in Hz (137000000 - 3000000000)
+     * @param bandwidth LoRa bandwidth in Hz (7800 - 1625000)
+     * @param txPower Transmission power in dBm (0-22)
      * @param spreadingFactor LoRa spreading factor (5-12)
      * @param codingRate LoRa coding rate (5-8)
+     * @param stAlock Short-term airtime limit percentage (optional)
+     * @param ltAlock Long-term airtime limit percentage (optional)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
+     * @param enableFramebuffer Display Columba logo on RNode's OLED screen
      */
     data class RNode(
         override val name: String = "RNode LoRa",
         override val enabled: Boolean = true,
-        val port: String,
+        val targetDeviceName: String,
+        val connectionMode: String = "classic", // "classic" or "ble"
         val frequency: Long = 915000000, // 915 MHz (US)
         val bandwidth: Int = 125000, // 125 KHz
         val txPower: Int = 7, // 7 dBm
         val spreadingFactor: Int = 7,
         val codingRate: Int = 5,
+        val stAlock: Double? = null, // Short-term airtime limit %
+        val ltAlock: Double? = null, // Long-term airtime limit %
         val mode: String = "full",
+        val enableFramebuffer: Boolean = true, // Display logo on RNode OLED
     ) : InterfaceConfig()
 
     /**

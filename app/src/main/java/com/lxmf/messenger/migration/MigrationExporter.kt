@@ -48,10 +48,11 @@ class MigrationExporter
             private const val EXPORT_DIR = "migration_export"
         }
 
-        private val json = Json {
-            prettyPrint = true
-            ignoreUnknownKeys = true
-        }
+        private val json =
+            Json {
+                prettyPrint = true
+                ignoreUnknownKeys = true
+            }
 
         /**
          * Export all app data to a migration bundle file.
@@ -95,29 +96,31 @@ class MigrationExporter
                     onProgress(0.7f)
 
                     // Create migration bundle
-                    val bundle = MigrationBundle(
-                        identities = identityExports,
-                        conversations = conversations,
-                        messages = messages,
-                        contacts = contacts,
-                        announces = announceExports,
-                        peerIdentities = peerIdentityExports,
-                        interfaces = interfaceExports,
-                        customThemes = customThemeExports,
-                        settings = settingsExport,
-                        attachmentManifest = attachmentRefs,
-                    )
+                    val bundle =
+                        MigrationBundle(
+                            identities = identityExports,
+                            conversations = conversations,
+                            messages = messages,
+                            contacts = contacts,
+                            announces = announceExports,
+                            peerIdentities = peerIdentityExports,
+                            interfaces = interfaceExports,
+                            customThemes = customThemeExports,
+                            settings = settingsExport,
+                            attachmentManifest = attachmentRefs,
+                        )
 
                     // Create and return ZIP file
                     val exportFile = createExportZip(bundle, attachmentRefs, onProgress)
                     Log.i(TAG, "Export complete: ${exportFile.absolutePath}")
                     onProgress(1.0f)
 
-                    val uri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        exportFile,
-                    )
+                    val uri =
+                        FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            exportFile,
+                        )
                     Result.success(uri)
                 } catch (e: Exception) {
                     Log.e(TAG, "Export failed", e)
@@ -204,9 +207,7 @@ class MigrationExporter
             }
         }
 
-        private fun exportIdentities(
-            identities: List<com.lxmf.messenger.data.db.entity.LocalIdentityEntity>,
-        ): List<IdentityExport> {
+        private fun exportIdentities(identities: List<com.lxmf.messenger.data.db.entity.LocalIdentityEntity>): List<IdentityExport> {
             return identities.map { identity ->
                 val keyData = identity.keyData ?: loadIdentityKeyFromFile(identity.filePath)
                 IdentityExport(
@@ -276,19 +277,25 @@ class MigrationExporter
         private suspend fun exportSettings(): SettingsExport {
             return SettingsExport(
                 notificationsEnabled = settingsRepository.notificationsEnabledFlow.first(),
-                notificationReceivedMessage = settingsRepository
-                    .notificationReceivedMessageFlow.first(),
-                notificationReceivedMessageFavorite = settingsRepository
-                    .notificationReceivedMessageFavoriteFlow.first(),
-                notificationHeardAnnounce = settingsRepository
-                    .notificationHeardAnnounceFlow.first(),
-                notificationBleConnected = settingsRepository
-                    .notificationBleConnectedFlow.first(),
-                notificationBleDisconnected = settingsRepository
-                    .notificationBleDisconnectedFlow.first(),
+                notificationReceivedMessage =
+                    settingsRepository
+                        .notificationReceivedMessageFlow.first(),
+                notificationReceivedMessageFavorite =
+                    settingsRepository
+                        .notificationReceivedMessageFavoriteFlow.first(),
+                notificationHeardAnnounce =
+                    settingsRepository
+                        .notificationHeardAnnounceFlow.first(),
+                notificationBleConnected =
+                    settingsRepository
+                        .notificationBleConnectedFlow.first(),
+                notificationBleDisconnected =
+                    settingsRepository
+                        .notificationBleDisconnectedFlow.first(),
                 autoAnnounceEnabled = settingsRepository.autoAnnounceEnabledFlow.first(),
-                autoAnnounceIntervalMinutes = settingsRepository
-                    .autoAnnounceIntervalMinutesFlow.first(),
+                autoAnnounceIntervalMinutes =
+                    settingsRepository
+                        .autoAnnounceIntervalMinutesFlow.first(),
                 themePreference = settingsRepository.themePreferenceFlow.first().getIdentifier(),
             )
         }
@@ -379,16 +386,19 @@ class MigrationExporter
                     var contactCount = 0
 
                     identities.forEach { identity ->
-                        messageCount += database.messageDao()
-                            .getAllMessagesForIdentity(identity.identityHash).size
-                        contactCount += database.contactDao()
-                            .getAllContactsSync(identity.identityHash).size
+                        messageCount +=
+                            database.messageDao()
+                                .getAllMessagesForIdentity(identity.identityHash).size
+                        contactCount +=
+                            database.contactDao()
+                                .getAllContactsSync(identity.identityHash).size
                     }
 
                     val announceCount = database.announceDao().getAnnounceCount()
                     val peerIdentityCount = database.peerIdentityDao().getAllPeerIdentities().size
-                    val interfaceCount = interfaceDatabase.interfaceDao()
-                        .getAllInterfaces().first().size
+                    val interfaceCount =
+                        interfaceDatabase.interfaceDao()
+                            .getAllInterfaces().first().size
                     val customThemeCount = database.customThemeDao().getThemeCount()
 
                     ExportResult.Success(

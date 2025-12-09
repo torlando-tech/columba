@@ -9,10 +9,13 @@ import com.lxmf.messenger.data.model.BleConnectionsState
 import com.lxmf.messenger.data.repository.BleStatusRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,6 +48,8 @@ data class InterfaceManagementState(
     val blePermissionsGranted: Boolean = false,
     // Info message for transient notifications (lighter than error/success)
     val infoMessage: String? = null,
+    // Interface online status from Python/RNS (interface name -> online status)
+    val interfaceOnlineStatus: Map<String, Boolean> = emptyMap(),
 )
 
 /**
@@ -69,6 +74,16 @@ data class InterfaceConfigState(
     // AndroidBLE fields
     val deviceName: String = "",
     val maxConnections: String = "7",
+    // RNode fields
+    val targetDeviceName: String = "",
+    val connectionMode: String = "classic", // "classic" or "ble"
+    val frequency: String = "915000000", // Hz
+    val bandwidth: String = "125000", // Hz
+    val txPower: String = "7", // dBm
+    val spreadingFactor: String = "7",
+    val codingRate: String = "5",
+    val stAlock: String = "", // Short-term airtime limit % (optional)
+    val ltAlock: String = "", // Long-term airtime limit % (optional)
     // Common fields
     val mode: String = "roaming",
     // Validation
@@ -79,6 +94,12 @@ data class InterfaceConfigState(
     val dataPortError: String? = null,
     val deviceNameError: String? = null,
     val maxConnectionsError: String? = null,
+    val targetDeviceNameError: String? = null,
+    val frequencyError: String? = null,
+    val bandwidthError: String? = null,
+    val txPowerError: String? = null,
+    val spreadingFactorError: String? = null,
+    val codingRateError: String? = null,
 )
 
 /**
@@ -91,9 +112,11 @@ class InterfaceManagementViewModel
         private val interfaceRepository: InterfaceRepository,
         private val configManager: InterfaceConfigManager,
         private val bleStatusRepository: BleStatusRepository,
+        private val reticulumProtocol: ReticulumProtocol,
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceMgmtVM"
+            private const val STATUS_POLL_INTERVAL_MS = 3000L
         }
 
         private val _state = MutableStateFlow(InterfaceManagementState())
@@ -109,6 +132,83 @@ class InterfaceManagementViewModel
             Log.d(TAG, "ViewModel initialized")
             loadInterfaces()
             observeBluetoothState()
+            checkExternalPendingChanges()
+            startPollingInterfaceStatus()
+            observeInterfaceStatusChanges()
+        }
+
+        /**
+         * Check if there are pending changes set by external sources (e.g., RNode wizard).
+         */
+        private fun checkExternalPendingChanges() {
+            if (configManager.checkAndClearPendingChanges()) {
+                Log.d(TAG, "Found pending changes from external source")
+                _state.value = _state.value.copy(hasPendingChanges = true)
+            }
+        }
+
+        /**
+         * Start polling for interface online status from Python/RNS.
+         */
+        private fun startPollingInterfaceStatus() {
+            viewModelScope.launch {
+                while (true) {
+                    try {
+                        fetchInterfaceStatus()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error polling interface status", e)
+                    }
+                    delay(STATUS_POLL_INTERVAL_MS)
+                }
+            }
+        }
+
+        /**
+         * Observe interface status change events for immediate refresh.
+         * This provides event-driven updates when RNode connects/disconnects,
+         * supplementing the polling mechanism for faster UI updates.
+         */
+        private fun observeInterfaceStatusChanges() {
+            // Check if protocol is ServiceReticulumProtocol which has the event flow
+            val serviceProtocol =
+                reticulumProtocol as? com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+            if (serviceProtocol == null) {
+                Log.d(TAG, "Protocol is not ServiceReticulumProtocol, skipping event observation")
+                return
+            }
+
+            viewModelScope.launch {
+                serviceProtocol.interfaceStatusChanged.collect {
+                    Log.d(TAG, "████ INTERFACE STATUS EVENT ████ Triggering immediate refresh")
+                    try {
+                        fetchInterfaceStatus()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error refreshing interface status after event", e)
+                    }
+                }
+            }
+        }
+
+        /**
+         * Fetch interface online status from Reticulum.
+         */
+        @Suppress("UNCHECKED_CAST")
+        private suspend fun fetchInterfaceStatus() {
+            try {
+                val debugInfo = reticulumProtocol.getDebugInfo()
+                val interfacesData = debugInfo["interfaces"] as? List<Map<String, Any>> ?: return
+
+                val statusMap = mutableMapOf<String, Boolean>()
+                for (ifaceMap in interfacesData) {
+                    val name = ifaceMap["name"] as? String ?: continue
+                    val online = ifaceMap["online"] as? Boolean ?: false
+                    statusMap[name] = online
+                }
+
+                _state.value = _state.value.copy(interfaceOnlineStatus = statusMap)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch interface status", e)
+            }
         }
 
         /**
@@ -566,6 +666,23 @@ class InterfaceManagementViewModel
                         mode = config.mode,
                     )
 
+                is InterfaceConfig.RNode ->
+                    InterfaceConfigState(
+                        name = config.name,
+                        type = "RNode",
+                        enabled = config.enabled,
+                        targetDeviceName = config.targetDeviceName,
+                        connectionMode = config.connectionMode,
+                        frequency = config.frequency.toString(),
+                        bandwidth = config.bandwidth.toString(),
+                        txPower = config.txPower.toString(),
+                        spreadingFactor = config.spreadingFactor.toString(),
+                        codingRate = config.codingRate.toString(),
+                        stAlock = config.stAlock?.toString() ?: "",
+                        ltAlock = config.ltAlock?.toString() ?: "",
+                        mode = config.mode,
+                    )
+
                 else -> InterfaceConfigState() // Default for unsupported types
             }
         }
@@ -604,6 +721,22 @@ class InterfaceManagementViewModel
                         enabled = state.enabled,
                         deviceName = state.deviceName.trim(),
                         maxConnections = state.maxConnections.toIntOrNull() ?: 7,
+                        mode = state.mode,
+                    )
+
+                "RNode" ->
+                    InterfaceConfig.RNode(
+                        name = state.name.trim(),
+                        enabled = state.enabled,
+                        targetDeviceName = state.targetDeviceName.trim(),
+                        connectionMode = state.connectionMode,
+                        frequency = state.frequency.toLongOrNull() ?: 915000000,
+                        bandwidth = state.bandwidth.toIntOrNull() ?: 125000,
+                        txPower = state.txPower.toIntOrNull() ?: 7,
+                        spreadingFactor = state.spreadingFactor.toIntOrNull() ?: 7,
+                        codingRate = state.codingRate.toIntOrNull() ?: 5,
+                        stAlock = state.stAlock.toDoubleOrNull(),
+                        ltAlock = state.ltAlock.toDoubleOrNull(),
                         mode = state.mode,
                     )
 
@@ -667,5 +800,20 @@ class InterfaceManagementViewModel
          */
         fun clearApplyError() {
             _state.value = _state.value.copy(applyChangesError = null)
+        }
+
+        /**
+         * Attempt to reconnect the RNode interface.
+         * Use this when automatic reconnection has failed.
+         */
+        fun reconnectRNodeInterface() {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    Log.i(TAG, "User triggered RNode reconnection")
+                    reticulumProtocol.reconnectRNodeInterface()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error reconnecting RNode interface", e)
+                }
+            }
         }
     }

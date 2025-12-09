@@ -47,6 +47,9 @@ class BlePairingHandler(private val context: Context) {
         private const val PAIRING_VARIANT_CONSENT = 3 // "Just Works" pairing
     }
 
+    private val registrationLock = Any()
+
+    @Volatile
     private var isRegistered = false
 
     /**
@@ -104,26 +107,23 @@ class BlePairingHandler(private val context: Context) {
 
                 // Auto-confirm pairing based on variant type
                 when (pairingVariant) {
-                    PAIRING_VARIANT_CONSENT,
-                    PAIRING_VARIANT_PASSKEY_CONFIRMATION,
-                    -> {
-                        // "Just Works" or numeric comparison - auto-confirm
+                    PAIRING_VARIANT_CONSENT -> {
+                        // "Just Works" pairing - auto-confirm
                         confirmPairing(device, deviceName)
                     }
 
-                    PAIRING_VARIANT_PIN -> {
-                        // PIN pairing - set PIN to empty/0 and confirm
-                        try {
-                            device.setPin(byteArrayOf())
-                            confirmPairing(device, deviceName)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to set PIN for pairing", e)
-                        }
+                    PAIRING_VARIANT_PIN,
+                    PAIRING_VARIANT_PASSKEY_CONFIRMATION,
+                    -> {
+                        // PIN or passkey required - let system dialog handle it
+                        // RNode displays a PIN that user must enter manually
+                        Log.i(TAG, "PIN/passkey pairing required for $deviceName - showing system dialog")
+                        // Don't abort broadcast - let system show the PIN entry dialog
                     }
 
                     else -> {
-                        Log.d(TAG, "Unknown pairing variant $pairingVariant, attempting confirmation anyway")
-                        confirmPairing(device, deviceName)
+                        // Unknown variant - let system handle it to be safe
+                        Log.d(TAG, "Unknown pairing variant $pairingVariant, letting system handle")
                     }
                 }
             }
@@ -161,33 +161,35 @@ class BlePairingHandler(private val context: Context) {
      * Call this when BLE operations start.
      */
     fun register() {
-        if (isRegistered) {
-            Log.d(TAG, "Pairing handler already registered")
-            return
-        }
-
-        try {
-            val filter =
-                IntentFilter(BluetoothDevice.ACTION_PAIRING_REQUEST).apply {
-                    // High priority to receive before system handler
-                    priority = IntentFilter.SYSTEM_HIGH_PRIORITY - 1
-                }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(
-                    pairingReceiver,
-                    filter,
-                    Context.RECEIVER_EXPORTED,
-                )
-            } else {
-                @Suppress("UnspecifiedRegisterReceiverFlag")
-                context.registerReceiver(pairingReceiver, filter)
+        synchronized(registrationLock) {
+            if (isRegistered) {
+                Log.d(TAG, "Pairing handler already registered")
+                return
             }
 
-            isRegistered = true
-            Log.i(TAG, "Pairing handler registered - will auto-confirm BLE pairing requests")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to register pairing handler", e)
+            try {
+                val filter =
+                    IntentFilter(BluetoothDevice.ACTION_PAIRING_REQUEST).apply {
+                        // High priority to receive before system handler
+                        priority = IntentFilter.SYSTEM_HIGH_PRIORITY - 1
+                    }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.registerReceiver(
+                        pairingReceiver,
+                        filter,
+                        Context.RECEIVER_EXPORTED,
+                    )
+                } else {
+                    @Suppress("UnspecifiedRegisterReceiverFlag")
+                    context.registerReceiver(pairingReceiver, filter)
+                }
+
+                isRegistered = true
+                Log.i(TAG, "Pairing handler registered - will auto-confirm BLE pairing requests")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to register pairing handler", e)
+            }
         }
     }
 
@@ -197,20 +199,22 @@ class BlePairingHandler(private val context: Context) {
      * Call this when BLE operations stop.
      */
     fun unregister() {
-        if (!isRegistered) {
-            Log.d(TAG, "Pairing handler not registered")
-            return
-        }
+        synchronized(registrationLock) {
+            if (!isRegistered) {
+                Log.d(TAG, "Pairing handler not registered")
+                return
+            }
 
-        try {
-            context.unregisterReceiver(pairingReceiver)
-            isRegistered = false
-            Log.i(TAG, "Pairing handler unregistered")
-        } catch (e: IllegalArgumentException) {
-            Log.w(TAG, "Receiver was not registered", e)
-            isRegistered = false
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to unregister pairing handler", e)
+            try {
+                context.unregisterReceiver(pairingReceiver)
+                isRegistered = false
+                Log.i(TAG, "Pairing handler unregistered")
+            } catch (e: IllegalArgumentException) {
+                Log.w(TAG, "Receiver was not registered", e)
+                isRegistered = false
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to unregister pairing handler", e)
+            }
         }
     }
 }

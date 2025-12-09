@@ -106,6 +106,11 @@ class ColumbaApplication : Application() {
             }
         }
 
+        // Register existing companion device associations (Android 12+)
+        // This ensures RNodeCompanionService is bound when associated devices connect,
+        // even for associations created before this code was added
+        registerExistingCompanionDevices()
+
         // Initialize Python environment
         PythonBridge.initialize(this)
 
@@ -119,15 +124,38 @@ class ColumbaApplication : Application() {
                             .getBoolean("is_applying_config", false)
 
                     if (isApplyingConfig) {
-                        android.util.Log.d("ColumbaApplication", "Skipping auto-init - config changes are being applied")
-                        // Just bind to service, but don't initialize
-                        // InterfaceConfigManager will handle initialization with the new config
+                        android.util.Log.d("ColumbaApp", "Config apply flag set - checking service...")
+                        // Bind to service to check status
                         (reticulumProtocol as ServiceReticulumProtocol).bindService()
-                        return@launch
+
+                        // Check if service is actually being configured, or if the flag is stale
+                        // from a crashed/failed previous config apply
+                        val status = (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
+                        android.util.Log.d("ColumbaApplication", "Service status with config flag set: $status")
+
+                        if (status == "SHUTDOWN" || status == null || status.startsWith("ERROR:")) {
+                            // Service is not running/ready - the flag is stale from a failed config apply
+                            // Clear it and proceed with normal initialization
+                            android.util.Log.w(
+                                "ColumbaApp",
+                                "Stale config flag (status: $status) - clearing",
+                            )
+                            getSharedPreferences("columba_prefs", MODE_PRIVATE)
+                                .edit()
+                                .putBoolean("is_applying_config", false)
+                                .commit()
+                            // Fall through to normal initialization below
+                        } else {
+                            // Service is INITIALIZING or READY - InterfaceConfigManager is handling it
+                            android.util.Log.d("ColumbaApplication", "Config apply in progress - skipping auto-init")
+                            return@launch
+                        }
                     }
 
-                    // Bind to service first
-                    (reticulumProtocol as ServiceReticulumProtocol).bindService()
+                    // Bind to service first (skip if already bound above for config flag check)
+                    if (!isApplyingConfig) {
+                        (reticulumProtocol as ServiceReticulumProtocol).bindService()
+                    }
                     android.util.Log.d("ColumbaApplication", "Successfully bound to ReticulumService")
 
                     // Check if service is already initialized (handle service process surviving app restart)
@@ -139,8 +167,9 @@ class ColumbaApplication : Application() {
 
                         // Verify service identity matches database active identity
                         // This catches mismatches from interrupted identity switches or data imports
-                        val serviceIdentity = (reticulumProtocol as ServiceReticulumProtocol)
-                            .getLxmfIdentity().getOrNull()
+                        val serviceIdentity =
+                            (reticulumProtocol as ServiceReticulumProtocol)
+                                .getLxmfIdentity().getOrNull()
                         val serviceIdentityHash = serviceIdentity?.hash?.toHexString()
 
                         val activeIdentity = identityRepository.getActiveIdentitySync()
@@ -393,5 +422,56 @@ class ColumbaApplication : Application() {
      */
     private fun ByteArray.toHexString(): String {
         return joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Register existing companion device associations for device presence monitoring.
+     * This ensures that RNodeCompanionService is bound when associated devices connect,
+     * even for associations that were created before startObservingDevicePresence() was added.
+     *
+     * Only runs on Android 12+ (API 31+) where CompanionDeviceManager is available.
+     */
+    private fun registerExistingCompanionDevices() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+            return
+        }
+
+        try {
+            val companionDeviceManager =
+                getSystemService(android.companion.CompanionDeviceManager::class.java)
+                    ?: return
+
+            val associations = companionDeviceManager.myAssociations
+            if (associations.isEmpty()) {
+                android.util.Log.d("ColumbaApplication", "No companion device associations found")
+                return
+            }
+
+            android.util.Log.d("ColumbaApplication", "████ COMPANION DEVICE REGISTRATION ████ Found ${associations.size} association(s)")
+
+            for (association in associations) {
+                try {
+                    val macAddress = association.deviceMacAddress?.toString()
+                    if (macAddress != null) {
+                        android.util.Log.d(
+                            "ColumbaApplication",
+                            "████ REGISTERING OBSERVER ████ MAC=$macAddress name=${association.displayName}",
+                        )
+                        companionDeviceManager.startObservingDevicePresence(macAddress)
+                        android.util.Log.d(
+                            "ColumbaApplication",
+                            "████ OBSERVER REGISTERED ████ MAC=$macAddress",
+                        )
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w(
+                        "ColumbaApplication",
+                        "Failed to register device presence for association ${association.id}: ${e.message}",
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("ColumbaApplication", "Failed to register companion devices: ${e.message}")
+        }
     }
 }

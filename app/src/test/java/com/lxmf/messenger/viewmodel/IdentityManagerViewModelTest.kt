@@ -343,9 +343,10 @@ class IdentityManagerViewModelTest {
             viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
 
             // WhileSubscribed requires active collector - subscribe to activeIdentity to start the flow
-            val identityJob = launch {
-                viewModel.activeIdentity.collect {}
-            }
+            val identityJob =
+                launch {
+                    viewModel.activeIdentity.collect {}
+                }
             advanceUntilIdle()
 
             viewModel.uiState.test {
@@ -369,7 +370,7 @@ class IdentityManagerViewModelTest {
                 assertTrue(errorState is IdentityManagerUiState.Error)
                 assertTrue((errorState as IdentityManagerUiState.Error).message.contains("active identity"))
             }
-            
+
             identityJob.cancel()
         }
 

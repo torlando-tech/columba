@@ -93,9 +93,10 @@ class MigrationViewModel
                     _uiState.value = MigrationUiState.Exporting
                     _exportProgress.value = 0f
 
-                    val result = migrationExporter.exportData { progress ->
-                        _exportProgress.value = progress
-                    }
+                    val result =
+                        migrationExporter.exportData { progress ->
+                            _exportProgress.value = progress
+                        }
 
                     result.fold(
                         onSuccess = { uri ->
@@ -105,9 +106,10 @@ class MigrationViewModel
                         },
                         onFailure = { error ->
                             Log.e(TAG, "Export failed", error)
-                            _uiState.value = MigrationUiState.Error(
-                                "Export failed: ${error.message}",
-                            )
+                            _uiState.value =
+                                MigrationUiState.Error(
+                                    "Export failed: ${error.message}",
+                                )
                         },
                     )
                 } catch (e: Exception) {
@@ -136,16 +138,18 @@ class MigrationViewModel
                         },
                         onFailure = { error ->
                             Log.e(TAG, "Preview failed", error)
-                            _uiState.value = MigrationUiState.Error(
-                                "Could not read migration file: ${error.message}",
-                            )
+                            _uiState.value =
+                                MigrationUiState.Error(
+                                    "Could not read migration file: ${error.message}",
+                                )
                         },
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Preview failed with exception", e)
-                    _uiState.value = MigrationUiState.Error(
-                        "Could not read migration file: ${e.message}",
-                    )
+                    _uiState.value =
+                        MigrationUiState.Error(
+                            "Could not read migration file: ${e.message}",
+                        )
                 }
             }
         }
@@ -160,9 +164,10 @@ class MigrationViewModel
                     _uiState.value = MigrationUiState.Importing
                     _importProgress.value = 0f
 
-                    val result = migrationImporter.importData(uri) { progress ->
-                        _importProgress.value = progress
-                    }
+                    val result =
+                        migrationImporter.importData(uri) { progress ->
+                            _importProgress.value = progress
+                        }
 
                     when (result) {
                         is ImportResult.Success -> {
@@ -230,12 +235,20 @@ class MigrationViewModel
  */
 sealed class MigrationUiState {
     data object Idle : MigrationUiState()
+
     data class Loading(val message: String) : MigrationUiState()
+
     data object Exporting : MigrationUiState()
+
     data class ExportComplete(val fileUri: Uri) : MigrationUiState()
+
     data class ImportPreview(val preview: MigrationPreview, val fileUri: Uri) : MigrationUiState()
+
     data object Importing : MigrationUiState()
+
     data class RestartingService(val result: ImportResult.Success) : MigrationUiState()
+
     data class ImportComplete(val result: ImportResult.Success) : MigrationUiState()
+
     data class Error(val message: String) : MigrationUiState()
 }

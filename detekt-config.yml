@@ -37,6 +37,10 @@ complexity:
     active: true
     threshold: 18
     ignoreAnnotated: ['Composable']
+  LargeClass:
+    active: true
+    threshold: 600
+    excludes: ['**/test/**', '**/androidTest/**']
   LongMethod:
     active: true
     threshold: 80

@@ -62,11 +62,12 @@ class ContactRepositoryTest {
         every { mockLocalIdentityDao.getActiveIdentity() } returns flowOf(createTestIdentity())
         coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns createTestIdentity()
 
-        repository = ContactRepository(
-            contactDao = mockContactDao,
-            localIdentityDao = mockLocalIdentityDao,
-            announceDao = mockAnnounceDao,
-        )
+        repository =
+            ContactRepository(
+                contactDao = mockContactDao,
+                localIdentityDao = mockLocalIdentityDao,
+                announceDao = mockAnnounceDao,
+            )
     }
 
     @After
@@ -127,360 +128,384 @@ class ContactRepositoryTest {
     // ========== addPendingContact Tests ==========
 
     @Test
-    fun `addPendingContact - no active identity returns failure`() = runTest {
-        // Given: No active identity
-        coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+    fun `addPendingContact - no active identity returns failure`() =
+        runTest {
+            // Given: No active identity
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
 
-        // When
-        val result = repository.addPendingContact(testDestHash, "Test")
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result = repository.addPendingContact(testDestHash, "Test")
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalStateException)
-    }
-
-    @Test
-    fun `addPendingContact - existing announce resolves immediately`() = runTest {
-        // Given: Announce exists with public key
-        val announce = createTestAnnounce()
-        coEvery { mockAnnounceDao.getAnnounce(testDestHash) } returns announce
-        coEvery { mockContactDao.insertContact(any()) } just Runs
-
-        // When
-        val result = repository.addPendingContact(testDestHash, "Test Nickname")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        // Then
-        assertTrue(result.isSuccess)
-        assertEquals(ContactRepository.AddPendingResult.ResolvedImmediately, result.getOrNull())
-
-        // Verify contact was inserted with ACTIVE status and public key
-        val contactSlot = slot<ContactEntity>()
-        coVerify { mockContactDao.insertContact(capture(contactSlot)) }
-
-        val insertedContact = contactSlot.captured
-        assertEquals(testDestHash, insertedContact.destinationHash)
-        assertEquals(testIdentityHash, insertedContact.identityHash)
-        assertEquals(testPublicKey, insertedContact.publicKey)
-        assertEquals(ContactStatus.ACTIVE, insertedContact.status)
-        assertEquals("Test Nickname", insertedContact.customNickname)
-        assertEquals("MANUAL", insertedContact.addedVia)
-    }
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalStateException)
+        }
 
     @Test
-    fun `addPendingContact - announce with empty public key adds as pending`() = runTest {
-        // Given: Announce exists but with empty public key
-        val announce = createTestAnnounce(publicKey = ByteArray(0))
-        coEvery { mockAnnounceDao.getAnnounce(testDestHash) } returns announce
-        coEvery { mockContactDao.insertContact(any()) } just Runs
+    fun `addPendingContact - existing announce resolves immediately`() =
+        runTest {
+            // Given: Announce exists with public key
+            val announce = createTestAnnounce()
+            coEvery { mockAnnounceDao.getAnnounce(testDestHash) } returns announce
+            coEvery { mockContactDao.insertContact(any()) } just Runs
 
-        // When
-        val result = repository.addPendingContact(testDestHash, "Test")
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result = repository.addPendingContact(testDestHash, "Test Nickname")
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertTrue(result.isSuccess)
-        assertEquals(ContactRepository.AddPendingResult.AddedAsPending, result.getOrNull())
+            // Then
+            assertTrue(result.isSuccess)
+            assertEquals(ContactRepository.AddPendingResult.ResolvedImmediately, result.getOrNull())
 
-        // Verify contact was inserted with PENDING_IDENTITY status and null public key
-        val contactSlot = slot<ContactEntity>()
-        coVerify { mockContactDao.insertContact(capture(contactSlot)) }
+            // Verify contact was inserted with ACTIVE status and public key
+            val contactSlot = slot<ContactEntity>()
+            coVerify { mockContactDao.insertContact(capture(contactSlot)) }
 
-        val insertedContact = contactSlot.captured
-        assertNull(insertedContact.publicKey)
-        assertEquals(ContactStatus.PENDING_IDENTITY, insertedContact.status)
-        assertEquals("MANUAL_PENDING", insertedContact.addedVia)
-    }
-
-    @Test
-    fun `addPendingContact - no announce adds as pending`() = runTest {
-        // Given: No existing announce
-        coEvery { mockAnnounceDao.getAnnounce(testDestHash) } returns null
-        coEvery { mockContactDao.insertContact(any()) } just Runs
-
-        // When
-        val result = repository.addPendingContact(testDestHash, null)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        // Then
-        assertTrue(result.isSuccess)
-        assertEquals(ContactRepository.AddPendingResult.AddedAsPending, result.getOrNull())
-
-        // Verify contact was inserted correctly
-        val contactSlot = slot<ContactEntity>()
-        coVerify { mockContactDao.insertContact(capture(contactSlot)) }
-
-        val insertedContact = contactSlot.captured
-        assertEquals(testDestHash, insertedContact.destinationHash)
-        assertNull(insertedContact.publicKey)
-        assertNull(insertedContact.customNickname)
-        assertEquals(ContactStatus.PENDING_IDENTITY, insertedContact.status)
-    }
+            val insertedContact = contactSlot.captured
+            assertEquals(testDestHash, insertedContact.destinationHash)
+            assertEquals(testIdentityHash, insertedContact.identityHash)
+            assertEquals(testPublicKey, insertedContact.publicKey)
+            assertEquals(ContactStatus.ACTIVE, insertedContact.status)
+            assertEquals("Test Nickname", insertedContact.customNickname)
+            assertEquals("MANUAL", insertedContact.addedVia)
+        }
 
     @Test
-    fun `addPendingContact - database error returns failure`() = runTest {
-        // Given: Database throws exception
-        coEvery { mockAnnounceDao.getAnnounce(testDestHash) } returns null
-        coEvery { mockContactDao.insertContact(any()) } throws RuntimeException("DB error")
+    fun `addPendingContact - announce with empty public key adds as pending`() =
+        runTest {
+            // Given: Announce exists but with empty public key
+            val announce = createTestAnnounce(publicKey = ByteArray(0))
+            coEvery { mockAnnounceDao.getAnnounce(testDestHash) } returns announce
+            coEvery { mockContactDao.insertContact(any()) } just Runs
 
-        // When
-        val result = repository.addPendingContact(testDestHash, "Test")
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result = repository.addPendingContact(testDestHash, "Test")
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertTrue(result.isFailure)
-        assertEquals("DB error", result.exceptionOrNull()?.message)
-    }
+            // Then
+            assertTrue(result.isSuccess)
+            assertEquals(ContactRepository.AddPendingResult.AddedAsPending, result.getOrNull())
+
+            // Verify contact was inserted with PENDING_IDENTITY status and null public key
+            val contactSlot = slot<ContactEntity>()
+            coVerify { mockContactDao.insertContact(capture(contactSlot)) }
+
+            val insertedContact = contactSlot.captured
+            assertNull(insertedContact.publicKey)
+            assertEquals(ContactStatus.PENDING_IDENTITY, insertedContact.status)
+            assertEquals("MANUAL_PENDING", insertedContact.addedVia)
+        }
+
+    @Test
+    fun `addPendingContact - no announce adds as pending`() =
+        runTest {
+            // Given: No existing announce
+            coEvery { mockAnnounceDao.getAnnounce(testDestHash) } returns null
+            coEvery { mockContactDao.insertContact(any()) } just Runs
+
+            // When
+            val result = repository.addPendingContact(testDestHash, null)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isSuccess)
+            assertEquals(ContactRepository.AddPendingResult.AddedAsPending, result.getOrNull())
+
+            // Verify contact was inserted correctly
+            val contactSlot = slot<ContactEntity>()
+            coVerify { mockContactDao.insertContact(capture(contactSlot)) }
+
+            val insertedContact = contactSlot.captured
+            assertEquals(testDestHash, insertedContact.destinationHash)
+            assertNull(insertedContact.publicKey)
+            assertNull(insertedContact.customNickname)
+            assertEquals(ContactStatus.PENDING_IDENTITY, insertedContact.status)
+        }
+
+    @Test
+    fun `addPendingContact - database error returns failure`() =
+        runTest {
+            // Given: Database throws exception
+            coEvery { mockAnnounceDao.getAnnounce(testDestHash) } returns null
+            coEvery { mockContactDao.insertContact(any()) } throws RuntimeException("DB error")
+
+            // When
+            val result = repository.addPendingContact(testDestHash, "Test")
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isFailure)
+            assertEquals("DB error", result.exceptionOrNull()?.message)
+        }
 
     // ========== updateContactWithIdentity Tests ==========
 
     @Test
-    fun `updateContactWithIdentity - no active identity returns failure`() = runTest {
-        // Given: No active identity
-        coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+    fun `updateContactWithIdentity - no active identity returns failure`() =
+        runTest {
+            // Given: No active identity
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
 
-        // When
-        val result = repository.updateContactWithIdentity(testDestHash, testPublicKey)
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result = repository.updateContactWithIdentity(testDestHash, testPublicKey)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalStateException)
-    }
-
-    @Test
-    fun `updateContactWithIdentity - success updates dao`() = runTest {
-        // Given
-        coEvery {
-            mockContactDao.updateContactIdentity(any(), any(), any(), any())
-        } just Runs
-
-        // When
-        val result = repository.updateContactWithIdentity(testDestHash, testPublicKey)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        // Then
-        assertTrue(result.isSuccess)
-        coVerify {
-            mockContactDao.updateContactIdentity(
-                destinationHash = testDestHash,
-                identityHash = testIdentityHash,
-                publicKey = testPublicKey,
-                status = ContactStatus.ACTIVE.name,
-            )
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalStateException)
         }
-    }
 
     @Test
-    fun `updateContactWithIdentity - database error returns failure`() = runTest {
-        // Given
-        coEvery {
-            mockContactDao.updateContactIdentity(any(), any(), any(), any())
-        } throws RuntimeException("Update failed")
+    fun `updateContactWithIdentity - success updates dao`() =
+        runTest {
+            // Given
+            coEvery {
+                mockContactDao.updateContactIdentity(any(), any(), any(), any())
+            } just Runs
 
-        // When
-        val result = repository.updateContactWithIdentity(testDestHash, testPublicKey)
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result = repository.updateContactWithIdentity(testDestHash, testPublicKey)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertTrue(result.isFailure)
-        assertEquals("Update failed", result.exceptionOrNull()?.message)
-    }
+            // Then
+            assertTrue(result.isSuccess)
+            coVerify {
+                mockContactDao.updateContactIdentity(
+                    destinationHash = testDestHash,
+                    identityHash = testIdentityHash,
+                    publicKey = testPublicKey,
+                    status = ContactStatus.ACTIVE.name,
+                )
+            }
+        }
+
+    @Test
+    fun `updateContactWithIdentity - database error returns failure`() =
+        runTest {
+            // Given
+            coEvery {
+                mockContactDao.updateContactIdentity(any(), any(), any(), any())
+            } throws RuntimeException("Update failed")
+
+            // When
+            val result = repository.updateContactWithIdentity(testDestHash, testPublicKey)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isFailure)
+            assertEquals("Update failed", result.exceptionOrNull()?.message)
+        }
 
     // ========== updateContactStatus Tests ==========
 
     @Test
-    fun `updateContactStatus - no active identity returns failure`() = runTest {
-        // Given: No active identity
-        coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+    fun `updateContactStatus - no active identity returns failure`() =
+        runTest {
+            // Given: No active identity
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
 
-        // When
-        val result = repository.updateContactStatus(testDestHash, ContactStatus.UNRESOLVED)
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result = repository.updateContactStatus(testDestHash, ContactStatus.UNRESOLVED)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalStateException)
-    }
-
-    @Test
-    fun `updateContactStatus - success updates to UNRESOLVED`() = runTest {
-        // Given
-        coEvery { mockContactDao.updateContactStatus(any(), any(), any()) } just Runs
-
-        // When
-        val result = repository.updateContactStatus(testDestHash, ContactStatus.UNRESOLVED)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        // Then
-        assertTrue(result.isSuccess)
-        coVerify {
-            mockContactDao.updateContactStatus(
-                destinationHash = testDestHash,
-                identityHash = testIdentityHash,
-                status = ContactStatus.UNRESOLVED.name,
-            )
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalStateException)
         }
-    }
 
     @Test
-    fun `updateContactStatus - success updates to PENDING_IDENTITY`() = runTest {
-        // Given
-        coEvery { mockContactDao.updateContactStatus(any(), any(), any()) } just Runs
+    fun `updateContactStatus - success updates to UNRESOLVED`() =
+        runTest {
+            // Given
+            coEvery { mockContactDao.updateContactStatus(any(), any(), any()) } just Runs
 
-        // When
-        val result = repository.updateContactStatus(testDestHash, ContactStatus.PENDING_IDENTITY)
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result = repository.updateContactStatus(testDestHash, ContactStatus.UNRESOLVED)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertTrue(result.isSuccess)
-        coVerify {
-            mockContactDao.updateContactStatus(
-                destinationHash = testDestHash,
-                identityHash = testIdentityHash,
-                status = ContactStatus.PENDING_IDENTITY.name,
-            )
+            // Then
+            assertTrue(result.isSuccess)
+            coVerify {
+                mockContactDao.updateContactStatus(
+                    destinationHash = testDestHash,
+                    identityHash = testIdentityHash,
+                    status = ContactStatus.UNRESOLVED.name,
+                )
+            }
         }
-    }
 
     @Test
-    fun `updateContactStatus - database error returns failure`() = runTest {
-        // Given
-        coEvery {
-            mockContactDao.updateContactStatus(any(), any(), any())
-        } throws RuntimeException("Status update failed")
+    fun `updateContactStatus - success updates to PENDING_IDENTITY`() =
+        runTest {
+            // Given
+            coEvery { mockContactDao.updateContactStatus(any(), any(), any()) } just Runs
 
-        // When
-        val result = repository.updateContactStatus(testDestHash, ContactStatus.UNRESOLVED)
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result = repository.updateContactStatus(testDestHash, ContactStatus.PENDING_IDENTITY)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertTrue(result.isFailure)
-        assertEquals("Status update failed", result.exceptionOrNull()?.message)
-    }
+            // Then
+            assertTrue(result.isSuccess)
+            coVerify {
+                mockContactDao.updateContactStatus(
+                    destinationHash = testDestHash,
+                    identityHash = testIdentityHash,
+                    status = ContactStatus.PENDING_IDENTITY.name,
+                )
+            }
+        }
+
+    @Test
+    fun `updateContactStatus - database error returns failure`() =
+        runTest {
+            // Given
+            coEvery {
+                mockContactDao.updateContactStatus(any(), any(), any())
+            } throws RuntimeException("Status update failed")
+
+            // When
+            val result = repository.updateContactStatus(testDestHash, ContactStatus.UNRESOLVED)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isFailure)
+            assertEquals("Status update failed", result.exceptionOrNull()?.message)
+        }
 
     // ========== getContactsByStatus Tests ==========
 
     @Test
-    fun `getContactsByStatus - returns contacts matching statuses`() = runTest {
-        // Given
-        val pendingContact = createTestContact(
-            destinationHash = "pending_hash",
-            status = ContactStatus.PENDING_IDENTITY,
-        )
-        val unresolvedContact = createTestContact(
-            destinationHash = "unresolved_hash",
-            status = ContactStatus.UNRESOLVED,
-        )
-        coEvery {
-            mockContactDao.getContactsByStatus(listOf("PENDING_IDENTITY", "UNRESOLVED"))
-        } returns listOf(pendingContact, unresolvedContact)
+    fun `getContactsByStatus - returns contacts matching statuses`() =
+        runTest {
+            // Given
+            val pendingContact =
+                createTestContact(
+                    destinationHash = "pending_hash",
+                    status = ContactStatus.PENDING_IDENTITY,
+                )
+            val unresolvedContact =
+                createTestContact(
+                    destinationHash = "unresolved_hash",
+                    status = ContactStatus.UNRESOLVED,
+                )
+            coEvery {
+                mockContactDao.getContactsByStatus(listOf("PENDING_IDENTITY", "UNRESOLVED"))
+            } returns listOf(pendingContact, unresolvedContact)
 
-        // When
-        val result = repository.getContactsByStatus(
-            listOf(ContactStatus.PENDING_IDENTITY, ContactStatus.UNRESOLVED)
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result =
+                repository.getContactsByStatus(
+                    listOf(ContactStatus.PENDING_IDENTITY, ContactStatus.UNRESOLVED),
+                )
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertEquals(2, result.size)
-        assertEquals("pending_hash", result[0].destinationHash)
-        assertEquals("unresolved_hash", result[1].destinationHash)
-    }
+            // Then
+            assertEquals(2, result.size)
+            assertEquals("pending_hash", result[0].destinationHash)
+            assertEquals("unresolved_hash", result[1].destinationHash)
+        }
 
     @Test
-    fun `getContactsByStatus - returns empty list when no matches`() = runTest {
-        // Given
-        coEvery { mockContactDao.getContactsByStatus(any()) } returns emptyList()
+    fun `getContactsByStatus - returns empty list when no matches`() =
+        runTest {
+            // Given
+            coEvery { mockContactDao.getContactsByStatus(any()) } returns emptyList()
 
-        // When
-        val result = repository.getContactsByStatus(listOf(ContactStatus.PENDING_IDENTITY))
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result = repository.getContactsByStatus(listOf(ContactStatus.PENDING_IDENTITY))
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertTrue(result.isEmpty())
-    }
+            // Then
+            assertTrue(result.isEmpty())
+        }
 
     // ========== getContactsByStatusForActiveIdentity Tests ==========
 
     @Test
-    fun `getContactsByStatusForActiveIdentity - no active identity returns empty`() = runTest {
-        // Given
-        coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+    fun `getContactsByStatusForActiveIdentity - no active identity returns empty`() =
+        runTest {
+            // Given
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
 
-        // When
-        val result = repository.getContactsByStatusForActiveIdentity(
-            listOf(ContactStatus.PENDING_IDENTITY)
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result =
+                repository.getContactsByStatusForActiveIdentity(
+                    listOf(ContactStatus.PENDING_IDENTITY),
+                )
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertTrue(result.isEmpty())
-    }
+            // Then
+            assertTrue(result.isEmpty())
+        }
 
     @Test
-    fun `getContactsByStatusForActiveIdentity - returns contacts for active identity`() = runTest {
-        // Given
-        val pendingContact = createTestContact(status = ContactStatus.PENDING_IDENTITY)
-        coEvery {
-            mockContactDao.getContactsByStatusForIdentity(testIdentityHash, listOf("PENDING_IDENTITY"))
-        } returns listOf(pendingContact)
+    fun `getContactsByStatusForActiveIdentity - returns contacts for active identity`() =
+        runTest {
+            // Given
+            val pendingContact = createTestContact(status = ContactStatus.PENDING_IDENTITY)
+            coEvery {
+                mockContactDao.getContactsByStatusForIdentity(testIdentityHash, listOf("PENDING_IDENTITY"))
+            } returns listOf(pendingContact)
 
-        // When
-        val result = repository.getContactsByStatusForActiveIdentity(
-            listOf(ContactStatus.PENDING_IDENTITY)
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result =
+                repository.getContactsByStatusForActiveIdentity(
+                    listOf(ContactStatus.PENDING_IDENTITY),
+                )
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertEquals(1, result.size)
-        assertEquals(ContactStatus.PENDING_IDENTITY, result[0].status)
-    }
+            // Then
+            assertEquals(1, result.size)
+            assertEquals(ContactStatus.PENDING_IDENTITY, result[0].status)
+        }
 
     // ========== getContact Tests ==========
 
     @Test
-    fun `getContact - no active identity returns null`() = runTest {
-        // Given
-        coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+    fun `getContact - no active identity returns null`() =
+        runTest {
+            // Given
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
 
-        // When
-        val result = repository.getContact(testDestHash)
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result = repository.getContact(testDestHash)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertNull(result)
-    }
-
-    @Test
-    fun `getContact - returns contact from dao`() = runTest {
-        // Given
-        val contact = createTestContact()
-        coEvery {
-            mockContactDao.getContact(testDestHash, testIdentityHash)
-        } returns contact
-
-        // When
-        val result = repository.getContact(testDestHash)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        // Then
-        assertEquals(contact, result)
-    }
+            // Then
+            assertNull(result)
+        }
 
     @Test
-    fun `getContact - returns null when not found`() = runTest {
-        // Given
-        coEvery {
-            mockContactDao.getContact(testDestHash, testIdentityHash)
-        } returns null
+    fun `getContact - returns contact from dao`() =
+        runTest {
+            // Given
+            val contact = createTestContact()
+            coEvery {
+                mockContactDao.getContact(testDestHash, testIdentityHash)
+            } returns contact
 
-        // When
-        val result = repository.getContact(testDestHash)
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When
+            val result = repository.getContact(testDestHash)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then
-        assertNull(result)
-    }
+            // Then
+            assertEquals(contact, result)
+        }
+
+    @Test
+    fun `getContact - returns null when not found`() =
+        runTest {
+            // Given
+            coEvery {
+                mockContactDao.getContact(testDestHash, testIdentityHash)
+            } returns null
+
+            // When
+            val result = repository.getContact(testDestHash)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertNull(result)
+        }
 }

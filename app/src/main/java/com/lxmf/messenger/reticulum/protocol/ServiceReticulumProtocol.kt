@@ -25,6 +25,7 @@ import com.lxmf.messenger.reticulum.model.PacketType
 import com.lxmf.messenger.reticulum.model.ReceivedPacket
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import com.lxmf.messenger.service.ReticulumService
+import com.lxmf.messenger.service.manager.parseIdentityResultJson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,7 +33,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -40,7 +43,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
-import com.lxmf.messenger.service.manager.parseIdentityResultJson
 import org.json.JSONObject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -75,6 +77,11 @@ class ServiceReticulumProtocol(
     // Initialize to CONNECTING since we don't know service state until we query it
     private val _networkStatus = MutableStateFlow<NetworkStatus>(NetworkStatus.CONNECTING)
     override val networkStatus: StateFlow<NetworkStatus> = _networkStatus.asStateFlow()
+
+    // SharedFlow for interface status change events (triggers UI refresh)
+    // replay=0 means events are not replayed to late subscribers
+    private val _interfaceStatusChanged = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
+    val interfaceStatusChanged: SharedFlow<Unit> = _interfaceStatusChanged.asSharedFlow()
 
     // Phase 2, Task 2.3: Readiness tracking for explicit service binding notification
     // Thread-safe: Protected by bindLock to prevent race between callback and continuation storage
@@ -287,6 +294,13 @@ class ServiceReticulumProtocol(
             }
 
             override fun onStatusChanged(status: String) {
+                // Handle RNode online/offline status changes - emit event to trigger UI refresh
+                if (status == "RNODE_ONLINE" || status == "RNODE_OFFLINE") {
+                    Log.d(TAG, "████ RNODE STATUS EVENT ████ $status - triggering interface refresh")
+                    _interfaceStatusChanged.tryEmit(Unit)
+                    return // Don't update network status for interface-specific events
+                }
+
                 // Phase 2.1: Emit to StateFlow for reactive updates
                 val newStatus =
                     when {
@@ -680,13 +694,17 @@ class ServiceReticulumProtocol(
                 is InterfaceConfig.RNode -> {
                     ifaceJson.put("type", "RNode")
                     ifaceJson.put("name", iface.name)
-                    ifaceJson.put("port", iface.port)
+                    ifaceJson.put("target_device_name", iface.targetDeviceName)
+                    ifaceJson.put("connection_mode", iface.connectionMode)
                     ifaceJson.put("frequency", iface.frequency)
                     ifaceJson.put("bandwidth", iface.bandwidth)
                     ifaceJson.put("tx_power", iface.txPower)
                     ifaceJson.put("spreading_factor", iface.spreadingFactor)
                     ifaceJson.put("coding_rate", iface.codingRate)
+                    iface.stAlock?.let { ifaceJson.put("st_alock", it) }
+                    iface.ltAlock?.let { ifaceJson.put("lt_alock", it) }
                     ifaceJson.put("mode", iface.mode)
+                    ifaceJson.put("enable_framebuffer", iface.enableFramebuffer)
                 }
                 is InterfaceConfig.UDP -> {
                     ifaceJson.put("type", "UDP")
@@ -1315,6 +1333,17 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun reconnectRNodeInterface() {
+        try {
+            service?.reconnectRNodeInterface()
+            Log.i(TAG, "Triggered RNode interface reconnection")
+        } catch (e: RemoteException) {
+            Log.e(TAG, "Error triggering RNode reconnection", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error triggering RNode reconnection", e)
+        }
+    }
+
     /**
      * Get BLE connection details from the service.
      */
@@ -1325,6 +1354,21 @@ class ServiceReticulumProtocol(
         } catch (e: Exception) {
             Log.e(TAG, "Error getting BLE connection details", e)
             "[]"
+        }
+    }
+
+    /**
+     * Get the current RSSI of the active RNode BLE connection.
+     *
+     * @return RSSI in dBm, or -100 if not connected or not available
+     */
+    fun getRNodeRssi(): Int {
+        return try {
+            val service = this.service ?: return -100
+            service.rNodeRssi
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting RNode RSSI", e)
+            -100
         }
     }
 

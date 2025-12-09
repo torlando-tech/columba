@@ -49,6 +49,8 @@ class RNodeWizardViewModelTest {
 
     private val usRegion = FrequencyRegions.findById("us_915")!!
     private val euRegionP = FrequencyRegions.findById("eu_868_p")!!
+    private val brazilRegion = FrequencyRegions.findById("br_902")!!
+    private val euRegionL = FrequencyRegions.findById("eu_868_l")!!
 
     private val testBleDevice =
         DiscoveredRNode(
@@ -248,16 +250,12 @@ class RNodeWizardViewModelTest {
     @Test
     fun `selectFrequencyRegion updates state`() =
         runTest {
-            viewModel.state.test {
-                awaitItem() // Initial
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
 
-                viewModel.selectFrequencyRegion(usRegion)
-                advanceUntilIdle()
-
-                val state = awaitItem()
-                assertEquals(usRegion, state.selectedFrequencyRegion)
-                assertFalse(state.isCustomMode)
-            }
+            val state = viewModel.state.value
+            assertEquals(usRegion, state.selectedFrequencyRegion)
+            assertFalse(state.isCustomMode)
         }
 
     @Test
@@ -439,15 +437,38 @@ class RNodeWizardViewModelTest {
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
-            viewModel.state.test {
-                awaitItem() // Current state
+            viewModel.updateFrequency("915000000")
+            advanceUntilIdle()
 
-                viewModel.updateFrequency("915000000")
-                advanceUntilIdle()
+            val state = viewModel.state.value
+            assertNull(state.frequencyError)
+        }
 
-                val state = awaitItem()
-                assertNull(state.frequencyError)
-            }
+    @Test
+    fun `changing region clears frequency validation error from previous region`() =
+        runTest {
+            // Select Brazil 902 region (902-907.5 MHz range)
+            viewModel.selectFrequencyRegion(brazilRegion)
+            advanceUntilIdle()
+
+            // Enter an invalid frequency for Brazil (920 MHz is above 907.5 MHz limit)
+            viewModel.updateFrequency("920000000")
+            advanceUntilIdle()
+
+            // Verify the error is set
+            val stateWithError = viewModel.state.value
+            assertNotNull(stateWithError.frequencyError)
+            assertTrue(stateWithError.frequencyError!!.contains("MHz"))
+
+            // Now change to EU 868 L region
+            viewModel.selectFrequencyRegion(euRegionL)
+            advanceUntilIdle()
+
+            val stateAfterRegionChange = viewModel.state.value
+            // Error should be cleared even though we programmatically set a new frequency
+            assertNull(stateAfterRegionChange.frequencyError)
+            // New frequency should be set to the EU region's default
+            assertEquals(euRegionL.frequency.toString(), stateAfterRegionChange.frequency)
         }
 
     @Test

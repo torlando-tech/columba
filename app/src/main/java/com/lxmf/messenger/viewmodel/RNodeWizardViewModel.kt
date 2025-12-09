@@ -1237,6 +1237,9 @@ class RNodeWizardViewModel
                     isCustomMode = false,
                 )
             }
+            // Apply region defaults (frequency, tx power, airtime limits) when region changes
+            // This ensures validation errors from a previous region are cleared
+            applyFrequencyRegionSettings()
         }
 
         fun getFrequencyRegions(): List<FrequencyRegion> = FrequencyRegions.regions

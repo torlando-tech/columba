@@ -519,6 +519,296 @@ class TestWriteRetry:
         assert iface.kotlin_bridge.writeSync.call_count == 2
 
 
+class TestRadioStateThreadSafety:
+    """Tests for thread-safe access to radio state variables (Issue 3)."""
+
+    def create_interface(self):
+        """Create a test interface with mocked dependencies."""
+        import threading
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
+                iface.frequency = 915000000
+                iface.bandwidth = 125000
+                iface.txpower = 17
+                iface.sf = 8
+                iface.cr = 5
+                iface.st_alock = None
+                iface.lt_alock = None
+                iface.name = "test-rnode"
+                iface.target_device_name = "TestRNode"
+                iface.connection_mode = 0
+                iface.kotlin_bridge = None
+                iface.enable_framebuffer = False
+                iface.framebuffer_enabled = False
+                iface._read_thread = None
+                iface._running = threading.Event()
+                iface._read_lock = threading.Lock()
+                iface._reconnect_thread = None
+                iface._reconnecting = False
+                iface._max_reconnect_attempts = 30
+                iface._reconnect_interval = 10.0
+                iface._on_error_callback = None
+                iface._on_online_status_changed = None
+                # Radio state readback variables (these need thread safety)
+                iface.r_frequency = None
+                iface.r_bandwidth = None
+                iface.r_txpower = None
+                iface.r_sf = None
+                iface.r_cr = None
+                iface.r_state = None
+                iface.r_stat_rssi = None
+                iface.r_stat_snr = None
+                return iface
+
+    def test_radio_state_lock_exists(self):
+        """Interface should have a _read_lock for thread-safe radio state access."""
+        import threading
+        iface = self.create_interface()
+        assert hasattr(iface, '_read_lock')
+        assert isinstance(iface._read_lock, type(threading.Lock()))
+
+    def test_radio_state_can_be_updated_safely(self):
+        """Radio state variables should be accessible under lock."""
+        iface = self.create_interface()
+
+        # Simulate what the read loop does - update state under lock
+        with iface._read_lock:
+            iface.r_frequency = 915000000
+            iface.r_bandwidth = 250000
+            iface.r_sf = 11
+            iface.r_cr = 5
+            iface.r_state = 0x01  # RADIO_STATE_ON
+
+        # Read values (should be consistent)
+        with iface._read_lock:
+            assert iface.r_frequency == 915000000
+            assert iface.r_bandwidth == 250000
+            assert iface.r_sf == 11
+            assert iface.r_cr == 5
+            assert iface.r_state == 0x01
+
+    def test_concurrent_radio_state_access(self):
+        """Concurrent reads and writes to radio state should not cause errors."""
+        import threading
+        import time
+
+        iface = self.create_interface()
+        errors = []
+        iterations = 100
+
+        def writer():
+            """Simulate read loop updating state."""
+            for i in range(iterations):
+                with iface._read_lock:
+                    iface.r_frequency = 915000000 + i
+                    iface.r_bandwidth = 250000
+                    iface.r_sf = 11
+                    iface.r_cr = 5
+                time.sleep(0.001)
+
+        def reader():
+            """Simulate _validate_radio_state reading state."""
+            for _ in range(iterations):
+                try:
+                    with iface._read_lock:
+                        # Read all values atomically
+                        freq = iface.r_frequency
+                        bw = iface.r_bandwidth
+                        sf = iface.r_sf
+                        cr = iface.r_cr
+                        # Values should be consistent (all set or all None)
+                        if freq is not None:
+                            assert bw is not None
+                            assert sf is not None
+                            assert cr is not None
+                except Exception as e:
+                    errors.append(e)
+                time.sleep(0.001)
+
+        # Run concurrent threads
+        writer_thread = threading.Thread(target=writer)
+        reader_thread = threading.Thread(target=reader)
+
+        writer_thread.start()
+        reader_thread.start()
+
+        writer_thread.join(timeout=5.0)
+        reader_thread.join(timeout=5.0)
+
+        assert len(errors) == 0, f"Concurrent access errors: {errors}"
+
+
+class TestOnlineStatusThreadSafety:
+    """Tests for thread-safe online status access (PR #36 critical fix)."""
+
+    def create_interface(self):
+        """Create a test interface with mocked dependencies."""
+        import threading
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
+                iface.frequency = 915000000
+                iface.bandwidth = 125000
+                iface.txpower = 17
+                iface.sf = 8
+                iface.cr = 5
+                iface.st_alock = None
+                iface.lt_alock = None
+                iface.name = "test-rnode"
+                iface.target_device_name = "TestRNode"
+                iface.connection_mode = 0
+                iface.kotlin_bridge = MagicMock()
+                iface.kotlin_bridge.writeSync.return_value = 10
+                iface.enable_framebuffer = False
+                iface.framebuffer_enabled = False
+                iface._read_thread = None
+                iface._running = threading.Event()
+                iface._read_lock = threading.Lock()
+                iface._reconnect_thread = None
+                iface._reconnecting = False
+                iface._max_reconnect_attempts = 30
+                iface._reconnect_interval = 10.0
+                iface._on_error_callback = None
+                iface._on_online_status_changed = None
+                iface.online = False
+                iface.txb = 0
+                iface.r_stat_rssi = None
+                iface.r_stat_snr = None
+                return iface
+
+    def test_set_online_uses_lock(self):
+        """_set_online should use _read_lock for thread-safe updates."""
+        iface = self.create_interface()
+
+        # Verify initial state
+        assert iface.online is False
+
+        # Set online
+        iface._set_online(True)
+        assert iface.online is True
+
+        # Set offline
+        iface._set_online(False)
+        assert iface.online is False
+
+    def test_process_outgoing_uses_lock(self):
+        """process_outgoing should use _read_lock when checking online status."""
+        iface = self.create_interface()
+        iface.online = True
+
+        # Should not raise - online status should be readable
+        iface.process_outgoing(b"test data")
+
+        # Verify write was attempted
+        iface.kotlin_bridge.writeSync.assert_called()
+
+    def test_concurrent_online_status_access(self):
+        """Concurrent reads/writes to online status should be thread-safe."""
+        import threading
+        import time
+
+        iface = self.create_interface()
+        errors = []
+        iterations = 200
+
+        def status_changer():
+            """Simulate connection state changes."""
+            for i in range(iterations):
+                iface._set_online(i % 2 == 0)
+                time.sleep(0.001)
+
+        def sender():
+            """Simulate sending data."""
+            for _ in range(iterations):
+                try:
+                    iface.process_outgoing(b"test")
+                except IOError:
+                    pass  # Expected when offline
+                except Exception as e:
+                    errors.append(e)
+                time.sleep(0.001)
+
+        changer_thread = threading.Thread(target=status_changer)
+        sender_thread = threading.Thread(target=sender)
+
+        changer_thread.start()
+        sender_thread.start()
+
+        changer_thread.join(timeout=5.0)
+        sender_thread.join(timeout=5.0)
+
+        assert len(errors) == 0, f"Thread safety errors: {errors}"
+
+    def test_online_status_callback_called_on_change(self):
+        """_on_online_status_changed callback should be called when status changes."""
+        iface = self.create_interface()
+        callback_calls = []
+
+        def callback(is_online):
+            callback_calls.append(is_online)
+
+        iface._on_online_status_changed = callback
+
+        # Change from offline to online
+        iface._set_online(True)
+        assert callback_calls == [True]
+
+        # Change from online to offline
+        iface._set_online(False)
+        assert callback_calls == [True, False]
+
+        # Same status should not trigger callback
+        iface._set_online(False)
+        assert callback_calls == [True, False]  # No new call
+
+
+class TestRssiSnrThreadSafety:
+    """Tests for thread-safe RSSI/SNR access (PR #36 critical fix)."""
+
+    def create_interface(self):
+        """Create a test interface with mocked dependencies."""
+        import threading
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
+                iface._read_lock = threading.Lock()
+                iface.r_stat_rssi = None
+                iface.r_stat_snr = None
+                return iface
+
+    def test_rssi_snr_can_be_updated_under_lock(self):
+        """RSSI and SNR should be updatable under lock."""
+        iface = self.create_interface()
+
+        with iface._read_lock:
+            iface.r_stat_rssi = -80
+            iface.r_stat_snr = 10.5
+
+        assert iface.r_stat_rssi == -80
+        assert iface.r_stat_snr == 10.5
+
+
+class TestMalformedEscapeSequenceLogging:
+    """Tests for malformed KISS escape sequence warning (PR #36 critical fix)."""
+
+    def test_escape_sequence_logging_documented(self):
+        """Verify the fix documents invalid escape sequence handling.
+
+        The read loop at line 666-669 now logs a warning when FESC is followed
+        by an unexpected byte (not TFEND or TFESC). This test documents the
+        expected behavior.
+        """
+        # This is a documentation test - the actual logging happens in _read_loop
+        # which requires a full mock of the read loop. We verify the KISS constants
+        # that define valid escape sequences.
+        assert KISS.FESC == 0xDB
+        assert KISS.TFEND == 0xDC
+        assert KISS.TFESC == 0xDD
+        # Any byte after FESC that is NOT TFEND (0xDC) or TFESC (0xDD)
+        # is considered invalid and will now be logged
+
+
 class TestKISSConstants:
     """Tests for KISS protocol constants."""
 

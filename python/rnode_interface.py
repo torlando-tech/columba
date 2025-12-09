@@ -490,25 +490,34 @@ class ColumbaRNodeInterface:
         # Wait a moment for state to be reported back
         time.sleep(0.3)
 
+        # Read radio state under lock for thread safety (Issue 3)
+        # The read loop updates these from a background thread
+        with self._read_lock:
+            r_frequency = self.r_frequency
+            r_bandwidth = self.r_bandwidth
+            r_sf = self.r_sf
+            r_cr = self.r_cr
+            r_state = self.r_state
+
         # Check if we got the expected values back
-        if self.r_frequency is not None and self.r_frequency != self.frequency:
-            RNS.log(f"Frequency mismatch: configured={self.frequency}, reported={self.r_frequency}", RNS.LOG_ERROR)
+        if r_frequency is not None and r_frequency != self.frequency:
+            RNS.log(f"Frequency mismatch: configured={self.frequency}, reported={r_frequency}", RNS.LOG_ERROR)
             return False
 
-        if self.r_bandwidth is not None and self.r_bandwidth != self.bandwidth:
-            RNS.log(f"Bandwidth mismatch: configured={self.bandwidth}, reported={self.r_bandwidth}", RNS.LOG_ERROR)
+        if r_bandwidth is not None and r_bandwidth != self.bandwidth:
+            RNS.log(f"Bandwidth mismatch: configured={self.bandwidth}, reported={r_bandwidth}", RNS.LOG_ERROR)
             return False
 
-        if self.r_sf is not None and self.r_sf != self.sf:
-            RNS.log(f"SF mismatch: configured={self.sf}, reported={self.r_sf}", RNS.LOG_ERROR)
+        if r_sf is not None and r_sf != self.sf:
+            RNS.log(f"SF mismatch: configured={self.sf}, reported={r_sf}", RNS.LOG_ERROR)
             return False
 
-        if self.r_cr is not None and self.r_cr != self.cr:
-            RNS.log(f"CR mismatch: configured={self.cr}, reported={self.r_cr}", RNS.LOG_ERROR)
+        if r_cr is not None and r_cr != self.cr:
+            RNS.log(f"CR mismatch: configured={self.cr}, reported={r_cr}", RNS.LOG_ERROR)
             return False
 
-        if self.r_state != KISS.RADIO_STATE_ON:
-            RNS.log(f"Radio state not ON: {self.r_state}", RNS.LOG_ERROR)
+        if r_state != KISS.RADIO_STATE_ON:
+            RNS.log(f"Radio state not ON: {r_state}", RNS.LOG_ERROR)
             return False
 
         return True
@@ -655,6 +664,8 @@ class ColumbaRNodeInterface:
                             elif byte == KISS.TFESC:
                                 data_buffer += bytes([KISS.FESC])
                             else:
+                                # Invalid escape sequence - FESC should only be followed by TFEND or TFESC
+                                RNS.log(f"Invalid KISS escape sequence: FESC followed by 0x{byte:02X}", RNS.LOG_WARNING)
                                 data_buffer += bytes([byte])
                             escape = False
                         elif byte == KISS.FESC:
@@ -667,30 +678,40 @@ class ColumbaRNodeInterface:
                             if len(data_buffer) < 4:
                                 data_buffer += bytes([byte])
                                 if len(data_buffer) == 4:
-                                    self.r_frequency = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
-                                    RNS.log(f"RNode frequency: {self.r_frequency}", RNS.LOG_DEBUG)
+                                    freq = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
+                                    with self._read_lock:
+                                        self.r_frequency = freq
+                                    RNS.log(f"RNode frequency: {freq}", RNS.LOG_DEBUG)
                         elif command == KISS.CMD_BANDWIDTH:
                             if len(data_buffer) < 4:
                                 data_buffer += bytes([byte])
                                 if len(data_buffer) == 4:
-                                    self.r_bandwidth = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
-                                    RNS.log(f"RNode bandwidth: {self.r_bandwidth}", RNS.LOG_DEBUG)
+                                    bw = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
+                                    with self._read_lock:
+                                        self.r_bandwidth = bw
+                                    RNS.log(f"RNode bandwidth: {bw}", RNS.LOG_DEBUG)
                         elif command == KISS.CMD_TXPOWER:
-                            self.r_txpower = byte
-                            RNS.log(f"RNode TX power: {self.r_txpower}", RNS.LOG_DEBUG)
+                            with self._read_lock:
+                                self.r_txpower = byte
+                            RNS.log(f"RNode TX power: {byte}", RNS.LOG_DEBUG)
                         elif command == KISS.CMD_SF:
-                            self.r_sf = byte
-                            RNS.log(f"RNode SF: {self.r_sf}", RNS.LOG_DEBUG)
+                            with self._read_lock:
+                                self.r_sf = byte
+                            RNS.log(f"RNode SF: {byte}", RNS.LOG_DEBUG)
                         elif command == KISS.CMD_CR:
-                            self.r_cr = byte
-                            RNS.log(f"RNode CR: {self.r_cr}", RNS.LOG_DEBUG)
+                            with self._read_lock:
+                                self.r_cr = byte
+                            RNS.log(f"RNode CR: {byte}", RNS.LOG_DEBUG)
                         elif command == KISS.CMD_RADIO_STATE:
-                            self.r_state = byte
-                            RNS.log(f"RNode radio state: {self.r_state}", RNS.LOG_DEBUG)
+                            with self._read_lock:
+                                self.r_state = byte
+                            RNS.log(f"RNode radio state: {byte}", RNS.LOG_DEBUG)
                         elif command == KISS.CMD_STAT_RSSI:
-                            self.r_stat_rssi = byte - 157  # RSSI offset
+                            with self._read_lock:
+                                self.r_stat_rssi = byte - 157  # RSSI offset
                         elif command == KISS.CMD_STAT_SNR:
-                            self.r_stat_snr = int.from_bytes([byte], "big", signed=True) / 4.0
+                            with self._read_lock:
+                                self.r_stat_snr = int.from_bytes([byte], "big", signed=True) / 4.0
                         elif command == KISS.CMD_FW_VERSION:
                             if len(data_buffer) < 2:
                                 data_buffer += bytes([byte])
@@ -792,10 +813,13 @@ class ColumbaRNodeInterface:
         """
         Set online status and notify callback if status changed.
 
+        Thread-safe: Uses _read_lock to synchronize with process_outgoing().
+
         @param is_online: New online status
         """
-        old_status = self.online
-        self.online = is_online
+        with self._read_lock:
+            old_status = self.online
+            self.online = is_online
         if old_status != is_online and self._on_online_status_changed:
             try:
                 self._on_online_status_changed(is_online)
@@ -864,7 +888,10 @@ class ColumbaRNodeInterface:
 
     def process_outgoing(self, data):
         """Send data through the RNode interface."""
-        if not self.online:
+        # Thread-safe check of online status (synchronized with _set_online)
+        with self._read_lock:
+            is_online = self.online
+        if not is_online:
             RNS.log("Cannot send - interface is offline", RNS.LOG_WARNING)
             return
 

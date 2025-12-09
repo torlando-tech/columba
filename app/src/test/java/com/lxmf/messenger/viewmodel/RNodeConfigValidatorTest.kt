@@ -36,6 +36,19 @@ class RNodeConfigValidatorTest {
             dutyCycle = 10,
         )
 
+    // NZ 865 region has highest TX power limit (36 dBm)
+    private val nzRegion =
+        FrequencyRegion(
+            id = "nz_865",
+            name = "New Zealand (865 MHz)",
+            description = "864-868 MHz alternative band",
+            frequencyStart = 864_000_000L,
+            frequencyEnd = 868_000_000L,
+            maxTxPower = 36,
+            defaultTxPower = 17,
+            dutyCycle = 100,
+        )
+
     // ========== validateName Tests ==========
 
     @Test
@@ -231,6 +244,38 @@ class RNodeConfigValidatorTest {
         val result = RNodeConfigValidator.validateTxPower("25", null)
         assertFalse(result.isValid)
         assertTrue(result.errorMessage!!.contains("22"))
+    }
+
+    @Test
+    fun `validateTxPower NZ region allows up to 36 dBm`() {
+        // NZ 865 allows highest TX power (36 dBm)
+        val result = RNodeConfigValidator.validateTxPower("36", nzRegion)
+        assertTrue(result.isValid)
+        assertNull(result.errorMessage)
+    }
+
+    @Test
+    fun `validateTxPower NZ region rejects above 36 dBm`() {
+        val result = RNodeConfigValidator.validateTxPower("37", nzRegion)
+        assertFalse(result.isValid)
+        assertTrue(result.errorMessage!!.contains("36"))
+    }
+
+    @Test
+    fun `validateTxPower US region allows 30 dBm`() {
+        val result = RNodeConfigValidator.validateTxPower("30", usRegion)
+        assertTrue(result.isValid)
+    }
+
+    @Test
+    fun `validateTxPower EU region limits to 14 dBm`() {
+        // EU 868-P max is 14 dBm
+        val validResult = RNodeConfigValidator.validateTxPower("14", euRegion)
+        assertTrue(validResult.isValid)
+
+        val invalidResult = RNodeConfigValidator.validateTxPower("15", euRegion)
+        assertFalse(invalidResult.isValid)
+        assertTrue(invalidResult.errorMessage!!.contains("14"))
     }
 
     // ========== validateAirtimeLimit Tests ==========
@@ -437,6 +482,7 @@ class RNodeConfigValidatorTest {
     fun `getMaxTxPower returns region max`() {
         assertEquals(30, RNodeConfigValidator.getMaxTxPower(usRegion))
         assertEquals(14, RNodeConfigValidator.getMaxTxPower(euRegion))
+        assertEquals(36, RNodeConfigValidator.getMaxTxPower(nzRegion))
     }
 
     @Test

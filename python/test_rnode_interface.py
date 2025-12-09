@@ -205,13 +205,28 @@ class TestValidateConfig:
             iface._validate_config()
 
     def test_txpower_above_max(self):
-        """TX power above 22 dBm should raise ValueError."""
-        iface = self.create_interface(txpower=25)
+        """TX power above 36 dBm should raise ValueError."""
+        iface = self.create_interface(txpower=40)
         with pytest.raises(ValueError, match="TX power"):
             iface._validate_config()
 
     def test_txpower_at_max(self):
-        """TX power at 22 dBm should be valid."""
+        """TX power at 36 dBm (NZ regional max) should be valid."""
+        iface = self.create_interface(txpower=36)
+        iface._validate_config()  # Should not raise
+
+    def test_txpower_us_regional_max(self):
+        """TX power at 30 dBm (US regional max) should be valid."""
+        iface = self.create_interface(txpower=30)
+        iface._validate_config()  # Should not raise
+
+    def test_txpower_eu_regional_max(self):
+        """TX power at 27 dBm (EU 868-P regional max) should be valid."""
+        iface = self.create_interface(txpower=27)
+        iface._validate_config()  # Should not raise
+
+    def test_txpower_common_device_max(self):
+        """TX power at 22 dBm (common RNode device max) should be valid."""
         iface = self.create_interface(txpower=22)
         iface._validate_config()  # Should not raise
 

@@ -280,7 +280,10 @@ class ColumbaRNodeInterface:
         if self.frequency < self.FREQ_MIN or self.frequency > self.FREQ_MAX:
             raise ValueError(f"Invalid frequency: {self.frequency}")
 
-        if self.txpower < 0 or self.txpower > 22:
+        # Max TX power varies by region (up to 36 dBm for NZ 865)
+        # The RNode firmware will validate against actual hardware limits
+        # and return error 0x40 if TX power exceeds device capability
+        if self.txpower < 0 or self.txpower > 36:
             raise ValueError(f"Invalid TX power: {self.txpower}")
 
         if self.bandwidth < 7800 or self.bandwidth > 1625000:

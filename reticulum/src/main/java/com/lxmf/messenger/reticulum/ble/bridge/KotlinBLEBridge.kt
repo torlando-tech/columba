@@ -705,11 +705,12 @@ class KotlinBLEBridge(
 
         // Extract identity prefix from device name
         // Protocol v2.2 format: "RNS-XXXXXX" or "Reticulum-XXXXXX" where X is hex
-        val identityPrefix = when {
-            deviceName.startsWith("RNS-") -> deviceName.removePrefix("RNS-").lowercase()
-            deviceName.startsWith("Reticulum-") -> deviceName.removePrefix("Reticulum-").lowercase()
-            else -> return false
-        }
+        val identityPrefix =
+            when {
+                deviceName.startsWith("RNS-") -> deviceName.removePrefix("RNS-").lowercase()
+                deviceName.startsWith("Reticulum-") -> deviceName.removePrefix("Reticulum-").lowercase()
+                else -> return false
+            }
 
         // Check if any recently deduplicated identity starts with this prefix
         // (device name has 6 hex chars = 3 bytes, full identity is 32 hex chars)

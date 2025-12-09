@@ -243,7 +243,7 @@ class ColumbaRNodeInterface:
 
         # Read thread
         self._read_thread = None
-        self._running = False
+        self._running = threading.Event()  # Thread-safe flag for read loop control
         self._read_lock = threading.Lock()
 
         # Auto-reconnection
@@ -321,7 +321,7 @@ class ColumbaRNodeInterface:
         self.kotlin_bridge.setOnConnectionStateChanged(self._on_connection_state_changed)
 
         # Start read thread
-        self._running = True
+        self._running.set()
         self._read_thread = threading.Thread(target=self._read_loop, daemon=True)
         self._read_thread.start()
 
@@ -337,7 +337,7 @@ class ColumbaRNodeInterface:
 
     def stop(self):
         """Stop the interface and disconnect."""
-        self._running = False
+        self._running.clear()
         self._reconnecting = False  # Stop any reconnection attempts
         self._set_online(False)
 
@@ -513,8 +513,11 @@ class ColumbaRNodeInterface:
 
         return True
 
+    # Exponential backoff delays for write retries (in seconds)
+    WRITE_BACKOFF_DELAYS = [0.3, 1.0, 3.0]
+
     def _write(self, data, max_retries=3):
-        """Write data to the RNode via Kotlin bridge with retry logic."""
+        """Write data to the RNode via Kotlin bridge with exponential backoff retry."""
         if self.kotlin_bridge is None:
             raise IOError("Kotlin bridge not available")
 
@@ -526,8 +529,10 @@ class ColumbaRNodeInterface:
 
             last_error = f"expected {len(data)}, wrote {written}"
             if attempt < max_retries - 1:
-                RNS.log(f"Write attempt {attempt + 1} failed ({last_error}), retrying...", RNS.LOG_WARNING)
-                time.sleep(0.3)  # Brief delay before retry
+                # Use exponential backoff delay (0.3s, 1.0s, 3.0s, ...)
+                delay = self.WRITE_BACKOFF_DELAYS[min(attempt, len(self.WRITE_BACKOFF_DELAYS) - 1)]
+                RNS.log(f"Write attempt {attempt + 1} failed ({last_error}), retrying in {delay}s...", RNS.LOG_WARNING)
+                time.sleep(delay)
 
         raise IOError(f"Write failed after {max_retries} attempts: {last_error}")
 
@@ -616,7 +621,7 @@ class ColumbaRNodeInterface:
 
         RNS.log("RNode read loop started", RNS.LOG_DEBUG)
 
-        while self._running:
+        while self._running.is_set():
             try:
                 # Read available data
                 raw_data = self.kotlin_bridge.read()
@@ -714,7 +719,7 @@ class ColumbaRNodeInterface:
                             pass  # Device ready
 
             except Exception as e:
-                if self._running:
+                if self._running.is_set():
                     RNS.log(f"Read loop error: {e}", RNS.LOG_ERROR)
                     time.sleep(0.1)
 

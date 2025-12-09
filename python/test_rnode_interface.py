@@ -349,6 +349,176 @@ class TestValidateFirmware:
         assert iface.firmware_ok is False
 
 
+class TestThreadSafety:
+    """Tests for thread-safe read loop control using threading.Event."""
+
+    def create_interface(self):
+        """Create a test interface with mocked dependencies."""
+        import threading
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                config = {
+                    'frequency': 915000000,
+                    'bandwidth': 125000,
+                    'txpower': 17,
+                    'sf': 8,
+                    'cr': 5,
+                }
+                iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
+                iface.frequency = config['frequency']
+                iface.bandwidth = config['bandwidth']
+                iface.txpower = config['txpower']
+                iface.sf = config['sf']
+                iface.cr = config['cr']
+                iface.st_alock = None
+                iface.lt_alock = None
+                iface.name = "test-rnode"
+                iface.target_device_name = "TestRNode"
+                iface.connection_mode = 0
+                iface.kotlin_bridge = None
+                iface.enable_framebuffer = False
+                iface.framebuffer_enabled = False
+                iface._read_thread = None
+                iface._running = threading.Event()
+                iface._read_lock = threading.Lock()
+                iface._reconnect_thread = None
+                iface._reconnecting = False
+                iface._max_reconnect_attempts = 30
+                iface._reconnect_interval = 10.0
+                iface._on_error_callback = None
+                iface._on_online_status_changed = None
+                return iface
+
+    def test_running_flag_is_threading_event(self):
+        """_running should be a threading.Event for thread-safe signaling."""
+        import threading
+        iface = self.create_interface()
+        assert isinstance(iface._running, threading.Event)
+
+    def test_running_event_initially_not_set(self):
+        """_running event should not be set on initialization."""
+        iface = self.create_interface()
+        assert not iface._running.is_set()
+
+    def test_running_event_can_be_set_and_cleared(self):
+        """_running event should support set() and clear() operations."""
+        iface = self.create_interface()
+
+        # Initially not set
+        assert not iface._running.is_set()
+
+        # Set the event
+        iface._running.set()
+        assert iface._running.is_set()
+
+        # Clear the event
+        iface._running.clear()
+        assert not iface._running.is_set()
+
+    def test_running_event_thread_safe_signaling(self):
+        """Verify threading.Event provides thread-safe stop signaling."""
+        import threading
+        import time
+
+        iface = self.create_interface()
+        loop_iterations = []
+
+        def mock_loop():
+            """Simulate read loop behavior."""
+            while iface._running.is_set():
+                loop_iterations.append(1)
+                time.sleep(0.01)
+
+        # Start the event and thread
+        iface._running.set()
+        thread = threading.Thread(target=mock_loop)
+        thread.start()
+
+        # Let it run a bit
+        time.sleep(0.05)
+
+        # Clear event to stop the loop
+        iface._running.clear()
+        thread.join(timeout=1.0)
+
+        # Thread should have stopped cleanly
+        assert not thread.is_alive()
+        assert len(loop_iterations) > 0  # Loop ran at least once
+
+
+class TestWriteRetry:
+    """Tests for write retry with exponential backoff."""
+
+    def create_interface_for_write(self):
+        """Create a test interface with mocked dependencies."""
+        import threading
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
+                iface.name = "test-rnode"
+                iface.kotlin_bridge = MagicMock()
+                return iface
+
+    def test_write_uses_exponential_backoff(self):
+        """Write retry should use exponential backoff delays."""
+        import time
+        iface = self.create_interface_for_write()
+        test_data = b"test"
+
+        # Mock writeSync to always fail (return 0 bytes written)
+        iface.kotlin_bridge.writeSync.return_value = 0
+
+        sleep_calls = []
+
+        def mock_sleep(seconds):
+            sleep_calls.append(seconds)
+            # Don't actually sleep in tests
+
+        with patch('time.sleep', mock_sleep):
+            with pytest.raises(IOError):
+                iface._write(test_data)
+
+        # With 3 retries, we get 2 sleep calls between attempts
+        # Should have exponential backoff: 0.3s, 1.0s
+        assert len(sleep_calls) == 2
+        assert sleep_calls[0] == pytest.approx(0.3, rel=0.01)
+        assert sleep_calls[1] == pytest.approx(1.0, rel=0.01)
+
+    def test_write_succeeds_on_first_attempt(self):
+        """Write should not retry if first attempt succeeds."""
+        import time
+        iface = self.create_interface_for_write()
+        test_data = b"test"
+
+        # Mock writeSync to succeed
+        iface.kotlin_bridge.writeSync.return_value = len(test_data)
+
+        sleep_calls = []
+        with patch('time.sleep', lambda s: sleep_calls.append(s)):
+            iface._write(test_data)  # Should not raise
+
+        # No retries needed
+        assert len(sleep_calls) == 0
+        assert iface.kotlin_bridge.writeSync.call_count == 1
+
+    def test_write_succeeds_on_retry(self):
+        """Write should succeed if a retry works."""
+        import time
+        iface = self.create_interface_for_write()
+        test_data = b"test"
+
+        # Mock writeSync to fail first, then succeed
+        iface.kotlin_bridge.writeSync.side_effect = [0, len(test_data)]
+
+        sleep_calls = []
+        with patch('time.sleep', lambda s: sleep_calls.append(s)):
+            iface._write(test_data)  # Should not raise
+
+        # One retry delay
+        assert len(sleep_calls) == 1
+        assert iface.kotlin_bridge.writeSync.call_count == 2
+
+
 class TestKISSConstants:
     """Tests for KISS protocol constants."""
 

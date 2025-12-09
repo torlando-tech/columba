@@ -540,10 +540,11 @@ fun InterfaceCard(
                 }
 
                 // Reconnect button for offline RNode interfaces
-                val showReconnect = interfaceEntity.type == "RNode" &&
-                    interfaceEntity.enabled &&
-                    isOnline == false &&
-                    onReconnect != null
+                val showReconnect =
+                    interfaceEntity.type == "RNode" &&
+                        interfaceEntity.enabled &&
+                        isOnline == false &&
+                        onReconnect != null
                 if (showReconnect) {
                     TextButton(
                         onClick = onReconnect,

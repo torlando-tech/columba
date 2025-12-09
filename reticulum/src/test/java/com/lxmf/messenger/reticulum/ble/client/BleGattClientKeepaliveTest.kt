@@ -15,7 +15,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Unit tests for BleGattClient keepalive failure tracking.
@@ -175,8 +174,9 @@ class BleGattClientKeepaliveTest {
     fun `time to disconnect after continuous failures is approximately 45 seconds`() {
         // With 15s interval and 3 failures needed:
         // Failure 1 at ~15s, Failure 2 at ~30s, Failure 3 at ~45s -> disconnect
-        val expectedTimeToDisconnect = BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS *
-            BleConstants.MAX_CONNECTION_FAILURES
+        val expectedTimeToDisconnect =
+            BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS *
+                BleConstants.MAX_CONNECTION_FAILURES
 
         assertEquals(
             "Should disconnect after ~45 seconds of failures",
@@ -216,9 +216,10 @@ class BleGattClientKeepaliveTest {
         every { mockGatt.device } returns mockDevice
         every { mockDevice.address } returns address
 
-        val connectionDataClass = Class.forName(
-            "com.lxmf.messenger.reticulum.ble.client.BleGattClient\$ConnectionData",
-        )
+        val connectionDataClass =
+            Class.forName(
+                "com.lxmf.messenger.reticulum.ble.client.BleGattClient\$ConnectionData",
+            )
 
         // Find constructor with parameters:
         // gatt: BluetoothGatt, address: String, mtu: Int, rxCharacteristic, txCharacteristic,

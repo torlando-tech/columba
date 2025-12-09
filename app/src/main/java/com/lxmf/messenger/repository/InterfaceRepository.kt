@@ -159,27 +159,29 @@ class InterfaceRepository
                 when (entity.type) {
                     "AutoInterface" -> {
                         // Ports are optional - null means use RNS defaults
-                        val discoveryPort = if (json.has("discovery_port")) {
-                            val port = json.getInt("discovery_port")
-                            if (port !in 1..65535) {
-                                Log.e(TAG, "Invalid discovery port in database: $port")
-                                error("Invalid discovery port: $port")
+                        val discoveryPort =
+                            if (json.has("discovery_port")) {
+                                val port = json.getInt("discovery_port")
+                                if (port !in 1..65535) {
+                                    Log.e(TAG, "Invalid discovery port in database: $port")
+                                    error("Invalid discovery port: $port")
+                                }
+                                port
+                            } else {
+                                null
                             }
-                            port
-                        } else {
-                            null
-                        }
 
-                        val dataPort = if (json.has("data_port")) {
-                            val port = json.getInt("data_port")
-                            if (port !in 1..65535) {
-                                Log.e(TAG, "Invalid data port in database: $port")
-                                error("Invalid data port: $port")
+                        val dataPort =
+                            if (json.has("data_port")) {
+                                val port = json.getInt("data_port")
+                                if (port !in 1..65535) {
+                                    Log.e(TAG, "Invalid data port in database: $port")
+                                    error("Invalid data port: $port")
+                                }
+                                port
+                            } else {
+                                null
                             }
-                            port
-                        } else {
-                            null
-                        }
 
                         InterfaceConfig.AutoInterface(
                             name = entity.name,

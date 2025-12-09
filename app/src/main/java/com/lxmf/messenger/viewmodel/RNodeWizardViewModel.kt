@@ -805,6 +805,17 @@ class RNodeWizardViewModel
 
                     override fun onScanFailed(errorCode: Int) {
                         Log.e(TAG, "BLE scan failed: $errorCode")
+                        val errorMessage =
+                            when (errorCode) {
+                                1 -> "BLE scan failed: already started"
+                                2 -> "BLE scan failed: app not registered"
+                                3 -> "BLE scan failed: internal error"
+                                4 -> "BLE scan failed: feature unsupported"
+                                5 -> "BLE scan failed: out of hardware resources"
+                                6 -> "BLE scan failed: scanning too frequently"
+                                else -> "BLE scan failed: error code $errorCode"
+                            }
+                        setScanError(errorMessage)
                     }
                 }
 
@@ -814,6 +825,19 @@ class RNodeWizardViewModel
                 scanner.stopScan(callback)
             } catch (e: SecurityException) {
                 Log.e(TAG, "BLE scan permission denied", e)
+                setScanError("Bluetooth permission required. Please grant Bluetooth permissions in Settings.")
+            }
+        }
+
+        /**
+         * Set a scan error message and stop scanning.
+         */
+        private fun setScanError(message: String) {
+            _state.update {
+                it.copy(
+                    scanError = message,
+                    isScanning = false,
+                )
             }
         }
 
@@ -1494,5 +1518,15 @@ class RNodeWizardViewModel
         fun getEffectiveBluetoothType(): BluetoothType {
             val state = _state.value
             return state.selectedDevice?.type ?: state.manualBluetoothType
+        }
+
+        /**
+         * Cleanup when ViewModel is cleared.
+         * Cancels any ongoing polling jobs to prevent memory leaks.
+         */
+        override fun onCleared() {
+            super.onCleared()
+            stopRssiPolling()
+            Log.d(TAG, "RNodeWizardViewModel cleared, RSSI polling stopped")
         }
     }

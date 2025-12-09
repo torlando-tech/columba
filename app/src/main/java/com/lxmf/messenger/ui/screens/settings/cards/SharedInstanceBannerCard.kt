@@ -28,6 +28,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -249,6 +253,13 @@ fun SharedInstanceBannerCard(
                             )
                         }
 
+                        // Hint text about restart
+                        Text(
+                            text = "Service will restart automatically",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = contentColor.copy(alpha = 0.7f),
+                        )
+
                         // Show hint when toggle is disabled (ON but can't turn OFF)
                         if (preferOwnInstance && !canSwitchToShared) {
                             Text(
@@ -260,40 +271,48 @@ fun SharedInstanceBannerCard(
 
                         // RPC Key input (only when using shared instance)
                         if (isUsingSharedInstance && !preferOwnInstance) {
+                            var rpcKeyInput by remember { mutableStateOf(rpcKey ?: "") }
+
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "RPC Key (from Sideband → Connectivity)",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = contentColor,
                             )
-                            OutlinedTextField(
-                                value = rpcKey ?: "",
-                                onValueChange = { newValue ->
-                                    onRpcKeyChange(newValue.ifEmpty { null })
-                                },
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                placeholder = {
-                                    Text(
-                                        "Paste RPC key here...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                },
-                                singleLine = true,
-                                textStyle = MaterialTheme.typography.bodySmall,
-                            )
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                OutlinedTextField(
+                                    value = rpcKeyInput,
+                                    onValueChange = { rpcKeyInput = it },
+                                    modifier = Modifier.weight(1f),
+                                    placeholder = {
+                                        Text(
+                                            "Paste config or key...",
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    },
+                                    singleLine = false,
+                                    maxLines = 3,
+                                    textStyle = MaterialTheme.typography.bodySmall,
+                                )
+                                Button(
+                                    onClick = {
+                                        onRpcKeyChange(rpcKeyInput.ifEmpty { null })
+                                    },
+                                    enabled = rpcKeyInput != (rpcKey ?: ""),
+                                ) {
+                                    Text("Save")
+                                }
+                            }
                             Text(
-                                text = "Required for full shared instance functionality",
+                                text = "Paste full config or just the hex key",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = contentColor.copy(alpha = 0.7f),
                             )
                         }
-
-                        // Hint text
-                        Text(
-                            text = "Service will restart automatically",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = contentColor.copy(alpha = 0.7f),
-                        )
                     }
                 }
             }

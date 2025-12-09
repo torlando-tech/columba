@@ -43,7 +43,7 @@ data class SettingsState(
     // Shared instance state
     val isSharedInstance: Boolean = false,
     val preferOwnInstance: Boolean = false,
-    val isSharedInstanceBannerExpanded: Boolean = true,
+    val isSharedInstanceBannerExpanded: Boolean = false,
     val rpcKey: String? = null,
     val sharedInstanceLost: Boolean = false, // True when shared instance disconnected
     val sharedInstanceAvailable: Boolean = false, // True when shared instance detected while running own
@@ -535,16 +535,49 @@ class SettingsViewModel
         /**
          * Save the RPC key for shared instance authentication.
          * When the key changes, restart the service to apply it.
+         *
+         * Handles multiple input formats:
+         * - Raw hex key: "e17abc123..."
+         * - Sideband config format: "shared_instance_type = tcp\nrpc_key = e17abc123..."
          */
         fun saveRpcKey(rpcKey: String?) {
             viewModelScope.launch {
-                settingsRepository.saveRpcKey(rpcKey)
-                Log.d(TAG, "RPC key ${if (rpcKey != null) "updated" else "cleared"}")
+                val parsedKey = parseRpcKey(rpcKey)
+                settingsRepository.saveRpcKey(parsedKey)
+                Log.d(TAG, "RPC key ${if (parsedKey != null) "updated" else "cleared"}")
                 // Restart service to apply the change
                 if (!_state.value.isRestarting && _state.value.isSharedInstance) {
                     restartService()
                 }
             }
+        }
+
+        /**
+         * Parse RPC key from various input formats.
+         * Extracts the hex key value from Sideband's config export format.
+         */
+        private fun parseRpcKey(input: String?): String? {
+            if (input.isNullOrBlank()) return null
+
+            // Check if it's the Sideband config format (contains "rpc_key")
+            val rpcKeyPattern = Regex("""rpc_key\s*=\s*([a-fA-F0-9]+)""")
+            val match = rpcKeyPattern.find(input)
+            if (match != null) {
+                val key = match.groupValues[1]
+                Log.d(TAG, "Parsed RPC key from config format (${key.length} chars)")
+                return key
+            }
+
+            // Check if it's already a raw hex key (only hex characters)
+            val trimmed = input.trim()
+            if (trimmed.matches(Regex("^[a-fA-F0-9]+$"))) {
+                Log.d(TAG, "Using raw hex RPC key (${trimmed.length} chars)")
+                return trimmed
+            }
+
+            // Invalid format
+            Log.w(TAG, "Invalid RPC key format, ignoring")
+            return null
         }
 
         /**

@@ -66,6 +66,20 @@ interface RNodeErrorListener {
 }
 
 /**
+ * Listener interface for RNode online status changes.
+ * Implement this to receive notifications when RNode connects or disconnects.
+ * This enables event-driven UI updates for the network interfaces display.
+ */
+interface RNodeOnlineStatusListener {
+    /**
+     * Called when RNode online status changes.
+     *
+     * @param isOnline True if RNode is now online, false if offline
+     */
+    fun onRNodeOnlineStatusChanged(isOnline: Boolean)
+}
+
+/**
  * Kotlin RNode Bridge for Bluetooth communication.
  *
  * This bridge provides serial communication with RNode devices over both
@@ -212,6 +226,9 @@ class KotlinRNodeBridge(
     // Kotlin error listeners (for UI notification)
     private val errorListeners = mutableListOf<RNodeErrorListener>()
 
+    // Kotlin online status listeners (for UI notification)
+    private val onlineStatusListeners = mutableListOf<RNodeOnlineStatusListener>()
+
     /**
      * Set callback for received data.
      * Called on background thread when data arrives from RNode.
@@ -289,6 +306,53 @@ class KotlinRNodeBridge(
                     listener.onRNodeError(errorCode, errorMessage)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error listener threw exception", e)
+                }
+            }
+        }
+    }
+
+    /**
+     * Register a Kotlin listener for online status changes.
+     * Listeners will be called on a background thread when status changes.
+     *
+     * @param listener The listener to register
+     */
+    fun addOnlineStatusListener(listener: RNodeOnlineStatusListener) {
+        synchronized(onlineStatusListeners) {
+            if (!onlineStatusListeners.contains(listener)) {
+                onlineStatusListeners.add(listener)
+            }
+        }
+    }
+
+    /**
+     * Unregister a Kotlin online status listener.
+     *
+     * @param listener The listener to remove
+     */
+    fun removeOnlineStatusListener(listener: RNodeOnlineStatusListener) {
+        synchronized(onlineStatusListeners) {
+            onlineStatusListeners.remove(listener)
+        }
+    }
+
+    /**
+     * Notify online status change callbacks.
+     * Called from Python via the bridge when RNode online status changes.
+     * This enables event-driven UI updates for network interfaces display.
+     *
+     * @param isOnline True if RNode is now online, false if offline
+     */
+    fun notifyOnlineStatusChanged(isOnline: Boolean) {
+        Log.d(TAG, "████ RNODE ONLINE STATUS ████ online=$isOnline")
+
+        // Notify Kotlin listeners
+        synchronized(onlineStatusListeners) {
+            onlineStatusListeners.forEach { listener ->
+                try {
+                    listener.onRNodeOnlineStatusChanged(isOnline)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Online status listener threw exception", e)
                 }
             }
         }
@@ -460,7 +524,7 @@ class KotlinRNodeBridge(
         deviceName: String,
         adapter: BluetoothAdapter,
     ): Boolean {
-        Log.i(TAG, "Connecting to $deviceName via BLE...")
+        Log.d(TAG, "████ RNODE BLE CONNECT ████ deviceName=$deviceName")
 
         // First check bonded devices
         var device: BluetoothDevice? =
@@ -478,7 +542,7 @@ class KotlinRNodeBridge(
         }
 
         if (device == null) {
-            Log.e(TAG, "BLE device not found: $deviceName")
+            Log.e(TAG, "████ RNODE BLE FAILED ████ device not found: $deviceName")
             return false
         }
 
@@ -499,7 +563,7 @@ class KotlinRNodeBridge(
             }
         }
 
-        Log.e(TAG, "BLE connection failed after $BLE_CONNECT_MAX_RETRIES attempts")
+        Log.e(TAG, "████ RNODE BLE FAILED ████ failed after $BLE_CONNECT_MAX_RETRIES attempts")
         return false
     }
 
@@ -543,7 +607,7 @@ class KotlinRNodeBridge(
             connectionMode = RNodeConnectionMode.BLE
             isConnected.set(true)
 
-            Log.i(TAG, "Connected to $deviceName via BLE (MTU=$bleMtu)")
+            Log.d(TAG, "████ RNODE BLE SUCCESS ████ deviceName=$deviceName MTU=$bleMtu")
 
             // Notify Python
             onConnectionStateChanged?.callAttr("__call__", true, deviceName)

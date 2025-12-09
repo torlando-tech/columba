@@ -447,16 +447,20 @@ class ColumbaApplication : Application() {
                 return
             }
 
-            android.util.Log.d("ColumbaApplication", "Found ${associations.size} companion device association(s)")
+            android.util.Log.d("ColumbaApplication", "████ COMPANION DEVICE REGISTRATION ████ Found ${associations.size} association(s)")
 
             for (association in associations) {
                 try {
                     val macAddress = association.deviceMacAddress?.toString()
                     if (macAddress != null) {
+                        android.util.Log.d(
+                            "ColumbaApplication",
+                            "████ REGISTERING OBSERVER ████ MAC=$macAddress name=${association.displayName}",
+                        )
                         companionDeviceManager.startObservingDevicePresence(macAddress)
                         android.util.Log.d(
                             "ColumbaApplication",
-                            "Registered device presence observer for: ${association.displayName ?: macAddress}",
+                            "████ OBSERVER REGISTERED ████ MAC=$macAddress",
                         )
                     }
                 } catch (e: Exception) {

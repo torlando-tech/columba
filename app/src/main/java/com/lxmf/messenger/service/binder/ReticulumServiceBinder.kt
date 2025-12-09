@@ -111,6 +111,19 @@ class ReticulumServiceBinder(
                                 },
                             )
 
+                            // Register online status listener to trigger UI refresh when RNode connects/disconnects
+                            rnodeBridge?.addOnlineStatusListener(
+                                object : com.lxmf.messenger.reticulum.rnode.RNodeOnlineStatusListener {
+                                    override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                                        Log.d(TAG, "████ RNODE ONLINE STATUS CHANGED ████ online=$isOnline")
+                                        // Broadcast status change so UI can refresh interface list
+                                        broadcaster.broadcastStatusChange(
+                                            if (isOnline) "RNODE_ONLINE" else "RNODE_OFFLINE",
+                                        )
+                                    }
+                                },
+                            )
+
                             wrapper.callAttr("set_rnode_bridge", rnodeBridge)
                             Log.d(TAG, "RNode bridge set before Python initialization")
                         } catch (e: Exception) {
@@ -442,10 +455,11 @@ class ReticulumServiceBinder(
     }
 
     override fun reconnectRNodeInterface() {
-        Log.i(TAG, "reconnectRNodeInterface() called - attempting to reconnect RNode")
+        Log.d(TAG, "████ RECONNECT RNODE ████ reconnectRNodeInterface() called")
         scope.launch(Dispatchers.IO) {
             try {
                 wrapperManager.withWrapper { wrapper ->
+                    Log.d(TAG, "████ RECONNECT RNODE ████ calling Python initialize_rnode_interface()")
                     val result = wrapper.callAttr("initialize_rnode_interface")
 
                     @Suppress("UNCHECKED_CAST")
@@ -453,14 +467,14 @@ class ReticulumServiceBinder(
                     val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false
                     if (success) {
                         val message = resultDict?.entries?.find { it.key.toString() == "message" }?.value?.toString()
-                        Log.i(TAG, "RNode interface reconnected: ${message ?: "success"}")
+                        Log.d(TAG, "████ RECONNECT RNODE SUCCESS ████ ${message ?: "success"}")
                     } else {
                         val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"
-                        Log.e(TAG, "Failed to reconnect RNode interface: $error")
+                        Log.w(TAG, "████ RECONNECT RNODE FAILED ████ $error")
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error reconnecting RNode interface", e)
+                Log.e(TAG, "████ RECONNECT RNODE ERROR ████", e)
             }
         }
     }

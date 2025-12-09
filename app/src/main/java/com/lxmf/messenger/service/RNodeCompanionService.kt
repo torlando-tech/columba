@@ -95,7 +95,7 @@ class RNodeCompanionService : CompanionDeviceService() {
     @SuppressLint("MissingPermission")
     override fun onDeviceAppeared(associationInfo: AssociationInfo) {
         val deviceName = associationInfo.displayName ?: "Unknown"
-        Log.i(TAG, "RNode device appeared: $deviceName")
+        Log.d(TAG, "████ RNODE APPEARED ████ name=$deviceName")
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val device = associationInfo.associatedDevice?.bluetoothDevice
@@ -113,7 +113,7 @@ class RNodeCompanionService : CompanionDeviceService() {
      * Android 13+ (API 33) version with AssociationInfo.
      */
     override fun onDeviceDisappeared(associationInfo: AssociationInfo) {
-        Log.i(TAG, "RNode device disappeared: ${associationInfo.displayName ?: "Unknown"}")
+        Log.d(TAG, "████ RNODE DISAPPEARED ████ name=${associationInfo.displayName ?: "Unknown"}")
 
         // Cancel any pending reconnection if device disappears
         pendingReconnect?.let {
@@ -129,7 +129,7 @@ class RNodeCompanionService : CompanionDeviceService() {
      */
     @Deprecated("Use onDeviceAppeared(AssociationInfo) for Android 13+")
     override fun onDeviceAppeared(address: String) {
-        Log.i(TAG, "RNode device appeared (legacy): $address")
+        Log.d(TAG, "████ RNODE APPEARED (legacy) ████ address=$address")
         scheduleReconnection()
     }
 
@@ -139,7 +139,7 @@ class RNodeCompanionService : CompanionDeviceService() {
      */
     @Deprecated("Use onDeviceDisappeared(AssociationInfo) for Android 13+")
     override fun onDeviceDisappeared(address: String) {
-        Log.i(TAG, "RNode device disappeared (legacy): $address")
+        Log.d(TAG, "████ RNODE DISAPPEARED (legacy) ████ address=$address")
 
         // Cancel any pending reconnection
         pendingReconnect?.let { handler.removeCallbacks(it) }

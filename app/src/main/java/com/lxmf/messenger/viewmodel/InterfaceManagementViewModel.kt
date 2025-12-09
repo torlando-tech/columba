@@ -134,6 +134,7 @@ class InterfaceManagementViewModel
             observeBluetoothState()
             checkExternalPendingChanges()
             startPollingInterfaceStatus()
+            observeInterfaceStatusChanges()
         }
 
         /**
@@ -158,6 +159,32 @@ class InterfaceManagementViewModel
                         Log.e(TAG, "Error polling interface status", e)
                     }
                     delay(STATUS_POLL_INTERVAL_MS)
+                }
+            }
+        }
+
+        /**
+         * Observe interface status change events for immediate refresh.
+         * This provides event-driven updates when RNode connects/disconnects,
+         * supplementing the polling mechanism for faster UI updates.
+         */
+        private fun observeInterfaceStatusChanges() {
+            // Check if protocol is ServiceReticulumProtocol which has the event flow
+            val serviceProtocol =
+                reticulumProtocol as? com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+            if (serviceProtocol == null) {
+                Log.d(TAG, "Protocol is not ServiceReticulumProtocol, skipping event observation")
+                return
+            }
+
+            viewModelScope.launch {
+                serviceProtocol.interfaceStatusChanged.collect {
+                    Log.d(TAG, "████ INTERFACE STATUS EVENT ████ Triggering immediate refresh")
+                    try {
+                        fetchInterfaceStatus()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error refreshing interface status after event", e)
+                    }
                 }
             }
         }

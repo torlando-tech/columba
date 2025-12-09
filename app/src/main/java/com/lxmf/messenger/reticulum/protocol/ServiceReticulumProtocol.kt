@@ -32,7 +32,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -75,6 +77,11 @@ class ServiceReticulumProtocol(
     // Initialize to CONNECTING since we don't know service state until we query it
     private val _networkStatus = MutableStateFlow<NetworkStatus>(NetworkStatus.CONNECTING)
     override val networkStatus: StateFlow<NetworkStatus> = _networkStatus.asStateFlow()
+
+    // SharedFlow for interface status change events (triggers UI refresh)
+    // replay=0 means events are not replayed to late subscribers
+    private val _interfaceStatusChanged = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
+    val interfaceStatusChanged: SharedFlow<Unit> = _interfaceStatusChanged.asSharedFlow()
 
     // Phase 2, Task 2.3: Readiness tracking for explicit service binding notification
     // Thread-safe: Protected by bindLock to prevent race between callback and continuation storage
@@ -287,6 +294,13 @@ class ServiceReticulumProtocol(
             }
 
             override fun onStatusChanged(status: String) {
+                // Handle RNode online/offline status changes - emit event to trigger UI refresh
+                if (status == "RNODE_ONLINE" || status == "RNODE_OFFLINE") {
+                    Log.d(TAG, "████ RNODE STATUS EVENT ████ $status - triggering interface refresh")
+                    _interfaceStatusChanged.tryEmit(Unit)
+                    return // Don't update network status for interface-specific events
+                }
+
                 // Phase 2.1: Emit to StateFlow for reactive updates
                 val newStatus =
                     when {

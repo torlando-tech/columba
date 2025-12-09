@@ -254,6 +254,8 @@ class ColumbaRNodeInterface:
 
         # Error callback for surfacing RNode errors to UI
         self._on_error_callback = None
+        # Online status change callback for UI refresh
+        self._on_online_status_changed = None
 
         # Validate configuration
         self._validate_config()
@@ -337,7 +339,7 @@ class ColumbaRNodeInterface:
         """Stop the interface and disconnect."""
         self._running = False
         self._reconnecting = False  # Stop any reconnection attempts
-        self.online = False
+        self._set_online(False)
 
         if self.kotlin_bridge:
             self.kotlin_bridge.disconnect()
@@ -376,7 +378,7 @@ class ColumbaRNodeInterface:
         # Validate configuration
         if self._validate_radio_state():
             self.interface_ready = True
-            self.online = True
+            self._set_online(True)
             RNS.log(f"RNode '{self.name}' is online", RNS.LOG_INFO)
 
             # Display Columba logo on RNode if enabled
@@ -752,7 +754,7 @@ class ColumbaRNodeInterface:
             self._reconnecting = False
         else:
             RNS.log(f"RNode disconnected: {device_name}", RNS.LOG_WARNING)
-            self.online = False
+            self._set_online(False)
             self.detected = False
             # Start auto-reconnection if not already reconnecting
             self._start_reconnection_loop()
@@ -767,6 +769,33 @@ class ColumbaRNodeInterface:
         @param callback: Callable that receives (error_code, error_message)
         """
         self._on_error_callback = callback
+
+    def setOnOnlineStatusChanged(self, callback):
+        """
+        Set callback for online status change events.
+
+        The callback will be called when the interface's online status changes,
+        with signature: callback(is_online: bool)
+
+        This enables event-driven UI updates when the RNode connects/disconnects.
+
+        @param callback: Callable that receives (is_online)
+        """
+        self._on_online_status_changed = callback
+
+    def _set_online(self, is_online):
+        """
+        Set online status and notify callback if status changed.
+
+        @param is_online: New online status
+        """
+        old_status = self.online
+        self.online = is_online
+        if old_status != is_online and self._on_online_status_changed:
+            try:
+                self._on_online_status_changed(is_online)
+            except Exception as e:
+                RNS.log(f"Error in online status callback: {e}", RNS.LOG_ERROR)
 
     def _start_reconnection_loop(self):
         """Start a background thread to attempt reconnection."""

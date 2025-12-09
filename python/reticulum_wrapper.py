@@ -2965,17 +2965,41 @@ class ReticulumWrapper:
 
             self.rnode_interface.setOnErrorReceived(on_rnode_error)
 
-            # Start the interface
-            log_info("ReticulumWrapper", "initialize_rnode_interface", "Starting ColumbaRNodeInterface...")
-            if not self.rnode_interface.start():
-                error_msg = "Failed to start RNode interface"
-                log_error("ReticulumWrapper", "initialize_rnode_interface", error_msg)
-                return {'success': False, 'error': error_msg}
-
-            # Register with RNS Transport
+            # Register with RNS Transport BEFORE starting
+            # This ensures the interface is tracked even if initial connection fails
+            # (auto-reconnect may succeed later)
             RNS.Transport.interfaces.append(self.rnode_interface)
             log_info("ReticulumWrapper", "initialize_rnode_interface",
-                    f"✅ ColumbaRNodeInterface started and registered, online={self.rnode_interface.online}")
+                    "Registered ColumbaRNodeInterface with RNS Transport")
+
+            # Set up online status callback to notify Kotlin when interface comes online
+            def on_online_status_change(is_online):
+                log_info("ReticulumWrapper", "RNodeStatus",
+                        f"████ RNODE ONLINE STATUS CHANGED ████ online={is_online}")
+                if self.kotlin_rnode_bridge:
+                    try:
+                        self.kotlin_rnode_bridge.notifyOnlineStatusChanged(is_online)
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "RNodeStatus",
+                                f"Failed to notify Kotlin of online status: {e}")
+
+            if hasattr(self.rnode_interface, 'setOnOnlineStatusChanged'):
+                self.rnode_interface.setOnOnlineStatusChanged(on_online_status_change)
+                log_debug("ReticulumWrapper", "initialize_rnode_interface",
+                        "Set online status callback")
+
+            # Start the interface
+            log_info("ReticulumWrapper", "initialize_rnode_interface", "Starting ColumbaRNodeInterface...")
+            start_success = self.rnode_interface.start()
+
+            if start_success:
+                log_info("ReticulumWrapper", "initialize_rnode_interface",
+                        f"✅ ColumbaRNodeInterface started successfully, online={self.rnode_interface.online}")
+            else:
+                # Interface failed to start initially, but it has auto-reconnect capability
+                # Don't return failure - the interface is registered and will auto-reconnect
+                log_warning("ReticulumWrapper", "initialize_rnode_interface",
+                        "Initial RNode connection failed, but interface registered with auto-reconnect enabled")
 
             # Clear the pending config
             self._pending_rnode_config = None

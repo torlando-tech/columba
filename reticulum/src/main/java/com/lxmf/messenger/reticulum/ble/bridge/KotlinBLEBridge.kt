@@ -174,7 +174,7 @@ class KotlinBLEBridge(
     private val recentlyDeduplicatedIdentities = ConcurrentHashMap<String, Long>()
 
     // How long to prevent reconnection after deduplication (60 seconds)
-    private val DEDUPLICATION_COOLDOWN_MS = 60_000L
+    private val deduplicationCooldownMs = 60_000L
 
     /**
      * Data class for connections awaiting identity before Python notification.
@@ -693,12 +693,13 @@ class KotlinBLEBridge(
      * @param deviceName Advertised device name (e.g., "RNS-272b4c" or "Reticulum-272b4c")
      * @return true if the device should be skipped, false otherwise
      */
+    @Suppress("ReturnCount")
     private fun shouldSkipDiscoveredDevice(deviceName: String?): Boolean {
         if (deviceName == null) return false
 
         // Clean up old entries first
         val now = System.currentTimeMillis()
-        recentlyDeduplicatedIdentities.entries.removeIf { now - it.value > DEDUPLICATION_COOLDOWN_MS }
+        recentlyDeduplicatedIdentities.entries.removeIf { now - it.value > deduplicationCooldownMs }
 
         if (recentlyDeduplicatedIdentities.isEmpty()) return false
 
@@ -712,14 +713,11 @@ class KotlinBLEBridge(
 
         // Check if any recently deduplicated identity starts with this prefix
         // (device name has 6 hex chars = 3 bytes, full identity is 32 hex chars)
-        for (identityHash in recentlyDeduplicatedIdentities.keys) {
-            if (identityHash.startsWith(identityPrefix)) {
-                Log.i(TAG, "Skipping discovered device with name '$deviceName' - matches recently deduplicated identity $identityHash")
-                return true
-            }
+        val matchingIdentity = recentlyDeduplicatedIdentities.keys.find { it.startsWith(identityPrefix) }
+        if (matchingIdentity != null) {
+            Log.i(TAG, "Skipping discovered device with name '$deviceName' - matches recently deduplicated identity $matchingIdentity")
         }
-
-        return false
+        return matchingIdentity != null
     }
 
     /**
@@ -1439,7 +1437,9 @@ class KotlinBLEBridge(
             // Also check for in-progress central connections (race condition fix)
             // When identity arrives before handlePeerConnected, peer isn't in connectedPeers yet
             val isPendingCentral = pendingCentralConnections.contains(existingAddress)
-            if ((existingPeer != null && (existingPeer.isCentral || existingPeer.isPeripheral)) || isPendingCentral) {
+            val existingPeerHasConnection = existingPeer?.isCentral == true || existingPeer?.isPeripheral == true
+            val isActiveConnection = existingPeerHasConnection || isPendingCentral
+            if (isActiveConnection) {
                 // Only treat as duplicate if SAME connection direction
                 // Central-to-peripheral and peripheral-to-central are valid dual connections
                 val existingIsCentral = existingPeer?.isCentral == true || isPendingCentral

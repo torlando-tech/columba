@@ -78,6 +78,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun InterfaceManagementScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToRNodeWizard: (interfaceId: Long?) -> Unit = {},
     viewModel: InterfaceManagementViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -86,6 +87,12 @@ fun InterfaceManagementScreen(
 
     // State for delete confirmation dialog
     var interfaceToDelete by remember { mutableStateOf<InterfaceEntity?>(null) }
+
+    // State for error dialog
+    var errorDialogInterface by remember { mutableStateOf<InterfaceEntity?>(null) }
+
+    // State for interface type selection
+    var showTypeSelector by remember { mutableStateOf(false) }
 
     // Permission state
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -153,7 +160,7 @@ fun InterfaceManagementScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { viewModel.showAddDialog() },
+                onClick = { showTypeSelector = true },
                 containerColor = MaterialTheme.colorScheme.primary,
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Interface")
@@ -228,16 +235,34 @@ fun InterfaceManagementScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(state.interfaces) { iface ->
+                                val isOnline = state.interfaceOnlineStatus[iface.name]
                                 InterfaceCard(
                                     interfaceEntity = iface,
                                     onToggle = { enabled ->
                                         val hasPermissions = BlePermissionManager.hasAllPermissions(context)
                                         viewModel.toggleInterface(iface.id, enabled, hasPermissions)
                                     },
-                                    onEdit = { viewModel.showEditDialog(iface) },
+                                    onEdit = {
+                                        // Use wizard for RNode, dialog for other types
+                                        if (iface.type == "RNode") {
+                                            onNavigateToRNodeWizard(iface.id)
+                                        } else {
+                                            viewModel.showEditDialog(iface)
+                                        }
+                                    },
                                     onDelete = { interfaceToDelete = iface },
                                     bluetoothState = state.bluetoothState,
                                     blePermissionsGranted = state.blePermissionsGranted,
+                                    isOnline = isOnline,
+                                    onErrorClick = {
+                                        errorDialogInterface = iface
+                                    },
+                                    onReconnect =
+                                        if (iface.type == "RNode") {
+                                            { viewModel.reconnectRNodeInterface() }
+                                        } else {
+                                            null
+                                        },
                                 )
                             }
                         }
@@ -319,6 +344,24 @@ fun InterfaceManagementScreen(
         )
     }
 
+    // Interface Error Dialog
+    errorDialogInterface?.let { iface ->
+        val isOnline = state.interfaceOnlineStatus[iface.name]
+        val errorMessage =
+            iface.getErrorMessage(
+                state.bluetoothState,
+                state.blePermissionsGranted,
+                isOnline,
+            )
+        if (errorMessage != null) {
+            InterfaceErrorDialog(
+                interfaceName = iface.name,
+                errorMessage = errorMessage,
+                onDismiss = { errorDialogInterface = null },
+            )
+        }
+    }
+
     // Apply Changes Blocking Dialog
     if (state.isApplyingChanges) {
         ApplyChangesDialog()
@@ -344,6 +387,22 @@ fun InterfaceManagementScreen(
             sheetState = sheetState,
         )
     }
+
+    // Interface type selection dialog
+    if (showTypeSelector) {
+        InterfaceTypeSelector(
+            onTypeSelected = { type ->
+                showTypeSelector = false
+                if (type == "RNode") {
+                    onNavigateToRNodeWizard(null)
+                } else {
+                    viewModel.showAddDialog()
+                    viewModel.updateConfigState { it.copy(type = type) }
+                }
+            },
+            onDismiss = { showTypeSelector = false },
+        )
+    }
 }
 
 @Composable
@@ -354,10 +413,13 @@ fun InterfaceCard(
     onDelete: () -> Unit,
     bluetoothState: Int,
     blePermissionsGranted: Boolean,
+    isOnline: Boolean? = null,
+    onErrorClick: (() -> Unit)? = null,
+    onReconnect: (() -> Unit)? = null,
 ) {
     // Determine if toggle should be enabled and if there's an error
     val toggleEnabled = interfaceEntity.shouldToggleBeEnabled(bluetoothState, blePermissionsGranted)
-    val errorMessage = interfaceEntity.getErrorMessage(bluetoothState, blePermissionsGranted)
+    val errorMessage = interfaceEntity.getErrorMessage(bluetoothState, blePermissionsGranted, isOnline)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -425,27 +487,73 @@ fun InterfaceCard(
 
                 // Error Badge (only show if interface is enabled and there's an error)
                 if (interfaceEntity.enabled && errorMessage != null) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        shape = RoundedCornerShape(4.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                    if (onErrorClick != null) {
+                        // Clickable error badge
+                        Surface(
+                            onClick = onErrorClick,
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = RoundedCornerShape(4.dp),
                         ) {
-                            Icon(
-                                Icons.Default.Warning,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                            )
-                            Text(
-                                text = errorMessage,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = "Tap for details",
+                                    modifier = Modifier.size(12.dp),
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                                Text(
+                                    text = errorMessage,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                            }
                         }
+                    } else {
+                        // Non-clickable error badge
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = RoundedCornerShape(4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                                Text(
+                                    text = errorMessage,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Reconnect button for offline RNode interfaces
+                val showReconnect =
+                    interfaceEntity.type == "RNode" &&
+                        interfaceEntity.enabled &&
+                        isOnline == false &&
+                        onReconnect != null
+                if (showReconnect) {
+                    TextButton(
+                        onClick = onReconnect,
+                        colors =
+                            ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary,
+                            ),
+                    ) {
+                        Text("Reconnect", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
@@ -743,4 +851,140 @@ private fun getInterfaceTypeLabel(type: String): String {
         "AndroidBLE" -> "Bluetooth LE"
         else -> type
     }
+}
+
+/**
+ * Dialog for selecting interface type when adding a new interface.
+ */
+@Composable
+fun InterfaceTypeSelector(
+    onTypeSelected: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Interface Type") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                InterfaceTypeOption(
+                    title = "Auto Discovery",
+                    description = "Automatically discover peers on local network",
+                    onClick = { onTypeSelected("AutoInterface") },
+                )
+                InterfaceTypeOption(
+                    title = "TCP Client",
+                    description = "Connect to a remote Reticulum transport node",
+                    onClick = { onTypeSelected("TCPClient") },
+                )
+                InterfaceTypeOption(
+                    title = "Bluetooth LE",
+                    description = "Connect to nearby devices via Bluetooth",
+                    onClick = { onTypeSelected("AndroidBLE") },
+                )
+                InterfaceTypeOption(
+                    title = "RNode LoRa",
+                    description = "Long-range radio via RNode hardware",
+                    onClick = { onTypeSelected("RNode") },
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
+private fun InterfaceTypeOption(
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    isHighlighted: Boolean = false,
+) {
+    Card(
+        onClick = onClick,
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isHighlighted) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+            ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+                color =
+                    if (isHighlighted) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color =
+                    if (isHighlighted) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    },
+            )
+        }
+    }
+}
+
+/**
+ * Dialog to show detailed interface error information.
+ */
+@Composable
+fun InterfaceErrorDialog(
+    interfaceName: String,
+    errorMessage: String,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+            )
+        },
+        title = { Text("Interface Issue") },
+        text = {
+            Column {
+                Text(
+                    text = interfaceName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = errorMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("OK")
+            }
+        },
+    )
 }

@@ -63,16 +63,18 @@ fun SharedInstanceBannerCard(
     onDismissLostWarning: () -> Unit = {},
 ) {
     // Use error color when shared instance is lost, primary otherwise
-    val containerColor = if (sharedInstanceLost) {
-        MaterialTheme.colorScheme.errorContainer
-    } else {
-        MaterialTheme.colorScheme.primaryContainer
-    }
-    val contentColor = if (sharedInstanceLost) {
-        MaterialTheme.colorScheme.onErrorContainer
-    } else {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    }
+    val containerColor =
+        if (sharedInstanceLost) {
+            MaterialTheme.colorScheme.errorContainer
+        } else {
+            MaterialTheme.colorScheme.primaryContainer
+        }
+    val contentColor =
+        if (sharedInstanceLost) {
+            MaterialTheme.colorScheme.onErrorContainer
+        } else {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        }
 
     Card(
         modifier =
@@ -104,20 +106,22 @@ fun SharedInstanceBannerCard(
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(
-                        imageVector = if (sharedInstanceLost) {
-                            Icons.Default.LinkOff
-                        } else {
-                            Icons.Default.Link
-                        },
+                        imageVector =
+                            if (sharedInstanceLost) {
+                                Icons.Default.LinkOff
+                            } else {
+                                Icons.Default.Link
+                            },
                         contentDescription = "Instance Mode",
                         tint = contentColor,
                     )
                     Text(
-                        text = when {
-                            sharedInstanceLost -> "Shared Instance Disconnected"
-                            isUsingSharedInstance -> "Connected to Shared Instance"
-                            else -> "Using Columba's Own Instance"
-                        },
+                        text =
+                            when {
+                                sharedInstanceLost -> "Shared Instance Disconnected"
+                                isUsingSharedInstance -> "Connected to Shared Instance"
+                                else -> "Using Columba's Own Instance"
+                            },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = contentColor,
@@ -157,16 +161,18 @@ fun SharedInstanceBannerCard(
                                 tint = contentColor,
                             )
                             Text(
-                                text = "The shared Reticulum instance (e.g., Sideband) appears " +
-                                    "to be offline. Columba cannot send or receive messages.",
+                                text =
+                                    "The shared Reticulum instance (e.g., Sideband) appears " +
+                                        "to be offline. Columba cannot send or receive messages.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = contentColor,
                             )
                         }
 
                         Text(
-                            text = "You can switch to Columba's own instance to restore " +
-                                "connectivity, or wait for the shared instance to come back online.",
+                            text =
+                                "You can switch to Columba's own instance to restore " +
+                                    "connectivity, or wait for the shared instance to come back online.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = contentColor,
                         )
@@ -192,13 +198,14 @@ fun SharedInstanceBannerCard(
                     } else {
                         // Normal state
                         Text(
-                            text = if (isUsingSharedInstance) {
-                                "Another app (e.g., Sideband) is managing the Reticulum network " +
-                                    "on this device. Columba is using that connection."
-                            } else {
-                                "Columba is running its own Reticulum instance. Toggle off to use " +
-                                    "a shared instance if available."
-                            },
+                            text =
+                                if (isUsingSharedInstance) {
+                                    "Another app (e.g., Sideband) is managing the Reticulum network " +
+                                        "on this device. Columba is using that connection."
+                                } else {
+                                    "Columba is running its own Reticulum instance. Toggle off to use " +
+                                        "a shared instance if available."
+                                },
                             style = MaterialTheme.typography.bodyMedium,
                             color = contentColor,
                         )
@@ -219,8 +226,9 @@ fun SharedInstanceBannerCard(
                                     color = contentColor,
                                 )
                                 Text(
-                                    text = "• BLE connections to other Columba users require " +
-                                        "Columba's own instance",
+                                    text =
+                                        "• BLE connections to other Columba users require " +
+                                            "Columba's own instance",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = contentColor,
                                 )
@@ -240,11 +248,12 @@ fun SharedInstanceBannerCard(
                             Text(
                                 text = "Use Columba's own instance",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (toggleEnabled) {
-                                    contentColor
-                                } else {
-                                    contentColor.copy(alpha = 0.5f)
-                                },
+                                color =
+                                    if (toggleEnabled) {
+                                        contentColor
+                                    } else {
+                                        contentColor.copy(alpha = 0.5f)
+                                    },
                             )
                             Switch(
                                 checked = preferOwnInstance,

@@ -29,14 +29,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.viewmodel.InterfaceConfigState
@@ -309,7 +309,7 @@ fun TCPClientFields(
         singleLine = true,
         supportingText = {
             Text(
-                "Optional: Sets the virtual network name for this segment. " + 
+                "Optional: Sets the virtual network name for this segment. " +
                     "This allows multiple separate networks to exist on the same " +
                     "physical channel or medium.",
                 style = MaterialTheme.typography.bodySmall,

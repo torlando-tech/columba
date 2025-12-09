@@ -1,10 +1,13 @@
 package com.lxmf.messenger.service.binder
 
+import android.content.Context
 import android.util.Log
 import com.lxmf.messenger.IInitializationCallback
 import com.lxmf.messenger.IReadinessCallback
 import com.lxmf.messenger.IReticulumService
 import com.lxmf.messenger.IReticulumServiceCallback
+import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
+import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
 import com.lxmf.messenger.service.manager.IdentityManager
@@ -34,6 +37,7 @@ import org.json.JSONObject
  * - State is managed through ServiceState atomic operations
  */
 class ReticulumServiceBinder(
+    private val context: Context,
     private val state: ServiceState,
     private val wrapperManager: PythonWrapperManager,
     private val identityManager: IdentityManager,
@@ -52,6 +56,9 @@ class ReticulumServiceBinder(
     companion object {
         private const val TAG = "ReticulumServiceBinder"
     }
+
+    // RNode bridge - created lazily when needed
+    private var rnodeBridge: KotlinRNodeBridge? = null
 
     // ===========================================
     // Lifecycle Methods
@@ -83,6 +90,44 @@ class ReticulumServiceBinder(
                             Log.d(TAG, "BLE bridge set before Python initialization")
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to set BLE bridge before init: ${e.message}", e)
+                        }
+
+                        // Setup RNode bridge BEFORE Python initialization
+                        // (ColumbaRNodeInterface needs kotlin_rnode_bridge during initialization)
+                        try {
+                            rnodeBridge = KotlinRNodeBridge(context)
+
+                            // Register error listener to surface RNode errors to UI
+                            rnodeBridge?.addErrorListener(
+                                object : RNodeErrorListener {
+                                    override fun onRNodeError(
+                                        errorCode: Int,
+                                        errorMessage: String,
+                                    ) {
+                                        Log.w(TAG, "RNode error surfaced to service: ($errorCode) $errorMessage")
+                                        // Broadcast error as status change so UI can display it
+                                        broadcaster.broadcastStatusChange("RNODE_ERROR:$errorMessage")
+                                    }
+                                },
+                            )
+
+                            // Register online status listener to trigger UI refresh when RNode connects/disconnects
+                            rnodeBridge?.addOnlineStatusListener(
+                                object : com.lxmf.messenger.reticulum.rnode.RNodeOnlineStatusListener {
+                                    override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                                        Log.d(TAG, "████ RNODE ONLINE STATUS CHANGED ████ online=$isOnline")
+                                        // Broadcast status change so UI can refresh interface list
+                                        broadcaster.broadcastStatusChange(
+                                            if (isOnline) "RNODE_ONLINE" else "RNODE_OFFLINE",
+                                        )
+                                    }
+                                },
+                            )
+
+                            wrapper.callAttr("set_rnode_bridge", rnodeBridge)
+                            Log.d(TAG, "RNode bridge set before Python initialization")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to set RNode bridge before init: ${e.message}", e)
                         }
                     },
                     onSuccess = { isSharedInstance ->
@@ -402,6 +447,38 @@ class ReticulumServiceBinder(
             }.toString()
         }
 
+    override fun getRNodeRssi(): Int {
+        val bridge = rnodeBridge ?: return -100
+        // Trigger an RSSI read and return current value
+        bridge.requestRssiUpdate()
+        return bridge.getRssi()
+    }
+
+    override fun reconnectRNodeInterface() {
+        Log.d(TAG, "████ RECONNECT RNODE ████ reconnectRNodeInterface() called")
+        scope.launch(Dispatchers.IO) {
+            try {
+                wrapperManager.withWrapper { wrapper ->
+                    Log.d(TAG, "████ RECONNECT RNODE ████ calling Python initialize_rnode_interface()")
+                    val result = wrapper.callAttr("initialize_rnode_interface")
+
+                    @Suppress("UNCHECKED_CAST")
+                    val resultDict = result?.asMap() as? Map<com.chaquo.python.PyObject, com.chaquo.python.PyObject>
+                    val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false
+                    if (success) {
+                        val message = resultDict?.entries?.find { it.key.toString() == "message" }?.value?.toString()
+                        Log.d(TAG, "████ RECONNECT RNODE SUCCESS ████ ${message ?: "success"}")
+                    } else {
+                        val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"
+                        Log.w(TAG, "████ RECONNECT RNODE FAILED ████ $error")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "████ RECONNECT RNODE ERROR ████", e)
+            }
+        }
+    }
+
     // ===========================================
     // Private Helpers
     // ===========================================
@@ -409,6 +486,31 @@ class ReticulumServiceBinder(
     private fun setupBridges() {
         // Note: BLE bridge is set in beforeInit callback (before Python initialization)
         // because AndroidBLEDriver needs it during Reticulum startup
+
+        // Initialize RNode interface if configured
+        // (RNode bridge was set in beforeInit, but interface needs to be started after RNS init)
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("initialize_rnode_interface")
+
+                @Suppress("UNCHECKED_CAST")
+                val resultDict = result?.asMap() as? Map<com.chaquo.python.PyObject, com.chaquo.python.PyObject>
+                val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false
+                if (success) {
+                    val message = resultDict?.entries?.find { it.key.toString() == "message" }?.value?.toString()
+                    if (message != null) {
+                        Log.d(TAG, "RNode interface: $message")
+                    } else {
+                        Log.i(TAG, "RNode interface initialized successfully")
+                    }
+                } else {
+                    val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"
+                    Log.e(TAG, "Failed to initialize RNode interface: $error")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to initialize RNode interface: ${e.message}", e)
+        }
 
         // Setup Reticulum bridge for event-driven announces
         try {

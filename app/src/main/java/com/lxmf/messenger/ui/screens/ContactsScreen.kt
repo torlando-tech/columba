@@ -47,9 +47,9 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -742,11 +742,12 @@ fun ContactListItem(
                                 Text(
                                     text = if (contact.isOnline) "Online" else formatRelativeTime(lastSeen),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (contact.isOnline) {
-                                        MeshConnected
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
+                                    color =
+                                        if (contact.isOnline) {
+                                            MeshConnected
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
                                 )
 
                                 if (contact.isOnline && contact.hops != null) {
@@ -792,11 +793,12 @@ fun ContactListItem(
                     Icon(
                         imageVector = if (contact.isPinned) Icons.Filled.Star else Icons.Outlined.Star,
                         contentDescription = if (contact.isPinned) "Unpin" else "Pin",
-                        tint = if (contact.isPinned) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = textAlpha)
-                        },
+                        tint =
+                            if (contact.isPinned) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = textAlpha)
+                            },
                     )
                 }
             }

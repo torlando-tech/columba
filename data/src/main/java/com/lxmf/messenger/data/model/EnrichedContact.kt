@@ -62,7 +62,9 @@ data class EnrichedContact(
         if (publicKey != null) {
             if (other.publicKey == null) return false
             if (!publicKey.contentEquals(other.publicKey)) return false
-        } else if (other.publicKey != null) return false
+        } else if (other.publicKey != null) {
+            return false
+        }
         if (displayName != other.displayName) return false
         if (customNickname != other.customNickname) return false
         if (announceName != other.announceName) return false

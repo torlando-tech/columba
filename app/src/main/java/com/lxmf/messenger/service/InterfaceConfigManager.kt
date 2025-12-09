@@ -178,15 +178,16 @@ class InterfaceConfigManager
 
                 // Load active identity and ensure its file exists (recover from keyData if needed)
                 val activeIdentity = identityRepository.getActiveIdentitySync()
-                val identityPath = if (activeIdentity != null) {
-                    identityRepository.ensureIdentityFileExists(activeIdentity)
-                        .onFailure { error ->
-                            Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
-                        }
-                        .getOrNull()
-                } else {
-                    null
-                }
+                val identityPath =
+                    if (activeIdentity != null) {
+                        identityRepository.ensureIdentityFileExists(activeIdentity)
+                            .onFailure { error ->
+                                Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
+                            }
+                            .getOrNull()
+                    } else {
+                        null
+                    }
                 val displayName = activeIdentity?.displayName
                 Log.d(TAG, "Active identity: ${activeIdentity?.displayName ?: "none"}, verified path: $identityPath")
 
@@ -265,9 +266,10 @@ class InterfaceConfigManager
 
                     if (announces.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
                         // Map announces to peer identity format (destinationHash, publicKey)
-                        val announcePeerIdentities = announces.map { announce ->
-                            announce.destinationHash to announce.publicKey
-                        }
+                        val announcePeerIdentities =
+                            announces.map { announce ->
+                                announce.destinationHash to announce.publicKey
+                            }
                         reticulumProtocol.restorePeerIdentities(announcePeerIdentities)
                             .onSuccess { count ->
                                 Log.d(TAG, "✓ Restored $count announce peer identities")
@@ -302,6 +304,44 @@ class InterfaceConfigManager
                 status.toString().contains("RUNNING") || status.toString().contains("READY")
             } catch (e: Exception) {
                 false
+            }
+        }
+
+        /**
+         * Mark that there are pending interface changes that need to be applied.
+         * Used when interfaces are modified outside of InterfaceManagementViewModel
+         * (e.g., from RNode wizard).
+         */
+        fun setPendingChanges(hasPending: Boolean) {
+            context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("has_pending_interface_changes", hasPending)
+                .apply()
+        }
+
+        /**
+         * Check if there are pending interface changes and clear the flag.
+         * @return true if there were pending changes, false otherwise
+         */
+        fun checkAndClearPendingChanges(): Boolean {
+            val prefs = context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+            val hasPending = prefs.getBoolean("has_pending_interface_changes", false)
+            if (hasPending) {
+                prefs.edit().putBoolean("has_pending_interface_changes", false).apply()
+            }
+            return hasPending
+        }
+
+        /**
+         * Get the current RSSI of the active RNode BLE connection.
+         *
+         * @return RSSI in dBm, or -100 if not connected or not available
+         */
+        fun getRNodeRssi(): Int {
+            return if (reticulumProtocol is ServiceReticulumProtocol) {
+                reticulumProtocol.getRNodeRssi()
+            } else {
+                -100
             }
         }
     }

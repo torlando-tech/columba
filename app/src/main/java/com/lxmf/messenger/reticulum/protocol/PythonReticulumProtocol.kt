@@ -489,7 +489,7 @@ class PythonReticulumProtocol(
         Log.d(TAG, "Reticulum configuration validation passed")
     }
 
-    @Suppress("NestedBlockDepth") // Interface serialization requires nested when/try structure
+    @Suppress("NestedBlockDepth", "LongMethod") // Interface serialization requires nested when/try structure
     private fun buildConfigJson(config: ReticulumConfig): String {
         Log.d(TAG, "buildConfigJson: Starting")
         try {
@@ -557,13 +557,17 @@ class PythonReticulumProtocol(
                             Log.d(TAG, "buildConfigJson: RNode - ${iface.name}")
                             ifaceJson.put("type", "RNode")
                             ifaceJson.put("name", iface.name)
-                            ifaceJson.put("port", iface.port)
+                            ifaceJson.put("target_device_name", iface.targetDeviceName)
+                            ifaceJson.put("connection_mode", iface.connectionMode)
                             ifaceJson.put("frequency", iface.frequency)
                             ifaceJson.put("bandwidth", iface.bandwidth)
                             ifaceJson.put("tx_power", iface.txPower)
                             ifaceJson.put("spreading_factor", iface.spreadingFactor)
                             ifaceJson.put("coding_rate", iface.codingRate)
+                            iface.stAlock?.let { ifaceJson.put("st_alock", it) }
+                            iface.ltAlock?.let { ifaceJson.put("lt_alock", it) }
                             ifaceJson.put("mode", iface.mode)
+                            ifaceJson.put("enable_framebuffer", iface.enableFramebuffer)
                         }
                         is InterfaceConfig.AndroidBLE -> {
                             Log.d(TAG, "buildConfigJson: AndroidBLE - ${iface.name}")
@@ -1087,5 +1091,10 @@ class PythonReticulumProtocol(
         // No-op for PythonReticulumProtocol since it doesn't use service-based polling
         // This is only relevant for ServiceReticulumProtocol
         Log.d(TAG, "setConversationActive($active) - no-op for PythonReticulumProtocol")
+    }
+
+    override suspend fun reconnectRNodeInterface() {
+        // No-op for PythonReticulumProtocol - RNode reconnection is handled by ServiceReticulumProtocol
+        Log.d(TAG, "reconnectRNodeInterface() - no-op for PythonReticulumProtocol")
     }
 }

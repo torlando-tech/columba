@@ -389,6 +389,7 @@ class ContactRepository
          * @param nickname Optional display name for the contact
          * @return Result indicating success or failure
          */
+
         /**
          * Sealed class to represent the result of adding a pending contact.
          * Used to communicate whether the contact was resolved immediately or is still pending.

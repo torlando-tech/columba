@@ -132,7 +132,11 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python build dependencies
-        run: pip install build
+        run: pip install build pytest
+
+      - name: Run Python unit tests
+        run: |
+          cd python && python -m pytest test_rnode_interface.py -v
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew

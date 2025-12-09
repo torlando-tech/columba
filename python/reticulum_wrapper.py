@@ -104,6 +104,13 @@ class ReticulumWrapper:
         self.transport_identity_hash = None  # 16-byte Transport identity hash (for BLE Protocol v2.2)
         self.kotlin_ble_bridge = None  # KotlinBLEBridge instance (passed from Kotlin)
 
+        # RNode interface support (Bluetooth Classic or BLE to RNode LoRa hardware)
+        self.rnode_interface = None  # ColumbaRNodeInterface instance (if enabled)
+        self.kotlin_rnode_bridge = None  # KotlinRNodeBridge instance (passed from Kotlin)
+        self._pending_rnode_config = None  # Stored RNode config during initialization
+        self._rnode_init_lock = threading.Lock()  # Lock to prevent concurrent RNode initialization
+        self._rnode_initializing = False  # Flag to track if RNode initialization is in progress
+
         # Delivery status callback support (for event-driven message status updates)
         self.kotlin_delivery_status_callback = None  # Callback to Kotlin for delivery status events
 
@@ -141,6 +148,44 @@ class ReticulumWrapper:
         """
         self.kotlin_ble_bridge = bridge
         log_info("ReticulumWrapper", "set_ble_bridge", "KotlinBLEBridge instance set")
+
+    def set_rnode_bridge(self, bridge):
+        """
+        Set the KotlinRNodeBridge instance for RNode operations.
+        Should be called from Kotlin before initialize().
+
+        Args:
+            bridge: KotlinRNodeBridge instance from Kotlin
+        """
+        self.kotlin_rnode_bridge = bridge
+        log_info("ReticulumWrapper", "set_rnode_bridge", "KotlinRNodeBridge instance set")
+
+    def get_paired_rnodes(self) -> Dict:
+        """
+        Get list of paired Bluetooth devices that might be RNodes.
+
+        Uses the KotlinRNodeBridge to query paired devices.
+        Returns devices that appear to be RNodes based on naming patterns.
+
+        Returns:
+            Dict with:
+            - success: boolean
+            - devices: list of device name strings
+            - error: optional error message
+        """
+        try:
+            if self.kotlin_rnode_bridge is None:
+                return {'success': False, 'devices': [], 'error': 'KotlinRNodeBridge not set'}
+
+            devices = self.kotlin_rnode_bridge.getPairedRNodes()
+            device_list = list(devices) if devices else []
+
+            log_info("ReticulumWrapper", "get_paired_rnodes", f"Found {len(device_list)} paired RNode(s)")
+            return {'success': True, 'devices': device_list}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_paired_rnodes", f"ERROR getting paired RNodes: {e}")
+            return {'success': False, 'devices': [], 'error': str(e)}
 
     def set_reticulum_bridge(self, bridge):
         """
@@ -459,30 +504,26 @@ class ReticulumWrapper:
                     config_lines.append(f"    mode = {mode}")
 
             elif iface_type == "RNode":
-                config_lines.append("    type = RNodeInterface")
-                config_lines.append("    enabled = yes")
-
-                port = iface.get("port", "/dev/ttyUSB0")
-                config_lines.append(f"    port = {port}")
-
-                frequency = iface.get("frequency", 915000000)
-                config_lines.append(f"    frequency = {frequency}")
-
-                bandwidth = iface.get("bandwidth", 125000)
-                config_lines.append(f"    bandwidth = {bandwidth}")
-
-                tx_power = iface.get("tx_power", 7)
-                config_lines.append(f"    txpower = {tx_power}")
-
-                spreading_factor = iface.get("spreading_factor", 7)
-                config_lines.append(f"    spreadingfactor = {spreading_factor}")
-
-                coding_rate = iface.get("coding_rate", 5)
-                config_lines.append(f"    codingrate = {coding_rate}")
-
-                mode = iface.get("mode", "full")
-                if mode != "full":
-                    config_lines.append(f"    mode = {mode}")
+                # RNode interfaces are handled specially via ColumbaRNodeInterface
+                # Don't write to config file - standard RNodeInterface uses jnius which doesn't work with Chaquopy
+                # Store the config for later use by ColumbaRNodeInterface
+                self._pending_rnode_config = {
+                    "name": iface.get("name", "RNode LoRa"),
+                    "target_device_name": iface.get("target_device_name", iface.get("port", "")),
+                    "connection_mode": iface.get("connection_mode", "classic"),
+                    "frequency": iface.get("frequency", 915000000),
+                    "bandwidth": iface.get("bandwidth", 125000),
+                    "tx_power": iface.get("tx_power", 7),
+                    "spreading_factor": iface.get("spreading_factor", 7),
+                    "coding_rate": iface.get("coding_rate", 5),
+                    "st_alock": iface.get("st_alock"),
+                    "lt_alock": iface.get("lt_alock"),
+                    "mode": iface.get("mode", "full"),
+                    "enable_framebuffer": iface.get("enable_framebuffer", True),  # Display Columba logo on RNode
+                }
+                log_info("ReticulumWrapper", "_create_config_file",
+                        f"RNode config stored for ColumbaRNodeInterface: {self._pending_rnode_config['target_device_name']}")
+                continue  # Skip writing to config file
 
             elif iface_type == "AndroidBLE":
                 config_lines.append("    type = AndroidBLE")
@@ -2841,6 +2882,136 @@ class ReticulumWrapper:
             import traceback
             traceback.print_exc()
             return {'success': False, 'error': str(e)}
+
+    def initialize_rnode_interface(self) -> Dict:
+        """
+        Initialize the RNode interface with Kotlin bridge architecture.
+
+        Unlike BLE interface which is loaded by RNS from config, RNode interface
+        is created directly here using ColumbaRNodeInterface. This is because
+        the standard RNodeInterface uses jnius which is incompatible with Chaquopy.
+
+        The RNode config was stored in _pending_rnode_config during config creation.
+
+        Returns:
+            Dict with 'success' boolean and optional 'error' string
+        """
+        # Prevent concurrent initialization (race condition fix)
+        # Acquire lock before checking/setting initialization flag to prevent race condition
+        # (Double-check locking without proper memory barriers is broken in Python)
+        with self._rnode_init_lock:
+            if self._rnode_initializing:
+                log_info("ReticulumWrapper", "initialize_rnode_interface",
+                        "RNode initialization already in progress, skipping duplicate call")
+                return {'success': True, 'message': 'Initialization already in progress'}
+            self._rnode_initializing = True
+
+        try:
+            if not self.initialized:
+                return {'success': False, 'error': 'Reticulum not initialized'}
+
+            # Check if we already have an RNode interface that just needs reconnecting
+            if self.rnode_interface is not None:
+                if not self.rnode_interface.online:
+                    log_info("ReticulumWrapper", "initialize_rnode_interface",
+                            "Reconnecting existing offline RNode interface...")
+                    if self.rnode_interface.start():
+                        log_info("ReticulumWrapper", "initialize_rnode_interface",
+                                f"✅ RNode interface reconnected, online={self.rnode_interface.online}")
+                        return {'success': True, 'message': 'RNode interface reconnected'}
+                    else:
+                        return {'success': False, 'error': 'Failed to reconnect RNode interface'}
+                else:
+                    log_info("ReticulumWrapper", "initialize_rnode_interface",
+                            "RNode interface already online, skipping")
+                    return {'success': True, 'message': 'RNode interface already online'}
+
+            # Check if we have pending RNode config (for initial creation)
+            if not hasattr(self, '_pending_rnode_config') or self._pending_rnode_config is None:
+                log_info("ReticulumWrapper", "initialize_rnode_interface", "No RNode config pending, skipping")
+                return {'success': True, 'message': 'No RNode interface configured'}
+
+            # Check if Kotlin bridge is available
+            if self.kotlin_rnode_bridge is None:
+                return {'success': False, 'error': 'KotlinRNodeBridge not set. Call set_rnode_bridge() first.'}
+
+            log_info("ReticulumWrapper", "initialize_rnode_interface",
+                    f"Creating ColumbaRNodeInterface for {self._pending_rnode_config['target_device_name']}")
+
+            # Import ColumbaRNodeInterface
+            from rnode_interface import ColumbaRNodeInterface
+
+            # Create the RNode interface
+            # Note: ColumbaRNodeInterface gets kotlin_rnode_bridge from owner (self) via _get_kotlin_bridge()
+            self.rnode_interface = ColumbaRNodeInterface(
+                owner=self,
+                name=self._pending_rnode_config['name'],
+                config=self._pending_rnode_config
+            )
+
+            # Set up error callback to surface RNode errors to Kotlin/UI
+            def on_rnode_error(error_code, error_message):
+                log_error("ReticulumWrapper", "RNodeError", f"RNode error ({error_code}): {error_message}")
+                if self.kotlin_rnode_bridge:
+                    try:
+                        self.kotlin_rnode_bridge.notifyError(error_code, error_message)
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "RNodeError", f"Failed to notify Kotlin: {e}")
+
+            self.rnode_interface.setOnErrorReceived(on_rnode_error)
+
+            # Set up online status callback to notify Kotlin when interface comes online
+            def on_online_status_change(is_online):
+                log_info("ReticulumWrapper", "RNodeStatus",
+                        f"████ RNODE ONLINE STATUS CHANGED ████ online={is_online}")
+                if self.kotlin_rnode_bridge:
+                    try:
+                        self.kotlin_rnode_bridge.notifyOnlineStatusChanged(is_online)
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "RNodeStatus",
+                                f"Failed to notify Kotlin of online status: {e}")
+
+            if hasattr(self.rnode_interface, 'setOnOnlineStatusChanged'):
+                self.rnode_interface.setOnOnlineStatusChanged(on_online_status_change)
+                log_debug("ReticulumWrapper", "initialize_rnode_interface",
+                        "Set online status callback")
+
+            # Start the interface FIRST before registering with Transport
+            # This ensures we catch any fatal initialization errors before committing
+            log_info("ReticulumWrapper", "initialize_rnode_interface", "Starting ColumbaRNodeInterface...")
+            start_success = self.rnode_interface.start()
+
+            # Register with RNS Transport after starting
+            # The interface is registered even if start() returns False because:
+            # 1. The interface has auto-reconnect capability
+            # 2. start() failure may be transient (Bluetooth not ready, device not in range)
+            # 3. RNS Transport checks online status before sending
+            RNS.Transport.interfaces.append(self.rnode_interface)
+            log_info("ReticulumWrapper", "initialize_rnode_interface",
+                    f"Registered ColumbaRNodeInterface with RNS Transport (start_success={start_success})")
+
+            if start_success:
+                log_info("ReticulumWrapper", "initialize_rnode_interface",
+                        f"✅ ColumbaRNodeInterface started successfully, online={self.rnode_interface.online}")
+            else:
+                # Interface failed to start initially, but it has auto-reconnect capability
+                # Don't return failure - the interface is registered and will auto-reconnect
+                log_warning("ReticulumWrapper", "initialize_rnode_interface",
+                        "Initial RNode connection failed, but interface registered with auto-reconnect enabled")
+
+            # Clear the pending config
+            self._pending_rnode_config = None
+
+            return {'success': True}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "initialize_rnode_interface", f"ERROR initializing RNode interface: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'success': False, 'error': str(e)}
+
+        finally:
+            self._rnode_initializing = False
 
     # ========== Identity Management Methods ==========
 

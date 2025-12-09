@@ -817,7 +817,7 @@ object DatabaseModule {
                 // If not, apply the 17->18 migration first
                 val cursor = database.query("PRAGMA table_info(contacts)")
                 var hasStatusColumn = false
-                
+
                 try {
                     while (cursor.moveToNext()) {
                         val columnName = cursor.getString(cursor.getColumnIndexOrThrow("name"))
@@ -829,12 +829,12 @@ object DatabaseModule {
                 } finally {
                     cursor.close()
                 }
-                
+
                 // If contacts table is missing status column, apply 17->18 migration first
                 if (!hasStatusColumn) {
                     // Step 1: Rename old table
                     database.execSQL("ALTER TABLE contacts RENAME TO contacts_old")
-                    
+
                     // Step 2: Create new table with nullable publicKey and status column
                     database.execSQL(
                         """
@@ -855,7 +855,7 @@ object DatabaseModule {
                         )
                         """.trimIndent(),
                     )
-                    
+
                     // Step 3: Copy data from old table (existing contacts get 'ACTIVE' status)
                     database.execSQL(
                         """
@@ -864,14 +864,14 @@ object DatabaseModule {
                         FROM contacts_old
                         """.trimIndent(),
                     )
-                    
+
                     // Step 4: Drop old table
                     database.execSQL("DROP TABLE contacts_old")
-                    
+
                     // Step 5: Recreate index
                     database.execSQL("CREATE INDEX IF NOT EXISTS index_contacts_identityHash ON contacts(identityHash)")
                 }
-                
+
                 // Now safe to do the UPDATE operation
                 database.execSQL(
                     """
@@ -899,12 +899,12 @@ object DatabaseModule {
                 val cursor = database.query("PRAGMA table_info(contacts)")
                 var hasStatusColumn = false
                 var publicKeyIsNullable = false
-                
+
                 try {
                     while (cursor.moveToNext()) {
                         val columnName = cursor.getString(cursor.getColumnIndexOrThrow("name"))
                         val notNull = cursor.getInt(cursor.getColumnIndexOrThrow("notnull"))
-                        
+
                         if (columnName == "status") {
                             hasStatusColumn = true
                         }
@@ -915,12 +915,12 @@ object DatabaseModule {
                 } finally {
                     cursor.close()
                 }
-                
+
                 // If contacts table is missing status column or publicKey is NOT NULL, fix it
                 if (!hasStatusColumn || !publicKeyIsNullable) {
                     // Step 1: Rename old table
                     database.execSQL("ALTER TABLE contacts RENAME TO contacts_old")
-                    
+
                     // Step 2: Create new table with nullable publicKey and status column
                     database.execSQL(
                         """
@@ -941,7 +941,7 @@ object DatabaseModule {
                         )
                         """.trimIndent(),
                     )
-                    
+
                     // Step 3: Copy data from old table (existing contacts get 'ACTIVE' status)
                     database.execSQL(
                         """
@@ -950,21 +950,27 @@ object DatabaseModule {
                         FROM contacts_old
                         """.trimIndent(),
                     )
-                    
+
                     // Step 4: Drop old table
                     database.execSQL("DROP TABLE contacts_old")
-                    
+
                     // Step 5: Recreate index
                     database.execSQL("CREATE INDEX IF NOT EXISTS index_contacts_identityHash ON contacts(identityHash)")
                 }
-                
+
                 // MessageEntity indices
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_messages_timestamp ON messages(timestamp)")
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_messages_conversationHash_identityHash_timestamp ON messages(conversationHash, identityHash, timestamp)")
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_messages_conversationHash_identityHash_isFromMe_isRead ON messages(conversationHash, identityHash, isFromMe, isRead)")
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_messages_conversationHash_identityHash_timestamp ON messages(conversationHash, identityHash, timestamp)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_messages_conversationHash_identityHash_isFromMe_isRead ON messages(conversationHash, identityHash, isFromMe, isRead)",
+                )
 
                 // ConversationEntity indices
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_conversations_identityHash_lastMessageTimestamp ON conversations(identityHash, lastMessageTimestamp)")
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_conversations_identityHash_lastMessageTimestamp ON conversations(identityHash, lastMessageTimestamp)",
+                )
 
                 // AnnounceEntity indices
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_announces_lastSeenTimestamp ON announces(lastSeenTimestamp)")

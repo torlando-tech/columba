@@ -77,6 +77,7 @@ object InterfaceDatabaseModule {
     /**
      * Provides the InterfaceConfigManager for applying configuration changes.
      */
+    @Suppress("LongParameterList") // Hilt DI requires all dependencies as parameters
     @Provides
     @Singleton
     fun provideInterfaceConfigManager(

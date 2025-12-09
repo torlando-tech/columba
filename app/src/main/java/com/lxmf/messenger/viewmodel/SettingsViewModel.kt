@@ -49,6 +49,7 @@ data class SettingsState(
     val sharedInstanceAvailable: Boolean = false, // True when shared instance detected while running own
 )
 
+@Suppress("TooManyFunctions") // ViewModel with many user interaction methods is expected
 @HiltViewModel
 class SettingsViewModel
     @Inject
@@ -67,6 +68,13 @@ class SettingsViewModel
             private const val SHARED_INSTANCE_LOST_THRESHOLD_MS = 10_000L // 10 seconds to consider lost
             private const val SHARED_INSTANCE_PORT = 37428 // Default RNS shared instance port
             private const val SOCKET_TIMEOUT_MS = 1000 // Socket connection timeout
+
+            /**
+             * Controls whether shared instance monitors are started in init.
+             * Set to false for unit testing to avoid infinite loops.
+             * @suppress VisibleForTesting
+             */
+            internal var enableMonitors = true
         }
 
         private val _state =
@@ -85,10 +93,13 @@ class SettingsViewModel
 
         init {
             loadSettings()
-            startSharedInstanceMonitor()
-            startSharedInstanceAvailabilityMonitor()
+            if (enableMonitors) {
+                startSharedInstanceMonitor()
+                startSharedInstanceAvailabilityMonitor()
+            }
         }
 
+        @Suppress("LongMethod") // Complex flow combination logic is best kept together for readability
         private fun loadSettings() {
             viewModelScope.launch {
                 // Add initial delay to allow Reticulum service and DataStore to fully initialize
@@ -556,28 +567,30 @@ class SettingsViewModel
          * Parse RPC key from various input formats.
          * Extracts the hex key value from Sideband's config export format.
          */
-        private fun parseRpcKey(input: String?): String? {
+        internal fun parseRpcKey(input: String?): String? {
             if (input.isNullOrBlank()) return null
 
             // Check if it's the Sideband config format (contains "rpc_key")
             val rpcKeyPattern = Regex("""rpc_key\s*=\s*([a-fA-F0-9]+)""")
             val match = rpcKeyPattern.find(input)
-            if (match != null) {
-                val key = match.groupValues[1]
-                Log.d(TAG, "Parsed RPC key from config format (${key.length} chars)")
-                return key
-            }
 
-            // Check if it's already a raw hex key (only hex characters)
-            val trimmed = input.trim()
-            if (trimmed.matches(Regex("^[a-fA-F0-9]+$"))) {
-                Log.d(TAG, "Using raw hex RPC key (${trimmed.length} chars)")
-                return trimmed
+            val result = when {
+                match != null -> {
+                    val key = match.groupValues[1]
+                    Log.d(TAG, "Parsed RPC key from config format (${key.length} chars)")
+                    key
+                }
+                input.trim().matches(Regex("^[a-fA-F0-9]+$")) -> {
+                    val trimmed = input.trim()
+                    Log.d(TAG, "Using raw hex RPC key (${trimmed.length} chars)")
+                    trimmed
+                }
+                else -> {
+                    Log.w(TAG, "Invalid RPC key format, ignoring")
+                    null
+                }
             }
-
-            // Invalid format
-            Log.w(TAG, "Invalid RPC key format, ignoring")
-            return null
+            return result
         }
 
         /**
@@ -719,8 +732,9 @@ class SettingsViewModel
                     )
                     true
                 }
-            } catch (e: Exception) {
+            } catch (@Suppress("SwallowedException") e: Exception) {
                 // Connection refused, timeout, etc. = no shared instance
+                // Not logging to avoid spamming logs during polling
                 false
             }
         }

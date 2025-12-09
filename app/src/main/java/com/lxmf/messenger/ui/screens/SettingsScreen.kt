@@ -113,15 +113,12 @@ fun SettingsScreen(
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Shared instance banner - show when shared instance is relevant:
-                // 1. Connected to shared instance
-                // 2. Shared instance available (detected while running own)
-                // 3. Shared instance was lost (show warning)
-                // 4. Service is restarting (keep visible during transition)
-                // Hidden when: running own instance with no shared instance detected
-                if (state.isSharedInstance || state.sharedInstanceAvailable ||
-                    state.sharedInstanceLost || state.isRestarting
-                ) {
+                // Show shared instance banner when relevant to the user
+                val showSharedInstanceBanner = state.isSharedInstance ||
+                    state.sharedInstanceAvailable ||
+                    state.sharedInstanceLost ||
+                    state.isRestarting
+                if (showSharedInstanceBanner) {
                     SharedInstanceBannerCard(
                         isExpanded = state.isSharedInstanceBannerExpanded,
                         preferOwnInstance = state.preferOwnInstance,

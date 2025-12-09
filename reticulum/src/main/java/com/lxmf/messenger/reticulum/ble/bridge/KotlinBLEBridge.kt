@@ -1625,17 +1625,26 @@ class KotlinBLEBridge(
         // Complete pending connection notification (race condition fix)
         // This fires the deferred onConnected callback with the now-available identity
         completedPending?.let { pending ->
+            // Re-read peer state - deduplication may have changed isCentral/isPeripheral flags
+            // after pendingConnection was stored. Using stale flags would notify Python about
+            // a connection type that was closed during deduplication!
+            val currentPeer = connectedPeers[address]
             Log.w(
                 TAG,
                 "[CALLBACK] handleIdentityReceived: Completing DEFERRED connection " +
                     "for $address with identity ${identityHash.take(16)}...",
             )
-            Log.i(TAG, "Notifying Python of deferred connection: $address with identity $identityHash")
+            Log.i(
+                TAG,
+                "Notifying Python of deferred connection: $address with identity $identityHash " +
+                    "(pending: central=${pending.isCentral}/peripheral=${pending.isPeripheral}, " +
+                    "current: central=${currentPeer?.isCentral}/peripheral=${currentPeer?.isPeripheral})",
+            )
             notifyPythonConnected(
                 address = pending.address,
-                mtu = pending.mtu,
-                isCentral = pending.isCentral,
-                isPeripheral = pending.isPeripheral,
+                mtu = currentPeer?.mtu ?: pending.mtu,
+                isCentral = currentPeer?.isCentral ?: pending.isCentral,
+                isPeripheral = currentPeer?.isPeripheral ?: pending.isPeripheral,
                 identityHash = identityHash,
             )
         } ?: run {

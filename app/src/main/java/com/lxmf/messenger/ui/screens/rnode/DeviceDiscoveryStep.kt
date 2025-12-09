@@ -379,6 +379,23 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                     placeholder = { Text("e.g., RNode 1234") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    isError = state.manualDeviceNameError != null,
+                    supportingText = {
+                        val error = state.manualDeviceNameError
+                        val warning = state.manualDeviceNameWarning
+                        when {
+                            error != null ->
+                                Text(
+                                    error,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            warning != null ->
+                                Text(
+                                    warning,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                )
+                        }
+                    },
                     leadingIcon = {
                         Icon(Icons.Default.Bluetooth, contentDescription = null)
                     },

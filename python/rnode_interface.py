@@ -912,11 +912,13 @@ class ColumbaRNodeInterface:
 
     def get_rssi(self):
         """Get last received signal strength."""
-        return self.r_stat_rssi
+        with self._read_lock:
+            return self.r_stat_rssi
 
     def get_snr(self):
         """Get last received signal-to-noise ratio."""
-        return self.r_stat_snr
+        with self._read_lock:
+            return self.r_stat_snr
 
     def __str__(self):
         return f"ColumbaRNodeInterface[{self.name}]"

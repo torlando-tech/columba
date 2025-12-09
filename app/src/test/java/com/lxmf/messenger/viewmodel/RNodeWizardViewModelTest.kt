@@ -791,5 +791,4 @@ class RNodeWizardViewModelTest {
                 assertFalse("Scanning should be stopped on error", stateWithError.isScanning)
             }
         }
-
 }

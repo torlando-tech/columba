@@ -461,6 +461,67 @@ class TestThreadSafety:
         assert len(loop_iterations) > 0  # Loop ran at least once
 
 
+class TestThreadSafeAccessors:
+    """Tests for thread-safe RSSI/SNR accessors."""
+
+    def create_interface(self):
+        """Create a test interface with mocked dependencies."""
+        import threading
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
+                iface._read_lock = threading.Lock()
+                iface.r_stat_rssi = -75
+                iface.r_stat_snr = 8.5
+                return iface
+
+    def test_get_rssi_uses_lock(self):
+        """get_rssi() should acquire _read_lock for thread safety."""
+        iface = self.create_interface()
+        mock_lock = MagicMock()
+        mock_lock.__enter__ = MagicMock(return_value=None)
+        mock_lock.__exit__ = MagicMock(return_value=None)
+        iface._read_lock = mock_lock
+
+        result = iface.get_rssi()
+
+        mock_lock.__enter__.assert_called_once()
+        mock_lock.__exit__.assert_called_once()
+        assert result == -75
+
+    def test_get_snr_uses_lock(self):
+        """get_snr() should acquire _read_lock for thread safety."""
+        iface = self.create_interface()
+        mock_lock = MagicMock()
+        mock_lock.__enter__ = MagicMock(return_value=None)
+        mock_lock.__exit__ = MagicMock(return_value=None)
+        iface._read_lock = mock_lock
+
+        result = iface.get_snr()
+
+        mock_lock.__enter__.assert_called_once()
+        mock_lock.__exit__.assert_called_once()
+        assert result == 8.5
+
+    def test_get_rssi_returns_correct_value_under_lock(self):
+        """get_rssi() should return correct value while holding lock."""
+        iface = self.create_interface()
+        iface.r_stat_rssi = -90
+
+        result = iface.get_rssi()
+
+        assert result == -90
+
+    def test_get_snr_returns_correct_value_under_lock(self):
+        """get_snr() should return correct value while holding lock."""
+        iface = self.create_interface()
+        iface.r_stat_snr = 12.0
+
+        result = iface.get_snr()
+
+        assert result == 12.0
+
+
 class TestWriteRetry:
     """Tests for write retry with exponential backoff."""
 

@@ -120,48 +120,12 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
 
         Spacer(Modifier.height(16.dp))
 
-        // Frequency region summary
-        state.selectedFrequencyRegion?.let { region ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Default.SignalCellularAlt,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            "Frequency Region",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            region.name,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            "${region.frequency / 1_000_000.0} MHz • ${region.maxTxPower} dBm max • ${region.dutyCycleDisplay}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-
-            // Duty cycle warning for restricted regions
-            if (region.hasDutyCycleLimit) {
+        // In custom mode, skip showing region/modem/slot summary cards
+        // since user is configuring everything manually
+        if (!state.isCustomMode) {
+            // Frequency region summary
+            state.selectedFrequencyRegion?.let { region ->
                 Card(
-                    colors =
-                        CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                        ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
@@ -169,109 +133,151 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
-                            Icons.Default.Warning,
+                            Icons.Default.SignalCellularAlt,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                "Duty Cycle Limit: ${region.dutyCycle}%",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                "Frequency Region",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
-                                if (region.dutyCycle <= 1) {
-                                    "This region has very strict limits. Airtime limits (${region.dutyCycle}%) applied automatically in Advanced Settings."
-                                } else {
-                                    "This region requires limiting transmission time. Airtime limits (${region.dutyCycle}%) applied automatically in Advanced Settings."
-                                },
+                                region.name,
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                "${region.frequency / 1_000_000.0} MHz • ${region.maxTxPower} dBm max • ${region.dutyCycleDisplay}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+
+                // Duty cycle warning for restricted regions
+                if (region.hasDutyCycleLimit) {
+                    Card(
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                            ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "Duty Cycle Limit: ${region.dutyCycle}%",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                                Text(
+                                    if (region.dutyCycle <= 1) {
+                                        "This region has very strict limits. Airtime limits " +
+                                            "(${region.dutyCycle}%) applied automatically in Advanced Settings."
+                                    } else {
+                                        "This region requires limiting transmission time. Airtime limits " +
+                                            "(${region.dutyCycle}%) applied automatically in Advanced Settings."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+
+            // Modem preset summary
+            state.selectedModemPreset?.let { preset ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            if (preset.displayName.startsWith("Short")) {
+                                Icons.Default.Speed
+                            } else {
+                                Icons.Default.Radio
+                            },
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "Modem Preset",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                preset.displayName,
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                "SF${preset.spreadingFactor} • ${preset.bandwidth / 1000} kHz • 4/${preset.codingRate}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
             }
-        }
 
-        // Modem preset summary
-        state.selectedModemPreset?.let { preset ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+            // Frequency slot summary
+            state.selectedFrequencyRegion?.let { region ->
+                val frequency = viewModel.getFrequencyForSlot(state.selectedSlot)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Icon(
-                        if (preset.displayName.startsWith("Short")) {
-                            Icons.Default.Speed
-                        } else {
-                            Icons.Default.Radio
-                        },
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            "Modem Preset",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Default.Radio,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Text(
-                            preset.displayName,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            "SF${preset.spreadingFactor} • ${preset.bandwidth / 1000} kHz • 4/${preset.codingRate}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "Frequency Slot",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                "Slot ${state.selectedSlot}",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                FrequencySlotCalculator.formatFrequency(frequency),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
+                Spacer(Modifier.height(8.dp))
             }
-            Spacer(Modifier.height(8.dp))
-        }
-
-        // Frequency slot summary
-        state.selectedFrequencyRegion?.let { region ->
-            val frequency = viewModel.getFrequencyForSlot(state.selectedSlot)
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Default.Radio,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            "Frequency Slot",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            "Slot ${state.selectedSlot}",
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            FrequencySlotCalculator.formatFrequency(frequency),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-        }
+        } // end if (!state.isCustomMode)
 
         // Popular preset summary (if using city-specific preset)
         state.selectedPreset?.let { preset ->

@@ -86,6 +86,8 @@ data class RNodeWizardState(
     val scanError: String? = null,
     val showManualEntry: Boolean = false,
     val manualDeviceName: String = "",
+    val manualDeviceNameError: String? = null,
+    val manualDeviceNameWarning: String? = null,
     val manualBluetoothType: BluetoothType = BluetoothType.CLASSIC,
     val isPairingInProgress: Boolean = false,
     val pairingError: String? = null,
@@ -129,6 +131,9 @@ data class RNodeWizardState(
     val codingRateError: String? = null,
     val stAlockError: String? = null,
     val ltAlockError: String? = null,
+    // Regulatory warning
+    val showRegulatoryWarning: Boolean = false,
+    val regulatoryWarningMessage: String? = null,
     // Save state
     val isSaving: Boolean = false,
     val saveError: String? = null,
@@ -156,6 +161,7 @@ class RNodeWizardViewModel
             private const val PAIRING_START_TIMEOUT_MS = 5_000L // 5s to start pairing
             private const val PIN_ENTRY_TIMEOUT_MS = 60_000L // 60s for user to enter PIN
             private const val RSSI_UPDATE_INTERVAL_MS = 3000L // Update RSSI every 3s
+            private const val MAX_DEVICE_NAME_LENGTH = 32 // Standard Bluetooth device name limit
         }
 
         private val _state = MutableStateFlow(RNodeWizardState())
@@ -172,6 +178,10 @@ class RNodeWizardViewModel
 
         // Device type cache - persists detected BLE vs Classic types
         private val deviceTypePrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        // Track user-modified fields to preserve state during navigation
+        // When user explicitly modifies a field, we don't overwrite it with region defaults
+        private val userModifiedFields = mutableSetOf<String>()
 
         /**
          * Get cached Bluetooth type for a device address.
@@ -331,9 +341,16 @@ class RNodeWizardViewModel
                         WizardStep.REGION_SELECTION
                     }
                     WizardStep.REGION_SELECTION -> {
-                        // Apply frequency region settings when moving to modem step
-                        applyFrequencyRegionSettings()
-                        WizardStep.MODEM_PRESET
+                        if (currentState.isCustomMode) {
+                            // Custom mode: skip modem and slot selection, go straight to review
+                            // Also expand advanced settings by default
+                            _state.update { it.copy(showAdvancedSettings = true) }
+                            WizardStep.REVIEW_CONFIGURE
+                        } else {
+                            // Apply frequency region settings when moving to modem step
+                            applyFrequencyRegionSettings()
+                            WizardStep.MODEM_PRESET
+                        }
                     }
                     WizardStep.MODEM_PRESET -> {
                         // Apply modem preset settings when moving to slot step
@@ -353,13 +370,20 @@ class RNodeWizardViewModel
         }
 
         fun goToPreviousStep() {
+            val currentState = _state.value
             val prevStep =
-                when (_state.value.currentStep) {
+                when (currentState.currentStep) {
                     WizardStep.DEVICE_DISCOVERY -> WizardStep.DEVICE_DISCOVERY // Already at start
                     WizardStep.REGION_SELECTION -> WizardStep.DEVICE_DISCOVERY
                     WizardStep.MODEM_PRESET -> WizardStep.REGION_SELECTION
                     WizardStep.FREQUENCY_SLOT -> WizardStep.MODEM_PRESET
-                    WizardStep.REVIEW_CONFIGURE -> WizardStep.FREQUENCY_SLOT
+                    WizardStep.REVIEW_CONFIGURE ->
+                        if (currentState.isCustomMode) {
+                            // Custom mode: go back to region selection (skipping modem and slot)
+                            WizardStep.REGION_SELECTION
+                        } else {
+                            WizardStep.FREQUENCY_SLOT
+                        }
                 }
             _state.update { it.copy(currentStep = prevStep) }
         }
@@ -369,11 +393,15 @@ class RNodeWizardViewModel
             return when (state.currentStep) {
                 WizardStep.DEVICE_DISCOVERY ->
                     state.selectedDevice != null ||
-                        (state.showManualEntry && state.manualDeviceName.isNotBlank())
+                        (
+                            state.showManualEntry &&
+                                state.manualDeviceName.isNotBlank() &&
+                                state.manualDeviceNameError == null
+                        )
                 WizardStep.REGION_SELECTION ->
-                    state.selectedFrequencyRegion != null // Must select a region
+                    state.selectedFrequencyRegion != null || state.isCustomMode
                 WizardStep.MODEM_PRESET ->
-                    state.selectedModemPreset != null // Must select a modem preset
+                    true // Default preset is pre-selected, user can always proceed
                 WizardStep.FREQUENCY_SLOT ->
                     true // Slot always has a valid selection
                 WizardStep.REVIEW_CONFIGURE ->
@@ -393,16 +421,18 @@ class RNodeWizardViewModel
                     "" // No limit
                 }
 
+            // Only apply defaults for fields that the user hasn't explicitly modified
+            // This preserves user changes and validation errors during navigation
             _state.update {
                 it.copy(
-                    frequency = region.frequency.toString(),
-                    frequencyError = null, // Clear any previous validation error
-                    txPower = region.defaultTxPower.toString(),
-                    txPowerError = null, // Clear any previous validation error
-                    stAlock = airtimeLimit,
-                    stAlockError = null, // Clear any previous validation error
-                    ltAlock = airtimeLimit,
-                    ltAlockError = null, // Clear any previous validation error
+                    frequency = if ("frequency" !in userModifiedFields) region.frequency.toString() else it.frequency,
+                    frequencyError = if ("frequency" !in userModifiedFields) null else it.frequencyError,
+                    txPower = if ("txPower" !in userModifiedFields) region.defaultTxPower.toString() else it.txPower,
+                    txPowerError = if ("txPower" !in userModifiedFields) null else it.txPowerError,
+                    stAlock = if ("stAlock" !in userModifiedFields) airtimeLimit else it.stAlock,
+                    stAlockError = if ("stAlock" !in userModifiedFields) null else it.stAlockError,
+                    ltAlock = if ("ltAlock" !in userModifiedFields) airtimeLimit else it.ltAlock,
+                    ltAlockError = if ("ltAlock" !in userModifiedFields) null else it.ltAlockError,
                 )
             }
         }
@@ -1087,7 +1117,28 @@ class RNodeWizardViewModel
         }
 
         fun updateManualDeviceName(name: String) {
-            _state.update { it.copy(manualDeviceName = name) }
+            val (error, warning) = validateManualDeviceName(name)
+            _state.update {
+                it.copy(
+                    manualDeviceName = name,
+                    manualDeviceNameError = error,
+                    manualDeviceNameWarning = warning,
+                )
+            }
+        }
+
+        /**
+         * Validates the manual device name entry.
+         * @return Pair of (error, warning) - error prevents proceeding, warning is informational
+         */
+        private fun validateManualDeviceName(name: String): Pair<String?, String?> {
+            return when {
+                name.length > MAX_DEVICE_NAME_LENGTH ->
+                    "Device name must be $MAX_DEVICE_NAME_LENGTH characters or less" to null
+                name.isNotBlank() && !name.startsWith("RNode", ignoreCase = true) ->
+                    null to "Device may not be an RNode. Proceed with caution."
+                else -> null to null
+            }
         }
 
         fun updateManualBluetoothType(type: BluetoothType) {
@@ -1259,11 +1310,47 @@ class RNodeWizardViewModel
                     selectedFrequencyRegion = null,
                 )
             }
+            updateRegulatoryWarning()
+        }
+
+        /**
+         * Updates the regulatory warning based on current state.
+         * Shows warning when:
+         * - Custom mode with no region selected
+         * - Region with duty cycle restrictions but airtime limits not set
+         */
+        private fun updateRegulatoryWarning() {
+            val state = _state.value
+            val region = state.selectedFrequencyRegion
+            val stAlock = state.stAlock.toDoubleOrNull()
+            val ltAlock = state.ltAlock.toDoubleOrNull()
+            val isCustomMode = state.isCustomMode
+
+            val (showWarning, message) =
+                when {
+                    isCustomMode && region == null ->
+                        true to "No region selected. You are responsible for ensuring compliance with local regulations."
+
+                    region != null && region.dutyCycle < 100 && (stAlock == null || ltAlock == null) ->
+                        true to "Region ${region.name} has a ${region.dutyCycle}% duty cycle limit. " +
+                            "Airtime limits are not set. Ensure compliance with local regulations."
+
+                    else -> false to null
+                }
+
+            _state.update {
+                it.copy(
+                    showRegulatoryWarning = showWarning,
+                    regulatoryWarningMessage = message,
+                )
+            }
         }
 
         // ========== FREQUENCY REGION SELECTION ==========
 
         fun selectFrequencyRegion(region: FrequencyRegion) {
+            // Clear user modifications - user is explicitly requesting region defaults
+            userModifiedFields.clear()
             _state.update {
                 it.copy(
                     selectedFrequencyRegion = region,
@@ -1323,6 +1410,7 @@ class RNodeWizardViewModel
         }
 
         fun updateFrequency(value: String) {
+            userModifiedFields.add("frequency")
             val region = _state.value.selectedFrequencyRegion
             val result = RNodeConfigValidator.validateFrequency(value, region)
             _state.update { it.copy(frequency = value, frequencyError = result.errorMessage) }
@@ -1344,21 +1432,26 @@ class RNodeWizardViewModel
         }
 
         fun updateTxPower(value: String) {
+            userModifiedFields.add("txPower")
             val region = _state.value.selectedFrequencyRegion
             val result = RNodeConfigValidator.validateTxPower(value, region)
             _state.update { it.copy(txPower = value, txPowerError = result.errorMessage) }
         }
 
         fun updateStAlock(value: String) {
+            userModifiedFields.add("stAlock")
             val region = _state.value.selectedFrequencyRegion
             val result = RNodeConfigValidator.validateAirtimeLimit(value, region)
             _state.update { it.copy(stAlock = value, stAlockError = result.errorMessage) }
+            updateRegulatoryWarning()
         }
 
         fun updateLtAlock(value: String) {
+            userModifiedFields.add("ltAlock")
             val region = _state.value.selectedFrequencyRegion
             val result = RNodeConfigValidator.validateAirtimeLimit(value, region)
             _state.update { it.copy(ltAlock = value, ltAlockError = result.errorMessage) }
+            updateRegulatoryWarning()
         }
 
         fun updateInterfaceMode(mode: String) {

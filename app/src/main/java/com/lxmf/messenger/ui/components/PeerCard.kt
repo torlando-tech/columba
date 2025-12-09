@@ -38,9 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.ui.theme.MeshConnected
-import com.lxmf.messenger.util.formatTimeSince
 import com.lxmf.messenger.ui.theme.MeshLimited
 import com.lxmf.messenger.ui.theme.MeshOffline
+import com.lxmf.messenger.util.formatTimeSince
 
 /**
  * Shared peer card component used by both AnnounceStreamScreen and SavedPeersScreen.
@@ -168,11 +168,12 @@ fun PeerCard(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = if (announce.isFavorite || !showFavoriteToggle) {
-                            Icons.Default.Star
-                        } else {
-                            Icons.Default.StarBorder
-                        },
+                        imageVector =
+                            if (announce.isFavorite || !showFavoriteToggle) {
+                                Icons.Default.Star
+                            } else {
+                                Icons.Default.StarBorder
+                            },
                         contentDescription = if (announce.isFavorite) "Remove from saved" else "Save peer",
                         tint =
                             if (announce.isFavorite || !showFavoriteToggle) {
@@ -297,4 +298,3 @@ fun OtherBadge() {
 fun formatHashString(hashString: String): String {
     return hashString.take(16)
 }
-

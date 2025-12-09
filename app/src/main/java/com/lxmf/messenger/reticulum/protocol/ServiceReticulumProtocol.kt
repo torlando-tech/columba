@@ -25,6 +25,7 @@ import com.lxmf.messenger.reticulum.model.PacketType
 import com.lxmf.messenger.reticulum.model.ReceivedPacket
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import com.lxmf.messenger.service.ReticulumService
+import com.lxmf.messenger.service.manager.parseIdentityResultJson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,7 +43,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
-import com.lxmf.messenger.service.manager.parseIdentityResultJson
 import org.json.JSONObject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException

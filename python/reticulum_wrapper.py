@@ -2897,17 +2897,12 @@ class ReticulumWrapper:
             Dict with 'success' boolean and optional 'error' string
         """
         # Prevent concurrent initialization (race condition fix)
-        # Quick check without lock first for performance
-        if self._rnode_initializing:
-            log_info("ReticulumWrapper", "initialize_rnode_interface",
-                    "RNode initialization already in progress, skipping duplicate call")
-            return {'success': True, 'message': 'Initialization already in progress'}
-
-        # Acquire lock and double-check
+        # Acquire lock before checking/setting initialization flag to prevent race condition
+        # (Double-check locking without proper memory barriers is broken in Python)
         with self._rnode_init_lock:
             if self._rnode_initializing:
                 log_info("ReticulumWrapper", "initialize_rnode_interface",
-                        "RNode initialization already in progress (after lock), skipping")
+                        "RNode initialization already in progress, skipping duplicate call")
                 return {'success': True, 'message': 'Initialization already in progress'}
             self._rnode_initializing = True
 
@@ -2965,13 +2960,6 @@ class ReticulumWrapper:
 
             self.rnode_interface.setOnErrorReceived(on_rnode_error)
 
-            # Register with RNS Transport BEFORE starting
-            # This ensures the interface is tracked even if initial connection fails
-            # (auto-reconnect may succeed later)
-            RNS.Transport.interfaces.append(self.rnode_interface)
-            log_info("ReticulumWrapper", "initialize_rnode_interface",
-                    "Registered ColumbaRNodeInterface with RNS Transport")
-
             # Set up online status callback to notify Kotlin when interface comes online
             def on_online_status_change(is_online):
                 log_info("ReticulumWrapper", "RNodeStatus",
@@ -2988,9 +2976,19 @@ class ReticulumWrapper:
                 log_debug("ReticulumWrapper", "initialize_rnode_interface",
                         "Set online status callback")
 
-            # Start the interface
+            # Start the interface FIRST before registering with Transport
+            # This ensures we catch any fatal initialization errors before committing
             log_info("ReticulumWrapper", "initialize_rnode_interface", "Starting ColumbaRNodeInterface...")
             start_success = self.rnode_interface.start()
+
+            # Register with RNS Transport after starting
+            # The interface is registered even if start() returns False because:
+            # 1. The interface has auto-reconnect capability
+            # 2. start() failure may be transient (Bluetooth not ready, device not in range)
+            # 3. RNS Transport checks online status before sending
+            RNS.Transport.interfaces.append(self.rnode_interface)
+            log_info("ReticulumWrapper", "initialize_rnode_interface",
+                    f"Registered ColumbaRNodeInterface with RNS Transport (start_success={start_success})")
 
             if start_success:
                 log_info("ReticulumWrapper", "initialize_rnode_interface",

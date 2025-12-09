@@ -194,6 +194,9 @@ class KotlinRNodeBridge(
     private var bleServicesDiscovered = false
 
     @Volatile
+    private var bleMtuCallbackReceived = false // Tracks if onMtuChanged callback fired
+
+    @Volatile
     private var bleRssi: Int = -100 // Current RSSI (-100 = unknown)
 
     // Common state
@@ -208,6 +211,7 @@ class KotlinRNodeBridge(
     private val writeMutex = Mutex()
 
     // BLE write synchronization - Android BLE is async, we must wait for each write to complete
+    // Latch-based synchronization with null check prevents stale callbacks from corrupting state
     @Volatile
     private var bleWriteLatch: CountDownLatch? = null
     private val bleWriteStatus = AtomicInteger(BluetoothGatt.GATT_SUCCESS)
@@ -578,6 +582,7 @@ class KotlinRNodeBridge(
             // Reset BLE state
             bleConnected = false
             bleServicesDiscovered = false
+            bleMtuCallbackReceived = false
             bleRxCharacteristic = null
             bleTxCharacteristic = null
 
@@ -690,10 +695,20 @@ class KotlinRNodeBridge(
             ) {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
-                        Log.i(TAG, "BLE connected, discovering services...")
+                        Log.i(TAG, "BLE connected, requesting MTU...")
                         bleConnected = true
+                        bleMtuCallbackReceived = false
                         // Request higher MTU for better throughput
                         gatt.requestMtu(512)
+                        // Timeout: if onMtuChanged doesn't fire within 2 seconds,
+                        // proceed with service discovery anyway to prevent hang
+                        scope.launch {
+                            delay(2000)
+                            if (!bleMtuCallbackReceived && bleConnected) {
+                                Log.w(TAG, "MTU callback timeout, proceeding with service discovery")
+                                gatt.discoverServices()
+                            }
+                        }
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         Log.i(TAG, "BLE disconnected (status=${gattStatusToString(status)})")
@@ -710,9 +725,12 @@ class KotlinRNodeBridge(
                 mtu: Int,
                 status: Int,
             ) {
+                bleMtuCallbackReceived = true
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     bleMtu = mtu
                     Log.d(TAG, "BLE MTU changed to $mtu")
+                } else {
+                    Log.w(TAG, "MTU change failed with status $status, using default MTU")
                 }
                 // Discover services after MTU negotiation
                 gatt.discoverServices()
@@ -784,9 +802,17 @@ class KotlinRNodeBridge(
                 status: Int,
             ) {
                 // Signal write completion to waiting thread
-                bleWriteStatus.set(status)
+                // Use write ID to prevent race condition where delayed callback
+                // corrupts status for a different write operation
                 synchronized(bleWriteLock) {
-                    bleWriteLatch?.countDown()
+                    val currentLatch = bleWriteLatch
+                    if (currentLatch != null) {
+                        bleWriteStatus.set(status)
+                        currentLatch.countDown()
+                    } else {
+                        // Stale callback - latch was already cleared (write timed out or completed)
+                        Log.w(TAG, "Ignoring stale BLE write callback (no latch)")
+                    }
                 }
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     Log.e(TAG, "BLE write failed: $status")
@@ -822,6 +848,7 @@ class KotlinRNodeBridge(
         bleTxCharacteristic = null
         bleConnected = false
         bleServicesDiscovered = false
+        bleMtuCallbackReceived = false
     }
 
     /**
@@ -1096,6 +1123,7 @@ class KotlinRNodeBridge(
                     val chunkData = chunk.toByteArray()
 
                     // Create latch BEFORE starting write so callback can find it
+                    // Latch null check in callback prevents stale callbacks from corrupting state
                     val latch = CountDownLatch(1)
                     synchronized(bleWriteLock) {
                         bleWriteLatch = latch

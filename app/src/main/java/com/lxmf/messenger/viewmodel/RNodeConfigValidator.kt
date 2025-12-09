@@ -214,9 +214,10 @@ object RNodeConfigValidator {
         stAlock: String,
         ltAlock: String,
         region: FrequencyRegion?,
-    ): Boolean = validateConfigSilent(
-        RNodeConfigInput(name, frequency, bandwidth, spreadingFactor, codingRate, txPower, stAlock, ltAlock, region),
-    )
+    ): Boolean =
+        validateConfigSilent(
+            RNodeConfigInput(name, frequency, bandwidth, spreadingFactor, codingRate, txPower, stAlock, ltAlock, region),
+        )
 
     /**
      * Validate the full configuration with error messages.
@@ -313,9 +314,10 @@ object RNodeConfigValidator {
         stAlock: String,
         ltAlock: String,
         region: FrequencyRegion?,
-    ): ConfigValidationResult = validateConfig(
-        RNodeConfigInput(name, frequency, bandwidth, spreadingFactor, codingRate, txPower, stAlock, ltAlock, region),
-    )
+    ): ConfigValidationResult =
+        validateConfig(
+            RNodeConfigInput(name, frequency, bandwidth, spreadingFactor, codingRate, txPower, stAlock, ltAlock, region),
+        )
 
     /**
      * Get the maximum TX power for a region.

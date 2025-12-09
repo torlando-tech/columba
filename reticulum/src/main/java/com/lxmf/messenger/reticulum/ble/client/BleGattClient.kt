@@ -1127,15 +1127,16 @@ class BleGattClient(
                                             connections[address]?.consecutiveKeepaliveFailures = 0
                                         }
                                     } else {
-                                        val failures = connectionsMutex.withLock {
-                                            val conn = connections[address]
-                                            if (conn != null) {
-                                                conn.consecutiveKeepaliveFailures++
-                                                conn.consecutiveKeepaliveFailures
-                                            } else {
-                                                0
+                                        val failures =
+                                            connectionsMutex.withLock {
+                                                val conn = connections[address]
+                                                if (conn != null) {
+                                                    conn.consecutiveKeepaliveFailures++
+                                                    conn.consecutiveKeepaliveFailures
+                                                } else {
+                                                    0
+                                                }
                                             }
-                                        }
                                         Log.w(
                                             TAG,
                                             "Keepalive failed for $address ($failures/${BleConstants.MAX_CONNECTION_FAILURES} failures)",

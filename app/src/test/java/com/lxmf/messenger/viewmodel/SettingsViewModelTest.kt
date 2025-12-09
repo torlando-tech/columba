@@ -110,364 +110,392 @@ class SettingsViewModelTest {
     // region parseRpcKey Tests
 
     @Test
-    fun `parseRpcKey with full Sideband config extracts key`() = runTest {
-        viewModel = createViewModel()
+    fun `parseRpcKey with full Sideband config extracts key`() =
+        runTest {
+            viewModel = createViewModel()
 
-        val input = "shared_instance_type = tcp\nrpc_key = e17abc123def456"
-        val result = viewModel.parseRpcKey(input)
+            val input = "shared_instance_type = tcp\nrpc_key = e17abc123def456"
+            val result = viewModel.parseRpcKey(input)
 
-        assertEquals("e17abc123def456", result)
-    }
-
-    @Test
-    fun `parseRpcKey with key only returns key`() = runTest {
-        viewModel = createViewModel()
-
-        val input = "e17abc123def456"
-        val result = viewModel.parseRpcKey(input)
-
-        assertEquals("e17abc123def456", result)
-    }
+            assertEquals("e17abc123def456", result)
+        }
 
     @Test
-    fun `parseRpcKey with spaces around equals extracts key`() = runTest {
-        viewModel = createViewModel()
+    fun `parseRpcKey with key only returns key`() =
+        runTest {
+            viewModel = createViewModel()
 
-        val input = "rpc_key  =  e17abc"
-        val result = viewModel.parseRpcKey(input)
+            val input = "e17abc123def456"
+            val result = viewModel.parseRpcKey(input)
 
-        assertEquals("e17abc", result)
-    }
-
-    @Test
-    fun `parseRpcKey with extra whitespace trims correctly`() = runTest {
-        viewModel = createViewModel()
-
-        val input = "  e17abc123  "
-        val result = viewModel.parseRpcKey(input)
-
-        assertEquals("e17abc123", result)
-    }
+            assertEquals("e17abc123def456", result)
+        }
 
     @Test
-    fun `parseRpcKey with invalid characters returns null`() = runTest {
-        viewModel = createViewModel()
+    fun `parseRpcKey with spaces around equals extracts key`() =
+        runTest {
+            viewModel = createViewModel()
 
-        val input = "not-a-hex-key!"
-        val result = viewModel.parseRpcKey(input)
+            val input = "rpc_key  =  e17abc"
+            val result = viewModel.parseRpcKey(input)
 
-        assertNull(result)
-    }
-
-    @Test
-    fun `parseRpcKey with empty string returns null`() = runTest {
-        viewModel = createViewModel()
-
-        val input = ""
-        val result = viewModel.parseRpcKey(input)
-
-        assertNull(result)
-    }
+            assertEquals("e17abc", result)
+        }
 
     @Test
-    fun `parseRpcKey with null returns null`() = runTest {
-        viewModel = createViewModel()
+    fun `parseRpcKey with extra whitespace trims correctly`() =
+        runTest {
+            viewModel = createViewModel()
 
-        val result = viewModel.parseRpcKey(null)
+            val input = "  e17abc123  "
+            val result = viewModel.parseRpcKey(input)
 
-        assertNull(result)
-    }
-
-    @Test
-    fun `parseRpcKey with mixed case preserves case`() = runTest {
-        viewModel = createViewModel()
-
-        val input = "e17AbC123DeF"
-        val result = viewModel.parseRpcKey(input)
-
-        assertEquals("e17AbC123DeF", result)
-    }
+            assertEquals("e17abc123", result)
+        }
 
     @Test
-    fun `parseRpcKey with multiline config and key in middle extracts key`() = runTest {
-        viewModel = createViewModel()
+    fun `parseRpcKey with invalid characters returns null`() =
+        runTest {
+            viewModel = createViewModel()
 
-        val input = """
-            shared_instance_type = tcp
-            rpc_key = abcd1234ef56
-            some_other_setting = value
-        """.trimIndent()
-        val result = viewModel.parseRpcKey(input)
+            val input = "not-a-hex-key!"
+            val result = viewModel.parseRpcKey(input)
 
-        assertEquals("abcd1234ef56", result)
-    }
+            assertNull(result)
+        }
 
     @Test
-    fun `parseRpcKey with whitespace only returns null`() = runTest {
-        viewModel = createViewModel()
+    fun `parseRpcKey with empty string returns null`() =
+        runTest {
+            viewModel = createViewModel()
 
-        val input = "   \n\t  "
-        val result = viewModel.parseRpcKey(input)
+            val input = ""
+            val result = viewModel.parseRpcKey(input)
 
-        assertNull(result)
-    }
+            assertNull(result)
+        }
+
+    @Test
+    fun `parseRpcKey with null returns null`() =
+        runTest {
+            viewModel = createViewModel()
+
+            val result = viewModel.parseRpcKey(null)
+
+            assertNull(result)
+        }
+
+    @Test
+    fun `parseRpcKey with mixed case preserves case`() =
+        runTest {
+            viewModel = createViewModel()
+
+            val input = "e17AbC123DeF"
+            val result = viewModel.parseRpcKey(input)
+
+            assertEquals("e17AbC123DeF", result)
+        }
+
+    @Test
+    fun `parseRpcKey with multiline config and key in middle extracts key`() =
+        runTest {
+            viewModel = createViewModel()
+
+            val input =
+                """
+                shared_instance_type = tcp
+                rpc_key = abcd1234ef56
+                some_other_setting = value
+                """.trimIndent()
+            val result = viewModel.parseRpcKey(input)
+
+            assertEquals("abcd1234ef56", result)
+        }
+
+    @Test
+    fun `parseRpcKey with whitespace only returns null`() =
+        runTest {
+            viewModel = createViewModel()
+
+            val input = "   \n\t  "
+            val result = viewModel.parseRpcKey(input)
+
+            assertNull(result)
+        }
 
     // endregion
 
     // region Initial State Tests
 
     @Test
-    fun `initial state has correct defaults`() = runTest {
-        viewModel = createViewModel()
+    fun `initial state has correct defaults`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            val state = awaitItem()
-            assertFalse(state.isSharedInstanceBannerExpanded)
-            assertFalse(state.isRestarting)
-            assertFalse(state.sharedInstanceLost)
-            assertFalse(state.sharedInstanceAvailable)
-            cancelAndConsumeRemainingEvents()
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.isSharedInstanceBannerExpanded)
+                assertFalse(state.isRestarting)
+                assertFalse(state.sharedInstanceLost)
+                assertFalse(state.sharedInstanceAvailable)
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `initial state reflects repository values`() = runTest {
-        // Setup initial flow values before creating ViewModel
-        preferOwnInstanceFlow.value = true
-        isSharedInstanceFlow.value = true
-        rpcKeyFlow.value = "testkey123"
+    fun `initial state reflects repository values`() =
+        runTest {
+            // Setup initial flow values before creating ViewModel
+            preferOwnInstanceFlow.value = true
+            isSharedInstanceFlow.value = true
+            rpcKeyFlow.value = "testkey123"
 
-        viewModel = createViewModel()
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            // First emission may be initial defaults while loading
-            var state = awaitItem()
-            // Wait for the state to load (isLoading becomes false after loadSettings completes)
-            while (state.isLoading) {
-                state = awaitItem()
+            viewModel.state.test {
+                // First emission may be initial defaults while loading
+                var state = awaitItem()
+                // Wait for the state to load (isLoading becomes false after loadSettings completes)
+                while (state.isLoading) {
+                    state = awaitItem()
+                }
+                assertTrue(state.preferOwnInstance)
+                assertTrue(state.isSharedInstance)
+                assertEquals("testkey123", state.rpcKey)
+                cancelAndConsumeRemainingEvents()
             }
-            assertTrue(state.preferOwnInstance)
-            assertTrue(state.isSharedInstance)
-            assertEquals("testkey123", state.rpcKey)
-            cancelAndConsumeRemainingEvents()
         }
-    }
 
     // endregion
 
     // region State Transition Tests
 
     @Test
-    fun `toggleSharedInstanceBannerExpanded toggles state`() = runTest {
-        viewModel = createViewModel()
+    fun `toggleSharedInstanceBannerExpanded toggles state`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            // Initial state
-            assertFalse(awaitItem().isSharedInstanceBannerExpanded)
+            viewModel.state.test {
+                // Initial state
+                assertFalse(awaitItem().isSharedInstanceBannerExpanded)
 
-            // Toggle on
-            viewModel.toggleSharedInstanceBannerExpanded(true)
-            assertTrue(awaitItem().isSharedInstanceBannerExpanded)
+                // Toggle on
+                viewModel.toggleSharedInstanceBannerExpanded(true)
+                assertTrue(awaitItem().isSharedInstanceBannerExpanded)
 
-            // Toggle off
-            viewModel.toggleSharedInstanceBannerExpanded(false)
-            assertFalse(awaitItem().isSharedInstanceBannerExpanded)
+                // Toggle off
+                viewModel.toggleSharedInstanceBannerExpanded(false)
+                assertFalse(awaitItem().isSharedInstanceBannerExpanded)
 
-            cancelAndConsumeRemainingEvents()
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `togglePreferOwnInstance saves to repository and triggers restart`() = runTest {
-        viewModel = createViewModel()
+    fun `togglePreferOwnInstance saves to repository and triggers restart`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.togglePreferOwnInstance(true)
+            viewModel.togglePreferOwnInstance(true)
 
-        coVerify { settingsRepository.savePreferOwnInstance(true) }
-        coVerify { interfaceConfigManager.applyInterfaceChanges() }
-    }
-
-    @Test
-    fun `dismissSharedInstanceLostWarning clears flag`() = runTest {
-        viewModel = createViewModel()
-
-        // First, trigger the lost state by updating the internal state
-        viewModel.state.test {
-            awaitItem() // initial
-
-            // Manually trigger the method
-            viewModel.dismissSharedInstanceLostWarning()
-
-            // State should have sharedInstanceLost = false
-            val finalState = awaitItem()
-            assertFalse(finalState.sharedInstanceLost)
-
-            cancelAndConsumeRemainingEvents()
+            coVerify { settingsRepository.savePreferOwnInstance(true) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges() }
         }
-    }
 
     @Test
-    fun `switchToOwnInstanceAfterLoss sets preferOwn and triggers restart`() = runTest {
-        viewModel = createViewModel()
+    fun `dismissSharedInstanceLostWarning clears flag`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.switchToOwnInstanceAfterLoss()
+            // First, trigger the lost state by updating the internal state
+            viewModel.state.test {
+                awaitItem() // initial
 
-        coVerify { settingsRepository.savePreferOwnInstance(true) }
-        coVerify { interfaceConfigManager.applyInterfaceChanges() }
-    }
+                // Manually trigger the method
+                viewModel.dismissSharedInstanceLostWarning()
+
+                // State should have sharedInstanceLost = false
+                val finalState = awaitItem()
+                assertFalse(finalState.sharedInstanceLost)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
 
     @Test
-    fun `switchToSharedInstance clears preferOwn and triggers restart`() = runTest {
-        preferOwnInstanceFlow.value = true
-        viewModel = createViewModel()
+    fun `switchToOwnInstanceAfterLoss sets preferOwn and triggers restart`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.switchToSharedInstance()
+            viewModel.switchToOwnInstanceAfterLoss()
 
-        coVerify { settingsRepository.savePreferOwnInstance(false) }
-        coVerify { interfaceConfigManager.applyInterfaceChanges() }
-    }
+            coVerify { settingsRepository.savePreferOwnInstance(true) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges() }
+        }
 
     @Test
-    fun `dismissSharedInstanceAvailable sets preferOwnInstance`() = runTest {
-        viewModel = createViewModel()
+    fun `switchToSharedInstance clears preferOwn and triggers restart`() =
+        runTest {
+            preferOwnInstanceFlow.value = true
+            viewModel = createViewModel()
 
-        viewModel.dismissSharedInstanceAvailable()
+            viewModel.switchToSharedInstance()
 
-        coVerify { settingsRepository.savePreferOwnInstance(true) }
-    }
+            coVerify { settingsRepository.savePreferOwnInstance(false) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges() }
+        }
+
+    @Test
+    fun `dismissSharedInstanceAvailable sets preferOwnInstance`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.dismissSharedInstanceAvailable()
+
+            coVerify { settingsRepository.savePreferOwnInstance(true) }
+        }
 
     // endregion
 
     // region saveRpcKey Tests
 
     @Test
-    fun `saveRpcKey with valid config parses and saves`() = runTest {
-        isSharedInstanceFlow.value = true // Must be shared instance to trigger restart
-        viewModel = createViewModel()
+    fun `saveRpcKey with valid config parses and saves`() =
+        runTest {
+            isSharedInstanceFlow.value = true // Must be shared instance to trigger restart
+            viewModel = createViewModel()
 
-        viewModel.saveRpcKey("shared_instance_type = tcp\nrpc_key = abc123def")
+            viewModel.saveRpcKey("shared_instance_type = tcp\nrpc_key = abc123def")
 
-        coVerify { settingsRepository.saveRpcKey("abc123def") }
-    }
-
-    @Test
-    fun `saveRpcKey with raw hex saves directly`() = runTest {
-        isSharedInstanceFlow.value = true
-        viewModel = createViewModel()
-
-        viewModel.saveRpcKey("abc123def456")
-
-        coVerify { settingsRepository.saveRpcKey("abc123def456") }
-    }
-
-    @Test
-    fun `saveRpcKey with invalid input saves null`() = runTest {
-        isSharedInstanceFlow.value = true
-        viewModel = createViewModel()
-
-        viewModel.saveRpcKey("invalid-key!")
-
-        coVerify { settingsRepository.saveRpcKey(null) }
-    }
-
-    @Test
-    fun `saveRpcKey triggers service restart when shared instance`() = runTest {
-        isSharedInstanceFlow.value = true
-        viewModel = createViewModel()
-
-        // Wait for state to load so isSharedInstance is populated from flow
-        viewModel.state.test {
-            var state = awaitItem()
-            while (state.isLoading) {
-                state = awaitItem()
-            }
-            cancelAndConsumeRemainingEvents()
+            coVerify { settingsRepository.saveRpcKey("abc123def") }
         }
 
-        viewModel.saveRpcKey("abc123")
+    @Test
+    fun `saveRpcKey with raw hex saves directly`() =
+        runTest {
+            isSharedInstanceFlow.value = true
+            viewModel = createViewModel()
 
-        coVerify { interfaceConfigManager.applyInterfaceChanges() }
-    }
+            viewModel.saveRpcKey("abc123def456")
+
+            coVerify { settingsRepository.saveRpcKey("abc123def456") }
+        }
 
     @Test
-    fun `saveRpcKey does not restart when not shared instance`() = runTest {
-        isSharedInstanceFlow.value = false
-        viewModel = createViewModel()
+    fun `saveRpcKey with invalid input saves null`() =
+        runTest {
+            isSharedInstanceFlow.value = true
+            viewModel = createViewModel()
 
-        viewModel.saveRpcKey("abc123")
+            viewModel.saveRpcKey("invalid-key!")
 
-        // Should not call applyInterfaceChanges since not using shared instance
-        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges() }
-    }
+            coVerify { settingsRepository.saveRpcKey(null) }
+        }
+
+    @Test
+    fun `saveRpcKey triggers service restart when shared instance`() =
+        runTest {
+            isSharedInstanceFlow.value = true
+            viewModel = createViewModel()
+
+            // Wait for state to load so isSharedInstance is populated from flow
+            viewModel.state.test {
+                var state = awaitItem()
+                while (state.isLoading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            viewModel.saveRpcKey("abc123")
+
+            coVerify { interfaceConfigManager.applyInterfaceChanges() }
+        }
+
+    @Test
+    fun `saveRpcKey does not restart when not shared instance`() =
+        runTest {
+            isSharedInstanceFlow.value = false
+            viewModel = createViewModel()
+
+            viewModel.saveRpcKey("abc123")
+
+            // Should not call applyInterfaceChanges since not using shared instance
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges() }
+        }
 
     // endregion
 
     // region Flow Collection Tests
 
     @Test
-    fun `state collects preferOwnInstance from repository`() = runTest {
-        viewModel = createViewModel()
+    fun `state collects preferOwnInstance from repository`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            var state = awaitItem()
-            assertFalse(state.preferOwnInstance)
+            viewModel.state.test {
+                var state = awaitItem()
+                assertFalse(state.preferOwnInstance)
 
-            // Update flow
-            preferOwnInstanceFlow.value = true
-            state = awaitItem()
-            assertTrue(state.preferOwnInstance)
+                // Update flow
+                preferOwnInstanceFlow.value = true
+                state = awaitItem()
+                assertTrue(state.preferOwnInstance)
 
-            cancelAndConsumeRemainingEvents()
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state collects isSharedInstance from repository`() = runTest {
-        viewModel = createViewModel()
+    fun `state collects isSharedInstance from repository`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            var state = awaitItem()
-            assertFalse(state.isSharedInstance)
+            viewModel.state.test {
+                var state = awaitItem()
+                assertFalse(state.isSharedInstance)
 
-            // Update flow
-            isSharedInstanceFlow.value = true
-            state = awaitItem()
-            assertTrue(state.isSharedInstance)
+                // Update flow
+                isSharedInstanceFlow.value = true
+                state = awaitItem()
+                assertTrue(state.isSharedInstance)
 
-            cancelAndConsumeRemainingEvents()
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state collects rpcKey from repository`() = runTest {
-        viewModel = createViewModel()
+    fun `state collects rpcKey from repository`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            var state = awaitItem()
-            assertNull(state.rpcKey)
+            viewModel.state.test {
+                var state = awaitItem()
+                assertNull(state.rpcKey)
 
-            // Update flow
-            rpcKeyFlow.value = "newkey456"
-            state = awaitItem()
-            assertEquals("newkey456", state.rpcKey)
+                // Update flow
+                rpcKeyFlow.value = "newkey456"
+                state = awaitItem()
+                assertEquals("newkey456", state.rpcKey)
 
-            cancelAndConsumeRemainingEvents()
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     // endregion
 
     // region Restart State Tests
 
     @Test
-    fun `restartService calls interfaceConfigManager`() = runTest {
-        viewModel = createViewModel()
+    fun `restartService calls interfaceConfigManager`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.restartService()
+            viewModel.restartService()
 
-        // Verify the restart was triggered via interfaceConfigManager
-        coVerify { interfaceConfigManager.applyInterfaceChanges() }
-    }
+            // Verify the restart was triggered via interfaceConfigManager
+            coVerify { interfaceConfigManager.applyInterfaceChanges() }
+        }
 
     // endregion
 }

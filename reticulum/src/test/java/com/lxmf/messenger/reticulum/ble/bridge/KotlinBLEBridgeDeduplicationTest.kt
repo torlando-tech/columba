@@ -408,10 +408,11 @@ class KotlinBLEBridgeDeduplicationTest {
         bridge: KotlinBLEBridge,
         deviceName: String?,
     ): Boolean {
-        val method = KotlinBLEBridge::class.java.getDeclaredMethod(
-            "shouldSkipDiscoveredDevice",
-            String::class.java,
-        )
+        val method =
+            KotlinBLEBridge::class.java.getDeclaredMethod(
+                "shouldSkipDiscoveredDevice",
+                String::class.java,
+            )
         method.isAccessible = true
         return method.invoke(bridge, deviceName) as Boolean
     }

@@ -381,6 +381,11 @@ class ColumbaRNodeInterface:
 
         RNS.log(f"RNode interface '{self.name}' stopped", RNS.LOG_INFO)
 
+    def detach(self):
+        """Detach interface from transport. Called during Reticulum shutdown."""
+        RNS.log(f"Detaching RNode interface '{self.name}'", RNS.LOG_DEBUG)
+        self.stop()
+
     def _configure_device(self):
         """Detect and configure the RNode."""
         # Send detect command

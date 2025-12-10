@@ -261,4 +261,13 @@ interface IReticulumService {
      * after going out of BLE range.
      */
     void reconnectRNodeInterface();
+
+    /**
+     * Check if a shared Reticulum instance is available.
+     * This queries the Python layer's port probe to detect if another app
+     * (e.g., Sideband) is running a shared RNS instance on localhost:37428.
+     *
+     * @return true if a shared instance is available and responding, false otherwise
+     */
+    boolean isSharedInstanceAvailable();
 }

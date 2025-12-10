@@ -1373,6 +1373,24 @@ class ServiceReticulumProtocol(
     }
 
     /**
+     * Check if a shared Reticulum instance is currently available.
+     * This queries the Python layer's port probe to detect if another app
+     * (e.g., Sideband) is running a shared RNS instance on localhost:37428.
+     *
+     * @return true if a shared instance is available and responding, false otherwise
+     */
+    suspend fun isSharedInstanceAvailable(): Boolean {
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                service?.isSharedInstanceAvailable ?: false
+            } catch (e: Exception) {
+                Log.e(TAG, "Error querying shared instance availability", e)
+                false
+            }
+        }
+    }
+
+    /**
      * Trigger an auto-announce with the provided display name.
      * This is a convenience method used by the auto-announce feature that handles
      * retrieving the LXMF identity and destination automatically.

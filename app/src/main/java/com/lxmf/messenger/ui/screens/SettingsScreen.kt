@@ -114,11 +114,15 @@ fun SettingsScreen(
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Show shared instance banner when relevant to the user
+                // Show shared instance banner when:
+                // - Currently using a shared instance
+                // - A shared instance is currently available (can switch to it)
+                // - Was using shared instance but it went offline (informational state)
+                // - Service is restarting
                 val showSharedInstanceBanner =
                     state.isSharedInstance ||
-                        state.sharedInstanceAvailable ||
-                        state.sharedInstanceLost ||
+                        state.sharedInstanceOnline ||
+                        state.wasUsingSharedInstance ||
                         state.isRestarting
                 if (showSharedInstanceBanner) {
                     SharedInstanceBannerCard(
@@ -126,13 +130,11 @@ fun SettingsScreen(
                         preferOwnInstance = state.preferOwnInstance,
                         isUsingSharedInstance = state.isSharedInstance,
                         rpcKey = state.rpcKey,
-                        sharedInstanceLost = state.sharedInstanceLost,
-                        sharedInstanceAvailable = state.sharedInstanceAvailable,
+                        wasUsingSharedInstance = state.wasUsingSharedInstance,
+                        sharedInstanceOnline = state.sharedInstanceOnline,
                         onExpandToggle = { viewModel.toggleSharedInstanceBannerExpanded(it) },
                         onTogglePreferOwnInstance = { viewModel.togglePreferOwnInstance(it) },
                         onRpcKeyChange = { viewModel.saveRpcKey(it) },
-                        onSwitchToOwnInstance = { viewModel.switchToOwnInstanceAfterLoss() },
-                        onDismissLostWarning = { viewModel.dismissSharedInstanceLostWarning() },
                     )
                 }
 
@@ -140,6 +142,7 @@ fun SettingsScreen(
                     onViewStatus = onNavigateToNetworkStatus,
                     onManageInterfaces = onNavigateToInterfaces,
                     isSharedInstance = state.isSharedInstance,
+                    sharedInstanceOnline = state.sharedInstanceOnline,
                 )
 
                 IdentityCard(

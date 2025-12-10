@@ -34,13 +34,20 @@ import androidx.compose.ui.unit.dp
  * @param onManageInterfaces Callback when "Manage Interfaces" is clicked
  * @param isSharedInstance When true, interface management is disabled because
  *                         Columba is connected to a shared RNS instance
+ * @param sharedInstanceOnline Whether the shared instance is currently reachable.
+ *                             When false and isSharedInstance is true, Columba has
+ *                             switched to its own instance and interfaces can be managed.
  */
 @Composable
 fun NetworkCard(
     onViewStatus: () -> Unit,
     onManageInterfaces: () -> Unit,
     isSharedInstance: Boolean = false,
+    sharedInstanceOnline: Boolean = true,
 ) {
+    // Interface management is only disabled when actively using a shared instance
+    // If shared instance went offline, we're now using our own instance
+    val interfacesDisabled = isSharedInstance && sharedInstanceOnline
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -83,7 +90,7 @@ fun NetworkCard(
             // Description for Manage Interfaces (changes when using shared instance)
             Text(
                 text =
-                    if (isSharedInstance) {
+                    if (interfacesDisabled) {
                         "Interface management is disabled while using a shared system instance."
                     } else {
                         "Configure how your device connects to the Reticulum network. " +
@@ -91,7 +98,7 @@ fun NetworkCard(
                     },
                 style = MaterialTheme.typography.bodyMedium,
                 color =
-                    if (isSharedInstance) {
+                    if (interfacesDisabled) {
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -120,7 +127,7 @@ fun NetworkCard(
             OutlinedButton(
                 onClick = onManageInterfaces,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isSharedInstance,
+                enabled = !interfacesDisabled,
             ) {
                 Icon(
                     imageVector = Icons.Default.Settings,

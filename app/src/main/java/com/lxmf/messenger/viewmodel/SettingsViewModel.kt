@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -17,8 +18,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import java.net.InetSocketAddress
-import java.net.Socket
 import javax.inject.Inject
 
 @androidx.compose.runtime.Immutable
@@ -44,8 +43,9 @@ data class SettingsState(
     val preferOwnInstance: Boolean = false,
     val isSharedInstanceBannerExpanded: Boolean = false,
     val rpcKey: String? = null,
-    val sharedInstanceLost: Boolean = false, // True when shared instance disconnected
-    val sharedInstanceAvailable: Boolean = false, // True when shared instance detected while running own
+    val wasUsingSharedInstance: Boolean = false, // True if we were using shared but it went offline
+    val sharedInstanceAvailable: Boolean = false, // True when shared instance becomes newly available (notification)
+    val sharedInstanceOnline: Boolean = false, // True if shared instance is currently reachable (from service query)
 )
 
 @Suppress("TooManyFunctions") // ViewModel with many user interaction methods is expected
@@ -64,9 +64,7 @@ class SettingsViewModel
             private const val MAX_RETRIES = 3
             private const val RETRY_DELAY_MS = 1000L
             private const val SHARED_INSTANCE_MONITOR_INTERVAL_MS = 5_000L // Check every 5 seconds
-            private const val SHARED_INSTANCE_LOST_THRESHOLD_MS = 10_000L // 10 seconds to consider lost
-            private const val SHARED_INSTANCE_PORT = 37428 // Default RNS shared instance port
-            private const val SOCKET_TIMEOUT_MS = 1000 // Socket connection timeout
+            private const val SHARED_INSTANCE_PORT = 37428 // Default RNS shared instance port (for logging)
 
             /**
              * Controls whether shared instance monitors are started in init.
@@ -188,9 +186,62 @@ class SettingsViewModel
                             preferOwnInstance = preferOwnInstance,
                             isSharedInstanceBannerExpanded = _state.value.isSharedInstanceBannerExpanded,
                             rpcKey = rpcKey,
+                            // Preserve state from availability monitor
+                            sharedInstanceOnline = _state.value.sharedInstanceOnline,
+                            sharedInstanceAvailable = _state.value.sharedInstanceAvailable,
+                            wasUsingSharedInstance = _state.value.wasUsingSharedInstance,
                         )
                     }.collect { newState ->
-                        _state.value = newState
+                        val previousState = _state.value
+
+                        // Initialize sharedInstanceOnline on first load:
+                        // If isSharedInstance is true at startup, the shared instance was online when we connected
+                        val isFirstLoadWithSharedInstance =
+                            previousState.isLoading && !newState.isLoading && newState.isSharedInstance
+                        val needsOnlineInit = isFirstLoadWithSharedInstance && !newState.sharedInstanceOnline
+                        val initializedOnline =
+                            if (needsOnlineInit) {
+                                Log.d(
+                                    TAG,
+                                    "Initializing sharedInstanceOnline=true since isSharedInstance=true at startup",
+                                )
+                                true
+                            } else {
+                                newState.sharedInstanceOnline
+                            }
+
+                        // Log state for debugging
+                        if (previousState.isSharedInstance != newState.isSharedInstance) {
+                            Log.i(
+                                TAG,
+                                "isSharedInstance changed: ${previousState.isSharedInstance} -> ${newState.isSharedInstance}, " +
+                                    "preferOwnInstance=${newState.preferOwnInstance}",
+                            )
+                        }
+
+                        // Detect transition: was using shared instance, now not, and user didn't choose this
+                        // This indicates the shared instance went offline and RNS auto-switched
+                        val wasUsingShared =
+                            if (previousState.isSharedInstance &&
+                                !newState.isSharedInstance &&
+                                !newState.preferOwnInstance // User didn't actively choose own instance
+                            ) {
+                                Log.i(
+                                    TAG,
+                                    "Detected shared instance went offline - " +
+                                        "Columba auto-switched to own instance",
+                                )
+                                true
+                            } else {
+                                // Keep current value unless shared comes back online
+                                previousState.wasUsingSharedInstance
+                            }
+
+                        _state.value =
+                            newState.copy(
+                                sharedInstanceOnline = initializedOnline,
+                                wasUsingSharedInstance = wasUsingShared,
+                            )
                         Log.d(
                             TAG,
                             "Settings updated: displayName=${newState.displayName}, autoAnnounce=${newState.autoAnnounceEnabled}, interval=${newState.autoAnnounceIntervalMinutes}min, theme=${newState.selectedTheme}, customThemes=${newState.customThemes.size}",
@@ -518,6 +569,49 @@ class SettingsViewModel
             }
         }
 
+        /**
+         * Restart service after shared instance went offline.
+         * Called automatically when we detect shared instance is no longer available.
+         * After restart, Python will detect no shared instance and use Columba's own interfaces.
+         * Keeps wasUsingSharedInstance = true to show informational banner after restart.
+         */
+        private fun restartServiceAfterSharedInstanceLost() {
+            viewModelScope.launch {
+                try {
+                    Log.i(TAG, "Auto-restarting service after shared instance went offline")
+
+                    // Set preferOwnInstance = true since we're now using own instance
+                    // This ensures the toggle shows the correct state after restart
+                    settingsRepository.savePreferOwnInstance(true)
+
+                    // Use InterfaceConfigManager which handles the full restart lifecycle
+                    // Python will check for shared instance, find it offline, and use own interfaces
+                    interfaceConfigManager.applyInterfaceChanges()
+                        .onSuccess {
+                            Log.i(TAG, "Service restart completed - now using Columba's own instance")
+                        }
+                        .onFailure { error ->
+                            Log.e(TAG, "Service restart failed: ${error.message}", error)
+                        }
+                        .getOrThrow()
+
+                    // Keep wasUsingSharedInstance = true to show informational banner
+                    _state.value =
+                        _state.value.copy(
+                            isRestarting = false,
+                            wasUsingSharedInstance = true,
+                        )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error restarting service after shared instance lost", e)
+                    _state.value =
+                        _state.value.copy(
+                            isRestarting = false,
+                            wasUsingSharedInstance = true,
+                        )
+                }
+            }
+        }
+
         // Shared instance methods
 
         /**
@@ -595,8 +689,11 @@ class SettingsViewModel
 
         /**
          * Start monitoring shared instance connection status.
-         * Detects when shared instance is disconnected for too long and sets sharedInstanceLost flag.
-         * Uses direct TCP port probing since Python doesn't report connection loss.
+         * Tracks network status changes for logging purposes.
+         *
+         * Note: The actual detection of shared instance going offline is now handled
+         * in loadSettings() combine flow, which detects when isSharedInstance transitions
+         * from true to false while sharedInstanceOnline is false.
          */
         private fun startSharedInstanceMonitor() {
             sharedInstanceMonitorJob?.cancel()
@@ -605,51 +702,29 @@ class SettingsViewModel
                     // Wait for initial setup
                     delay(INIT_DELAY_MS * 2)
 
-                    while (true) {
-                        delay(SHARED_INSTANCE_MONITOR_INTERVAL_MS)
-
+                    // Monitor the service's network status for logging
+                    reticulumProtocol.networkStatus.collect { status ->
                         val currentState = _state.value
 
-                        // Only monitor when we're using a shared instance
+                        // Only log when we're using a shared instance
                         if (currentState.isSharedInstance && !currentState.preferOwnInstance) {
-                            // Probe the shared instance port directly - more reliable than networkStatus
-                            // because Python doesn't actively detect connection loss
-                            val isPortOpen = probeSharedInstancePort()
+                            val isConnected = status is NetworkStatus.READY
 
-                            if (!isPortOpen) {
-                                val now = System.currentTimeMillis()
+                            if (!isConnected) {
                                 if (sharedInstanceDisconnectedTime == null) {
-                                    sharedInstanceDisconnectedTime = now
-                                    Log.d(TAG, "Shared instance port closed, starting timer...")
-                                } else {
-                                    val disconnectedDuration = now - sharedInstanceDisconnectedTime!!
-                                    if (disconnectedDuration >= SHARED_INSTANCE_LOST_THRESHOLD_MS &&
-                                        !currentState.sharedInstanceLost
-                                    ) {
-                                        Log.w(
-                                            TAG,
-                                            "Shared instance lost for ${disconnectedDuration / 1000}s, " +
-                                                "notifying user",
-                                        )
-                                        _state.value = currentState.copy(sharedInstanceLost = true)
-                                    }
+                                    sharedInstanceDisconnectedTime = System.currentTimeMillis()
+                                    Log.d(TAG, "Shared instance network status: $status")
                                 }
                             } else {
                                 // Connection restored
                                 if (sharedInstanceDisconnectedTime != null) {
-                                    Log.d(TAG, "Shared instance port open again")
+                                    Log.d(TAG, "Shared instance connection restored")
                                     sharedInstanceDisconnectedTime = null
-                                    if (currentState.sharedInstanceLost) {
-                                        _state.value = currentState.copy(sharedInstanceLost = false)
-                                    }
                                 }
                             }
                         } else {
                             // Not in shared instance mode, reset tracking
                             sharedInstanceDisconnectedTime = null
-                            if (currentState.sharedInstanceLost) {
-                                _state.value = currentState.copy(sharedInstanceLost = false)
-                            }
                         }
                     }
                 }
@@ -659,7 +734,7 @@ class SettingsViewModel
          * Dismiss the shared instance lost warning without taking action.
          */
         fun dismissSharedInstanceLostWarning() {
-            _state.value = _state.value.copy(sharedInstanceLost = false)
+            _state.value = _state.value.copy(wasUsingSharedInstance = false)
             // Reset timer so warning doesn't immediately reappear
             sharedInstanceDisconnectedTime = System.currentTimeMillis()
         }
@@ -670,7 +745,7 @@ class SettingsViewModel
         fun switchToOwnInstanceAfterLoss() {
             viewModelScope.launch {
                 Log.i(TAG, "User chose to switch to own instance after shared instance loss")
-                _state.value = _state.value.copy(sharedInstanceLost = false)
+                _state.value = _state.value.copy(wasUsingSharedInstance = false)
                 settingsRepository.savePreferOwnInstance(true)
                 if (!_state.value.isRestarting) {
                     restartService()
@@ -679,10 +754,12 @@ class SettingsViewModel
         }
 
         /**
-         * Start monitoring for shared instance becoming available.
-         * When Columba is running its own instance (not by user preference),
-         * this periodically probes the shared instance port to detect if
-         * another app (like Sideband) has started.
+         * Start monitoring for shared instance availability.
+         * This periodically queries the service to check if a shared instance is reachable.
+         * Updates sharedInstanceOnline for toggle enable logic and sharedInstanceAvailable
+         * for "newly available" notifications.
+         *
+         * Also clears wasUsingSharedInstance when the shared instance comes back online.
          */
         private fun startSharedInstanceAvailabilityMonitor() {
             sharedInstanceAvailabilityJob?.cancel()
@@ -694,23 +771,63 @@ class SettingsViewModel
                     while (true) {
                         val currentState = _state.value
 
-                        // Probe when running our own instance (regardless of preference)
-                        // This allows the toggle to know if switching to shared is possible
-                        if (!currentState.isSharedInstance && !currentState.isRestarting) {
-                            val isAvailable = probeSharedInstancePort()
+                        // Only monitor when not restarting
+                        if (!currentState.isRestarting) {
+                            // Query service for shared instance availability
+                            val isOnline =
+                                if (reticulumProtocol is
+                                        com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+                                ) {
+                                    reticulumProtocol.isSharedInstanceAvailable()
+                                } else {
+                                    false
+                                }
 
-                            if (isAvailable && !currentState.sharedInstanceAvailable) {
-                                Log.i(TAG, "Shared instance detected on port $SHARED_INSTANCE_PORT")
-                                _state.value = currentState.copy(sharedInstanceAvailable = true)
-                            } else if (!isAvailable && currentState.sharedInstanceAvailable) {
-                                // Shared instance went away
-                                Log.d(TAG, "Shared instance no longer available")
-                                _state.value = currentState.copy(sharedInstanceAvailable = false)
+                            // Update sharedInstanceOnline if changed
+                            if (isOnline != currentState.sharedInstanceOnline) {
+                                Log.d(TAG, "Shared instance online status changed: $isOnline")
+
+                                // Detect shared instance going offline while we were using it
+                                val wasUsingShared = currentState.sharedInstanceOnline && currentState.isSharedInstance
+                                val shouldAutoRestart = !isOnline && wasUsingShared && !currentState.preferOwnInstance
+                                if (shouldAutoRestart) {
+                                    Log.i(
+                                        TAG,
+                                        "Shared instance went offline while we were using it - " +
+                                            "restarting with Columba's own instance",
+                                    )
+                                    _state.value =
+                                        currentState.copy(
+                                            sharedInstanceOnline = isOnline,
+                                            wasUsingSharedInstance = true,
+                                            isRestarting = true,
+                                        )
+                                    // Restart service - Python will detect no shared instance
+                                    // and initialize with Columba's own interfaces
+                                    restartServiceAfterSharedInstanceLost()
+                                } else {
+                                    _state.value = currentState.copy(sharedInstanceOnline = isOnline)
+                                }
                             }
-                        } else if (currentState.isSharedInstance) {
-                            // Already using shared instance, reset availability flag
-                            if (currentState.sharedInstanceAvailable) {
-                                _state.value = currentState.copy(sharedInstanceAvailable = false)
+
+                            // Clear wasUsingSharedInstance when shared instance comes back online
+                            if (isOnline && currentState.wasUsingSharedInstance) {
+                                Log.i(TAG, "Shared instance is back online - clearing informational state")
+                                _state.value = _state.value.copy(wasUsingSharedInstance = false)
+                            }
+
+                            // Trigger "newly available" notification if applicable
+                            // (only when not currently using shared and notification not already shown)
+                            if (isOnline &&
+                                !currentState.isSharedInstance &&
+                                !currentState.sharedInstanceAvailable
+                            ) {
+                                Log.i(TAG, "Shared instance became available on port $SHARED_INSTANCE_PORT")
+                                _state.value = _state.value.copy(sharedInstanceAvailable = true)
+                            } else if (!isOnline && currentState.sharedInstanceAvailable) {
+                                // Shared instance went away, clear notification
+                                Log.d(TAG, "Shared instance no longer available")
+                                _state.value = _state.value.copy(sharedInstanceAvailable = false)
                             }
                         }
 
@@ -718,29 +835,6 @@ class SettingsViewModel
                         delay(SHARED_INSTANCE_MONITOR_INTERVAL_MS)
                     }
                 }
-        }
-
-        /**
-         * Probe the shared instance port to check if it's listening.
-         * Returns true if a connection can be established.
-         */
-        @Suppress("TooGenericExceptionCaught") // Socket operations can throw various exceptions
-        private fun probeSharedInstancePort(): Boolean {
-            return try {
-                Socket().use { socket ->
-                    socket.connect(
-                        InetSocketAddress("127.0.0.1", SHARED_INSTANCE_PORT),
-                        SOCKET_TIMEOUT_MS,
-                    )
-                    true
-                }
-            } catch (
-                @Suppress("SwallowedException") e: Exception,
-            ) {
-                // Connection refused, timeout, etc. = no shared instance
-                // Not logging to avoid spamming logs during polling
-                false
-            }
         }
 
         /**

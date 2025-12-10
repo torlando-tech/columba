@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LinkOff
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,11 +41,12 @@ import androidx.compose.ui.unit.dp
  *
  * Shown when:
  * - Connected to a shared instance (e.g., from Sideband)
- * - User has opted to use Columba's own instance (so they can toggle back)
+ * - A shared instance is available to switch to
+ * - Was using shared instance but it went offline (informational state)
  *
  * The banner is collapsible:
  * - Collapsed: Shows current instance status with expand chevron
- * - Expanded: Shows full explanation and toggle
+ * - Expanded: Shows full explanation and toggle (or informational message if shared went offline)
  */
 @Composable
 fun SharedInstanceBannerCard(
@@ -54,24 +54,33 @@ fun SharedInstanceBannerCard(
     preferOwnInstance: Boolean,
     isUsingSharedInstance: Boolean,
     rpcKey: String?,
-    sharedInstanceLost: Boolean = false,
-    sharedInstanceAvailable: Boolean = false, // Used for toggle enable logic
+    wasUsingSharedInstance: Boolean = false,
+    sharedInstanceOnline: Boolean = false, // Current availability from service query
     onExpandToggle: (Boolean) -> Unit,
     onTogglePreferOwnInstance: (Boolean) -> Unit,
     onRpcKeyChange: (String?) -> Unit,
-    onSwitchToOwnInstance: () -> Unit = {},
-    onDismissLostWarning: () -> Unit = {},
 ) {
-    // Use error color when shared instance is lost, primary otherwise
+    // Toggle enable logic:
+    // - Can always switch TO own instance
+    // - Can only switch TO shared instance if it's online
+    val canSwitchToShared = sharedInstanceOnline || isUsingSharedInstance
+    val toggleEnabled = !preferOwnInstance || canSwitchToShared
+
+    // Determine if this is the informational state (was using shared, now offline)
+    // Note: wasUsingSharedInstance is only set when shared went offline while we were using it,
+    // so we just need to check that flag and that shared is still offline
+    val isInformationalState = wasUsingSharedInstance && !sharedInstanceOnline
+
+    // Use subtle color for informational state (not error), primary otherwise
     val containerColor =
-        if (sharedInstanceLost) {
-            MaterialTheme.colorScheme.errorContainer
+        if (isInformationalState) {
+            MaterialTheme.colorScheme.surfaceVariant
         } else {
             MaterialTheme.colorScheme.primaryContainer
         }
     val contentColor =
-        if (sharedInstanceLost) {
-            MaterialTheme.colorScheme.onErrorContainer
+        if (isInformationalState) {
+            MaterialTheme.colorScheme.onSurfaceVariant
         } else {
             MaterialTheme.colorScheme.onPrimaryContainer
         }
@@ -107,7 +116,7 @@ fun SharedInstanceBannerCard(
                 ) {
                     Icon(
                         imageVector =
-                            if (sharedInstanceLost) {
+                            if (isInformationalState) {
                                 Icons.Default.LinkOff
                             } else {
                                 Icons.Default.Link
@@ -118,7 +127,7 @@ fun SharedInstanceBannerCard(
                     Text(
                         text =
                             when {
-                                sharedInstanceLost -> "Shared Instance Disconnected"
+                                isInformationalState -> "Shared Instance No Longer Available"
                                 isUsingSharedInstance -> "Connected to Shared Instance"
                                 else -> "Using Columba's Own Instance"
                             },
@@ -149,52 +158,25 @@ fun SharedInstanceBannerCard(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     // Show different content based on state
-                    if (sharedInstanceLost) {
-                        // Lost state - show warning and action buttons
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = "Warning",
-                                tint = contentColor,
-                            )
-                            Text(
-                                text =
-                                    "The shared Reticulum instance (e.g., Sideband) appears " +
-                                        "to be offline. Columba cannot send or receive messages.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = contentColor,
-                            )
-                        }
-
+                    if (isInformationalState) {
+                        // Informational state - shared instance went offline, Columba restarted
                         Text(
                             text =
-                                "You can switch to Columba's own instance to restore " +
-                                    "connectivity, or wait for the shared instance to come back online.",
+                                "The shared Reticulum instance (e.g., Sideband) is no longer " +
+                                    "available. Columba has automatically restarted with its own " +
+                                    "network interfaces.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = contentColor,
                         )
 
-                        // Action buttons
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            OutlinedButton(
-                                onClick = onDismissLostWarning,
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Text("Wait")
-                            }
-                            Button(
-                                onClick = onSwitchToOwnInstance,
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Text("Use Own Instance")
-                            }
-                        }
+                        Text(
+                            text =
+                                "Your messages will continue to be sent and received. " +
+                                    "If the shared instance becomes available again, you can " +
+                                    "switch back to it from Settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = contentColor.copy(alpha = 0.7f),
+                        )
                     } else {
                         // Normal state
                         Text(
@@ -236,10 +218,9 @@ fun SharedInstanceBannerCard(
                         }
 
                         // Toggle for using own instance
-                        // Can only toggle OFF (to shared) if a shared instance is available
-                        val canSwitchToShared = isUsingSharedInstance || sharedInstanceAvailable
-                        // Enable toggle if: turning ON (always ok) OR turning OFF with shared available
-                        val toggleEnabled = !preferOwnInstance || canSwitchToShared
+                        // Enabled based on whether switching is possible:
+                        // - Can always switch TO own instance (preferOwnInstance = true)
+                        // - Can only switch TO shared if it's online (preferOwnInstance = false)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -248,12 +229,7 @@ fun SharedInstanceBannerCard(
                             Text(
                                 text = "Use Columba's own instance",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color =
-                                    if (toggleEnabled) {
-                                        contentColor
-                                    } else {
-                                        contentColor.copy(alpha = 0.5f)
-                                    },
+                                color = contentColor,
                             )
                             Switch(
                                 checked = preferOwnInstance,
@@ -262,21 +238,17 @@ fun SharedInstanceBannerCard(
                             )
                         }
 
-                        // Hint text about restart
+                        // Hint text - show different message based on toggle state
                         Text(
-                            text = "Service will restart automatically",
+                            text =
+                                if (preferOwnInstance && !canSwitchToShared) {
+                                    "No shared instance available"
+                                } else {
+                                    "Service will restart automatically"
+                                },
                             style = MaterialTheme.typography.bodySmall,
                             color = contentColor.copy(alpha = 0.7f),
                         )
-
-                        // Show hint when toggle is disabled (ON but can't turn OFF)
-                        if (preferOwnInstance && !canSwitchToShared) {
-                            Text(
-                                text = "No shared instance detected",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = contentColor.copy(alpha = 0.7f),
-                            )
-                        }
 
                         // RPC Key input (only when using shared instance)
                         if (isUsingSharedInstance && !preferOwnInstance) {

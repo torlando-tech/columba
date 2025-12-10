@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -596,7 +597,10 @@ class SettingsViewModel
         /**
          * Start monitoring shared instance connection status.
          * Detects when shared instance is disconnected for too long and sets sharedInstanceLost flag.
-         * Uses direct TCP port probing since Python doesn't report connection loss.
+         *
+         * Uses the service's networkStatus flow to detect actual connection state.
+         * Note: Direct TCP port probing doesn't work reliably because RNS shared instances
+         * expect a proper RNS client handshake, not just a socket connection test.
          */
         private fun startSharedInstanceMonitor() {
             sharedInstanceMonitorJob?.cancel()
@@ -605,22 +609,19 @@ class SettingsViewModel
                     // Wait for initial setup
                     delay(INIT_DELAY_MS * 2)
 
-                    while (true) {
-                        delay(SHARED_INSTANCE_MONITOR_INTERVAL_MS)
-
+                    // Monitor the service's network status
+                    reticulumProtocol.networkStatus.collect { status ->
                         val currentState = _state.value
 
                         // Only monitor when we're using a shared instance
                         if (currentState.isSharedInstance && !currentState.preferOwnInstance) {
-                            // Probe the shared instance port directly - more reliable than networkStatus
-                            // because Python doesn't actively detect connection loss
-                            val isPortOpen = probeSharedInstancePort()
+                            val isConnected = status is NetworkStatus.READY
 
-                            if (!isPortOpen) {
+                            if (!isConnected) {
                                 val now = System.currentTimeMillis()
                                 if (sharedInstanceDisconnectedTime == null) {
                                     sharedInstanceDisconnectedTime = now
-                                    Log.d(TAG, "Shared instance port closed, starting timer...")
+                                    Log.d(TAG, "Shared instance status: $status, starting timer...")
                                 } else {
                                     val disconnectedDuration = now - sharedInstanceDisconnectedTime!!
                                     if (disconnectedDuration >= SHARED_INSTANCE_LOST_THRESHOLD_MS &&
@@ -637,7 +638,7 @@ class SettingsViewModel
                             } else {
                                 // Connection restored
                                 if (sharedInstanceDisconnectedTime != null) {
-                                    Log.d(TAG, "Shared instance port open again")
+                                    Log.d(TAG, "Shared instance connection restored")
                                     sharedInstanceDisconnectedTime = null
                                     if (currentState.sharedInstanceLost) {
                                         _state.value = currentState.copy(sharedInstanceLost = false)

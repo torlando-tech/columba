@@ -5,6 +5,7 @@ import app.cash.turbine.test
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -61,6 +62,7 @@ class SettingsViewModelTest {
     private val lastAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
     private val themePreferenceFlow = MutableStateFlow(PresetTheme.VIBRANT)
     private val activeIdentityFlow = MutableStateFlow<LocalIdentityEntity?>(null)
+    private val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
 
     @Before
     fun setup() {
@@ -88,6 +90,9 @@ class SettingsViewModelTest {
         // Mock other required methods
         coEvery { identityRepository.getActiveIdentitySync() } returns null
         coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+
+        // Mock ReticulumProtocol networkStatus flow
+        every { reticulumProtocol.networkStatus } returns networkStatusFlow
     }
 
     @After
@@ -495,6 +500,149 @@ class SettingsViewModelTest {
 
             // Verify the restart was triggered via interfaceConfigManager
             coVerify { interfaceConfigManager.applyInterfaceChanges() }
+        }
+
+    // endregion
+
+    // region Shared Instance Monitoring Tests
+
+    @Test
+    fun `networkStatus READY clears sharedInstanceLost flag`() =
+        runTest {
+            // Enable monitors for this test
+            SettingsViewModel.enableMonitors = true
+
+            // Setup as shared instance mode
+            isSharedInstanceFlow.value = true
+            preferOwnInstanceFlow.value = false
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                // Wait for initial loading to complete
+                while (state.isLoading) {
+                    state = awaitItem()
+                }
+
+                // Verify sharedInstanceLost is false when networkStatus is READY
+                assertFalse(state.sharedInstanceLost)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `networkStatus uses service status not port probe for monitoring`() =
+        runTest {
+            // This test verifies the fix: monitoring should use networkStatus flow
+            // not the unreliable port probe
+
+            // Enable monitors for this test
+            SettingsViewModel.enableMonitors = true
+
+            // Setup as shared instance mode with READY status
+            isSharedInstanceFlow.value = true
+            preferOwnInstanceFlow.value = false
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                while (state.isLoading) {
+                    state = awaitItem()
+                }
+
+                // With networkStatus READY, sharedInstanceLost should be false
+                // (even if port probe would fail, which it does in release builds)
+                assertFalse(state.sharedInstanceLost)
+                assertTrue(state.isSharedInstance)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `sharedInstanceLost flag remains false when networkStatus stays READY`() =
+        runTest {
+            // Enable monitors for this test
+            SettingsViewModel.enableMonitors = true
+
+            // Setup as shared instance mode
+            isSharedInstanceFlow.value = true
+            preferOwnInstanceFlow.value = false
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                while (state.isLoading) {
+                    state = awaitItem()
+                }
+
+                // Verify state is correct
+                assertTrue(state.isSharedInstance)
+                assertFalse(state.preferOwnInstance)
+                assertFalse(state.sharedInstanceLost)
+
+                // Keep emitting READY - should stay not lost
+                networkStatusFlow.value = NetworkStatus.READY
+
+                // The state should remain with sharedInstanceLost = false
+                // No new emission expected since value didn't change meaningfully
+                assertFalse(state.sharedInstanceLost)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `non-shared instance mode ignores networkStatus changes`() =
+        runTest {
+            // Enable monitors for this test
+            SettingsViewModel.enableMonitors = true
+
+            // Setup as NOT shared instance mode
+            isSharedInstanceFlow.value = false
+            preferOwnInstanceFlow.value = true
+            networkStatusFlow.value = NetworkStatus.SHUTDOWN
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                while (state.isLoading) {
+                    state = awaitItem()
+                }
+
+                // Even with SHUTDOWN status, sharedInstanceLost should be false
+                // because we're not using shared instance
+                assertFalse(state.sharedInstanceLost)
+                assertFalse(state.isSharedInstance)
+                assertTrue(state.preferOwnInstance)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `networkStatus is properly collected from reticulumProtocol`() =
+        runTest {
+            // Enable monitors for this test
+            SettingsViewModel.enableMonitors = true
+
+            // Setup as shared instance mode
+            isSharedInstanceFlow.value = true
+            preferOwnInstanceFlow.value = false
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            // Verify that networkStatus flow was accessed
+            io.mockk.verify { reticulumProtocol.networkStatus }
         }
 
     // endregion

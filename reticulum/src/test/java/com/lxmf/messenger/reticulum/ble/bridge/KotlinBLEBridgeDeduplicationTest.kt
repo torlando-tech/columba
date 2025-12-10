@@ -426,33 +426,6 @@ class KotlinBLEBridgeDeduplicationTest {
         field.set(bridge, identityBytes)
     }
 
-    private fun addConnectedPeer(
-        bridge: KotlinBLEBridge,
-        address: String,
-        isCentral: Boolean,
-        isPeripheral: Boolean = !isCentral,
-    ) {
-        val connectedPeersField = KotlinBLEBridge::class.java.getDeclaredField("connectedPeers")
-        connectedPeersField.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        val connectedPeers = connectedPeersField.get(bridge) as ConcurrentHashMap<String, Any>
-
-        // Create PeerConnection via reflection
-        val peerConnectionClass = Class.forName("com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge\$PeerConnection")
-        val constructor = peerConnectionClass.declaredConstructors.first()
-        constructor.isAccessible = true
-        // PeerConnection(address, mtu, isCentral, isPeripheral)
-        val peer = constructor.newInstance(address, 512, isCentral, isPeripheral)
-        connectedPeers[address] = peer
-    }
-
-    private fun getConnectedPeers(bridge: KotlinBLEBridge): ConcurrentHashMap<String, Any> {
-        val field = KotlinBLEBridge::class.java.getDeclaredField("connectedPeers")
-        field.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        return field.get(bridge) as ConcurrentHashMap<String, Any>
-    }
-
     // ========== Cooldown Asymmetry Tests ==========
 
     @Test

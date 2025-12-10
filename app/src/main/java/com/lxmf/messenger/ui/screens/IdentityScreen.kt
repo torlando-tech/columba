@@ -164,6 +164,7 @@ fun IdentityScreen(
                 onEnableBluetooth = btController.onEnableClick,
                 onOpenBluetoothSettings = btController.onOpenSettingsClick,
                 isSharedInstance = settingsState.isSharedInstance,
+                sharedInstanceOnline = settingsState.sharedInstanceOnline,
             )
 
             // Status Card
@@ -178,6 +179,7 @@ fun IdentityScreen(
                 onShutdown = { viewModel.shutdownService() },
                 onRestart = { viewModel.restartService() },
                 isSharedInstance = settingsState.isSharedInstance,
+                sharedInstanceOnline = settingsState.sharedInstanceOnline,
             )
 
             // Interfaces Card
@@ -680,7 +682,12 @@ fun BleConnectionsCard(
     onEnableBluetooth: () -> Unit = {},
     onOpenBluetoothSettings: () -> Unit = {},
     isSharedInstance: Boolean = false,
+    sharedInstanceOnline: Boolean = true,
 ) {
+    // BLE is only disabled when actively connected to shared instance
+    // If shared instance went offline, Columba is using its own instance and BLE works
+    val bleDisabled = isSharedInstance && sharedInstanceOnline
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -700,7 +707,7 @@ fun BleConnectionsCard(
 
             Divider()
 
-            if (isSharedInstance) {
+            if (bleDisabled) {
                 Text(
                     text =
                         "BLE connections are not available while using a shared Reticulum instance. " +
@@ -1158,7 +1165,12 @@ private fun ServiceControlCard(
     onShutdown: () -> Unit,
     onRestart: () -> Unit,
     isSharedInstance: Boolean = false,
+    sharedInstanceOnline: Boolean = true,
 ) {
+    // Service control is only disabled when actively connected to shared instance
+    // If shared instance went offline, Columba is using its own instance
+    val controlDisabled = isSharedInstance && sharedInstanceOnline
+
     var showShutdownDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Card(
@@ -1188,7 +1200,7 @@ private fun ServiceControlCard(
                 )
             }
 
-            if (isSharedInstance) {
+            if (controlDisabled) {
                 Text(
                     text =
                         "Service control is disabled while using a shared Reticulum instance. " +
@@ -1211,7 +1223,7 @@ private fun ServiceControlCard(
                 OutlinedButton(
                     onClick = { showShutdownDialog = true },
                     modifier = Modifier.weight(1f),
-                    enabled = !isSharedInstance,
+                    enabled = !controlDisabled,
                 ) {
                     Icon(Icons.Default.Close, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
@@ -1221,7 +1233,7 @@ private fun ServiceControlCard(
                 Button(
                     onClick = onRestart,
                     modifier = Modifier.weight(1f),
-                    enabled = !isSharedInstance,
+                    enabled = !controlDisabled,
                 ) {
                     Icon(Icons.Default.Send, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))

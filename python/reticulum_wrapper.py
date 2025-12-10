@@ -295,13 +295,15 @@ class ReticulumWrapper:
         except Exception as e:
             log_warning("ReticulumWrapper", "_clear_stale_ble_paths", f"Error during stale path cleanup (non-fatal): {e}")
 
-    def _check_shared_instance_available(self, host: str = "127.0.0.1", port: int = 37428, timeout: float = 1.0) -> bool:
+    def check_shared_instance_available(self, host: str = "127.0.0.1", port: int = 37428, timeout: float = 1.0) -> bool:
         """
         Check if a shared Reticulum instance is available via TCP.
 
         RNS shared instances listen on 127.0.0.1:37428 by default for TCP clients.
         This method attempts to connect to that port to detect if another app
         (e.g., Sideband) is already running a shared Reticulum instance.
+
+        This method is callable from Kotlin via the service AIDL interface.
 
         Args:
             host: Host to check (default: localhost)
@@ -314,7 +316,7 @@ class ReticulumWrapper:
         import socket
 
         try:
-            log_info("ReticulumWrapper", "_check_shared_instance_available",
+            log_info("ReticulumWrapper", "check_shared_instance_available",
                      f"Checking for shared instance at {host}:{port}...")
 
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -324,20 +326,20 @@ class ReticulumWrapper:
             sock.close()
 
             if result == 0:
-                log_info("ReticulumWrapper", "_check_shared_instance_available",
+                log_info("ReticulumWrapper", "check_shared_instance_available",
                          f"✓ Shared instance detected at {host}:{port}")
                 return True
             else:
-                log_info("ReticulumWrapper", "_check_shared_instance_available",
+                log_info("ReticulumWrapper", "check_shared_instance_available",
                          f"No shared instance found at {host}:{port} (error code: {result})")
                 return False
 
         except socket.timeout:
-            log_info("ReticulumWrapper", "_check_shared_instance_available",
+            log_info("ReticulumWrapper", "check_shared_instance_available",
                      f"Connection to {host}:{port} timed out - no shared instance")
             return False
         except Exception as e:
-            log_warning("ReticulumWrapper", "_check_shared_instance_available",
+            log_warning("ReticulumWrapper", "check_shared_instance_available",
                         f"Error checking shared instance: {e}")
             return False
 
@@ -699,7 +701,7 @@ class ReticulumWrapper:
             use_shared_instance = False
             if not prefer_own_instance:
                 log_info("ReticulumWrapper", "initialize", "Checking for shared Reticulum instance...")
-                if self._check_shared_instance_available():
+                if self.check_shared_instance_available():
                     use_shared_instance = True
                     log_info("ReticulumWrapper", "initialize", "✓ Will connect to shared instance")
                 else:

@@ -479,6 +479,17 @@ class ReticulumServiceBinder(
         }
     }
 
+    override fun isSharedInstanceAvailable(): Boolean {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("check_shared_instance_available")?.toBoolean() ?: false
+            } ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking shared instance availability", e)
+            false
+        }
+    }
+
     // ===========================================
     // Private Helpers
     // ===========================================

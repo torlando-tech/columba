@@ -59,8 +59,6 @@ fun SharedInstanceBannerCard(
     onExpandToggle: (Boolean) -> Unit,
     onTogglePreferOwnInstance: (Boolean) -> Unit,
     onRpcKeyChange: (String?) -> Unit,
-    onSwitchToOwnInstance: () -> Unit = {},
-    onDismissLostWarning: () -> Unit = {},
 ) {
     // Toggle enable logic:
     // - Can always switch TO own instance

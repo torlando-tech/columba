@@ -64,7 +64,6 @@ class SettingsViewModel
             private const val MAX_RETRIES = 3
             private const val RETRY_DELAY_MS = 1000L
             private const val SHARED_INSTANCE_MONITOR_INTERVAL_MS = 5_000L // Check every 5 seconds
-            private const val SHARED_INSTANCE_LOST_THRESHOLD_MS = 10_000L // 10 seconds to consider lost
             private const val SHARED_INSTANCE_PORT = 37428 // Default RNS shared instance port (for logging)
 
             /**
@@ -197,12 +196,11 @@ class SettingsViewModel
 
                         // Initialize sharedInstanceOnline on first load:
                         // If isSharedInstance is true at startup, the shared instance was online when we connected
+                        val isFirstLoadWithSharedInstance =
+                            previousState.isLoading && !newState.isLoading && newState.isSharedInstance
+                        val needsOnlineInit = isFirstLoadWithSharedInstance && !newState.sharedInstanceOnline
                         val initializedOnline =
-                            if (previousState.isLoading &&
-                                !newState.isLoading &&
-                                newState.isSharedInstance &&
-                                !newState.sharedInstanceOnline
-                            ) {
+                            if (needsOnlineInit) {
                                 Log.d(
                                     TAG,
                                     "Initializing sharedInstanceOnline=true since isSharedInstance=true at startup",
@@ -790,11 +788,9 @@ class SettingsViewModel
                                 Log.d(TAG, "Shared instance online status changed: $isOnline")
 
                                 // Detect shared instance going offline while we were using it
-                                if (!isOnline &&
-                                    currentState.sharedInstanceOnline &&
-                                    currentState.isSharedInstance &&
-                                    !currentState.preferOwnInstance
-                                ) {
+                                val wasUsingShared = currentState.sharedInstanceOnline && currentState.isSharedInstance
+                                val shouldAutoRestart = !isOnline && wasUsingShared && !currentState.preferOwnInstance
+                                if (shouldAutoRestart) {
                                     Log.i(
                                         TAG,
                                         "Shared instance went offline while we were using it - " +

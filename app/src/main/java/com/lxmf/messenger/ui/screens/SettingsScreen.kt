@@ -135,8 +135,6 @@ fun SettingsScreen(
                         onExpandToggle = { viewModel.toggleSharedInstanceBannerExpanded(it) },
                         onTogglePreferOwnInstance = { viewModel.togglePreferOwnInstance(it) },
                         onRpcKeyChange = { viewModel.saveRpcKey(it) },
-                        onSwitchToOwnInstance = { viewModel.switchToOwnInstanceAfterLoss() },
-                        onDismissLostWarning = { viewModel.dismissSharedInstanceLostWarning() },
                     )
                 }
 

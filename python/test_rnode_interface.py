@@ -89,6 +89,29 @@ class TestKISSUnescape:
         unescaped = KISS.unescape(data)
         assert unescaped == bytes()
 
+    def test_unescape_invalid_escape_skipped(self):
+        """Invalid escape sequences (0xDB followed by invalid byte) should be skipped.
+
+        Per KISS protocol, 0xDB should only be followed by 0xDC (TFEND) or 0xDD (TFESC).
+        If followed by any other byte, both bytes should be skipped to avoid data corruption.
+        """
+        # 0xDB 0xAA is invalid - should skip both bytes
+        data = bytes([0x01, 0xDB, 0xAA, 0x02])
+        unescaped = KISS.unescape(data)
+        # Invalid escape (0xDB 0xAA) should be skipped
+        assert unescaped == bytes([0x01, 0x02])
+
+    def test_unescape_trailing_fesc_skipped(self):
+        """Trailing FESC (0xDB) at end of data should be skipped.
+
+        If data ends with 0xDB, there's no following byte to complete the escape sequence.
+        The trailing 0xDB should be skipped.
+        """
+        data = bytes([0x01, 0x02, 0xDB])
+        unescaped = KISS.unescape(data)
+        # Trailing 0xDB should be skipped
+        assert unescaped == bytes([0x01, 0x02])
+
 
 class TestKISSRoundTrip:
     """Tests for escape/unescape round-trip consistency."""

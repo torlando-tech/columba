@@ -115,8 +115,10 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 // Show shared instance banner when relevant to the user
+                // Include preferOwnInstance so user can toggle back to shared instance
                 val showSharedInstanceBanner =
                     state.isSharedInstance ||
+                        state.preferOwnInstance ||
                         state.sharedInstanceAvailable ||
                         state.sharedInstanceLost ||
                         state.isRestarting

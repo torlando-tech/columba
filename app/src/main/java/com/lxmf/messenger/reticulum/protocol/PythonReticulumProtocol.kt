@@ -1090,20 +1090,7 @@ class PythonReticulumProtocol(
     override suspend fun getFailedInterfaces(): List<FailedInterface> {
         return try {
             val result = wrapper?.callAttr("get_failed_interfaces")?.toString() ?: "[]"
-            val jsonArray = org.json.JSONArray(result)
-
-            val failedList = mutableListOf<FailedInterface>()
-            for (i in 0 until jsonArray.length()) {
-                val item = jsonArray.getJSONObject(i)
-                failedList.add(
-                    FailedInterface(
-                        name = item.optString("name", "Unknown"),
-                        error = item.optString("error", "Unknown error"),
-                        recoverable = item.optBoolean("recoverable", true),
-                    ),
-                )
-            }
-            failedList
+            FailedInterface.parseFromJson(result)
         } catch (e: Exception) {
             Log.e(TAG, "Error getting failed interfaces", e)
             emptyList()

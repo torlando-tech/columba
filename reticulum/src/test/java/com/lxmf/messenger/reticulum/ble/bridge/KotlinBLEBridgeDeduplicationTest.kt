@@ -11,6 +11,7 @@ import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -466,4 +467,49 @@ class KotlinBLEBridgeDeduplicationTest {
         val cooldownAfter = getRecentlyDeduplicatedIdentities(bridge)
         assertTrue("Cooldown should contain identity after adding", cooldownAfter.containsKey(identity))
     }
+
+    // ========== onAddressChanged Callback Tests ==========
+
+    @Test
+    fun `onAddressChanged callback can be set`() {
+        val bridge = createBridgeWithMocks()
+        val mockCallback = mockk<PyObject>(relaxed = true)
+
+        // When: set the callback
+        setOnAddressChanged(bridge, mockCallback)
+
+        // Then: callback should be stored (use assertSame to avoid native PyObject.equals())
+        val storedCallback = getOnAddressChanged(bridge)
+        org.junit.Assert.assertSame("Callback should be stored", mockCallback, storedCallback)
+    }
+
+    @Test
+    fun `onAddressChanged callback is initially null`() {
+        val bridge = createBridgeWithMocks()
+
+        // Verify callback starts as null
+        val callback = getOnAddressChanged(bridge)
+        org.junit.Assert.assertNull("Callback should be null initially", callback)
+    }
+
+    // ========== Additional Helper Methods for onAddressChanged Tests ==========
+
+    private fun setOnAddressChanged(
+        bridge: KotlinBLEBridge,
+        callback: PyObject,
+    ) {
+        val method = KotlinBLEBridge::class.java.getDeclaredMethod(
+            "setOnAddressChanged",
+            PyObject::class.java,
+        )
+        method.isAccessible = true
+        method.invoke(bridge, callback)
+    }
+
+    private fun getOnAddressChanged(bridge: KotlinBLEBridge): PyObject? {
+        val field = KotlinBLEBridge::class.java.getDeclaredField("onAddressChanged")
+        field.isAccessible = true
+        return field.get(bridge) as? PyObject
+    }
+
 }

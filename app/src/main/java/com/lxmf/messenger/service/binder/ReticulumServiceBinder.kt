@@ -490,6 +490,17 @@ class ReticulumServiceBinder(
         }
     }
 
+    override fun getFailedInterfaces(): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("get_failed_interfaces")?.toString() ?: "[]"
+            } ?: "[]"
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting failed interfaces", e)
+            "[]"
+        }
+    }
+
     // ===========================================
     // Private Helpers
     // ===========================================

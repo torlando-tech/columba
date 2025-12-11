@@ -880,29 +880,75 @@ class ReticulumWrapper:
             # Track which interfaces failed to initialize
             self.failed_interfaces = []
 
+            # Proactively check if AutoInterface ports are available
+            # This prevents RNS from calling sys.exit(255) on port conflicts
+            has_autointerface = any(
+                iface.get('type') == 'AutoInterface'
+                for iface in enabled_interfaces
+            )
+            log_debug("ReticulumWrapper", "initialize", f"has_autointerface = {has_autointerface}")
+
+            # Pre-check if AutoInterface ports are available
+            # AutoInterface uses IPv6 multicast (discovery) and IPv6 link-local (data)
+            if has_autointerface:
+                log_info("ReticulumWrapper", "initialize", "Pre-checking AutoInterface port availability...")
+                try:
+                    import socket
+
+                    # AutoInterface uses:
+                    # - Port 29716 for discovery (IPv6 multicast)
+                    # - Port 42671 for data (IPv6 link-local)
+                    # Check both by trying to bind an IPv6 UDP socket
+
+                    ports_to_check = [29716, 42671]
+                    port_conflict = False
+
+                    for test_port in ports_to_check:
+                        log_debug("ReticulumWrapper", "initialize", f"Testing IPv6 UDP bind to port {test_port}...")
+                        try:
+                            # Use IPv6 socket since AutoInterface uses IPv6
+                            # Don't use SO_REUSEADDR - we want to detect conflicts
+                            sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+                            # Bind to all IPv6 interfaces
+                            sock.bind(('::', test_port))
+                            sock.close()
+                            log_debug("ReticulumWrapper", "initialize", f"Port {test_port} is available")
+                        except OSError as port_error:
+                            if port_error.errno == 98:  # Address already in use
+                                log_warning("ReticulumWrapper", "initialize",
+                                            f"⚠️ Port {test_port} is already in use - another Reticulum app may be running")
+                                port_conflict = True
+                                self.failed_interfaces.append({
+                                    "name": "AutoInterface",
+                                    "error": f"Port {test_port} already in use (another Reticulum app may be running)",
+                                    "recoverable": True
+                                })
+                                break
+                            else:
+                                log_debug("ReticulumWrapper", "initialize", f"Port check failed with error: {port_error}")
+
+                    if port_conflict:
+                        log_info("ReticulumWrapper", "initialize", "Disabling AutoInterface to prevent crash...")
+                        self._remove_autointerface_from_config()
+                        has_autointerface = False
+                        log_info("ReticulumWrapper", "initialize", "AutoInterface removed from config")
+
+                except Exception as check_error:
+                    log_debug("ReticulumWrapper", "initialize", f"Port pre-check failed: {check_error}")
+                    # Non-critical, continue
+
+            # Now initialize RNS
+            log_info("ReticulumWrapper", "initialize", "Calling RNS.Reticulum()...")
             try:
                 self.reticulum = RNS.Reticulum(configdir=self.storage_path)
                 log_info("ReticulumWrapper", "initialize", "RNS.Reticulum created successfully")
+            except SystemExit as e:
+                # This shouldn't happen now that we pre-check, but keep as safety net
+                log_warning("ReticulumWrapper", "initialize", f"RNS called sys.exit({e.code}) - likely interface failure")
+                raise
             except OSError as e:
-                if "Address already in use" in str(e) or "Errno 98" in str(e):
-                    log_warning("ReticulumWrapper", "initialize", "⚠️ AutoInterface bind failed (address in use)")
-                    log_warning("ReticulumWrapper", "initialize", "This usually means another Reticulum app (e.g., Sideband) is running")
-                    log_info("ReticulumWrapper", "initialize", "Retrying initialization without AutoInterface...")
-
-                    # Track that AutoInterface failed
-                    self.failed_interfaces.append({
-                        "name": "AutoInterface",
-                        "error": "Address already in use - another Reticulum app may be running"
-                    })
-
-                    # Remove AutoInterface from config and retry
-                    self._remove_autointerface_from_config()
-                    self.reticulum = RNS.Reticulum(configdir=self.storage_path)
-                    log_info("ReticulumWrapper", "initialize", "✅ RNS.Reticulum created successfully (without AutoInterface)")
-                else:
-                    # Different error - re-raise
-                    log_error("ReticulumWrapper", "initialize", f"Failed to create RNS.Reticulum: {e}")
-                    raise
+                log_error("ReticulumWrapper", "initialize", f"OSError during RNS init: {e}")
+                raise
 
             # Clear stale BLE paths (bug workaround)
             log_info("ReticulumWrapper", "initialize", "Clearing stale BLE paths from previous session")
@@ -2648,6 +2694,16 @@ class ReticulumWrapper:
             info['transport_enabled'] = False
 
         return info
+
+    def get_failed_interfaces(self) -> str:
+        """
+        Get list of interfaces that failed to initialize.
+
+        Returns:
+            JSON string containing list of failed interfaces with error details.
+            Each entry has: name, error, and optionally recoverable flag.
+        """
+        return json.dumps(self.failed_interfaces if hasattr(self, 'failed_interfaces') else [])
 
     def get_path_table(self) -> List[str]:
         """

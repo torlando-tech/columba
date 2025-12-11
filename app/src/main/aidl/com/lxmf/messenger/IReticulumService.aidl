@@ -270,4 +270,14 @@ interface IReticulumService {
      * @return true if a shared instance is available and responding, false otherwise
      */
     boolean isSharedInstanceAvailable();
+
+    /**
+     * Get list of interfaces that failed to initialize.
+     * This is used to surface warnings to the user when an interface (like AutoInterface)
+     * couldn't start due to port conflicts with another Reticulum app.
+     *
+     * @return JSON string containing array of failed interface details:
+     *         [{"name": "AutoInterface", "error": "Port 29716 already in use", "recoverable": true}]
+     */
+    String getFailedInterfaces();
 }

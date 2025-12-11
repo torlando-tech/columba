@@ -157,7 +157,7 @@ jobs:
           rm -rf */build/reports/jacoco
 
       - name: Run unit tests
-        run: ./gradlew test --stacktrace --max-workers=2
+        run: ./gradlew test --stacktrace --max-workers=2 --no-build-cache
 
       - name: Upload unit test results
         if: always()

@@ -14,7 +14,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -28,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.TcpCommunityServer
+import com.lxmf.messenger.ui.components.CustomSettingsCard
 import com.lxmf.messenger.viewmodel.TcpClientWizardViewModel
 
 /**
@@ -79,7 +79,9 @@ fun ServerSelectionStep(viewModel: TcpClientWizardViewModel) {
 
             // Custom option
             item {
-                CustomServerCard(
+                CustomSettingsCard(
+                    title = "Custom",
+                    description = "Enter server details manually",
                     isSelected = state.isCustomMode,
                     onClick = { viewModel.enableCustomMode() },
                 )
@@ -161,61 +163,3 @@ private fun ServerCard(
     }
 }
 
-@Composable
-private fun CustomServerCard(
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
-    val containerColor =
-        if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surface
-        }
-
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Default.Tune,
-                contentDescription = null,
-                tint =
-                    if (isSelected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-            )
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Custom",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                )
-                Text(
-                    "Enter server details manually",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-    }
-}

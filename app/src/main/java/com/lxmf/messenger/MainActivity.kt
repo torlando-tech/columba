@@ -383,16 +383,26 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
             }
     }
 
-    // Check if we're on the messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, or welcome screen
-    val isOnWelcomeScreen = currentRoute == Screen.Welcome.route
-    val isOnMessagingScreen = currentRoute?.startsWith("messaging/") ?: false
-    val isOnAnnounceDetailScreen = currentRoute?.startsWith("announce_detail/") ?: false
-    val isOnInterfaceManagementScreen = currentRoute == "interface_management"
-    val isOnBleConnectionStatusScreen = currentRoute == "ble_connection_status"
-    val isOnThemeManagementScreen = currentRoute == "theme_management"
-    val isOnThemeEditorScreen = currentRoute == "theme_editor" || currentRoute?.startsWith("theme_editor/") == true
-    val isOnRNodeWizardScreen = currentRoute?.startsWith("rnode_wizard") ?: false
-    val isOnTcpClientWizardScreen = currentRoute == "tcp_client_wizard"
+    // Screens that should hide the bottom navigation bar
+    val hideBottomNavScreens =
+        listOf(
+            Screen.Welcome.route,
+            "interface_management",
+            "ble_connection_status",
+            "theme_management",
+            "tcp_client_wizard",
+        )
+    val hideBottomNavPrefixes =
+        listOf(
+            "messaging/",
+            "announce_detail/",
+            "theme_editor",
+            "rnode_wizard",
+        )
+    val shouldShowBottomNav =
+        currentRoute != null &&
+            currentRoute !in hideBottomNavScreens &&
+            hideBottomNavPrefixes.none { currentRoute.startsWith(it) }
 
     val screens =
         listOf(
@@ -410,8 +420,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
             @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
             Scaffold(
                 bottomBar = {
-                    // Only show NavigationBar when NOT on messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, welcome screen, RNode wizard, or TCP Client wizard
-                    if (!isOnWelcomeScreen && !isOnMessagingScreen && !isOnAnnounceDetailScreen && !isOnInterfaceManagementScreen && !isOnBleConnectionStatusScreen && !isOnThemeManagementScreen && !isOnThemeEditorScreen && !isOnRNodeWizardScreen && !isOnTcpClientWizardScreen) {
+                    if (shouldShowBottomNav) {
                         NavigationBar {
                             screens.forEachIndexed { index, screen ->
                                 NavigationBarItem(

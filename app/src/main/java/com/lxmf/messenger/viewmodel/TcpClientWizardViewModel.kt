@@ -48,153 +48,157 @@ data class TcpClientWizardState(
  * ViewModel for the TCP Client interface setup wizard.
  */
 @HiltViewModel
-class TcpClientWizardViewModel @Inject constructor(
-    private val interfaceRepository: InterfaceRepository,
-    private val configManager: InterfaceConfigManager,
-) : ViewModel() {
-
-    companion object {
-        private const val TAG = "TcpClientWizard"
-    }
-
-    private val _state = MutableStateFlow(TcpClientWizardState())
-    val state: StateFlow<TcpClientWizardState> = _state.asStateFlow()
-
-    /**
-     * Get the list of community servers.
-     */
-    fun getCommunityServers(): List<TcpCommunityServer> = TcpCommunityServers.servers
-
-    /**
-     * Select a community server.
-     */
-    fun selectServer(server: TcpCommunityServer) {
-        _state.update {
-            it.copy(
-                selectedServer = server,
-                isCustomMode = false,
-                interfaceName = server.name,
-                targetHost = server.host,
-                targetPort = server.port.toString(),
-            )
+class TcpClientWizardViewModel
+    @Inject
+    constructor(
+        private val interfaceRepository: InterfaceRepository,
+        private val configManager: InterfaceConfigManager,
+    ) : ViewModel() {
+        companion object {
+            private const val TAG = "TcpClientWizard"
         }
-    }
 
-    /**
-     * Enable custom mode (user enters server details manually).
-     */
-    fun enableCustomMode() {
-        _state.update {
-            it.copy(
-                selectedServer = null,
-                isCustomMode = true,
-                interfaceName = "",
-                targetHost = "",
-                targetPort = "",
-            )
-        }
-    }
+        private val _state = MutableStateFlow(TcpClientWizardState())
+        val state: StateFlow<TcpClientWizardState> = _state.asStateFlow()
 
-    /**
-     * Update interface name field.
-     */
-    fun updateInterfaceName(value: String) {
-        _state.update { it.copy(interfaceName = value) }
-    }
+        /**
+         * Get the list of community servers.
+         */
+        fun getCommunityServers(): List<TcpCommunityServer> = TcpCommunityServers.servers
 
-    /**
-     * Update target host field.
-     */
-    fun updateTargetHost(value: String) {
-        _state.update { it.copy(targetHost = value) }
-    }
-
-    /**
-     * Update target port field.
-     */
-    fun updateTargetPort(value: String) {
-        _state.update { it.copy(targetPort = value) }
-    }
-
-    /**
-     * Check if the user can proceed to the next step.
-     */
-    fun canProceed(): Boolean {
-        val currentState = _state.value
-        return when (currentState.currentStep) {
-            TcpClientWizardStep.SERVER_SELECTION ->
-                currentState.selectedServer != null || currentState.isCustomMode
-            TcpClientWizardStep.REVIEW_CONFIGURE ->
-                true // No validation required per user request
-        }
-    }
-
-    /**
-     * Navigate to the next wizard step.
-     */
-    fun goToNextStep() {
-        val currentState = _state.value
-        val nextStep = when (currentState.currentStep) {
-            TcpClientWizardStep.SERVER_SELECTION -> TcpClientWizardStep.REVIEW_CONFIGURE
-            TcpClientWizardStep.REVIEW_CONFIGURE -> return // Already at last step
-        }
-        _state.update { it.copy(currentStep = nextStep) }
-    }
-
-    /**
-     * Navigate to the previous wizard step.
-     */
-    fun goToPreviousStep() {
-        val currentState = _state.value
-        val previousStep = when (currentState.currentStep) {
-            TcpClientWizardStep.SERVER_SELECTION -> return // Already at first step
-            TcpClientWizardStep.REVIEW_CONFIGURE -> TcpClientWizardStep.SERVER_SELECTION
-        }
-        _state.update { it.copy(currentStep = previousStep) }
-    }
-
-    /**
-     * Save the TCP Client interface configuration.
-     */
-    fun saveConfiguration() {
-        viewModelScope.launch {
-            _state.update { it.copy(isSaving = true, saveError = null) }
-
-            try {
-                val currentState = _state.value
-
-                val config = InterfaceConfig.TCPClient(
-                    name = currentState.interfaceName.trim().ifEmpty { "TCP Connection" },
-                    enabled = true,
-                    targetHost = currentState.targetHost.trim(),
-                    targetPort = currentState.targetPort.toIntOrNull() ?: 4242,
-                    kissFraming = false,
-                    mode = "full",
+        /**
+         * Select a community server.
+         */
+        fun selectServer(server: TcpCommunityServer) {
+            _state.update {
+                it.copy(
+                    selectedServer = server,
+                    isCustomMode = false,
+                    interfaceName = server.name,
+                    targetHost = server.host,
+                    targetPort = server.port.toString(),
                 )
+            }
+        }
 
-                interfaceRepository.insertInterface(config)
-                Log.d(TAG, "Saved TCP Client interface: ${config.name}")
+        /**
+         * Enable custom mode (user enters server details manually).
+         */
+        fun enableCustomMode() {
+            _state.update {
+                it.copy(
+                    selectedServer = null,
+                    isCustomMode = true,
+                    interfaceName = "",
+                    targetHost = "",
+                    targetPort = "",
+                )
+            }
+        }
 
-                // Mark pending changes for InterfaceManagementScreen to show "Apply" button
-                configManager.setPendingChanges(true)
+        /**
+         * Update interface name field.
+         */
+        fun updateInterfaceName(value: String) {
+            _state.update { it.copy(interfaceName = value) }
+        }
 
-                _state.update { it.copy(isSaving = false, saveSuccess = true) }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to save TCP Client interface", e)
-                _state.update {
-                    it.copy(
-                        isSaving = false,
-                        saveError = e.message ?: "Failed to save configuration",
-                    )
+        /**
+         * Update target host field.
+         */
+        fun updateTargetHost(value: String) {
+            _state.update { it.copy(targetHost = value) }
+        }
+
+        /**
+         * Update target port field.
+         */
+        fun updateTargetPort(value: String) {
+            _state.update { it.copy(targetPort = value) }
+        }
+
+        /**
+         * Check if the user can proceed to the next step.
+         */
+        fun canProceed(): Boolean {
+            val currentState = _state.value
+            return when (currentState.currentStep) {
+                TcpClientWizardStep.SERVER_SELECTION ->
+                    currentState.selectedServer != null || currentState.isCustomMode
+                TcpClientWizardStep.REVIEW_CONFIGURE ->
+                    true // No validation required per user request
+            }
+        }
+
+        /**
+         * Navigate to the next wizard step.
+         */
+        fun goToNextStep() {
+            val currentState = _state.value
+            val nextStep =
+                when (currentState.currentStep) {
+                    TcpClientWizardStep.SERVER_SELECTION -> TcpClientWizardStep.REVIEW_CONFIGURE
+                    TcpClientWizardStep.REVIEW_CONFIGURE -> return // Already at last step
+                }
+            _state.update { it.copy(currentStep = nextStep) }
+        }
+
+        /**
+         * Navigate to the previous wizard step.
+         */
+        fun goToPreviousStep() {
+            val currentState = _state.value
+            val previousStep =
+                when (currentState.currentStep) {
+                    TcpClientWizardStep.SERVER_SELECTION -> return // Already at first step
+                    TcpClientWizardStep.REVIEW_CONFIGURE -> TcpClientWizardStep.SERVER_SELECTION
+                }
+            _state.update { it.copy(currentStep = previousStep) }
+        }
+
+        /**
+         * Save the TCP Client interface configuration.
+         */
+        fun saveConfiguration() {
+            viewModelScope.launch {
+                _state.update { it.copy(isSaving = true, saveError = null) }
+
+                try {
+                    val currentState = _state.value
+
+                    val config =
+                        InterfaceConfig.TCPClient(
+                            name = currentState.interfaceName.trim().ifEmpty { "TCP Connection" },
+                            enabled = true,
+                            targetHost = currentState.targetHost.trim(),
+                            targetPort = currentState.targetPort.toIntOrNull() ?: 4242,
+                            kissFraming = false,
+                            mode = "full",
+                        )
+
+                    interfaceRepository.insertInterface(config)
+                    Log.d(TAG, "Saved TCP Client interface: ${config.name}")
+
+                    // Mark pending changes for InterfaceManagementScreen to show "Apply" button
+                    configManager.setPendingChanges(true)
+
+                    _state.update { it.copy(isSaving = false, saveSuccess = true) }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to save TCP Client interface", e)
+                    _state.update {
+                        it.copy(
+                            isSaving = false,
+                            saveError = e.message ?: "Failed to save configuration",
+                        )
+                    }
                 }
             }
         }
-    }
 
-    /**
-     * Clear the save error.
-     */
-    fun clearSaveError() {
-        _state.update { it.copy(saveError = null) }
+        /**
+         * Clear the save error.
+         */
+        fun clearSaveError() {
+            _state.update { it.copy(saveError = null) }
+        }
     }
-}

@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SignalCellularAlt
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -40,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.FrequencyRegion
 import com.lxmf.messenger.data.model.RNodeRegionalPreset
+import com.lxmf.messenger.ui.components.CustomSettingsCard
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
 
 /**
@@ -98,6 +98,8 @@ fun RegionSelectionStep(viewModel: RNodeWizardViewModel) {
             // Custom option
             item {
                 CustomSettingsCard(
+                    title = "Custom Settings",
+                    description = "Configure all parameters manually",
                     isSelected = state.isCustomMode,
                     onClick = { viewModel.enableCustomMode() },
                 )
@@ -260,65 +262,6 @@ private fun FrequencyRegionCard(
                         )
                     }
                 }
-            }
-
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CustomSettingsCard(
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
-    val containerColor =
-        if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surface
-        }
-
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Default.Tune,
-                contentDescription = null,
-                tint =
-                    if (isSelected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-            )
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Custom Settings",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                )
-                Text(
-                    "Configure all parameters manually",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
 
             if (isSelected) {

@@ -268,6 +268,10 @@ class MockReticulumProtocol : ReticulumProtocol {
         )
     }
 
+    override suspend fun getFailedInterfaces(): List<FailedInterface> {
+        return emptyList()
+    }
+
     override fun setConversationActive(active: Boolean) {
         // No-op for mock implementation
     }

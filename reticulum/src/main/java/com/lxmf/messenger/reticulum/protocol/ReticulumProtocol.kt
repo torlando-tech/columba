@@ -128,6 +128,12 @@ interface ReticulumProtocol {
     // Debug/diagnostics
     suspend fun getDebugInfo(): Map<String, Any>
 
+    /**
+     * Get list of interfaces that failed to initialize.
+     * Returns a list of FailedInterface objects containing the interface name and error message.
+     */
+    suspend fun getFailedInterfaces(): List<FailedInterface>
+
     // Performance optimization
 
     /**
@@ -176,4 +182,13 @@ data class DeliveryStatusUpdate(
     val messageHash: String,
     val status: String, // "delivered" or "failed"
     val timestamp: Long,
+)
+
+/**
+ * Information about an interface that failed to initialize
+ */
+data class FailedInterface(
+    val name: String,
+    val error: String,
+    val recoverable: Boolean = true,
 )

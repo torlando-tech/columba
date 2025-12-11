@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SharedInstanceBannerCard(
     isExpanded: Boolean,
-    preferOwnInstance: Boolean,
     isUsingSharedInstance: Boolean,
     rpcKey: String?,
     wasUsingSharedInstance: Boolean = false,
@@ -61,10 +60,9 @@ fun SharedInstanceBannerCard(
     onRpcKeyChange: (String?) -> Unit,
 ) {
     // Toggle enable logic:
-    // - Can always switch TO own instance
-    // - Can only switch TO shared instance if it's online
-    val canSwitchToShared = sharedInstanceOnline || isUsingSharedInstance
-    val toggleEnabled = !preferOwnInstance || canSwitchToShared
+    // - When using shared (toggle OFF): can always switch to own (toggle ON)
+    // - When using own (toggle ON): can only switch to shared (toggle OFF) if shared is available
+    val toggleEnabled = isUsingSharedInstance || sharedInstanceOnline
 
     // Determine if this is the informational state (was using shared, now offline)
     // Note: wasUsingSharedInstance is only set when shared went offline while we were using it,
@@ -218,9 +216,8 @@ fun SharedInstanceBannerCard(
                         }
 
                         // Toggle for using own instance
-                        // Enabled based on whether switching is possible:
-                        // - Can always switch TO own instance (preferOwnInstance = true)
-                        // - Can only switch TO shared if it's online (preferOwnInstance = false)
+                        // Shows actual state (!isUsingSharedInstance), not preference
+                        // Enabled when: using shared (can always switch to own) OR shared is online (can switch to it)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -232,7 +229,8 @@ fun SharedInstanceBannerCard(
                                 color = contentColor,
                             )
                             Switch(
-                                checked = preferOwnInstance,
+                                // Show actual state, not preference - toggle ON when using own instance
+                                checked = !isUsingSharedInstance,
                                 onCheckedChange = onTogglePreferOwnInstance,
                                 enabled = toggleEnabled,
                             )
@@ -241,7 +239,7 @@ fun SharedInstanceBannerCard(
                         // Hint text - show different message based on toggle state
                         Text(
                             text =
-                                if (preferOwnInstance && !canSwitchToShared) {
+                                if (!isUsingSharedInstance && !sharedInstanceOnline) {
                                     "No shared instance available"
                                 } else {
                                     "Service will restart automatically"
@@ -251,7 +249,7 @@ fun SharedInstanceBannerCard(
                         )
 
                         // RPC Key input (only when using shared instance)
-                        if (isUsingSharedInstance && !preferOwnInstance) {
+                        if (isUsingSharedInstance) {
                             var rpcKeyInput by remember { mutableStateOf(rpcKey ?: "") }
 
                             Spacer(modifier = Modifier.height(8.dp))

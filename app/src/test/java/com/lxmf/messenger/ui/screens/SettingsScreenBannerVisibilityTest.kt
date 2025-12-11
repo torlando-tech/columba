@@ -34,10 +34,19 @@ class SettingsScreenBannerVisibilityTest {
 
     /**
      * Replicates the toggle enable logic from SharedInstanceBannerCard.kt
+     * - When using shared (toggle OFF): can always switch to own (toggle ON)
+     * - When using own (toggle ON): can only switch to shared if it's available
      */
     private fun isToggleEnabled(state: SettingsState): Boolean {
-        val canSwitchToShared = state.sharedInstanceOnline || state.isSharedInstance
-        return !state.preferOwnInstance || canSwitchToShared
+        return state.isSharedInstance || state.sharedInstanceOnline
+    }
+
+    /**
+     * Replicates the toggle checked logic from SharedInstanceBannerCard.kt
+     * Shows actual state (!isSharedInstance), not preference
+     */
+    private fun computeToggleChecked(state: SettingsState): Boolean {
+        return !state.isSharedInstance // Toggle ON when using own instance
     }
 
     private fun createDefaultState() = SettingsState(
@@ -215,5 +224,52 @@ class SettingsScreenBannerVisibilityTest {
         )
         assertTrue("Banner should show when shared becomes available", shouldShowSharedInstanceBanner(state))
         assertTrue("Toggle should be enabled to switch to shared", isToggleEnabled(state))
+    }
+
+    // ==========================================
+    // Toggle Checked State Tests (Bug Fix)
+    // ==========================================
+
+    @Test
+    fun `toggle shows ON when using own instance by necessity`() {
+        // BUG SCENARIO: Columba started first (no shared available), now Sideband is online
+        // We are using own instance (isSharedInstance=false)
+        // but didn't explicitly choose it (preferOwnInstance=false)
+        val state = createDefaultState().copy(
+            isSharedInstance = false, // Actually using own instance
+            preferOwnInstance = false, // Didn't explicitly choose own (default)
+            sharedInstanceOnline = true, // Sideband is now available
+        )
+
+        // Banner should show (shared is online)
+        assertTrue("Banner should show", shouldShowSharedInstanceBanner(state))
+
+        // The toggle should show the ACTUAL state (using own), not preference
+        val toggleChecked = computeToggleChecked(state)
+        assertTrue("Toggle should be ON when using own instance", toggleChecked)
+    }
+
+    @Test
+    fun `toggle shows OFF when using shared instance`() {
+        val state = createDefaultState().copy(
+            isSharedInstance = true, // Using shared
+            preferOwnInstance = false,
+            sharedInstanceOnline = true,
+        )
+
+        val toggleChecked = computeToggleChecked(state)
+        assertFalse("Toggle should be OFF when using shared instance", toggleChecked)
+    }
+
+    @Test
+    fun `toggle shows ON when using own instance by choice`() {
+        val state = createDefaultState().copy(
+            isSharedInstance = false, // Using own
+            preferOwnInstance = true, // Explicitly chose own
+            sharedInstanceOnline = true,
+        )
+
+        val toggleChecked = computeToggleChecked(state)
+        assertTrue("Toggle should be ON when using own instance by choice", toggleChecked)
     }
 }

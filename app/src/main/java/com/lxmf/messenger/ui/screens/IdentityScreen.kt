@@ -366,7 +366,7 @@ fun InterfacesCard(interfaces: List<InterfaceInfo>) {
                     InterfaceRow(
                         iface = iface,
                         onClick =
-                            if (!iface.online) {
+                            if (!iface.online || iface.error != null) {
                                 { selectedInterface = iface }
                             } else {
                                 null
@@ -377,18 +377,20 @@ fun InterfacesCard(interfaces: List<InterfaceInfo>) {
         }
     }
 
-    // Error dialog for offline interfaces
+    // Error dialog for offline/failed interfaces
     selectedInterface?.let { iface ->
+        val hasFailed = iface.error != null
+
         AlertDialog(
             onDismissRequest = { selectedInterface = null },
             icon = {
                 Icon(
-                    Icons.Default.Warning,
+                    if (hasFailed) Icons.Default.Error else Icons.Default.Warning,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.error,
                 )
             },
-            title = { Text("Interface Offline") },
+            title = { Text(if (hasFailed) "Interface Failed" else "Interface Offline") },
             text = {
                 Column {
                     Text(
@@ -397,16 +399,36 @@ fun InterfacesCard(interfaces: List<InterfaceInfo>) {
                         fontWeight = FontWeight.Bold,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "This interface is currently offline and not passing traffic.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Check that the device is powered on, in range, and properly configured.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    if (hasFailed) {
+                        Text(
+                            text = "This interface failed to start:",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = iface.error ?: "Unknown error",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Another Reticulum app may be using this interface. " +
+                                "Close other apps or disable this interface in Settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        Text(
+                            text = "This interface is currently offline and not passing traffic.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Check that the device is powered on, in range, and properly configured.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -423,6 +445,8 @@ fun InterfaceRow(
     iface: InterfaceInfo,
     onClick: (() -> Unit)? = null,
 ) {
+    val hasFailed = iface.error != null
+
     Row(
         modifier =
             Modifier
@@ -457,14 +481,21 @@ fun InterfaceRow(
         }
 
         Icon(
-            imageVector = if (iface.online) Icons.Default.CheckCircle else Icons.Default.Warning,
-            contentDescription = if (iface.online) "Online" else "Offline - tap for details",
-            tint =
-                if (iface.online) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.error
-                },
+            imageVector = when {
+                iface.online -> Icons.Default.CheckCircle
+                hasFailed -> Icons.Default.Error
+                else -> Icons.Default.Warning
+            },
+            contentDescription = when {
+                iface.online -> "Online"
+                hasFailed -> "Failed to start - tap for details"
+                else -> "Offline - tap for details"
+            },
+            tint = when {
+                iface.online -> MaterialTheme.colorScheme.primary
+                hasFailed -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.tertiary
+            },
         )
     }
 }

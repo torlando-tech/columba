@@ -1322,6 +1322,17 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun getFailedInterfaces(): List<FailedInterface> {
+        return try {
+            val service = this.service ?: return emptyList()
+            val resultJson = service.failedInterfaces
+            FailedInterface.parseFromJson(resultJson)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting failed interfaces", e)
+            emptyList()
+        }
+    }
+
     override fun setConversationActive(active: Boolean) {
         try {
             service?.setConversationActive(active)

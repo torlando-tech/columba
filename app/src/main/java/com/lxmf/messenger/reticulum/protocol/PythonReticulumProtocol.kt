@@ -1087,6 +1087,16 @@ class PythonReticulumProtocol(
         }
     }
 
+    override suspend fun getFailedInterfaces(): List<FailedInterface> {
+        return try {
+            val result = wrapper?.callAttr("get_failed_interfaces")?.toString() ?: "[]"
+            FailedInterface.parseFromJson(result)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting failed interfaces", e)
+            emptyList()
+        }
+    }
+
     override fun setConversationActive(active: Boolean) {
         // No-op for PythonReticulumProtocol since it doesn't use service-based polling
         // This is only relevant for ServiceReticulumProtocol

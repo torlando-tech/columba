@@ -35,6 +35,7 @@ data class InterfaceInfo(
     val name: String,
     val type: String,
     val online: Boolean,
+    val error: String? = null, // Error message if interface failed to initialize
 )
 
 @androidx.compose.runtime.Immutable
@@ -134,7 +135,7 @@ class DebugViewModel
                     // Extract interface information
                     @Suppress("UNCHECKED_CAST")
                     val interfacesData = pythonDebugInfo["interfaces"] as? List<Map<String, Any>> ?: emptyList()
-                    val interfaces =
+                    val activeInterfaces =
                         interfacesData.map { ifaceMap ->
                             InterfaceInfo(
                                 name = ifaceMap["name"] as? String ?: "",
@@ -142,6 +143,20 @@ class DebugViewModel
                                 online = ifaceMap["online"] as? Boolean ?: false,
                             )
                         }
+
+                    // Get failed interfaces and add them to the list
+                    val failedInterfaces = reticulumProtocol.getFailedInterfaces()
+                    val failedInterfaceInfos = failedInterfaces.map { failed ->
+                        InterfaceInfo(
+                            name = failed.name,
+                            type = failed.name, // Use name as type since we don't have detailed type info
+                            online = false,
+                            error = failed.error,
+                        )
+                    }
+
+                    // Combine active and failed interfaces
+                    val interfaces = activeInterfaces + failedInterfaceInfos
 
                     // Get status
                     val status = reticulumProtocol.networkStatus.value

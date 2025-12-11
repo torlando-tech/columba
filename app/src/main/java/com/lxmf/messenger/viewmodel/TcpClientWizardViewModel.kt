@@ -7,6 +7,7 @@ import com.lxmf.messenger.data.model.TcpCommunityServer
 import com.lxmf.messenger.data.model.TcpCommunityServers
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
+import com.lxmf.messenger.service.InterfaceConfigManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +50,7 @@ data class TcpClientWizardState(
 @HiltViewModel
 class TcpClientWizardViewModel @Inject constructor(
     private val interfaceRepository: InterfaceRepository,
+    private val configManager: InterfaceConfigManager,
 ) : ViewModel() {
 
     companion object {
@@ -172,6 +174,9 @@ class TcpClientWizardViewModel @Inject constructor(
 
                 interfaceRepository.insertInterface(config)
                 Log.d(TAG, "Saved TCP Client interface: ${config.name}")
+
+                // Mark pending changes for InterfaceManagementScreen to show "Apply" button
+                configManager.setPendingChanges(true)
 
                 _state.update { it.copy(isSaving = false, saveSuccess = true) }
             } catch (e: Exception) {

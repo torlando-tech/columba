@@ -216,6 +216,9 @@ class KotlinBLEBridge(
     @Volatile
     private var onMtuNegotiated: PyObject? = null
 
+    @Volatile
+    private var onAddressChanged: PyObject? = null
+
     fun setOnDeviceDiscovered(callback: PyObject) {
         // VALIDATION: Accept PyObject from Python - validation happens at call time
         onDeviceDiscovered = callback
@@ -244,6 +247,12 @@ class KotlinBLEBridge(
     fun setOnMtuNegotiated(callback: PyObject) {
         // VALIDATION: Accept PyObject from Python - validation happens at call time
         onMtuNegotiated = callback
+    }
+
+    fun setOnAddressChanged(callback: PyObject) {
+        // VALIDATION: Accept PyObject from Python - validation happens at call time
+        // Called when address changes during dual connection deduplication
+        onAddressChanged = callback
     }
 
     // State
@@ -1534,6 +1543,11 @@ class KotlinBLEBridge(
                         }
 
                         Log.i(TAG, "Dual connection deduplicated - $identityHash now only via $remainingAddr")
+
+                        // Notify Python of address change so it can update its mappings
+                        val closedAddr = if (weKeepCentral) peripheralAddr else centralAddr
+                        onAddressChanged?.callAttr("__call__", closedAddr, remainingAddr, identityHash)
+
                         // Continue to notify Python about the remaining connection
                     } else {
                         Log.w(TAG, "Cannot deduplicate dual connection - local identity not set")

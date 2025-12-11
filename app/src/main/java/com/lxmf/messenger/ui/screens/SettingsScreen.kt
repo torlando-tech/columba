@@ -127,7 +127,6 @@ fun SettingsScreen(
                 if (showSharedInstanceBanner) {
                     SharedInstanceBannerCard(
                         isExpanded = state.isSharedInstanceBannerExpanded,
-                        preferOwnInstance = state.preferOwnInstance,
                         isUsingSharedInstance = state.isSharedInstance,
                         rpcKey = state.rpcKey,
                         wasUsingSharedInstance = state.wasUsingSharedInstance,

@@ -20,7 +20,7 @@ import javax.inject.Provider
  */
 @Database(
     entities = [InterfaceEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class InterfaceDatabase : RoomDatabase() {
@@ -99,6 +99,31 @@ abstract class InterfaceDatabase : RoomDatabase() {
                         """
                         DELETE FROM interfaces
                         WHERE name = 'RNS Testnet BetweenTheBorders' AND type = 'TCPClient'
+                    """,
+                    )
+                }
+            }
+
+        /**
+         * Migration from version 3 to version 4.
+         * Removes legacy discovery_port (48555) and data_port (49555) from AutoInterface configs.
+         * These ports were from early development; removing them lets RNS use proper defaults.
+         */
+        val MIGRATION_3_4 =
+            object : Migration(3, 4) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    // Remove legacy port settings from AutoInterface entries
+                    // The ports were added during development and should be null to use RNS defaults
+                    // Uses string REPLACE since SQLite JSON functions require API 34+
+                    db.execSQL(
+                        """
+                        UPDATE interfaces
+                        SET configJson = REPLACE(REPLACE(configJson,
+                            ',"discovery_port":48555', ''),
+                            ',"data_port":49555', '')
+                        WHERE type = 'AutoInterface'
+                          AND configJson LIKE '%"discovery_port":48555%'
+                          AND configJson LIKE '%"data_port":49555%'
                     """,
                     )
                 }

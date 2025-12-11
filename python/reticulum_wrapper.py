@@ -732,10 +732,9 @@ class ReticulumWrapper:
                 "VERBOSE": RNS.LOG_VERBOSE,
                 "EXTREME": RNS.LOG_EXTREME
             }
-            # DIAGNOSTIC: Temporarily force EXTREME log level to debug packet processing
-            log_level = RNS.LOG_EXTREME
-            log_info("ReticulumWrapper", "initialize", "🔍 DIAGNOSTIC MODE: RNS.loglevel forced to EXTREME for packet debugging")
-            log_debug("ReticulumWrapper", "initialize", f"Setting RNS.loglevel to {log_level}")
+            log_level_str = config.get("logLevel", "DEBUG").upper()
+            log_level = log_level_map.get(log_level_str, RNS.LOG_DEBUG)
+            log_debug("ReticulumWrapper", "initialize", f"Setting RNS.loglevel to {log_level_str} ({log_level})")
             RNS.loglevel = log_level
 
             # Add ble-reticulum to path for imports
@@ -833,55 +832,46 @@ class ReticulumWrapper:
                 log_error("ReticulumWrapper", "initialize", f"Traceback: {traceback.format_exc()}")
                 # Non-fatal - continue, but interface won't be discovered
 
-            # DIAGNOSTIC: Test socket.if_nametoindex availability
+            # Fix for runtimes where socket.if_nametoindex() doesn't work reliably
+            # Windows lacks the function entirely, Android/Chaquopy stubs it but it may fail on real interfaces
             try:
-                import socket as _diag_socket
-                log_info("ReticulumWrapper", "initialize", "=== DIAGNOSTIC: Testing socket.if_nametoindex ===")
-                log_info("ReticulumWrapper", "initialize", f"Has attribute: {hasattr(_diag_socket, 'if_nametoindex')}")
-                if hasattr(_diag_socket, 'if_nametoindex'):
-                    log_info("ReticulumWrapper", "initialize", f"Function: {_diag_socket.if_nametoindex}")
-                    try:
-                        result = _diag_socket.if_nametoindex('lo')
-                        log_info("ReticulumWrapper", "initialize", f"SUCCESS: if_nametoindex('lo') = {result}")
-                    except OSError as e:
-                        log_info("ReticulumWrapper", "initialize", f"OSError raised: {e}")
-                    except Exception as e:
-                        log_info("ReticulumWrapper", "initialize", f"Exception ({type(e).__name__}): {e}")
-                else:
-                    log_info("ReticulumWrapper", "initialize", "if_nametoindex NOT available")
-            except Exception as e:
-                log_warning("ReticulumWrapper", "initialize", f"Diagnostic failed: {e}")
+                from RNS.Interfaces import AutoInterface
+                import RNS.vendor.platformutils as platformutils
 
-            # TEMPORARILY DISABLED FOR TESTING - Remove this comment to re-enable
-            # # Android fix: Patch AutoInterface to avoid socket leaks
-            # # Chaquopy 16.0.0 stubs socket.if_nametoindex to raise OSError (not implemented)
-            # # This causes OSError on Android, leading to unclosed sockets in AutoInterface.peer_announce()
-            # # The fix uses the netinfo fallback (same as Windows) instead of socket.if_nametoindex()
-            # try:
-            #     from RNS.Interfaces import AutoInterface
-            #     import RNS.vendor.platformutils as platformutils
-            #
-            #     # Store original method reference
-            #     _original_interface_name_to_index = AutoInterface.AutoInterface.interface_name_to_index
-            #
-            #     def _patched_interface_name_to_index(self, ifname):
-            #         """
-            #         Patched version that uses netinfo fallback on Android.
-            #         Same approach as Windows platform, avoiding socket.if_nametoindex() on Android.
-            #         """
-            #         if platformutils.is_windows() or platformutils.is_android():
-            #             return self.netinfo.interface_names_to_indexes()[ifname]
-            #         # Fall back to original implementation for other platforms
-            #         return _original_interface_name_to_index(self, ifname)
-            #
-            #     # Apply the monkey-patch
-            #     AutoInterface.AutoInterface.interface_name_to_index = _patched_interface_name_to_index
-            #     log_info("ReticulumWrapper", "initialize", "✓ Applied Android AutoInterface socket leak fix")
-            #
-            # except Exception as e:
-            #     log_warning("ReticulumWrapper", "initialize",
-            #               f"Could not patch AutoInterface (non-fatal): {type(e).__name__}: {e}")
-            #     # Continue anyway - worst case we get socket warnings but functionality works
+                _use_fallback = False
+                _reason = None
+
+                if platformutils.is_windows():
+                    _use_fallback = True
+                    _reason = "Windows"
+                elif platformutils.is_android():
+                    # Chaquopy may stub socket.if_nametoindex but it can fail on real network interfaces
+                    # Always use netinfo fallback on Android for reliability
+                    _use_fallback = True
+                    _reason = "Android/Chaquopy"
+                else:
+                    # Test if socket.if_nametoindex works on this platform
+                    import socket as _test_socket
+                    try:
+                        _test_socket.if_nametoindex("lo")
+                    except (OSError, AttributeError):
+                        _use_fallback = True
+                        _reason = "socket.if_nametoindex unavailable"
+
+                if _use_fallback:
+                    _original_interface_name_to_index = AutoInterface.AutoInterface.interface_name_to_index
+
+                    def _patched_interface_name_to_index(self, ifname):
+                        """Use netinfo fallback when socket.if_nametoindex() is unavailable."""
+                        return self.netinfo.interface_names_to_indexes()[ifname]
+
+                    AutoInterface.AutoInterface.interface_name_to_index = _patched_interface_name_to_index
+                    log_info("ReticulumWrapper", "initialize",
+                             f"✓ Using netinfo fallback for interface_name_to_index ({_reason})")
+
+            except Exception as e:
+                log_warning("ReticulumWrapper", "initialize",
+                          f"Could not check/patch interface_name_to_index (non-fatal): {type(e).__name__}: {e}")
 
             # Initialize Reticulum - it will load config from the config file we created
             log_info("ReticulumWrapper", "initialize", "Creating RNS.Reticulum instance")

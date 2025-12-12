@@ -553,11 +553,19 @@ class ContactRepository
             destinationHash: String,
             clearOther: Boolean = true,
         ) {
-            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            val activeIdentity = localIdentityDao.getActiveIdentitySync()
+            if (activeIdentity == null) {
+                android.util.Log.e("ContactRepository", "setAsMyRelay: No active identity!")
+                return
+            }
+            android.util.Log.d("ContactRepository", "setAsMyRelay: dest=$destinationHash, identity=${activeIdentity.identityHash}")
             if (clearOther) {
                 contactDao.clearMyRelay(activeIdentity.identityHash)
             }
             contactDao.setAsMyRelay(destinationHash, activeIdentity.identityHash)
+            // Verify update
+            val contact = contactDao.getContact(destinationHash, activeIdentity.identityHash)
+            android.util.Log.d("ContactRepository", "setAsMyRelay: after update, contact exists=${contact != null}, isMyRelay=${contact?.isMyRelay}")
         }
 
         /**

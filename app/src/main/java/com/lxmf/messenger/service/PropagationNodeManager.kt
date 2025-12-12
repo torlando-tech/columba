@@ -125,12 +125,17 @@ class PropagationNodeManager
                 reticulumProtocol.setOutboundPropagationNode(destHashBytes)
 
                 // Auto-add to contacts if not already present
-                if (!contactRepository.hasContact(destinationHash)) {
-                    contactRepository.addContactFromAnnounce(destinationHash, publicKey)
+                val contactExists = contactRepository.hasContact(destinationHash)
+                Log.d(TAG, "Contact exists for $destinationHash: $contactExists")
+                if (!contactExists) {
+                    val result = contactRepository.addContactFromAnnounce(destinationHash, publicKey)
+                    Log.d(TAG, "Added contact from announce: ${result.isSuccess}, error: ${result.exceptionOrNull()?.message}")
                 }
 
                 // Mark as relay in contacts (clears other relays first)
+                Log.d(TAG, "Setting as my relay: $destinationHash")
                 contactRepository.setAsMyRelay(destinationHash, clearOther = true)
+                Log.d(TAG, "Set as my relay complete")
 
                 // Update current relay state
                 _currentRelay.value = RelayInfo(

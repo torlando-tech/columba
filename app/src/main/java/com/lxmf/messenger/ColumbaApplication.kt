@@ -12,6 +12,7 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.MessageCollector
+import com.lxmf.messenger.service.PropagationNodeManager
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +51,9 @@ class ColumbaApplication : Application() {
 
     @Inject
     lateinit var identityResolutionManager: IdentityResolutionManager
+
+    @Inject
+    lateinit var propagationNodeManager: PropagationNodeManager
 
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Main for lifecycle operations and UI coordination
@@ -193,9 +197,10 @@ class ColumbaApplication : Application() {
                             messageCollector.startCollecting()
                             autoAnnounceManager.start()
                             identityResolutionManager.start(applicationScope)
+                            propagationNodeManager.start()
                             android.util.Log.d(
                                 "ColumbaApplication",
-                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager started",
+                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started",
                             )
                             return@launch
                         }
@@ -349,9 +354,10 @@ class ColumbaApplication : Application() {
                             messageCollector.startCollecting()
                             autoAnnounceManager.start()
                             identityResolutionManager.start(applicationScope)
+                            propagationNodeManager.start()
                             android.util.Log.d(
                                 "ColumbaApplication",
-                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager started",
+                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started",
                             )
                         }
                         .onFailure { error ->

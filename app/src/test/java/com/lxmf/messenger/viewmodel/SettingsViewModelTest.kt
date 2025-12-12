@@ -1026,4 +1026,70 @@ class SettingsViewModelTest {
         }
 
     // endregion
+
+    // region Message Delivery Settings Tests
+
+    @Test
+    fun `setDefaultDeliveryMethod direct saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setDefaultDeliveryMethod("direct")
+
+            coVerify { settingsRepository.saveDefaultDeliveryMethod("direct") }
+        }
+
+    @Test
+    fun `setDefaultDeliveryMethod propagated saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setDefaultDeliveryMethod("propagated")
+
+            coVerify { settingsRepository.saveDefaultDeliveryMethod("propagated") }
+        }
+
+    @Test
+    fun `setTryPropagationOnFail enabled saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTryPropagationOnFail(true)
+
+            coVerify { settingsRepository.saveTryPropagationOnFail(true) }
+        }
+
+    @Test
+    fun `setTryPropagationOnFail disabled saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTryPropagationOnFail(false)
+
+            coVerify { settingsRepository.saveTryPropagationOnFail(false) }
+        }
+
+    @Test
+    fun `setAutoSelectPropagationNode true enables auto-select and saves`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setAutoSelectPropagationNode(true)
+
+            coVerify { propagationNodeManager.enableAutoSelect() }
+            coVerify { settingsRepository.saveAutoSelectPropagationNode(true) }
+        }
+
+    @Test
+    fun `setAutoSelectPropagationNode false saves without enabling auto-select`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setAutoSelectPropagationNode(false)
+
+            coVerify(exactly = 0) { propagationNodeManager.enableAutoSelect() }
+            coVerify { settingsRepository.saveAutoSelectPropagationNode(false) }
+        }
+
+    // endregion
 }

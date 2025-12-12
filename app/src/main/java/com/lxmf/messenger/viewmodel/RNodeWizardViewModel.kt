@@ -93,6 +93,8 @@ data class RNodeWizardState(
     val pairingError: String? = null,
     val pairingTimeRemaining: Int = 0,
     val lastPairingDeviceAddress: String? = null,
+    val isWaitingForReconnect: Boolean = false,
+    val reconnectDeviceName: String? = null,
     // Companion Device Association (Android 12+)
     val isAssociating: Boolean = false,
     val pendingAssociationIntent: IntentSender? = null,
@@ -160,6 +162,7 @@ class RNodeWizardViewModel
             private const val KEY_DEVICE_TYPES = "device_type_cache"
             private const val PAIRING_START_TIMEOUT_MS = 5_000L // 5s to start pairing
             private const val PIN_ENTRY_TIMEOUT_MS = 60_000L // 60s for user to enter PIN
+            private const val RECONNECT_SCAN_TIMEOUT_MS = 15_000L // 15s to find device after reboot
             private const val RSSI_UPDATE_INTERVAL_MS = 3000L // Update RSSI every 3s
             private const val MAX_DEVICE_NAME_LENGTH = 32 // Standard Bluetooth device name limit
         }
@@ -881,6 +884,98 @@ class RNodeWizardViewModel
             }
         }
 
+        /**
+         * Scan for a specific BLE device by name with a timeout.
+         * Used to detect when a device comes back online after a reboot.
+         *
+         * @param deviceName The name of the device to find
+         * @param deviceType The expected Bluetooth type (for returned DiscoveredRNode)
+         * @return The discovered device if found within timeout, null otherwise
+         */
+        @SuppressLint("MissingPermission")
+        private suspend fun scanForDeviceByName(
+            deviceName: String,
+            deviceType: BluetoothType,
+        ): DiscoveredRNode? {
+            val scanner = bluetoothAdapter?.bluetoothLeScanner ?: return null
+
+            val filter =
+                ScanFilter.Builder()
+                    .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
+                    .build()
+
+            val settings =
+                ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                    .build()
+
+            var foundDevice: DiscoveredRNode? = null
+
+            val callback =
+                object : ScanCallback() {
+                    override fun onScanResult(
+                        callbackType: Int,
+                        result: ScanResult,
+                    ) {
+                        val name = result.device.name ?: return
+                        if (name == deviceName) {
+                            foundDevice =
+                                DiscoveredRNode(
+                                    name = name,
+                                    address = result.device.address,
+                                    type = deviceType,
+                                    rssi = result.rssi,
+                                    isPaired = result.device.bondState == BluetoothDevice.BOND_BONDED,
+                                    bluetoothDevice = result.device,
+                                )
+                            Log.d(TAG, "Found device during reconnect scan: $name")
+                        }
+                    }
+
+                    override fun onScanFailed(errorCode: Int) {
+                        Log.e(TAG, "Reconnect scan failed: $errorCode")
+                    }
+                }
+
+            try {
+                scanner.startScan(listOf(filter), settings, callback)
+
+                // Poll for device with timeout
+                val startTime = System.currentTimeMillis()
+                while (foundDevice == null &&
+                    System.currentTimeMillis() - startTime < RECONNECT_SCAN_TIMEOUT_MS
+                ) {
+                    // Check if scan was cancelled
+                    if (!_state.value.isWaitingForReconnect) {
+                        Log.d(TAG, "Reconnect scan cancelled by user")
+                        break
+                    }
+                    delay(200)
+                }
+
+                scanner.stopScan(callback)
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Reconnect scan permission denied", e)
+            }
+
+            return foundDevice
+        }
+
+        /**
+         * Cancel the ongoing reconnect scan.
+         * Called when user wants to stop waiting for the device.
+         */
+        fun cancelReconnectScan() {
+            Log.d(TAG, "User cancelled reconnect scan")
+            _state.update {
+                it.copy(
+                    isWaitingForReconnect = false,
+                    reconnectDeviceName = null,
+                    isPairingInProgress = false,
+                )
+            }
+        }
+
         fun selectDevice(device: DiscoveredRNode) {
             _state.update {
                 it.copy(
@@ -1191,15 +1286,63 @@ class RNodeWizardViewModel
                         }
 
                         if (!pairingStarted && btDevice.bondState == BluetoothDevice.BOND_NONE) {
-                            // Pairing never started - device not in pairing mode
-                            _state.update {
-                                it.copy(
-                                    pairingError =
-                                        "RNode is not in pairing mode. Press the " +
-                                            "pairing button until a PIN code appears on the display.",
-                                )
+                            // Pairing never started - for BLE devices, try to wait for reconnect
+                            if (device.type == BluetoothType.BLE) {
+                                // Start waiting for device to reconnect
+                                Log.d(TAG, "Device not responding, waiting for reconnect: ${device.name}")
+                                _state.update {
+                                    it.copy(
+                                        isPairingInProgress = false,
+                                        isWaitingForReconnect = true,
+                                        reconnectDeviceName = device.name,
+                                    )
+                                }
+
+                                // Scan for device by name with timeout
+                                val reconnectedDevice = scanForDeviceByName(device.name, device.type)
+
+                                _state.update {
+                                    it.copy(isWaitingForReconnect = false, reconnectDeviceName = null)
+                                }
+
+                                if (reconnectedDevice != null) {
+                                    // Device found - retry pairing with the new device reference
+                                    Log.d(TAG, "Device reconnected, retrying pairing: ${device.name}")
+                                    // Update discovered devices list with new device info
+                                    _state.update { state ->
+                                        state.copy(
+                                            discoveredDevices =
+                                                state.discoveredDevices.map {
+                                                    if (it.name == device.name) reconnectedDevice else it
+                                                },
+                                        )
+                                    }
+                                    // Recursively retry pairing with the refreshed device
+                                    initiateBluetoothPairing(reconnectedDevice)
+                                    return@launch
+                                } else {
+                                    // Timeout - device not found
+                                    _state.update {
+                                        it.copy(
+                                            pairingError =
+                                                "Could not find RNode. Please ensure the device is powered on, " +
+                                                    "Bluetooth is enabled, and it's within range. " +
+                                                    "Tap 'Scan Again' to refresh the device list.",
+                                        )
+                                    }
+                                    return@launch
+                                }
+                            } else {
+                                // Classic Bluetooth - show standard error
+                                _state.update {
+                                    it.copy(
+                                        pairingError =
+                                            "RNode is not in pairing mode. Press the " +
+                                                "pairing button until a PIN code appears on the display.",
+                                    )
+                                }
+                                return@launch
                             }
-                            return@launch
                         }
 
                         // Phase 2: Wait for user to enter PIN (longer timeout)

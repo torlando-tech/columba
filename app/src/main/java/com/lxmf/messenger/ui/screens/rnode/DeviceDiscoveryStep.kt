@@ -233,6 +233,54 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
             Spacer(Modifier.height(16.dp))
         }
 
+        // Waiting for device to reconnect (after reboot)
+        if (state.isWaitingForReconnect) {
+            Card(
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = "Waiting for RNode to reconnect...",
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    state.reconnectDeviceName?.let { name ->
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Looking for: $name",
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = { viewModel.cancelReconnectScan() }) {
+                            Text("Cancel")
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
         // Association error
         state.associationError?.let { error ->
             Card(
@@ -472,6 +520,8 @@ private fun BluetoothDeviceCard(
         onClick = {
             if (device.type == BluetoothType.UNKNOWN) {
                 showTypeSelector = !showTypeSelector
+            } else if (!device.isPaired) {
+                onPair()
             } else {
                 onSelect()
             }

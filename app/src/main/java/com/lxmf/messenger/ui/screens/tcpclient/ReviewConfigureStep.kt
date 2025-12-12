@@ -72,7 +72,7 @@ fun ReviewConfigureStep(viewModel: TcpClientWizardViewModel) {
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                     )
                     Text(
-                        if (state.isCustomMode) "Custom Server" else state.selectedServer?.name ?: "",
+                        if (state.isCustomMode) "Custom Server" else state.selectedServer?.name.orEmpty(),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )

@@ -21,7 +21,7 @@ subprojects {
     apply(plugin = "io.gitlab.arturbosch.detekt")
 
     configure<JacocoPluginExtension> {
-        toolVersion = "0.8.12"
+        toolVersion = "0.8.14"
     }
 
     configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
@@ -106,8 +106,8 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
 
         // Add patterns for class directories and exec data (resolved at execution time)
         val buildDir = subproject.layout.buildDirectory.get().asFile
-        classDirectoriesList.add(File("$buildDir/intermediates/javac/debug/classes"))
-        classDirectoriesList.add(File("$buildDir/tmp/kotlin-classes/debug"))
+        // Use ASM-transformed classes which contain all classes including UI/Compose
+        classDirectoriesList.add(File("$buildDir/intermediates/classes/debug/transformDebugClassesWithAsm/dirs"))
         // Android puts coverage data in outputs/unit_test_code_coverage/
         execDataPatterns.add("$buildDir/outputs/unit_test_code_coverage/debugUnitTest")
     }

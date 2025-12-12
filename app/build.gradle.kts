@@ -170,6 +170,12 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "2048m"
+                // Enable JaCoCo coverage for Robolectric tests
+                it.extensions.configure<JacocoTaskExtension> {
+                    isIncludeNoLocationClasses = true
+                    // Required for Java 9+ compatibility
+                    excludes = listOf("jdk.internal.*")
+                }
                 // Exclude Compose UI tests from release builds due to Robolectric manifest issues
                 // These tests run successfully in debug and don't need to run twice
                 if (it.name.contains("Release")) {

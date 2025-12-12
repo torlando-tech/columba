@@ -132,11 +132,14 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python build dependencies
-        run: pip install build pytest
+        run: pip install build pytest pytest-cov
 
-      - name: Run Python unit tests
+      - name: Run Python unit tests with coverage
         run: |
-          cd python && python -m pytest test_rnode_interface.py -v
+          cd python && python -m pytest -v \
+            --cov=. \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-python.xml
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -190,6 +193,16 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
+      - name: Upload Python coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./python/coverage-python.xml
+          flags: python
+          name: codecov-python
+          fail_ci_if_error: false
+          verbose: true
+
       - name: Upload coverage reports
         if: always()
         uses: actions/upload-artifact@v5
@@ -197,6 +210,7 @@ jobs:
           name: coverage-reports
           path: |
             **/build/reports/jacoco/
+            python/coverage-python.xml
           retention-days: 7
 
   # instrumented-tests:

@@ -51,7 +51,9 @@ interface ContactDao {
             c.addedTimestamp,
             c.addedVia,
             c.isPinned,
-            c.status
+            c.status,
+            c.isMyRelay,
+            a.nodeType
         FROM contacts c
         LEFT JOIN announces a ON c.destinationHash = a.destinationHash
         LEFT JOIN conversations conv ON c.destinationHash = conv.peerHash AND c.identityHash = conv.identityHash
@@ -296,4 +298,54 @@ interface ContactDao {
         identityHash: String,
         statuses: List<String>,
     ): List<ContactEntity>
+
+    // ========== PROPAGATION NODE RELAY MANAGEMENT ==========
+
+    /**
+     * Set a contact as the user's relay (propagation node).
+     * Note: Application layer should call clearMyRelay first to ensure only one relay is set.
+     * Relay contacts appear in their own "My Relay" section, separate from pinned contacts.
+     */
+    @Query(
+        """
+        UPDATE contacts SET isMyRelay = 1
+        WHERE destinationHash = :destinationHash AND identityHash = :identityHash
+        """,
+    )
+    suspend fun setAsMyRelay(
+        destinationHash: String,
+        identityHash: String,
+    )
+
+    /**
+     * Clear all relay flags for an identity (ensures only one relay at a time).
+     */
+    @Query("UPDATE contacts SET isMyRelay = 0 WHERE identityHash = :identityHash AND isMyRelay = 1")
+    suspend fun clearMyRelay(identityHash: String)
+
+    /**
+     * Get the current relay contact for an identity
+     */
+    @Query("SELECT * FROM contacts WHERE identityHash = :identityHash AND isMyRelay = 1 LIMIT 1")
+    suspend fun getMyRelay(identityHash: String): ContactEntity?
+
+    /**
+     * Get the current relay contact as Flow for observing changes
+     */
+    @Query("SELECT * FROM contacts WHERE identityHash = :identityHash AND isMyRelay = 1 LIMIT 1")
+    fun getMyRelayFlow(identityHash: String): Flow<ContactEntity?>
+
+    /**
+     * Check if a specific contact is the user's relay
+     */
+    @Query(
+        """
+        SELECT isMyRelay FROM contacts
+        WHERE destinationHash = :destinationHash AND identityHash = :identityHash
+        """,
+    )
+    fun isMyRelayFlow(
+        destinationHash: String,
+        identityHash: String,
+    ): Flow<Boolean?>
 }

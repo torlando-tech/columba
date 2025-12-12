@@ -39,6 +39,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
 import com.lxmf.messenger.ui.screens.settings.cards.DataMigrationCard
 import com.lxmf.messenger.ui.screens.settings.cards.IdentityCard
+import com.lxmf.messenger.ui.screens.settings.cards.MessageDeliveryCard
 import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
@@ -163,6 +164,18 @@ fun SettingsScreen(
                     onToggle = { viewModel.toggleAutoAnnounce(it) },
                     onIntervalChange = { viewModel.setAnnounceInterval(it) },
                     onManualAnnounce = { viewModel.triggerManualAnnounce() },
+                )
+
+                MessageDeliveryCard(
+                    defaultMethod = state.defaultDeliveryMethod,
+                    tryPropagationOnFail = state.tryPropagationOnFail,
+                    currentRelayName = state.currentRelayName,
+                    currentRelayHops = state.currentRelayHops,
+                    isAutoSelect = state.autoSelectPropagationNode,
+                    onMethodChange = { viewModel.setDefaultDeliveryMethod(it) },
+                    onTryPropagationToggle = { viewModel.setTryPropagationOnFail(it) },
+                    onAutoSelectToggle = { viewModel.setAutoSelectPropagationNode(it) },
+                    onSelectRelay = { /* TODO: Navigate to announce stream with relay filter */ },
                 )
 
                 ThemeSelectionCard(

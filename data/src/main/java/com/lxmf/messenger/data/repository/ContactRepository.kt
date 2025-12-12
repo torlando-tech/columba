@@ -539,4 +539,69 @@ class ContactRepository
                 statuses.map { it.name },
             )
         }
+
+        // ========== PROPAGATION NODE RELAY MANAGEMENT ==========
+
+        /**
+         * Set a contact as the user's propagation node relay.
+         * Clears any existing relay first (only one relay per identity).
+         *
+         * @param destinationHash The destination hash of the propagation node
+         * @param clearOther If true, clears other relays first (default true)
+         */
+        suspend fun setAsMyRelay(
+            destinationHash: String,
+            clearOther: Boolean = true,
+        ) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            if (clearOther) {
+                contactDao.clearMyRelay(activeIdentity.identityHash)
+            }
+            contactDao.setAsMyRelay(destinationHash, activeIdentity.identityHash)
+        }
+
+        /**
+         * Clear the current relay for the active identity.
+         */
+        suspend fun clearMyRelay() {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            contactDao.clearMyRelay(activeIdentity.identityHash)
+        }
+
+        /**
+         * Get the current relay contact for the active identity.
+         */
+        suspend fun getMyRelay(): ContactEntity? {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return null
+            return contactDao.getMyRelay(activeIdentity.identityHash)
+        }
+
+        /**
+         * Get the current relay contact as Flow for observing changes.
+         * Automatically switches when identity changes.
+         */
+        fun getMyRelayFlow(): Flow<ContactEntity?> {
+            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+                if (identity == null) {
+                    flowOf(null)
+                } else {
+                    contactDao.getMyRelayFlow(identity.identityHash)
+                }
+            }
+        }
+
+        /**
+         * Check if a specific contact is the user's relay.
+         * Automatically switches when identity changes.
+         */
+        fun isMyRelayFlow(destinationHash: String): Flow<Boolean> {
+            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+                if (identity == null) {
+                    flowOf(false)
+                } else {
+                    contactDao.isMyRelayFlow(destinationHash, identity.identityHash)
+                        .flatMapLatest { isRelay -> flowOf(isRelay == true) }
+                }
+            }
+        }
     }

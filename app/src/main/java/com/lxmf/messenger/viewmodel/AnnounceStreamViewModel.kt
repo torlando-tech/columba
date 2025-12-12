@@ -12,6 +12,7 @@ import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.PropagationNodeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +34,7 @@ class AnnounceStreamViewModel
         private val reticulumProtocol: ReticulumProtocol,
         private val announceRepository: AnnounceRepository,
         private val contactRepository: com.lxmf.messenger.data.repository.ContactRepository,
+        private val propagationNodeManager: PropagationNodeManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "AnnounceStreamViewModel"
@@ -303,6 +305,46 @@ class AnnounceStreamViewModel
 
         fun updateShowAudioAnnounces(show: Boolean) {
             _showAudioAnnounces.value = show
+        }
+
+        /**
+         * Observe whether a destination is the user's current relay.
+         */
+        fun isMyRelayFlow(destinationHash: String): Flow<Boolean> {
+            return contactRepository.isMyRelayFlow(destinationHash)
+        }
+
+        /**
+         * Set a propagation node as the user's relay.
+         * This will add it to contacts if not already present and mark it as the relay.
+         */
+        fun setAsMyRelay(
+            destinationHash: String,
+            peerName: String,
+        ) {
+            viewModelScope.launch {
+                try {
+                    propagationNodeManager.setManualRelay(destinationHash, peerName)
+                    Log.d(TAG, "Set $peerName as my relay")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to set relay: $destinationHash", e)
+                }
+            }
+        }
+
+        /**
+         * Unset the current relay and delete it from contacts, then trigger auto-selection.
+         */
+        fun unsetRelayAndDelete(destinationHash: String) {
+            viewModelScope.launch {
+                try {
+                    contactRepository.deleteContact(destinationHash)
+                    propagationNodeManager.onRelayDeleted()
+                    Log.d(TAG, "Unset relay and deleted: $destinationHash")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to unset relay: $destinationHash", e)
+                }
+            }
         }
 
         override fun onCleared() {

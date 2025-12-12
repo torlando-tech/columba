@@ -1107,4 +1107,84 @@ class PythonReticulumProtocol(
         // No-op for PythonReticulumProtocol - RNode reconnection is handled by ServiceReticulumProtocol
         Log.d(TAG, "reconnectRNodeInterface() - no-op for PythonReticulumProtocol")
     }
+
+    override suspend fun setOutboundPropagationNode(destHash: ByteArray?): Result<Unit> {
+        return runCatching {
+            Log.d(TAG, "Setting outbound propagation node: ${destHash?.joinToString("") { "%02x".format(it) }}")
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("set_outbound_propagation_node", destHash)
+
+            val success = result.getDictValue("success")?.toBoolean() ?: false
+            if (!success) {
+                val error = result.getDictValue("error")?.toString() ?: "Unknown error"
+                throw RuntimeException(error)
+            }
+        }
+    }
+
+    override suspend fun getOutboundPropagationNode(): Result<String?> {
+        return runCatching {
+            Log.d(TAG, "Getting outbound propagation node")
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("get_outbound_propagation_node")
+
+            val success = result.getDictValue("success")?.toBoolean() ?: false
+            if (!success) {
+                val error = result.getDictValue("error")?.toString() ?: "Unknown error"
+                throw RuntimeException(error)
+            }
+
+            result.getDictValue("propagation_node")?.toString()
+        }
+    }
+
+    override suspend fun sendLxmfMessageWithMethod(
+        destinationHash: ByteArray,
+        content: String,
+        sourceIdentity: Identity,
+        deliveryMethod: DeliveryMethod,
+        tryPropagationOnFail: Boolean,
+        imageData: ByteArray?,
+        imageFormat: String?,
+    ): Result<MessageReceipt> {
+        return runCatching {
+            Log.d(TAG, "Sending LXMF message with method: $deliveryMethod (tryPropOnFail=$tryPropagationOnFail)")
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+
+            val methodString = when (deliveryMethod) {
+                DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
+                DeliveryMethod.DIRECT -> "direct"
+                DeliveryMethod.PROPAGATED -> "propagated"
+            }
+
+            val result = currentWrapper.callAttr(
+                "send_lxmf_message_with_method",
+                destinationHash,
+                content,
+                sourceIdentity.privateKey,
+                methodString,
+                tryPropagationOnFail,
+                imageData,
+                imageFormat,
+            )
+
+            val success = result.getDictValue("success")?.toBoolean() ?: false
+            if (!success) {
+                val error = result.getDictValue("error")?.toString() ?: "Unknown error"
+                throw RuntimeException(error)
+            }
+
+            val messageHash = result.getDictValue("message_hash")?.toJava(ByteArray::class.java)
+                ?: throw RuntimeException("No message hash in response")
+            val timestamp = result.getDictValue("timestamp")?.toLong() ?: System.currentTimeMillis()
+            val destHashResult = result.getDictValue("destination_hash")?.toJava(ByteArray::class.java)
+                ?: destinationHash
+
+            MessageReceipt(
+                messageHash = messageHash,
+                timestamp = timestamp,
+                destinationHash = destHashResult,
+            )
+        }
+    }
 }

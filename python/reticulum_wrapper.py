@@ -98,6 +98,7 @@ class ReticulumWrapper:
         self.last_announce_poll_time = 0  # Track last poll time for announce_table polling
         self.seen_announce_hashes = set()  # Track which announces we've already processed from announce_table
         self.identities = {}  # Local cache of recalled identities (identity_hash_hex -> RNS.Identity)
+        self.active_propagation_node = None  # Currently active propagation node destination hash (bytes)
 
         # BLE interface support (Android-specific - driver-based architecture)
         self.ble_interface = None  # AndroidBLEInterface instance (if enabled)
@@ -2100,6 +2101,204 @@ class ReticulumWrapper:
             log_separator("ReticulumWrapper", "send_lxmf_message", "=", 80)
             return {"success": False, "error": str(e)}
 
+    # ==================== PROPAGATION NODE SUPPORT ====================
+
+    def set_outbound_propagation_node(self, dest_hash: bytes) -> Dict:
+        """
+        Set the propagation node to use for PROPAGATED delivery.
+
+        Args:
+            dest_hash: 16-byte destination hash of the propagation node, or None to clear
+
+        Returns:
+            Dict with 'success' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Convert jarray to bytes if needed
+            if dest_hash is not None:
+                if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+                    dest_hash = bytes(dest_hash)
+
+            if dest_hash is None:
+                self.router.set_outbound_propagation_node(None)
+                self.active_propagation_node = None
+                log_info("ReticulumWrapper", "set_outbound_propagation_node", "Cleared propagation node")
+            else:
+                self.router.set_outbound_propagation_node(dest_hash)
+                self.active_propagation_node = dest_hash
+                log_info("ReticulumWrapper", "set_outbound_propagation_node",
+                        f"Set propagation node to {dest_hash.hex()[:16]}...")
+
+            return {"success": True}
+        except Exception as e:
+            log_error("ReticulumWrapper", "set_outbound_propagation_node", f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    def get_outbound_propagation_node(self) -> Dict:
+        """
+        Get the currently configured propagation node.
+
+        Returns:
+            Dict with 'success', 'propagation_node' (hex string or None) or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            node = self.router.get_outbound_propagation_node()
+            return {
+                "success": True,
+                "propagation_node": node.hex() if node else None
+            }
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_outbound_propagation_node", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def send_lxmf_message_with_method(self, dest_hash: bytes, content: str, source_identity_private_key: bytes,
+                                       delivery_method: str = "direct", try_propagation_on_fail: bool = True,
+                                       image_data: bytes = None, image_format: str = None) -> Dict:
+        """
+        Send an LXMF message with explicit delivery method.
+
+        Args:
+            dest_hash: Identity hash bytes (16 bytes)
+            content: Message content string
+            source_identity_private_key: Private key of sender identity
+            delivery_method: "opportunistic", "direct", or "propagated"
+            try_propagation_on_fail: If True and direct fails, retry via propagation
+            image_data: Optional image data bytes
+            image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
+
+        Returns:
+            Dict with 'success', 'message_hash', 'timestamp', 'delivery_method' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Convert jarray to bytes if needed
+            if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+                dest_hash = bytes(dest_hash)
+            if hasattr(source_identity_private_key, '__iter__') and not isinstance(source_identity_private_key, (bytes, bytearray)):
+                source_identity_private_key = bytes(source_identity_private_key)
+
+            log_separator("ReticulumWrapper", "send_lxmf_message_with_method", "=", 80)
+            log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                    f"Sending message with method={delivery_method}, try_propagation_on_fail={try_propagation_on_fail}")
+
+            # Map delivery method string to LXMF constant
+            method_map = {
+                "opportunistic": LXMF.LXMessage.OPPORTUNISTIC,
+                "direct": LXMF.LXMessage.DIRECT,
+                "propagated": LXMF.LXMessage.PROPAGATED,
+            }
+
+            lxmf_method = method_map.get(delivery_method.lower(), LXMF.LXMessage.DIRECT)
+
+            # Check size for OPPORTUNISTIC - max 295 bytes content
+            content_bytes = content.encode('utf-8')
+            if lxmf_method == LXMF.LXMessage.OPPORTUNISTIC:
+                if len(content_bytes) > 295:
+                    log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                               f"Content too large for OPPORTUNISTIC ({len(content_bytes)} bytes > 295), falling back to DIRECT")
+                    lxmf_method = LXMF.LXMessage.DIRECT
+                if image_data:
+                    log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                               "OPPORTUNISTIC doesn't support attachments, falling back to DIRECT")
+                    lxmf_method = LXMF.LXMessage.DIRECT
+
+            # Check if PROPAGATED requires a propagation node
+            if lxmf_method == LXMF.LXMessage.PROPAGATED and not self.active_propagation_node:
+                return {"success": False, "error": "PROPAGATED delivery requires a propagation node to be set"}
+
+            # Reconstruct source identity
+            source_identity = RNS.Identity()
+            source_identity.load_private_key(source_identity_private_key)
+
+            # Recall recipient identity
+            recipient_identity = RNS.Identity.recall(dest_hash)
+            if not recipient_identity:
+                recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+            if not recipient_identity and dest_hash.hex() in self.identities:
+                recipient_identity = self.identities[dest_hash.hex()]
+
+            if not recipient_identity:
+                return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known"}
+
+            # Create destination
+            recipient_lxmf_destination = RNS.Destination(
+                recipient_identity,
+                RNS.Destination.OUT,
+                RNS.Destination.SINGLE,
+                "lxmf",
+                "delivery"
+            )
+
+            # Prepare fields if image provided
+            fields = None
+            if image_data and image_format:
+                if hasattr(image_data, '__iter__') and not isinstance(image_data, (bytes, bytearray)):
+                    image_data = bytes(image_data)
+                fields = {6: [image_format, image_data]}
+                log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                        f"📎 Attaching image: {len(image_data)} bytes, format={image_format}")
+
+            # Create LXMF message with specified delivery method
+            lxmf_message = LXMF.LXMessage(
+                destination=recipient_lxmf_destination,
+                source=self.local_lxmf_destination,
+                content=content_bytes,
+                title="",
+                fields=fields,
+                desired_method=lxmf_method
+            )
+
+            # Store retry flag on message for use in _on_message_failed
+            if try_propagation_on_fail and self.active_propagation_node and lxmf_method != LXMF.LXMessage.PROPAGATED:
+                lxmf_message.try_propagation_on_fail = True
+            else:
+                lxmf_message.try_propagation_on_fail = False
+
+            log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                    f"LXMessage created with desired_method={lxmf_method}")
+
+            # Register callbacks
+            lxmf_message.register_delivery_callback(self._on_message_delivered)
+            lxmf_message.register_failed_callback(self._on_message_failed)
+
+            # Send via router
+            self.router.handle_outbound(lxmf_message)
+
+            msg_hash = lxmf_message.hash if lxmf_message.hash else b''
+            log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                    f"✅ Message {msg_hash.hex()[:16] if msg_hash else 'unknown'}... handed to router")
+
+            # Map method back to string for return
+            method_names = {
+                LXMF.LXMessage.OPPORTUNISTIC: "opportunistic",
+                LXMF.LXMessage.DIRECT: "direct",
+                LXMF.LXMessage.PROPAGATED: "propagated",
+            }
+
+            return {
+                "success": True,
+                "message_hash": msg_hash,
+                "timestamp": int(time.time() * 1000),
+                "delivery_method": method_names.get(lxmf_method, "unknown"),
+                "destination_hash": recipient_lxmf_destination.hash
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "send_lxmf_message_with_method", f"❌ ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
     def _on_message_delivered(self, lxmf_message):
         """
         Callback invoked by LXMF when a sent message is successfully delivered.
@@ -2145,11 +2344,54 @@ class ReticulumWrapper:
         Callback invoked by LXMF when a sent message delivery fails.
         This is called when delivery times out or is otherwise unsuccessful.
 
+        If try_propagation_on_fail is set on the message and we have an active
+        propagation node, the message will be retried via propagation instead
+        of being marked as failed.
+
         Args:
             lxmf_message: The LXMF.LXMessage that failed
         """
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
+
+            # Check if we should retry via propagation (Sideband pattern)
+            if (hasattr(lxmf_message, 'try_propagation_on_fail') and
+                lxmf_message.try_propagation_on_fail and
+                self.active_propagation_node):
+
+                log_info("ReticulumWrapper", "_on_message_failed",
+                        f"📡 Message {msg_hash[:16]}... direct delivery failed, retrying via propagation node")
+
+                # Clear retry flag to prevent infinite loop
+                lxmf_message.try_propagation_on_fail = False
+                # Reset delivery attempts
+                lxmf_message.delivery_attempts = 0
+                # Clear packed state so message can be re-packed
+                lxmf_message.packed = None
+                # Switch to PROPAGATED delivery
+                lxmf_message.desired_method = LXMF.LXMessage.PROPAGATED
+
+                # Re-submit to router
+                self.router.handle_outbound(lxmf_message)
+
+                # Notify Kotlin of retry (status = "retrying_propagated")
+                if self.kotlin_delivery_status_callback:
+                    try:
+                        import json
+                        status_event = {
+                            'message_hash': msg_hash,
+                            'status': 'retrying_propagated',
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        self.kotlin_delivery_status_callback(json.dumps(status_event))
+                        log_debug("ReticulumWrapper", "_on_message_failed",
+                                 "Kotlin callback invoked with retrying_propagated status")
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "_on_message_failed",
+                                 f"Error invoking Kotlin callback: {e}")
+                return  # Don't report as failed - we're retrying
+
+            # Normal failure - no retry
             log_error("ReticulumWrapper", "_on_message_failed",
                      f"❌ Message {msg_hash[:16]}... FAILED!")
 

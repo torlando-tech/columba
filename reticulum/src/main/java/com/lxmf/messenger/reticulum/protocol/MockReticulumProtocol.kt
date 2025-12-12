@@ -279,4 +279,33 @@ class MockReticulumProtocol : ReticulumProtocol {
     override suspend fun reconnectRNodeInterface() {
         // No-op for mock implementation
     }
+
+    override suspend fun setOutboundPropagationNode(destHash: ByteArray?): Result<Unit> {
+        // Mock implementation - always succeed
+        return Result.success(Unit)
+    }
+
+    override suspend fun getOutboundPropagationNode(): Result<String?> {
+        // Mock implementation - no propagation node set
+        return Result.success(null)
+    }
+
+    override suspend fun sendLxmfMessageWithMethod(
+        destinationHash: ByteArray,
+        content: String,
+        sourceIdentity: Identity,
+        deliveryMethod: DeliveryMethod,
+        tryPropagationOnFail: Boolean,
+        imageData: ByteArray?,
+        imageFormat: String?,
+    ): Result<MessageReceipt> {
+        // Mock implementation - same as sendLxmfMessage
+        return Result.success(
+            MessageReceipt(
+                messageHash = ByteArray(32) { it.toByte() },
+                timestamp = System.currentTimeMillis(),
+                destinationHash = destinationHash,
+            ),
+        )
+    }
 }

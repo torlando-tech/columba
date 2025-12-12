@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.util.IdentityQrCodeUtils
 import com.lxmf.messenger.util.validation.IdentityInput
 import com.lxmf.messenger.util.validation.InputValidator
@@ -46,10 +48,11 @@ sealed class AddContactResult {
 }
 
 /**
- * Data class for grouping contacts by pinned status
+ * Data class for grouping contacts by section (relay, pinned, all)
  */
 @androidx.compose.runtime.Immutable
 data class ContactGroups(
+    val relay: EnrichedContact?, // Current relay (if any)
     val pinned: List<EnrichedContact>,
     val all: List<EnrichedContact>,
 )
@@ -59,6 +62,7 @@ class ContactsViewModel
     @Inject
     constructor(
         private val contactRepository: ContactRepository,
+        private val propagationNodeManager: PropagationNodeManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "ContactsViewModel"
@@ -67,6 +71,9 @@ class ContactsViewModel
         // Search query state
         private val _searchQuery = MutableStateFlow("")
         val searchQuery: StateFlow<String> = _searchQuery
+
+        // Current relay info (includes isAutoSelected for showing "(auto)" badge)
+        val currentRelayInfo: StateFlow<RelayInfo?> = propagationNodeManager.currentRelay
 
         // All enriched contacts (includes network status and conversation data)
         val contacts: StateFlow<List<EnrichedContact>> =
@@ -100,19 +107,21 @@ class ContactsViewModel
                 initialValue = emptyList(),
             )
 
-        // Grouped contacts for section headers (pinned vs all)
+        // Grouped contacts for section headers (relay, pinned, all)
         val groupedContacts: StateFlow<ContactGroups> =
             filteredContacts
                 .combine(MutableStateFlow(Unit)) { contacts, _ ->
+                    val relay = contacts.find { it.isMyRelay }
                     ContactGroups(
-                        pinned = contacts.filter { it.isPinned },
-                        all = contacts.filterNot { it.isPinned },
+                        relay = relay,
+                        pinned = contacts.filter { it.isPinned && !it.isMyRelay },
+                        all = contacts.filterNot { it.isPinned || it.isMyRelay },
                     )
                 }
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5000L),
-                    initialValue = ContactGroups(emptyList(), emptyList()),
+                    initialValue = ContactGroups(null, emptyList(), emptyList()),
                 )
 
         // Contact count
@@ -210,6 +219,26 @@ class ContactsViewModel
                     Log.d(TAG, "Deleted contact: $destinationHash")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to delete contact: $destinationHash", e)
+                }
+            }
+        }
+
+        /**
+         * Unset a relay contact and delete it, then trigger auto-selection of a new relay.
+         * This should be called when the user confirms removing their current relay.
+         */
+        fun unsetRelayAndDelete(destinationHash: String) {
+            viewModelScope.launch {
+                try {
+                    // Delete the contact (this also clears isMyRelay flag in database)
+                    contactRepository.deleteContact(destinationHash)
+
+                    // Notify PropagationNodeManager to trigger auto-selection of new relay
+                    propagationNodeManager.onRelayDeleted()
+
+                    Log.d(TAG, "Unset relay and deleted: $destinationHash")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to unset relay: $destinationHash", e)
                 }
             }
         }

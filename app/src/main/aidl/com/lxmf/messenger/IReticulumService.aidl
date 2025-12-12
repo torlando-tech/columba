@@ -280,4 +280,32 @@ interface IReticulumService {
      *         [{"name": "AutoInterface", "error": "Port 29716 already in use", "recoverable": true}]
      */
     String getFailedInterfaces();
+
+    // ==================== PROPAGATION NODE SUPPORT ====================
+
+    /**
+     * Set the propagation node to use for PROPAGATED delivery.
+     * @param destHash 16-byte destination hash of the propagation node, or null to clear
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String setOutboundPropagationNode(in byte[] destHash);
+
+    /**
+     * Get the currently configured propagation node.
+     * @return JSON string with result: {"success": true, "propagation_node": "hex_hash" or null}
+     */
+    String getOutboundPropagationNode();
+
+    /**
+     * Send an LXMF message with explicit delivery method.
+     * @param destHash Destination hash bytes
+     * @param content Message content string
+     * @param sourceIdentityPrivateKey Source identity private key bytes
+     * @param deliveryMethod Delivery method: "opportunistic", "direct", or "propagated"
+     * @param tryPropagationOnFail If true and direct fails, retry via propagation
+     * @param imageData Optional image data bytes (null if none)
+     * @param imageFormat Optional image format string (e.g., "jpg", "png", null if none)
+     * @return JSON string with result: {"success": true, "message_hash": "...", "delivery_method": "..."}
+     */
+    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat);
 }

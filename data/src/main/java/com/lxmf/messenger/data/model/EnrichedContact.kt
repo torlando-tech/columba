@@ -33,6 +33,10 @@ data class EnrichedContact(
     val isPinned: Boolean,
     // Identity resolution status
     val status: ContactStatus = ContactStatus.ACTIVE,
+    // Propagation node relay status
+    val isMyRelay: Boolean = false,
+    // Node type (from announces table) - "PEER", "NODE", "PROPAGATION_NODE"
+    val nodeType: String? = null,
 ) {
     /**
      * Parse tags from JSON string to list
@@ -80,6 +84,8 @@ data class EnrichedContact(
         if (addedVia != other.addedVia) return false
         if (isPinned != other.isPinned) return false
         if (status != other.status) return false
+        if (isMyRelay != other.isMyRelay) return false
+        if (nodeType != other.nodeType) return false
 
         return true
     }
@@ -102,6 +108,8 @@ data class EnrichedContact(
         result = 31 * result + addedVia.hashCode()
         result = 31 * result + isPinned.hashCode()
         result = 31 * result + status.hashCode()
+        result = 31 * result + isMyRelay.hashCode()
+        result = 31 * result + (nodeType?.hashCode() ?: 0)
         return result
     }
 }

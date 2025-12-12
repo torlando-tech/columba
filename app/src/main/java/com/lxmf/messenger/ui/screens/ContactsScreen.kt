@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
@@ -117,6 +119,7 @@ fun ContactsScreen(
     val groupedContacts by viewModel.groupedContacts.collectAsState()
     val contactCount by viewModel.contactCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
     var showAddContactSheet by remember { mutableStateOf(false) }
     var showManualEntryDialog by remember { mutableStateOf(false) }
@@ -138,6 +141,10 @@ fun ContactsScreen(
     // Pending contact bottom sheet state
     var showPendingContactSheet by remember { mutableStateOf(false) }
     var pendingContactToShow by remember { mutableStateOf<EnrichedContact?>(null) }
+
+    // Unset relay confirmation dialog state
+    var showUnsetRelayDialog by remember { mutableStateOf(false) }
+    var relayToUnset by remember { mutableStateOf<EnrichedContact?>(null) }
 
     val scope = rememberCoroutineScope()
 
@@ -274,6 +281,64 @@ fun ContactsScreen(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // My Relay section (shown at top, separate from pinned)
+                groupedContacts.relay?.let { relay ->
+                    item {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Hub,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.tertiary,
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "MY RELAY",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
+                            // Show "(auto)" badge if relay was auto-selected
+                            if (currentRelayInfo?.isAutoSelected == true) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "(auto)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                    item(key = "relay_${relay.destinationHash}") {
+                        ContactListItemWithMenu(
+                            contact = relay,
+                            onClick = {
+                                if (relay.status == ContactStatus.PENDING_IDENTITY ||
+                                    relay.status == ContactStatus.UNRESOLVED
+                                ) {
+                                    pendingContactToShow = relay
+                                    showPendingContactSheet = true
+                                } else {
+                                    onContactClick(relay.destinationHash, relay.displayName)
+                                }
+                            },
+                            onPinToggle = { viewModel.togglePin(relay.destinationHash) },
+                            onEditNickname = {
+                                editNicknameContactHash = relay.destinationHash
+                                editNicknameCurrentValue = relay.customNickname
+                                showEditNicknameDialog = true
+                            },
+                            onViewDetails = { onViewPeerDetails(relay.destinationHash) },
+                            onRemove = {
+                                relayToUnset = relay
+                                showUnsetRelayDialog = true
+                            },
+                        )
+                    }
+                }
+
                 // Pinned contacts section
                 if (groupedContacts.pinned.isNotEmpty()) {
                     item {
@@ -314,7 +379,7 @@ fun ContactsScreen(
 
                 // All contacts section
                 if (groupedContacts.all.isNotEmpty()) {
-                    if (groupedContacts.pinned.isNotEmpty()) {
+                    if (groupedContacts.relay != null || groupedContacts.pinned.isNotEmpty()) {
                         item {
                             Text(
                                 text = "ALL CONTACTS",
@@ -469,6 +534,58 @@ fun ContactsScreen(
                     },
                 ) {
                     Text("OK")
+                }
+            },
+        )
+    }
+
+    // Unset relay confirmation dialog
+    if (showUnsetRelayDialog && relayToUnset != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showUnsetRelayDialog = false
+                relayToUnset = null
+            },
+            icon = {
+                Icon(
+                    imageVector = Icons.Filled.Hub,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.tertiary,
+                )
+            },
+            title = {
+                Text(
+                    text = "Unset as Your Relay?",
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            },
+            text = {
+                Text(
+                    text = "\"${relayToUnset!!.displayName}\" will be removed from contacts. " +
+                        "A new relay will be selected automatically from available propagation nodes.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.unsetRelayAndDelete(relayToUnset!!.destinationHash)
+                        showUnsetRelayDialog = false
+                        relayToUnset = null
+                    },
+                ) {
+                    Text("Unset Relay")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showUnsetRelayDialog = false
+                        relayToUnset = null
+                    },
+                ) {
+                    Text("Cancel")
                 }
             },
         )
@@ -661,6 +778,26 @@ fun ContactListItem(
                         )
                     }
                 }
+
+                // Relay badge overlay (Hub icon in top-right corner)
+                if (contact.isMyRelay) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(20.dp)
+                                .align(Alignment.TopEnd)
+                                .offset(x = 4.dp, y = (-4).dp)
+                                .background(MaterialTheme.colorScheme.tertiary, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Hub,
+                            contentDescription = "My Relay",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onTertiary,
+                        )
+                    }
+                }
             }
 
             // Contact info
@@ -679,6 +816,26 @@ fun ContactListItem(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = textAlpha),
                     )
+
+                    // Show "MY RELAY" badge for relay contacts
+                    if (contact.isMyRelay) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .background(
+                                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(4.dp),
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                text = "RELAY",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
+                        }
+                    }
 
                     // Source badge - prioritize status over addedVia for pending contacts
                     val (badgeIcon, badgeColor) =

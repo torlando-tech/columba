@@ -502,6 +502,63 @@ class ReticulumServiceBinder(
     }
 
     // ===========================================
+    // Propagation Node Support
+    // ===========================================
+
+    override fun setOutboundPropagationNode(destHash: ByteArray?): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("set_outbound_propagation_node", destHash)
+                result?.toString() ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting propagation node", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun getOutboundPropagationNode(): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("get_outbound_propagation_node")
+                result?.toString() ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting propagation node", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun sendLxmfMessageWithMethod(
+        destHash: ByteArray,
+        content: String,
+        sourceIdentityPrivateKey: ByteArray,
+        deliveryMethod: String,
+        tryPropagationOnFail: Boolean,
+        imageData: ByteArray?,
+        imageFormat: String?,
+    ): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr(
+                    "send_lxmf_message_with_method",
+                    destHash,
+                    content,
+                    sourceIdentityPrivateKey,
+                    deliveryMethod,
+                    tryPropagationOnFail,
+                    imageData,
+                    imageFormat,
+                )
+                result?.toString() ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending LXMF message with method", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    // ===========================================
     // Private Helpers
     // ===========================================
 

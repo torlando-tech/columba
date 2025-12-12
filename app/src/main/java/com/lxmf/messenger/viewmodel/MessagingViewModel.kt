@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
+import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.ui.model.toMessageUi
@@ -42,9 +44,12 @@ class MessagingViewModel
         private val conversationRepository: com.lxmf.messenger.data.repository.ConversationRepository,
         private val announceRepository: com.lxmf.messenger.data.repository.AnnounceRepository,
         private val activeConversationManager: com.lxmf.messenger.service.ActiveConversationManager,
+        private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
+            // LXMF opportunistic mode max content size (single packet, no link required)
+            private const val OPPORTUNISTIC_MAX_BYTES = 295
         }
 
         // Track the currently active conversation - drives reactive message loading
@@ -306,14 +311,39 @@ class MessagingViewModel
                             return@launch
                         }
 
-                    Log.d(TAG, "Sending LXMF message to $destinationHash (${sanitized.length} chars, hasImage=${imageData != null})...")
+                    // Get delivery method settings
+                    val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
+                    val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
 
-                    // Send via protocol with VALIDATED data
+                    // Determine delivery method:
+                    // - OPPORTUNISTIC: for small messages (≤295 bytes) without attachments
+                    // - Otherwise use user's default (direct or propagated)
+                    val contentSize = sanitized.toByteArray().size
+                    val deliveryMethod =
+                        if (imageData == null && contentSize <= OPPORTUNISTIC_MAX_BYTES) {
+                            Log.d(TAG, "Using OPPORTUNISTIC delivery (content: $contentSize bytes)")
+                            DeliveryMethod.OPPORTUNISTIC
+                        } else {
+                            when (defaultMethod) {
+                                "propagated" -> DeliveryMethod.PROPAGATED
+                                else -> DeliveryMethod.DIRECT
+                            }
+                        }
+
+                    Log.d(
+                        TAG,
+                        "Sending LXMF message to $destinationHash " +
+                            "(${sanitized.length} chars, hasImage=${imageData != null}, method=$deliveryMethod, tryPropOnFail=$tryPropOnFail)...",
+                    )
+
+                    // Send via protocol with delivery method support
                     val result =
-                        reticulumProtocol.sendLxmfMessage(
+                        reticulumProtocol.sendLxmfMessageWithMethod(
                             destinationHash = destHashBytes,
                             content = sanitized,
                             sourceIdentity = identity,
+                            deliveryMethod = deliveryMethod,
+                            tryPropagationOnFail = tryPropOnFail,
                             imageData = imageData,
                             imageFormat = imageFormat,
                         )

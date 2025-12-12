@@ -151,6 +151,59 @@ interface ReticulumProtocol {
      * Use this when the RNode has disconnected and automatic reconnection has failed.
      */
     suspend fun reconnectRNodeInterface()
+
+    // Propagation node support
+
+    /**
+     * Set the propagation node to use for PROPAGATED delivery.
+     *
+     * @param destHash 16-byte destination hash of the propagation node, or null to clear
+     * @return Result indicating success or failure
+     */
+    suspend fun setOutboundPropagationNode(destHash: ByteArray?): Result<Unit>
+
+    /**
+     * Get the currently configured propagation node.
+     *
+     * @return The hex destination hash of the propagation node, or null if none set
+     */
+    suspend fun getOutboundPropagationNode(): Result<String?>
+
+    /**
+     * Send an LXMF message with explicit delivery method.
+     *
+     * @param destinationHash Destination hash bytes
+     * @param content Message content string
+     * @param sourceIdentity Identity of the sender
+     * @param deliveryMethod Delivery method to use (OPPORTUNISTIC, DIRECT, or PROPAGATED)
+     * @param tryPropagationOnFail If true and direct fails, retry via propagation
+     * @param imageData Optional image data bytes
+     * @param imageFormat Optional image format (e.g., "jpg", "png", "webp")
+     * @return Result containing MessageReceipt or failure
+     */
+    suspend fun sendLxmfMessageWithMethod(
+        destinationHash: ByteArray,
+        content: String,
+        sourceIdentity: Identity,
+        deliveryMethod: DeliveryMethod = DeliveryMethod.DIRECT,
+        tryPropagationOnFail: Boolean = true,
+        imageData: ByteArray? = null,
+        imageFormat: String? = null,
+    ): Result<MessageReceipt>
+}
+
+/**
+ * Delivery methods for LXMF messages
+ */
+enum class DeliveryMethod {
+    /** Single-packet delivery, max 295 bytes content, no link required */
+    OPPORTUNISTIC,
+
+    /** Link-based delivery, unlimited size, with retries */
+    DIRECT,
+
+    /** Delivery via propagation node for offline recipients */
+    PROPAGATED,
 }
 
 /**
@@ -180,7 +233,8 @@ data class ReceivedMessage(
  */
 data class DeliveryStatusUpdate(
     val messageHash: String,
-    val status: String, // "delivered" or "failed"
+    /** Status: "delivered", "failed", or "retrying_propagated" (direct failed, retrying via propagation) */
+    val status: String,
     val timestamp: Long,
 )
 

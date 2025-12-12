@@ -1355,6 +1355,91 @@ class ServiceReticulumProtocol(
         }
     }
 
+    // ==================== PROPAGATION NODE SUPPORT ====================
+
+    override suspend fun setOutboundPropagationNode(destHash: ByteArray?): Result<Unit> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.setOutboundPropagationNode(destHash)
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            Log.d(TAG, "Propagation node ${if (destHash != null) "set to ${destHash.toHexString()}" else "cleared"}")
+        }
+    }
+
+    override suspend fun getOutboundPropagationNode(): Result<String?> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.getOutboundPropagationNode()
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            result.optString("propagation_node").takeIf { it.isNotEmpty() }
+        }
+    }
+
+    override suspend fun sendLxmfMessageWithMethod(
+        destinationHash: ByteArray,
+        content: String,
+        sourceIdentity: Identity,
+        deliveryMethod: DeliveryMethod,
+        tryPropagationOnFail: Boolean,
+        imageData: ByteArray?,
+        imageFormat: String?,
+    ): Result<MessageReceipt> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
+
+            val methodString = when (deliveryMethod) {
+                DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
+                DeliveryMethod.DIRECT -> "direct"
+                DeliveryMethod.PROPAGATED -> "propagated"
+            }
+
+            val resultJson = service.sendLxmfMessageWithMethod(
+                destinationHash,
+                content,
+                privateKey,
+                methodString,
+                tryPropagationOnFail,
+                imageData,
+                imageFormat,
+            )
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            val msgHash = result.optString("message_hash").toByteArrayFromBase64() ?: byteArrayOf()
+            val timestamp = result.optLong("timestamp", System.currentTimeMillis())
+            val destHash = result.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
+            val actualMethod = result.optString("delivery_method", methodString)
+
+            Log.d(TAG, "Message sent with method=$actualMethod")
+
+            MessageReceipt(
+                messageHash = msgHash,
+                timestamp = timestamp,
+                destinationHash = destHash,
+            )
+        }
+    }
+
     /**
      * Get BLE connection details from the service.
      */

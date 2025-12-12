@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NetworkCheck
@@ -76,8 +77,14 @@ fun AnnounceDetailScreen(
     // Separately observe contact status for star button
     val isContact by viewModel.isContactFlow(destinationHash).collectAsState(initial = false)
 
+    // Observe if this contact is the current relay
+    val isMyRelay by viewModel.isMyRelayFlow(destinationHash).collectAsState(initial = false)
+
     // Dialog state for remove confirmation
     var showRemoveDialog by remember { mutableStateOf(false) }
+
+    // Dialog state for relay unset confirmation
+    var showUnsetRelayDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -103,8 +110,12 @@ fun AnnounceDetailScreen(
                         IconButton(
                             onClick = {
                                 if (isContact) {
-                                    // Show confirmation dialog when removing
-                                    showRemoveDialog = true
+                                    // Show appropriate confirmation dialog when removing
+                                    if (isMyRelay) {
+                                        showUnsetRelayDialog = true
+                                    } else {
+                                        showRemoveDialog = true
+                                    }
                                 } else {
                                     // Add directly without confirmation
                                     viewModel.toggleContact(destinationHash)
@@ -224,6 +235,44 @@ fun AnnounceDetailScreen(
                     }
                 }
 
+                // Show "Set as My Relay" button for propagation nodes
+                if (announceNonNull.nodeType == "PROPAGATION_NODE") {
+                    val isCurrentRelay by viewModel.isMyRelayFlow(destinationHash).collectAsState(initial = false)
+
+                    Button(
+                        onClick = {
+                            viewModel.setAsMyRelay(announceNonNull.destinationHash, announceNonNull.peerName)
+                        },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor =
+                                    if (isCurrentRelay) {
+                                        MaterialTheme.colorScheme.tertiary
+                                    } else {
+                                        MaterialTheme.colorScheme.secondary
+                                    },
+                            ),
+                        enabled = !isCurrentRelay,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Hub,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isCurrentRelay) "Current Relay" else "Set as My Relay",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+
                 // Information cards
                 InfoCard(
                     icon = Icons.Default.Fingerprint,
@@ -325,6 +374,20 @@ fun AnnounceDetailScreen(
             },
         )
     }
+
+    // Show unset relay confirmation dialog
+    if (showUnsetRelayDialog) {
+        UnsetRelayConfirmationDialog(
+            relayName = announce?.peerName ?: "this relay",
+            onConfirm = {
+                viewModel.unsetRelayAndDelete(destinationHash)
+                showUnsetRelayDialog = false
+            },
+            onDismiss = {
+                showUnsetRelayDialog = false
+            },
+        )
+    }
 }
 
 @Composable
@@ -357,6 +420,43 @@ private fun RemoveContactConfirmationDialog(
                     ),
             ) {
                 Text("Remove")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
+private fun UnsetRelayConfirmationDialog(
+    relayName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Filled.Hub,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.tertiary,
+            )
+        },
+        title = {
+            Text("Unset as Your Relay?")
+        },
+        text = {
+            Text(
+                "\"$relayName\" will be removed from contacts. " +
+                    "A new relay will be selected automatically from available propagation nodes.",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Unset Relay")
             }
         },
         dismissButton = {

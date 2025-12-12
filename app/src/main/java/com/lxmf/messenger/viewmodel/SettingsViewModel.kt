@@ -7,6 +7,7 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,6 +47,12 @@ data class SettingsState(
     val wasUsingSharedInstance: Boolean = false, // True if we were using shared but it went offline
     val sharedInstanceAvailable: Boolean = false, // True when shared instance becomes newly available (notification)
     val sharedInstanceOnline: Boolean = false, // True if shared instance is currently reachable (from service query)
+    // Message delivery state
+    val defaultDeliveryMethod: String = "direct", // "direct" or "propagated"
+    val tryPropagationOnFail: Boolean = true,
+    val autoSelectPropagationNode: Boolean = true,
+    val currentRelayName: String? = null,
+    val currentRelayHops: Int? = null,
 )
 
 @Suppress("TooManyFunctions") // ViewModel with many user interaction methods is expected
@@ -57,6 +64,7 @@ class SettingsViewModel
         private val identityRepository: IdentityRepository,
         private val reticulumProtocol: ReticulumProtocol,
         private val interfaceConfigManager: com.lxmf.messenger.service.InterfaceConfigManager,
+        private val propagationNodeManager: PropagationNodeManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -93,6 +101,7 @@ class SettingsViewModel
             if (enableMonitors) {
                 startSharedInstanceMonitor()
                 startSharedInstanceAvailabilityMonitor()
+                startRelayMonitor()
             }
         }
 
@@ -863,6 +872,65 @@ class SettingsViewModel
                 settingsRepository.savePreferOwnInstance(false)
                 if (!_state.value.isRestarting) {
                     restartService()
+                }
+            }
+        }
+
+        // Message delivery methods
+
+        /**
+         * Set the default delivery method for messages.
+         * @param method "direct" or "propagated"
+         */
+        fun setDefaultDeliveryMethod(method: String) {
+            viewModelScope.launch {
+                settingsRepository.saveDefaultDeliveryMethod(method)
+                _state.value = _state.value.copy(defaultDeliveryMethod = method)
+                Log.d(TAG, "Default delivery method set to: $method")
+            }
+        }
+
+        /**
+         * Toggle the try propagation on fail setting.
+         */
+        fun setTryPropagationOnFail(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveTryPropagationOnFail(enabled)
+                _state.value = _state.value.copy(tryPropagationOnFail = enabled)
+                Log.d(TAG, "Try propagation on fail set to: $enabled")
+            }
+        }
+
+        /**
+         * Toggle auto-select propagation node setting.
+         */
+        fun setAutoSelectPropagationNode(autoSelect: Boolean) {
+            viewModelScope.launch {
+                if (autoSelect) {
+                    propagationNodeManager.enableAutoSelect()
+                }
+                settingsRepository.saveAutoSelectPropagationNode(autoSelect)
+                _state.value = _state.value.copy(autoSelectPropagationNode = autoSelect)
+                Log.d(TAG, "Auto-select propagation node set to: $autoSelect")
+            }
+        }
+
+        /**
+         * Start observing current relay info from PropagationNodeManager.
+         * Call this after init to update state with relay information.
+         */
+        private fun startRelayMonitor() {
+            viewModelScope.launch {
+                propagationNodeManager.currentRelay.collect { relayInfo ->
+                    _state.value =
+                        _state.value.copy(
+                            currentRelayName = relayInfo?.displayName,
+                            currentRelayHops = relayInfo?.hops,
+                            autoSelectPropagationNode = relayInfo?.isAutoSelected ?: true,
+                        )
+                    if (relayInfo != null) {
+                        Log.d(TAG, "Current relay updated: ${relayInfo.displayName} (${relayInfo.hops} hops)")
+                    }
                 }
             }
         }

@@ -18,6 +18,7 @@ import com.lxmf.messenger.ui.theme.CustomTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -65,6 +66,13 @@ class SettingsRepository
             val PREFER_OWN_INSTANCE = booleanPreferencesKey("prefer_own_instance")
             val IS_SHARED_INSTANCE = booleanPreferencesKey("is_shared_instance")
             val RPC_KEY = stringPreferencesKey("rpc_key")
+
+            // Message delivery preferences
+            val DEFAULT_DELIVERY_METHOD = stringPreferencesKey("default_delivery_method")
+            val TRY_PROPAGATION_ON_FAIL = booleanPreferencesKey("try_propagation_on_fail")
+            val MANUAL_PROPAGATION_NODE = stringPreferencesKey("manual_propagation_node")
+            val LAST_PROPAGATION_NODE = stringPreferencesKey("last_propagation_node")
+            val AUTO_SELECT_PROPAGATION_NODE = booleanPreferencesKey("auto_select_propagation_node")
         }
 
         // Notification preferences
@@ -483,6 +491,163 @@ class SettingsRepository
                 } else {
                     preferences.remove(PreferencesKeys.RPC_KEY)
                 }
+            }
+        }
+
+        // Message delivery preferences
+
+        /**
+         * Flow of the default delivery method.
+         * Defaults to "direct" if not set.
+         * Values: "direct", "propagated"
+         */
+        val defaultDeliveryMethodFlow: Flow<String> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.DEFAULT_DELIVERY_METHOD] ?: "direct"
+                }
+
+        /**
+         * Get the default delivery method (non-flow for use in sending).
+         */
+        suspend fun getDefaultDeliveryMethod(): String {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.DEFAULT_DELIVERY_METHOD] ?: "direct"
+            }.first()
+        }
+
+        /**
+         * Save the default delivery method.
+         *
+         * @param method "direct" or "propagated"
+         */
+        suspend fun saveDefaultDeliveryMethod(method: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.DEFAULT_DELIVERY_METHOD] = method
+            }
+        }
+
+        /**
+         * Flow of the try propagation on fail setting.
+         * Defaults to true if not set.
+         */
+        val tryPropagationOnFailFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TRY_PROPAGATION_ON_FAIL] ?: true
+                }
+
+        /**
+         * Get try propagation on fail setting (non-flow for use in sending).
+         */
+        suspend fun getTryPropagationOnFail(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TRY_PROPAGATION_ON_FAIL] ?: true
+            }.first()
+        }
+
+        /**
+         * Save the try propagation on fail setting.
+         *
+         * @param enabled Whether to retry via propagation when direct delivery fails
+         */
+        suspend fun saveTryPropagationOnFail(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.TRY_PROPAGATION_ON_FAIL] = enabled
+            }
+        }
+
+        /**
+         * Flow of the manually selected propagation node.
+         * Returns hex destination hash string or null if not set.
+         */
+        val manualPropagationNodeFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MANUAL_PROPAGATION_NODE]
+                }
+
+        /**
+         * Get the manually selected propagation node (non-flow).
+         */
+        suspend fun getManualPropagationNode(): String? {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.MANUAL_PROPAGATION_NODE]
+            }.first()
+        }
+
+        /**
+         * Save the manually selected propagation node.
+         *
+         * @param nodeHash Hex destination hash of the propagation node, or null to clear
+         */
+        suspend fun saveManualPropagationNode(nodeHash: String?) {
+            context.dataStore.edit { preferences ->
+                if (nodeHash != null) {
+                    preferences[PreferencesKeys.MANUAL_PROPAGATION_NODE] = nodeHash
+                } else {
+                    preferences.remove(PreferencesKeys.MANUAL_PROPAGATION_NODE)
+                }
+            }
+        }
+
+        /**
+         * Flow of the last used propagation node (fallback for auto-selection).
+         * Returns hex destination hash string or null if not set.
+         */
+        val lastPropagationNodeFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LAST_PROPAGATION_NODE]
+                }
+
+        /**
+         * Get the last used propagation node (non-flow).
+         */
+        suspend fun getLastPropagationNode(): String? {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.LAST_PROPAGATION_NODE]
+            }.first()
+        }
+
+        /**
+         * Save the last used propagation node.
+         *
+         * @param nodeHash Hex destination hash of the propagation node
+         */
+        suspend fun saveLastPropagationNode(nodeHash: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LAST_PROPAGATION_NODE] = nodeHash
+            }
+        }
+
+        /**
+         * Flow of the auto-select propagation node setting.
+         * Defaults to true if not set.
+         */
+        val autoSelectPropagationNodeFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTO_SELECT_PROPAGATION_NODE] ?: true
+                }
+
+        /**
+         * Get the auto-select propagation node setting (non-flow).
+         */
+        suspend fun getAutoSelectPropagationNode(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.AUTO_SELECT_PROPAGATION_NODE] ?: true
+            }.first()
+        }
+
+        /**
+         * Save the auto-select propagation node setting.
+         *
+         * @param enabled Whether to automatically select the nearest propagation node
+         */
+        suspend fun saveAutoSelectPropagationNode(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.AUTO_SELECT_PROPAGATION_NODE] = enabled
             }
         }
 

@@ -165,4 +165,93 @@ class DeviceDiscoveryStepTest {
         // Then - pairing should be initiated
         verify(exactly = 1) { mockViewModel.initiateBluetoothPairing(unpairedBleDevice) }
     }
+
+    // ========== Reconnect Waiting State Tests ==========
+
+    @Test
+    fun reconnectWaitingState_showsWaitingCard() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val state =
+            RNodeWizardState(
+                discoveredDevices = listOf(unpairedBleDevice),
+                isWaitingForReconnect = true,
+                reconnectDeviceName = "RNode 1234",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+
+        // When
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        // Then - waiting card should be displayed
+        composeTestRule.onNodeWithText("Waiting for RNode to reconnect...").assertIsDisplayed()
+    }
+
+    @Test
+    fun reconnectWaitingState_showsDeviceName() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val state =
+            RNodeWizardState(
+                discoveredDevices = emptyList(),
+                isWaitingForReconnect = true,
+                reconnectDeviceName = "My RNode Device",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+
+        // When
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        // Then - device name should be shown
+        composeTestRule.onNodeWithText("Looking for: My RNode Device").assertIsDisplayed()
+    }
+
+    @Test
+    fun reconnectWaitingState_cancelButton_callsCancelReconnectScan() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val state =
+            RNodeWizardState(
+                discoveredDevices = emptyList(),
+                isWaitingForReconnect = true,
+                reconnectDeviceName = "RNode 1234",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+
+        // When
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        // Click the Cancel button
+        composeTestRule.onNodeWithText("Cancel").performClick()
+
+        // Then - cancelReconnectScan should be called
+        verify(exactly = 1) { mockViewModel.cancelReconnectScan() }
+    }
+
+    @Test
+    fun reconnectWaitingState_notShownWhenFalse() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val state =
+            RNodeWizardState(
+                discoveredDevices = listOf(unpairedBleDevice),
+                isWaitingForReconnect = false,
+                reconnectDeviceName = null,
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+
+        // When
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        // Then - waiting card should NOT be displayed
+        composeTestRule.onNodeWithText("Waiting for RNode to reconnect...").assertDoesNotExist()
+    }
 }

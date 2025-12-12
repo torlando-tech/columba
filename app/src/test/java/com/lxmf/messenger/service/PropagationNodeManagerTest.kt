@@ -13,8 +13,11 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import app.cash.turbine.test
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -23,6 +26,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.junit.Assert.assertNotEquals
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -78,6 +82,8 @@ class PropagationNodeManagerTest {
         coEvery { settingsRepository.saveAutoSelectPropagationNode(any()) } just Runs
         coEvery { settingsRepository.saveManualPropagationNode(any()) } just Runs
         coEvery { settingsRepository.getLastSyncTimestamp() } returns null
+        coEvery { settingsRepository.getAutoRetrieveEnabled() } returns false
+        coEvery { settingsRepository.getRetrievalIntervalSeconds() } returns 30
         every { settingsRepository.autoSelectPropagationNodeFlow } returns autoSelectFlow
         every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(30)
 
@@ -801,4 +807,62 @@ class PropagationNodeManagerTest {
     // 1. ContactRepositoryTest - tests getAnyRelay() fallback
     // 2. SettingsViewModelTest - tests relay state preservation in loadSettings()
     // 3. The tests above that verify repository method calls (setAsMyRelay, clearMyRelay)
+
+    // ========== triggerSync Race Condition Tests ==========
+
+    @Test
+    fun `triggerSync waits for relay state to load before checking relay`() =
+        runTest {
+            // Arrange: Set up the relay value BEFORE creating manager
+            // This simulates the database already having a relay configured
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Mock the sync protocol call to return success
+            val mockSyncState =
+                com.lxmf.messenger.reticulum.protocol.PropagationState(
+                    state = 0,
+                    stateName = "IDLE",
+                    progress = 0.0f,
+                    messagesReceived = 0,
+                )
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.success(mockSyncState)
+
+            // Verify the currentRelayState starts as Loading before any coroutines run
+            assert(manager.currentRelayState.value is RelayLoadState.Loading) {
+                "currentRelayState should start as Loading"
+            }
+
+            // Start collecting results BEFORE triggering sync (SharedFlow doesn't replay)
+            manager.manualSyncResult.test(timeout = 10.seconds) {
+                // Act: Trigger sync - this will wait for currentRelayState to become Loaded
+                val syncJob =
+                    async {
+                        manager.triggerSync()
+                    }
+
+                // Run coroutines without time advancement to avoid infinite loops
+                // The combine flow for currentRelayState should run and emit Loaded
+                repeat(10) {
+                    testDispatcher.scheduler.runCurrent()
+                }
+
+                // Wait for sync to complete
+                syncJob.await()
+
+                // Assert: Should NOT emit NoRelay - sync should proceed with the relay
+                val result = awaitItem()
+                assertNotEquals(
+                    "Sync should wait for relay state and find configured relay",
+                    SyncResult.NoRelay,
+                    result,
+                )
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
 }

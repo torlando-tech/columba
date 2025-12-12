@@ -48,6 +48,18 @@ data class RelayInfo(
 )
 
 /**
+ * Represents the loading state of the relay configuration.
+ * Used to distinguish between "not yet loaded from DB" and "loaded, no relay configured".
+ */
+sealed class RelayLoadState {
+    /** Relay state is being loaded from database */
+    data object Loading : RelayLoadState()
+
+    /** Relay state has been loaded from database */
+    data class Loaded(val relay: RelayInfo?) : RelayLoadState()
+}
+
+/**
  * Manages propagation node (relay) selection for LXMF message delivery.
  *
  * This class implements Sideband's auto-selection algorithm:
@@ -98,15 +110,25 @@ class PropagationNodeManager
         }
 
         /**
-         * Current relay derived from database (single source of truth).
-         * Automatically stays in sync with database changes.
-         * Initial value is null - the Flow will populate the correct value almost immediately.
+         * Current relay state with loading indicator.
+         * Starts as Loading, transitions to Loaded once database query completes.
+         * This allows distinguishing "loading" from "no relay configured".
          */
-        val currentRelay: StateFlow<RelayInfo?> =
+        val currentRelayState: StateFlow<RelayLoadState> =
             contactRepository.getMyRelayFlow()
                 .combine(settingsRepository.autoSelectPropagationNodeFlow) { contact, isAutoSelect ->
-                    buildRelayInfo(contact, isAutoSelect)
+                    RelayLoadState.Loaded(buildRelayInfo(contact, isAutoSelect))
                 }
+                .stateIn(scope, SharingStarted.Eagerly, RelayLoadState.Loading)
+
+        /**
+         * Current relay derived from database (single source of truth).
+         * Automatically stays in sync with database changes.
+         * Returns null if loading or no relay configured.
+         */
+        val currentRelay: StateFlow<RelayInfo?> =
+            currentRelayState
+                .map { state -> (state as? RelayLoadState.Loaded)?.relay }
                 .stateIn(scope, SharingStarted.Eagerly, null)
 
         private val _isSyncing = MutableStateFlow(false)
@@ -459,7 +481,11 @@ class PropagationNodeManager
          * Emits result to manualSyncResult SharedFlow for UI notification.
          */
         suspend fun triggerSync() {
-            val relay = currentRelay.value
+            // Wait for relay state to be loaded from database
+            // This prevents race conditions where sync is triggered before DB query completes
+            val state = currentRelayState.first { it is RelayLoadState.Loaded }
+            val relay = (state as RelayLoadState.Loaded).relay
+
             if (relay == null) {
                 Log.d(TAG, "No relay configured, cannot sync")
                 _manualSyncResult.emit(SyncResult.NoRelay)

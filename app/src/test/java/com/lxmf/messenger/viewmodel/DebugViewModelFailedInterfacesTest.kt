@@ -14,15 +14,15 @@ import org.junit.Test
  * are properly represented in the InterfaceInfo data class.
  */
 class DebugViewModelFailedInterfacesTest {
-
     @Test
     fun `InterfaceInfo with error correctly identifies failed interfaces`() {
-        val failedInterface = InterfaceInfo(
-            name = "AutoInterface",
-            type = "AutoInterface",
-            online = false,
-            error = "Port 29716 already in use",
-        )
+        val failedInterface =
+            InterfaceInfo(
+                name = "AutoInterface",
+                type = "AutoInterface",
+                online = false,
+                error = "Port 29716 already in use",
+            )
 
         assertNotNull(failedInterface.error)
         assertEquals("Port 29716 already in use", failedInterface.error)
@@ -31,12 +31,13 @@ class DebugViewModelFailedInterfacesTest {
 
     @Test
     fun `InterfaceInfo without error represents healthy interface`() {
-        val healthyInterface = InterfaceInfo(
-            name = "RNode",
-            type = "ColumbaRNodeInterface",
-            online = true,
-            error = null,
-        )
+        val healthyInterface =
+            InterfaceInfo(
+                name = "RNode",
+                type = "ColumbaRNodeInterface",
+                online = true,
+                error = null,
+            )
 
         assertNull(healthyInterface.error)
         assertTrue(healthyInterface.online)
@@ -44,12 +45,13 @@ class DebugViewModelFailedInterfacesTest {
 
     @Test
     fun `InterfaceInfo offline without error represents temporary disconnection`() {
-        val offlineInterface = InterfaceInfo(
-            name = "RNode",
-            type = "ColumbaRNodeInterface",
-            online = false,
-            error = null,
-        )
+        val offlineInterface =
+            InterfaceInfo(
+                name = "RNode",
+                type = "ColumbaRNodeInterface",
+                online = false,
+                error = null,
+            )
 
         assertNull(offlineInterface.error)
         assertEquals(false, offlineInterface.online)
@@ -58,28 +60,30 @@ class DebugViewModelFailedInterfacesTest {
     @Test
     fun `FailedInterface to InterfaceInfo conversion logic`() {
         // Simulate the conversion that happens in DebugViewModel.fetchDebugInfo()
-        val failedInterfaces = listOf(
-            FailedInterface(
-                name = "AutoInterface",
-                error = "Port 29716 already in use",
-                recoverable = true,
-            ),
-            FailedInterface(
-                name = "TCPClient",
-                error = "Connection refused",
-                recoverable = false,
-            ),
-        )
+        val failedInterfaces =
+            listOf(
+                FailedInterface(
+                    name = "AutoInterface",
+                    error = "Port 29716 already in use",
+                    recoverable = true,
+                ),
+                FailedInterface(
+                    name = "TCPClient",
+                    error = "Connection refused",
+                    recoverable = false,
+                ),
+            )
 
         // Convert to InterfaceInfo as done in fetchDebugInfo()
-        val interfaceInfos = failedInterfaces.map { failed ->
-            InterfaceInfo(
-                name = failed.name,
-                type = failed.name,
-                online = false,
-                error = failed.error,
-            )
-        }
+        val interfaceInfos =
+            failedInterfaces.map { failed ->
+                InterfaceInfo(
+                    name = failed.name,
+                    type = failed.name,
+                    online = false,
+                    error = failed.error,
+                )
+            }
 
         assertEquals(2, interfaceInfos.size)
 
@@ -96,30 +100,32 @@ class DebugViewModelFailedInterfacesTest {
     @Test
     fun `merging active and failed interfaces`() {
         // Simulate active interfaces from getDebugInfo()
-        val activeInterfaces = listOf(
-            InterfaceInfo(
-                name = "RNode LoRa",
-                type = "ColumbaRNodeInterface",
-                online = true,
-                error = null,
-            ),
-            InterfaceInfo(
-                name = "Bluetooth LE",
-                type = "AndroidBLE",
-                online = true,
-                error = null,
-            ),
-        )
+        val activeInterfaces =
+            listOf(
+                InterfaceInfo(
+                    name = "RNode LoRa",
+                    type = "ColumbaRNodeInterface",
+                    online = true,
+                    error = null,
+                ),
+                InterfaceInfo(
+                    name = "Bluetooth LE",
+                    type = "AndroidBLE",
+                    online = true,
+                    error = null,
+                ),
+            )
 
         // Simulate failed interfaces from getFailedInterfaces()
-        val failedInterfaceInfos = listOf(
-            InterfaceInfo(
-                name = "AutoInterface",
-                type = "AutoInterface",
-                online = false,
-                error = "Port conflict",
-            ),
-        )
+        val failedInterfaceInfos =
+            listOf(
+                InterfaceInfo(
+                    name = "AutoInterface",
+                    type = "AutoInterface",
+                    online = false,
+                    error = "Port conflict",
+                ),
+            )
 
         // Merge as done in fetchDebugInfo()
         val allInterfaces = activeInterfaces + failedInterfaceInfos
@@ -137,20 +143,22 @@ class DebugViewModelFailedInterfacesTest {
 
     @Test
     fun `DebugInfo interfaceCount reflects merged interfaces`() {
-        val interfaces = listOf(
-            InterfaceInfo("RNode", "ColumbaRNodeInterface", true, null),
-            InterfaceInfo("BLE", "AndroidBLE", true, null),
-            InterfaceInfo("Auto", "AutoInterface", false, "Port conflict"),
-        )
+        val interfaces =
+            listOf(
+                InterfaceInfo("RNode", "ColumbaRNodeInterface", true, null),
+                InterfaceInfo("BLE", "AndroidBLE", true, null),
+                InterfaceInfo("Auto", "AutoInterface", false, "Port conflict"),
+            )
 
-        val debugInfo = DebugInfo(
-            initialized = true,
-            reticulumAvailable = true,
-            storagePath = "/test",
-            interfaceCount = interfaces.size,
-            interfaces = interfaces,
-            transportEnabled = true,
-        )
+        val debugInfo =
+            DebugInfo(
+                initialized = true,
+                reticulumAvailable = true,
+                storagePath = "/test",
+                interfaceCount = interfaces.size,
+                interfaces = interfaces,
+                transportEnabled = true,
+            )
 
         assertEquals(3, debugInfo.interfaceCount)
         assertEquals(3, debugInfo.interfaces.size)
@@ -158,12 +166,13 @@ class DebugViewModelFailedInterfacesTest {
 
     @Test
     fun `interface list correctly separates healthy, offline, and failed`() {
-        val interfaces = listOf(
-            InterfaceInfo("RNode", "ColumbaRNodeInterface", online = true, error = null),
-            InterfaceInfo("BLE", "AndroidBLE", online = true, error = null),
-            InterfaceInfo("AutoInterface", "AutoInterface", online = false, error = "Port conflict"),
-            InterfaceInfo("TCPClient", "TCPClient", online = false, error = null),
-        )
+        val interfaces =
+            listOf(
+                InterfaceInfo("RNode", "ColumbaRNodeInterface", online = true, error = null),
+                InterfaceInfo("BLE", "AndroidBLE", online = true, error = null),
+                InterfaceInfo("AutoInterface", "AutoInterface", online = false, error = "Port conflict"),
+                InterfaceInfo("TCPClient", "TCPClient", online = false, error = null),
+            )
 
         val healthy = interfaces.filter { it.online && it.error == null }
         val failed = interfaces.filter { it.error != null }

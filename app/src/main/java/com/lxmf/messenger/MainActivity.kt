@@ -67,7 +67,6 @@ import com.lxmf.messenger.ui.screens.ContactsScreen
 import com.lxmf.messenger.ui.screens.IdentityManagerScreen
 import com.lxmf.messenger.ui.screens.IdentityScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
-import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.screens.MessagingScreen
 import com.lxmf.messenger.ui.screens.MigrationScreen
 import com.lxmf.messenger.ui.screens.MyIdentityScreen
@@ -77,6 +76,7 @@ import com.lxmf.messenger.ui.screens.SettingsScreen
 import com.lxmf.messenger.ui.screens.ThemeEditorScreen
 import com.lxmf.messenger.ui.screens.ThemeManagementScreen
 import com.lxmf.messenger.ui.screens.WelcomeScreen
+import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
 import com.lxmf.messenger.viewmodel.ContactsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel

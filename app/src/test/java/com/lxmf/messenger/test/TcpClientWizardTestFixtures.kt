@@ -24,34 +24,11 @@ object TcpClientWizardTestFixtures {
 
     val testServers = listOf(testServer, anotherTestServer)
 
-    fun createTestState(
-        currentStep: TcpClientWizardStep = TcpClientWizardStep.SERVER_SELECTION,
-        selectedServer: TcpCommunityServer? = null,
-        isCustomMode: Boolean = false,
-        interfaceName: String = "",
-        targetHost: String = "",
-        targetPort: String = "",
-        isSaving: Boolean = false,
-        saveError: String? = null,
-        saveSuccess: Boolean = false,
-    ): TcpClientWizardState =
-        TcpClientWizardState(
-            currentStep = currentStep,
-            selectedServer = selectedServer,
-            isCustomMode = isCustomMode,
-            interfaceName = interfaceName,
-            targetHost = targetHost,
-            targetPort = targetPort,
-            isSaving = isSaving,
-            saveError = saveError,
-            saveSuccess = saveSuccess,
-        )
-
     // Convenience methods for common state configurations
     fun serverSelectionState(
         selectedServer: TcpCommunityServer? = null,
         isCustomMode: Boolean = false,
-    ) = createTestState(
+    ) = TcpClientWizardState(
         currentStep = TcpClientWizardStep.SERVER_SELECTION,
         selectedServer = selectedServer,
         isCustomMode = isCustomMode,
@@ -63,7 +40,7 @@ object TcpClientWizardTestFixtures {
         interfaceName: String = selectedServer?.name ?: "",
         targetHost: String = selectedServer?.host ?: "",
         targetPort: String = selectedServer?.port?.toString() ?: "",
-    ) = createTestState(
+    ) = TcpClientWizardState(
         currentStep = TcpClientWizardStep.REVIEW_CONFIGURE,
         selectedServer = selectedServer,
         isCustomMode = isCustomMode,
@@ -76,7 +53,7 @@ object TcpClientWizardTestFixtures {
         interfaceName: String = "",
         targetHost: String = "",
         targetPort: String = "",
-    ) = createTestState(
+    ) = TcpClientWizardState(
         currentStep = TcpClientWizardStep.REVIEW_CONFIGURE,
         selectedServer = null,
         isCustomMode = true,
@@ -86,7 +63,7 @@ object TcpClientWizardTestFixtures {
     )
 
     fun savingState() =
-        createTestState(
+        TcpClientWizardState(
             currentStep = TcpClientWizardStep.REVIEW_CONFIGURE,
             selectedServer = testServer,
             interfaceName = testServer.name,
@@ -96,7 +73,7 @@ object TcpClientWizardTestFixtures {
         )
 
     fun errorState(errorMessage: String = "Test error") =
-        createTestState(
+        TcpClientWizardState(
             currentStep = TcpClientWizardStep.REVIEW_CONFIGURE,
             selectedServer = testServer,
             interfaceName = testServer.name,
@@ -106,7 +83,7 @@ object TcpClientWizardTestFixtures {
         )
 
     fun successState() =
-        createTestState(
+        TcpClientWizardState(
             currentStep = TcpClientWizardStep.REVIEW_CONFIGURE,
             selectedServer = testServer,
             interfaceName = testServer.name,

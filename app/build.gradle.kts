@@ -170,6 +170,13 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "2048m"
+                // Exclude Compose UI tests from release builds due to Robolectric manifest issues
+                // These tests run successfully in debug and don't need to run twice
+                if (it.name.contains("Release")) {
+                    it.exclude("com/lxmf/messenger/ui/components/WizardComponentsTest.class")
+                    it.exclude("com/lxmf/messenger/ui/screens/tcpclient/**")
+                    it.exclude("com/lxmf/messenger/ui/MainActivityTcpClientNavigationTest.class")
+                }
             }
         }
         execution = "ANDROIDX_TEST_ORCHESTRATOR"

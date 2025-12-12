@@ -87,6 +87,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -661,6 +662,7 @@ private fun ContactListItemWithMenu(
             expanded = showMenu,
             onDismiss = { showMenu = false },
             isPinned = contact.isPinned,
+            isRelay = contact.isMyRelay,
             contactName = contact.displayName,
             onPin = {
                 onPinToggle()
@@ -805,64 +807,15 @@ fun ContactListItem(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                // Display name with source badge
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = contact.displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = textAlpha),
-                    )
-
-                    // Show "MY RELAY" badge for relay contacts
-                    if (contact.isMyRelay) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .background(
-                                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f),
-                                        shape = RoundedCornerShape(4.dp),
-                                    )
-                                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                        ) {
-                            Text(
-                                text = "RELAY",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.tertiary,
-                            )
-                        }
-                    }
-
-                    // Source badge - prioritize status over addedVia for pending contacts
-                    val (badgeIcon, badgeColor) =
-                        when {
-                            // Show hourglass only if still pending
-                            contact.status == ContactStatus.PENDING_IDENTITY ->
-                                Icons.Default.HourglassEmpty to MaterialTheme.colorScheme.secondary
-                            // Show error if unresolved
-                            contact.status == ContactStatus.UNRESOLVED ->
-                                Icons.Default.Error to MaterialTheme.colorScheme.error
-                            // Otherwise show based on how contact was added
-                            contact.addedVia == "ANNOUNCE" ->
-                                Icons.Default.Star to MaterialTheme.colorScheme.tertiary
-                            contact.addedVia == "QR_CODE" ->
-                                Icons.Default.QrCode to MaterialTheme.colorScheme.secondary
-                            contact.addedVia == "MANUAL" || contact.addedVia == "MANUAL_PENDING" ->
-                                Icons.Default.Edit to MaterialTheme.colorScheme.secondary
-                            else ->
-                                Icons.Default.Person to MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    Icon(
-                        imageVector = badgeIcon,
-                        contentDescription = "Added via ${contact.addedVia}",
-                        modifier = Modifier.size(16.dp),
-                        tint = badgeColor.copy(alpha = textAlpha),
-                    )
-                }
+                // Display name (constrained to prevent badge squishing)
+                Text(
+                    text = contact.displayName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = textAlpha),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
 
                 // Destination hash
                 Text(
@@ -936,6 +889,56 @@ fun ContactListItem(
                 }
             }
 
+            // Badge column (relay badge + source badge)
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(horizontal = 4.dp),
+            ) {
+                // Show "RELAY" badge for relay contacts
+                if (contact.isMyRelay) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .background(
+                                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(4.dp),
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = "RELAY",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                }
+
+                // Source badge - prioritize status over addedVia for pending contacts
+                val (badgeIcon, badgeColor) =
+                    when {
+                        contact.status == ContactStatus.PENDING_IDENTITY ->
+                            Icons.Default.HourglassEmpty to MaterialTheme.colorScheme.secondary
+                        contact.status == ContactStatus.UNRESOLVED ->
+                            Icons.Default.Error to MaterialTheme.colorScheme.error
+                        contact.addedVia == "ANNOUNCE" ->
+                            Icons.Default.Star to MaterialTheme.colorScheme.tertiary
+                        contact.addedVia == "QR_CODE" ->
+                            Icons.Default.QrCode to MaterialTheme.colorScheme.secondary
+                        contact.addedVia == "MANUAL" || contact.addedVia == "MANUAL_PENDING" ->
+                            Icons.Default.Edit to MaterialTheme.colorScheme.secondary
+                        else ->
+                            Icons.Default.Person to MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                Icon(
+                    imageVector = badgeIcon,
+                    contentDescription = "Added via ${contact.addedVia}",
+                    modifier = Modifier.size(16.dp),
+                    tint = badgeColor.copy(alpha = textAlpha),
+                )
+            }
+
             // Pin button (or retry button for unresolved)
             if (isUnresolved) {
                 IconButton(onClick = onClick) {
@@ -968,6 +971,7 @@ fun ContactContextMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     isPinned: Boolean,
+    isRelay: Boolean,
     contactName: String,
     onPin: () -> Unit,
     onEditNickname: () -> Unit,
@@ -1041,7 +1045,7 @@ fun ContactContextMenu(
             },
             text = {
                 Text(
-                    text = "Remove from Contacts",
+                    text = if (isRelay) "Unset as Relay" else "Remove from Contacts",
                     color = MaterialTheme.colorScheme.error,
                 )
             },

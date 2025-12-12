@@ -6,15 +6,34 @@ import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.data.db.entity.ContactEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Result of a manual sync operation.
+ */
+sealed class SyncResult {
+    data object Success : SyncResult()
+    data class Error(val message: String) : SyncResult()
+    data object NoRelay : SyncResult()
+}
 
 /**
  * Information about the current relay (propagation node).
@@ -53,27 +72,139 @@ class PropagationNodeManager
             private const val TAG = "PropagationNodeManager"
         }
 
-        private val _currentRelay = MutableStateFlow<RelayInfo?>(null)
-        val currentRelay: StateFlow<RelayInfo?> = _currentRelay.asStateFlow()
-
-        private var announceObserverJob: Job? = null
+        /**
+         * Build RelayInfo from a contact entity and auto-select setting.
+         * Enriches with announce data if available.
+         */
+        private suspend fun buildRelayInfo(contact: ContactEntity?, isAutoSelect: Boolean): RelayInfo? {
+            if (contact == null) return null
+            val announce = announceRepository.getAnnounce(contact.destinationHash)
+            return RelayInfo(
+                destinationHash = contact.destinationHash,
+                displayName = announce?.peerName
+                    ?: contact.customNickname
+                    ?: contact.destinationHash.take(12),
+                hops = announce?.hops ?: -1, // -1 = unknown
+                isAutoSelected = isAutoSelect,
+                lastSeenTimestamp = announce?.lastSeenTimestamp
+                    ?: contact.lastInteractionTimestamp,
+            )
+        }
 
         /**
-         * Initialize the manager - restore last relay and start observing announces.
+         * Get the initial relay info synchronously for StateFlow initialization.
+         * Falls back to getAnyRelay() if no active identity is available yet.
+         */
+        private suspend fun getInitialRelayInfo(): RelayInfo? {
+            Log.d(TAG, "getInitialRelayInfo: Starting")
+
+            // First try via active identity (normal path)
+            var contact = contactRepository.getMyRelay()
+            Log.d(TAG, "getInitialRelayInfo: getMyRelay returned ${contact?.destinationHash}")
+
+            // Fallback: if no active identity yet, get any relay
+            if (contact == null) {
+                contact = contactRepository.getAnyRelay()
+                Log.d(TAG, "getInitialRelayInfo: getAnyRelay returned ${contact?.destinationHash}")
+            }
+
+            if (contact == null) {
+                Log.d(TAG, "getInitialRelayInfo: No relay found, returning null")
+                return null
+            }
+
+            val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
+            val relayInfo = buildRelayInfo(contact, isAutoSelect)
+            Log.d(TAG, "getInitialRelayInfo: Returning relay ${relayInfo?.displayName}")
+            return relayInfo
+        }
+
+        /**
+         * Current relay derived from database (single source of truth).
+         * Automatically stays in sync with database changes.
+         * Initial value is fetched synchronously to avoid UI showing "no relay" briefly.
+         */
+        val currentRelay: StateFlow<RelayInfo?> =
+            contactRepository.getMyRelayFlow()
+                .combine(settingsRepository.autoSelectPropagationNodeFlow) { contact, isAutoSelect ->
+                    buildRelayInfo(contact, isAutoSelect)
+                }
+                .stateIn(
+                    scope,
+                    SharingStarted.Eagerly,
+                    runBlocking { getInitialRelayInfo() }, // Synchronous initial value
+                )
+
+        private val _isSyncing = MutableStateFlow(false)
+        val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
+        private val _lastSyncTimestamp = MutableStateFlow<Long?>(null)
+        val lastSyncTimestamp: StateFlow<Long?> = _lastSyncTimestamp.asStateFlow()
+
+        // Emits results only for manually triggered syncs (not periodic syncs)
+        private val _manualSyncResult = MutableSharedFlow<SyncResult>()
+        val manualSyncResult: SharedFlow<SyncResult> = _manualSyncResult.asSharedFlow()
+
+        private var announceObserverJob: Job? = null
+        private var syncJob: Job? = null
+        private var settingsObserverJob: Job? = null
+
+        private var relayObserverJob: Job? = null
+
+        /**
+         * Initialize the manager - start observing database for relay changes.
          * Call this when the Reticulum service becomes ready.
          */
         fun start() {
             Log.d(TAG, "Starting PropagationNodeManager")
 
-            // Restore last relay from settings
+            // Load last sync timestamp
             scope.launch {
-                restoreLastRelay()
+                _lastSyncTimestamp.value = settingsRepository.getLastSyncTimestamp()
+            }
+
+            // Observe relay changes from database and sync to Python layer
+            // This replaces the old restoreLastRelay() approach - now we're reactive
+            relayObserverJob = scope.launch {
+                observeRelayChanges()
             }
 
             // Start observing propagation node announces for auto-selection
             announceObserverJob = scope.launch {
                 observePropagationNodeAnnounces()
             }
+
+            // Observe settings changes to restart sync with new interval
+            settingsObserverJob = scope.launch {
+                settingsRepository.retrievalIntervalSecondsFlow.collect { _ ->
+                    // Restart periodic sync when interval changes
+                    restartPeriodicSync()
+                }
+            }
+
+            // Start periodic sync with propagation node
+            startPeriodicSync()
+        }
+
+        /**
+         * Observe relay changes from database and sync to Python layer.
+         * This is the reactive replacement for restoreLastRelay().
+         */
+        private suspend fun observeRelayChanges() {
+            // Use distinctUntilChanged to only update Python when relay actually changes
+            currentRelay
+                .map { it?.destinationHash }
+                .distinctUntilChanged()
+                .collect { destinationHash ->
+                    if (destinationHash != null) {
+                        val destHashBytes = destinationHash.hexToByteArray()
+                        reticulumProtocol.setOutboundPropagationNode(destHashBytes)
+                        Log.i(TAG, "Python layer synced with relay: $destinationHash")
+                    } else {
+                        reticulumProtocol.setOutboundPropagationNode(null)
+                        Log.i(TAG, "Python layer cleared - no relay configured")
+                    }
+                }
         }
 
         /**
@@ -81,13 +212,22 @@ class PropagationNodeManager
          */
         fun stop() {
             Log.d(TAG, "Stopping PropagationNodeManager")
+            relayObserverJob?.cancel()
             announceObserverJob?.cancel()
+            syncJob?.cancel()
+            settingsObserverJob?.cancel()
+            relayObserverJob = null
             announceObserverJob = null
+            syncJob = null
+            settingsObserverJob = null
         }
 
         /**
          * Called when a propagation node announce is received.
          * Implements Sideband's algorithm: select nearest by hop count, only switch if new node has <= hops.
+         *
+         * Note: This method only updates the database. The currentRelay Flow automatically
+         * picks up changes, and observeRelayChanges() syncs to Python layer.
          */
         suspend fun onPropagationNodeAnnounce(
             destinationHash: String,
@@ -104,25 +244,19 @@ class PropagationNodeManager
                 return
             }
 
-            val current = _currentRelay.value
+            // Get current relay from the database-derived StateFlow
+            val current = currentRelay.value
 
             // Auto-selection logic (from Sideband)
             val shouldSwitch = when {
-                current == null -> true  // No relay yet
-                hops < current.hops -> true  // New node is closer
-                hops == current.hops && destinationHash == current.destinationHash -> true  // Same node, update info
-                else -> false  // Current node is closer, keep it
+                current == null -> true // No relay yet
+                hops < current.hops || current.hops == -1 -> true // New node is closer (or current hops unknown)
+                hops == current.hops && destinationHash == current.destinationHash -> true // Same node
+                else -> false // Current node is closer, keep it
             }
 
             if (shouldSwitch) {
                 Log.i(TAG, "Switching to relay $displayName ($destinationHash) at $hops hops")
-
-                // Update settings
-                settingsRepository.saveLastPropagationNode(destinationHash)
-
-                // Update Python layer
-                val destHashBytes = destinationHash.hexToByteArray()
-                reticulumProtocol.setOutboundPropagationNode(destHashBytes)
 
                 // Auto-add to contacts if not already present
                 val contactExists = contactRepository.hasContact(destinationHash)
@@ -133,55 +267,37 @@ class PropagationNodeManager
                 }
 
                 // Mark as relay in contacts (clears other relays first)
+                // This updates the database, which triggers currentRelay Flow,
+                // which triggers observeRelayChanges() to sync Python layer
                 Log.d(TAG, "Setting as my relay: $destinationHash")
                 contactRepository.setAsMyRelay(destinationHash, clearOther = true)
                 Log.d(TAG, "Set as my relay complete")
-
-                // Update current relay state
-                _currentRelay.value = RelayInfo(
-                    destinationHash = destinationHash,
-                    displayName = displayName,
-                    hops = hops,
-                    isAutoSelected = isAutoSelect,
-                    lastSeenTimestamp = System.currentTimeMillis(),
-                )
             }
         }
 
         /**
          * Manually set a specific propagation node as relay.
          * This disables auto-selection.
+         *
+         * Note: This method only updates settings and database. The currentRelay Flow
+         * automatically picks up changes, and observeRelayChanges() syncs to Python layer.
          */
         suspend fun setManualRelay(destinationHash: String, displayName: String) {
             Log.i(TAG, "User manually selected relay: $displayName")
 
-            // Disable auto-select
+            // Disable auto-select and save manual selection
             settingsRepository.saveAutoSelectPropagationNode(false)
             settingsRepository.saveManualPropagationNode(destinationHash)
-            settingsRepository.saveLastPropagationNode(destinationHash)
-
-            // Get announce info for hop count
-            val announce = announceRepository.getAnnounce(destinationHash)
-            val hops = announce?.hops ?: 0
-
-            // Update Python layer
-            val destHashBytes = destinationHash.hexToByteArray()
-            reticulumProtocol.setOutboundPropagationNode(destHashBytes)
 
             // Update contacts - add if needed and mark as relay
+            val announce = announceRepository.getAnnounce(destinationHash)
             if (!contactRepository.hasContact(destinationHash) && announce != null) {
                 contactRepository.addContactFromAnnounce(destinationHash, announce.publicKey)
             }
-            contactRepository.setAsMyRelay(destinationHash, clearOther = true)
 
-            // Update state
-            _currentRelay.value = RelayInfo(
-                destinationHash = destinationHash,
-                displayName = displayName,
-                hops = hops,
-                isAutoSelected = false,
-                lastSeenTimestamp = System.currentTimeMillis(),
-            )
+            // This updates the database, which triggers currentRelay Flow,
+            // which triggers observeRelayChanges() to sync Python layer
+            contactRepository.setAsMyRelay(destinationHash, clearOther = true)
         }
 
         /**
@@ -205,9 +321,8 @@ class PropagationNodeManager
                     nearest.publicKey,
                 )
             } else {
-                // No known propagation nodes, clear current and wait for announces
-                _currentRelay.value = null
-                reticulumProtocol.setOutboundPropagationNode(null)
+                // No known propagation nodes, clear and wait for announces
+                // Database update triggers currentRelay Flow → observeRelayChanges() → Python sync
                 contactRepository.clearMyRelay()
             }
         }
@@ -219,8 +334,7 @@ class PropagationNodeManager
             Log.i(TAG, "Clearing relay selection")
 
             settingsRepository.saveManualPropagationNode(null)
-            _currentRelay.value = null
-            reticulumProtocol.setOutboundPropagationNode(null)
+            // Database update triggers currentRelay Flow → observeRelayChanges() → Python sync
             contactRepository.clearMyRelay()
         }
 
@@ -230,9 +344,6 @@ class PropagationNodeManager
          */
         suspend fun onRelayDeleted() {
             Log.i(TAG, "Relay contact was deleted, selecting new relay")
-
-            // Clear current relay state
-            _currentRelay.value = null
 
             // If manual node was deleted, switch to auto-select
             val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
@@ -256,38 +367,7 @@ class PropagationNodeManager
                 )
             } else {
                 Log.d(TAG, "No propagation nodes available for auto-selection")
-                reticulumProtocol.setOutboundPropagationNode(null)
-            }
-        }
-
-        /**
-         * Restore the last used relay on app start.
-         */
-        private suspend fun restoreLastRelay() {
-            val lastRelay = settingsRepository.getLastPropagationNode()
-            val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
-
-            if (lastRelay != null) {
-                val announce = announceRepository.getAnnounce(lastRelay)
-                if (announce != null && announce.nodeType == "PROPAGATION_NODE") {
-                    Log.i(TAG, "Restoring last relay: ${announce.peerName}")
-
-                    // Update Python layer
-                    val destHashBytes = lastRelay.hexToByteArray()
-                    reticulumProtocol.setOutboundPropagationNode(destHashBytes)
-
-                    _currentRelay.value = RelayInfo(
-                        destinationHash = lastRelay,
-                        displayName = announce.peerName,
-                        hops = announce.hops,
-                        isAutoSelected = isAutoSelect,
-                        lastSeenTimestamp = announce.lastSeenTimestamp,
-                    )
-                } else {
-                    Log.d(TAG, "Last relay not found in announces, waiting for new announce")
-                }
-            } else {
-                Log.d(TAG, "No last relay saved")
+                // currentRelay Flow will emit null, observeRelayChanges() will sync to Python
             }
         }
 
@@ -318,5 +398,126 @@ class PropagationNodeManager
          */
         private fun String.hexToByteArray(): ByteArray {
             return chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        }
+
+        // ==================== PROPAGATION NODE SYNC ====================
+
+        /**
+         * Start periodic sync with the propagation node.
+         * This downloads messages that were sent via propagation.
+         * Respects the autoRetrieveEnabled setting and uses configurable interval.
+         */
+        private fun startPeriodicSync() {
+            syncJob?.cancel()
+            syncJob = scope.launch {
+                // Initial delay to let things settle
+                kotlinx.coroutines.delay(5_000)
+
+                while (true) {
+                    // Check if auto-retrieve is enabled
+                    val autoRetrieveEnabled = settingsRepository.getAutoRetrieveEnabled()
+                    if (autoRetrieveEnabled) {
+                        try {
+                            syncWithPropagationNode()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error during propagation sync", e)
+                        }
+                    }
+
+                    // Get configurable interval from settings
+                    val intervalSeconds = settingsRepository.getRetrievalIntervalSeconds()
+                    val intervalMs = intervalSeconds * 1000L
+                    kotlinx.coroutines.delay(intervalMs)
+                }
+            }
+        }
+
+        /**
+         * Restart periodic sync (called when settings change).
+         */
+        private fun restartPeriodicSync() {
+            Log.d(TAG, "Restarting periodic sync with new settings")
+            startPeriodicSync()
+        }
+
+        /**
+         * Sync messages from the propagation node.
+         * This requests any waiting messages from the configured propagation node.
+         */
+        suspend fun syncWithPropagationNode() {
+            val relay = currentRelay.value
+            if (relay == null) {
+                Log.d(TAG, "No relay configured, skipping sync")
+                return
+            }
+
+            // Don't start a new sync if one is already in progress
+            if (_isSyncing.value) {
+                Log.d(TAG, "Sync already in progress, skipping")
+                return
+            }
+
+            Log.d(TAG, "📡 Syncing with propagation node: ${relay.displayName}")
+            _isSyncing.value = true
+
+            try {
+                val result = reticulumProtocol.requestMessagesFromPropagationNode()
+                result.onSuccess { state ->
+                    Log.d(TAG, "Propagation sync started: state=${state.stateName}")
+                    // Update last sync timestamp
+                    val timestamp = System.currentTimeMillis()
+                    _lastSyncTimestamp.value = timestamp
+                    settingsRepository.saveLastSyncTimestamp(timestamp)
+                }.onFailure { error ->
+                    Log.w(TAG, "Propagation sync failed: ${error.message}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error requesting messages from propagation node", e)
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+
+        /**
+         * Manually trigger a sync with the propagation node.
+         * Useful for pull-to-refresh or when user explicitly wants to check for messages.
+         * Emits result to manualSyncResult SharedFlow for UI notification.
+         */
+        suspend fun triggerSync() {
+            val relay = currentRelay.value
+            if (relay == null) {
+                Log.d(TAG, "No relay configured, cannot sync")
+                _manualSyncResult.emit(SyncResult.NoRelay)
+                return
+            }
+
+            // Don't start a new sync if one is already in progress
+            if (_isSyncing.value) {
+                Log.d(TAG, "Sync already in progress, skipping manual trigger")
+                return
+            }
+
+            Log.d(TAG, "📡 Manual sync with propagation node: ${relay.displayName}")
+            _isSyncing.value = true
+
+            try {
+                val result = reticulumProtocol.requestMessagesFromPropagationNode()
+                result.onSuccess { state ->
+                    Log.d(TAG, "Manual sync started: state=${state.stateName}")
+                    // Update last sync timestamp
+                    val timestamp = System.currentTimeMillis()
+                    _lastSyncTimestamp.value = timestamp
+                    settingsRepository.saveLastSyncTimestamp(timestamp)
+                    _manualSyncResult.emit(SyncResult.Success)
+                }.onFailure { error ->
+                    Log.w(TAG, "Manual sync failed: ${error.message}")
+                    _manualSyncResult.emit(SyncResult.Error(error.message ?: "Unknown error"))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during manual sync", e)
+                _manualSyncResult.emit(SyncResult.Error(e.message ?: "Unknown error"))
+            } finally {
+                _isSyncing.value = false
+            }
         }
     }

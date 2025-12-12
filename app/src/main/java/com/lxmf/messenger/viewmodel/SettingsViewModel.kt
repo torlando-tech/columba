@@ -53,6 +53,11 @@ data class SettingsState(
     val autoSelectPropagationNode: Boolean = true,
     val currentRelayName: String? = null,
     val currentRelayHops: Int? = null,
+    // Message retrieval state
+    val autoRetrieveEnabled: Boolean = true,
+    val retrievalIntervalSeconds: Int = 30,
+    val lastSyncTimestamp: Long? = null,
+    val isSyncing: Boolean = false,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -199,6 +204,10 @@ class SettingsViewModel
                             sharedInstanceOnline = _state.value.sharedInstanceOnline,
                             sharedInstanceAvailable = _state.value.sharedInstanceAvailable,
                             wasUsingSharedInstance = _state.value.wasUsingSharedInstance,
+                            // Preserve relay state from startRelayMonitor()
+                            currentRelayName = _state.value.currentRelayName,
+                            currentRelayHops = _state.value.currentRelayHops,
+                            autoSelectPropagationNode = _state.value.autoSelectPropagationNode,
                         )
                     }.collect { newState ->
                         val previousState = _state.value
@@ -925,13 +934,73 @@ class SettingsViewModel
                     _state.value =
                         _state.value.copy(
                             currentRelayName = relayInfo?.displayName,
-                            currentRelayHops = relayInfo?.hops,
+                            // -1 means unknown hops (relay restored without announce data)
+                            currentRelayHops = relayInfo?.hops?.takeIf { it >= 0 },
                             autoSelectPropagationNode = relayInfo?.isAutoSelected ?: true,
                         )
                     if (relayInfo != null) {
                         Log.d(TAG, "Current relay updated: ${relayInfo.displayName} (${relayInfo.hops} hops)")
                     }
                 }
+            }
+
+            // Monitor sync state from PropagationNodeManager
+            viewModelScope.launch {
+                propagationNodeManager.isSyncing.collect { syncing ->
+                    _state.value = _state.value.copy(isSyncing = syncing)
+                }
+            }
+
+            // Monitor last sync timestamp from PropagationNodeManager
+            viewModelScope.launch {
+                propagationNodeManager.lastSyncTimestamp.collect { timestamp ->
+                    _state.value = _state.value.copy(lastSyncTimestamp = timestamp)
+                }
+            }
+
+            // Monitor retrieval settings from repository
+            viewModelScope.launch {
+                settingsRepository.autoRetrieveEnabledFlow.collect { enabled ->
+                    _state.value = _state.value.copy(autoRetrieveEnabled = enabled)
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.retrievalIntervalSecondsFlow.collect { seconds ->
+                    _state.value = _state.value.copy(retrievalIntervalSeconds = seconds)
+                }
+            }
+        }
+
+        // Message retrieval methods
+
+        /**
+         * Toggle auto-retrieve enabled state.
+         */
+        fun setAutoRetrieveEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAutoRetrieveEnabled(enabled)
+                Log.d(TAG, "Auto-retrieve ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the retrieval interval in seconds.
+         * @param seconds Interval in seconds (30, 60, 120, or 300)
+         */
+        fun setRetrievalIntervalSeconds(seconds: Int) {
+            viewModelScope.launch {
+                settingsRepository.saveRetrievalIntervalSeconds(seconds)
+                Log.d(TAG, "Retrieval interval set to $seconds seconds")
+            }
+        }
+
+        /**
+         * Trigger a manual sync with the propagation node.
+         */
+        fun syncNow() {
+            viewModelScope.launch {
+                Log.d(TAG, "User triggered manual sync")
+                propagationNodeManager.triggerSync()
             }
         }
     }

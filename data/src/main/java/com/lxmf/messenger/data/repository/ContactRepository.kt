@@ -612,4 +612,12 @@ class ContactRepository
                 }
             }
         }
+
+        /**
+         * Get any relay contact (not filtered by identity).
+         * Used during initialization before active identity is available.
+         */
+        suspend fun getAnyRelay(): ContactEntity? {
+            return contactDao.getAnyMyRelay()
+        }
     }

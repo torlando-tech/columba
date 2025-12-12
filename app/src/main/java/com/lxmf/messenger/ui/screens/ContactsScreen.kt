@@ -548,7 +548,8 @@ fun ContactsScreen(
     }
 
     // Unset relay confirmation dialog
-    if (showUnsetRelayDialog && relayToUnset != null) {
+    val currentRelayToUnset = relayToUnset
+    if (showUnsetRelayDialog && currentRelayToUnset != null) {
         AlertDialog(
             onDismissRequest = {
                 showUnsetRelayDialog = false
@@ -570,7 +571,7 @@ fun ContactsScreen(
             },
             text = {
                 Text(
-                    text = "\"${relayToUnset!!.displayName}\" will be removed from contacts. " +
+                    text = "\"${currentRelayToUnset.displayName}\" will be removed from contacts. " +
                         "A new relay will be selected automatically from available propagation nodes.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -578,7 +579,7 @@ fun ContactsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.unsetRelayAndDelete(relayToUnset!!.destinationHash)
+                        viewModel.unsetRelayAndDelete(currentRelayToUnset.destinationHash)
                         showUnsetRelayDialog = false
                         relayToUnset = null
                     },

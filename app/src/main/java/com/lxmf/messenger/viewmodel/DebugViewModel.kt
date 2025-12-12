@@ -289,7 +289,7 @@ class DebugViewModel
          * Get the LXMF delivery destination for test announces.
          * This reuses the destination already created by the LXMF router.
          */
-        private suspend fun getOrCreateDestination(identity: com.lxmf.messenger.reticulum.model.Identity): com.lxmf.messenger.reticulum.model.Destination {
+        private fun getOrCreateDestination(identity: com.lxmf.messenger.reticulum.model.Identity): com.lxmf.messenger.reticulum.model.Destination {
             // Return cached destination if available
             cachedDestination?.let {
                 Log.d(TAG, "Using cached destination")

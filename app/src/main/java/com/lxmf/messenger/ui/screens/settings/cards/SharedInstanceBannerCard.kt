@@ -250,7 +250,7 @@ fun SharedInstanceBannerCard(
 
                         // RPC Key input (only when using shared instance)
                         if (isUsingSharedInstance) {
-                            var rpcKeyInput by remember { mutableStateOf(rpcKey ?: "") }
+                            var rpcKeyInput by remember { mutableStateOf(rpcKey.orEmpty()) }
 
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
@@ -281,7 +281,7 @@ fun SharedInstanceBannerCard(
                                     onClick = {
                                         onRpcKeyChange(rpcKeyInput.ifEmpty { null })
                                     },
-                                    enabled = rpcKeyInput != (rpcKey ?: ""),
+                                    enabled = rpcKeyInput != rpcKey.orEmpty(),
                                 ) {
                                     Text("Save")
                                 }

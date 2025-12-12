@@ -335,7 +335,8 @@ class BleConnectionManager(
         // Check blacklist (identity-aware)
         if (isBlacklisted(address)) {
             val peerKey = getPeerKey(address)
-            val remainingMs = connectionBlacklist[peerKey]!! - System.currentTimeMillis()
+            val blacklistExpiry = connectionBlacklist[peerKey] ?: 0L
+            val remainingMs = blacklistExpiry - System.currentTimeMillis()
             return Result.failure(
                 IllegalStateException("Device $address (key: $peerKey) is blacklisted for ${remainingMs / 1000}s"),
             )
@@ -447,7 +448,7 @@ class BleConnectionManager(
     /**
      * Get list of connected peer addresses.
      */
-    suspend fun getConnectedPeers(): List<String> {
+    fun getConnectedPeers(): List<String> {
         // ConcurrentHashMap.values provides a consistent snapshot
         return connections.values.filter { it.isConnected }.map { it.address }
     }
@@ -633,7 +634,7 @@ class BleConnectionManager(
         }
     }
 
-    private suspend fun handleCentralConnected(
+    private fun handleCentralConnected(
         address: String,
         mtu: Int,
     ) {
@@ -649,7 +650,7 @@ class BleConnectionManager(
         updateConnectionState()
     }
 
-    private suspend fun handleCentralDisconnected(
+    private fun handleCentralDisconnected(
         address: String,
         reason: String?,
     ) {
@@ -694,7 +695,7 @@ class BleConnectionManager(
         }
     }
 
-    private suspend fun handlePeripheralConnected(address: String) {
+    private fun handlePeripheralConnected(address: String) {
         // ConcurrentHashMap.getOrPut() is atomic
         val info = connections.getOrPut(address) { ConnectionInfo(address) }
         info.hasPeripheralConnection = true
@@ -706,7 +707,7 @@ class BleConnectionManager(
         updateConnectionState()
     }
 
-    private suspend fun handlePeripheralDisconnected(address: String) {
+    private fun handlePeripheralDisconnected(address: String) {
         // ConcurrentHashMap operations are atomic
         val info = connections[address]
         if (info != null) {
@@ -728,7 +729,7 @@ class BleConnectionManager(
      * Data arrives as pre-fragmented packets from remote peer.
      * Pass directly to Python for reassembly by BLEInterface.
      */
-    private suspend fun handleDataReceived(
+    private fun handleDataReceived(
         address: String,
         fragment: ByteArray,
     ) {
@@ -748,7 +749,7 @@ class BleConnectionManager(
         }
     }
 
-    private suspend fun handleCentralMtuChanged(
+    private fun handleCentralMtuChanged(
         address: String,
         mtu: Int,
     ) {
@@ -764,7 +765,7 @@ class BleConnectionManager(
         Log.d(TAG, "Central MTU changed for $address: $mtu")
     }
 
-    private suspend fun handlePeripheralMtuChanged(
+    private fun handlePeripheralMtuChanged(
         address: String,
         mtu: Int,
     ) {
@@ -780,7 +781,7 @@ class BleConnectionManager(
         Log.d(TAG, "Peripheral MTU changed for $address: $mtu")
     }
 
-    private suspend fun handleIdentityReceived(
+    private fun handleIdentityReceived(
         address: String,
         identityHash: String,
     ) {
@@ -900,7 +901,7 @@ class BleConnectionManager(
         }
     }
 
-    private suspend fun canAcceptNewConnection(): Boolean {
+    private fun canAcceptNewConnection(): Boolean {
         // ConcurrentHashMap.values provides a consistent snapshot
         val currentConnections = connections.values.count { it.isConnected }
         return currentConnections < BleConstants.MAX_CONNECTIONS
@@ -912,7 +913,7 @@ class BleConnectionManager(
         return isBlacklistedByKey(peerKey)
     }
 
-    private suspend fun updateConnectionState() {
+    private fun updateConnectionState() {
         val peers = getConnectedPeers()
         // ConcurrentHashMap.values provides a consistent snapshot
         val centralConns = connections.values.count { it.hasCentralConnection }

@@ -686,11 +686,12 @@ class BleGattClient(
 
         // Enable notifications on TX characteristic
         val connData = connectionsMutex.withLock { connections[address] }
-        if (connData != null && connData.txCharacteristic != null) {
+        val txCharacteristic = connData?.txCharacteristic
+        if (connData != null && txCharacteristic != null) {
             // Allow BLE stack to settle after MTU negotiation before writing descriptor
             // Without this delay, we get ERROR_GATT_WRITE_REQUEST_BUSY (201)
             delay(BleConstants.POST_MTU_SETTLE_DELAY_MS)
-            enableNotifications(address, connData.gatt, connData.txCharacteristic!!)
+            enableNotifications(address, connData.gatt, txCharacteristic)
         }
     }
 
@@ -933,7 +934,7 @@ class BleGattClient(
         }
     }
 
-    private suspend fun handleCharacteristicChanged(
+    private fun handleCharacteristicChanged(
         address: String,
         characteristic: BluetoothGattCharacteristic,
         value: ByteArray,

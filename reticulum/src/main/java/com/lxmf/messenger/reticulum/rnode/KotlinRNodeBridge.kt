@@ -104,7 +104,7 @@ interface RNodeOnlineStatusListener {
  * @property context Application context for Bluetooth access
  */
 @SuppressLint("MissingPermission")
-@Suppress("LargeClass")
+@Suppress("LargeClass", "InjectDispatcher") // Bridge class doesn't use DI - dispatcher used for BLE/serial I/O
 class KotlinRNodeBridge(
     private val context: Context,
 ) {
@@ -384,7 +384,7 @@ class KotlinRNodeBridge(
         return try {
             adapter.bondedDevices
                 .filter { device ->
-                    val name = device.name ?: ""
+                    val name = device.name.orEmpty()
                     name.startsWith("RNode ")
                 }
                 .mapNotNull { it.name }
@@ -756,17 +756,19 @@ class KotlinRNodeBridge(
                 }
 
                 // Get characteristics
-                bleRxCharacteristic = nusService.getCharacteristic(NUS_RX_CHAR_UUID)
-                bleTxCharacteristic = nusService.getCharacteristic(NUS_TX_CHAR_UUID)
+                val rxChar = nusService.getCharacteristic(NUS_RX_CHAR_UUID)
+                val txChar = nusService.getCharacteristic(NUS_TX_CHAR_UUID)
+                bleRxCharacteristic = rxChar
+                bleTxCharacteristic = txChar
 
-                if (bleRxCharacteristic == null || bleTxCharacteristic == null) {
+                if (rxChar == null || txChar == null) {
                     Log.e(TAG, "NUS characteristics not found")
                     return
                 }
 
                 // Enable notifications on TX characteristic (data from RNode)
-                gatt.setCharacteristicNotification(bleTxCharacteristic, true)
-                val descriptor = bleTxCharacteristic!!.getDescriptor(CCCD_UUID)
+                gatt.setCharacteristicNotification(txChar, true)
+                val descriptor = txChar.getDescriptor(CCCD_UUID)
                 descriptor?.let {
                     it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                     gatt.writeDescriptor(it)
@@ -883,7 +885,7 @@ class KotlinRNodeBridge(
         Log.i(TAG, "Disconnected from $deviceName")
 
         // Notify Python
-        onConnectionStateChanged?.callAttr("__call__", false, deviceName ?: "")
+        onConnectionStateChanged?.callAttr("__call__", false, deviceName.orEmpty())
     }
 
     /**
@@ -1317,7 +1319,7 @@ class KotlinRNodeBridge(
             connectedDeviceName = null
             readBuffer.clear()
 
-            onConnectionStateChanged?.callAttr("__call__", false, deviceName ?: "")
+            onConnectionStateChanged?.callAttr("__call__", false, deviceName.orEmpty())
         }
     }
 

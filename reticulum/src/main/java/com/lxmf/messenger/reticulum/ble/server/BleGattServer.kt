@@ -270,12 +270,13 @@ class BleGattServer(
                 }
 
                 // Open GATT server
-                gattServer = bluetoothManager.openGattServer(context, gattServerCallback)
-                if (gattServer == null) {
+                val server = bluetoothManager.openGattServer(context, gattServerCallback)
+                if (server == null) {
                     return@withContext Result.failure(
                         IllegalStateException("Failed to open GATT server"),
                     )
                 }
+                gattServer = server
 
                 // Create and add Reticulum service
                 val service = createReticulumService()
@@ -283,7 +284,7 @@ class BleGattServer(
                 // Create deferred to wait for service registration callback
                 serviceAddedDeferred = CompletableDeferred()
 
-                val added = gattServer!!.addService(service)
+                val added = server.addService(service)
                 if (!added) {
                     serviceAddedDeferred = null
                     gattServer?.close()
@@ -405,7 +406,7 @@ class BleGattServer(
                 val targets =
                     centralsMutex.withLock {
                         if (centralAddress != null) {
-                            connectedCentrals[centralAddress]?.let { listOf(it) } ?: emptyList()
+                            connectedCentrals[centralAddress]?.let { listOf(it) }.orEmpty()
                         } else {
                             connectedCentrals.values.toList()
                         }

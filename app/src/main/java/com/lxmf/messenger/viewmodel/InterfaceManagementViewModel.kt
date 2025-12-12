@@ -645,8 +645,8 @@ class InterfaceManagementViewModel
                         enabled = config.enabled,
                         groupId = config.groupId,
                         discoveryScope = config.discoveryScope,
-                        discoveryPort = config.discoveryPort?.toString() ?: "",
-                        dataPort = config.dataPort?.toString() ?: "",
+                        discoveryPort = config.discoveryPort?.toString().orEmpty(),
+                        dataPort = config.dataPort?.toString().orEmpty(),
                         mode = config.mode,
                     )
 

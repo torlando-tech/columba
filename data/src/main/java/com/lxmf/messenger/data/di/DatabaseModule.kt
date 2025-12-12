@@ -1065,6 +1065,7 @@ object DatabaseModule {
 
     @Provides
     @Singleton
+    @Suppress("InjectDispatcher") // This IS the DI provider for the IO dispatcher
     fun provideIODispatcher(): CoroutineDispatcher {
         return Dispatchers.IO
     }

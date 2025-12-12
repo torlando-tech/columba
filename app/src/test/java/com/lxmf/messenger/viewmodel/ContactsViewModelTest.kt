@@ -190,14 +190,18 @@ class ContactsViewModelTest {
         // Given
         val contacts = listOf(
             TestFactories.createEnrichedContact(
-                destinationHash = "hash1",
-                displayName = "Custom Name",
-                announceName = "Announce Alice",
+                TestFactories.EnrichedContactConfig(
+                    destinationHash = "hash1",
+                    displayName = "Custom Name",
+                    announceName = "Announce Alice",
+                ),
             ),
             TestFactories.createEnrichedContact(
-                destinationHash = "hash2",
-                displayName = "Bob",
-                announceName = "Announce Bob",
+                TestFactories.EnrichedContactConfig(
+                    destinationHash = "hash2",
+                    displayName = "Bob",
+                    announceName = "Announce Bob",
+                ),
             ),
         )
         contactsFlow.value = contacts
@@ -222,14 +226,18 @@ class ContactsViewModelTest {
         // Given
         val contacts = listOf(
             TestFactories.createEnrichedContact(
-                destinationHash = "hash1",
-                displayName = "Alice",
-                tags = "[\"friend\", \"work\"]",
+                TestFactories.EnrichedContactConfig(
+                    destinationHash = "hash1",
+                    displayName = "Alice",
+                    tags = "[\"friend\", \"work\"]",
+                ),
             ),
             TestFactories.createEnrichedContact(
-                destinationHash = "hash2",
-                displayName = "Bob",
-                tags = "[\"family\"]",
+                TestFactories.EnrichedContactConfig(
+                    destinationHash = "hash2",
+                    displayName = "Bob",
+                    tags = "[\"family\"]",
+                ),
             ),
         )
         contactsFlow.value = contacts

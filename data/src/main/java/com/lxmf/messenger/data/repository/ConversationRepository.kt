@@ -144,6 +144,7 @@ class ConversationRepository
          * Messages ordered DESC (newest first) for efficient pagination.
          * Note: Paging source requires a fresh identityHash - doesn't auto-switch on identity change.
          */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend is needed to fetch active identity before creating Flow
         suspend fun getMessagesPaged(peerHash: String): Flow<PagingData<Message>> {
             val activeIdentity =
                 localIdentityDao.getActiveIdentitySync()

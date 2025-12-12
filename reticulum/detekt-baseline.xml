@@ -3,8 +3,6 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ComplexCondition:KotlinBLEBridge.kt$KotlinBLEBridge$peer.isCentral &amp;&amp; !peer.isPeripheral || !peer.isCentral &amp;&amp; peer.isPeripheral</ID>
-    <ID>ComplexCondition:KotlinBLEBridge.kt$KotlinBLEBridge$storedServiceUuid == null || storedRxCharUuid == null || storedTxCharUuid == null || storedIdentityCharUuid == null</ID>
-    <ID>CyclomaticComplexMethod:AppDataParser.kt$AppDataParser$private fun tryParseMsgpack(data: ByteArray): String?</ID>
     <ID>CyclomaticComplexMethod:BleOperationQueue.kt$BleOperationQueue$private suspend fun executeOperation(operation: BleOperation): OperationResult</ID>
     <ID>CyclomaticComplexMethod:KotlinBLEBridge.kt$KotlinBLEBridge$private suspend fun handleIdentityReceived( address: String, identityHash: String, isCentralConnection: Boolean, )</ID>
     <ID>LargeClass:BleGattClient.kt$BleGattClient</ID>
@@ -15,50 +13,12 @@
     <ID>LongMethod:BleOperationQueue.kt$BleOperationQueue$private suspend fun executeOperation(operation: BleOperation): OperationResult</ID>
     <ID>LongMethod:KotlinBLEBridge.kt$KotlinBLEBridge$private suspend fun handleIdentityReceived( address: String, identityHash: String, isCentralConnection: Boolean, )</ID>
     <ID>LoopWithTooManyJumpStatements:KotlinRNodeBridge.kt$KotlinRNodeBridge$while</ID>
-    <ID>MaxLineLength:AppDataParser.kt$AppDataParser$val printableRatio = str.count { it.isLetterOrDigit() || it.isWhitespace() || it in ".-_@#'\"()[]{},:;!?" } / str.length.toFloat()</ID>
-    <ID>MaxLineLength:BleAdvertiser.kt$BleAdvertiser$"RNS-${identity.take(BleConstants.IDENTITY_BYTES_IN_ADVERTISED_NAME).joinToString("") { "%02x".format(it) }}"</ID>
-    <ID>MaxLineLength:BleAdvertiser.kt$BleAdvertiser$.</ID>
-    <ID>MaxLineLength:BleAdvertiser.kt$BleAdvertiser.&lt;no name provided&gt;$Log.d(TAG, "Retrying advertising in ${backoffMs}ms (attempt $retryAttempts/$MAX_RETRY_ATTEMPTS)")</ID>
-    <ID>MaxLineLength:BleGattClient.kt$BleGattClient$BleConstants.ERROR_GATT_WRITE_REQUEST_BUSY -&gt; "ERROR_GATT_WRITE_REQUEST_BUSY - BLE stack busy (should have been retried)"</ID>
-    <ID>MaxLineLength:BleGattClient.kt$BleGattClient$Log.d(TAG, "Retrying connection to $address (attempt $retryCount/$MAX_CONNECTION_RETRIES) in ${backoffMs}ms")</ID>
-    <ID>MaxLineLength:BleGattClient.kt$BleGattClient$Log.d(TAG, "Started keepalive for $address (interval: ${BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS}ms)")</ID>
-    <ID>MaxLineLength:BleGattClient.kt$BleGattClient$val localAddress = bluetoothAdapter.address ?: return true // Fallback: always connect if we can't get local MAC</ID>
-    <ID>MaxLineLength:BleGattServer.kt$BleGattServer$Log.d(TAG, "Serving identity to ${device.address}: ${identity.joinToString("") { "%02x".format(it) }}")</ID>
-    <ID>MaxLineLength:BleGattServer.kt$BleGattServer$Log.d(TAG, "Started peripheral keepalive for $address (interval: ${BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS}ms)")</ID>
-    <ID>MaxLineLength:BleGattServer.kt$BleGattServer$Log.i(TAG, "Peripheral connection established: ${device.address}, MTU=$mtu, identity=$identityHash")</ID>
-    <ID>MaxLineLength:BleGattServer.kt$BleGattServer$Result.failure(SecurityException("Bluetooth permission required. Please grant permission in app settings.", e))</ID>
-    <ID>MaxLineLength:BleGattServer.kt$BleGattServer.&lt;no name provided&gt;$Log.d(TAG, "onCharacteristicWriteRequest: device=${device.address}, char=${characteristic.uuid}, size=${value.size}")</ID>
-    <ID>MaxLineLength:BleOperationQueue.kt$BleOperationQueue$"ERROR_GATT_WRITE_REQUEST_BUSY (201), waiting ${BleConstants.POST_MTU_SETTLE_DELAY_MS}ms and retrying once..."</ID>
-    <ID>MaxLineLength:BleOperationQueue.kt$BleOperationQueue$Log.d(TAG, "writeDescriptor() returned: $errorCode (GATT_SUCCESS=${BluetoothGatt.GATT_SUCCESS})")</ID>
-    <ID>MaxLineLength:BleOperationQueue.kt$BleOperationQueue$val errorMsg = "Failed to queue descriptor write for ${operation.descriptor.uuid} (error: $errorCode)"</ID>
-    <ID>MaxLineLength:BlePermissionManager.kt$BlePermissionManager$appendLine("Note: Location permission is required by Android for BLE scanning, but Columba does not use your location.")</ID>
-    <ID>MaxLineLength:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$every { mockBluetoothAdapter.getRemoteDevice(any&lt;String&gt;()) } throws IllegalArgumentException("Invalid address")</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge$// If weKeepCentral: keep central (our connection to them), close peripheral (their connection to us)</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge$Log.d(TAG, " Existing: $existingAddress (central=${existingPeer.isCentral}, peripheral=${existingPeer.isPeripheral})")</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge$Log.d(TAG, "Identity ready - starting BLE advertising with system name '$systemDeviceName'...")</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge$Log.d(TAG, "MAC comparison: local=$localAddress ($localMacInt), peer=$peerAddress ($peerMacInt), shouldConnect=$shouldConnect")</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge$Log.d(TAG, "Peer $address partially disconnected (central=${peer.isCentral}, peripheral=${peer.isPeripheral})")</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge$Log.i(TAG, "Bluetooth adapter state receiver registered - monitoring ${BluetoothAdapter.ACTION_STATE_CHANGED}")</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge$Log.i(TAG, "Identity received for dual connection $address - will deduplicate (local=$localIdentityHex, peer=$identityHash)")</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge$Log.i(TAG, "Identity sorting (MAC rotation): keeping central at $centralAddr, closing peripheral at $peripheralAddr")</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge$Log.i(TAG, "Identity sorting (MAC rotation): keeping peripheral at $peripheralAddr, closing central to $centralAddr")</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge$Log.i(TAG, "Identity sorting: keeping central, will close peripheral for $address (local=$localIdentityHex &lt; peer=$peerIdentity)")</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge$Log.i(TAG, "Identity sorting: keeping peripheral, will close central to $address (local=$localIdentityHex &gt;= peer=$peerIdentity)")</ID>
-    <ID>MaxLineLength:KotlinBLEBridge.kt$KotlinBLEBridge.&lt;no name provided&gt;$Log.i(TAG, "Bluetooth adapter state changed: ${stateToString(previousState)} -&gt; ${stateToString(state)}")</ID>
-    <ID>NestedBlockDepth:AppDataParser.kt$AppDataParser$private fun tryParseMsgpack(data: ByteArray): String?</ID>
     <ID>NestedBlockDepth:KotlinBLEBridge.kt$KotlinBLEBridge$private suspend fun handleIdentityReceived( address: String, identityHash: String, isCentralConnection: Boolean, )</ID>
     <ID>NestedBlockDepth:KotlinBLEBridge.kt$KotlinBLEBridge$suspend fun send( address: String, data: ByteArray, )</ID>
-    <ID>ReturnCount:AppDataParser.kt$AppDataParser$fun extractPeerName( appData: ByteArray?, destinationHash: String, ): String</ID>
-    <ID>ReturnCount:AppDataParser.kt$AppDataParser$private fun extractValidSubstring(str: String): String?</ID>
-    <ID>ReturnCount:AppDataParser.kt$AppDataParser$private fun isValidDisplayName(str: String): Boolean</ID>
-    <ID>ReturnCount:AppDataParser.kt$AppDataParser$private fun tryParseMsgpack(data: ByteArray): String?</ID>
-    <ID>ReturnCount:AppDataParser.kt$AppDataParser$private fun tryParseUtf8(data: ByteArray): String?</ID>
     <ID>ReturnCount:BleConnectionManager.kt$BleConnectionManager$suspend fun connectToDevice(address: String): Result&lt;Unit&gt;</ID>
     <ID>ReturnCount:KotlinBLEBridge.kt$KotlinBLEBridge$fun shouldConnect(peerAddress: String): Boolean</ID>
     <ID>ReturnCount:KotlinBLEBridge.kt$KotlinBLEBridge$suspend fun connect(address: String)</ID>
     <ID>ReturnCount:KotlinBLEBridge.kt$KotlinBLEBridge$suspend fun start( serviceUuid: String, rxCharUuid: String, txCharUuid: String, identityCharUuid: String, ): Result&lt;Unit&gt;</ID>
-    <ID>ReturnCount:KotlinRNodeBridge.kt$KotlinRNodeBridge$fun connect(deviceName: String, mode: String): Boolean</ID>
-    <ID>ReturnCount:KotlinRNodeBridge.kt$KotlinRNodeBridge$private fun connectBle(deviceName: String, adapter: BluetoothAdapter): Boolean</ID>
     <ID>SwallowedException:BleAdvertiser.kt$BleAdvertiser$e: SecurityException</ID>
     <ID>SwallowedException:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$e: Exception</ID>
     <ID>SwallowedException:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$e: RuntimeException</ID>
@@ -83,8 +43,6 @@
     <ID>UnusedPrivateMember:BleConnectionManager.kt$BleConnectionManager$private fun getIdentityMac(identityHash: String): String?</ID>
     <ID>UnusedPrivateProperty:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$val disconnectOp = queue.enqueue( BleOperationQueue.BleOperation.Disconnect(mockGatt), timeoutMs = 500, )</ID>
     <ID>UnusedPrivateProperty:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$val firstOpResult = try { queue.enqueue( BleOperationQueue.BleOperation.WriteCharacteristic( gatt = mockGatt, characteristic = mockChar, data = byteArrayOf(0x01), writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, ), timeoutMs = 1000, ) fail("Should have thrown exception") } catch (e: RuntimeException) { // Expected "exception_thrown" }</ID>
-    <ID>UnusedPrivateProperty:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$var advertiserStopped = false</ID>
-    <ID>UnusedPrivateProperty:ErrorHandlingIntegrationTest.kt$ErrorHandlingIntegrationTest$var scannerStopped = false</ID>
     <ID>UseCheckOrError:ErrorHandlingUnitTest.kt$ErrorHandlingUnitTest$throw IllegalStateException("Already cleaned")</ID>
   </CurrentIssues>
 </SmellBaseline>

@@ -76,6 +76,9 @@ data class ContactEntity(
     // Propagation node relay status
     val isMyRelay: Boolean = false, // True if this contact is the user's selected propagation node relay
 ) {
+    // Suppressed: Data classes with ByteArray fields require custom equals/hashCode,
+    // and the complexity is inherent to comparing many fields with special ByteArray handling.
+    @Suppress("CyclomaticComplexMethod")
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

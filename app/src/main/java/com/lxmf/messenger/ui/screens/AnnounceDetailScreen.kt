@@ -330,7 +330,7 @@ fun AnnounceDetailScreen(
                 // Display stamp cost for propagation nodes (with flexibility)
                 if (announceNonNull.nodeType == "PROPAGATION_NODE") {
                     announceNonNull.stampCost?.let { cost ->
-                        val flexText = announceNonNull.stampCostFlexibility?.let { " (\u00B1$it)" } ?: ""
+                        val flexText = announceNonNull.stampCostFlexibility?.let { " (\u00B1$it)" }.orEmpty()
                         InfoCard(
                             icon = Icons.Default.Lock,
                             title = "Stamp Cost",

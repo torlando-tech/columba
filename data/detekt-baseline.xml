@@ -4,32 +4,9 @@
   <CurrentIssues>
     <ID>CyclomaticComplexMethod:EnrichedContact.kt$EnrichedContact$override fun equals(other: Any?): Boolean</ID>
     <ID>LongMethod:DatabaseModule.kt$DatabaseModule.&lt;no name provided&gt;$override fun migrate(database: SupportSQLiteDatabase)</ID>
-    <ID>LongParameterList:AnnounceRepository.kt$AnnounceRepository$( destinationHash: String, peerName: String, publicKey: ByteArray, appData: ByteArray?, hops: Int, timestamp: Long, nodeType: String, receivingInterface: String? = null, aspect: String? = null, )</ID>
     <ID>LongParameterList:CustomThemeRepository.kt$CustomThemeRepository$( id: Long, name: String, description: String, seedPrimary: Int, seedSecondary: Int, seedTertiary: Int, lightColors: ThemeColorSet, darkColors: ThemeColorSet, baseTheme: String? = null, )</ID>
     <ID>LongParameterList:CustomThemeRepository.kt$CustomThemeRepository$( name: String, description: String, seedPrimary: Int, seedSecondary: Int, seedTertiary: Int, lightColors: ThemeColorSet, darkColors: ThemeColorSet, baseTheme: String? = null, )</ID>
-    <ID>MaxLineLength:AnnounceDao.kt$AnnounceDao$@Query("UPDATE announces SET isFavorite = :isFavorite, favoritedTimestamp = :timestamp WHERE destinationHash = :destinationHash")</ID>
-    <ID>MaxLineLength:ConversationRepository.kt$ConversationRepository$android.util.Log.d("ConversationRepository", "Returning ${identitiesWithKeys.size} peer identities for restoration")</ID>
-    <ID>MaxLineLength:ConversationRepository.kt$ConversationRepository$android.util.Log.d("ConversationRepository", "Stored public key for peer: $peerHash (${publicKey.size} bytes)")</ID>
-    <ID>MaxLineLength:ConversationRepository.kt$ConversationRepository$android.util.Log.d("ConversationRepository", "Updated public key for existing conversation: $peerHash")</ID>
-    <ID>MaxLineLength:ConversationRepository.kt$ConversationRepository$android.util.Log.w("ConversationRepository", "Created new conversation without public key: $peerHash")</ID>
-    <ID>MaxLineLength:ConversationRepository.kt$ConversationRepository$peerPublicKey = peerPublicKey ?: existingConversation.peerPublicKey</ID>
-    <ID>MaxLineLength:CustomThemeDao.kt$CustomThemeDao$@Query("UPDATE custom_themes SET name = :name, description = :description, modifiedTimestamp = :modifiedTimestamp WHERE id = :id")</ID>
     <ID>MaxLineLength:DatabaseModule.kt$DatabaseModule$.</ID>
-    <ID>MaxLineLength:DatabaseModule.kt$DatabaseModule.&lt;no name provided&gt;$database.execSQL("CREATE INDEX IF NOT EXISTS index_conversations_identityHash ON conversations(identityHash)")</ID>
-    <ID>MaxLineLength:DatabaseModule.kt$DatabaseModule.&lt;no name provided&gt;$database.execSQL("CREATE INDEX IF NOT EXISTS index_messages_conversationHash ON messages(conversationHash)")</ID>
-    <ID>MaxLineLength:DatabaseModule.kt$DatabaseModule.&lt;no name provided&gt;$database.execSQL("CREATE INDEX IF NOT EXISTS index_peer_identities_identityHash ON peer_identities(identityHash)")</ID>
-    <ID>MaxLineLength:IdentityRepository.kt$IdentityRepository$Log.d(TAG, "createIdentity: Creating entity for '$displayName' with hash ${identityHash.take(8)}...")</ID>
-    <ID>MaxLineLength:IdentityRepository.kt$IdentityRepository$Log.d(TAG, "updateDisplayName: Updating display name for ${identityHash.take(8)}... to '$displayName'")</ID>
-    <ID>MaxLineLength:IdentityRepository.kt$IdentityRepository$android.util.Log.d("IdentityRepository", "Checking for default_identity at: ${defaultIdentityFile.absolutePath}")</ID>
-    <ID>MaxLineLength:IdentityRepository.kt$IdentityRepository$android.util.Log.i("IdentityRepository", "Found default_identity file at: ${defaultIdentityFile.absolutePath}")</ID>
-    <ID>MaxLineLength:IdentityRepository.kt$IdentityRepository$android.util.Log.i("IdentityRepository", "No identities found - this is a fresh install, will add default identity")</ID>
-    <ID>MaxLineLength:IdentityRepository.kt$IdentityRepository$android.util.Log.i("IdentityRepository", "Removing migration_placeholder - will wait for identity creation")</ID>
-    <ID>MaxLineLength:IdentityRepository.kt$IdentityRepository$android.util.Log.w("IdentityRepository", "Identity hashes not provided - will retry on next app start")</ID>
-    <ID>MaxLineLength:IdentityRepository.kt$IdentityRepository$android.util.Log.w("IdentityRepository", "No default_identity file found at ${defaultIdentityFile.absolutePath}")</ID>
-    <ID>MaxLineLength:IdentityRepository.kt$IdentityRepository$execSQL("UPDATE announces SET identityHash = ? WHERE identityHash = 'migration_placeholder'", arrayOf(identityHash))</ID>
-    <ID>MaxLineLength:IdentityRepository.kt$IdentityRepository$execSQL("UPDATE contacts SET identityHash = ? WHERE identityHash = 'migration_placeholder'", arrayOf(identityHash))</ID>
-    <ID>MaxLineLength:IdentityRepository.kt$IdentityRepository$execSQL("UPDATE messages SET identityHash = ? WHERE identityHash = 'migration_placeholder'", arrayOf(identityHash))</ID>
-    <ID>MaxLineLength:LocalIdentityDao.kt$LocalIdentityDao$@Query("UPDATE local_identities SET isActive = 1, lastUsedTimestamp = :timestamp WHERE identityHash = :identityHash")</ID>
     <ID>SwallowedException:EnrichedContact.kt$EnrichedContact$e: Exception</ID>
     <ID>TooManyFunctions:AnnounceRepository.kt$AnnounceRepository</ID>
     <ID>TooManyFunctions:ContactRepository.kt$ContactRepository</ID>

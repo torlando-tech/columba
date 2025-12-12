@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
  * **Thread Safety**: All public methods are thread-safe and can be called from
  * Python threads via Chaquopy.
  */
+@Suppress("InjectDispatcher") // Bridge class doesn't use DI - dispatcher used for async callbacks
 class KotlinReticulumBridge private constructor() {
     companion object {
         private const val TAG = "Columba:Kotlin:ReticulumBridge"

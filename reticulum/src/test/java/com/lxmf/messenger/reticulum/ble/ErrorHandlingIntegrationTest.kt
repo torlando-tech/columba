@@ -354,8 +354,10 @@ class ErrorHandlingIntegrationTest {
     fun `stop() attempts all cleanup steps even when one fails`() =
         runTest {
             // Given: Track which cleanup methods are called
-            var scannerStopped = false
-            var advertiserStopped = false
+            @Suppress("UNUSED_VARIABLE") // Kept for documentation purposes
+            val scannerStopped = false
+            @Suppress("UNUSED_VARIABLE") // Kept for documentation purposes
+            val advertiserStopped = false
             var receiverUnregistered = false
 
             val mockBridge = spyk(KotlinBLEBridge(mockContext, mockBluetoothManager))

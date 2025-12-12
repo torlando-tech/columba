@@ -56,7 +56,6 @@ fun MessageDeliveryCard(
     onMethodChange: (String) -> Unit,
     onTryPropagationToggle: (Boolean) -> Unit,
     onAutoSelectToggle: (Boolean) -> Unit,
-    onSelectRelay: () -> Unit,
 ) {
     var showMethodDropdown by remember { mutableStateOf(false) }
 

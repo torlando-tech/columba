@@ -472,6 +472,8 @@ private fun BluetoothDeviceCard(
         onClick = {
             if (device.type == BluetoothType.UNKNOWN) {
                 showTypeSelector = !showTypeSelector
+            } else if (!device.isPaired) {
+                onPair()
             } else {
                 onSelect()
             }

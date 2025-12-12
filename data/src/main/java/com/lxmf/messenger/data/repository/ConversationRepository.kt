@@ -398,6 +398,14 @@ class ConversationRepository
             return messageDao.getMessageById(messageId, activeIdentity.identityHash)
         }
 
+        /**
+         * Observe a message by ID for real-time updates (e.g., status changes from pending → delivered).
+         * Returns a Flow that emits whenever the message changes in the database.
+         */
+        fun observeMessageById(messageId: String): Flow<MessageEntity?> {
+            return messageDao.observeMessageById(messageId)
+        }
+
         suspend fun updateMessageStatus(
             messageId: String,
             status: String,

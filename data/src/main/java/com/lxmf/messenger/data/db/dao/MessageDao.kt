@@ -86,6 +86,13 @@ interface MessageDao {
         identityHash: String,
     ): MessageEntity?
 
+    /**
+     * Observe a message by ID for real-time updates (e.g., status changes).
+     * Returns a Flow that emits whenever the message changes in the database.
+     */
+    @Query("SELECT * FROM messages WHERE id = :messageId LIMIT 1")
+    fun observeMessageById(messageId: String): Flow<MessageEntity?>
+
     @Query("UPDATE messages SET status = :status WHERE id = :messageId AND identityHash = :identityHash")
     suspend fun updateMessageStatus(
         messageId: String,

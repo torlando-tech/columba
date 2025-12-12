@@ -10,10 +10,12 @@ import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
+import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -45,6 +47,7 @@ class MessagingViewModelTest {
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var activeConversationManager: ActiveConversationManager
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var viewModel: MessagingViewModel
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
@@ -65,6 +68,11 @@ class MessagingViewModelTest {
         announceRepository = mockk()
         activeConversationManager = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
+        propagationNodeManager = mockk(relaxed = true)
+
+        // Mock propagationNodeManager flows
+        every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
+        every { propagationNodeManager.manualSyncResult } returns MutableSharedFlow()
 
         // Mock default behaviors
         coEvery { reticulumProtocol.getLxmfIdentity() } returns Result.success(testIdentity)
@@ -86,7 +94,7 @@ class MessagingViewModelTest {
         // Default: no announce info
         every { announceRepository.getAnnounceFlow(any()) } returns flowOf(null)
 
-        viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, activeConversationManager, settingsRepository)
+        viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, activeConversationManager, settingsRepository, propagationNodeManager)
     }
 
     @After
@@ -346,9 +354,19 @@ class MessagingViewModelTest {
 
             val failingActiveConversationManager: ActiveConversationManager = mockk(relaxed = true)
             val failingSettingsRepository: SettingsRepository = mockk(relaxed = true)
+            val failingPropagationNodeManager: PropagationNodeManager = mockk(relaxed = true)
+            every { failingPropagationNodeManager.isSyncing } returns MutableStateFlow(false)
+            every { failingPropagationNodeManager.manualSyncResult } returns MutableSharedFlow()
 
             val viewModelWithoutIdentity =
-                MessagingViewModel(failingProtocol, failingRepository, failingAnnounceRepository, failingActiveConversationManager, failingSettingsRepository)
+                MessagingViewModel(
+                    failingProtocol,
+                    failingRepository,
+                    failingAnnounceRepository,
+                    failingActiveConversationManager,
+                    failingSettingsRepository,
+                    failingPropagationNodeManager,
+                )
 
             // Attempt to send message
             viewModelWithoutIdentity.sendMessage(testPeerHash, "Test")

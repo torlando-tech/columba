@@ -1,18 +1,18 @@
 package com.lxmf.messenger.service
 
 import android.util.Log
+import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.data.db.entity.ContactEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,7 +30,9 @@ import javax.inject.Singleton
  */
 sealed class SyncResult {
     data object Success : SyncResult()
+
     data class Error(val message: String) : SyncResult()
+
     data object NoRelay : SyncResult()
 }
 
@@ -76,64 +77,37 @@ class PropagationNodeManager
          * Build RelayInfo from a contact entity and auto-select setting.
          * Enriches with announce data if available.
          */
-        private suspend fun buildRelayInfo(contact: ContactEntity?, isAutoSelect: Boolean): RelayInfo? {
+        private suspend fun buildRelayInfo(
+            contact: ContactEntity?,
+            isAutoSelect: Boolean,
+        ): RelayInfo? {
             if (contact == null) return null
             val announce = announceRepository.getAnnounce(contact.destinationHash)
             return RelayInfo(
                 destinationHash = contact.destinationHash,
-                displayName = announce?.peerName
-                    ?: contact.customNickname
-                    ?: contact.destinationHash.take(12),
+                displayName =
+                    announce?.peerName
+                        ?: contact.customNickname
+                        ?: contact.destinationHash.take(12),
                 hops = announce?.hops ?: -1, // -1 = unknown
                 isAutoSelected = isAutoSelect,
-                lastSeenTimestamp = announce?.lastSeenTimestamp
-                    ?: contact.lastInteractionTimestamp,
+                lastSeenTimestamp =
+                    announce?.lastSeenTimestamp
+                        ?: contact.lastInteractionTimestamp,
             )
-        }
-
-        /**
-         * Get the initial relay info synchronously for StateFlow initialization.
-         * Falls back to getAnyRelay() if no active identity is available yet.
-         */
-        private suspend fun getInitialRelayInfo(): RelayInfo? {
-            Log.d(TAG, "getInitialRelayInfo: Starting")
-
-            // First try via active identity (normal path)
-            var contact = contactRepository.getMyRelay()
-            Log.d(TAG, "getInitialRelayInfo: getMyRelay returned ${contact?.destinationHash}")
-
-            // Fallback: if no active identity yet, get any relay
-            if (contact == null) {
-                contact = contactRepository.getAnyRelay()
-                Log.d(TAG, "getInitialRelayInfo: getAnyRelay returned ${contact?.destinationHash}")
-            }
-
-            if (contact == null) {
-                Log.d(TAG, "getInitialRelayInfo: No relay found, returning null")
-                return null
-            }
-
-            val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
-            val relayInfo = buildRelayInfo(contact, isAutoSelect)
-            Log.d(TAG, "getInitialRelayInfo: Returning relay ${relayInfo?.displayName}")
-            return relayInfo
         }
 
         /**
          * Current relay derived from database (single source of truth).
          * Automatically stays in sync with database changes.
-         * Initial value is fetched synchronously to avoid UI showing "no relay" briefly.
+         * Initial value is null - the Flow will populate the correct value almost immediately.
          */
         val currentRelay: StateFlow<RelayInfo?> =
             contactRepository.getMyRelayFlow()
                 .combine(settingsRepository.autoSelectPropagationNodeFlow) { contact, isAutoSelect ->
                     buildRelayInfo(contact, isAutoSelect)
                 }
-                .stateIn(
-                    scope,
-                    SharingStarted.Eagerly,
-                    runBlocking { getInitialRelayInfo() }, // Synchronous initial value
-                )
+                .stateIn(scope, SharingStarted.Eagerly, null)
 
         private val _isSyncing = MutableStateFlow(false)
         val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
@@ -165,22 +139,26 @@ class PropagationNodeManager
 
             // Observe relay changes from database and sync to Python layer
             // This replaces the old restoreLastRelay() approach - now we're reactive
-            relayObserverJob = scope.launch {
-                observeRelayChanges()
-            }
+            relayObserverJob =
+                scope.launch {
+                    observeRelayChanges()
+                }
 
             // Start observing propagation node announces for auto-selection
-            announceObserverJob = scope.launch {
-                observePropagationNodeAnnounces()
-            }
+            announceObserverJob =
+                scope.launch {
+                    observePropagationNodeAnnounces()
+                }
 
             // Observe settings changes to restart sync with new interval
-            settingsObserverJob = scope.launch {
-                settingsRepository.retrievalIntervalSecondsFlow.collect { _ ->
-                    // Restart periodic sync when interval changes
-                    restartPeriodicSync()
+            settingsObserverJob =
+                scope.launch {
+                    settingsRepository.retrievalIntervalSecondsFlow.collect { _ ->
+                        // Restart periodic sync when interval changes
+                        Log.d(TAG, "Restarting periodic sync with new settings")
+                        startPeriodicSync()
+                    }
                 }
-            }
 
             // Start periodic sync with propagation node
             startPeriodicSync()
@@ -248,12 +226,13 @@ class PropagationNodeManager
             val current = currentRelay.value
 
             // Auto-selection logic (from Sideband)
-            val shouldSwitch = when {
-                current == null -> true // No relay yet
-                hops < current.hops || current.hops == -1 -> true // New node is closer (or current hops unknown)
-                hops == current.hops && destinationHash == current.destinationHash -> true // Same node
-                else -> false // Current node is closer, keep it
-            }
+            val shouldSwitch =
+                when {
+                    current == null -> true // No relay yet
+                    hops < current.hops || current.hops == -1 -> true // New node is closer (or current hops unknown)
+                    hops == current.hops && destinationHash == current.destinationHash -> true // Same node
+                    else -> false // Current node is closer, keep it
+                }
 
             if (shouldSwitch) {
                 Log.i(TAG, "Switching to relay $displayName ($destinationHash) at $hops hops")
@@ -282,7 +261,10 @@ class PropagationNodeManager
          * Note: This method only updates settings and database. The currentRelay Flow
          * automatically picks up changes, and observeRelayChanges() syncs to Python layer.
          */
-        suspend fun setManualRelay(destinationHash: String, displayName: String) {
+        suspend fun setManualRelay(
+            destinationHash: String,
+            displayName: String,
+        ) {
             Log.i(TAG, "User manually selected relay: $displayName")
 
             // Disable auto-select and save manual selection
@@ -409,35 +391,28 @@ class PropagationNodeManager
          */
         private fun startPeriodicSync() {
             syncJob?.cancel()
-            syncJob = scope.launch {
-                // Initial delay to let things settle
-                kotlinx.coroutines.delay(5_000)
+            syncJob =
+                scope.launch {
+                    // Initial delay to let things settle
+                    kotlinx.coroutines.delay(5_000)
 
-                while (true) {
-                    // Check if auto-retrieve is enabled
-                    val autoRetrieveEnabled = settingsRepository.getAutoRetrieveEnabled()
-                    if (autoRetrieveEnabled) {
-                        try {
-                            syncWithPropagationNode()
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error during propagation sync", e)
+                    while (true) {
+                        // Check if auto-retrieve is enabled
+                        val autoRetrieveEnabled = settingsRepository.getAutoRetrieveEnabled()
+                        if (autoRetrieveEnabled) {
+                            try {
+                                syncWithPropagationNode()
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error during propagation sync", e)
+                            }
                         }
+
+                        // Get configurable interval from settings
+                        val intervalSeconds = settingsRepository.getRetrievalIntervalSeconds()
+                        val intervalMs = intervalSeconds * 1000L
+                        kotlinx.coroutines.delay(intervalMs)
                     }
-
-                    // Get configurable interval from settings
-                    val intervalSeconds = settingsRepository.getRetrievalIntervalSeconds()
-                    val intervalMs = intervalSeconds * 1000L
-                    kotlinx.coroutines.delay(intervalMs)
                 }
-            }
-        }
-
-        /**
-         * Restart periodic sync (called when settings change).
-         */
-        private fun restartPeriodicSync() {
-            Log.d(TAG, "Restarting periodic sync with new settings")
-            startPeriodicSync()
         }
 
         /**

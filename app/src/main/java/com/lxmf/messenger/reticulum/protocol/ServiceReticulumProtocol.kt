@@ -1389,6 +1389,52 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun requestMessagesFromPropagationNode(
+        identityPrivateKey: ByteArray?,
+        maxMessages: Int,
+    ): Result<PropagationState> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.requestMessagesFromPropagationNode(identityPrivateKey, maxMessages)
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            val state = result.optInt("state", 0)
+            PropagationState(
+                state = state,
+                stateName = result.optString("state_name", "unknown"),
+                progress = result.optDouble("progress", 0.0).toFloat(),
+                messagesReceived = result.optInt("messages_received", 0),
+            )
+        }
+    }
+
+    override suspend fun getPropagationState(): Result<PropagationState> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.getPropagationState()
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            PropagationState(
+                state = result.optInt("state", 0),
+                stateName = result.optString("state_name", "unknown"),
+                progress = result.optDouble("progress", 0.0).toFloat(),
+                messagesReceived = result.optInt("messages_received", 0),
+            )
+        }
+    }
+
     override suspend fun sendLxmfMessageWithMethod(
         destinationHash: ByteArray,
         content: String,
@@ -1403,21 +1449,23 @@ class ServiceReticulumProtocol(
 
             val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
 
-            val methodString = when (deliveryMethod) {
-                DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
-                DeliveryMethod.DIRECT -> "direct"
-                DeliveryMethod.PROPAGATED -> "propagated"
-            }
+            val methodString =
+                when (deliveryMethod) {
+                    DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
+                    DeliveryMethod.DIRECT -> "direct"
+                    DeliveryMethod.PROPAGATED -> "propagated"
+                }
 
-            val resultJson = service.sendLxmfMessageWithMethod(
-                destinationHash,
-                content,
-                privateKey,
-                methodString,
-                tryPropagationOnFail,
-                imageData,
-                imageFormat,
-            )
+            val resultJson =
+                service.sendLxmfMessageWithMethod(
+                    destinationHash,
+                    content,
+                    privateKey,
+                    methodString,
+                    tryPropagationOnFail,
+                    imageData,
+                    imageFormat,
+                )
             val result = JSONObject(resultJson)
 
             if (!result.optBoolean("success", false)) {

@@ -290,6 +290,19 @@ class MockReticulumProtocol : ReticulumProtocol {
         return Result.success(null)
     }
 
+    override suspend fun requestMessagesFromPropagationNode(
+        identityPrivateKey: ByteArray?,
+        maxMessages: Int,
+    ): Result<PropagationState> {
+        // Mock implementation - return idle state
+        return Result.success(PropagationState.IDLE)
+    }
+
+    override suspend fun getPropagationState(): Result<PropagationState> {
+        // Mock implementation - return idle state
+        return Result.success(PropagationState.IDLE)
+    }
+
     override suspend fun sendLxmfMessageWithMethod(
         destinationHash: ByteArray,
         content: String,

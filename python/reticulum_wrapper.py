@@ -1058,6 +1058,8 @@ class ReticulumWrapper:
             )
             # Store display name for use in announces
             self.display_name = display_name
+            # Store default identity for use in propagation node requests
+            self.default_identity = default_identity
             log_info("ReticulumWrapper", "initialize", f"Local LXMF destination: {self.local_lxmf_destination.hexhash}")
             log_debug("ReticulumWrapper", "initialize", f"(Identity hash: {default_identity.hash.hex()}, Dest hash: {self.local_lxmf_destination.hexhash})")
 
@@ -2157,6 +2159,117 @@ class ReticulumWrapper:
             }
         except Exception as e:
             log_error("ReticulumWrapper", "get_outbound_propagation_node", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def request_messages_from_propagation_node(self, identity_private_key: bytes = None, max_messages: int = 256) -> Dict:
+        """
+        Request/sync messages from the configured propagation node.
+
+        This is the key method for RECEIVING messages that were sent via propagation.
+        When messages are sent to a propagation node, the recipient must explicitly
+        request them. Call this method periodically (e.g., every 30 seconds) to
+        retrieve waiting messages.
+
+        Args:
+            identity_private_key: Optional private key bytes to use for requesting messages.
+                                  If None, uses the default identity.
+            max_messages: Maximum number of messages to retrieve (default 256)
+
+        Returns:
+            Dict with 'success' or 'error', and 'state' indicating the transfer state
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Check if propagation node is configured
+            if not self.active_propagation_node:
+                return {
+                    "success": False,
+                    "error": "No propagation node configured",
+                    "errorCode": "NO_PROPAGATION_NODE"
+                }
+
+            # Get or create identity for requesting messages
+            if identity_private_key is not None:
+                # Convert jarray to bytes if needed
+                if hasattr(identity_private_key, '__iter__') and not isinstance(identity_private_key, (bytes, bytearray)):
+                    identity_private_key = bytes(identity_private_key)
+
+                # Load identity from private key
+                identity = RNS.Identity.from_bytes(identity_private_key)
+                log_info("ReticulumWrapper", "request_messages_from_propagation_node",
+                        f"Using provided identity: {identity.hash.hex()[:16]}...")
+            else:
+                # Use default identity
+                identity = self.default_identity
+                log_info("ReticulumWrapper", "request_messages_from_propagation_node",
+                        f"Using default identity: {identity.hash.hex()[:16]}...")
+
+            log_info("ReticulumWrapper", "request_messages_from_propagation_node",
+                    f"📡 Requesting up to {max_messages} messages from propagation node {self.active_propagation_node.hex()[:16]}...")
+
+            # Request messages from the propagation node
+            self.router.request_messages_from_propagation_node(identity, max_messages=max_messages)
+
+            return {
+                "success": True,
+                "state": self.router.propagation_transfer_state
+            }
+        except Exception as e:
+            log_error("ReticulumWrapper", "request_messages_from_propagation_node", f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    def get_propagation_state(self) -> Dict:
+        """
+        Get the current propagation sync state and progress.
+
+        State values:
+            0 (PR_IDLE): Inactive
+            1 (PR_PATH_REQUESTED): Path discovery in progress
+            2 (PR_LINK_ESTABLISHING): Connection pending
+            3 (PR_LINK_ESTABLISHED): Connected and ready
+            4 (PR_REQUEST_SENT): Message list requested
+            5 (PR_RECEIVING): Messages downloading
+            7 (PR_COMPLETE): Transfer finished
+
+        Returns:
+            Dict with 'success', 'state', 'progress', 'messages_received' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            state = self.router.propagation_transfer_state
+            progress = self.router.propagation_transfer_progress
+
+            # propagation_transfer_last_result contains the number of messages received
+            # in the last completed transfer
+            last_result = getattr(self.router, 'propagation_transfer_last_result', None) or 0
+
+            # Map state to human-readable string
+            state_names = {
+                0: "idle",
+                1: "path_requested",
+                2: "link_establishing",
+                3: "link_established",
+                4: "request_sent",
+                5: "receiving",
+                7: "complete"
+            }
+            state_name = state_names.get(state, f"unknown_{state}")
+
+            return {
+                "success": True,
+                "state": state,
+                "state_name": state_name,
+                "progress": progress,
+                "messages_received": last_result
+            }
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_propagation_state", f"Error: {e}")
             return {"success": False, "error": str(e)}
 
     def send_lxmf_message_with_method(self, dest_hash: bytes, content: str, source_identity_private_key: bytes,

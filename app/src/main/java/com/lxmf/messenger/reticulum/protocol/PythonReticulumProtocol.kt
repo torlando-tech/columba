@@ -1138,6 +1138,70 @@ class PythonReticulumProtocol(
         }
     }
 
+    override suspend fun requestMessagesFromPropagationNode(
+        identityPrivateKey: ByteArray?,
+        maxMessages: Int,
+    ): Result<PropagationState> {
+        return runCatching {
+            Log.d(TAG, "Requesting messages from propagation node (maxMessages=$maxMessages)")
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result =
+                currentWrapper.callAttr(
+                    "request_messages_from_propagation_node",
+                    identityPrivateKey,
+                    maxMessages,
+                )
+
+            val success = result.getDictValue("success")?.toBoolean() ?: false
+            if (!success) {
+                val error = result.getDictValue("error")?.toString() ?: "Unknown error"
+                throw RuntimeException(error)
+            }
+
+            val state = result.getDictValue("state")?.toInt() ?: 0
+            PropagationState(
+                state = state,
+                stateName = getStateNameForCode(state),
+                progress = 0f,
+                messagesReceived = 0,
+            )
+        }
+    }
+
+    override suspend fun getPropagationState(): Result<PropagationState> {
+        return runCatching {
+            Log.d(TAG, "Getting propagation state")
+            val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
+            val result = currentWrapper.callAttr("get_propagation_state")
+
+            val success = result.getDictValue("success")?.toBoolean() ?: false
+            if (!success) {
+                val error = result.getDictValue("error")?.toString() ?: "Unknown error"
+                throw RuntimeException(error)
+            }
+
+            PropagationState(
+                state = result.getDictValue("state")?.toInt() ?: 0,
+                stateName = result.getDictValue("state_name")?.toString() ?: "unknown",
+                progress = result.getDictValue("progress")?.toFloat() ?: 0f,
+                messagesReceived = result.getDictValue("messages_received")?.toInt() ?: 0,
+            )
+        }
+    }
+
+    private fun getStateNameForCode(state: Int): String {
+        return when (state) {
+            0 -> "idle"
+            1 -> "path_requested"
+            2 -> "link_establishing"
+            3 -> "link_established"
+            4 -> "request_sent"
+            5 -> "receiving"
+            7 -> "complete"
+            else -> "unknown_$state"
+        }
+    }
+
     override suspend fun sendLxmfMessageWithMethod(
         destinationHash: ByteArray,
         content: String,
@@ -1151,22 +1215,24 @@ class PythonReticulumProtocol(
             Log.d(TAG, "Sending LXMF message with method: $deliveryMethod (tryPropOnFail=$tryPropagationOnFail)")
             val currentWrapper = checkNotNull(wrapper) { "Wrapper not initialized" }
 
-            val methodString = when (deliveryMethod) {
-                DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
-                DeliveryMethod.DIRECT -> "direct"
-                DeliveryMethod.PROPAGATED -> "propagated"
-            }
+            val methodString =
+                when (deliveryMethod) {
+                    DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
+                    DeliveryMethod.DIRECT -> "direct"
+                    DeliveryMethod.PROPAGATED -> "propagated"
+                }
 
-            val result = currentWrapper.callAttr(
-                "send_lxmf_message_with_method",
-                destinationHash,
-                content,
-                sourceIdentity.privateKey,
-                methodString,
-                tryPropagationOnFail,
-                imageData,
-                imageFormat,
-            )
+            val result =
+                currentWrapper.callAttr(
+                    "send_lxmf_message_with_method",
+                    destinationHash,
+                    content,
+                    sourceIdentity.privateKey,
+                    methodString,
+                    tryPropagationOnFail,
+                    imageData,
+                    imageFormat,
+                )
 
             val success = result.getDictValue("success")?.toBoolean() ?: false
             if (!success) {
@@ -1174,12 +1240,14 @@ class PythonReticulumProtocol(
                 error("LXMF send failed: $errorMsg")
             }
 
-            val messageHash = checkNotNull(
-                result.getDictValue("message_hash")?.toJava(ByteArray::class.java),
-            ) { "No message hash in response" }
+            val messageHash =
+                checkNotNull(
+                    result.getDictValue("message_hash")?.toJava(ByteArray::class.java),
+                ) { "No message hash in response" }
             val timestamp = result.getDictValue("timestamp")?.toLong() ?: System.currentTimeMillis()
-            val destHashResult = result.getDictValue("destination_hash")?.toJava(ByteArray::class.java)
-                ?: destinationHash
+            val destHashResult =
+                result.getDictValue("destination_hash")?.toJava(ByteArray::class.java)
+                    ?: destinationHash
 
             MessageReceipt(
                 messageHash = messageHash,

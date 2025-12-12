@@ -356,6 +356,7 @@ class ErrorHandlingIntegrationTest {
             // Given: Track which cleanup methods are called
             @Suppress("UNUSED_VARIABLE") // Kept for documentation purposes
             val scannerStopped = false
+
             @Suppress("UNUSED_VARIABLE") // Kept for documentation purposes
             val advertiserStopped = false
             var receiverUnregistered = false

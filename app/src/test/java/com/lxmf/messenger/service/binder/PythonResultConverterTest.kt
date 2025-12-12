@@ -26,7 +26,6 @@ import org.junit.Test
  * we test using a testable interface abstraction.
  */
 class PythonResultConverterTest {
-
     @Before
     fun setup() {
         mockkStatic(Base64::class)
@@ -48,15 +47,16 @@ class PythonResultConverterTest {
         val destHashBytes = byteArrayOf(0xf3.toByte(), 0xd6.toByte(), 0x6c, 0xe5.toByte())
         val timestamp = 1765560315794L
 
-        val dictAccessor = FakeDictAccessor(
-            mapOf(
-                "success" to true,
-                "message_hash" to messageHashBytes,
-                "timestamp" to timestamp,
-                "delivery_method" to "opportunistic",
-                "destination_hash" to destHashBytes,
-            ),
-        )
+        val dictAccessor =
+            FakeDictAccessor(
+                mapOf(
+                    "success" to true,
+                    "message_hash" to messageHashBytes,
+                    "timestamp" to timestamp,
+                    "delivery_method" to "opportunistic",
+                    "destination_hash" to destHashBytes,
+                ),
+            )
 
         // When: Converting to JSON
         val json = PythonResultConverter.convertSendMessageResult(dictAccessor)
@@ -88,12 +88,13 @@ class PythonResultConverterTest {
     @Test
     fun `convertSendMessageResult produces valid JSON for failed result`() {
         // Given: A simulated Python dict result with error
-        val dictAccessor = FakeDictAccessor(
-            mapOf(
-                "success" to false,
-                "error" to "Test error message",
-            ),
-        )
+        val dictAccessor =
+            FakeDictAccessor(
+                mapOf(
+                    "success" to false,
+                    "error" to "Test error message",
+                ),
+            )
 
         // When: Converting to JSON
         val json = PythonResultConverter.convertSendMessageResult(dictAccessor)
@@ -119,14 +120,15 @@ class PythonResultConverterTest {
     @Test
     fun `convertSendMessageResult handles missing optional fields`() {
         // Given: A result without destination_hash
-        val dictAccessor = FakeDictAccessor(
-            mapOf(
-                "success" to true,
-                "message_hash" to byteArrayOf(0x01, 0x02),
-                "timestamp" to 12345L,
-                "delivery_method" to "direct",
-            ),
-        )
+        val dictAccessor =
+            FakeDictAccessor(
+                mapOf(
+                    "success" to true,
+                    "message_hash" to byteArrayOf(0x01, 0x02),
+                    "timestamp" to 12345L,
+                    "delivery_method" to "direct",
+                ),
+            )
 
         // When: Converting to JSON
         val json = PythonResultConverter.convertSendMessageResult(dictAccessor)
@@ -143,8 +145,11 @@ class PythonResultConverterTest {
      */
     class FakeDictAccessor(private val values: Map<String, Any?>) : PythonResultConverter.DictAccessor {
         override fun getBoolean(key: String): Boolean? = values[key] as? Boolean
+
         override fun getLong(key: String): Long? = (values[key] as? Number)?.toLong()
+
         override fun getString(key: String): String? = values[key] as? String
+
         override fun getByteArray(key: String): ByteArray? = values[key] as? ByteArray
     }
 }

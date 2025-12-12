@@ -12,14 +12,14 @@ import org.junit.Test
  * such as AutoInterface with a port conflict.
  */
 class FailedInterfaceTest {
-
     @Test
     fun `FailedInterface stores name and error correctly`() {
-        val failed = FailedInterface(
-            name = "AutoInterface",
-            error = "Port 29716 already in use",
-            recoverable = true,
-        )
+        val failed =
+            FailedInterface(
+                name = "AutoInterface",
+                error = "Port 29716 already in use",
+                recoverable = true,
+            )
 
         assertEquals("AutoInterface", failed.name)
         assertEquals("Port 29716 already in use", failed.error)
@@ -28,42 +28,47 @@ class FailedInterfaceTest {
 
     @Test
     fun `FailedInterface defaults recoverable to true`() {
-        val failed = FailedInterface(
-            name = "AutoInterface",
-            error = "Some error",
-        )
+        val failed =
+            FailedInterface(
+                name = "AutoInterface",
+                error = "Some error",
+            )
 
         assertTrue(failed.recoverable)
     }
 
     @Test
     fun `FailedInterface can be non-recoverable`() {
-        val failed = FailedInterface(
-            name = "CriticalInterface",
-            error = "Hardware failure",
-            recoverable = false,
-        )
+        val failed =
+            FailedInterface(
+                name = "CriticalInterface",
+                error = "Hardware failure",
+                recoverable = false,
+            )
 
         assertFalse(failed.recoverable)
     }
 
     @Test
     fun `FailedInterface equality works correctly`() {
-        val failed1 = FailedInterface(
-            name = "AutoInterface",
-            error = "Port conflict",
-            recoverable = true,
-        )
-        val failed2 = FailedInterface(
-            name = "AutoInterface",
-            error = "Port conflict",
-            recoverable = true,
-        )
-        val failed3 = FailedInterface(
-            name = "AutoInterface",
-            error = "Different error",
-            recoverable = true,
-        )
+        val failed1 =
+            FailedInterface(
+                name = "AutoInterface",
+                error = "Port conflict",
+                recoverable = true,
+            )
+        val failed2 =
+            FailedInterface(
+                name = "AutoInterface",
+                error = "Port conflict",
+                recoverable = true,
+            )
+        val failed3 =
+            FailedInterface(
+                name = "AutoInterface",
+                error = "Different error",
+                recoverable = true,
+            )
 
         assertEquals(failed1, failed2)
         assertFalse(failed1 == failed3)
@@ -72,11 +77,12 @@ class FailedInterfaceTest {
     @Test
     fun `typical AutoInterface port conflict scenario`() {
         // This is the actual use case: AutoInterface fails due to Sideband
-        val failed = FailedInterface(
-            name = "AutoInterface",
-            error = "Port 29716 already in use (another Reticulum app may be running)",
-            recoverable = true,
-        )
+        val failed =
+            FailedInterface(
+                name = "AutoInterface",
+                error = "Port 29716 already in use (another Reticulum app may be running)",
+                recoverable = true,
+            )
 
         assertEquals("AutoInterface", failed.name)
         assertTrue(failed.error.contains("Port 29716"))

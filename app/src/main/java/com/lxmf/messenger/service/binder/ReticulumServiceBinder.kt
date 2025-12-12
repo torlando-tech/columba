@@ -529,6 +529,38 @@ class ReticulumServiceBinder(
         }
     }
 
+    override fun requestMessagesFromPropagationNode(
+        identityPrivateKey: ByteArray?,
+        maxMessages: Int,
+    ): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                val result =
+                    wrapper.callAttr(
+                        "request_messages_from_propagation_node",
+                        identityPrivateKey,
+                        maxMessages,
+                    )
+                result?.toString() ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error requesting messages from propagation node", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun getPropagationState(): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("get_propagation_state")
+                result?.toString() ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting propagation state", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
     override fun sendLxmfMessageWithMethod(
         destHash: ByteArray,
         content: String,
@@ -540,16 +572,17 @@ class ReticulumServiceBinder(
     ): String {
         return try {
             wrapperManager.withWrapper { wrapper ->
-                val result = wrapper.callAttr(
-                    "send_lxmf_message_with_method",
-                    destHash,
-                    content,
-                    sourceIdentityPrivateKey,
-                    deliveryMethod,
-                    tryPropagationOnFail,
-                    imageData,
-                    imageFormat,
-                )
+                val result =
+                    wrapper.callAttr(
+                        "send_lxmf_message_with_method",
+                        destHash,
+                        content,
+                        sourceIdentityPrivateKey,
+                        deliveryMethod,
+                        tryPropagationOnFail,
+                        imageData,
+                        imageFormat,
+                    )
                 // Use PythonResultConverter to properly convert Python dict to JSON
                 // (bytes values like message_hash need Base64 encoding)
                 PythonResultConverter.convertSendMessageResult(result)

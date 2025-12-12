@@ -14,15 +14,17 @@ import org.json.JSONObject
  * Instead, we must extract values and encode bytes as Base64.
  */
 object PythonResultConverter {
-
     /**
      * Abstraction for accessing dict values.
      * Allows testing without requiring Chaquopy's native PyObject class.
      */
     interface DictAccessor {
         fun getBoolean(key: String): Boolean?
+
         fun getLong(key: String): Long?
+
         fun getString(key: String): String?
+
         fun getByteArray(key: String): ByteArray?
     }
 
@@ -30,17 +32,13 @@ object PythonResultConverter {
      * Implementation that wraps a PyObject for production use.
      */
     class PyObjectDictAccessor(private val pyObject: PyObject) : DictAccessor {
-        override fun getBoolean(key: String): Boolean? =
-            pyObject.callAttr("get", key)?.toBoolean()
+        override fun getBoolean(key: String): Boolean? = pyObject.callAttr("get", key)?.toBoolean()
 
-        override fun getLong(key: String): Long? =
-            pyObject.callAttr("get", key)?.toLong()
+        override fun getLong(key: String): Long? = pyObject.callAttr("get", key)?.toLong()
 
-        override fun getString(key: String): String? =
-            pyObject.callAttr("get", key)?.toString()
+        override fun getString(key: String): String? = pyObject.callAttr("get", key)?.toString()
 
-        override fun getByteArray(key: String): ByteArray? =
-            pyObject.callAttr("get", key)?.toJava(ByteArray::class.java)
+        override fun getByteArray(key: String): ByteArray? = pyObject.callAttr("get", key)?.toJava(ByteArray::class.java)
     }
 
     /**

@@ -44,7 +44,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.viewmodel.MessageDetailViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -124,23 +123,23 @@ fun MessageDetailScreen(
                 )
 
                 // Status card
-                val (statusIcon, statusColor, statusText, statusSubtitle) = getStatusInfo(msg.status)
+                val statusInfo = getStatusInfo(msg.status)
                 MessageInfoCard(
-                    icon = statusIcon,
-                    iconTint = statusColor,
+                    icon = statusInfo.icon,
+                    iconTint = statusInfo.color,
                     title = "Status",
-                    content = statusText,
-                    subtitle = statusSubtitle,
+                    content = statusInfo.text,
+                    subtitle = statusInfo.subtitle,
                 )
 
                 // Delivery method card (only if available)
                 msg.deliveryMethod?.let { method ->
-                    val (methodIcon, methodText, methodSubtitle) = getDeliveryMethodInfo(method)
+                    val methodInfo = getDeliveryMethodInfo(method)
                     MessageInfoCard(
-                        icon = methodIcon,
+                        icon = methodInfo.icon,
                         title = "Delivery Method",
-                        content = methodText,
-                        subtitle = methodSubtitle,
+                        content = methodInfo.text,
+                        subtitle = methodInfo.subtitle,
                     )
                 }
 

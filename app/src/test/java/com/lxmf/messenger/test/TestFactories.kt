@@ -46,20 +46,21 @@ object TestFactories {
         val addedVia: String = "MANUAL",
     )
 
-    fun createContactEntity(config: ContactConfig = ContactConfig()) = ContactEntity(
-        destinationHash = config.destinationHash,
-        identityHash = config.identityHash,
-        publicKey = config.publicKey,
-        customNickname = config.customNickname,
-        notes = null,
-        tags = null,
-        addedTimestamp = System.currentTimeMillis(),
-        addedVia = config.addedVia,
-        lastInteractionTimestamp = 0,
-        isPinned = config.isPinned,
-        status = config.status,
-        isMyRelay = config.isMyRelay,
-    )
+    fun createContactEntity(config: ContactConfig = ContactConfig()) =
+        ContactEntity(
+            destinationHash = config.destinationHash,
+            identityHash = config.identityHash,
+            publicKey = config.publicKey,
+            customNickname = config.customNickname,
+            notes = null,
+            tags = null,
+            addedTimestamp = System.currentTimeMillis(),
+            addedVia = config.addedVia,
+            lastInteractionTimestamp = 0,
+            isPinned = config.isPinned,
+            status = config.status,
+            isMyRelay = config.isMyRelay,
+        )
 
     /** Convenience overload for simple cases. */
     fun createContactEntity(
@@ -96,27 +97,28 @@ object TestFactories {
         val tags: String? = null,
     )
 
-    fun createEnrichedContact(config: EnrichedContactConfig = EnrichedContactConfig()) = EnrichedContact(
-        destinationHash = config.destinationHash,
-        publicKey = config.publicKey,
-        displayName = config.displayName,
-        customNickname = config.customNickname,
-        announceName = config.announceName ?: config.displayName,
-        lastSeenTimestamp = System.currentTimeMillis(),
-        hops = config.hops,
-        isOnline = config.isOnline,
-        hasConversation = config.hasConversation,
-        unreadCount = config.unreadCount,
-        lastMessageTimestamp = null,
-        notes = null,
-        tags = config.tags,
-        addedTimestamp = System.currentTimeMillis(),
-        addedVia = "ANNOUNCE",
-        isPinned = config.isPinned,
-        status = config.status,
-        isMyRelay = config.isMyRelay,
-        nodeType = config.nodeType,
-    )
+    fun createEnrichedContact(config: EnrichedContactConfig = EnrichedContactConfig()) =
+        EnrichedContact(
+            destinationHash = config.destinationHash,
+            publicKey = config.publicKey,
+            displayName = config.displayName,
+            customNickname = config.customNickname,
+            announceName = config.announceName ?: config.displayName,
+            lastSeenTimestamp = System.currentTimeMillis(),
+            hops = config.hops,
+            isOnline = config.isOnline,
+            hasConversation = config.hasConversation,
+            unreadCount = config.unreadCount,
+            lastMessageTimestamp = null,
+            notes = null,
+            tags = config.tags,
+            addedTimestamp = System.currentTimeMillis(),
+            addedVia = "ANNOUNCE",
+            isPinned = config.isPinned,
+            status = config.status,
+            isMyRelay = config.isMyRelay,
+            nodeType = config.nodeType,
+        )
 
     /** Convenience overload for simple cases. */
     fun createEnrichedContact(

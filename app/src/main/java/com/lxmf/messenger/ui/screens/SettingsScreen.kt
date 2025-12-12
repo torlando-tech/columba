@@ -39,7 +39,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
 import com.lxmf.messenger.ui.screens.settings.cards.DataMigrationCard
 import com.lxmf.messenger.ui.screens.settings.cards.IdentityCard
-import com.lxmf.messenger.ui.screens.settings.cards.MessageDeliveryCard
+import com.lxmf.messenger.ui.screens.settings.cards.MessageDeliveryRetrievalCard
 import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
@@ -166,7 +166,7 @@ fun SettingsScreen(
                     onManualAnnounce = { viewModel.triggerManualAnnounce() },
                 )
 
-                MessageDeliveryCard(
+                MessageDeliveryRetrievalCard(
                     defaultMethod = state.defaultDeliveryMethod,
                     tryPropagationOnFail = state.tryPropagationOnFail,
                     currentRelayName = state.currentRelayName,
@@ -175,6 +175,14 @@ fun SettingsScreen(
                     onMethodChange = { viewModel.setDefaultDeliveryMethod(it) },
                     onTryPropagationToggle = { viewModel.setTryPropagationOnFail(it) },
                     onAutoSelectToggle = { viewModel.setAutoSelectPropagationNode(it) },
+                    // Retrieval settings
+                    autoRetrieveEnabled = state.autoRetrieveEnabled,
+                    retrievalIntervalSeconds = state.retrievalIntervalSeconds,
+                    lastSyncTimestamp = state.lastSyncTimestamp,
+                    isSyncing = state.isSyncing,
+                    onAutoRetrieveToggle = { viewModel.setAutoRetrieveEnabled(it) },
+                    onIntervalChange = { viewModel.setRetrievalIntervalSeconds(it) },
+                    onSyncNow = { viewModel.syncNow() },
                 )
 
                 ThemeSelectionCard(

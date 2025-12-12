@@ -85,7 +85,8 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
     group = "verification"
     description = "Generate unified Jacoco coverage report for all modules"
 
-    dependsOn(subprojects.map { it.tasks.withType<Test>() })
+    // Only depend on debug unit tests to avoid Robolectric issues with release builds
+    dependsOn(subprojects.mapNotNull { it.tasks.findByName("testDebugUnitTest") })
 
     // Use lazy configuration - fileTree is resolved at execution time, not registration time
     val sourceDirectoriesList = mutableListOf<File>()

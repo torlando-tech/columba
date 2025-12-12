@@ -368,6 +368,90 @@ class TestPropagationFallback(unittest.TestCase):
         # Delivery attempts should be reset
         self.assertEqual(mock_message.delivery_attempts, 0)
 
+    @patch.object(reticulum_wrapper, 'LXMF', mock_lxmf)
+    def test_propagation_retry_sets_stamp_generation_flags(self):
+        """Test that propagation retry properly configures stamp generation.
+
+        Propagation nodes require valid stamps (proof-of-work). When retrying
+        via propagation, we must:
+        1. Clear propagation_packed (old propagation data)
+        2. Clear propagation_stamp (old stamp)
+        3. Set defer_propagation_stamp=True to trigger stamp generation
+        """
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.active_propagation_node = b'prop_node_hash'
+        wrapper.router = MagicMock()
+
+        # Create a mock message with old propagation data (simulating prior attempt)
+        mock_message = MagicMock()
+        mock_message.hash = b'stamp_test_hash'
+        mock_message.try_propagation_on_fail = True
+        mock_message.delivery_attempts = 3
+        mock_message.packed = b'old_packed_data'
+        mock_message.propagation_packed = b'old_propagation_packed'
+        mock_message.propagation_stamp = b'old_invalid_stamp'
+        mock_message.defer_propagation_stamp = False
+
+        # Trigger failure callback (simulating opportunistic delivery failure)
+        wrapper._on_message_failed(mock_message)
+
+        # Verify stamp generation is properly configured
+        self.assertIsNone(mock_message.packed, "packed should be cleared for re-packing")
+        self.assertIsNone(mock_message.propagation_packed, "propagation_packed should be cleared")
+        self.assertIsNone(mock_message.propagation_stamp, "propagation_stamp should be cleared")
+        self.assertTrue(mock_message.defer_propagation_stamp,
+                       "defer_propagation_stamp must be True to trigger stamp generation")
+
+        # Verify message was resubmitted to router
+        wrapper.router.handle_outbound.assert_called_once_with(mock_message)
+
+    @patch.object(reticulum_wrapper, 'LXMF', mock_lxmf)
+    def test_propagation_retry_without_prior_propagation_data(self):
+        """Test that propagation retry works when message has no prior propagation data.
+
+        This is the common case - opportunistic messages don't have propagation
+        data until they're converted to PROPAGATED delivery.
+        """
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.active_propagation_node = b'prop_node_hash'
+        wrapper.router = MagicMock()
+
+        # Create a fresh opportunistic message (no propagation attributes yet)
+        mock_message = MagicMock(spec=['hash', 'try_propagation_on_fail', 'delivery_attempts'])
+        mock_message.hash = b'fresh_msg_hash'
+        mock_message.try_propagation_on_fail = True
+        mock_message.delivery_attempts = 2
+
+        # Trigger failure callback
+        wrapper._on_message_failed(mock_message)
+
+        # Verify stamp generation flags are set (even if attributes didn't exist before)
+        self.assertIsNone(mock_message.packed)
+        self.assertIsNone(mock_message.propagation_packed)
+        self.assertIsNone(mock_message.propagation_stamp)
+        self.assertTrue(mock_message.defer_propagation_stamp)
+        self.assertEqual(mock_message.desired_method, mock_lxmf.LXMessage.PROPAGATED)
+
+    @patch.object(reticulum_wrapper, 'LXMF', mock_lxmf)
+    def test_no_propagation_retry_without_active_node(self):
+        """Test that propagation retry doesn't happen without an active propagation node."""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.active_propagation_node = None  # No propagation node configured
+        wrapper.router = MagicMock()
+        wrapper.kotlin_delivery_status_callback = MagicMock()
+
+        mock_message = MagicMock()
+        mock_message.hash = b'no_prop_node_hash'
+        mock_message.try_propagation_on_fail = True
+
+        # Trigger failure callback
+        wrapper._on_message_failed(mock_message)
+
+        # Should NOT have tried to resubmit
+        wrapper.router.handle_outbound.assert_not_called()
+        # Should have reported failure
+        wrapper.kotlin_delivery_status_callback.assert_called()
+
 
 if __name__ == '__main__':
     # Run tests with verbose output

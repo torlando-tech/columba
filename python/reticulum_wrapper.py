@@ -2519,10 +2519,15 @@ class ReticulumWrapper:
                 lxmf_message.delivery_attempts = 0
                 # Clear packed state so message can be re-packed
                 lxmf_message.packed = None
+                # Clear propagation-specific state for fresh stamp generation
+                lxmf_message.propagation_packed = None
+                lxmf_message.propagation_stamp = None
+                # Request deferred stamp generation - propagation nodes require valid stamps
+                lxmf_message.defer_propagation_stamp = True
                 # Switch to PROPAGATED delivery
                 lxmf_message.desired_method = LXMF.LXMessage.PROPAGATED
 
-                # Re-submit to router
+                # Re-submit to router (will go through pending_deferred_stamps for stamp generation)
                 self.router.handle_outbound(lxmf_message)
 
                 # Notify Kotlin of retry (status = "retrying_propagated")

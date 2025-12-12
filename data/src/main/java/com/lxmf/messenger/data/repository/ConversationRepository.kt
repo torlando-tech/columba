@@ -37,6 +37,8 @@ data class Message(
     val isFromMe: Boolean,
     val status: String = "sent",
     val fieldsJson: String? = null,
+    val deliveryMethod: String? = null,
+    val errorMessage: String? = null,
 )
 
 @Singleton
@@ -261,6 +263,8 @@ class ConversationRepository
                         status = message.status,
                         isRead = message.isFromMe, // Our own messages are always "read"
                         fieldsJson = message.fieldsJson, // LXMF fields (attachments, images, etc.)
+                        deliveryMethod = message.deliveryMethod,
+                        errorMessage = message.errorMessage,
                     )
                 messageDao.insertMessage(messageEntity)
             }
@@ -422,5 +426,28 @@ class ConversationRepository
                 isFromMe = isFromMe,
                 status = status,
                 fieldsJson = fieldsJson,
+                deliveryMethod = deliveryMethod,
+                errorMessage = errorMessage,
             )
+
+        /**
+         * Update message delivery details (method and error) for the active identity
+         */
+        suspend fun updateMessageDeliveryDetails(
+            messageId: String,
+            deliveryMethod: String?,
+            errorMessage: String?,
+        ) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            messageDao.updateMessageDeliveryDetails(
+                messageId,
+                activeIdentity.identityHash,
+                deliveryMethod,
+                errorMessage,
+            )
+            android.util.Log.d(
+                "ConversationRepository",
+                "Updated message $messageId delivery details: method=$deliveryMethod, error=$errorMessage",
+            )
+        }
     }

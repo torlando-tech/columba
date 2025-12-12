@@ -93,6 +93,20 @@ interface MessageDao {
         status: String,
     )
 
+    @Query(
+        """
+        UPDATE messages
+        SET deliveryMethod = :deliveryMethod, errorMessage = :errorMessage
+        WHERE id = :messageId AND identityHash = :identityHash
+        """,
+    )
+    suspend fun updateMessageDeliveryDetails(
+        messageId: String,
+        identityHash: String,
+        deliveryMethod: String?,
+        errorMessage: String?,
+    )
+
     // Paging3 method for infinite scroll
 
     /**

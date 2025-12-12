@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -99,6 +100,7 @@ fun MessagingScreen(
     peerName: String,
     onBackClick: () -> Unit,
     onPeerClick: () -> Unit = {},
+    onViewMessageDetails: (messageId: String) -> Unit = {},
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
@@ -324,6 +326,7 @@ fun MessagingScreen(
                                     message = message,
                                     isFromMe = message.isFromMe,
                                     clipboardManager = clipboardManager,
+                                    onViewDetails = onViewMessageDetails,
                                 )
                             }
                         }
@@ -361,6 +364,7 @@ fun MessageBubble(
     message: com.lxmf.messenger.ui.model.MessageUi,
     isFromMe: Boolean,
     clipboardManager: androidx.compose.ui.platform.ClipboardManager,
+    onViewDetails: (messageId: String) -> Unit = {},
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var showMenu by remember { mutableStateOf(false) }
@@ -481,6 +485,16 @@ fun MessageBubble(
                     clipboardManager.setText(AnnotatedString(message.content))
                     showMenu = false
                 },
+                isFromMe = isFromMe,
+                onViewDetails =
+                    if (isFromMe) {
+                        {
+                            onViewDetails(message.id)
+                            showMenu = false
+                        }
+                    } else {
+                        null
+                    },
             )
         }
     }
@@ -491,6 +505,8 @@ fun MessageContextMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     onCopy: () -> Unit,
+    isFromMe: Boolean = false,
+    onViewDetails: (() -> Unit)? = null,
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -509,6 +525,20 @@ fun MessageContextMenu(
             text = { Text("Copy") },
             onClick = onCopy,
         )
+
+        // Show "View Details" only for sent messages
+        if (isFromMe && onViewDetails != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text("View Details") },
+                onClick = onViewDetails,
+            )
+        }
     }
 }
 

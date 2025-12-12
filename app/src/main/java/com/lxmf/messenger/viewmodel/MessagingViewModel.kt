@@ -348,6 +348,14 @@ class MessagingViewModel
                             imageFormat = imageFormat,
                         )
 
+                    // Convert delivery method enum to string for database storage
+                    val deliveryMethodString =
+                        when (deliveryMethod) {
+                            DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
+                            DeliveryMethod.DIRECT -> "direct"
+                            DeliveryMethod.PROPAGATED -> "propagated"
+                        }
+
                     result.onSuccess { receipt ->
                         Log.d(TAG, "Message sent successfully")
 
@@ -386,6 +394,7 @@ class MessagingViewModel
                                 isFromMe = true,
                                 status = "pending", // Will be updated to "delivered" when LXMF proof arrives
                                 fieldsJson = fieldsJson,
+                                deliveryMethod = deliveryMethodString,
                             )
 
                         // Clear image after successful send
@@ -405,6 +414,8 @@ class MessagingViewModel
                                 timestamp = System.currentTimeMillis(),
                                 isFromMe = true,
                                 status = "failed",
+                                deliveryMethod = deliveryMethodString,
+                                errorMessage = error.message,
                             )
 
                         // Save to database - reactive Flow will auto-update UI

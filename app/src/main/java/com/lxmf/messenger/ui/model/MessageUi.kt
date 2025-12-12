@@ -30,4 +30,14 @@ data class MessageUi(
      * during composition, which was the primary cause of scroll lag.
      */
     val decodedImage: ImageBitmap? = null,
+    /**
+     * Delivery method used when sending: "opportunistic", "direct", or "propagated".
+     * Null for received messages or messages sent before this feature was added.
+     */
+    val deliveryMethod: String? = null,
+    /**
+     * Error message if delivery failed (when status == "failed").
+     * Null for successful deliveries or messages without errors.
+     */
+    val errorMessage: String? = null,
 )

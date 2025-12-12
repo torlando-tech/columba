@@ -121,6 +121,15 @@ class ReticulumWrapper:
         # General Reticulum bridge for protocol-level callbacks (announces, link events, etc.)
         self.kotlin_reticulum_bridge = None  # KotlinReticulumBridge instance (passed from Kotlin)
 
+        # Opportunistic message timeout tracking
+        # When opportunistic messages are sent but recipient is offline, they get stuck in SENT state
+        # forever waiting for a delivery receipt. This tracking dict + timer provides a timeout
+        # mechanism to trigger propagation fallback for undelivered opportunistic messages.
+        self._opportunistic_messages = {}  # {msg_hash_hex: {'message': lxmf_message, 'sent_time': timestamp}}
+        self._opportunistic_timeout_seconds = 30  # Timeout before falling back to propagation
+        self._opportunistic_check_interval = 10  # How often to check for timeouts (seconds)
+        self._opportunistic_timer = None  # Timer thread reference
+
         # Set global instance so AndroidBLEDriver can access it
         _global_wrapper_instance = self
 
@@ -1077,6 +1086,10 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "initialize", "Set last_announce_poll_time to current time")
 
             self.initialized = True
+
+            # Start opportunistic message timeout checker
+            self._start_opportunistic_timer()
+
             log_separator("ReticulumWrapper", "initialize")
             log_info("ReticulumWrapper", "initialize", "Reticulum initialized successfully")
             log_info("ReticulumWrapper", "initialize", f"Shared instance mode: {self.is_shared_instance}")
@@ -2391,6 +2404,19 @@ class ReticulumWrapper:
             log_info("ReticulumWrapper", "send_lxmf_message_with_method",
                     f"✅ Message {msg_hash.hex()[:16] if msg_hash else 'unknown'}... handed to router")
 
+            # Track opportunistic messages for timeout fallback
+            # If an opportunistic message doesn't get delivered within the timeout period,
+            # we'll trigger the failure callback to initiate propagation fallback
+            if lxmf_method == LXMF.LXMessage.OPPORTUNISTIC and lxmf_message.try_propagation_on_fail and msg_hash:
+                self._opportunistic_messages[msg_hash.hex()] = {
+                    'message': lxmf_message,
+                    'sent_time': time.time()
+                }
+                log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                         f"Tracking opportunistic message {msg_hash.hex()[:16]}... for timeout fallback")
+                # Ensure timer is running
+                self._start_opportunistic_timer()
+
             # Map method back to string for return
             method_names = {
                 LXMF.LXMessage.OPPORTUNISTIC: "opportunistic",
@@ -2424,6 +2450,12 @@ class ReticulumWrapper:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
             log_info("ReticulumWrapper", "_on_message_delivered",
                     f"✅ Message {msg_hash[:16]}... DELIVERED!")
+
+            # Remove from opportunistic tracking (if it was being tracked)
+            if msg_hash in self._opportunistic_messages:
+                del self._opportunistic_messages[msg_hash]
+                log_debug("ReticulumWrapper", "_on_message_delivered",
+                         f"Removed {msg_hash[:16]}... from opportunistic tracking (delivered)")
 
             # Create status event for Kotlin
             status_event = {
@@ -2467,6 +2499,12 @@ class ReticulumWrapper:
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
 
+            # Remove from opportunistic tracking (if it was being tracked)
+            if msg_hash in self._opportunistic_messages:
+                del self._opportunistic_messages[msg_hash]
+                log_debug("ReticulumWrapper", "_on_message_failed",
+                         f"Removed {msg_hash[:16]}... from opportunistic tracking (failed)")
+
             # Check if we should retry via propagation (Sideband pattern)
             if (hasattr(lxmf_message, 'try_propagation_on_fail') and
                 lxmf_message.try_propagation_on_fail and
@@ -2481,10 +2519,15 @@ class ReticulumWrapper:
                 lxmf_message.delivery_attempts = 0
                 # Clear packed state so message can be re-packed
                 lxmf_message.packed = None
+                # Clear propagation-specific state for fresh stamp generation
+                lxmf_message.propagation_packed = None
+                lxmf_message.propagation_stamp = None
+                # Request deferred stamp generation - propagation nodes require valid stamps
+                lxmf_message.defer_propagation_stamp = True
                 # Switch to PROPAGATED delivery
                 lxmf_message.desired_method = LXMF.LXMessage.PROPAGATED
 
-                # Re-submit to router
+                # Re-submit to router (will go through pending_deferred_stamps for stamp generation)
                 self.router.handle_outbound(lxmf_message)
 
                 # Notify Kotlin of retry (status = "retrying_propagated")
@@ -2578,6 +2621,63 @@ class ReticulumWrapper:
                      f"Error in sent callback: {e}")
             import traceback
             traceback.print_exc()
+
+    def _start_opportunistic_timer(self):
+        """
+        Start the timer thread that checks for opportunistic message timeouts.
+        This is called when the first opportunistic message is tracked, or during initialize().
+        The timer thread is a daemon thread and will exit cleanly when the app shuts down.
+        """
+        if self._opportunistic_timer is None or not self._opportunistic_timer.is_alive():
+            self._opportunistic_timer = threading.Thread(
+                target=self._opportunistic_timeout_loop,
+                daemon=True
+            )
+            self._opportunistic_timer.start()
+            log_info("ReticulumWrapper", "_start_opportunistic_timer",
+                    "Started opportunistic message timeout checker")
+
+    def _opportunistic_timeout_loop(self):
+        """
+        Background loop that periodically checks for timed-out opportunistic messages.
+        Runs every _opportunistic_check_interval seconds while self.initialized is True.
+        """
+        log_debug("ReticulumWrapper", "_opportunistic_timeout_loop", "Timeout loop started")
+        while self.initialized:
+            time.sleep(self._opportunistic_check_interval)
+            if self._opportunistic_messages:  # Only check if there are messages to track
+                self._check_opportunistic_timeouts()
+        log_debug("ReticulumWrapper", "_opportunistic_timeout_loop", "Timeout loop exiting (not initialized)")
+
+    def _check_opportunistic_timeouts(self):
+        """
+        Check for opportunistic messages that have timed out waiting for delivery.
+        For any that have exceeded the timeout threshold, trigger the failure callback
+        to initiate propagation fallback.
+
+        This is the key fix for the issue where opportunistic messages to offline
+        recipients get stuck in SENT state forever.
+        """
+        now = time.time()
+        timed_out = []
+
+        # Collect timed-out messages (iterate over copy to avoid modification during iteration)
+        for msg_hash, tracking in list(self._opportunistic_messages.items()):
+            elapsed = now - tracking['sent_time']
+            if elapsed >= self._opportunistic_timeout_seconds:
+                timed_out.append((msg_hash, tracking['message']))
+
+        # Process timed-out messages
+        for msg_hash, lxmf_message in timed_out:
+            log_info("ReticulumWrapper", "_check_opportunistic_timeouts",
+                    f"⏱️ Opportunistic message {msg_hash[:16]}... timed out after "
+                    f"{self._opportunistic_timeout_seconds}s, triggering propagation fallback")
+            # Remove from tracking dict (will also be removed in _on_message_failed, but do it here
+            # to prevent any race condition where the message could be processed twice)
+            if msg_hash in self._opportunistic_messages:
+                del self._opportunistic_messages[msg_hash]
+            # Trigger the failure callback which handles propagation fallback
+            self._on_message_failed(lxmf_message)
 
     def get_transport_identity_hash(self) -> bytes:
         """

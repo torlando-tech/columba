@@ -502,7 +502,7 @@ fun MessageBubble(
                                 text =
                                     when (message.status) {
                                         "pending" -> "○" // Hollow circle - message created, waiting to send
-                                        "sent" -> "✓" // Single check - transmitted to network
+                                        "sent", "retrying_propagated" -> "✓" // Single check - transmitted/retrying
                                         "delivered" -> "✓✓" // Double check - delivered and acknowledged
                                         "failed" -> "!" // Exclamation - delivery failed
                                         else -> ""

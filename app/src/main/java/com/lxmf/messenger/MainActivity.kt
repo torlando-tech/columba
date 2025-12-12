@@ -76,6 +76,7 @@ import com.lxmf.messenger.ui.screens.SettingsScreen
 import com.lxmf.messenger.ui.screens.ThemeEditorScreen
 import com.lxmf.messenger.ui.screens.ThemeManagementScreen
 import com.lxmf.messenger.ui.screens.WelcomeScreen
+import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
 import com.lxmf.messenger.viewmodel.ContactsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
@@ -382,15 +383,26 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
             }
     }
 
-    // Check if we're on the messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, or welcome screen
-    val isOnWelcomeScreen = currentRoute == Screen.Welcome.route
-    val isOnMessagingScreen = currentRoute?.startsWith("messaging/") ?: false
-    val isOnAnnounceDetailScreen = currentRoute?.startsWith("announce_detail/") ?: false
-    val isOnInterfaceManagementScreen = currentRoute == "interface_management"
-    val isOnBleConnectionStatusScreen = currentRoute == "ble_connection_status"
-    val isOnThemeManagementScreen = currentRoute == "theme_management"
-    val isOnThemeEditorScreen = currentRoute == "theme_editor" || currentRoute?.startsWith("theme_editor/") == true
-    val isOnRNodeWizardScreen = currentRoute?.startsWith("rnode_wizard") ?: false
+    // Screens that should hide the bottom navigation bar
+    val hideBottomNavScreens =
+        listOf(
+            Screen.Welcome.route,
+            "interface_management",
+            "ble_connection_status",
+            "theme_management",
+            "tcp_client_wizard",
+        )
+    val hideBottomNavPrefixes =
+        listOf(
+            "messaging/",
+            "announce_detail/",
+            "theme_editor",
+            "rnode_wizard",
+        )
+    val shouldShowBottomNav =
+        currentRoute != null &&
+            currentRoute !in hideBottomNavScreens &&
+            hideBottomNavPrefixes.none { currentRoute.startsWith(it) }
 
     val screens =
         listOf(
@@ -408,8 +420,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
             @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
             Scaffold(
                 bottomBar = {
-                    // Only show NavigationBar when NOT on messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, welcome screen, or RNode wizard
-                    if (!isOnWelcomeScreen && !isOnMessagingScreen && !isOnAnnounceDetailScreen && !isOnInterfaceManagementScreen && !isOnBleConnectionStatusScreen && !isOnThemeManagementScreen && !isOnThemeEditorScreen && !isOnRNodeWizardScreen) {
+                    if (shouldShowBottomNav) {
                         NavigationBar {
                             screens.forEachIndexed { index, screen ->
                                 NavigationBarItem(
@@ -554,6 +565,20 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                                     navController.navigate("rnode_wizard?interfaceId=$interfaceId")
                                 } else {
                                     navController.navigate("rnode_wizard")
+                                }
+                            },
+                            onNavigateToTcpClientWizard = {
+                                navController.navigate("tcp_client_wizard")
+                            },
+                        )
+                    }
+
+                    composable("tcp_client_wizard") {
+                        TcpClientWizardScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onComplete = {
+                                navController.navigate("interface_management") {
+                                    popUpTo("interface_management") { inclusive = true }
                                 }
                             },
                         )

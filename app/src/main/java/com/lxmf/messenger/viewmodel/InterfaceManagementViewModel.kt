@@ -116,6 +116,7 @@ class InterfaceManagementViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceMgmtVM"
+
             // Made internal var (not const) to allow disabling polling in tests
             internal var STATUS_POLL_INTERVAL_MS = 3000L
         }

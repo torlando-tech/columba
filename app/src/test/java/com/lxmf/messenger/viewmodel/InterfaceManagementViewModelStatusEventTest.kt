@@ -79,11 +79,13 @@ class InterfaceManagementViewModelStatusEventTest {
         every { serviceProtocol.interfaceStatusChanged } returns interfaceStatusFlow
 
         // Mock getDebugInfo for status polling
-        coEvery { serviceProtocol.getDebugInfo() } returns mapOf(
-            "interfaces" to listOf(
-                mapOf("name" to "ble0", "online" to true),
-            ),
-        )
+        coEvery { serviceProtocol.getDebugInfo() } returns
+            mapOf(
+                "interfaces" to
+                    listOf(
+                        mapOf("name" to "ble0", "online" to true),
+                    ),
+            )
     }
 
     @After
@@ -99,151 +101,168 @@ class InterfaceManagementViewModelStatusEventTest {
     }
 
     @Test
-    fun `ViewModel initializes without error with ServiceReticulumProtocol`() = runTest {
-        viewModel = InterfaceManagementViewModel(
-            interfaceRepository,
-            configManager,
-            bleStatusRepository,
-            serviceProtocol,
-        )
+    fun `ViewModel initializes without error with ServiceReticulumProtocol`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        assertNotNull(viewModel)
-        assertNotNull(viewModel.state.value)
-    }
-
-    @Test
-    fun `ViewModel observes ServiceReticulumProtocol interfaceStatusChanged flow`() = runTest {
-        viewModel = InterfaceManagementViewModel(
-            interfaceRepository,
-            configManager,
-            bleStatusRepository,
-            serviceProtocol,
-        )
-
-        advanceUntilIdle()
-
-        // Verify interfaceStatusChanged was accessed
-        verify { serviceProtocol.interfaceStatusChanged }
-    }
+            assertNotNull(viewModel)
+            assertNotNull(viewModel.state.value)
+        }
 
     @Test
-    fun `interface status event triggers immediate debug info fetch`() = runTest {
-        viewModel = InterfaceManagementViewModel(
-            interfaceRepository,
-            configManager,
-            bleStatusRepository,
-            serviceProtocol,
-        )
+    fun `ViewModel observes ServiceReticulumProtocol interfaceStatusChanged flow`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Reset mock to track new calls
-        coEvery { serviceProtocol.getDebugInfo() } returns mapOf(
-            "interfaces" to listOf(
-                mapOf("name" to "ble0", "online" to false),
-            ),
-        )
-
-        // Emit interface status event
-        interfaceStatusFlow.emit(Unit)
-        advanceUntilIdle()
-
-        // Verify getDebugInfo was called after event
-        io.mockk.coVerify(atLeast = 1) { serviceProtocol.getDebugInfo() }
-    }
+            // Verify interfaceStatusChanged was accessed
+            verify { serviceProtocol.interfaceStatusChanged }
+        }
 
     @Test
-    fun `interface online status is updated in state after event`() = runTest {
-        viewModel = InterfaceManagementViewModel(
-            interfaceRepository,
-            configManager,
-            bleStatusRepository,
-            serviceProtocol,
-        )
+    fun `interface status event triggers immediate debug info fetch`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Since polling is disabled in tests, initial state has empty status map
-        // Emit first event to populate initial status
-        interfaceStatusFlow.emit(Unit)
-        advanceUntilIdle()
+            // Reset mock to track new calls
+            coEvery { serviceProtocol.getDebugInfo() } returns
+                mapOf(
+                    "interfaces" to
+                        listOf(
+                            mapOf("name" to "ble0", "online" to false),
+                        ),
+                )
 
-        viewModel.state.test {
-            val initialState = awaitItem()
-            assertEquals(true, initialState.interfaceOnlineStatus["ble0"])
-
-            // Update mock to return different status
-            coEvery { serviceProtocol.getDebugInfo() } returns mapOf(
-                "interfaces" to listOf(
-                    mapOf("name" to "ble0", "online" to false),
-                    mapOf("name" to "rnode0", "online" to true),
-                ),
-            )
-
-            // Emit status change event
+            // Emit interface status event
             interfaceStatusFlow.emit(Unit)
             advanceUntilIdle()
 
-            // Should receive updated state
-            val updatedState = awaitItem()
-            assertEquals(false, updatedState.interfaceOnlineStatus["ble0"])
-            assertEquals(true, updatedState.interfaceOnlineStatus["rnode0"])
-        }
-    }
-
-    @Test
-    fun `multiple interface status events all trigger refreshes`() = runTest {
-        var callCount = 0
-        coEvery { serviceProtocol.getDebugInfo() } answers {
-            callCount++
-            val isOnline: Boolean = callCount % 2 == 0
-            mapOf(
-                "interfaces" to listOf(
-                    mapOf("name" to "ble0", "online" to isOnline),
-                ),
-            )
+            // Verify getDebugInfo was called after event
+            io.mockk.coVerify(atLeast = 1) { serviceProtocol.getDebugInfo() }
         }
 
-        viewModel = InterfaceManagementViewModel(
-            interfaceRepository,
-            configManager,
-            bleStatusRepository,
-            serviceProtocol,
-        )
+    @Test
+    fun `interface online status is updated in state after event`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
 
-        advanceUntilIdle()
-        val initialCallCount = callCount
+            advanceUntilIdle()
 
-        // Emit multiple events
-        interfaceStatusFlow.emit(Unit)
-        advanceUntilIdle()
-        interfaceStatusFlow.emit(Unit)
-        advanceUntilIdle()
-        interfaceStatusFlow.emit(Unit)
-        advanceUntilIdle()
+            // Since polling is disabled in tests, initial state has empty status map
+            // Emit first event to populate initial status
+            interfaceStatusFlow.emit(Unit)
+            advanceUntilIdle()
 
-        // Should have called getDebugInfo multiple times
-        assertTrue("Expected at least 3 additional calls", callCount >= initialCallCount + 3)
-    }
+            viewModel.state.test {
+                val initialState = awaitItem()
+                assertEquals(true, initialState.interfaceOnlineStatus["ble0"])
+
+                // Update mock to return different status
+                coEvery { serviceProtocol.getDebugInfo() } returns
+                    mapOf(
+                        "interfaces" to
+                            listOf(
+                                mapOf("name" to "ble0", "online" to false),
+                                mapOf("name" to "rnode0", "online" to true),
+                            ),
+                    )
+
+                // Emit status change event
+                interfaceStatusFlow.emit(Unit)
+                advanceUntilIdle()
+
+                // Should receive updated state
+                val updatedState = awaitItem()
+                assertEquals(false, updatedState.interfaceOnlineStatus["ble0"])
+                assertEquals(true, updatedState.interfaceOnlineStatus["rnode0"])
+            }
+        }
 
     @Test
-    fun `non-ServiceReticulumProtocol does not crash`() = runTest {
-        // Use a generic ReticulumProtocol mock instead of ServiceReticulumProtocol
-        val genericProtocol: ReticulumProtocol = mockk()
-        coEvery { genericProtocol.getDebugInfo() } returns emptyMap()
+    fun `multiple interface status events all trigger refreshes`() =
+        runTest {
+            var callCount = 0
+            coEvery { serviceProtocol.getDebugInfo() } answers {
+                callCount++
+                val isOnline: Boolean = callCount % 2 == 0
+                mapOf(
+                    "interfaces" to
+                        listOf(
+                            mapOf("name" to "ble0", "online" to isOnline),
+                        ),
+                )
+            }
 
-        viewModel = InterfaceManagementViewModel(
-            interfaceRepository,
-            configManager,
-            bleStatusRepository,
-            genericProtocol,
-        )
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
 
-        advanceUntilIdle()
+            advanceUntilIdle()
+            val initialCallCount = callCount
 
-        // Should not crash, just skip event observation
-        assertNotNull(viewModel)
-    }
+            // Emit multiple events
+            interfaceStatusFlow.emit(Unit)
+            advanceUntilIdle()
+            interfaceStatusFlow.emit(Unit)
+            advanceUntilIdle()
+            interfaceStatusFlow.emit(Unit)
+            advanceUntilIdle()
+
+            // Should have called getDebugInfo multiple times
+            assertTrue("Expected at least 3 additional calls", callCount >= initialCallCount + 3)
+        }
+
+    @Test
+    fun `non-ServiceReticulumProtocol does not crash`() =
+        runTest {
+            // Use a generic ReticulumProtocol mock instead of ServiceReticulumProtocol
+            val genericProtocol: ReticulumProtocol = mockk()
+            coEvery { genericProtocol.getDebugInfo() } returns emptyMap()
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    genericProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Should not crash, just skip event observation
+            assertNotNull(viewModel)
+        }
 }

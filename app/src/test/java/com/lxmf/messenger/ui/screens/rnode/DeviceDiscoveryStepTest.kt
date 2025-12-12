@@ -1,11 +1,12 @@
 package com.lxmf.messenger.ui.screens.rnode
 
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import android.app.Application
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.DiscoveredRNode
-import com.lxmf.messenger.test.TestActivity
 import com.lxmf.messenger.viewmodel.RNodeWizardState
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
 import io.mockk.every
@@ -14,14 +15,19 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * UI tests for DeviceDiscoveryStep.
  * Tests card click behavior for paired, unpaired, and unknown type devices.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
 class DeviceDiscoveryStepTest {
     @get:Rule
-    val composeTestRule = createAndroidComposeRule<TestActivity>()
+    val composeTestRule = createComposeRule()
 
     private val unpairedBleDevice =
         DiscoveredRNode(
@@ -67,11 +73,9 @@ class DeviceDiscoveryStepTest {
         composeTestRule.setContent {
             DeviceDiscoveryStep(viewModel = mockViewModel)
         }
-        composeTestRule.waitForIdle()
 
         // Click the device card (using device name as identifier)
         composeTestRule.onNodeWithText("RNode 1234").performClick()
-        composeTestRule.waitForIdle()
 
         // Then - pairing should be initiated, not selection
         verify(exactly = 1) { mockViewModel.initiateBluetoothPairing(unpairedBleDevice) }
@@ -96,11 +100,9 @@ class DeviceDiscoveryStepTest {
         composeTestRule.setContent {
             DeviceDiscoveryStep(viewModel = mockViewModel)
         }
-        composeTestRule.waitForIdle()
 
         // Click the device card
         composeTestRule.onNodeWithText("RNode 5678").performClick()
-        composeTestRule.waitForIdle()
 
         // Then - selection should occur, not pairing
         verify(exactly = 1) { mockViewModel.requestDeviceAssociation(pairedBleDevice, any()) }
@@ -124,11 +126,9 @@ class DeviceDiscoveryStepTest {
         composeTestRule.setContent {
             DeviceDiscoveryStep(viewModel = mockViewModel)
         }
-        composeTestRule.waitForIdle()
 
         // Click the device card
         composeTestRule.onNodeWithText("RNode ABCD").performClick()
-        composeTestRule.waitForIdle()
 
         // Then - neither pairing nor selection should occur (type selector should show instead)
         verify(exactly = 0) { mockViewModel.initiateBluetoothPairing(any()) }
@@ -136,9 +136,9 @@ class DeviceDiscoveryStepTest {
         verify(exactly = 0) { mockViewModel.selectDevice(any()) }
 
         // Type selector options should be visible
-        composeTestRule.onNodeWithText("Select connection type:").assertExists()
-        composeTestRule.onNodeWithText("Bluetooth Classic").assertExists()
-        composeTestRule.onNodeWithText("Bluetooth LE").assertExists()
+        composeTestRule.onNodeWithText("Select connection type:").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Bluetooth Classic").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Bluetooth LE").assertIsDisplayed()
     }
 
     @Test
@@ -158,11 +158,9 @@ class DeviceDiscoveryStepTest {
         composeTestRule.setContent {
             DeviceDiscoveryStep(viewModel = mockViewModel)
         }
-        composeTestRule.waitForIdle()
 
         // Click the "Pair" text button specifically
         composeTestRule.onNodeWithText("Pair").performClick()
-        composeTestRule.waitForIdle()
 
         // Then - pairing should be initiated
         verify(exactly = 1) { mockViewModel.initiateBluetoothPairing(unpairedBleDevice) }

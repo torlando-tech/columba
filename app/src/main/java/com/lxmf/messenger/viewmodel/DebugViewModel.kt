@@ -146,14 +146,15 @@ class DebugViewModel
 
                     // Get failed interfaces and add them to the list
                     val failedInterfaces = reticulumProtocol.getFailedInterfaces()
-                    val failedInterfaceInfos = failedInterfaces.map { failed ->
-                        InterfaceInfo(
-                            name = failed.name,
-                            type = failed.name, // Use name as type since we don't have detailed type info
-                            online = false,
-                            error = failed.error,
-                        )
-                    }
+                    val failedInterfaceInfos =
+                        failedInterfaces.map { failed ->
+                            InterfaceInfo(
+                                name = failed.name,
+                                type = failed.name, // Use name as type since we don't have detailed type info
+                                online = false,
+                                error = failed.error,
+                            )
+                        }
 
                     // Combine active and failed interfaces
                     val interfaces = activeInterfaces + failedInterfaceInfos

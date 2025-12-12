@@ -1,4 +1,4 @@
-package com.lxmf.messenger.ui.screens.rnode
+package com.lxmf.messenger.ui.screens.tcpclient
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -25,32 +25,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.ui.components.WizardBottomBar
-import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
-import com.lxmf.messenger.viewmodel.WizardStep
+import com.lxmf.messenger.viewmodel.TcpClientWizardStep
+import com.lxmf.messenger.viewmodel.TcpClientWizardViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RNodeWizardScreen(
-    editingInterfaceId: Long? = null,
+fun TcpClientWizardScreen(
     onNavigateBack: () -> Unit,
     onComplete: () -> Unit,
-    viewModel: RNodeWizardViewModel = hiltViewModel(),
+    viewModel: TcpClientWizardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
 
     // Handle system back button - go to previous step or exit wizard
     BackHandler {
-        if (state.currentStep == WizardStep.DEVICE_DISCOVERY) {
+        if (state.currentStep == TcpClientWizardStep.SERVER_SELECTION) {
             onNavigateBack()
         } else {
             viewModel.goToPreviousStep()
-        }
-    }
-
-    // Load existing config if editing
-    LaunchedEffect(editingInterfaceId) {
-        if (editingInterfaceId != null && editingInterfaceId >= 0) {
-            viewModel.loadExistingConfig(editingInterfaceId)
         }
     }
 
@@ -67,19 +59,15 @@ fun RNodeWizardScreen(
                 title = {
                     Text(
                         when (state.currentStep) {
-                            WizardStep.DEVICE_DISCOVERY ->
-                                if (state.isEditMode) "Change RNode Device" else "Select RNode Device"
-                            WizardStep.REGION_SELECTION -> "Choose Region"
-                            WizardStep.MODEM_PRESET -> "Select Modem Preset"
-                            WizardStep.FREQUENCY_SLOT -> "Select Frequency Slot"
-                            WizardStep.REVIEW_CONFIGURE -> "Review Settings"
+                            TcpClientWizardStep.SERVER_SELECTION -> "Choose Server"
+                            TcpClientWizardStep.REVIEW_CONFIGURE -> "Review Settings"
                         },
                     )
                 },
                 navigationIcon = {
                     IconButton(
                         onClick = {
-                            if (state.currentStep == WizardStep.DEVICE_DISCOVERY) {
+                            if (state.currentStep == TcpClientWizardStep.SERVER_SELECTION) {
                                 onNavigateBack()
                             } else {
                                 viewModel.goToPreviousStep()
@@ -97,16 +85,16 @@ fun RNodeWizardScreen(
         bottomBar = {
             WizardBottomBar(
                 currentStepIndex = state.currentStep.ordinal,
-                totalSteps = WizardStep.entries.size,
+                totalSteps = TcpClientWizardStep.entries.size,
                 buttonText =
                     when (state.currentStep) {
-                        WizardStep.REVIEW_CONFIGURE -> if (state.isEditMode) "Update" else "Save"
-                        else -> "Next"
+                        TcpClientWizardStep.SERVER_SELECTION -> "Next"
+                        TcpClientWizardStep.REVIEW_CONFIGURE -> "Save"
                     },
                 canProceed = viewModel.canProceed(),
                 isSaving = state.isSaving,
                 onButtonClick = {
-                    if (state.currentStep == WizardStep.REVIEW_CONFIGURE) {
+                    if (state.currentStep == TcpClientWizardStep.REVIEW_CONFIGURE) {
                         viewModel.saveConfiguration()
                     } else {
                         viewModel.goToNextStep()
@@ -129,14 +117,11 @@ fun RNodeWizardScreen(
                     slideInHorizontally { -it } togetherWith slideOutHorizontally { it }
                 }
             },
-            label = "wizard_step",
+            label = "tcp_wizard_step",
         ) { step ->
             when (step) {
-                WizardStep.DEVICE_DISCOVERY -> DeviceDiscoveryStep(viewModel)
-                WizardStep.REGION_SELECTION -> RegionSelectionStep(viewModel)
-                WizardStep.MODEM_PRESET -> ModemPresetStep(viewModel)
-                WizardStep.FREQUENCY_SLOT -> FrequencySlotStep(viewModel)
-                WizardStep.REVIEW_CONFIGURE -> ReviewConfigStep(viewModel)
+                TcpClientWizardStep.SERVER_SELECTION -> ServerSelectionStep(viewModel)
+                TcpClientWizardStep.REVIEW_CONFIGURE -> ReviewConfigureStep(viewModel)
             }
         }
     }

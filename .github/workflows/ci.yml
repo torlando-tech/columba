@@ -148,8 +148,16 @@ jobs:
           rm -rf app/build/generated/aidl_source_output_dir
           rm -rf */build/generated/aidl_source_output_dir
 
+      - name: Clean JaCoCo execution data
+        run: |
+          # Clean stale JaCoCo execution data to avoid "exceeds max age" errors in Codecov
+          rm -rf build/jacoco
+          rm -rf */build/jacoco
+          rm -rf build/reports/jacoco
+          rm -rf */build/reports/jacoco
+
       - name: Run unit tests
-        run: ./gradlew test --stacktrace --max-workers=2
+        run: ./gradlew testDebugUnitTest --stacktrace --max-workers=2 --no-build-cache
 
       - name: Upload unit test results
         if: always()

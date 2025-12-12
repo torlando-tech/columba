@@ -42,14 +42,13 @@ class TestAnnounceHandler(unittest.TestCase):
 
         Per Reticulum docs: "Must be an object with an aspect_filter attribute"
         This is REQUIRED for RNS.Transport.register_announce_handler to work.
-
-        EXPECTED TO FAIL: Current implementation uses bare function without aspect_filter
         """
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
-        # The handler reference should have aspect_filter attribute
+        # Test one of the handlers from the handlers dict
+        handler = wrapper._announce_handlers["lxmf.delivery"]
         self.assertTrue(
-            hasattr(wrapper._announce_handler_ref, 'aspect_filter'),
+            hasattr(handler, 'aspect_filter'),
             "Announce handler must have 'aspect_filter' attribute for RNS to call it"
         )
 
@@ -62,15 +61,18 @@ class TestAnnounceHandler(unittest.TestCase):
         """
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
+        # Test one of the handlers from the handlers dict
+        handler = wrapper._announce_handlers["lxmf.delivery"]
+
         # The handler should have received_announce method
         self.assertTrue(
-            hasattr(wrapper._announce_handler_ref, 'received_announce'),
+            hasattr(handler, 'received_announce'),
             "Announce handler must have 'received_announce' method"
         )
 
         # It should be callable
         self.assertTrue(
-            callable(getattr(wrapper._announce_handler_ref, 'received_announce', None)),
+            callable(getattr(handler, 'received_announce', None)),
             "received_announce must be callable"
         )
 
@@ -78,9 +80,6 @@ class TestAnnounceHandler(unittest.TestCase):
     def test_handler_calls_underlying_callback(self, mock_rns):
         """
         Test that when received_announce is called, it invokes the actual handler.
-
-        EXPECTED TO FAIL: Current implementation is just a function reference,
-        not a proper handler object.
         """
         # Mock RNS.Transport.hops_to to return 1
         mock_rns.Transport.hops_to.return_value = 1
@@ -88,48 +87,45 @@ class TestAnnounceHandler(unittest.TestCase):
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
         # Mock the internal handler to track calls
-        original_handler = wrapper._announce_handler
         wrapper._announce_handler = Mock()
 
-        # Recreate handler ref
-        wrapper._announce_handler_ref = reticulum_wrapper.AnnounceHandler(wrapper._announce_handler)
+        # Create a new handler with the mocked callback
+        test_handler = reticulum_wrapper.AnnounceHandler("lxmf.delivery", wrapper._announce_handler)
 
-        # Recreate handler ref (simulating what __init__ does)
-        if hasattr(wrapper._announce_handler_ref, 'received_announce'):
-            # Simulate RNS calling our handler
-            test_dest_hash = b'test_destination_hash_bytes'
-            test_identity = Mock()
-            test_app_data = b'test_app_data'
+        # Simulate RNS calling our handler
+        test_dest_hash = b'test_destination_hash_bytes'
+        test_identity = Mock()
+        test_app_data = b'test_app_data'
 
-            # This simulates what RNS.Transport would do
-            wrapper._announce_handler_ref.received_announce(
-                test_dest_hash,
-                test_identity,
-                test_app_data
-            )
+        # This simulates what RNS.Transport would do
+        test_handler.received_announce(
+            test_dest_hash,
+            test_identity,
+            test_app_data
+        )
 
-            # Verify our internal handler was called
-            wrapper._announce_handler.assert_called_once()
-        else:
-            self.fail("Handler doesn't have received_announce method")
+        # Verify our internal handler was called
+        wrapper._announce_handler.assert_called_once()
 
-    def test_aspect_filter_allows_all_announces(self):
+    def test_aspect_filter_matches_handler_aspect(self):
         """
-        Test that aspect_filter is None to receive ALL announces.
+        Test that each handler has its correct aspect_filter set.
 
-        aspect_filter=None means "receive all announces regardless of aspect"
-        This is what we want for Columba to see all peer announces.
+        The implementation uses multiple handlers, each filtering for a specific aspect.
+        This allows proper routing of announces to the correct handlers.
         """
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
-        if hasattr(wrapper._announce_handler_ref, 'aspect_filter'):
-            # aspect_filter should be None to receive all announces
-            self.assertIsNone(
-                wrapper._announce_handler_ref.aspect_filter,
-                "aspect_filter should be None to receive all announces"
+        # Verify each handler has the correct aspect filter
+        expected_aspects = ["lxmf.delivery", "lxmf.propagation", "call.audio", "nomadnetwork.node"]
+
+        for aspect in expected_aspects:
+            handler = wrapper._announce_handlers[aspect]
+            self.assertEqual(
+                handler.aspect_filter,
+                aspect,
+                f"Handler for {aspect} should have matching aspect_filter"
             )
-        else:
-            self.fail("Handler doesn't have aspect_filter attribute")
 
     def test_handler_structure_compatible_with_rns(self):
         """
@@ -138,22 +134,23 @@ class TestAnnounceHandler(unittest.TestCase):
         This tests the EXACT requirements from Reticulum's documentation.
         """
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
-        handler = wrapper._announce_handler_ref
 
-        # Check all RNS requirements
-        checks = {
-            'has_aspect_filter': hasattr(handler, 'aspect_filter'),
-            'has_received_announce': hasattr(handler, 'received_announce'),
-            'received_announce_callable': callable(getattr(handler, 'received_announce', None)),
-        }
+        # Test all handlers for RNS compatibility
+        for aspect, handler in wrapper._announce_handlers.items():
+            # Check all RNS requirements
+            checks = {
+                'has_aspect_filter': hasattr(handler, 'aspect_filter'),
+                'has_received_announce': hasattr(handler, 'received_announce'),
+                'received_announce_callable': callable(getattr(handler, 'received_announce', None)),
+            }
 
-        failures = [check for check, passed in checks.items() if not passed]
+            failures = [check for check, passed in checks.items() if not passed]
 
-        self.assertEqual(
-            [],
-            failures,
-            f"Handler fails RNS compatibility checks: {failures}"
-        )
+            self.assertEqual(
+                [],
+                failures,
+                f"Handler for {aspect} fails RNS compatibility checks: {failures}"
+            )
 
 
 class TestAnnounceHandlerIntegration(unittest.TestCase):
@@ -195,27 +192,27 @@ class TestAnnounceHandlerIntegration(unittest.TestCase):
         test_identity.hash = b'test_identity_hash'
         test_app_data = b'test_app_data'
 
-        if hasattr(wrapper._announce_handler_ref, 'received_announce'):
-            # Call the handler (simulating what RNS would do)
-            wrapper._announce_handler_ref.received_announce(
-                test_dest_hash,
-                test_identity,
-                test_app_data
-            )
+        # Use one of the handlers from the handlers dict
+        handler = wrapper._announce_handlers["lxmf.delivery"]
 
-            # Verify announce was stored
-            self.assertEqual(
-                len(wrapper.pending_announces),
-                1,
-                "Announce should be added to pending_announces queue"
-            )
+        # Call the handler (simulating what RNS would do)
+        handler.received_announce(
+            test_dest_hash,
+            test_identity,
+            test_app_data
+        )
 
-            # Verify announce structure
-            stored_announce = wrapper.pending_announces[0]
-            self.assertEqual(stored_announce['destination_hash'], test_dest_hash)
-            self.assertEqual(stored_announce['app_data'], test_app_data)
-        else:
-            self.fail("Handler doesn't have received_announce method")
+        # Verify announce was stored
+        self.assertEqual(
+            len(wrapper.pending_announces),
+            1,
+            "Announce should be added to pending_announces queue"
+        )
+
+        # Verify announce structure
+        stored_announce = wrapper.pending_announces[0]
+        self.assertEqual(stored_announce['destination_hash'], test_dest_hash)
+        self.assertEqual(stored_announce['app_data'], test_app_data)
 
 
 if __name__ == '__main__':

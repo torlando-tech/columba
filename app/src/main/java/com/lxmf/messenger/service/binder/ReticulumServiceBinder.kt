@@ -550,7 +550,9 @@ class ReticulumServiceBinder(
                     imageData,
                     imageFormat,
                 )
-                result?.toString() ?: """{"success": false, "error": "No result"}"""
+                // Use PythonResultConverter to properly convert Python dict to JSON
+                // (bytes values like message_hash need Base64 encoding)
+                PythonResultConverter.convertSendMessageResult(result)
             } ?: """{"success": false, "error": "Wrapper not initialized"}"""
         } catch (e: Exception) {
             Log.e(TAG, "Error sending LXMF message with method", e)

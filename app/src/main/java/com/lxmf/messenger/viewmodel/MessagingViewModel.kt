@@ -201,6 +201,16 @@ class MessagingViewModel
                 if (message != null) {
                     // Update status
                     conversationRepository.updateMessageStatus(update.messageHash, update.status)
+
+                    // When retrying via propagation, also update the delivery method
+                    if (update.status == "retrying_propagated") {
+                        conversationRepository.updateMessageDeliveryDetails(
+                            update.messageHash,
+                            deliveryMethod = "propagated",
+                            errorMessage = null,
+                        )
+                    }
+
                     Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status}")
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")

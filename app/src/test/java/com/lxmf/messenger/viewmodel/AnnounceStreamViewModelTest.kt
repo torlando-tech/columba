@@ -6,6 +6,7 @@ import androidx.paging.PagingData
 import app.cash.turbine.test
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.reticulum.model.AnnounceEvent
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.model.NetworkStatus
@@ -48,6 +49,7 @@ class AnnounceStreamViewModelTest {
     private lateinit var reticulumProtocol: ReticulumProtocol
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var contactRepository: ContactRepository
+    private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var networkStatusFlow: MutableStateFlow<NetworkStatus>
     private lateinit var announceFlow: MutableSharedFlow<AnnounceEvent>
     private lateinit var viewModel: AnnounceStreamViewModel
@@ -80,6 +82,7 @@ class AnnounceStreamViewModelTest {
         reticulumProtocol = mockk()
         announceRepository = mockk()
         contactRepository = mockk()
+        propagationNodeManager = mockk(relaxed = true)
 
         // Setup network status flow
         networkStatusFlow = MutableStateFlow(NetworkStatus.SHUTDOWN)
@@ -120,7 +123,7 @@ class AnnounceStreamViewModelTest {
     @Test
     fun `waits for READY status before collecting announces`() =
         runTest {
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
 
             // Status starts as SHUTDOWN - should wait
             viewModel.initializationStatus.test {
@@ -140,7 +143,7 @@ class AnnounceStreamViewModelTest {
     @Test
     fun `handles ERROR status and stops waiting`() =
         runTest {
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
 
             viewModel.initializationStatus.test {
                 assertEquals("Reticulum managed by app", awaitItem())
@@ -161,7 +164,7 @@ class AnnounceStreamViewModelTest {
     fun `handles timeout waiting for READY`() =
         runTest {
             // Don't change status - let it timeout
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
 
             // Fast-forward past the 10 second timeout
             testScheduler.apply { advanceTimeBy(11000) }
@@ -183,7 +186,7 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { announceRepository.getAnnounceCount() } returns 1
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
             advanceUntilIdle()
 
             // Emit an announce
@@ -212,7 +215,7 @@ class AnnounceStreamViewModelTest {
             var count = 0
             coEvery { announceRepository.getAnnounceCount() } answers { ++count }
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
             advanceUntilIdle()
 
             // Emit multiple announces
@@ -248,7 +251,7 @@ class AnnounceStreamViewModelTest {
                 announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any())
             } throws Exception("Database error")
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
             advanceUntilIdle()
 
             // Emit an announce - should not crash
@@ -269,7 +272,7 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
             advanceUntilIdle()
 
             // Trigger the flow by collecting the first emission
@@ -286,7 +289,7 @@ class AnnounceStreamViewModelTest {
             // Start with INITIALIZING
             networkStatusFlow.value = NetworkStatus.INITIALIZING
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
 
             viewModel.initializationStatus.test {
                 assertEquals("Reticulum managed by app", awaitItem())
@@ -312,7 +315,7 @@ class AnnounceStreamViewModelTest {
                     appData = "MyCustomNode".toByteArray(),
                 )
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
             advanceUntilIdle()
 
             announceFlow.emit(announceWithName)
@@ -338,7 +341,7 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
             advanceUntilIdle()
 
             // Check default filter
@@ -357,7 +360,7 @@ class AnnounceStreamViewModelTest {
             // Mock both PEER (default) and the types we'll filter by
             every { announceRepository.getAnnouncesPaged(any(), any()) } returns flowOf(PagingData.empty())
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
             advanceUntilIdle()
 
             // Update filter to NODE and PROPAGATION_NODE
@@ -385,7 +388,7 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
             advanceUntilIdle()
 
             // Set empty filter
@@ -412,7 +415,7 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager)
             advanceUntilIdle()
 
             // Set search query

@@ -8,6 +8,7 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.ui.theme.PresetTheme
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -51,6 +52,7 @@ class SettingsViewModelTest {
     private lateinit var identityRepository: IdentityRepository
     private lateinit var reticulumProtocol: ReticulumProtocol
     private lateinit var interfaceConfigManager: InterfaceConfigManager
+    private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -75,6 +77,7 @@ class SettingsViewModelTest {
         identityRepository = mockk(relaxed = true)
         reticulumProtocol = mockk(relaxed = true)
         interfaceConfigManager = mockk(relaxed = true)
+        propagationNodeManager = mockk(relaxed = true)
 
         // Setup repository flow mocks
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
@@ -109,6 +112,7 @@ class SettingsViewModelTest {
             identityRepository = identityRepository,
             reticulumProtocol = reticulumProtocol,
             interfaceConfigManager = interfaceConfigManager,
+            propagationNodeManager = propagationNodeManager,
         )
     }
 

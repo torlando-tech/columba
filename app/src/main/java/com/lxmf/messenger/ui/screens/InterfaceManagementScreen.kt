@@ -79,6 +79,7 @@ import kotlinx.coroutines.delay
 fun InterfaceManagementScreen(
     onNavigateBack: () -> Unit,
     onNavigateToRNodeWizard: (interfaceId: Long?) -> Unit = {},
+    onNavigateToTcpClientWizard: () -> Unit = {},
     viewModel: InterfaceManagementViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -393,11 +394,13 @@ fun InterfaceManagementScreen(
         InterfaceTypeSelector(
             onTypeSelected = { type ->
                 showTypeSelector = false
-                if (type == "RNode") {
-                    onNavigateToRNodeWizard(null)
-                } else {
-                    viewModel.showAddDialog()
-                    viewModel.updateConfigState { it.copy(type = type) }
+                when (type) {
+                    "RNode" -> onNavigateToRNodeWizard(null)
+                    "TCPClient" -> onNavigateToTcpClientWizard()
+                    else -> {
+                        viewModel.showAddDialog()
+                        viewModel.updateConfigState { it.copy(type = type) }
+                    }
                 }
             },
             onDismiss = { showTypeSelector = false },

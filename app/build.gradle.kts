@@ -170,6 +170,12 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "2048m"
+                // Enable JaCoCo coverage for Robolectric tests
+                it.extensions.configure<JacocoTaskExtension> {
+                    isIncludeNoLocationClasses = true
+                    // Required for Java 9+ compatibility
+                    excludes = listOf("jdk.internal.*")
+                }
             }
         }
         execution = "ANDROIDX_TEST_ORCHESTRATOR"
@@ -281,6 +287,9 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.arch.core.testing)
     testImplementation(libs.robolectric)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.test)
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation(libs.paging.testing)
     testImplementation("androidx.test:core:1.5.0")
     testImplementation("androidx.test.ext:junit:1.1.5")

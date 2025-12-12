@@ -412,8 +412,9 @@ fun InterfacesCard(interfaces: List<InterfaceInfo>) {
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Another Reticulum app may be using this interface. " +
-                                "Close other apps or disable this interface in Settings.",
+                            text =
+                                "Another Reticulum app may be using this interface. " +
+                                    "Close other apps or disable this interface in Settings.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -481,21 +482,24 @@ fun InterfaceRow(
         }
 
         Icon(
-            imageVector = when {
-                iface.online -> Icons.Default.CheckCircle
-                hasFailed -> Icons.Default.Error
-                else -> Icons.Default.Warning
-            },
-            contentDescription = when {
-                iface.online -> "Online"
-                hasFailed -> "Failed to start - tap for details"
-                else -> "Offline - tap for details"
-            },
-            tint = when {
-                iface.online -> MaterialTheme.colorScheme.primary
-                hasFailed -> MaterialTheme.colorScheme.error
-                else -> MaterialTheme.colorScheme.tertiary
-            },
+            imageVector =
+                when {
+                    iface.online -> Icons.Default.CheckCircle
+                    hasFailed -> Icons.Default.Error
+                    else -> Icons.Default.Warning
+                },
+            contentDescription =
+                when {
+                    iface.online -> "Online"
+                    hasFailed -> "Failed to start - tap for details"
+                    else -> "Offline - tap for details"
+                },
+            tint =
+                when {
+                    iface.online -> MaterialTheme.colorScheme.primary
+                    hasFailed -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.tertiary
+                },
         )
     }
 }

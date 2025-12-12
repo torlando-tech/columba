@@ -8,6 +8,7 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.ui.theme.PresetTheme
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -51,6 +52,7 @@ class SettingsViewModelTest {
     private lateinit var identityRepository: IdentityRepository
     private lateinit var reticulumProtocol: ReticulumProtocol
     private lateinit var interfaceConfigManager: InterfaceConfigManager
+    private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -75,6 +77,7 @@ class SettingsViewModelTest {
         identityRepository = mockk(relaxed = true)
         reticulumProtocol = mockk(relaxed = true)
         interfaceConfigManager = mockk(relaxed = true)
+        propagationNodeManager = mockk(relaxed = true)
 
         // Setup repository flow mocks
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
@@ -109,6 +112,7 @@ class SettingsViewModelTest {
             identityRepository = identityRepository,
             reticulumProtocol = reticulumProtocol,
             interfaceConfigManager = interfaceConfigManager,
+            propagationNodeManager = propagationNodeManager,
         )
     }
 
@@ -1019,6 +1023,72 @@ class SettingsViewModelTest {
 
                 cancelAndConsumeRemainingEvents()
             }
+        }
+
+    // endregion
+
+    // region Message Delivery Settings Tests
+
+    @Test
+    fun `setDefaultDeliveryMethod direct saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setDefaultDeliveryMethod("direct")
+
+            coVerify { settingsRepository.saveDefaultDeliveryMethod("direct") }
+        }
+
+    @Test
+    fun `setDefaultDeliveryMethod propagated saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setDefaultDeliveryMethod("propagated")
+
+            coVerify { settingsRepository.saveDefaultDeliveryMethod("propagated") }
+        }
+
+    @Test
+    fun `setTryPropagationOnFail enabled saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTryPropagationOnFail(true)
+
+            coVerify { settingsRepository.saveTryPropagationOnFail(true) }
+        }
+
+    @Test
+    fun `setTryPropagationOnFail disabled saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTryPropagationOnFail(false)
+
+            coVerify { settingsRepository.saveTryPropagationOnFail(false) }
+        }
+
+    @Test
+    fun `setAutoSelectPropagationNode true enables auto-select and saves`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setAutoSelectPropagationNode(true)
+
+            coVerify { propagationNodeManager.enableAutoSelect() }
+            coVerify { settingsRepository.saveAutoSelectPropagationNode(true) }
+        }
+
+    @Test
+    fun `setAutoSelectPropagationNode false saves without enabling auto-select`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setAutoSelectPropagationNode(false)
+
+            coVerify(exactly = 0) { propagationNodeManager.enableAutoSelect() }
+            coVerify { settingsRepository.saveAutoSelectPropagationNode(false) }
         }
 
     // endregion

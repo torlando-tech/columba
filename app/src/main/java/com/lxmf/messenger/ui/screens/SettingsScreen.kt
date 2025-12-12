@@ -175,7 +175,6 @@ fun SettingsScreen(
                     onMethodChange = { viewModel.setDefaultDeliveryMethod(it) },
                     onTryPropagationToggle = { viewModel.setTryPropagationOnFail(it) },
                     onAutoSelectToggle = { viewModel.setAutoSelectPropagationNode(it) },
-                    onSelectRelay = { /* TODO: Navigate to announce stream with relay filter */ },
                 )
 
                 ThemeSelectionCard(

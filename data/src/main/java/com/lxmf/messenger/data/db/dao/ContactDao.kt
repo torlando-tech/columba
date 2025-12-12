@@ -9,6 +9,7 @@ import com.lxmf.messenger.data.model.EnrichedContact
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+@Suppress("TooManyFunctions") // DAOs naturally have many functions for CRUD + queries
 interface ContactDao {
     /**
      * Insert or replace a contact

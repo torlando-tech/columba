@@ -1,5 +1,6 @@
 package com.lxmf.messenger.data.repository
 
+import android.util.Log
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
@@ -14,7 +15,9 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkStatic
 import io.mockk.slot
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -54,6 +57,14 @@ class ContactRepositoryTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
+        // Mock android.util.Log to prevent "not mocked" errors
+        mockkStatic(Log::class)
+        every { Log.d(any(), any()) } returns 0
+        every { Log.e(any(), any()) } returns 0
+        every { Log.i(any(), any()) } returns 0
+        every { Log.w(any<String>(), any<String>()) } returns 0
+        every { Log.v(any(), any()) } returns 0
+
         mockContactDao = mockk(relaxed = true)
         mockLocalIdentityDao = mockk(relaxed = true)
         mockAnnounceDao = mockk(relaxed = true)
@@ -73,6 +84,7 @@ class ContactRepositoryTest {
     @After
     fun teardown() {
         Dispatchers.resetMain()
+        unmockkStatic(Log::class)
         clearAllMocks()
     }
 
@@ -111,6 +123,7 @@ class ContactRepositoryTest {
         identityHash: String = testIdentityHash,
         publicKey: ByteArray? = testPublicKey,
         status: ContactStatus = ContactStatus.ACTIVE,
+        isMyRelay: Boolean = false,
     ) = ContactEntity(
         destinationHash = destinationHash,
         identityHash = identityHash,
@@ -123,6 +136,7 @@ class ContactRepositoryTest {
         lastInteractionTimestamp = 0,
         isPinned = false,
         status = status,
+        isMyRelay = isMyRelay,
     )
 
     // ========== addPendingContact Tests ==========
@@ -507,5 +521,190 @@ class ContactRepositoryTest {
 
             // Then
             assertNull(result)
+        }
+
+    // ========== setAsMyRelay Tests ==========
+
+    @Test
+    fun `setAsMyRelay - no active identity returns early`() =
+        runTest {
+            // Given: No active identity
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+
+            // When
+            repository.setAsMyRelay(testDestHash, clearOther = true)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: Should not call DAO methods
+            coVerify(exactly = 0) { mockContactDao.clearMyRelay(any()) }
+            coVerify(exactly = 0) { mockContactDao.setAsMyRelay(any(), any()) }
+        }
+
+    @Test
+    fun `setAsMyRelay - clearOther true clears existing relay`() =
+        runTest {
+            // Given
+            coEvery { mockContactDao.clearMyRelay(any()) } just Runs
+            coEvery { mockContactDao.setAsMyRelay(any(), any()) } just Runs
+            coEvery { mockContactDao.getContact(any(), any()) } returns createTestContact(isMyRelay = true)
+
+            // When
+            repository.setAsMyRelay(testDestHash, clearOther = true)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            coVerify { mockContactDao.clearMyRelay(testIdentityHash) }
+            coVerify { mockContactDao.setAsMyRelay(testDestHash, testIdentityHash) }
+        }
+
+    @Test
+    fun `setAsMyRelay - clearOther false does not clear existing relay`() =
+        runTest {
+            // Given
+            coEvery { mockContactDao.setAsMyRelay(any(), any()) } just Runs
+            coEvery { mockContactDao.getContact(any(), any()) } returns createTestContact(isMyRelay = true)
+
+            // When
+            repository.setAsMyRelay(testDestHash, clearOther = false)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            coVerify(exactly = 0) { mockContactDao.clearMyRelay(any()) }
+            coVerify { mockContactDao.setAsMyRelay(testDestHash, testIdentityHash) }
+        }
+
+    @Test
+    fun `setAsMyRelay - updates contact in dao`() =
+        runTest {
+            // Given
+            coEvery { mockContactDao.clearMyRelay(any()) } just Runs
+            coEvery { mockContactDao.setAsMyRelay(any(), any()) } just Runs
+            coEvery { mockContactDao.getContact(any(), any()) } returns createTestContact(isMyRelay = true)
+
+            // When
+            repository.setAsMyRelay(testDestHash, clearOther = true)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            coVerify { mockContactDao.setAsMyRelay(testDestHash, testIdentityHash) }
+        }
+
+    // ========== clearMyRelay Tests ==========
+
+    @Test
+    fun `clearMyRelay - no active identity returns early`() =
+        runTest {
+            // Given: No active identity
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+
+            // When
+            repository.clearMyRelay()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: Should not call DAO
+            coVerify(exactly = 0) { mockContactDao.clearMyRelay(any()) }
+        }
+
+    @Test
+    fun `clearMyRelay - calls dao with identity hash`() =
+        runTest {
+            // Given
+            coEvery { mockContactDao.clearMyRelay(any()) } just Runs
+
+            // When
+            repository.clearMyRelay()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            coVerify { mockContactDao.clearMyRelay(testIdentityHash) }
+        }
+
+    // ========== getMyRelay Tests ==========
+
+    @Test
+    fun `getMyRelay - no active identity returns null`() =
+        runTest {
+            // Given: No active identity
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+
+            // When
+            val result = repository.getMyRelay()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertNull(result)
+        }
+
+    @Test
+    fun `getMyRelay - has relay returns contact`() =
+        runTest {
+            // Given
+            val relayContact = createTestContact(isMyRelay = true)
+            coEvery { mockContactDao.getMyRelay(testIdentityHash) } returns relayContact
+
+            // When
+            val result = repository.getMyRelay()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertEquals(relayContact, result)
+        }
+
+    @Test
+    fun `getMyRelay - no relay returns null`() =
+        runTest {
+            // Given
+            coEvery { mockContactDao.getMyRelay(testIdentityHash) } returns null
+
+            // When
+            val result = repository.getMyRelay()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertNull(result)
+        }
+
+    // ========== hasContact Tests ==========
+
+    @Test
+    fun `hasContact - no active identity returns false`() =
+        runTest {
+            // Given: No active identity
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+
+            // When
+            val result = repository.hasContact(testDestHash)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertEquals(false, result)
+        }
+
+    @Test
+    fun `hasContact - contact exists returns true`() =
+        runTest {
+            // Given
+            coEvery { mockContactDao.contactExists(testDestHash, testIdentityHash) } returns true
+
+            // When
+            val result = repository.hasContact(testDestHash)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertEquals(true, result)
+        }
+
+    @Test
+    fun `hasContact - contact does not exist returns false`() =
+        runTest {
+            // Given
+            coEvery { mockContactDao.contactExists(testDestHash, testIdentityHash) } returns false
+
+            // When
+            val result = repository.hasContact(testDestHash)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertEquals(false, result)
         }
 }

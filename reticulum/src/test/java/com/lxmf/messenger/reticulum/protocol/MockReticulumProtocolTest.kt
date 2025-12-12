@@ -213,7 +213,7 @@ class MockReticulumProtocolTest {
         val hash = ByteArray(16)
         val hopCount = protocol.getHopCount(hash)
         assertNotNull(hopCount)
-        assertTrue(hopCount!! >= 0)
+        assertTrue(requireNotNull(hopCount) >= 0)
     }
 
     @Test

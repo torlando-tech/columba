@@ -3,9 +3,11 @@ package com.lxmf.messenger.viewmodel
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
+import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.model.BleConnectionsState
 import com.lxmf.messenger.data.repository.BleStatusRepository
 import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
@@ -265,4 +267,150 @@ class InterfaceManagementViewModelStatusEventTest {
             // Should not crash, just skip event observation
             assertNotNull(viewModel)
         }
+
+    // region entityToConfigState Tests
+
+    @Test
+    fun `showEditDialog with AutoInterface null ports converts to empty strings`() =
+        runTest {
+            // Create test entity
+            val entity =
+                InterfaceEntity(
+                    id = 1L,
+                    name = "Test Auto",
+                    type = "AutoInterface",
+                    enabled = true,
+                    configJson = """{"group_id": "", "discovery_scope": "link", "mode": "full"}""",
+                    displayOrder = 0,
+                )
+
+            // Mock entityToConfig to return AutoInterface with null ports
+            every { interfaceRepository.entityToConfig(entity) } returns
+                InterfaceConfig.AutoInterface(
+                    name = "Test Auto",
+                    enabled = true,
+                    groupId = "",
+                    discoveryScope = "link",
+                    discoveryPort = null,
+                    dataPort = null,
+                    mode = "full",
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Call showEditDialog which triggers entityToConfigState
+            viewModel.showEditDialog(entity)
+            advanceUntilIdle()
+
+            // Verify configState has empty strings for ports (not "null" strings)
+            viewModel.configState.test {
+                val configState = awaitItem()
+                assertEquals("", configState.discoveryPort)
+                assertEquals("", configState.dataPort)
+                assertEquals("Test Auto", configState.name)
+                assertEquals("AutoInterface", configState.type)
+            }
+        }
+
+    @Test
+    fun `showEditDialog with AutoInterface valid ports converts correctly`() =
+        runTest {
+            val entity =
+                InterfaceEntity(
+                    id = 2L,
+                    name = "Custom Auto",
+                    type = "AutoInterface",
+                    enabled = true,
+                    configJson = """{"discovery_port": 12345, "data_port": 54321}""",
+                    displayOrder = 0,
+                )
+
+            every { interfaceRepository.entityToConfig(entity) } returns
+                InterfaceConfig.AutoInterface(
+                    name = "Custom Auto",
+                    enabled = true,
+                    discoveryPort = 12345,
+                    dataPort = 54321,
+                    mode = "full",
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.showEditDialog(entity)
+            advanceUntilIdle()
+
+            viewModel.configState.test {
+                val configState = awaitItem()
+                assertEquals("12345", configState.discoveryPort)
+                assertEquals("54321", configState.dataPort)
+            }
+        }
+
+    @Test
+    fun `showEditDialog with TCPClient handles optional fields correctly`() =
+        runTest {
+            val entity =
+                InterfaceEntity(
+                    id = 3L,
+                    name = "Remote TCP",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson = """{"target_host": "10.0.0.1", "target_port": 4242}""",
+                    displayOrder = 0,
+                )
+
+            // Mock with null networkName and passphrase
+            every { interfaceRepository.entityToConfig(entity) } returns
+                InterfaceConfig.TCPClient(
+                    name = "Remote TCP",
+                    enabled = true,
+                    targetHost = "10.0.0.1",
+                    targetPort = 4242,
+                    networkName = null,
+                    passphrase = null,
+                    mode = "full",
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.showEditDialog(entity)
+            advanceUntilIdle()
+
+            viewModel.configState.test {
+                val configState = awaitItem()
+                assertEquals("Remote TCP", configState.name)
+                assertEquals("TCPClient", configState.type)
+                assertEquals("10.0.0.1", configState.targetHost)
+                assertEquals("4242", configState.targetPort)
+                // networkName and passphrase should be empty strings via .orEmpty()
+                assertEquals("", configState.networkName)
+                assertEquals("", configState.passphrase)
+            }
+        }
+
+    // endregion
 }

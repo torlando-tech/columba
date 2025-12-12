@@ -1170,12 +1170,13 @@ class PythonReticulumProtocol(
 
             val success = result.getDictValue("success")?.toBoolean() ?: false
             if (!success) {
-                val error = result.getDictValue("error")?.toString() ?: "Unknown error"
-                throw RuntimeException(error)
+                val errorMsg = result.getDictValue("error")?.toString() ?: "Unknown error"
+                error("LXMF send failed: $errorMsg")
             }
 
-            val messageHash = result.getDictValue("message_hash")?.toJava(ByteArray::class.java)
-                ?: throw RuntimeException("No message hash in response")
+            val messageHash = checkNotNull(
+                result.getDictValue("message_hash")?.toJava(ByteArray::class.java),
+            ) { "No message hash in response" }
             val timestamp = result.getDictValue("timestamp")?.toLong() ?: System.currentTimeMillis()
             val destHashResult = result.getDictValue("destination_hash")?.toJava(ByteArray::class.java)
                 ?: destinationHash

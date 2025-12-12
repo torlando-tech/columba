@@ -56,6 +56,7 @@ import java.util.concurrent.ConcurrentHashMap
  * @property bluetoothManager Android Bluetooth manager
  */
 @SuppressLint("MissingPermission")
+@Suppress("InjectDispatcher") // Bridge class doesn't use DI - dispatchers are used for BLE operations
 class KotlinBLEBridge(
     private val context: Context,
     private val bluetoothManager: BluetoothManager,
@@ -510,9 +511,12 @@ class KotlinBLEBridge(
             Log.i(TAG, "Restarting BLE bridge after permission grant...")
 
             // Check if we have stored UUIDs (BLE was started before)
-            if (storedServiceUuid == null || storedRxCharUuid == null ||
-                storedTxCharUuid == null || storedIdentityCharUuid == null
-            ) {
+            val serviceUuid = storedServiceUuid
+            val rxCharUuid = storedRxCharUuid
+            val txCharUuid = storedTxCharUuid
+            val identityCharUuid = storedIdentityCharUuid
+            @Suppress("ComplexCondition") // All 4 UUIDs must be present to restart
+            if (serviceUuid == null || rxCharUuid == null || txCharUuid == null || identityCharUuid == null) {
                 Log.w(TAG, "Cannot restart BLE - no stored UUIDs (BLE was never started)")
                 return
             }
@@ -531,10 +535,10 @@ class KotlinBLEBridge(
             // Restart with stored UUIDs
             Log.d(TAG, "Starting BLE with stored UUIDs...")
             start(
-                storedServiceUuid!!,
-                storedRxCharUuid!!,
-                storedTxCharUuid!!,
-                storedIdentityCharUuid!!,
+                serviceUuid,
+                rxCharUuid,
+                txCharUuid,
+                identityCharUuid,
             ).fold(
                 onSuccess = {
                     Log.i(TAG, "BLE restart successful - interface is now operational")
@@ -1393,7 +1397,7 @@ class KotlinBLEBridge(
      *
      * Reassembles fragments into complete packets and forwards to Python.
      */
-    private suspend fun handleDataReceived(
+    private fun handleDataReceived(
         address: String,
         fragment: ByteArray,
     ) {

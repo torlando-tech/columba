@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
@@ -43,6 +44,7 @@ class MessagingViewModelTest {
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var activeConversationManager: ActiveConversationManager
+    private lateinit var settingsRepository: SettingsRepository
     private lateinit var viewModel: MessagingViewModel
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
@@ -62,6 +64,7 @@ class MessagingViewModelTest {
         conversationRepository = mockk()
         announceRepository = mockk()
         activeConversationManager = mockk(relaxed = true)
+        settingsRepository = mockk(relaxed = true)
 
         // Mock default behaviors
         coEvery { reticulumProtocol.getLxmfIdentity() } returns Result.success(testIdentity)
@@ -83,7 +86,7 @@ class MessagingViewModelTest {
         // Default: no announce info
         every { announceRepository.getAnnounceFlow(any()) } returns flowOf(null)
 
-        viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, activeConversationManager)
+        viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, activeConversationManager, settingsRepository)
     }
 
     @After
@@ -146,7 +149,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -169,12 +172,16 @@ class MessagingViewModelTest {
                 )
             }
 
-            // Verify: Protocol sendLxmfMessage was called
+            // Verify: Protocol sendLxmfMessageWithMethod was called
             coVerify {
-                reticulumProtocol.sendLxmfMessage(
+                reticulumProtocol.sendLxmfMessageWithMethod(
                     destinationHash = any(),
                     content = "Test message",
                     sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
                 )
             }
         }
@@ -184,7 +191,7 @@ class MessagingViewModelTest {
         runTest {
             // Setup: Mock failed LXMF send
             coEvery {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             } returns Result.failure(Exception("Network error"))
 
             coEvery {
@@ -219,7 +226,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -233,7 +240,7 @@ class MessagingViewModelTest {
 
             // Verify: Destination hash was converted to bytes
             coVerify {
-                reticulumProtocol.sendLxmfMessage(
+                reticulumProtocol.sendLxmfMessageWithMethod(
                     destinationHash =
                         match {
                             // "abcdef0123456789abcdef0123456789" -> 16 bytes
@@ -246,6 +253,10 @@ class MessagingViewModelTest {
                         },
                     content = "Test",
                     sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
                 )
             }
         }
@@ -299,7 +310,7 @@ class MessagingViewModelTest {
             // This avoids crashes when LXMF router isn't ready yet
             // Send a message to trigger identity loading
             coEvery {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(MessageReceipt(ByteArray(32), 3000L, testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()))
 
             coEvery {
@@ -334,16 +345,17 @@ class MessagingViewModelTest {
             every { failingAnnounceRepository.getAnnounceFlow(any()) } returns flowOf(null)
 
             val failingActiveConversationManager: ActiveConversationManager = mockk(relaxed = true)
+            val failingSettingsRepository: SettingsRepository = mockk(relaxed = true)
 
             val viewModelWithoutIdentity =
-                MessagingViewModel(failingProtocol, failingRepository, failingAnnounceRepository, failingActiveConversationManager)
+                MessagingViewModel(failingProtocol, failingRepository, failingAnnounceRepository, failingActiveConversationManager, failingSettingsRepository)
 
             // Attempt to send message
             viewModelWithoutIdentity.sendMessage(testPeerHash, "Test")
             advanceUntilIdle()
 
-            // Verify: sendLxmfMessage was NOT called
-            coVerify(exactly = 0) { failingProtocol.sendLxmfMessage(any(), any(), any()) }
+            // Verify: sendLxmfMessageWithMethod was NOT called
+            coVerify(exactly = 0) { failingProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any()) }
 
             // Verify: saveMessage was NOT called
             coVerify(exactly = 0) { failingRepository.saveMessage(any(), any(), any(), any()) }
@@ -396,7 +408,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved to database
@@ -418,7 +430,7 @@ class MessagingViewModelTest {
 
             // Verify: No protocol call made
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             }
 
             // Verify: No save to database
@@ -439,7 +451,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved
@@ -460,7 +472,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved
@@ -484,7 +496,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved
@@ -504,7 +516,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -520,10 +532,14 @@ class MessagingViewModelTest {
 
             // Assert: Message was trimmed before sending
             coVerify {
-                reticulumProtocol.sendLxmfMessage(
+                reticulumProtocol.sendLxmfMessageWithMethod(
                     destinationHash = any(),
                     content = "Test message", // Trimmed
                     sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
                 )
             }
 
@@ -549,7 +565,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -566,7 +582,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol was called (message is valid)
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message was saved
@@ -587,7 +603,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -603,7 +619,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol was called
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message was saved
@@ -630,7 +646,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -651,10 +667,12 @@ class MessagingViewModelTest {
 
             // Assert: Protocol was called with image data
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessage(
+                reticulumProtocol.sendLxmfMessageWithMethod(
                     destinationHash = any(),
                     content = "", // Empty content is OK with image
                     sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
                     imageData = testImageData,
                     imageFormat = "png",
                 )
@@ -677,7 +695,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessage(any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {

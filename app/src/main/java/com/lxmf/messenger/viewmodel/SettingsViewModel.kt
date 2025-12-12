@@ -55,7 +55,7 @@ data class SettingsState(
     val currentRelayHops: Int? = null,
 )
 
-@Suppress("TooManyFunctions") // ViewModel with many user interaction methods is expected
+@Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
 @HiltViewModel
 class SettingsViewModel
     @Inject

@@ -85,6 +85,18 @@ class ContactsViewModel
                     initialValue = emptyList(),
                 )
 
+        init {
+            Log.d(TAG, "ContactsViewModel created")
+            viewModelScope.launch {
+                contacts.collect { list ->
+                    Log.d(TAG, "Contacts flow emitted ${list.size} contacts")
+                    list.forEach { c ->
+                        Log.d(TAG, "  - ${c.displayName} (${c.destinationHash.take(8)}), isMyRelay=${c.isMyRelay}")
+                    }
+                }
+            }
+        }
+
         // Filtered contacts based on search query
         val filteredContacts: StateFlow<List<EnrichedContact>> =
             combine(
@@ -112,6 +124,7 @@ class ContactsViewModel
             filteredContacts
                 .combine(MutableStateFlow(Unit)) { contacts, _ ->
                     val relay = contacts.find { it.isMyRelay }
+                    Log.d(TAG, "GroupedContacts: ${contacts.size} filtered, relay=${relay?.displayName}")
                     ContactGroups(
                         relay = relay,
                         pinned = contacts.filter { it.isPinned && !it.isMyRelay },

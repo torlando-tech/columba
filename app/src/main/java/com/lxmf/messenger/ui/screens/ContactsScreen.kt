@@ -122,6 +122,11 @@ fun ContactsScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
+
+    // Debug logging
+    LaunchedEffect(groupedContacts) {
+        android.util.Log.d("ContactsScreen", "UI received: relay=${groupedContacts.relay?.displayName}, pinned=${groupedContacts.pinned.size}, all=${groupedContacts.all.size}")
+    }
     var showAddContactSheet by remember { mutableStateOf(false) }
     var showManualEntryDialog by remember { mutableStateOf(false) }
 
@@ -265,7 +270,7 @@ fun ContactsScreen(
             }
         },
     ) { paddingValues ->
-        if (groupedContacts.pinned.isEmpty() && groupedContacts.all.isEmpty()) {
+        if (groupedContacts.relay == null && groupedContacts.pinned.isEmpty() && groupedContacts.all.isEmpty()) {
             EmptyContactsState(
                 modifier =
                     Modifier
@@ -283,7 +288,9 @@ fun ContactsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // My Relay section (shown at top, separate from pinned)
+                android.util.Log.d("ContactsScreen", "LazyColumn composing, relay=${groupedContacts.relay?.displayName}")
                 groupedContacts.relay?.let { relay ->
+                    android.util.Log.d("ContactsScreen", "Rendering MY RELAY section for: ${relay.displayName}")
                     item {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

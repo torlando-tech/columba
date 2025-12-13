@@ -1,5 +1,6 @@
 package com.lxmf.messenger.service
 
+import app.cash.turbine.test
 import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
@@ -13,8 +14,6 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import app.cash.turbine.test
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -26,10 +25,11 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.junit.Assert.assertNotEquals
 import org.junit.After
+import org.junit.Assert.assertNotEquals
 import org.junit.Before
 import org.junit.Test
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Unit tests for PropagationNodeManager.
@@ -1014,5 +1014,4 @@ class PropagationNodeManagerTest {
                 cancelAndConsumeRemainingEvents()
             }
         }
-
 }

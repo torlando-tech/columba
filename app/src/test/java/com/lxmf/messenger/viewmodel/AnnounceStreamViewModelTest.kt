@@ -77,7 +77,7 @@ class AnnounceStreamViewModelTest {
         Dispatchers.setMain(testDispatcher)
 
         // Disable periodic updates in tests to prevent OOM from infinite loop
-        AnnounceStreamViewModel.UPDATE_INTERVAL_MS = 0
+        AnnounceStreamViewModel.updateIntervalMs = 0
 
         reticulumProtocol = mockk()
         announceRepository = mockk()
@@ -117,7 +117,7 @@ class AnnounceStreamViewModelTest {
         Dispatchers.resetMain()
         clearAllMocks()
         // Reset update interval to default
-        AnnounceStreamViewModel.UPDATE_INTERVAL_MS = 30_000L
+        AnnounceStreamViewModel.updateIntervalMs = 30_000L
     }
 
     @Test

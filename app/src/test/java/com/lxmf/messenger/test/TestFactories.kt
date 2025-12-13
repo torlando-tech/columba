@@ -5,6 +5,7 @@ import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.Announce
+import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.service.RelayInfo
 
 /**
@@ -169,4 +170,37 @@ object TestFactories {
         isAutoSelected = isAutoSelected,
         lastSeenTimestamp = lastSeenTimestamp,
     )
+
+    /**
+     * Create a test Conversation object for ChatsScreen testing.
+     */
+    fun createConversation(
+        peerHash: String = TEST_DEST_HASH,
+        peerName: String = "Test Peer",
+        peerPublicKey: ByteArray? = TEST_PUBLIC_KEY,
+        lastMessage: String = "Hello",
+        lastMessageTimestamp: Long = System.currentTimeMillis(),
+        unreadCount: Int = 0,
+    ) = Conversation(
+        peerHash = peerHash,
+        peerName = peerName,
+        peerPublicKey = peerPublicKey,
+        lastMessage = lastMessage,
+        lastMessageTimestamp = lastMessageTimestamp,
+        unreadCount = unreadCount,
+    )
+
+    /**
+     * Create multiple test conversations for list testing.
+     */
+    fun createMultipleConversations(count: Int = 3): List<Conversation> =
+        (0 until count).map { i ->
+            createConversation(
+                peerHash = "peer_hash_$i",
+                peerName = "Peer $i",
+                lastMessage = "Message from peer $i",
+                lastMessageTimestamp = System.currentTimeMillis() - (i * 60_000L),
+                unreadCount = i,
+            )
+        }
 }

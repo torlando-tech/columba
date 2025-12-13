@@ -129,6 +129,18 @@ class ReticulumServiceBinder(
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to set RNode bridge before init: ${e.message}", e)
                         }
+
+                        // Setup delivery status callback BEFORE Python initialization
+                        // This ensures messages sent during init get their status reported
+                        try {
+                            val deliveryCallback: (String) -> Unit = { statusJson ->
+                                pollingManager.handleDeliveryStatusEvent(statusJson)
+                            }
+                            wrapper.callAttr("set_delivery_status_callback", deliveryCallback)
+                            Log.d(TAG, "Delivery status callback set before Python initialization")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to set delivery status callback before init: ${e.message}", e)
+                        }
                     },
                     onSuccess = { isSharedInstance ->
                         // Execute directly - we're already in a coroutine from the outer scope.launch
@@ -650,14 +662,7 @@ class ReticulumServiceBinder(
             Log.w(TAG, "Failed to set ReticulumBridge: ${e.message}", e)
         }
 
-        // Setup delivery status callback
-        try {
-            wrapperManager.setDeliveryStatusCallback { statusJson ->
-                pollingManager.handleDeliveryStatusEvent(statusJson)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to set delivery status callback: ${e.message}", e)
-        }
+        // Note: Delivery status callback is set in beforeInit block to catch early messages
 
         // Setup message received callback
         try {

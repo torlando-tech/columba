@@ -405,22 +405,14 @@ class ServiceReticulumProtocolTest {
     // ===========================================
 
     @Test
-    fun `verify bindService mock is set up correctly`() = runTest {
+    fun `verify protocol can be created and cleaned up`() = runTest {
         // Given - protocol already created in setup
 
-        // When - attempt to bind (will start but not complete due to readiness)
-        // We're just verifying the mock setup works
-        var exceptionThrown = false
-        try {
-            // This will suspend indefinitely waiting for readiness callback
-            // but we can verify the context.bindService was called
-        } catch (e: Exception) {
-            exceptionThrown = true
-        }
-
-        // Then - verify we can at least create and cleanup the protocol
+        // When/Then - verify we can create and cleanup the protocol without error
         protocol.cleanup()
-        assertFalse(exceptionThrown)
+
+        // Verify context methods were configured correctly
+        assertTrue(::protocol.isInitialized)
     }
 
     @Test

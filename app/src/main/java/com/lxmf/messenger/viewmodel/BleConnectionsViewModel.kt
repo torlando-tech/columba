@@ -118,7 +118,8 @@ class BleConnectionsViewModel
 
             _uiState.value =
                 BleConnectionsUiState.Success(
-                    connections = connections.sortedByDescending { it.rssi }, // Sort by signal strength
+                    // Sort by signal strength
+                    connections = connections.sortedByDescending { it.rssi },
                     totalConnections = connections.size,
                     centralConnections = centralCount,
                     peripheralConnections = peripheralCount,

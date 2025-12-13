@@ -38,7 +38,9 @@ class AnnounceStreamViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "AnnounceStreamViewModel"
-            internal var UPDATE_INTERVAL_MS = 30_000L // Made var for testing
+
+            // Made var for testing
+            internal var updateIntervalMs = 30_000L
         }
 
         // Search query state
@@ -115,11 +117,11 @@ class AnnounceStreamViewModel
             startCollectingAnnouncesWhenReady()
 
             // Update reachable count periodically
-            if (UPDATE_INTERVAL_MS > 0) {
+            if (updateIntervalMs > 0) {
                 viewModelScope.launch {
                     while (true) {
                         updateReachableCount()
-                        kotlinx.coroutines.delay(UPDATE_INTERVAL_MS)
+                        kotlinx.coroutines.delay(updateIntervalMs)
                     }
                 }
             }

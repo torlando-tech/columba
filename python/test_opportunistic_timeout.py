@@ -322,6 +322,401 @@ class TestTimerManagement(unittest.TestCase):
         time.sleep(0.1)
 
 
+class TestStartOpportunisticTimer(unittest.TestCase):
+    """Tests for the _start_opportunistic_timer method."""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_timer_thread_starts_when_called(self):
+        """Test that timer thread is created and started"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+
+        # Initially no timer
+        self.assertIsNone(wrapper._opportunistic_timer)
+
+        # Start timer
+        wrapper._start_opportunistic_timer()
+
+        # Timer should be created and alive
+        self.assertIsNotNone(wrapper._opportunistic_timer)
+        self.assertTrue(wrapper._opportunistic_timer.is_alive())
+
+        # Clean up
+        wrapper.initialized = False
+        time.sleep(0.1)
+
+    def test_timer_is_daemon_thread(self):
+        """Test that created thread is a daemon thread"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+
+        wrapper._start_opportunistic_timer()
+
+        # Verify it's a daemon thread
+        self.assertTrue(wrapper._opportunistic_timer.daemon)
+
+        # Clean up
+        wrapper.initialized = False
+        time.sleep(0.1)
+
+    def test_doesnt_start_if_already_running(self):
+        """Test that timer doesn't restart if already running"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+
+        # Start first time
+        wrapper._start_opportunistic_timer()
+        first_timer = wrapper._opportunistic_timer
+        first_thread_id = first_timer.ident
+
+        # Give it a moment to start
+        time.sleep(0.05)
+
+        # Try to start again while still running
+        wrapper._start_opportunistic_timer()
+        second_timer = wrapper._opportunistic_timer
+
+        # Should be the same thread
+        self.assertIs(first_timer, second_timer)
+        self.assertEqual(first_thread_id, second_timer.ident)
+
+        # Clean up
+        wrapper.initialized = False
+        time.sleep(0.1)
+
+    def test_restarts_if_previous_thread_died(self):
+        """Test that timer restarts if previous thread has died"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper._opportunistic_check_interval = 0.05  # Speed up for testing
+
+        # Start first time
+        wrapper._start_opportunistic_timer()
+        first_timer = wrapper._opportunistic_timer
+
+        # Stop the thread by setting initialized to False
+        wrapper.initialized = False
+        # Wait for thread to exit (needs to be longer than check_interval)
+        first_timer.join(timeout=0.5)
+
+        # Verify first thread is no longer alive
+        self.assertFalse(first_timer.is_alive())
+
+        # Re-initialize and start again
+        wrapper.initialized = True
+        wrapper._start_opportunistic_timer()
+        second_timer = wrapper._opportunistic_timer
+
+        # Should be a different thread (not the same object)
+        self.assertIsNot(first_timer, second_timer)
+        self.assertTrue(second_timer.is_alive())
+
+        # Clean up
+        wrapper.initialized = False
+        second_timer.join(timeout=0.5)
+
+
+class TestOpportunisticTimeoutLoop(unittest.TestCase):
+    """Tests for the _opportunistic_timeout_loop method."""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_loop_exits_when_not_initialized(self):
+        """Test that loop exits cleanly when initialized is False"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = False
+
+        # Run loop in thread (it should exit immediately)
+        import threading
+        loop_thread = threading.Thread(target=wrapper._opportunistic_timeout_loop)
+        loop_thread.start()
+
+        # Wait for thread to complete
+        loop_thread.join(timeout=1.0)
+
+        # Thread should have exited
+        self.assertFalse(loop_thread.is_alive())
+
+    def test_loop_calls_check_periodically(self):
+        """Test that loop calls _check_opportunistic_timeouts periodically"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper._opportunistic_check_interval = 0.05  # Speed up for testing
+
+        # Mock the check method
+        wrapper._check_opportunistic_timeouts = MagicMock()
+
+        # Add a message to trigger checking
+        mock_message = MagicMock()
+        wrapper._opportunistic_messages['test_hash'] = {
+            'message': mock_message,
+            'sent_time': time.time()
+        }
+
+        # Start loop in thread
+        import threading
+        loop_thread = threading.Thread(target=wrapper._opportunistic_timeout_loop)
+        loop_thread.start()
+
+        # Let it run for a bit
+        time.sleep(0.15)  # Should get ~3 calls
+
+        # Stop the loop
+        wrapper.initialized = False
+        loop_thread.join(timeout=1.0)
+
+        # Verify check was called multiple times
+        self.assertGreaterEqual(wrapper._check_opportunistic_timeouts.call_count, 2)
+
+    def test_loop_skips_check_when_no_messages(self):
+        """Test that loop doesn't call check when tracking dict is empty"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper._opportunistic_check_interval = 0.05
+
+        # Mock the check method
+        wrapper._check_opportunistic_timeouts = MagicMock()
+
+        # Ensure tracking dict is empty
+        wrapper._opportunistic_messages = {}
+
+        # Start loop
+        import threading
+        loop_thread = threading.Thread(target=wrapper._opportunistic_timeout_loop)
+        loop_thread.start()
+
+        # Let it run for a bit
+        time.sleep(0.15)
+
+        # Stop the loop
+        wrapper.initialized = False
+        loop_thread.join(timeout=1.0)
+
+        # Check should not have been called (dict was empty)
+        wrapper._check_opportunistic_timeouts.assert_not_called()
+
+    def test_loop_respects_check_interval(self):
+        """Test that loop uses the configured check interval"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper._opportunistic_check_interval = 0.1  # 100ms interval
+
+        # Mock the check method
+        wrapper._check_opportunistic_timeouts = MagicMock()
+
+        # Add a message
+        wrapper._opportunistic_messages['test'] = {
+            'message': MagicMock(),
+            'sent_time': time.time()
+        }
+
+        # Start loop
+        import threading
+        loop_thread = threading.Thread(target=wrapper._opportunistic_timeout_loop)
+        start_time = time.time()
+        loop_thread.start()
+
+        # Run for just over 2 intervals
+        time.sleep(0.25)
+
+        # Stop the loop
+        wrapper.initialized = False
+        loop_thread.join(timeout=1.0)
+        elapsed = time.time() - start_time
+
+        # Should have been called 2-3 times (accounting for timing variance)
+        call_count = wrapper._check_opportunistic_timeouts.call_count
+        self.assertGreaterEqual(call_count, 2)
+        self.assertLessEqual(call_count, 4)
+
+
+class TestCheckOpportunisticTimeoutsThreading(unittest.TestCase):
+    """Tests for threading aspects of _check_opportunistic_timeouts method."""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_identifies_timed_out_messages(self):
+        """Test that messages exceeding 30 seconds are identified"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Create messages - some timed out, some not
+        old_message = MagicMock()
+        old_message.hash = b'old_msg'
+        old_message.try_propagation_on_fail = True
+
+        recent_message = MagicMock()
+        recent_message.hash = b'recent_msg'
+
+        # Add to tracking
+        wrapper._opportunistic_messages[b'old_msg'.hex()] = {
+            'message': old_message,
+            'sent_time': time.time() - 35  # 35 seconds ago
+        }
+        wrapper._opportunistic_messages[b'recent_msg'.hex()] = {
+            'message': recent_message,
+            'sent_time': time.time() - 5  # 5 seconds ago
+        }
+
+        # Mock failure callback
+        wrapper._on_message_failed = MagicMock()
+
+        # Check timeouts
+        wrapper._check_opportunistic_timeouts()
+
+        # Only old message should have triggered callback
+        wrapper._on_message_failed.assert_called_once_with(old_message)
+
+    def test_calls_delivery_callback_with_failure_status(self):
+        """Test that timed-out messages trigger failure callback"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.kotlin_delivery_status_callback = MagicMock()
+        wrapper.active_propagation_node = None  # No retry
+
+        mock_message = MagicMock()
+        mock_message.hash = b'timeout_msg'
+        mock_message.try_propagation_on_fail = False
+
+        # Add old message
+        wrapper._opportunistic_messages[b'timeout_msg'.hex()] = {
+            'message': mock_message,
+            'sent_time': time.time() - 40
+        }
+
+        # Check timeouts
+        wrapper._check_opportunistic_timeouts()
+
+        # Kotlin callback should have been called with failed status
+        wrapper.kotlin_delivery_status_callback.assert_called_once()
+        import json
+        call_args = wrapper.kotlin_delivery_status_callback.call_args[0][0]
+        status_data = json.loads(call_args)
+        self.assertEqual(status_data['status'], 'failed')
+
+    def test_removes_timed_out_messages_from_tracking(self):
+        """Test that timed-out messages are removed from tracking dict"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper._on_message_failed = MagicMock()
+
+        mock_message = MagicMock()
+        mock_message.hash = b'remove_msg'
+        mock_message.try_propagation_on_fail = True
+
+        msg_hash_hex = b'remove_msg'.hex()
+        wrapper._opportunistic_messages[msg_hash_hex] = {
+            'message': mock_message,
+            'sent_time': time.time() - 35
+        }
+
+        # Verify it's tracked
+        self.assertIn(msg_hash_hex, wrapper._opportunistic_messages)
+
+        # Check timeouts
+        wrapper._check_opportunistic_timeouts()
+
+        # Should be removed
+        self.assertNotIn(msg_hash_hex, wrapper._opportunistic_messages)
+
+    def test_handles_empty_tracking_dict(self):
+        """Test that empty tracking dict doesn't cause errors"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper._opportunistic_messages = {}
+
+        # Should not raise any exception
+        try:
+            wrapper._check_opportunistic_timeouts()
+            success = True
+        except Exception:
+            success = False
+
+        self.assertTrue(success)
+
+    def test_thread_safe_iteration(self):
+        """Test that iteration creates a copy to avoid modification errors"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Create multiple messages
+        for i in range(5):
+            msg = MagicMock()
+            msg.hash = f'msg_{i}'.encode()
+            msg.try_propagation_on_fail = True
+
+            wrapper._opportunistic_messages[f'msg_{i}'.encode().hex()] = {
+                'message': msg,
+                'sent_time': time.time() - 35  # All timed out
+            }
+
+        # Mock failure callback - it should be safe even though dict is modified
+        wrapper._on_message_failed = MagicMock()
+
+        # This should not raise "dictionary changed size during iteration" error
+        try:
+            wrapper._check_opportunistic_timeouts()
+            success = True
+        except RuntimeError as e:
+            if "dictionary changed size" in str(e):
+                success = False
+            else:
+                raise
+
+        self.assertTrue(success)
+        # All messages should have been processed
+        self.assertEqual(wrapper._on_message_failed.call_count, 5)
+        # All should be removed from tracking
+        self.assertEqual(len(wrapper._opportunistic_messages), 0)
+
+    def test_multiple_timeouts_processed_in_single_check(self):
+        """Test that multiple timed-out messages are all processed in one check"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper._on_message_failed = MagicMock()
+
+        # Create 3 timed-out messages
+        for i in range(3):
+            msg = MagicMock()
+            msg.hash = f'multi_{i}'.encode()
+            msg.try_propagation_on_fail = True
+
+            wrapper._opportunistic_messages[f'multi_{i}'.encode().hex()] = {
+                'message': msg,
+                'sent_time': time.time() - 35
+            }
+
+        # One check should process all
+        wrapper._check_opportunistic_timeouts()
+
+        # All 3 should have triggered callback
+        self.assertEqual(wrapper._on_message_failed.call_count, 3)
+        # All should be removed
+        self.assertEqual(len(wrapper._opportunistic_messages), 0)
+
+
 class TestPropagationFallback(unittest.TestCase):
     """Integration tests for propagation fallback flow."""
 

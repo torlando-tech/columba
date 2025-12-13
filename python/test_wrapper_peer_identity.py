@@ -337,6 +337,146 @@ class TestStorePeerIdentity(unittest.TestCase):
         # Should still succeed
         self.assertTrue(result.get('success'))
 
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_store_peer_identity_register_destination_fallback_attribute_error(self, mock_rns):
+        """Test Transport.register_destination() fallback when method doesn't exist (AttributeError)"""
+        # Create mock identity and destination
+        mock_identity = Mock()
+        mock_identity.hash = b'hash_16_bytes_ok'
+        mock_identity.load_public_key = Mock()
+
+        mock_destination = Mock()
+        mock_destination.hash = b'dest_hash_ok_16b'
+
+        # Configure RNS mocks
+        mock_rns.Identity.return_value = mock_identity
+        mock_rns.Destination.return_value = mock_destination
+        mock_rns.Destination.OUT = 'OUT'
+        mock_rns.Destination.SINGLE = 'SINGLE'
+        mock_rns.Identity.recall.return_value = None
+
+        # Make Transport.register_destination raise AttributeError (method not available)
+        mock_rns.Transport.register_destination.side_effect = AttributeError("No such method")
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        identity_hash = b'hash_16_bytes_ok'
+        public_key = b'a' * 32
+
+        result = wrapper.store_peer_identity(identity_hash, public_key)
+
+        # Should still succeed (falls back to local cache)
+        self.assertTrue(result.get('success'))
+
+        # Verify identity was stored in local cache
+        actual_hash_hex = b'hash_16_bytes_ok'.hex()
+        self.assertIn(actual_hash_hex, wrapper.identities)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_store_peer_identity_register_destination_exception(self, mock_rns):
+        """Test Transport.register_destination() fallback when it raises a generic exception"""
+        # Create mock identity and destination
+        mock_identity = Mock()
+        mock_identity.hash = b'hash_16_bytes_ok'
+        mock_identity.load_public_key = Mock()
+
+        mock_destination = Mock()
+        mock_destination.hash = b'dest_hash_ok_16b'
+
+        # Configure RNS mocks
+        mock_rns.Identity.return_value = mock_identity
+        mock_rns.Destination.return_value = mock_destination
+        mock_rns.Destination.OUT = 'OUT'
+        mock_rns.Destination.SINGLE = 'SINGLE'
+        mock_rns.Identity.recall.return_value = None
+
+        # Make Transport.register_destination raise a generic exception
+        mock_rns.Transport.register_destination.side_effect = RuntimeError("Transport error")
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        identity_hash = b'hash_16_bytes_ok'
+        public_key = b'b' * 32
+
+        result = wrapper.store_peer_identity(identity_hash, public_key)
+
+        # Should still succeed (falls back to local cache)
+        self.assertTrue(result.get('success'))
+
+        # Verify identity was stored in local cache
+        actual_hash_hex = b'hash_16_bytes_ok'.hex()
+        self.assertIn(actual_hash_hex, wrapper.identities)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_store_peer_identity_test_recall_verification_not_recallable(self, mock_rns):
+        """Test the test recall verification path when identity is not yet recallable"""
+        # Create mock identity and destination
+        mock_identity = Mock()
+        mock_identity.hash = b'hash_16_bytes_ok'
+        mock_identity.load_public_key = Mock()
+
+        mock_destination = Mock()
+        mock_destination.hash = b'dest_hash_ok_16b'
+
+        # Configure RNS mocks
+        mock_rns.Identity.return_value = mock_identity
+        mock_rns.Destination.return_value = mock_destination
+        mock_rns.Destination.OUT = 'OUT'
+        mock_rns.Destination.SINGLE = 'SINGLE'
+
+        # Make test recall return None (not recallable) - this tests lines 2897-2901
+        mock_rns.Identity.recall.return_value = None
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        identity_hash = b'hash_16_bytes_ok'
+        public_key = b'c' * 32
+
+        result = wrapper.store_peer_identity(identity_hash, public_key)
+
+        # Should still succeed despite not being recallable
+        self.assertTrue(result.get('success'))
+
+        # Verify recall was called to test recallability
+        mock_rns.Identity.recall.assert_called_once_with(b'dest_hash_ok_16b')
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_store_peer_identity_test_recall_verification_recallable(self, mock_rns):
+        """Test the test recall verification path when identity is successfully recallable"""
+        # Create mock identity and destination
+        mock_identity = Mock()
+        mock_identity.hash = b'hash_16_bytes_ok'
+        mock_identity.load_public_key = Mock()
+
+        mock_destination = Mock()
+        mock_destination.hash = b'dest_hash_ok_16b'
+
+        # Configure RNS mocks
+        mock_rns.Identity.return_value = mock_identity
+        mock_rns.Destination.return_value = mock_destination
+        mock_rns.Destination.OUT = 'OUT'
+        mock_rns.Destination.SINGLE = 'SINGLE'
+
+        # Make test recall return the identity (successfully recallable)
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        identity_hash = b'hash_16_bytes_ok'
+        public_key = b'd' * 32
+
+        result = wrapper.store_peer_identity(identity_hash, public_key)
+
+        # Should succeed
+        self.assertTrue(result.get('success'))
+
+        # Verify recall was called to test recallability
+        mock_rns.Identity.recall.assert_called_once_with(b'dest_hash_ok_16b')
+
 
 class TestRestoreAllPeerIdentities(unittest.TestCase):
     """Test the restore_all_peer_identities method for bulk identity restoration"""
@@ -626,6 +766,171 @@ class TestRestoreAllPeerIdentities(unittest.TestCase):
         # Should return error
         self.assertEqual(result['success_count'], 0)
         self.assertGreater(len(result['errors']), 0)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_restore_all_invalid_hex_in_identity_hash(self, mock_rns):
+        """Test restore_all_peer_identities with invalid hex string in identity_hash field"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Peer data with invalid hex in identity_hash (contains 'Z')
+        peer_data = [
+            {
+                "identity_hash": "ZZZZZZZZ12345678" * 2,  # Invalid hex
+                "public_key": base64.b64encode(b'key1' * 8).decode()
+            }
+        ]
+
+        result = wrapper.restore_all_peer_identities(peer_data)
+
+        # Should fail gracefully
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('Error processing peer', result['errors'][0])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_restore_all_invalid_hex_in_public_key_base64(self, mock_rns):
+        """Test restore_all_peer_identities with invalid base64 in public_key field"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Peer data with invalid base64 in public_key
+        peer_data = [
+            {
+                "identity_hash": "aabbccdd" * 4,
+                "public_key": "!!!INVALID_BASE64!!!"  # Invalid base64
+            }
+        ]
+
+        result = wrapper.restore_all_peer_identities(peer_data)
+
+        # Should fail gracefully
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('Error processing peer', result['errors'][0])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_restore_all_exception_during_store_call(self, mock_rns):
+        """Test restore_all_peer_identities when store_peer_identity raises exception"""
+        # Setup mocks
+        mock_identity = Mock()
+        mock_identity.hash = b'hash_16_bytes_ok'
+        mock_identity.load_public_key = Mock()
+
+        # Make Identity creation raise an exception
+        mock_rns.Identity.side_effect = Exception("Identity creation failed")
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {
+                "identity_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(b'key1' * 8).decode()
+            }
+        ]
+
+        result = wrapper.restore_all_peer_identities(peer_data)
+
+        # Should have 0 success and 1 error
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('Failed to restore', result['errors'][0])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_restore_all_mixed_success_failure_batch(self, mock_rns):
+        """Test restore_all_peer_identities with mixed success/failure batch (accumulates errors)"""
+        # Setup mocks - will succeed for first and third, fail for second
+        mock_identity = Mock()
+        mock_identity.hash = b'hash_16_bytes_ok'
+        mock_identity.load_public_key = Mock()
+
+        mock_destination = Mock()
+        mock_destination.hash = b'dest_hash_ok_16b'
+
+        mock_rns.Identity.return_value = mock_identity
+        mock_rns.Destination.return_value = mock_destination
+        mock_rns.Destination.OUT = 'OUT'
+        mock_rns.Destination.SINGLE = 'SINGLE'
+        mock_rns.Identity.recall.return_value = None
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Create test data - mix of valid, invalid hex, and valid
+        peer_data = [
+            {
+                "identity_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(b'key1' * 8).decode()
+            },
+            {
+                "identity_hash": "GGGGGGGG" * 4,  # Invalid hex
+                "public_key": base64.b64encode(b'key2' * 8).decode()
+            },
+            {
+                "identity_hash": "11223344" * 4,
+                "public_key": "NOT_BASE64!!!"  # Invalid base64
+            },
+            {
+                "identity_hash": "55667788" * 4,
+                "public_key": base64.b64encode(b'key4' * 8).decode()
+            }
+        ]
+
+        result = wrapper.restore_all_peer_identities(peer_data)
+
+        # Should have 2 successes and 2 errors (accumulates all errors)
+        self.assertEqual(result['success_count'], 2)
+        self.assertEqual(len(result['errors']), 2)
+
+        # Verify error accumulation
+        for error in result['errors']:
+            self.assertIn('Error processing peer', error)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_restore_all_json_parse_error(self, mock_rns):
+        """Test restore_all_peer_identities with malformed JSON that causes parse error"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Completely invalid JSON
+        invalid_json = '{"unclosed": "bracket"'
+
+        result = wrapper.restore_all_peer_identities(invalid_json)
+
+        # Should return error from outer exception handler
+        self.assertEqual(result['success_count'], 0)
+        self.assertGreater(len(result['errors']), 0)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_restore_all_store_returns_error_dict(self, mock_rns):
+        """Test restore_all_peer_identities when store_peer_identity returns error dict"""
+        # Setup mocks to fail destination creation
+        mock_identity = Mock()
+        mock_identity.hash = b'hash_16_bytes_ok'
+        mock_identity.load_public_key = Mock()
+
+        mock_rns.Identity.return_value = mock_identity
+        # Make Destination creation fail
+        mock_rns.Destination.side_effect = Exception("Destination creation failed")
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {
+                "identity_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(b'key1' * 8).decode()
+            }
+        ]
+
+        result = wrapper.restore_all_peer_identities(peer_data)
+
+        # Should have 0 success and 1 error with the failure message
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('Failed to restore', result['errors'][0])
+        self.assertIn('Destination creation failed', result['errors'][0])
 
 
 class TestPeerIdentityIntegration(unittest.TestCase):

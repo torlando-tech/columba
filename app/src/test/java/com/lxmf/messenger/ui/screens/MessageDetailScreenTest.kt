@@ -234,7 +234,9 @@ class MessageDetailScreenTest {
         val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
         every { mockViewModel.message } returns
             MutableStateFlow(
-                MessageDetailTestFixtures.createMessageUi(status = "unknown_status"),
+                MessageDetailTestFixtures.createMessageUi(
+                    MessageDetailTestFixtures.MessageConfig(status = "unknown_status"),
+                ),
             )
 
         composeTestRule.setContent {
@@ -341,8 +343,10 @@ class MessageDetailScreenTest {
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.createMessageUi(
-                    status = "delivered",
-                    deliveryMethod = "custom_method",
+                    MessageDetailTestFixtures.MessageConfig(
+                        status = "delivered",
+                        deliveryMethod = "custom_method",
+                    ),
                 ),
             )
 
@@ -432,8 +436,10 @@ class MessageDetailScreenTest {
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.createMessageUi(
-                    status = "failed",
-                    errorMessage = "   ",
+                    MessageDetailTestFixtures.MessageConfig(
+                        status = "failed",
+                        errorMessage = "   ",
+                    ),
                 ),
             )
 
@@ -454,8 +460,10 @@ class MessageDetailScreenTest {
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.createMessageUi(
-                    status = "delivered",
-                    errorMessage = "Some error",
+                    MessageDetailTestFixtures.MessageConfig(
+                        status = "delivered",
+                        errorMessage = "Some error",
+                    ),
                 ),
             )
 

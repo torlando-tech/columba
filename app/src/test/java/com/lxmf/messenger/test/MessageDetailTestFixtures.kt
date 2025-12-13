@@ -11,83 +11,106 @@ object MessageDetailTestFixtures {
     const val TEST_TIMESTAMP = 1702400000000L // Fixed timestamp for predictable formatting
 
     /**
-     * Creates a test MessageUi with customizable parameters.
+     * Configuration for creating test MessageUi instances.
      */
-    fun createMessageUi(
-        id: String = TEST_MESSAGE_ID,
-        destinationHash: String = TEST_DESTINATION_HASH,
-        content: String = "Test message content",
-        timestamp: Long = TEST_TIMESTAMP,
-        isFromMe: Boolean = true,
-        status: String = "sent",
-        deliveryMethod: String? = null,
-        errorMessage: String? = null,
-    ): MessageUi =
+    data class MessageConfig(
+        val id: String = TEST_MESSAGE_ID,
+        val destinationHash: String = TEST_DESTINATION_HASH,
+        val content: String = "Test message content",
+        val timestamp: Long = TEST_TIMESTAMP,
+        val isFromMe: Boolean = true,
+        val status: String = "sent",
+        val deliveryMethod: String? = null,
+        val errorMessage: String? = null,
+    )
+
+    /**
+     * Creates a test MessageUi from a configuration.
+     */
+    fun createMessageUi(config: MessageConfig = MessageConfig()): MessageUi =
         MessageUi(
-            id = id,
-            destinationHash = destinationHash,
-            content = content,
-            timestamp = timestamp,
-            isFromMe = isFromMe,
-            status = status,
+            id = config.id,
+            destinationHash = config.destinationHash,
+            content = config.content,
+            timestamp = config.timestamp,
+            isFromMe = config.isFromMe,
+            status = config.status,
             decodedImage = null,
-            deliveryMethod = deliveryMethod,
-            errorMessage = errorMessage,
+            deliveryMethod = config.deliveryMethod,
+            errorMessage = config.errorMessage,
         )
 
     fun deliveredMessage() =
         createMessageUi(
-            status = "delivered",
-            deliveryMethod = "direct",
+            MessageConfig(
+                status = "delivered",
+                deliveryMethod = "direct",
+            ),
         )
 
     fun failedMessage(errorMessage: String = "Connection timeout") =
         createMessageUi(
-            status = "failed",
-            deliveryMethod = "direct",
-            errorMessage = errorMessage,
+            MessageConfig(
+                status = "failed",
+                deliveryMethod = "direct",
+                errorMessage = errorMessage,
+            ),
         )
 
     fun pendingMessage() =
         createMessageUi(
-            status = "pending",
-            deliveryMethod = "opportunistic",
+            MessageConfig(
+                status = "pending",
+                deliveryMethod = "opportunistic",
+            ),
         )
 
     fun sentMessage() =
         createMessageUi(
-            status = "sent",
-            deliveryMethod = "direct",
+            MessageConfig(
+                status = "sent",
+                deliveryMethod = "direct",
+            ),
         )
 
     fun opportunisticMessage() =
         createMessageUi(
-            status = "delivered",
-            deliveryMethod = "opportunistic",
+            MessageConfig(
+                status = "delivered",
+                deliveryMethod = "opportunistic",
+            ),
         )
 
     fun directMessage() =
         createMessageUi(
-            status = "delivered",
-            deliveryMethod = "direct",
+            MessageConfig(
+                status = "delivered",
+                deliveryMethod = "direct",
+            ),
         )
 
     fun propagatedMessage() =
         createMessageUi(
-            status = "delivered",
-            deliveryMethod = "propagated",
+            MessageConfig(
+                status = "delivered",
+                deliveryMethod = "propagated",
+            ),
         )
 
     fun messageWithNoDeliveryMethod() =
         createMessageUi(
-            status = "delivered",
-            deliveryMethod = null,
+            MessageConfig(
+                status = "delivered",
+                deliveryMethod = null,
+            ),
         )
 
     fun failedWithoutErrorMessage() =
         createMessageUi(
-            status = "failed",
-            deliveryMethod = "direct",
-            errorMessage = null,
+            MessageConfig(
+                status = "failed",
+                deliveryMethod = "direct",
+                errorMessage = null,
+            ),
         )
 }

@@ -273,7 +273,7 @@ data class FailedInterface(
     companion object {
         /**
          * Parse a JSON array string into a list of FailedInterface objects.
-         * Used by both PythonReticulumProtocol and ServiceReticulumProtocol.
+         * Used by ServiceReticulumProtocol.
          */
         fun parseFromJson(jsonString: String): List<FailedInterface> {
             val jsonArray = org.json.JSONArray(jsonString)

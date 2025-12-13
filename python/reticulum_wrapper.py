@@ -1934,9 +1934,29 @@ class ReticulumWrapper:
                 log_info("ReticulumWrapper", "send_lxmf_message", f"✅ Retrieved identity from local cache")
 
             if not recipient_identity:
-                error_msg = f"Cannot send message: Recipient identity {dest_hash.hex()[:16]} not known. Please wait for announce or request path."
-                log_error("ReticulumWrapper", "send_lxmf_message", f"❌ {error_msg}")
-                return {"success": False, "error": error_msg}
+                # Request path from network (triggers announces from peers who know destination)
+                log_info("ReticulumWrapper", "send_lxmf_message",
+                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
+                try:
+                    RNS.Transport.request_path(dest_hash)
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "send_lxmf_message", f"Error requesting path: {e}")
+
+                # Wait up to 5 seconds for path response
+                for attempt in range(10):
+                    time.sleep(0.5)
+                    recipient_identity = RNS.Identity.recall(dest_hash)
+                    if not recipient_identity:
+                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                    if recipient_identity:
+                        log_info("ReticulumWrapper", "send_lxmf_message",
+                                 f"✅ Identity resolved after path request (attempt {attempt + 1})")
+                        break
+
+                if not recipient_identity:
+                    error_msg = f"Cannot send message: Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."
+                    log_error("ReticulumWrapper", "send_lxmf_message", f"❌ {error_msg}")
+                    return {"success": False, "error": error_msg}
 
             # Create outgoing LXMF destination object from the recalled identity
             # The router.handle_outbound() REQUIRES a destination object, not just a hash!
@@ -2354,7 +2374,27 @@ class ReticulumWrapper:
                 recipient_identity = self.identities[dest_hash.hex()]
 
             if not recipient_identity:
-                return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known"}
+                # Request path from network (triggers announces from peers who know destination)
+                log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
+                try:
+                    RNS.Transport.request_path(dest_hash)
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "send_lxmf_message_with_method", f"Error requesting path: {e}")
+
+                # Wait up to 5 seconds for path response
+                for attempt in range(10):
+                    time.sleep(0.5)
+                    recipient_identity = RNS.Identity.recall(dest_hash)
+                    if not recipient_identity:
+                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                    if recipient_identity:
+                        log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                                 f"✅ Identity resolved after path request (attempt {attempt + 1})")
+                        break
+
+                if not recipient_identity:
+                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."}
 
             # Create destination
             recipient_lxmf_destination = RNS.Destination(

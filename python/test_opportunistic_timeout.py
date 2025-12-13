@@ -22,6 +22,7 @@ mock_lxmf.LXMessage.OPPORTUNISTIC = 0x01
 mock_lxmf.LXMessage.DIRECT = 0x02
 mock_lxmf.LXMessage.PROPAGATED = 0x03
 mock_lxmf.LXMessage.SENT = 0x04
+mock_lxmf.LXMessage.DELIVERED = 0x08
 
 sys.modules['RNS'] = mock_rns
 sys.modules['RNS.vendor'] = MagicMock()
@@ -202,6 +203,7 @@ class TestRemoveFromTracking(unittest.TestCase):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
+    @patch('reticulum_wrapper.LXMF', mock_lxmf)
     def test_delivery_removes_from_tracking(self):
         """Test that successful delivery removes message from tracking"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -210,6 +212,7 @@ class TestRemoveFromTracking(unittest.TestCase):
         mock_message = MagicMock()
         msg_hash = b'delivered_hash_123'
         mock_message.hash = msg_hash
+        mock_message.state = mock_lxmf.LXMessage.DELIVERED  # Set state for proper status
         msg_hash_hex = msg_hash.hex()
 
         # Add to tracking
@@ -253,6 +256,7 @@ class TestRemoveFromTracking(unittest.TestCase):
         # Should be removed from tracking
         self.assertNotIn(msg_hash_hex, wrapper._opportunistic_messages)
 
+    @patch('reticulum_wrapper.LXMF', mock_lxmf)
     def test_untracked_message_delivery_no_error(self):
         """Test that delivery of untracked message doesn't raise error"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -260,6 +264,7 @@ class TestRemoveFromTracking(unittest.TestCase):
         # Create a mock message that was never tracked
         mock_message = MagicMock()
         mock_message.hash = b'untracked_hash_789'
+        mock_message.state = mock_lxmf.LXMessage.DELIVERED  # Set state for proper status
 
         # Verify tracking is empty
         self.assertEqual(len(wrapper._opportunistic_messages), 0)
@@ -870,14 +875,16 @@ class TestDeliveryCallbacks(unittest.TestCase):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
+    @patch('reticulum_wrapper.LXMF', mock_lxmf)
     def test_on_message_delivered_calls_kotlin_callback(self):
         """Test that _on_message_delivered invokes Kotlin callback with correct JSON"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.kotlin_delivery_status_callback = MagicMock()
 
-        # Create mock message
+        # Create mock message with DELIVERED state (direct delivery)
         mock_message = MagicMock()
         mock_message.hash = b'delivered_test_hash'
+        mock_message.state = mock_lxmf.LXMessage.DELIVERED  # Direct delivery confirmed
 
         # Trigger callback
         wrapper._on_message_delivered(mock_message)
@@ -893,6 +900,7 @@ class TestDeliveryCallbacks(unittest.TestCase):
         self.assertEqual(status_data['message_hash'], b'delivered_test_hash'.hex())
         self.assertIn('timestamp', status_data)
 
+    @patch('reticulum_wrapper.LXMF', mock_lxmf)
     def test_on_message_delivered_handles_missing_callback(self):
         """Test that _on_message_delivered handles missing callback gracefully"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -900,6 +908,7 @@ class TestDeliveryCallbacks(unittest.TestCase):
 
         mock_message = MagicMock()
         mock_message.hash = b'test_hash'
+        mock_message.state = mock_lxmf.LXMessage.DELIVERED  # Set state for proper status
 
         # Should not raise exception
         wrapper._on_message_delivered(mock_message)

@@ -671,17 +671,19 @@ class TestDeliveryCallbacks(unittest.TestCase):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
-    def test_on_message_delivered(self):
-        """Test _on_message_delivered callback"""
+    @patch('reticulum_wrapper.LXMF', mock_lxmf)
+    def test_on_message_delivered_direct(self):
+        """Test _on_message_delivered callback for DIRECT delivery (state=DELIVERED)"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
         # Mock Kotlin callback
         mock_kotlin_callback = Mock()
         wrapper.kotlin_delivery_status_callback = mock_kotlin_callback
 
-        # Create mock message
+        # Create mock message with DELIVERED state (direct delivery confirmed by recipient)
         mock_message = Mock()
         mock_message.hash = b'messagehash12345'
+        mock_message.state = mock_lxmf.LXMessage.DELIVERED  # Direct delivery confirmed
 
         # Call delivery callback
         wrapper._on_message_delivered(mock_message)
@@ -696,6 +698,38 @@ class TestDeliveryCallbacks(unittest.TestCase):
         self.assertEqual(status_event['message_hash'], mock_message.hash.hex())
         self.assertIn('timestamp', status_event)
 
+    @patch('reticulum_wrapper.LXMF', mock_lxmf)
+    def test_on_message_delivered_propagated(self):
+        """Test _on_message_delivered callback for PROPAGATED delivery (state=SENT)
+
+        When a message is sent via propagation, LXMF sets state=SENT (not DELIVERED)
+        because the relay accepted the message, but the end recipient hasn't confirmed.
+        """
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Mock Kotlin callback
+        mock_kotlin_callback = Mock()
+        wrapper.kotlin_delivery_status_callback = mock_kotlin_callback
+
+        # Create mock message with SENT state (propagated, relay accepted)
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+        mock_message.state = mock_lxmf.LXMessage.SENT  # Propagated (relay accepted)
+
+        # Call delivery callback
+        wrapper._on_message_delivered(mock_message)
+
+        # Kotlin callback should be invoked with 'propagated' status
+        mock_kotlin_callback.assert_called_once()
+        call_arg = mock_kotlin_callback.call_args[0][0]
+
+        # Parse JSON - should be 'propagated', not 'delivered'
+        status_event = json.loads(call_arg)
+        self.assertEqual(status_event['status'], 'propagated')
+        self.assertEqual(status_event['message_hash'], mock_message.hash.hex())
+        self.assertIn('timestamp', status_event)
+
+    @patch('reticulum_wrapper.LXMF', mock_lxmf)
     def test_on_message_delivered_removes_from_opportunistic_tracking(self):
         """Test that delivered messages are removed from opportunistic tracking"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -703,6 +737,7 @@ class TestDeliveryCallbacks(unittest.TestCase):
 
         mock_message = Mock()
         mock_message.hash = b'messagehash12345'
+        mock_message.state = mock_lxmf.LXMessage.DELIVERED  # Set state for proper status
 
         # Add to opportunistic tracking
         wrapper._opportunistic_messages = {
@@ -824,6 +859,7 @@ class TestDeliveryCallbacks(unittest.TestCase):
         self.assertEqual(status_event['status'], 'sent')
         self.assertEqual(status_event['message_hash'], mock_message.hash.hex())
 
+    @patch('reticulum_wrapper.LXMF', mock_lxmf)
     def test_delivery_callbacks_handle_missing_kotlin_callback(self):
         """Test delivery callbacks work when Kotlin callback not set"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -831,6 +867,7 @@ class TestDeliveryCallbacks(unittest.TestCase):
 
         mock_message = Mock()
         mock_message.hash = b'messagehash12345'
+        mock_message.state = mock_lxmf.LXMessage.DELIVERED  # Set state for proper status
 
         # Should not raise exception
         wrapper._on_message_delivered(mock_message)
@@ -1118,6 +1155,7 @@ class TestErrorHandling(unittest.TestCase):
 
         reticulum_wrapper.RETICULUM_AVAILABLE = original
 
+    @patch('reticulum_wrapper.LXMF', mock_lxmf)
     def test_delivery_callback_handles_kotlin_callback_error(self):
         """Test that errors in Kotlin callback don't crash delivery handler"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -1128,6 +1166,7 @@ class TestErrorHandling(unittest.TestCase):
 
         mock_message = Mock()
         mock_message.hash = b'messagehash12345'
+        mock_message.state = mock_lxmf.LXMessage.DELIVERED  # Set state for proper status
 
         # Should not raise exception
         wrapper._on_message_delivered(mock_message)

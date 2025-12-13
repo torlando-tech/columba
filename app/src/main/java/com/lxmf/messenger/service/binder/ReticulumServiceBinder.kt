@@ -82,66 +82,7 @@ class ReticulumServiceBinder(
                 // Initialize wrapper
                 wrapperManager.initialize(
                     configJson = configJson,
-                    beforeInit = { wrapper ->
-                        // Setup BLE bridge BEFORE Python initialization
-                        // (AndroidBLEDriver needs kotlin_bridge during Reticulum startup)
-                        try {
-                            wrapper.callAttr("set_ble_bridge", bleCoordinator.getBridge())
-                            Log.d(TAG, "BLE bridge set before Python initialization")
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to set BLE bridge before init: ${e.message}", e)
-                        }
-
-                        // Setup RNode bridge BEFORE Python initialization
-                        // (ColumbaRNodeInterface needs kotlin_rnode_bridge during initialization)
-                        try {
-                            rnodeBridge = KotlinRNodeBridge(context)
-
-                            // Register error listener to surface RNode errors to UI
-                            rnodeBridge?.addErrorListener(
-                                object : RNodeErrorListener {
-                                    override fun onRNodeError(
-                                        errorCode: Int,
-                                        errorMessage: String,
-                                    ) {
-                                        Log.w(TAG, "RNode error surfaced to service: ($errorCode) $errorMessage")
-                                        // Broadcast error as status change so UI can display it
-                                        broadcaster.broadcastStatusChange("RNODE_ERROR:$errorMessage")
-                                    }
-                                },
-                            )
-
-                            // Register online status listener to trigger UI refresh when RNode connects/disconnects
-                            rnodeBridge?.addOnlineStatusListener(
-                                object : com.lxmf.messenger.reticulum.rnode.RNodeOnlineStatusListener {
-                                    override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
-                                        Log.d(TAG, "████ RNODE ONLINE STATUS CHANGED ████ online=$isOnline")
-                                        // Broadcast status change so UI can refresh interface list
-                                        broadcaster.broadcastStatusChange(
-                                            if (isOnline) "RNODE_ONLINE" else "RNODE_OFFLINE",
-                                        )
-                                    }
-                                },
-                            )
-
-                            wrapper.callAttr("set_rnode_bridge", rnodeBridge)
-                            Log.d(TAG, "RNode bridge set before Python initialization")
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to set RNode bridge before init: ${e.message}", e)
-                        }
-
-                        // Setup delivery status callback BEFORE Python initialization
-                        // This ensures messages sent during init get their status reported
-                        try {
-                            val deliveryCallback: (String) -> Unit = { statusJson ->
-                                pollingManager.handleDeliveryStatusEvent(statusJson)
-                            }
-                            wrapper.callAttr("set_delivery_status_callback", deliveryCallback)
-                            Log.d(TAG, "Delivery status callback set before Python initialization")
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to set delivery status callback before init: ${e.message}", e)
-                        }
-                    },
+                    beforeInit = { wrapper -> setupPreInitializationBridges(wrapper) },
                     onSuccess = { isSharedInstance ->
                         // Execute directly - we're already in a coroutine from the outer scope.launch
                         // Wrap in try-catch to ensure callback is always called and locks are released on error
@@ -203,6 +144,67 @@ class ReticulumServiceBinder(
                 Log.e(TAG, "Initialization failed", e)
                 callback.onInitializationError(e.message ?: "Unknown error")
             }
+        }
+    }
+
+    private fun setupPreInitializationBridges(wrapper: com.chaquo.python.PyObject) {
+        // Setup BLE bridge BEFORE Python initialization
+        // (AndroidBLEDriver needs kotlin_bridge during Reticulum startup)
+        try {
+            wrapper.callAttr("set_ble_bridge", bleCoordinator.getBridge())
+            Log.d(TAG, "BLE bridge set before Python initialization")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set BLE bridge before init: ${e.message}", e)
+        }
+
+        // Setup RNode bridge BEFORE Python initialization
+        // (ColumbaRNodeInterface needs kotlin_rnode_bridge during initialization)
+        try {
+            rnodeBridge = KotlinRNodeBridge(context)
+
+            // Register error listener to surface RNode errors to UI
+            rnodeBridge?.addErrorListener(
+                object : RNodeErrorListener {
+                    override fun onRNodeError(
+                        errorCode: Int,
+                        errorMessage: String,
+                    ) {
+                        Log.w(TAG, "RNode error surfaced to service: ($errorCode) $errorMessage")
+                        // Broadcast error as status change so UI can display it
+                        broadcaster.broadcastStatusChange("RNODE_ERROR:$errorMessage")
+                    }
+                },
+            )
+
+            // Register online status listener to trigger UI refresh when RNode connects/disconnects
+            rnodeBridge?.addOnlineStatusListener(
+                object : com.lxmf.messenger.reticulum.rnode.RNodeOnlineStatusListener {
+                    override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                        Log.d(TAG, "████ RNODE ONLINE STATUS CHANGED ████ online=$isOnline")
+                        // Broadcast status change so UI can refresh interface list
+                        broadcaster.broadcastStatusChange(
+                            if (isOnline) "RNODE_ONLINE" else "RNODE_OFFLINE",
+                        )
+                    }
+                },
+            )
+
+            wrapper.callAttr("set_rnode_bridge", rnodeBridge)
+            Log.d(TAG, "RNode bridge set before Python initialization")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set RNode bridge before init: ${e.message}", e)
+        }
+
+        // Setup delivery status callback BEFORE Python initialization
+        // This ensures messages sent during init get their status reported
+        try {
+            val deliveryCallback: (String) -> Unit = { statusJson ->
+                pollingManager.handleDeliveryStatusEvent(statusJson)
+            }
+            wrapper.callAttr("set_delivery_status_callback", deliveryCallback)
+            Log.d(TAG, "Delivery status callback set before Python initialization")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set delivery status callback before init: ${e.message}", e)
         }
     }
 

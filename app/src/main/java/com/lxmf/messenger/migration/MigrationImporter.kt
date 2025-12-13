@@ -654,6 +654,17 @@ class MigrationImporter
                 // Non-fatal - continue with default theme
             }
 
+            // Import propagation node settings (with null-safety for backward compatibility)
+            settings.defaultDeliveryMethod?.let { settingsRepository.saveDefaultDeliveryMethod(it) }
+            settings.tryPropagationOnFail?.let { settingsRepository.saveTryPropagationOnFail(it) }
+            settings.manualPropagationNode?.let { settingsRepository.saveManualPropagationNode(it) }
+            settings.lastPropagationNode?.let { settingsRepository.saveLastPropagationNode(it) }
+            settings.autoSelectPropagationNode?.let { settingsRepository.saveAutoSelectPropagationNode(it) }
+
+            // Import message retrieval settings
+            settings.autoRetrieveEnabled?.let { settingsRepository.saveAutoRetrieveEnabled(it) }
+            settings.retrievalIntervalSeconds?.let { settingsRepository.saveRetrievalIntervalSeconds(it) }
+
             // Mark onboarding as completed since we're importing from another device
             settingsRepository.markOnboardingCompleted()
         }

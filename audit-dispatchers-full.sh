@@ -248,7 +248,6 @@ section "9. Documentation Coverage"
 info "Documentation coverage check skipped (manual review recommended)"
 info "Please review dispatcher usage in key files:"
 info "  - ReticulumService.kt"
-info "  - PythonReticulumProtocol.kt"
 info "  - ServiceReticulumProtocol.kt"
 
 section "10. Summary"

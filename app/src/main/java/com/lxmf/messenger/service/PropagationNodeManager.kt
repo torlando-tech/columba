@@ -72,6 +72,7 @@ sealed class RelayLoadState {
  * disables auto-selection until they re-enable it.
  */
 @Singleton
+@Suppress("TooManyFunctions") // Relay management requires distinct operations
 class PropagationNodeManager
     @Inject
     constructor(

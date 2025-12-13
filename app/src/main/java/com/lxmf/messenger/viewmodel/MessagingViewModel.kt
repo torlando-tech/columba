@@ -40,6 +40,7 @@ import com.lxmf.messenger.reticulum.model.Message as ReticulumMessage
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
+@Suppress("TooManyFunctions") // ViewModel handles multiple UI operations
 class MessagingViewModel
     @Inject
     constructor(

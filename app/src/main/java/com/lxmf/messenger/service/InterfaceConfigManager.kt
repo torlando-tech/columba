@@ -35,6 +35,7 @@ import javax.inject.Singleton
  * 7. Restart message collector and managers (PropagationNodeManager, AutoAnnounceManager, etc.)
  */
 @Singleton
+@Suppress("LongParameterList") // Dependencies required for full restart lifecycle
 class InterfaceConfigManager
     @Inject
     constructor(

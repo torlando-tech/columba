@@ -453,6 +453,171 @@ class TestPropagationFallback(unittest.TestCase):
         wrapper.kotlin_delivery_status_callback.assert_called()
 
 
+class TestDeliveryCallbacks(unittest.TestCase):
+    """Tests for delivery status callbacks to Kotlin."""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_on_message_delivered_calls_kotlin_callback(self):
+        """Test that _on_message_delivered invokes Kotlin callback with correct JSON"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.kotlin_delivery_status_callback = MagicMock()
+
+        # Create mock message
+        mock_message = MagicMock()
+        mock_message.hash = b'delivered_test_hash'
+
+        # Trigger callback
+        wrapper._on_message_delivered(mock_message)
+
+        # Verify callback was called
+        wrapper.kotlin_delivery_status_callback.assert_called_once()
+
+        # Verify JSON structure
+        import json
+        call_args = wrapper.kotlin_delivery_status_callback.call_args[0][0]
+        status_data = json.loads(call_args)
+        self.assertEqual(status_data['status'], 'delivered')
+        self.assertEqual(status_data['message_hash'], b'delivered_test_hash'.hex())
+        self.assertIn('timestamp', status_data)
+
+    def test_on_message_delivered_handles_missing_callback(self):
+        """Test that _on_message_delivered handles missing callback gracefully"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.kotlin_delivery_status_callback = None
+
+        mock_message = MagicMock()
+        mock_message.hash = b'test_hash'
+
+        # Should not raise exception
+        wrapper._on_message_delivered(mock_message)
+
+    def test_on_message_failed_calls_kotlin_callback(self):
+        """Test that _on_message_failed invokes Kotlin callback with failed status"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.kotlin_delivery_status_callback = MagicMock()
+        wrapper.active_propagation_node = None  # No retry
+
+        mock_message = MagicMock()
+        mock_message.hash = b'failed_test_hash'
+        mock_message.try_propagation_on_fail = False
+
+        wrapper._on_message_failed(mock_message)
+
+        wrapper.kotlin_delivery_status_callback.assert_called_once()
+        import json
+        call_args = wrapper.kotlin_delivery_status_callback.call_args[0][0]
+        status_data = json.loads(call_args)
+        self.assertEqual(status_data['status'], 'failed')
+
+    def test_on_message_failed_handles_missing_callback(self):
+        """Test that _on_message_failed handles missing callback gracefully"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.kotlin_delivery_status_callback = None
+        wrapper.active_propagation_node = None
+
+        mock_message = MagicMock()
+        mock_message.hash = b'test_hash'
+        mock_message.try_propagation_on_fail = False
+
+        # Should not raise exception
+        wrapper._on_message_failed(mock_message)
+
+    def test_on_message_sent_calls_kotlin_callback(self):
+        """Test that _on_message_sent invokes Kotlin callback with sent status"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.kotlin_delivery_status_callback = MagicMock()
+
+        mock_message = MagicMock()
+        mock_message.hash = b'sent_test_hash'
+
+        wrapper._on_message_sent(mock_message)
+
+        wrapper.kotlin_delivery_status_callback.assert_called_once()
+        import json
+        call_args = wrapper.kotlin_delivery_status_callback.call_args[0][0]
+        status_data = json.loads(call_args)
+        self.assertEqual(status_data['status'], 'sent')
+
+    def test_on_message_sent_handles_missing_callback(self):
+        """Test that _on_message_sent handles missing callback gracefully"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.kotlin_delivery_status_callback = None
+
+        mock_message = MagicMock()
+        mock_message.hash = b'test_hash'
+
+        # Should not raise exception
+        wrapper._on_message_sent(mock_message)
+
+
+class TestPropagationNodeSetting(unittest.TestCase):
+    """Tests for propagation node configuration methods."""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_set_outbound_propagation_node_stores_hash(self):
+        """Test that set_outbound_propagation_node stores the node hash"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+        reticulum_wrapper.RETICULUM_AVAILABLE = True
+
+        dest_hash = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+        result = wrapper.set_outbound_propagation_node(dest_hash)
+
+        self.assertTrue(result.get('success'))
+        self.assertEqual(wrapper.active_propagation_node, dest_hash)
+        wrapper.router.set_outbound_propagation_node.assert_called_once_with(dest_hash)
+
+    def test_set_outbound_propagation_node_clears_with_none(self):
+        """Test that set_outbound_propagation_node clears node with None"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+        wrapper.active_propagation_node = b'existing_hash'
+        reticulum_wrapper.RETICULUM_AVAILABLE = True
+
+        result = wrapper.set_outbound_propagation_node(None)
+
+        self.assertTrue(result.get('success'))
+        self.assertIsNone(wrapper.active_propagation_node)
+        wrapper.router.set_outbound_propagation_node.assert_called_once_with(None)
+
+    def test_get_outbound_propagation_node_returns_hex_string(self):
+        """Test that get_outbound_propagation_node returns hex string format"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+        reticulum_wrapper.RETICULUM_AVAILABLE = True
+
+        dest_hash = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+        wrapper.router.get_outbound_propagation_node.return_value = dest_hash
+
+        result = wrapper.get_outbound_propagation_node()
+
+        self.assertTrue(result.get('success'))
+        self.assertEqual(result.get('propagation_node'), dest_hash.hex())
+
+
 if __name__ == '__main__':
     # Run tests with verbose output
     unittest.main(verbosity=2)

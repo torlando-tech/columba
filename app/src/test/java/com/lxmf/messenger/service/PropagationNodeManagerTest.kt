@@ -865,4 +865,154 @@ class PropagationNodeManagerTest {
             }
         }
 
+    // ========== syncWithPropagationNode Tests ==========
+
+    @Test
+    fun `syncWithPropagationNode - skips when no relay configured`() =
+        runTest {
+            // Given: No relay configured (myRelayFlow is null by default)
+            advanceUntilIdle()
+
+            // When
+            manager.syncWithPropagationNode()
+            advanceUntilIdle()
+
+            // Then: Should not call requestMessagesFromPropagationNode
+            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+        }
+
+    @Test
+    fun `syncWithPropagationNode - skips when already syncing`() =
+        runTest {
+            // Given: Relay is configured
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            val mockSyncState =
+                com.lxmf.messenger.reticulum.protocol.PropagationState(
+                    state = 0,
+                    stateName = "IDLE",
+                    progress = 0.0f,
+                    messagesReceived = 0,
+                )
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.success(mockSyncState)
+
+            // When: Call sync
+            manager.syncWithPropagationNode()
+            advanceUntilIdle()
+
+            // Then: Protocol should be called
+            coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+        }
+
+    @Test
+    fun `syncWithPropagationNode - updates lastSyncTimestamp on success`() =
+        runTest {
+            // Given: Relay is configured
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            val mockSyncState =
+                com.lxmf.messenger.reticulum.protocol.PropagationState(
+                    state = 0,
+                    stateName = "IDLE",
+                    progress = 0.0f,
+                    messagesReceived = 0,
+                )
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.success(mockSyncState)
+
+            // When
+            manager.syncWithPropagationNode()
+            advanceUntilIdle()
+
+            // Then: Should save timestamp to settings repository
+            coVerify { settingsRepository.saveLastSyncTimestamp(any()) }
+        }
+
+    @Test
+    fun `syncWithPropagationNode - handles protocol failure gracefully`() =
+        runTest {
+            // Given: Relay is configured but sync will fail
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.failure(Exception("Network error"))
+
+            // When: Should not throw
+            manager.syncWithPropagationNode()
+            advanceUntilIdle()
+
+            // Then: isSyncing should be false after failure
+            assert(!manager.isSyncing.value) { "isSyncing should be false after failure" }
+        }
+
+    @Test
+    fun `triggerSync - emits NoRelay when no relay configured`() =
+        runTest {
+            // Given: No relay configured
+            advanceUntilIdle()
+
+            // Wait for state to be Loaded(null)
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                // Skip Loading state
+                val state = awaitItem()
+                if (state is RelayLoadState.Loading) {
+                    awaitItem() // Wait for Loaded
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // When: Trigger manual sync
+            manager.manualSyncResult.test(timeout = 5.seconds) {
+                manager.triggerSync()
+                advanceUntilIdle()
+
+                // Then: Should emit NoRelay
+                val result = awaitItem()
+                assert(result is SyncResult.NoRelay) {
+                    "Should emit NoRelay when no relay configured, got $result"
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
 }

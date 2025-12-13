@@ -216,6 +216,130 @@ class PropagationNodeManagerTest {
             // Further announces should not trigger selection
         }
 
+    @Test
+    fun `start - loads lastSyncTimestamp from settings`() =
+        runTest {
+            // Given: Last sync timestamp exists in settings
+            val savedTimestamp = 1234567890L
+            coEvery { settingsRepository.getLastSyncTimestamp() } returns savedTimestamp
+
+            // When
+            manager.start()
+
+            // Wait for the timestamp to be loaded (it's done via scope.launch)
+            manager.lastSyncTimestamp.test(timeout = 5.seconds) {
+                // Skip initial null
+                var value = awaitItem()
+                if (value == null) {
+                    value = awaitItem()
+                }
+                // Then: lastSyncTimestamp StateFlow should have the saved value
+                assert(value == savedTimestamp) {
+                    "lastSyncTimestamp should be loaded from settings, expected $savedTimestamp but got $value"
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            manager.stop()
+        }
+
+    @Test
+    fun `start - observeRelayChanges syncs to Python on relay update`() =
+        runTest {
+            // Given: Manager started
+            manager.start()
+            advanceUntilIdle()
+
+            // When: Relay is updated (simulating database change)
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for StateFlow to settle
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Then: Should sync to Python layer
+            coVerify { reticulumProtocol.setOutboundPropagationNode(any()) }
+
+            manager.stop()
+        }
+
+    @Test
+    fun `start - observeRelayChanges clears Python on relay removal`() =
+        runTest {
+            // Given: Manager started with a relay configured
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+            manager.start()
+
+            // Wait for initial relay to be processed
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading || (state as? RelayLoadState.Loaded)?.relay == null) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Verify initial sync happened
+            coVerify { reticulumProtocol.setOutboundPropagationNode(any()) }
+            io.mockk.clearMocks(reticulumProtocol, answers = false, recordedCalls = true, verificationMarks = true)
+
+            // When: Relay is removed
+            myRelayFlow.value = null
+
+            // Wait for StateFlow to settle with null
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while ((state as? RelayLoadState.Loaded)?.relay != null) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Then: Should clear Python layer
+            coVerify { reticulumProtocol.setOutboundPropagationNode(null) }
+
+            manager.stop()
+        }
+
+    @Test
+    fun `start - observePropagationNodeAnnounces respects autoSelect setting`() =
+        runTest {
+            // Given: Auto-select is disabled
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns false
+            autoSelectFlow.value = false
+
+            val announce =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    nodeType = "PROPAGATION_NODE",
+                    hops = 1,
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(announce))
+
+            // When: Start observing announces
+            manager.start()
+            advanceUntilIdle()
+
+            // Then: Should NOT auto-select relay (auto-select is disabled)
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
+
+            manager.stop()
+        }
+
     // ========== onPropagationNodeAnnounce Tests (Sideband Algorithm) ==========
 
     @Test
@@ -336,9 +460,143 @@ class PropagationNodeManagerTest {
             coVerify(atLeast = 2) { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
-    // NOTE: "same hops does not switch" and "more hops does not switch" tests removed
-    // because they require precise timing of async StateFlow updates which is hard to mock.
-    // The hop comparison logic is tested implicitly via onPropagationNodeAnnounce integration.
+    @Test
+    fun `onPropagationNodeAnnounce - current hops unknown switches to new node`() =
+        runTest {
+            // Given: Current relay has unknown hops (-1)
+            // First, set up a relay with hops = -1 by having no announce data
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns null
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for the StateFlow to update with the relay
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading || (state as? RelayLoadState.Loaded)?.relay == null) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Now set up the new relay with known hops
+            coEvery { announceRepository.getAnnounce(testDestHash2) } returns
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    peerName = "New Relay",
+                    hops = 5,
+                )
+
+            // When: New node announces with known hops
+            manager.onPropagationNodeAnnounce(
+                destinationHash = testDestHash2,
+                displayName = "New Relay",
+                hops = 5,
+                publicKey = testPublicKey,
+            )
+            advanceUntilIdle()
+
+            // Then: Should switch to new relay (current hops -1 means unknown, any known hops is better)
+            coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
+        }
+
+    @Test
+    fun `onPropagationNodeAnnounce - more hops does not switch`() =
+        runTest {
+            // Given: Current relay at 2 hops - set up announce BEFORE relay to ensure hops are known
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Close Relay",
+                    hops = 2,
+                )
+
+            // Set up initial relay via flow (simulating database-as-source-of-truth)
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for the StateFlow to update with correct hops
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                val loaded = state as RelayLoadState.Loaded
+                // Wait until we have the relay with correct hops
+                if (loaded.relay?.hops != 2) {
+                    // May need another emission after announce is fetched
+                    awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Clear verifications from setup
+            io.mockk.clearMocks(contactRepository, answers = false, recordedCalls = true, verificationMarks = true)
+
+            // When: New node at 5 hops (farther)
+            manager.onPropagationNodeAnnounce(
+                destinationHash = testDestHash2,
+                displayName = "Far Relay",
+                hops = 5,
+                publicKey = testPublicKey,
+            )
+            advanceUntilIdle()
+
+            // Then: Should NOT switch - current relay is closer
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash2, any()) }
+        }
+
+    @Test
+    fun `onPropagationNodeAnnounce - same hops different node does not switch`() =
+        runTest {
+            // Given: Current relay at 3 hops - set up announce BEFORE relay
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Current Relay",
+                    hops = 3,
+                )
+
+            // Set up initial relay via flow
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for the StateFlow to update with correct hops
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                val loaded = state as RelayLoadState.Loaded
+                if (loaded.relay?.hops != 3) {
+                    awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Clear verifications from setup
+            io.mockk.clearMocks(contactRepository, answers = false, recordedCalls = true, verificationMarks = true)
+
+            // When: Different node at same hops
+            manager.onPropagationNodeAnnounce(
+                destinationHash = testDestHash2,
+                displayName = "Other Relay",
+                hops = 3,
+                publicKey = testPublicKey,
+            )
+            advanceUntilIdle()
+
+            // Then: Should NOT switch - same hops, keep current
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash2, any()) }
+        }
 
     @Test
     fun `onPropagationNodeAnnounce - manual mode ignores announce`() =
@@ -616,6 +874,43 @@ class PropagationNodeManagerTest {
 
             // Then
             coVerify { contactRepository.addContactFromAnnounce(testDestHash, announce.publicKey) }
+        }
+
+    @Test
+    fun `setManualRelay - does not add contact if already exists`() =
+        runTest {
+            // Given: Contact already exists
+            coEvery { contactRepository.hasContact(testDestHash) } returns true
+            val announce = TestFactories.createAnnounce()
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns announce
+
+            // When
+            manager.setManualRelay(testDestHash, "Manual Relay")
+            advanceUntilIdle()
+
+            // Then: Should NOT add contact
+            coVerify(exactly = 0) { contactRepository.addContactFromAnnounce(any(), any()) }
+
+            // But should still set as relay
+            coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
+        }
+
+    @Test
+    fun `setManualRelay - skips contact add when no announce available`() =
+        runTest {
+            // Given: Contact does not exist AND announce is not available
+            coEvery { contactRepository.hasContact(testDestHash) } returns false
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns null
+
+            // When
+            manager.setManualRelay(testDestHash, "Manual Relay")
+            advanceUntilIdle()
+
+            // Then: Should NOT add contact (no announce data)
+            coVerify(exactly = 0) { contactRepository.addContactFromAnnounce(any(), any()) }
+
+            // But should still set as relay
+            coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
     // ========== enableAutoSelect Tests ==========
@@ -1010,6 +1305,349 @@ class PropagationNodeManagerTest {
                 val result = awaitItem()
                 assert(result is SyncResult.NoRelay) {
                     "Should emit NoRelay when no relay configured, got $result"
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `triggerSync - skips when already syncing`() =
+        runTest {
+            // Given: Relay is configured
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Use a CompletableDeferred to control when the sync completes
+            val syncCompletion = kotlinx.coroutines.CompletableDeferred<Unit>()
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } coAnswers {
+                syncCompletion.await() // Wait until we explicitly complete it
+                Result.success(
+                    com.lxmf.messenger.reticulum.protocol.PropagationState(
+                        state = 0,
+                        stateName = "IDLE",
+                        progress = 0.0f,
+                        messagesReceived = 0,
+                    ),
+                )
+            }
+
+            // Start first sync (will set isSyncing = true)
+            val firstSyncJob = async { manager.triggerSync() }
+
+            // Run current tasks to start the sync and enter the "syncing" state
+            testDispatcher.scheduler.runCurrent()
+
+            // Verify isSyncing is true
+            assert(manager.isSyncing.value) { "isSyncing should be true during sync" }
+
+            // When: Try to trigger second sync while first is running
+            manager.triggerSync()
+            testDispatcher.scheduler.runCurrent()
+
+            // Then: Protocol should only be called once (second call skipped)
+            coVerify(exactly = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+
+            // Cleanup - complete the deferred to let the first sync finish
+            syncCompletion.complete(Unit)
+            firstSyncJob.await()
+        }
+
+    @Test
+    fun `triggerSync - emits Success on successful sync`() =
+        runTest {
+            // Given: Relay is configured
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            val mockSyncState =
+                com.lxmf.messenger.reticulum.protocol.PropagationState(
+                    state = 0,
+                    stateName = "IDLE",
+                    progress = 0.0f,
+                    messagesReceived = 0,
+                )
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.success(mockSyncState)
+
+            // When: Trigger sync and collect result
+            manager.manualSyncResult.test(timeout = 5.seconds) {
+                manager.triggerSync()
+                advanceUntilIdle()
+
+                // Then: Should emit Success
+                val result = awaitItem()
+                assert(result is SyncResult.Success) {
+                    "Should emit Success on successful sync, got $result"
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `triggerSync - emits Error on protocol failure`() =
+        runTest {
+            // Given: Relay is configured but sync will fail
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.failure(Exception("Network error"))
+
+            // When: Trigger sync and collect result
+            manager.manualSyncResult.test(timeout = 5.seconds) {
+                manager.triggerSync()
+                advanceUntilIdle()
+
+                // Then: Should emit Error with message
+                val result = awaitItem()
+                assert(result is SyncResult.Error) {
+                    "Should emit Error on protocol failure, got $result"
+                }
+                assert((result as SyncResult.Error).message == "Network error") {
+                    "Error message should be 'Network error', got ${result.message}"
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `triggerSync - updates lastSyncTimestamp on success`() =
+        runTest {
+            // Given: Relay is configured
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            val mockSyncState =
+                com.lxmf.messenger.reticulum.protocol.PropagationState(
+                    state = 0,
+                    stateName = "IDLE",
+                    progress = 0.0f,
+                    messagesReceived = 0,
+                )
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.success(mockSyncState)
+
+            // When
+            manager.triggerSync()
+            advanceUntilIdle()
+
+            // Then: Should save timestamp to settings repository
+            coVerify { settingsRepository.saveLastSyncTimestamp(any()) }
+
+            // And lastSyncTimestamp StateFlow should be updated
+            assert(manager.lastSyncTimestamp.value != null) {
+                "lastSyncTimestamp should be set after successful sync"
+            }
+        }
+
+    // ========== RelayInfo Fallback Logic Tests (via currentRelay) ==========
+
+    @Test
+    fun `currentRelay - uses announce peerName when available`() =
+        runTest {
+            // Given: Relay with announce that has peerName
+            val announcePeerName = "Announce Peer Name"
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = announcePeerName,
+                    hops = 2,
+                )
+
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    TestFactories.ContactConfig(
+                        destinationHash = testDestHash,
+                        customNickname = "Custom Nickname",
+                        isMyRelay = true,
+                    ),
+                )
+
+            // Wait for state to settle
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading || (state as? RelayLoadState.Loaded)?.relay == null) {
+                    state = awaitItem()
+                }
+                // Then: displayName should be the announce peerName (primary source)
+                val relay = (state as RelayLoadState.Loaded).relay
+                assert(relay != null) { "Relay should not be null" }
+                assert(relay!!.displayName == announcePeerName) {
+                    "displayName should be announce peerName '$announcePeerName', got '${relay.displayName}'"
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `currentRelay - falls back to customNickname when no announce`() =
+        runTest {
+            // Given: Relay without announce data, but with customNickname
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns null
+
+            val customNickname = "Custom Nickname"
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    TestFactories.ContactConfig(
+                        destinationHash = testDestHash,
+                        customNickname = customNickname,
+                        isMyRelay = true,
+                    ),
+                )
+
+            // Wait for state to settle
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading || (state as? RelayLoadState.Loaded)?.relay == null) {
+                    state = awaitItem()
+                }
+                // Then: displayName should be the customNickname (fallback)
+                val relay = (state as RelayLoadState.Loaded).relay
+                assert(relay != null) { "Relay should not be null" }
+                assert(relay!!.displayName == customNickname) {
+                    "displayName should be customNickname '$customNickname', got '${relay.displayName}'"
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `currentRelay - falls back to truncated hash when no names available`() =
+        runTest {
+            // Given: Relay without announce data and without customNickname
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns null
+
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    TestFactories.ContactConfig(
+                        destinationHash = testDestHash,
+                        customNickname = null,
+                        isMyRelay = true,
+                    ),
+                )
+
+            // Wait for state to settle
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading || (state as? RelayLoadState.Loaded)?.relay == null) {
+                    state = awaitItem()
+                }
+                // Then: displayName should be the truncated hash (final fallback)
+                val relay = (state as RelayLoadState.Loaded).relay
+                assert(relay != null) { "Relay should not be null" }
+                assert(relay!!.displayName == testDestHash.take(12)) {
+                    "displayName should be truncated hash '${testDestHash.take(12)}', got '${relay.displayName}'"
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `currentRelay - uses announce lastSeenTimestamp when available`() =
+        runTest {
+            // Given: Relay with announce that has lastSeenTimestamp
+            val announceTimestamp = 1700000000000L
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    lastSeenTimestamp = announceTimestamp,
+                )
+
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for state to settle
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading || (state as? RelayLoadState.Loaded)?.relay == null) {
+                    state = awaitItem()
+                }
+                // Then: lastSeenTimestamp should be from announce (primary source)
+                val relay = (state as RelayLoadState.Loaded).relay
+                assert(relay != null) { "Relay should not be null" }
+                assert(relay!!.lastSeenTimestamp == announceTimestamp) {
+                    "lastSeenTimestamp should be announce timestamp $announceTimestamp, got ${relay.lastSeenTimestamp}"
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `currentRelay - falls back to contact lastInteractionTimestamp when no announce`() =
+        runTest {
+            // Given: Relay without announce data
+            // The contact's lastInteractionTimestamp is set to 0 by TestFactories
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns null
+
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for state to settle
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading || (state as? RelayLoadState.Loaded)?.relay == null) {
+                    state = awaitItem()
+                }
+                // Then: lastSeenTimestamp should fall back to contact's lastInteractionTimestamp (0)
+                val relay = (state as RelayLoadState.Loaded).relay
+                assert(relay != null) { "Relay should not be null" }
+                // Contact's lastInteractionTimestamp is 0 as set by TestFactories
+                assert(relay!!.lastSeenTimestamp == 0L) {
+                    "lastSeenTimestamp should be contact timestamp 0, got ${relay.lastSeenTimestamp}"
                 }
                 cancelAndConsumeRemainingEvents()
             }

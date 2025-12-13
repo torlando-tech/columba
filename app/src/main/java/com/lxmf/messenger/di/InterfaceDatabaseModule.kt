@@ -10,8 +10,11 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.AutoAnnounceManager
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.service.MessageCollector
+import com.lxmf.messenger.service.PropagationNodeManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -89,6 +92,10 @@ object InterfaceDatabaseModule {
         messageCollector: MessageCollector,
         database: ColumbaDatabase,
         settingsRepository: SettingsRepository,
+        autoAnnounceManager: AutoAnnounceManager,
+        identityResolutionManager: IdentityResolutionManager,
+        propagationNodeManager: PropagationNodeManager,
+        @ApplicationScope applicationScope: CoroutineScope,
     ): InterfaceConfigManager {
         return InterfaceConfigManager(
             context = context,
@@ -99,6 +106,10 @@ object InterfaceDatabaseModule {
             messageCollector = messageCollector,
             database = database,
             settingsRepository = settingsRepository,
+            autoAnnounceManager = autoAnnounceManager,
+            identityResolutionManager = identityResolutionManager,
+            propagationNodeManager = propagationNodeManager,
+            applicationScope = applicationScope,
         )
     }
 }

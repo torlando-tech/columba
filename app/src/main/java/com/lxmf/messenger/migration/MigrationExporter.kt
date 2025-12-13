@@ -297,6 +297,15 @@ class MigrationExporter
                     settingsRepository
                         .autoAnnounceIntervalMinutesFlow.first(),
                 themePreference = settingsRepository.themePreferenceFlow.first().getIdentifier(),
+                // Propagation node settings
+                defaultDeliveryMethod = settingsRepository.defaultDeliveryMethodFlow.first(),
+                tryPropagationOnFail = settingsRepository.tryPropagationOnFailFlow.first(),
+                manualPropagationNode = settingsRepository.manualPropagationNodeFlow.first(),
+                lastPropagationNode = settingsRepository.lastPropagationNodeFlow.first(),
+                autoSelectPropagationNode = settingsRepository.autoSelectPropagationNodeFlow.first(),
+                // Message retrieval settings
+                autoRetrieveEnabled = settingsRepository.autoRetrieveEnabledFlow.first(),
+                retrievalIntervalSeconds = settingsRepository.retrievalIntervalSecondsFlow.first(),
             )
         }
 

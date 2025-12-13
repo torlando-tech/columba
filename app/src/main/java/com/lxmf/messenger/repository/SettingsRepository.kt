@@ -18,6 +18,7 @@ import com.lxmf.messenger.ui.theme.CustomTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -73,6 +74,11 @@ class SettingsRepository
             val MANUAL_PROPAGATION_NODE = stringPreferencesKey("manual_propagation_node")
             val LAST_PROPAGATION_NODE = stringPreferencesKey("last_propagation_node")
             val AUTO_SELECT_PROPAGATION_NODE = booleanPreferencesKey("auto_select_propagation_node")
+
+            // Message retrieval preferences
+            val AUTO_RETRIEVE_ENABLED = booleanPreferencesKey("auto_retrieve_enabled")
+            val RETRIEVAL_INTERVAL_SECONDS = intPreferencesKey("retrieval_interval_seconds")
+            val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
         }
 
         // Notification preferences
@@ -648,6 +654,102 @@ class SettingsRepository
         suspend fun saveAutoSelectPropagationNode(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.AUTO_SELECT_PROPAGATION_NODE] = enabled
+            }
+        }
+
+        // Message retrieval preferences
+
+        /**
+         * Flow of the auto-retrieve enabled setting.
+         * When enabled, periodically syncs with the propagation node.
+         * Defaults to true if not set.
+         */
+        val autoRetrieveEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTO_RETRIEVE_ENABLED] ?: true
+                }
+
+        /**
+         * Get the auto-retrieve enabled setting (non-flow).
+         */
+        suspend fun getAutoRetrieveEnabled(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.AUTO_RETRIEVE_ENABLED] ?: true
+            }.first()
+        }
+
+        /**
+         * Save the auto-retrieve enabled setting.
+         *
+         * @param enabled Whether to automatically retrieve messages from the propagation node
+         */
+        suspend fun saveAutoRetrieveEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.AUTO_RETRIEVE_ENABLED] = enabled
+            }
+        }
+
+        /**
+         * Flow of the retrieval interval in seconds.
+         * Defaults to 30 seconds if not set.
+         * Uses distinctUntilChanged to only emit when the interval actually changes,
+         * not when other DataStore values change (which would restart sync unnecessarily).
+         */
+        val retrievalIntervalSecondsFlow: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 30
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the retrieval interval in seconds (non-flow).
+         */
+        suspend fun getRetrievalIntervalSeconds(): Int {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 30
+            }.first()
+        }
+
+        /**
+         * Save the retrieval interval in seconds.
+         *
+         * @param seconds The interval in seconds (30, 60, 120, or 300)
+         */
+        suspend fun saveRetrievalIntervalSeconds(seconds: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] = seconds
+            }
+        }
+
+        /**
+         * Flow of the last sync timestamp (epoch milliseconds).
+         * Returns null if no sync has occurred yet.
+         */
+        val lastSyncTimestampFlow: Flow<Long?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP]
+                }
+
+        /**
+         * Get the last sync timestamp (non-flow).
+         */
+        suspend fun getLastSyncTimestamp(): Long? {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP]
+            }.first()
+        }
+
+        /**
+         * Save the last sync timestamp.
+         *
+         * @param timestamp The timestamp in epoch milliseconds
+         */
+        suspend fun saveLastSyncTimestamp(timestamp: Long) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP] = timestamp
             }
         }
 

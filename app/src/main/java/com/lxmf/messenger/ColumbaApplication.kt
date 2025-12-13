@@ -120,6 +120,18 @@ class ColumbaApplication : Application() {
 
         // If using service-based protocol, bind to service and auto-initialize RNS
         if (reticulumProtocol is ServiceReticulumProtocol) {
+            // Set up the alternative relay handler for propagation failover
+            (reticulumProtocol as ServiceReticulumProtocol).alternativeRelayHandler = { excludeHashes ->
+                val relay = propagationNodeManager.getAlternativeRelay(excludeHashes)
+                if (relay != null) {
+                    android.util.Log.d("ColumbaApplication", "Providing alternative relay: ${relay.destinationHash.take(16)}")
+                    relay.destinationHash.hexStringToByteArray()
+                } else {
+                    android.util.Log.d("ColumbaApplication", "No alternative relay available")
+                    null
+                }
+            }
+
             applicationScope.launch {
                 try {
                     // Check if we're in the middle of applying config changes
@@ -428,6 +440,15 @@ class ColumbaApplication : Application() {
      */
     private fun ByteArray.toHexString(): String {
         return joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Convert hex string to ByteArray.
+     */
+    private fun String.hexStringToByteArray(): ByteArray {
+        return chunked(2)
+            .map { it.toInt(16).toByte() }
+            .toByteArray()
     }
 
     /**

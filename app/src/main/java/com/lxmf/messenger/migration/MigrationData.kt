@@ -23,7 +23,7 @@ data class MigrationBundle(
     val attachmentManifest: List<AttachmentRef> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 5
+        const val CURRENT_VERSION = 6
 
         // Minimum version we can import - older files may have incompatible structure
         const val MINIMUM_VERSION = 1
@@ -213,6 +213,15 @@ data class SettingsExport(
     val autoAnnounceEnabled: Boolean,
     val autoAnnounceIntervalMinutes: Int,
     val themePreference: String,
+    // Propagation node settings (nullable for backward compatibility with v5 imports)
+    val defaultDeliveryMethod: String? = null,
+    val tryPropagationOnFail: Boolean? = null,
+    val manualPropagationNode: String? = null,
+    val lastPropagationNode: String? = null,
+    val autoSelectPropagationNode: Boolean? = null,
+    // Message retrieval settings
+    val autoRetrieveEnabled: Boolean? = null,
+    val retrievalIntervalSeconds: Int? = null,
 )
 
 /**

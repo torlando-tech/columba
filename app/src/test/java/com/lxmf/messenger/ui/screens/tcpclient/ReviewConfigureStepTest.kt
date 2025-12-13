@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextInput
+import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.test.TcpClientWizardTestFixtures
 import com.lxmf.messenger.viewmodel.TcpClientWizardViewModel
 import io.mockk.every
@@ -15,6 +16,7 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -26,8 +28,13 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class ReviewConfigureStepTest {
+    private val registerActivityRule = RegisterComponentActivityRule()
+    private val composeRule = createComposeRule()
+
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
+
+    val composeTestRule get() = composeRule
 
     // ========== Server Summary Card Tests ==========
 

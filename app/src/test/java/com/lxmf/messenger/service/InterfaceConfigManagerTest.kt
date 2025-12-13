@@ -1,0 +1,265 @@
+package com.lxmf.messenger.service
+
+import android.app.ActivityManager
+import android.content.Context
+import android.content.SharedPreferences
+import com.lxmf.messenger.data.db.ColumbaDatabase
+import com.lxmf.messenger.data.db.dao.AnnounceDao
+import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.IdentityRepository
+import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import io.mockk.Ordering
+import io.mockk.Runs
+import io.mockk.clearAllMocks
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.coVerifyOrder
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+/**
+ * Unit tests for InterfaceConfigManager.
+ *
+ * Tests cover:
+ * - Manager lifecycle during service restart (stop before, start after)
+ * - Correct order of manager stop/start calls
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class InterfaceConfigManagerTest {
+    private val testDispatcher = StandardTestDispatcher()
+    private lateinit var testScope: TestScope
+
+    private lateinit var context: Context
+    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var interfaceRepository: InterfaceRepository
+    private lateinit var identityRepository: IdentityRepository
+    private lateinit var conversationRepository: ConversationRepository
+    private lateinit var messageCollector: MessageCollector
+    private lateinit var database: ColumbaDatabase
+    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var autoAnnounceManager: AutoAnnounceManager
+    private lateinit var identityResolutionManager: IdentityResolutionManager
+    private lateinit var propagationNodeManager: PropagationNodeManager
+    private lateinit var applicationScope: CoroutineScope
+
+    private lateinit var manager: InterfaceConfigManager
+    private lateinit var sharedPrefs: SharedPreferences
+    private lateinit var sharedPrefsEditor: SharedPreferences.Editor
+
+    @Before
+    fun setup() {
+        Dispatchers.setMain(testDispatcher)
+        testScope = TestScope(testDispatcher)
+
+        context = mockk(relaxed = true)
+        reticulumProtocol = mockk(relaxed = true)
+        interfaceRepository = mockk(relaxed = true)
+        identityRepository = mockk(relaxed = true)
+        conversationRepository = mockk(relaxed = true)
+        messageCollector = mockk(relaxed = true)
+        database = mockk(relaxed = true)
+        settingsRepository = mockk(relaxed = true)
+        autoAnnounceManager = mockk(relaxed = true)
+        identityResolutionManager = mockk(relaxed = true)
+        propagationNodeManager = mockk(relaxed = true)
+        applicationScope = testScope.backgroundScope
+
+        // Setup SharedPreferences mock
+        sharedPrefsEditor = mockk(relaxed = true)
+        sharedPrefs = mockk(relaxed = true)
+        every { context.getSharedPreferences(any(), any()) } returns sharedPrefs
+        every { sharedPrefs.edit() } returns sharedPrefsEditor
+        every { sharedPrefsEditor.putBoolean(any(), any()) } returns sharedPrefsEditor
+        every { sharedPrefsEditor.commit() } returns true
+
+        // Setup context mocks
+        every { context.filesDir } returns mockk {
+            every { absolutePath } returns "/data/data/com.lxmf.messenger/files"
+        }
+        every { context.packageName } returns "com.lxmf.messenger"
+
+        // Setup ActivityManager mock - no running processes by default
+        val activityManager = mockk<ActivityManager>()
+        every { context.getSystemService(any()) } returns activityManager
+        every { activityManager.runningAppProcesses } returns emptyList()
+
+        // Setup interface repository mock
+        every { interfaceRepository.enabledInterfaces } returns flowOf(emptyList())
+
+        // Setup settings repository mock
+        every { settingsRepository.preferOwnInstanceFlow } returns flowOf(true)
+        every { settingsRepository.rpcKeyFlow } returns flowOf(null)
+
+        // Setup identity repository mock
+        coEvery { identityRepository.getActiveIdentitySync() } returns null
+
+        // Setup database mock
+        val announceDao = mockk<AnnounceDao>()
+        every { database.announceDao() } returns announceDao
+        coEvery { announceDao.getAllAnnouncesSync() } returns emptyList()
+
+        // Setup conversation repository mock
+        coEvery { conversationRepository.getAllPeerIdentities() } returns emptyList()
+
+        // Setup protocol mock
+        coEvery { reticulumProtocol.shutdown() } returns Result.success(Unit)
+        coEvery { reticulumProtocol.initialize(any()) } returns Result.success(Unit)
+
+        manager = InterfaceConfigManager(
+            context = context,
+            reticulumProtocol = reticulumProtocol,
+            interfaceRepository = interfaceRepository,
+            identityRepository = identityRepository,
+            conversationRepository = conversationRepository,
+            messageCollector = messageCollector,
+            database = database,
+            settingsRepository = settingsRepository,
+            autoAnnounceManager = autoAnnounceManager,
+            identityResolutionManager = identityResolutionManager,
+            propagationNodeManager = propagationNodeManager,
+            applicationScope = applicationScope,
+        )
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+        clearAllMocks()
+    }
+
+    // ========== Manager Lifecycle Tests ==========
+
+    @Test
+    fun `applyInterfaceChanges - stops managers before service restart`() = runTest {
+        // When
+        val result = manager.applyInterfaceChanges()
+
+        // Then: Should succeed
+        assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
+
+        // And: All managers should have stop() called
+        verify { autoAnnounceManager.stop() }
+        verify { identityResolutionManager.stop() }
+        verify { propagationNodeManager.stop() }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - starts managers after successful initialization`() = runTest {
+        // When
+        val result = manager.applyInterfaceChanges()
+
+        // Then: Should succeed
+        assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
+
+        // And: All managers should have start() called
+        verify { autoAnnounceManager.start() }
+        verify { identityResolutionManager.start(any()) }
+        verify { propagationNodeManager.start() }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - managers stopped before collectors and started after`() = runTest {
+        // When
+        val result = manager.applyInterfaceChanges()
+
+        // Then: Should succeed
+        assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
+
+        // Verify order: stop managers happens early, start managers happens at the end
+        coVerifyOrder {
+            // Step 1: Stop message collector
+            messageCollector.stopCollecting()
+
+            // Step 1b: Stop managers
+            autoAnnounceManager.stop()
+            identityResolutionManager.stop()
+            propagationNodeManager.stop()
+
+            // ... (service restart happens in between) ...
+
+            // Step 11: Start message collector
+            messageCollector.startCollecting()
+
+            // Step 12: Start managers
+            autoAnnounceManager.start()
+            identityResolutionManager.start(any())
+            propagationNodeManager.start()
+        }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - stops message collector first`() = runTest {
+        // When
+        manager.applyInterfaceChanges()
+
+        // Then: Message collector should be stopped before managers
+        coVerify(ordering = Ordering.ORDERED) {
+            messageCollector.stopCollecting()
+            autoAnnounceManager.stop()
+        }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - starts message collector before managers`() = runTest {
+        // When
+        manager.applyInterfaceChanges()
+
+        // Then: Message collector should be started before managers
+        coVerify(ordering = Ordering.ORDERED) {
+            messageCollector.startCollecting()
+            autoAnnounceManager.start()
+        }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - propagationNodeManager started with applicationScope`() = runTest {
+        // When
+        manager.applyInterfaceChanges()
+
+        // Then: identityResolutionManager.start() should be called with scope
+        verify { identityResolutionManager.start(applicationScope) }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - all three managers are started`() = runTest {
+        // This test ensures we don't accidentally remove one of the manager start calls
+
+        // When
+        manager.applyInterfaceChanges()
+
+        // Then: All three managers should be started
+        verify(exactly = 1) { autoAnnounceManager.start() }
+        verify(exactly = 1) { identityResolutionManager.start(any()) }
+        verify(exactly = 1) { propagationNodeManager.start() }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - all three managers are stopped`() = runTest {
+        // This test ensures we don't accidentally remove one of the manager stop calls
+
+        // When
+        manager.applyInterfaceChanges()
+
+        // Then: All three managers should be stopped
+        verify(exactly = 1) { autoAnnounceManager.stop() }
+        verify(exactly = 1) { identityResolutionManager.stop() }
+        verify(exactly = 1) { propagationNodeManager.stop() }
+    }
+}

@@ -86,11 +86,32 @@ interface MessageDao {
         identityHash: String,
     ): MessageEntity?
 
+    /**
+     * Observe a message by ID for real-time updates (e.g., status changes).
+     * Returns a Flow that emits whenever the message changes in the database.
+     */
+    @Query("SELECT * FROM messages WHERE id = :messageId LIMIT 1")
+    fun observeMessageById(messageId: String): Flow<MessageEntity?>
+
     @Query("UPDATE messages SET status = :status WHERE id = :messageId AND identityHash = :identityHash")
     suspend fun updateMessageStatus(
         messageId: String,
         identityHash: String,
         status: String,
+    )
+
+    @Query(
+        """
+        UPDATE messages
+        SET deliveryMethod = :deliveryMethod, errorMessage = :errorMessage
+        WHERE id = :messageId AND identityHash = :identityHash
+        """,
+    )
+    suspend fun updateMessageDeliveryDetails(
+        messageId: String,
+        identityHash: String,
+        deliveryMethod: String?,
+        errorMessage: String?,
     )
 
     // Paging3 method for infinite scroll
@@ -132,4 +153,14 @@ interface MessageDao {
      */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertMessagesIgnoreDuplicates(messages: List<MessageEntity>)
+
+    /**
+     * Delete a message by ID.
+     * Used when updating message ID (primary key cannot be updated directly).
+     */
+    @Query("DELETE FROM messages WHERE id = :messageId AND identityHash = :identityHash")
+    suspend fun deleteMessageById(
+        messageId: String,
+        identityHash: String,
+    )
 }

@@ -1,0 +1,426 @@
+package com.lxmf.messenger.reticulum.protocol
+
+import android.content.Context
+import android.content.ServiceConnection
+import com.lxmf.messenger.IReticulumService
+import com.lxmf.messenger.reticulum.model.InterfaceConfig
+import com.lxmf.messenger.reticulum.model.LogLevel
+import com.lxmf.messenger.reticulum.model.NetworkStatus
+import com.lxmf.messenger.reticulum.model.ReticulumConfig
+import com.lxmf.messenger.repository.SettingsRepository
+import io.mockk.Runs
+import io.mockk.clearAllMocks
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.slot
+import io.mockk.unmockkStatic
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+/**
+ * Unit tests for ServiceReticulumProtocol.
+ *
+ * Note: ServiceReticulumProtocol has complex internal threading with its own
+ * CoroutineScope using Dispatchers.IO, making full service binding simulation
+ * impractical in unit tests. These tests focus on:
+ * - Initial state verification
+ * - Service not bound error cases
+ * - Configuration model tests
+ *
+ * Full service binding tests should be done as instrumented tests.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class ServiceReticulumProtocolTest {
+    private val testDispatcher = StandardTestDispatcher()
+
+    private lateinit var context: Context
+    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var mockService: IReticulumService
+    private lateinit var protocol: ServiceReticulumProtocol
+
+    @Before
+    fun setup() {
+        Dispatchers.setMain(testDispatcher)
+
+        // Mock static AIDL method
+        mockkStatic(IReticulumService.Stub::class)
+
+        // Create mocks
+        context = mockk(relaxed = true)
+        settingsRepository = mockk(relaxed = true)
+        mockService = mockk(relaxed = true)
+
+        // Default settings repository behavior
+        coEvery { settingsRepository.lastServiceStatusFlow } returns flowOf("SHUTDOWN")
+        coEvery { settingsRepository.saveServiceStatus(any()) } just Runs
+        coEvery { settingsRepository.saveIsSharedInstance(any()) } just Runs
+
+        // Capture service connection for lifecycle simulation
+        val connectionSlot = slot<ServiceConnection>()
+        every {
+            context.bindService(
+                any<android.content.Intent>(),
+                capture(connectionSlot),
+                any<Int>(),
+            )
+        } returns true
+        every { context.unbindService(any()) } just Runs
+        every { context.startService(any()) } returns mockk()
+        every { context.startForegroundService(any()) } returns mockk()
+
+        // Default service mock behaviors
+        every { mockService.getStatus() } returns "SHUTDOWN"
+        every { mockService.isInitialized() } returns false
+        every { mockService.registerCallback(any()) } just Runs
+        every { mockService.unregisterCallback(any()) } just Runs
+        every { mockService.registerReadinessCallback(any()) } just Runs
+
+        // Mock the static AIDL asInterface method
+        every { IReticulumService.Stub.asInterface(any()) } returns mockService
+
+        // Create protocol instance
+        protocol = ServiceReticulumProtocol(context, settingsRepository)
+    }
+
+    @After
+    fun tearDown() {
+        if (::protocol.isInitialized) {
+            protocol.cleanup()
+        }
+        Dispatchers.resetMain()
+        unmockkStatic(IReticulumService.Stub::class)
+        clearAllMocks()
+    }
+
+    // ===========================================
+    // Initial State Tests
+    // ===========================================
+
+    @Test
+    fun `initial networkStatus is CONNECTING`() {
+        // NetworkStatus starts as CONNECTING when protocol is created
+        assertTrue(protocol.networkStatus.value is NetworkStatus.CONNECTING)
+    }
+
+    @Test
+    fun `cleanup can be called safely`() {
+        // When
+        protocol.cleanup()
+
+        // Then - no exception should be thrown
+        assertTrue(true)
+    }
+
+    @Test
+    fun `cleanup can be called multiple times safely`() {
+        // When
+        protocol.cleanup()
+        protocol.cleanup()
+
+        // Then - no exception should be thrown
+        assertTrue(true)
+    }
+
+    // ===========================================
+    // Service Not Bound Error Tests
+    // ===========================================
+
+    @Test
+    fun `getStatus - returns error when service not bound`() {
+        // When
+        val result = protocol.getStatus()
+
+        // Then
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+    }
+
+    @Test
+    fun `isInitialized - returns error when service not bound`() {
+        // When
+        val result = protocol.isInitialized()
+
+        // Then
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+    }
+
+    @Test
+    fun `createIdentity - returns error when service not bound`() = runTest {
+        // When
+        val result = protocol.createIdentity()
+
+        // Then
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+    }
+
+    @Test
+    fun `loadIdentity - returns error when service not bound`() = runTest {
+        // When
+        val result = protocol.loadIdentity("/test/path")
+
+        // Then
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+    }
+
+    @Test
+    fun `shutdown - returns error when service not bound`() = runTest {
+        // When
+        val result = protocol.shutdown()
+
+        // Then
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+    }
+
+    // ===========================================
+    // Bind Failure Tests
+    // ===========================================
+
+    @Test
+    fun `bindService - handles bind failure when context returns false`() = runTest {
+        // Given
+        every {
+            context.bindService(
+                any<android.content.Intent>(),
+                any<ServiceConnection>(),
+                any<Int>(),
+            )
+        } returns false
+
+        // When/Then
+        try {
+            protocol.bindService()
+            assert(false) { "Should have thrown exception" }
+        } catch (e: RuntimeException) {
+            assertTrue(e.message!!.contains("Failed to bind"))
+        }
+    }
+
+    // ===========================================
+    // NetworkStatus Sealed Class Tests
+    // ===========================================
+
+    @Test
+    fun `NetworkStatus INITIALIZING is singleton`() {
+        val status1 = NetworkStatus.INITIALIZING
+        val status2 = NetworkStatus.INITIALIZING
+        assertEquals(status1, status2)
+    }
+
+    @Test
+    fun `NetworkStatus CONNECTING is singleton`() {
+        val status1 = NetworkStatus.CONNECTING
+        val status2 = NetworkStatus.CONNECTING
+        assertEquals(status1, status2)
+    }
+
+    @Test
+    fun `NetworkStatus READY is singleton`() {
+        val status1 = NetworkStatus.READY
+        val status2 = NetworkStatus.READY
+        assertEquals(status1, status2)
+    }
+
+    @Test
+    fun `NetworkStatus SHUTDOWN is singleton`() {
+        val status1 = NetworkStatus.SHUTDOWN
+        val status2 = NetworkStatus.SHUTDOWN
+        assertEquals(status1, status2)
+    }
+
+    @Test
+    fun `NetworkStatus ERROR contains message`() {
+        val error = NetworkStatus.ERROR("Test error message")
+        assertEquals("Test error message", error.message)
+    }
+
+    @Test
+    fun `NetworkStatus ERROR with same message are equal`() {
+        val error1 = NetworkStatus.ERROR("Same message")
+        val error2 = NetworkStatus.ERROR("Same message")
+        assertEquals(error1, error2)
+    }
+
+    @Test
+    fun `NetworkStatus ERROR with different messages are not equal`() {
+        val error1 = NetworkStatus.ERROR("Message 1")
+        val error2 = NetworkStatus.ERROR("Message 2")
+        assertFalse(error1 == error2)
+    }
+
+    // ===========================================
+    // ReticulumConfig Tests
+    // ===========================================
+
+    @Test
+    fun `ReticulumConfig - creates with required parameters`() {
+        val config = ReticulumConfig(
+            storagePath = "/test/path",
+            enabledInterfaces = emptyList(),
+        )
+
+        assertEquals("/test/path", config.storagePath)
+        assertTrue(config.enabledInterfaces.isEmpty())
+        assertEquals(LogLevel.INFO, config.logLevel)
+        assertFalse(config.allowAnonymous)
+        assertFalse(config.preferOwnInstance)
+    }
+
+    @Test
+    fun `ReticulumConfig - creates with all parameters`() {
+        val interfaces = listOf(
+            InterfaceConfig.AutoInterface(name = "Auto"),
+        )
+
+        val config = ReticulumConfig(
+            storagePath = "/test/path",
+            enabledInterfaces = interfaces,
+            identityFilePath = "/identity.dat",
+            displayName = "Test Node",
+            logLevel = LogLevel.DEBUG,
+            allowAnonymous = true,
+            preferOwnInstance = true,
+            rpcKey = "abc123",
+        )
+
+        assertEquals("/test/path", config.storagePath)
+        assertEquals(1, config.enabledInterfaces.size)
+        assertEquals("/identity.dat", config.identityFilePath)
+        assertEquals("Test Node", config.displayName)
+        assertEquals(LogLevel.DEBUG, config.logLevel)
+        assertTrue(config.allowAnonymous)
+        assertTrue(config.preferOwnInstance)
+        assertEquals("abc123", config.rpcKey)
+    }
+
+    // ===========================================
+    // InterfaceConfig Tests
+    // ===========================================
+
+    @Test
+    fun `AutoInterface - creates with defaults`() {
+        val config = InterfaceConfig.AutoInterface()
+
+        assertEquals("Auto Discovery", config.name)
+        assertTrue(config.enabled)
+        assertEquals("", config.groupId)
+        assertEquals("link", config.discoveryScope)
+        assertEquals("full", config.mode)
+    }
+
+    @Test
+    fun `TCPClient - creates with required parameters`() {
+        val config = InterfaceConfig.TCPClient(
+            targetHost = "192.168.1.1",
+            targetPort = 4242,
+        )
+
+        assertEquals("TCP Connection", config.name)
+        assertTrue(config.enabled)
+        assertEquals("192.168.1.1", config.targetHost)
+        assertEquals(4242, config.targetPort)
+        assertFalse(config.kissFraming)
+    }
+
+    @Test
+    fun `RNode - creates with required parameters`() {
+        val config = InterfaceConfig.RNode(
+            targetDeviceName = "RNode",
+        )
+
+        assertEquals("RNode LoRa", config.name)
+        assertTrue(config.enabled)
+        assertEquals("RNode", config.targetDeviceName)
+        assertEquals("classic", config.connectionMode)
+        assertEquals(915000000L, config.frequency)
+        assertEquals(125000, config.bandwidth)
+        assertEquals(7, config.txPower)
+    }
+
+    @Test
+    fun `UDP - creates with defaults`() {
+        val config = InterfaceConfig.UDP()
+
+        assertEquals("UDP Interface", config.name)
+        assertTrue(config.enabled)
+        assertEquals("0.0.0.0", config.listenIp)
+        assertEquals(4242, config.listenPort)
+    }
+
+    @Test
+    fun `AndroidBLE - creates with defaults`() {
+        val config = InterfaceConfig.AndroidBLE()
+
+        assertEquals("Bluetooth LE", config.name)
+        assertTrue(config.enabled)
+        assertEquals("", config.deviceName)
+        assertEquals(7, config.maxConnections)
+        assertEquals("roaming", config.mode)
+    }
+
+    // ===========================================
+    // LogLevel Tests
+    // ===========================================
+
+    @Test
+    fun `LogLevel - contains all expected values`() {
+        val levels = LogLevel.values()
+
+        assertTrue(levels.contains(LogLevel.CRITICAL))
+        assertTrue(levels.contains(LogLevel.ERROR))
+        assertTrue(levels.contains(LogLevel.WARNING))
+        assertTrue(levels.contains(LogLevel.INFO))
+        assertTrue(levels.contains(LogLevel.DEBUG))
+        assertTrue(levels.contains(LogLevel.VERBOSE))
+    }
+
+    @Test
+    fun `LogLevel - ordinal ordering is correct`() {
+        assertTrue(LogLevel.CRITICAL.ordinal < LogLevel.ERROR.ordinal)
+        assertTrue(LogLevel.ERROR.ordinal < LogLevel.WARNING.ordinal)
+        assertTrue(LogLevel.WARNING.ordinal < LogLevel.INFO.ordinal)
+        assertTrue(LogLevel.INFO.ordinal < LogLevel.DEBUG.ordinal)
+        assertTrue(LogLevel.DEBUG.ordinal < LogLevel.VERBOSE.ordinal)
+    }
+
+    // ===========================================
+    // Verify Mock Setup
+    // ===========================================
+
+    @Test
+    fun `verify protocol can be created and cleaned up`() = runTest {
+        // Given - protocol already created in setup
+
+        // When/Then - verify we can create and cleanup the protocol without error
+        protocol.cleanup()
+
+        // Verify context methods were configured correctly
+        assertTrue(::protocol.isInitialized)
+    }
+
+    @Test
+    fun `verify static AIDL mock returns mockService`() {
+        // When
+        val result = IReticulumService.Stub.asInterface(mockk())
+
+        // Then
+        assertEquals(mockService, result)
+    }
+}

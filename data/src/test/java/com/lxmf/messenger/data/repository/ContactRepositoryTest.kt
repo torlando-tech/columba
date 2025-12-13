@@ -707,4 +707,107 @@ class ContactRepositoryTest {
             // Then
             assertEquals(false, result)
         }
+
+    // ========== getAnyRelay Tests (Relay Source of Truth) ==========
+
+    @Test
+    fun `getAnyRelay - returns relay contact when exists`() =
+        runTest {
+            // Given: Relay contact exists in database
+            val relayContact = createTestContact(isMyRelay = true)
+            coEvery { mockContactDao.getAnyMyRelay() } returns relayContact
+
+            // When
+            val result = repository.getAnyRelay()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertEquals(relayContact, result)
+            assertEquals(true, result?.isMyRelay)
+        }
+
+    @Test
+    fun `getAnyRelay - returns null when no relay exists`() =
+        runTest {
+            // Given: No relay in database
+            coEvery { mockContactDao.getAnyMyRelay() } returns null
+
+            // When
+            val result = repository.getAnyRelay()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertNull(result)
+        }
+
+    @Test
+    fun `getAnyRelay - does not require active identity`() =
+        runTest {
+            // Given: No active identity, but relay exists in database
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+            val relayContact = createTestContact(isMyRelay = true)
+            coEvery { mockContactDao.getAnyMyRelay() } returns relayContact
+
+            // When
+            val result = repository.getAnyRelay()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: Should still return relay (doesn't depend on active identity)
+            assertEquals(relayContact, result)
+        }
+
+    @Test
+    fun `getAnyRelay - calls DAO without identity filter`() =
+        runTest {
+            // Given
+            coEvery { mockContactDao.getAnyMyRelay() } returns null
+
+            // When
+            repository.getAnyRelay()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: Should call getAnyMyRelay (no identity parameter)
+            coVerify { mockContactDao.getAnyMyRelay() }
+            // Should NOT call getMyRelay which requires identity
+            coVerify(exactly = 0) { mockContactDao.getMyRelay(any()) }
+        }
+
+    @Test
+    fun `getAnyRelay vs getMyRelay - getAnyRelay works without active identity`() =
+        runTest {
+            // Given: No active identity
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+            val relayContact = createTestContact(isMyRelay = true)
+            coEvery { mockContactDao.getAnyMyRelay() } returns relayContact
+
+            // When: Try both methods
+            val anyRelayResult = repository.getAnyRelay()
+            val myRelayResult = repository.getMyRelay()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: getAnyRelay works, getMyRelay returns null
+            assertEquals(relayContact, anyRelayResult)
+            assertNull(myRelayResult) // getMyRelay requires active identity
+        }
+
+    @Test
+    fun `getAnyRelay - returns first relay regardless of identity`() =
+        runTest {
+            // Given: Relay for a different identity
+            val otherIdentityRelay =
+                createTestContact(
+                    destinationHash = "other_relay_hash",
+                    identityHash = "different_identity_hash",
+                    isMyRelay = true,
+                )
+            coEvery { mockContactDao.getAnyMyRelay() } returns otherIdentityRelay
+
+            // When
+            val result = repository.getAnyRelay()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: Should return the relay regardless of which identity it belongs to
+            assertEquals(otherIdentityRelay, result)
+            assertEquals("different_identity_hash", result?.identityHash)
+        }
 }

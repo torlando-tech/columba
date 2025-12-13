@@ -33,6 +33,8 @@ fun Message.toMessageUi(): MessageUi {
         isFromMe = isFromMe,
         status = status,
         decodedImage = decodedImage,
+        deliveryMethod = deliveryMethod,
+        errorMessage = errorMessage,
     )
 }
 

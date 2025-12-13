@@ -11,7 +11,6 @@ import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -498,10 +497,11 @@ class KotlinBLEBridgeDeduplicationTest {
         bridge: KotlinBLEBridge,
         callback: PyObject,
     ) {
-        val method = KotlinBLEBridge::class.java.getDeclaredMethod(
-            "setOnAddressChanged",
-            PyObject::class.java,
-        )
+        val method =
+            KotlinBLEBridge::class.java.getDeclaredMethod(
+                "setOnAddressChanged",
+                PyObject::class.java,
+            )
         method.isAccessible = true
         method.invoke(bridge, callback)
     }
@@ -511,5 +511,4 @@ class KotlinBLEBridgeDeduplicationTest {
         field.isAccessible = true
         return field.get(bridge) as? PyObject
     }
-
 }

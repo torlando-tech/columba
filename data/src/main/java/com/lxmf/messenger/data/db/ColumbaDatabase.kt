@@ -27,7 +27,7 @@ import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
         CustomThemeEntity::class,
         LocalIdentityEntity::class,
     ],
-    version = 22,
+    version = 23,
     exportSchema = false,
 )
 abstract class ColumbaDatabase : RoomDatabase() {

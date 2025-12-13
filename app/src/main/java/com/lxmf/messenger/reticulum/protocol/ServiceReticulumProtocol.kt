@@ -126,6 +126,16 @@ class ServiceReticulumProtocol(
             extraBufferCapacity = 100,
         )
 
+    /**
+     * Handler for alternative relay requests from the service.
+     * Set by ColumbaApplication to provide PropagationNodeManager integration.
+     * Called when Python needs an alternative relay for message retry.
+     *
+     * @param excludeHashes List of relay hashes to exclude
+     * @param callback Function to call with the alternative relay hash (or null if none)
+     */
+    var alternativeRelayHandler: (suspend (excludeHashes: List<String>) -> ByteArray?)? = null
+
     init {
         // Load last known status as an optimistic hint while we query actual status
         // This reduces the visual flicker during app restart
@@ -343,6 +353,46 @@ class ServiceReticulumProtocol(
                     Log.d(TAG, "Delivery status emitted to flow: hash=${messageHash.take(16)}..., status=$status")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling delivery status callback", e)
+                }
+            }
+
+            override fun onAlternativeRelayRequested(requestJson: String) {
+                try {
+                    Log.d(TAG, "Alternative relay requested: $requestJson")
+                    val json = JSONObject(requestJson)
+
+                    // Parse exclude_relays list from request
+                    val excludeArray = json.optJSONArray("exclude_relays")
+                    val excludeHashes = mutableListOf<String>()
+                    if (excludeArray != null) {
+                        for (i in 0 until excludeArray.length()) {
+                            excludeHashes.add(excludeArray.getString(i))
+                        }
+                    }
+
+                    // Call the handler asynchronously
+                    protocolScope.launch {
+                        try {
+                            val handler = alternativeRelayHandler
+                            if (handler != null) {
+                                val alternativeRelay = handler(excludeHashes)
+                                // Provide the result back to the service
+                                service?.provideAlternativeRelay(alternativeRelay)
+                                Log.d(
+                                    TAG,
+                                    "Alternative relay provided: ${alternativeRelay?.toHexString()?.take(16) ?: "null"}",
+                                )
+                            } else {
+                                Log.w(TAG, "No alternative relay handler set, providing null")
+                                service?.provideAlternativeRelay(null)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error handling alternative relay request", e)
+                            service?.provideAlternativeRelay(null)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing alternative relay request", e)
                 }
             }
         }
@@ -1389,6 +1439,52 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun requestMessagesFromPropagationNode(
+        identityPrivateKey: ByteArray?,
+        maxMessages: Int,
+    ): Result<PropagationState> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.requestMessagesFromPropagationNode(identityPrivateKey, maxMessages)
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            val state = result.optInt("state", 0)
+            PropagationState(
+                state = state,
+                stateName = result.optString("state_name", "unknown"),
+                progress = result.optDouble("progress", 0.0).toFloat(),
+                messagesReceived = result.optInt("messages_received", 0),
+            )
+        }
+    }
+
+    override suspend fun getPropagationState(): Result<PropagationState> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.getPropagationState()
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            PropagationState(
+                state = result.optInt("state", 0),
+                stateName = result.optString("state_name", "unknown"),
+                progress = result.optDouble("progress", 0.0).toFloat(),
+                messagesReceived = result.optInt("messages_received", 0),
+            )
+        }
+    }
+
     override suspend fun sendLxmfMessageWithMethod(
         destinationHash: ByteArray,
         content: String,
@@ -1403,21 +1499,23 @@ class ServiceReticulumProtocol(
 
             val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
 
-            val methodString = when (deliveryMethod) {
-                DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
-                DeliveryMethod.DIRECT -> "direct"
-                DeliveryMethod.PROPAGATED -> "propagated"
-            }
+            val methodString =
+                when (deliveryMethod) {
+                    DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
+                    DeliveryMethod.DIRECT -> "direct"
+                    DeliveryMethod.PROPAGATED -> "propagated"
+                }
 
-            val resultJson = service.sendLxmfMessageWithMethod(
-                destinationHash,
-                content,
-                privateKey,
-                methodString,
-                tryPropagationOnFail,
-                imageData,
-                imageFormat,
-            )
+            val resultJson =
+                service.sendLxmfMessageWithMethod(
+                    destinationHash,
+                    content,
+                    privateKey,
+                    methodString,
+                    tryPropagationOnFail,
+                    imageData,
+                    imageFormat,
+                )
             val result = JSONObject(resultJson)
 
             if (!result.optBoolean("success", false)) {

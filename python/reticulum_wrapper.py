@@ -121,6 +121,22 @@ class ReticulumWrapper:
         # General Reticulum bridge for protocol-level callbacks (announces, link events, etc.)
         self.kotlin_reticulum_bridge = None  # KotlinReticulumBridge instance (passed from Kotlin)
 
+        # Opportunistic message timeout tracking
+        # When opportunistic messages are sent but recipient is offline, they get stuck in SENT state
+        # forever waiting for a delivery receipt. This tracking dict + timer provides a timeout
+        # mechanism to trigger propagation fallback for undelivered opportunistic messages.
+        self._opportunistic_messages = {}  # {msg_hash_hex: {'message': lxmf_message, 'sent_time': timestamp}}
+        self._opportunistic_timeout_seconds = 30  # Timeout before falling back to propagation
+        self._opportunistic_check_interval = 10  # How often to check for timeouts (seconds)
+        self._opportunistic_timer = None  # Timer thread reference
+
+        # Propagation node fallback tracking
+        # When the selected relay is offline and propagation fails, we request alternative relays
+        # from Kotlin. Messages wait in pending dict until alternative is provided or all exhausted.
+        self.kotlin_request_alternative_relay_callback = None  # Callback to request alternative relay
+        self._pending_relay_fallback_messages = {}  # {msg_hash_hex: lxmf_message} - waiting for alternative
+        self._max_relay_retries = 3  # Maximum number of alternative relays to try
+
         # Set global instance so AndroidBLEDriver can access it
         _global_wrapper_instance = self
 
@@ -244,6 +260,29 @@ class ReticulumWrapper:
         self.kotlin_message_received_callback = callback
         log_info("ReticulumWrapper", "set_message_received_callback",
                 "✅ Message received callback registered (event-driven architecture enabled)")
+
+    def set_kotlin_request_alternative_relay_callback(self, callback):
+        """
+        Set callback to request alternative relay when propagation fails.
+
+        When a message fails to deliver via the current propagation node (relay is offline),
+        this callback is invoked to request Kotlin to find an alternative relay.
+
+        Callback signature: callback(request_json: str)
+
+        Request JSON format:
+        {
+            "message_hash": "abc123...",     # Hex string of message hash needing retry
+            "exclude_relays": ["def456..."], # List of relay hashes to exclude (already tried)
+            "timestamp": 1234567890000       # Milliseconds since epoch
+        }
+
+        Args:
+            callback: PyObject callable from Kotlin (passed via Chaquopy)
+        """
+        self.kotlin_request_alternative_relay_callback = callback
+        log_info("ReticulumWrapper", "set_kotlin_request_alternative_relay_callback",
+                "✅ Alternative relay callback registered (relay fallback enabled)")
 
     def _clear_stale_ble_paths(self):
         """
@@ -1058,6 +1097,8 @@ class ReticulumWrapper:
             )
             # Store display name for use in announces
             self.display_name = display_name
+            # Store default identity for use in propagation node requests
+            self.default_identity = default_identity
             log_info("ReticulumWrapper", "initialize", f"Local LXMF destination: {self.local_lxmf_destination.hexhash}")
             log_debug("ReticulumWrapper", "initialize", f"(Identity hash: {default_identity.hash.hex()}, Dest hash: {self.local_lxmf_destination.hexhash})")
 
@@ -1075,6 +1116,10 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "initialize", "Set last_announce_poll_time to current time")
 
             self.initialized = True
+
+            # Start opportunistic message timeout checker
+            self._start_opportunistic_timer()
+
             log_separator("ReticulumWrapper", "initialize")
             log_info("ReticulumWrapper", "initialize", "Reticulum initialized successfully")
             log_info("ReticulumWrapper", "initialize", f"Shared instance mode: {self.is_shared_instance}")
@@ -1919,9 +1964,29 @@ class ReticulumWrapper:
                 log_info("ReticulumWrapper", "send_lxmf_message", f"✅ Retrieved identity from local cache")
 
             if not recipient_identity:
-                error_msg = f"Cannot send message: Recipient identity {dest_hash.hex()[:16]} not known. Please wait for announce or request path."
-                log_error("ReticulumWrapper", "send_lxmf_message", f"❌ {error_msg}")
-                return {"success": False, "error": error_msg}
+                # Request path from network (triggers announces from peers who know destination)
+                log_info("ReticulumWrapper", "send_lxmf_message",
+                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
+                try:
+                    RNS.Transport.request_path(dest_hash)
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "send_lxmf_message", f"Error requesting path: {e}")
+
+                # Wait up to 5 seconds for path response
+                for attempt in range(10):
+                    time.sleep(0.5)
+                    recipient_identity = RNS.Identity.recall(dest_hash)
+                    if not recipient_identity:
+                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                    if recipient_identity:
+                        log_info("ReticulumWrapper", "send_lxmf_message",
+                                 f"✅ Identity resolved after path request (attempt {attempt + 1})")
+                        break
+
+                if not recipient_identity:
+                    error_msg = f"Cannot send message: Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."
+                    log_error("ReticulumWrapper", "send_lxmf_message", f"❌ {error_msg}")
+                    return {"success": False, "error": error_msg}
 
             # Create outgoing LXMF destination object from the recalled identity
             # The router.handle_outbound() REQUIRES a destination object, not just a hash!
@@ -2159,6 +2224,117 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "get_outbound_propagation_node", f"Error: {e}")
             return {"success": False, "error": str(e)}
 
+    def request_messages_from_propagation_node(self, identity_private_key: bytes = None, max_messages: int = 256) -> Dict:
+        """
+        Request/sync messages from the configured propagation node.
+
+        This is the key method for RECEIVING messages that were sent via propagation.
+        When messages are sent to a propagation node, the recipient must explicitly
+        request them. Call this method periodically (e.g., every 30 seconds) to
+        retrieve waiting messages.
+
+        Args:
+            identity_private_key: Optional private key bytes to use for requesting messages.
+                                  If None, uses the default identity.
+            max_messages: Maximum number of messages to retrieve (default 256)
+
+        Returns:
+            Dict with 'success' or 'error', and 'state' indicating the transfer state
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Check if propagation node is configured
+            if not self.active_propagation_node:
+                return {
+                    "success": False,
+                    "error": "No propagation node configured",
+                    "errorCode": "NO_PROPAGATION_NODE"
+                }
+
+            # Get or create identity for requesting messages
+            if identity_private_key is not None:
+                # Convert jarray to bytes if needed
+                if hasattr(identity_private_key, '__iter__') and not isinstance(identity_private_key, (bytes, bytearray)):
+                    identity_private_key = bytes(identity_private_key)
+
+                # Load identity from private key
+                identity = RNS.Identity.from_bytes(identity_private_key)
+                log_info("ReticulumWrapper", "request_messages_from_propagation_node",
+                        f"Using provided identity: {identity.hash.hex()[:16]}...")
+            else:
+                # Use default identity
+                identity = self.default_identity
+                log_info("ReticulumWrapper", "request_messages_from_propagation_node",
+                        f"Using default identity: {identity.hash.hex()[:16]}...")
+
+            log_info("ReticulumWrapper", "request_messages_from_propagation_node",
+                    f"📡 Requesting up to {max_messages} messages from propagation node {self.active_propagation_node.hex()[:16]}...")
+
+            # Request messages from the propagation node
+            self.router.request_messages_from_propagation_node(identity, max_messages=max_messages)
+
+            return {
+                "success": True,
+                "state": self.router.propagation_transfer_state
+            }
+        except Exception as e:
+            log_error("ReticulumWrapper", "request_messages_from_propagation_node", f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    def get_propagation_state(self) -> Dict:
+        """
+        Get the current propagation sync state and progress.
+
+        State values:
+            0 (PR_IDLE): Inactive
+            1 (PR_PATH_REQUESTED): Path discovery in progress
+            2 (PR_LINK_ESTABLISHING): Connection pending
+            3 (PR_LINK_ESTABLISHED): Connected and ready
+            4 (PR_REQUEST_SENT): Message list requested
+            5 (PR_RECEIVING): Messages downloading
+            7 (PR_COMPLETE): Transfer finished
+
+        Returns:
+            Dict with 'success', 'state', 'progress', 'messages_received' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            state = self.router.propagation_transfer_state
+            progress = self.router.propagation_transfer_progress
+
+            # propagation_transfer_last_result contains the number of messages received
+            # in the last completed transfer
+            last_result = getattr(self.router, 'propagation_transfer_last_result', None) or 0
+
+            # Map state to human-readable string
+            state_names = {
+                0: "idle",
+                1: "path_requested",
+                2: "link_establishing",
+                3: "link_established",
+                4: "request_sent",
+                5: "receiving",
+                7: "complete"
+            }
+            state_name = state_names.get(state, f"unknown_{state}")
+
+            return {
+                "success": True,
+                "state": state,
+                "state_name": state_name,
+                "progress": progress,
+                "messages_received": last_result
+            }
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_propagation_state", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
     def send_lxmf_message_with_method(self, dest_hash: bytes, content: str, source_identity_private_key: bytes,
                                        delivery_method: str = "direct", try_propagation_on_fail: bool = True,
                                        image_data: bytes = None, image_format: str = None) -> Dict:
@@ -2228,7 +2404,27 @@ class ReticulumWrapper:
                 recipient_identity = self.identities[dest_hash.hex()]
 
             if not recipient_identity:
-                return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known"}
+                # Request path from network (triggers announces from peers who know destination)
+                log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
+                try:
+                    RNS.Transport.request_path(dest_hash)
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "send_lxmf_message_with_method", f"Error requesting path: {e}")
+
+                # Wait up to 5 seconds for path response
+                for attempt in range(10):
+                    time.sleep(0.5)
+                    recipient_identity = RNS.Identity.recall(dest_hash)
+                    if not recipient_identity:
+                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                    if recipient_identity:
+                        log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                                 f"✅ Identity resolved after path request (attempt {attempt + 1})")
+                        break
+
+                if not recipient_identity:
+                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."}
 
             # Create destination
             recipient_lxmf_destination = RNS.Destination(
@@ -2278,6 +2474,19 @@ class ReticulumWrapper:
             log_info("ReticulumWrapper", "send_lxmf_message_with_method",
                     f"✅ Message {msg_hash.hex()[:16] if msg_hash else 'unknown'}... handed to router")
 
+            # Track opportunistic messages for timeout fallback
+            # If an opportunistic message doesn't get delivered within the timeout period,
+            # we'll trigger the failure callback to initiate propagation fallback
+            if lxmf_method == LXMF.LXMessage.OPPORTUNISTIC and lxmf_message.try_propagation_on_fail and msg_hash:
+                self._opportunistic_messages[msg_hash.hex()] = {
+                    'message': lxmf_message,
+                    'sent_time': time.time()
+                }
+                log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                         f"Tracking opportunistic message {msg_hash.hex()[:16]}... for timeout fallback")
+                # Ensure timer is running
+                self._start_opportunistic_timer()
+
             # Map method back to string for return
             method_names = {
                 LXMF.LXMessage.OPPORTUNISTIC: "opportunistic",
@@ -2301,21 +2510,43 @@ class ReticulumWrapper:
 
     def _on_message_delivered(self, lxmf_message):
         """
-        Callback invoked by LXMF when a sent message is successfully delivered.
-        This is called when the recipient sends back a cryptographic proof of delivery.
+        Callback invoked by LXMF when a sent message acknowledgment is received.
+
+        For DIRECT messages: Called when recipient sends back proof of delivery.
+        For PROPAGATED messages: Called when relay accepts the message (NOT end recipient).
+
+        LXMF sets different states before calling this callback:
+        - DELIVERED (0x08): Direct delivery confirmed by recipient
+        - SENT (0x04): Propagated to relay, awaiting recipient sync
 
         Args:
-            lxmf_message: The LXMF.LXMessage that was delivered
+            lxmf_message: The LXMF.LXMessage that was acknowledged
         """
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
-            log_info("ReticulumWrapper", "_on_message_delivered",
-                    f"✅ Message {msg_hash[:16]}... DELIVERED!")
+
+            # Determine status based on LXMF message state
+            # LXMF sets state=DELIVERED for direct, state=SENT for propagated
+            if lxmf_message.state == LXMF.LXMessage.DELIVERED:
+                status = 'delivered'
+                log_info("ReticulumWrapper", "_on_message_delivered",
+                        f"✅ Message {msg_hash[:16]}... DELIVERED (confirmed by recipient)")
+            else:
+                # state == SENT means propagated (relay accepted, recipient unknown)
+                status = 'propagated'
+                log_info("ReticulumWrapper", "_on_message_delivered",
+                        f"📤 Message {msg_hash[:16]}... PROPAGATED (stored on relay)")
+
+            # Remove from opportunistic tracking (if it was being tracked)
+            if msg_hash in self._opportunistic_messages:
+                del self._opportunistic_messages[msg_hash]
+                log_debug("ReticulumWrapper", "_on_message_delivered",
+                         f"Removed {msg_hash[:16]}... from opportunistic tracking ({status})")
 
             # Create status event for Kotlin
             status_event = {
                 'message_hash': msg_hash,
-                'status': 'delivered',
+                'status': status,
                 'timestamp': int(time.time() * 1000)
             }
 
@@ -2344,9 +2575,10 @@ class ReticulumWrapper:
         Callback invoked by LXMF when a sent message delivery fails.
         This is called when delivery times out or is otherwise unsuccessful.
 
-        If try_propagation_on_fail is set on the message and we have an active
-        propagation node, the message will be retried via propagation instead
-        of being marked as failed.
+        Handles three cases:
+        1. First failure with try_propagation_on_fail=True: Retry via current propagation node
+        2. Propagation retry failed, retries < max: Request alternative relay from Kotlin
+        3. Max retries exceeded or no alternatives: Fail message permanently
 
         Args:
             lxmf_message: The LXMF.LXMessage that failed
@@ -2354,13 +2586,30 @@ class ReticulumWrapper:
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
 
-            # Check if we should retry via propagation (Sideband pattern)
+            # Remove from opportunistic tracking (if it was being tracked)
+            if msg_hash in self._opportunistic_messages:
+                del self._opportunistic_messages[msg_hash]
+                log_debug("ReticulumWrapper", "_on_message_failed",
+                         f"Removed {msg_hash[:16]}... from opportunistic tracking (failed)")
+
+            # Initialize tracking attributes if not present
+            if not hasattr(lxmf_message, 'propagation_retry_attempted'):
+                lxmf_message.propagation_retry_attempted = False
+            if not hasattr(lxmf_message, 'tried_relays'):
+                lxmf_message.tried_relays = []
+
+            # Case 1: First failure - try propagation if enabled (Sideband pattern)
             if (hasattr(lxmf_message, 'try_propagation_on_fail') and
                 lxmf_message.try_propagation_on_fail and
-                self.active_propagation_node):
+                self.active_propagation_node and
+                not lxmf_message.propagation_retry_attempted):
 
                 log_info("ReticulumWrapper", "_on_message_failed",
                         f"📡 Message {msg_hash[:16]}... direct delivery failed, retrying via propagation node")
+
+                # Mark that we've attempted propagation and track the relay
+                lxmf_message.propagation_retry_attempted = True
+                lxmf_message.tried_relays.append(self.active_propagation_node)
 
                 # Clear retry flag to prevent infinite loop
                 lxmf_message.try_propagation_on_fail = False
@@ -2368,10 +2617,15 @@ class ReticulumWrapper:
                 lxmf_message.delivery_attempts = 0
                 # Clear packed state so message can be re-packed
                 lxmf_message.packed = None
+                # Clear propagation-specific state for fresh stamp generation
+                lxmf_message.propagation_packed = None
+                lxmf_message.propagation_stamp = None
+                # Request deferred stamp generation - propagation nodes require valid stamps
+                lxmf_message.defer_propagation_stamp = True
                 # Switch to PROPAGATED delivery
                 lxmf_message.desired_method = LXMF.LXMessage.PROPAGATED
 
-                # Re-submit to router
+                # Re-submit to router (will go through pending_deferred_stamps for stamp generation)
                 self.router.handle_outbound(lxmf_message)
 
                 # Notify Kotlin of retry (status = "retrying_propagated")
@@ -2391,34 +2645,182 @@ class ReticulumWrapper:
                                  f"Error invoking Kotlin callback: {e}")
                 return  # Don't report as failed - we're retrying
 
-            # Normal failure - no retry
-            log_error("ReticulumWrapper", "_on_message_failed",
-                     f"❌ Message {msg_hash[:16]}... FAILED!")
+            # Case 2: Propagation retry failed - try alternative relay if available
+            if (lxmf_message.propagation_retry_attempted and
+                len(lxmf_message.tried_relays) < self._max_relay_retries and
+                self.kotlin_request_alternative_relay_callback):
 
-            # Create status event for Kotlin
-            status_event = {
-                'message_hash': msg_hash,
-                'status': 'failed',
-                'timestamp': int(time.time() * 1000)
-            }
+                log_info("ReticulumWrapper", "_on_message_failed",
+                        f"📡 Message {msg_hash[:16]}... propagation failed, requesting alternative relay "
+                        f"(tried {len(lxmf_message.tried_relays)}/{self._max_relay_retries})")
 
-            # Invoke Kotlin callback if registered (same pattern as BLE bridge)
-            if self.kotlin_delivery_status_callback:
+                # Store message for later retry when alternative is provided
+                self._pending_relay_fallback_messages[msg_hash] = lxmf_message
+
+                # Request alternative from Kotlin (exclude already tried relays)
+                import json
+                request = {
+                    'message_hash': msg_hash,
+                    'exclude_relays': [r.hex() if isinstance(r, bytes) else str(r) for r in lxmf_message.tried_relays],
+                    'timestamp': int(time.time() * 1000)
+                }
                 try:
-                    import json
-                    self.kotlin_delivery_status_callback(json.dumps(status_event))
+                    self.kotlin_request_alternative_relay_callback(json.dumps(request))
                     log_debug("ReticulumWrapper", "_on_message_failed",
-                             "Kotlin callback invoked successfully")
+                             f"Requested alternative relay for {msg_hash[:16]}...")
                 except Exception as e:
                     log_error("ReticulumWrapper", "_on_message_failed",
-                             f"Error invoking Kotlin callback: {e}")
+                             f"Error requesting alternative relay: {e}")
+                    # Fall through to permanent failure
+                    del self._pending_relay_fallback_messages[msg_hash]
+
+                # Notify Kotlin of status
+                if self.kotlin_delivery_status_callback:
+                    try:
+                        status_event = {
+                            'message_hash': msg_hash,
+                            'status': 'retrying_alternative_relay',
+                            'tried_count': len(lxmf_message.tried_relays),
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        self.kotlin_delivery_status_callback(json.dumps(status_event))
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "_on_message_failed",
+                                 f"Error notifying status: {e}")
+                return  # Don't report as failed yet - waiting for alternative
+
+            # Case 3: Max retries exceeded or no callback - fail permanently
+            if len(lxmf_message.tried_relays) >= self._max_relay_retries:
+                reason = 'max_relay_retries_exceeded'
             else:
-                log_warning("ReticulumWrapper", "_on_message_failed",
-                           "No Kotlin callback registered - failure status not reported")
+                reason = 'delivery_failed'
+            self._fail_message_permanently(lxmf_message, reason)
 
         except Exception as e:
             log_error("ReticulumWrapper", "_on_message_failed",
                      f"Error in failed callback: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _fail_message_permanently(self, lxmf_message, reason: str):
+        """
+        Mark a message as permanently failed and notify Kotlin.
+
+        Args:
+            lxmf_message: The LXMF.LXMessage that failed
+            reason: Reason for failure (e.g., 'max_relay_retries_exceeded', 'no_relays_available')
+        """
+        msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
+
+        log_error("ReticulumWrapper", "_fail_message_permanently",
+                 f"❌ Message {msg_hash[:16]}... FAILED permanently: {reason}")
+
+        # Remove from pending if present
+        if msg_hash in self._pending_relay_fallback_messages:
+            del self._pending_relay_fallback_messages[msg_hash]
+
+        # Notify Kotlin with failure reason
+        if self.kotlin_delivery_status_callback:
+            try:
+                import json
+                status_event = {
+                    'message_hash': msg_hash,
+                    'status': 'failed',
+                    'reason': reason,
+                    'timestamp': int(time.time() * 1000)
+                }
+                self.kotlin_delivery_status_callback(json.dumps(status_event))
+                log_debug("ReticulumWrapper", "_fail_message_permanently",
+                         "Kotlin callback invoked successfully")
+            except Exception as e:
+                log_error("ReticulumWrapper", "_fail_message_permanently",
+                         f"Error invoking Kotlin callback: {e}")
+        else:
+            log_warning("ReticulumWrapper", "_fail_message_permanently",
+                       "No Kotlin callback registered - failure status not reported")
+
+    def on_alternative_relay_received(self, relay_hash):
+        """
+        Called from Kotlin when an alternative relay is provided.
+
+        When propagation to the current relay fails, Kotlin is asked to find an alternative.
+        This method is called with the result - either a new relay hash or None if none available.
+
+        Args:
+            relay_hash: 16-byte destination hash of alternative relay (bytes or jarray),
+                       or None if no alternatives available
+        """
+        try:
+            if not self._pending_relay_fallback_messages:
+                log_warning("ReticulumWrapper", "on_alternative_relay_received",
+                           "No pending messages for relay fallback")
+                return
+
+            if relay_hash is None:
+                # No alternatives available - fail all pending messages
+                log_warning("ReticulumWrapper", "on_alternative_relay_received",
+                           f"No alternative relays available, failing {len(self._pending_relay_fallback_messages)} messages")
+                for msg_hash, message in list(self._pending_relay_fallback_messages.items()):
+                    self._fail_message_permanently(message, 'no_relays_available')
+                self._pending_relay_fallback_messages.clear()
+                return
+
+            # Convert jarray from Java if needed
+            if hasattr(relay_hash, '__iter__') and not isinstance(relay_hash, (bytes, bytearray)):
+                relay_hash = bytes(relay_hash)
+
+            relay_hex = relay_hash.hex() if isinstance(relay_hash, bytes) else str(relay_hash)
+            log_info("ReticulumWrapper", "on_alternative_relay_received",
+                    f"📡 Received alternative relay: {relay_hex[:16]}..., retrying {len(self._pending_relay_fallback_messages)} messages")
+
+            # Update active propagation node (directly set to bypass init checks in fallback)
+            self.active_propagation_node = relay_hash
+            # Also update router if available
+            if self.initialized and self.router:
+                try:
+                    self.router.set_outbound_propagation_node(relay_hash)
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "on_alternative_relay_received",
+                               f"Could not update router propagation node: {e}")
+
+            # Retry all pending messages with new relay
+            for msg_hash, message in list(self._pending_relay_fallback_messages.items()):
+                # Track this relay attempt
+                if not hasattr(message, 'tried_relays'):
+                    message.tried_relays = []
+                message.tried_relays.append(relay_hash)
+
+                # Reset for fresh retry
+                message.delivery_attempts = 0
+                message.packed = None
+                message.propagation_packed = None
+                message.propagation_stamp = None
+                message.defer_propagation_stamp = True
+                message.desired_method = LXMF.LXMessage.PROPAGATED
+
+                # Re-submit to router
+                self.router.handle_outbound(message)
+
+                # Notify Kotlin
+                if self.kotlin_delivery_status_callback:
+                    try:
+                        import json
+                        status = {
+                            'message_hash': msg_hash,
+                            'status': 'retrying_propagated',
+                            'relay_hash': relay_hex,
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        self.kotlin_delivery_status_callback(json.dumps(status))
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "on_alternative_relay_received",
+                                 f"Error notifying status: {e}")
+
+            self._pending_relay_fallback_messages.clear()
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "on_alternative_relay_received",
+                     f"Error handling alternative relay: {e}")
             import traceback
             traceback.print_exc()
 
@@ -2465,6 +2867,63 @@ class ReticulumWrapper:
                      f"Error in sent callback: {e}")
             import traceback
             traceback.print_exc()
+
+    def _start_opportunistic_timer(self):
+        """
+        Start the timer thread that checks for opportunistic message timeouts.
+        This is called when the first opportunistic message is tracked, or during initialize().
+        The timer thread is a daemon thread and will exit cleanly when the app shuts down.
+        """
+        if self._opportunistic_timer is None or not self._opportunistic_timer.is_alive():
+            self._opportunistic_timer = threading.Thread(
+                target=self._opportunistic_timeout_loop,
+                daemon=True
+            )
+            self._opportunistic_timer.start()
+            log_info("ReticulumWrapper", "_start_opportunistic_timer",
+                    "Started opportunistic message timeout checker")
+
+    def _opportunistic_timeout_loop(self):
+        """
+        Background loop that periodically checks for timed-out opportunistic messages.
+        Runs every _opportunistic_check_interval seconds while self.initialized is True.
+        """
+        log_debug("ReticulumWrapper", "_opportunistic_timeout_loop", "Timeout loop started")
+        while self.initialized:
+            time.sleep(self._opportunistic_check_interval)
+            if self._opportunistic_messages:  # Only check if there are messages to track
+                self._check_opportunistic_timeouts()
+        log_debug("ReticulumWrapper", "_opportunistic_timeout_loop", "Timeout loop exiting (not initialized)")
+
+    def _check_opportunistic_timeouts(self):
+        """
+        Check for opportunistic messages that have timed out waiting for delivery.
+        For any that have exceeded the timeout threshold, trigger the failure callback
+        to initiate propagation fallback.
+
+        This is the key fix for the issue where opportunistic messages to offline
+        recipients get stuck in SENT state forever.
+        """
+        now = time.time()
+        timed_out = []
+
+        # Collect timed-out messages (iterate over copy to avoid modification during iteration)
+        for msg_hash, tracking in list(self._opportunistic_messages.items()):
+            elapsed = now - tracking['sent_time']
+            if elapsed >= self._opportunistic_timeout_seconds:
+                timed_out.append((msg_hash, tracking['message']))
+
+        # Process timed-out messages
+        for msg_hash, lxmf_message in timed_out:
+            log_info("ReticulumWrapper", "_check_opportunistic_timeouts",
+                    f"⏱️ Opportunistic message {msg_hash[:16]}... timed out after "
+                    f"{self._opportunistic_timeout_seconds}s, triggering propagation fallback")
+            # Remove from tracking dict (will also be removed in _on_message_failed, but do it here
+            # to prevent any race condition where the message could be processed twice)
+            if msg_hash in self._opportunistic_messages:
+                del self._opportunistic_messages[msg_hash]
+            # Trigger the failure callback which handles propagation fallback
+            self._on_message_failed(lxmf_message)
 
     def get_transport_identity_hash(self) -> bytes:
         """

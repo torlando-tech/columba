@@ -349,4 +349,12 @@ interface ContactDao {
         destinationHash: String,
         identityHash: String,
     ): Flow<Boolean?>
+
+    /**
+     * Get any relay contact (not filtered by identity).
+     * Used during initialization before active identity is available.
+     * Returns the first contact with isMyRelay = true, regardless of identity.
+     */
+    @Query("SELECT * FROM contacts WHERE isMyRelay = 1 LIMIT 1")
+    suspend fun getAnyMyRelay(): ContactEntity?
 }

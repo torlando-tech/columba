@@ -170,6 +170,30 @@ interface ReticulumProtocol {
     suspend fun getOutboundPropagationNode(): Result<String?>
 
     /**
+     * Request/sync messages from the configured propagation node.
+     *
+     * This is the key method for RECEIVING messages that were sent via propagation.
+     * When messages are sent to a propagation node, the recipient must explicitly
+     * request them. Call this method periodically (e.g., every 30-60 seconds) to
+     * retrieve waiting messages.
+     *
+     * @param identityPrivateKey Optional private key bytes. If null, uses default identity.
+     * @param maxMessages Maximum number of messages to retrieve (default 256)
+     * @return Result containing the current propagation transfer state
+     */
+    suspend fun requestMessagesFromPropagationNode(
+        identityPrivateKey: ByteArray? = null,
+        maxMessages: Int = 256,
+    ): Result<PropagationState>
+
+    /**
+     * Get the current propagation sync state and progress.
+     *
+     * @return Result containing the current PropagationState
+     */
+    suspend fun getPropagationState(): Result<PropagationState>
+
+    /**
      * Send an LXMF message with explicit delivery method.
      *
      * @param destinationHash Destination hash bytes
@@ -249,7 +273,7 @@ data class FailedInterface(
     companion object {
         /**
          * Parse a JSON array string into a list of FailedInterface objects.
-         * Used by both PythonReticulumProtocol and ServiceReticulumProtocol.
+         * Used by ServiceReticulumProtocol.
          */
         fun parseFromJson(jsonString: String): List<FailedInterface> {
             val jsonArray = org.json.JSONArray(jsonString)
@@ -266,5 +290,31 @@ data class FailedInterface(
             }
             return failedList
         }
+    }
+}
+
+/**
+ * State of propagation node message sync/transfer.
+ */
+data class PropagationState(
+    /** Numeric state code (0=idle, 1=path_requested, 2=link_establishing, etc.) */
+    val state: Int,
+    /** Human-readable state name */
+    val stateName: String,
+    /** Transfer progress (0.0 to 1.0) */
+    val progress: Float,
+    /** Number of messages received in the last completed transfer */
+    val messagesReceived: Int,
+) {
+    companion object {
+        const val STATE_IDLE = 0
+        const val STATE_PATH_REQUESTED = 1
+        const val STATE_LINK_ESTABLISHING = 2
+        const val STATE_LINK_ESTABLISHED = 3
+        const val STATE_REQUEST_SENT = 4
+        const val STATE_RECEIVING = 5
+        const val STATE_COMPLETE = 7
+
+        val IDLE = PropagationState(STATE_IDLE, "idle", 0f, 0)
     }
 }

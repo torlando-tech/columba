@@ -17,11 +17,11 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -125,7 +125,10 @@ fun ContactsScreen(
 
     // Debug logging
     LaunchedEffect(groupedContacts) {
-        android.util.Log.d("ContactsScreen", "UI received: relay=${groupedContacts.relay?.displayName}, pinned=${groupedContacts.pinned.size}, all=${groupedContacts.all.size}")
+        android.util.Log.d(
+            "ContactsScreen",
+            "UI received: relay=${groupedContacts.relay?.displayName}, pinned=${groupedContacts.pinned.size}, all=${groupedContacts.all.size}",
+        )
     }
     var showAddContactSheet by remember { mutableStateOf(false) }
     var showManualEntryDialog by remember { mutableStateOf(false) }
@@ -571,8 +574,9 @@ fun ContactsScreen(
             },
             text = {
                 Text(
-                    text = "\"${currentRelayToUnset.displayName}\" will be removed from contacts. " +
-                        "A new relay will be selected automatically from available propagation nodes.",
+                    text =
+                        "\"${currentRelayToUnset.displayName}\" will be removed from contacts. " +
+                            "A new relay will be selected automatically from available propagation nodes.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },

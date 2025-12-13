@@ -67,6 +67,7 @@ import com.lxmf.messenger.ui.screens.ContactsScreen
 import com.lxmf.messenger.ui.screens.IdentityManagerScreen
 import com.lxmf.messenger.ui.screens.IdentityScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
+import com.lxmf.messenger.ui.screens.MessageDetailScreen
 import com.lxmf.messenger.ui.screens.MessagingScreen
 import com.lxmf.messenger.ui.screens.MigrationScreen
 import com.lxmf.messenger.ui.screens.MyIdentityScreen
@@ -396,6 +397,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
         listOf(
             "messaging/",
             "announce_detail/",
+            "message_detail/",
             "theme_editor",
             "rnode_wizard",
         )
@@ -733,6 +735,25 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                                 val encodedHash = Uri.encode(destinationHash)
                                 navController.navigate("announce_detail/$encodedHash")
                             },
+                            onViewMessageDetails = { messageId ->
+                                val encodedId = Uri.encode(messageId)
+                                navController.navigate("message_detail/$encodedId")
+                            },
+                        )
+                    }
+
+                    composable(
+                        route = "message_detail/{messageId}",
+                        arguments =
+                            listOf(
+                                navArgument("messageId") { type = NavType.StringType },
+                            ),
+                    ) { backStackEntry ->
+                        val messageId = backStackEntry.arguments?.getString("messageId").orEmpty()
+
+                        MessageDetailScreen(
+                            messageId = messageId,
+                            onBackClick = { navController.popBackStack() },
                         )
                     }
 

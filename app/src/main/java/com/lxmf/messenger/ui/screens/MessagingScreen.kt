@@ -1,6 +1,7 @@
 package com.lxmf.messenger.ui.screens
 
 import android.graphics.BitmapFactory
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -38,6 +39,9 @@ import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -82,6 +86,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
+import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
 import com.lxmf.messenger.util.formatRelativeTime
@@ -99,6 +104,7 @@ fun MessagingScreen(
     peerName: String,
     onBackClick: () -> Unit,
     onPeerClick: () -> Unit = {},
+    onViewMessageDetails: (messageId: String) -> Unit = {},
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
@@ -111,9 +117,23 @@ fun MessagingScreen(
     val selectedImageData by viewModel.selectedImageData.collectAsStateWithLifecycle()
     val selectedImageFormat by viewModel.selectedImageFormat.collectAsStateWithLifecycle()
     val isProcessingImage by viewModel.isProcessingImage.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
 
     // Lifecycle-aware coroutine scope for image processing
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    // Observe manual sync results and show Toast
+    LaunchedEffect(Unit) {
+        viewModel.manualSyncResult.collect { result ->
+            val message =
+                when (result) {
+                    is SyncResult.Success -> "Sync complete"
+                    is SyncResult.Error -> "Sync failed: ${result.message}"
+                    is SyncResult.NoRelay -> "No relay configured"
+                }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // Image picker launcher
     val imageLauncher =
@@ -225,132 +245,154 @@ fun MessagingScreen(
         }
     }
 
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceContainerLowest),
-    ) {
-        TopAppBar(
-            title = {
-                Column(
-                    modifier = Modifier.clickable(onClick = onPeerClick),
-                ) {
-                    Text(
-                        text = peerName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    // Online status indicator - updates in real-time
-                    val lastSeen = announceInfo?.lastSeenTimestamp
-                    if (lastSeen != null) {
-                        val isOnline = System.currentTimeMillis() - lastSeen < (5 * 60 * 1000L) // 5 minutes
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Circle,
-                                contentDescription = null,
-                                tint = if (isOnline) MeshConnected else MeshOffline,
-                                modifier = Modifier.size(8.dp),
-                            )
-                            Text(
-                                text = if (isOnline) "Online" else formatRelativeTime(lastSeen),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            },
-            navigationIcon = {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                    )
-                }
-            },
-            colors =
-                TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-        )
-
-        // Messages + Input area using Google's official pattern
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .imePadding(), // Apply IME padding to container
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceContainerLowest),
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-            ) {
-                if (pagingItems.itemCount == 0) {
-                    EmptyMessagesState()
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding =
-                            PaddingValues(
-                                start = 16.dp,
-                                end = 16.dp,
-                                top = 16.dp,
-                                bottom = 16.dp, // Space for input bar
-                            ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        reverseLayout = true, // Messages anchored to bottom (industry standard)
+            TopAppBar(
+                title = {
+                    Column(
+                        modifier = Modifier.clickable(onClick = onPeerClick),
                     ) {
-                        // Paging3 infinite scroll: loads 30 messages initially,
-                        // then loads more as user scrolls up
-                        // DB returns DESC (newest first), reverseLayout shows newest at bottom
-                        items(
-                            count = pagingItems.itemCount,
-                            key = pagingItems.itemKey { message -> message.id },
-                            contentType = { "message" }, // All items are message bubbles
-                        ) { index ->
-                            val message = pagingItems[index]
-                            if (message != null) {
-                                MessageBubble(
-                                    message = message,
-                                    isFromMe = message.isFromMe,
-                                    clipboardManager = clipboardManager,
+                        Text(
+                            text = peerName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        // Online status indicator - updates in real-time
+                        val lastSeen = announceInfo?.lastSeenTimestamp
+                        if (lastSeen != null) {
+                            val isOnline = System.currentTimeMillis() - lastSeen < (5 * 60 * 1000L) // 5 minutes
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Circle,
+                                    contentDescription = null,
+                                    tint = if (isOnline) MeshConnected else MeshOffline,
+                                    modifier = Modifier.size(8.dp),
+                                )
+                                Text(
+                                    text = if (isOnline) "Online" else formatRelativeTime(lastSeen),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                     }
-                }
-            }
-
-            // Message Input Bar - at bottom of Column
-            MessageInputBar(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding(),
-                // Only navigation bar padding, IME is handled by parent
-                messageText = messageText,
-                onMessageTextChange = { messageText = it },
-                selectedImageData = selectedImageData,
-                isProcessingImage = isProcessingImage,
-                onAttachmentClick = { imageLauncher.launch("image/*") },
-                onClearImage = { viewModel.clearSelectedImage() },
-                onSendClick = {
-                    if (messageText.isNotBlank() || selectedImageData != null) {
-                        viewModel.sendMessage(destinationHash, messageText.trim())
-                        messageText = ""
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                        )
                     }
                 },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.syncFromPropagationNode() },
+                        enabled = !isSyncing,
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Sync messages",
+                            )
+                        }
+                    }
+                },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
             )
+
+            // Messages + Input area using Google's official pattern
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .imePadding(), // Apply IME padding to container
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                ) {
+                    if (pagingItems.itemCount == 0) {
+                        EmptyMessagesState()
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding =
+                                PaddingValues(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = 16.dp,
+                                    bottom = 16.dp, // Space for input bar
+                                ),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            reverseLayout = true, // Messages anchored to bottom (industry standard)
+                        ) {
+                            // Paging3 infinite scroll: loads 30 messages initially,
+                            // then loads more as user scrolls up
+                            // DB returns DESC (newest first), reverseLayout shows newest at bottom
+                            items(
+                                count = pagingItems.itemCount,
+                                key = pagingItems.itemKey { message -> message.id },
+                                contentType = { "message" }, // All items are message bubbles
+                            ) { index ->
+                                val message = pagingItems[index]
+                                if (message != null) {
+                                    MessageBubble(
+                                        message = message,
+                                        isFromMe = message.isFromMe,
+                                        clipboardManager = clipboardManager,
+                                        onViewDetails = onViewMessageDetails,
+                                        onRetry = { viewModel.retryFailedMessage(message.id) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Message Input Bar - at bottom of Column
+                MessageInputBar(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding(),
+                    // Only navigation bar padding, IME is handled by parent
+                    messageText = messageText,
+                    onMessageTextChange = { messageText = it },
+                    selectedImageData = selectedImageData,
+                    isProcessingImage = isProcessingImage,
+                    onAttachmentClick = { imageLauncher.launch("image/*") },
+                    onClearImage = { viewModel.clearSelectedImage() },
+                    onSendClick = {
+                        if (messageText.isNotBlank() || selectedImageData != null) {
+                            viewModel.sendMessage(destinationHash, messageText.trim())
+                            messageText = ""
+                        }
+                    },
+                )
+            }
         }
     }
 }
@@ -361,6 +403,8 @@ fun MessageBubble(
     message: com.lxmf.messenger.ui.model.MessageUi,
     isFromMe: Boolean,
     clipboardManager: androidx.compose.ui.platform.ClipboardManager,
+    onViewDetails: (messageId: String) -> Unit = {},
+    onRetry: () -> Unit = {},
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var showMenu by remember { mutableStateOf(false) }
@@ -460,8 +504,8 @@ fun MessageBubble(
                                 text =
                                     when (message.status) {
                                         "pending" -> "○" // Hollow circle - message created, waiting to send
-                                        "sent" -> "✓" // Single check - transmitted to network
-                                        "delivered" -> "✓✓" // Double check - delivered and acknowledged
+                                        "sent", "retrying_propagated", "propagated" -> "✓" // Single check - transmitted/retrying/stored on relay
+                                        "delivered" -> "✓✓" // Double check - delivered and acknowledged by recipient
                                         "failed" -> "!" // Exclamation - delivery failed
                                         else -> ""
                                     },
@@ -481,6 +525,26 @@ fun MessageBubble(
                     clipboardManager.setText(AnnotatedString(message.content))
                     showMenu = false
                 },
+                isFromMe = isFromMe,
+                isFailed = message.status == "failed",
+                onViewDetails =
+                    if (isFromMe) {
+                        {
+                            onViewDetails(message.id)
+                            showMenu = false
+                        }
+                    } else {
+                        null
+                    },
+                onRetry =
+                    if (isFromMe && message.status == "failed") {
+                        {
+                            onRetry()
+                            showMenu = false
+                        }
+                    } else {
+                        null
+                    },
             )
         }
     }
@@ -491,6 +555,10 @@ fun MessageContextMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     onCopy: () -> Unit,
+    isFromMe: Boolean = false,
+    isFailed: Boolean = false,
+    onViewDetails: (() -> Unit)? = null,
+    onRetry: (() -> Unit)? = null,
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -499,6 +567,20 @@ fun MessageContextMenu(
         tonalElevation = 3.dp,
         offset = DpOffset(x = 0.dp, y = 0.dp),
     ) {
+        // Show "Retry" for failed messages
+        if (isFailed && onRetry != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text("Retry") },
+                onClick = onRetry,
+            )
+        }
+
         DropdownMenuItem(
             leadingIcon = {
                 Icon(
@@ -509,6 +591,20 @@ fun MessageContextMenu(
             text = { Text("Copy") },
             onClick = onCopy,
         )
+
+        // Show "View Details" only for sent messages
+        if (isFromMe && onViewDetails != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text("View Details") },
+                onClick = onViewDetails,
+            )
+        }
     }
 }
 

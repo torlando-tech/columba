@@ -10,6 +10,8 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.ui.model.toMessageUi
 import com.lxmf.messenger.util.validation.InputValidator
@@ -19,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
@@ -37,6 +40,7 @@ import com.lxmf.messenger.reticulum.model.Message as ReticulumMessage
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
+@Suppress("TooManyFunctions") // ViewModel handles multiple UI operations
 class MessagingViewModel
     @Inject
     constructor(
@@ -45,11 +49,10 @@ class MessagingViewModel
         private val announceRepository: com.lxmf.messenger.data.repository.AnnounceRepository,
         private val activeConversationManager: com.lxmf.messenger.service.ActiveConversationManager,
         private val settingsRepository: SettingsRepository,
+        private val propagationNodeManager: PropagationNodeManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
-            // LXMF opportunistic mode max content size (single packet, no link required)
-            private const val OPPORTUNISTIC_MAX_BYTES = 295
         }
 
         // Track the currently active conversation - drives reactive message loading
@@ -105,6 +108,12 @@ class MessagingViewModel
 
         private val _isProcessingImage = MutableStateFlow(false)
         val isProcessingImage: StateFlow<Boolean> = _isProcessingImage
+
+        // Sync state from PropagationNodeManager
+        val isSyncing: StateFlow<Boolean> = propagationNodeManager.isSyncing
+
+        // Manual sync result events for Snackbar notifications
+        val manualSyncResult: SharedFlow<SyncResult> = propagationNodeManager.manualSyncResult
 
         init {
             // NOTE: Message collection has been moved to MessageCollector service
@@ -193,6 +202,16 @@ class MessagingViewModel
                 if (message != null) {
                     // Update status
                     conversationRepository.updateMessageStatus(update.messageHash, update.status)
+
+                    // When retrying via propagation, also update the delivery method
+                    if (update.status == "retrying_propagated") {
+                        conversationRepository.updateMessageDeliveryDetails(
+                            update.messageHash,
+                            deliveryMethod = "propagated",
+                            errorMessage = null,
+                        )
+                    }
+
                     Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status}")
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
@@ -274,61 +293,21 @@ class MessagingViewModel
         ) {
             viewModelScope.launch {
                 try {
-                    // Get image attachment first - needed to determine if empty content is allowed
                     val imageData = _selectedImageData.value
                     val imageFormat = _selectedImageFormat.value
 
-                    // Validate content - allow empty if image is attached
-                    val sanitized =
-                        if (content.trim().isEmpty() && imageData != null) {
-                            // Empty content is OK when sending image-only message
-                            ""
-                        } else {
-                            // Validate content using InputValidator which checks length BEFORE sanitizing
-                            val validationResult = InputValidator.validateMessageContent(content)
-                            if (validationResult is ValidationResult.Error) {
-                                Log.w(TAG, "Invalid message content: ${validationResult.message}")
-                                return@launch
-                            }
-                            validationResult.getOrThrow()
-                        }
-
-                    // Validate and convert destination hash with SAFE conversion
-                    val destHashBytes =
-                        when (val result = InputValidator.validateDestinationHash(destinationHash)) {
-                            is ValidationResult.Success -> result.value
-                            is ValidationResult.Error -> {
-                                Log.e(TAG, "Invalid destination hash: ${result.message}")
-                                // Could emit error to UI state here if needed
-                                return@launch
-                            }
-                        }
-
-                    // Load identity lazily (may not be ready during init)
+                    val sanitized = validateAndSanitizeContent(content, imageData) ?: return@launch
+                    val destHashBytes = validateDestinationHash(destinationHash) ?: return@launch
                     val identity =
                         loadIdentityIfNeeded() ?: run {
                             Log.e(TAG, "Failed to load source identity")
                             return@launch
                         }
 
-                    // Get delivery method settings
-                    val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
                     val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
-
-                    // Determine delivery method:
-                    // - OPPORTUNISTIC: for small messages (≤295 bytes) without attachments
-                    // - Otherwise use user's default (direct or propagated)
-                    val contentSize = sanitized.toByteArray().size
-                    val deliveryMethod =
-                        if (imageData == null && contentSize <= OPPORTUNISTIC_MAX_BYTES) {
-                            Log.d(TAG, "Using OPPORTUNISTIC delivery (content: $contentSize bytes)")
-                            DeliveryMethod.OPPORTUNISTIC
-                        } else {
-                            when (defaultMethod) {
-                                "propagated" -> DeliveryMethod.PROPAGATED
-                                else -> DeliveryMethod.DIRECT
-                            }
-                        }
+                    val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
+                    val deliveryMethod = determineDeliveryMethod(sanitized, imageData, defaultMethod)
+                    val deliveryMethodString = deliveryMethod.toStorageString()
 
                     Log.d(
                         TAG,
@@ -336,7 +315,6 @@ class MessagingViewModel
                             "(${sanitized.length} chars, hasImage=${imageData != null}, method=$deliveryMethod, tryPropOnFail=$tryPropOnFail)...",
                     )
 
-                    // Send via protocol with delivery method support
                     val result =
                         reticulumProtocol.sendLxmfMessageWithMethod(
                             destinationHash = destHashBytes,
@@ -349,71 +327,63 @@ class MessagingViewModel
                         )
 
                     result.onSuccess { receipt ->
-                        Log.d(TAG, "Message sent successfully")
-
-                        // Build fieldsJson if image was included
-                        val fieldsJson =
-                            if (imageData != null && imageFormat != null) {
-                                // Store image as hex string in JSON format: {"6": "hex_image_data"}
-                                val hexImageData = imageData.joinToString("") { "%02x".format(it) }
-                                """{"6":"$hexImageData"}"""
-                            } else {
-                                null
-                            }
-
-                        // Use the ACTUAL LXMF destination hash that was used for sending
-                        // (not the announce hash, which might be for a different service like audio calls)
-                        val actualDestHash =
-                            if (receipt.destinationHash.isNotEmpty()) {
-                                receipt.destinationHash.joinToString("") { "%02x".format(it) }
-                            } else {
-                                Log.w(
-                                    TAG,
-                                    "Received empty destination hash from Python, " +
-                                        "falling back to original: $destinationHash",
-                                )
-                                destinationHash // Fallback to original if Python didn't return one
-                            }
-                        Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
-
-                        // Add to conversation as sent message
-                        val message =
-                            DataMessage(
-                                id = receipt.messageHash.joinToString("") { "%02x".format(it) },
-                                destinationHash = actualDestHash, // Use actual LXMF dest hash
-                                content = sanitized,
-                                timestamp = receipt.timestamp,
-                                isFromMe = true,
-                                status = "pending", // Will be updated to "delivered" when LXMF proof arrives
-                                fieldsJson = fieldsJson,
-                            )
-
-                        // Clear image after successful send
-                        clearSelectedImage()
-
-                        // Save to database using actual LXMF destination hash
-                        saveMessageToDatabase(actualDestHash, currentPeerName, message)
+                        handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, deliveryMethodString)
                     }.onFailure { error ->
-                        Log.e(TAG, "Failed to send message: ${error.message}", error)
-
-                        // Still add to DB but mark as failed
-                        val message =
-                            DataMessage(
-                                id = UUID.randomUUID().toString(),
-                                destinationHash = destinationHash,
-                                content = sanitized,
-                                timestamp = System.currentTimeMillis(),
-                                isFromMe = true,
-                                status = "failed",
-                            )
-
-                        // Save to database - reactive Flow will auto-update UI
-                        saveMessageToDatabase(destinationHash, currentPeerName, message)
+                        handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sending message", e)
                 }
             }
+        }
+
+        private suspend fun handleSendSuccess(
+            receipt: com.lxmf.messenger.reticulum.protocol.MessageReceipt,
+            sanitized: String,
+            destinationHash: String,
+            imageData: ByteArray?,
+            imageFormat: String?,
+            deliveryMethodString: String,
+        ) {
+            Log.d(TAG, "Message sent successfully")
+            val fieldsJson = buildFieldsJson(imageData, imageFormat)
+            val actualDestHash = resolveActualDestHash(receipt, destinationHash)
+            Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
+
+            val message =
+                DataMessage(
+                    id = receipt.messageHash.joinToString("") { "%02x".format(it) },
+                    destinationHash = actualDestHash,
+                    content = sanitized,
+                    timestamp = receipt.timestamp,
+                    isFromMe = true,
+                    status = "pending",
+                    fieldsJson = fieldsJson,
+                    deliveryMethod = deliveryMethodString,
+                )
+            clearSelectedImage()
+            saveMessageToDatabase(actualDestHash, currentPeerName, message)
+        }
+
+        private suspend fun handleSendFailure(
+            error: Throwable,
+            sanitized: String,
+            destinationHash: String,
+            deliveryMethodString: String,
+        ) {
+            Log.e(TAG, "Failed to send message: ${error.message}", error)
+            val message =
+                DataMessage(
+                    id = UUID.randomUUID().toString(),
+                    destinationHash = destinationHash,
+                    content = sanitized,
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    deliveryMethod = deliveryMethodString,
+                    errorMessage = error.message,
+                )
+            saveMessageToDatabase(destinationHash, currentPeerName, message)
         }
 
         fun selectImage(
@@ -435,6 +405,113 @@ class MessagingViewModel
             _isProcessingImage.value = processing
         }
 
+        /**
+         * Trigger a manual sync with the propagation node.
+         */
+        fun syncFromPropagationNode() {
+            viewModelScope.launch {
+                try {
+                    propagationNodeManager.triggerSync()
+                    Log.d(TAG, "Manual sync triggered from MessagingScreen")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error triggering manual sync", e)
+                }
+            }
+        }
+
+        /**
+         * Retry sending a failed message.
+         * Re-sends the message with the same content and destination,
+         * updating the database with the new message hash.
+         *
+         * @param messageId The ID (hash) of the failed message to retry
+         */
+        fun retryFailedMessage(messageId: String) {
+            viewModelScope.launch {
+                try {
+                    Log.d(TAG, "Retrying failed message: $messageId")
+
+                    // Load the failed message from database
+                    val failedMessage = conversationRepository.getMessageById(messageId)
+                    if (failedMessage == null) {
+                        Log.e(TAG, "Failed message not found: $messageId")
+                        return@launch
+                    }
+
+                    // Only retry failed messages
+                    if (failedMessage.status != "failed") {
+                        Log.w(TAG, "Message $messageId is not failed (status: ${failedMessage.status}), skipping retry")
+                        return@launch
+                    }
+
+                    // Get destination hash bytes (MessageEntity uses conversationHash)
+                    val destHashBytes = validateDestinationHash(failedMessage.conversationHash)
+                    if (destHashBytes == null) {
+                        Log.e(TAG, "Invalid destination hash in failed message")
+                        return@launch
+                    }
+
+                    // Load identity for sending
+                    val identity = loadIdentityIfNeeded()
+                    if (identity == null) {
+                        Log.e(TAG, "Failed to load source identity for retry")
+                        return@launch
+                    }
+
+                    // Parse image data from fieldsJson if present
+                    val imageData = failedMessage.fieldsJson?.let { parseImageFromFieldsJson(it) }
+                    val imageFormat = if (imageData != null) "jpg" else null
+
+                    // Get delivery settings
+                    val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
+                    val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
+                    val deliveryMethod = determineDeliveryMethod(failedMessage.content, imageData, defaultMethod)
+
+                    Log.d(TAG, "Retrying message via $deliveryMethod delivery")
+
+                    // Mark message as pending before sending
+                    conversationRepository.updateMessageStatus(messageId, "pending")
+
+                    // Send the message
+                    val result = reticulumProtocol.sendLxmfMessageWithMethod(
+                        destinationHash = destHashBytes,
+                        content = failedMessage.content,
+                        sourceIdentity = identity,
+                        deliveryMethod = deliveryMethod,
+                        tryPropagationOnFail = tryPropOnFail,
+                        imageData = imageData,
+                        imageFormat = imageFormat,
+                    )
+
+                    result.onSuccess { receipt ->
+                        val newMessageHash = receipt.messageHash.joinToString("") { "%02x".format(it) }
+                        Log.d(TAG, "Retry successful, new hash: ${newMessageHash.take(16)}...")
+
+                        // Update the message with the new hash
+                        // Delete the old message entry and create a new one with the new hash
+                        conversationRepository.updateMessageId(messageId, newMessageHash)
+                    }.onFailure { error ->
+                        Log.e(TAG, "Retry failed: ${error.message}", error)
+                        // Mark as failed again with the error message
+                        conversationRepository.updateMessageStatus(messageId, "failed")
+                        conversationRepository.updateMessageDeliveryDetails(
+                            messageId,
+                            deliveryMethod = null,
+                            errorMessage = error.message,
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error retrying message", e)
+                    // Restore failed status
+                    try {
+                        conversationRepository.updateMessageStatus(messageId, "failed")
+                    } catch (e2: Exception) {
+                        Log.e(TAG, "Error restoring failed status", e2)
+                    }
+                }
+            }
+        }
+
         override fun onCleared() {
             super.onCleared()
 
@@ -451,3 +528,95 @@ class MessagingViewModel
             Log.d(TAG, "ViewModel cleared - disabled fast polling")
         }
     }
+
+// Top-level helper functions to keep class function count under threshold
+
+private const val HELPER_TAG = "MessagingViewModel"
+
+private fun validateAndSanitizeContent(
+    content: String,
+    imageData: ByteArray?,
+): String? {
+    if (content.trim().isEmpty() && imageData != null) {
+        return "" // Empty content is OK when sending image-only message
+    }
+    val validationResult = InputValidator.validateMessageContent(content)
+    if (validationResult is ValidationResult.Error) {
+        Log.w(HELPER_TAG, "Invalid message content: ${validationResult.message}")
+        return null
+    }
+    return validationResult.getOrThrow()
+}
+
+private fun validateDestinationHash(destinationHash: String): ByteArray? {
+    return when (val result = InputValidator.validateDestinationHash(destinationHash)) {
+        is ValidationResult.Success -> result.value
+        is ValidationResult.Error -> {
+            Log.e(HELPER_TAG, "Invalid destination hash: ${result.message}")
+            null
+        }
+    }
+}
+
+private fun DeliveryMethod.toStorageString(): String =
+    when (this) {
+        DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
+        DeliveryMethod.DIRECT -> "direct"
+        DeliveryMethod.PROPAGATED -> "propagated"
+    }
+
+private const val OPPORTUNISTIC_MAX_BYTES_HELPER = 295
+
+private fun determineDeliveryMethod(
+    sanitized: String,
+    imageData: ByteArray?,
+    defaultMethod: String,
+): DeliveryMethod {
+    val contentSize = sanitized.toByteArray().size
+    return if (imageData == null && contentSize <= OPPORTUNISTIC_MAX_BYTES_HELPER) {
+        Log.d(HELPER_TAG, "Using OPPORTUNISTIC delivery (content: $contentSize bytes)")
+        DeliveryMethod.OPPORTUNISTIC
+    } else {
+        if (defaultMethod == "propagated") DeliveryMethod.PROPAGATED else DeliveryMethod.DIRECT
+    }
+}
+
+private fun buildFieldsJson(
+    imageData: ByteArray?,
+    imageFormat: String?,
+): String? {
+    if (imageData == null || imageFormat == null) return null
+    val hexImageData = imageData.joinToString("") { "%02x".format(it) }
+    return """{"6":"$hexImageData"}"""
+}
+
+private fun resolveActualDestHash(
+    receipt: com.lxmf.messenger.reticulum.protocol.MessageReceipt,
+    fallbackHash: String,
+): String {
+    return if (receipt.destinationHash.isNotEmpty()) {
+        receipt.destinationHash.joinToString("") { "%02x".format(it) }
+    } else {
+        Log.w(HELPER_TAG, "Received empty destination hash from Python, falling back to original: $fallbackHash")
+        fallbackHash
+    }
+}
+
+/**
+ * Parse image data from LXMF fields JSON.
+ * Field 6 contains the image data as hex string.
+ */
+private fun parseImageFromFieldsJson(fieldsJson: String): ByteArray? {
+    return try {
+        val json = org.json.JSONObject(fieldsJson)
+        val hexImageData = json.optString("6", "")
+        if (hexImageData.isNotEmpty()) {
+            hexImageData.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        } else {
+            null
+        }
+    } catch (e: Exception) {
+        Log.w(HELPER_TAG, "Failed to parse image from fieldsJson: ${e.message}")
+        null
+    }
+}

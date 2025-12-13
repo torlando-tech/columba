@@ -14,5 +14,17 @@ coverage:
       default:
         target: 80%
 
+flags:
+  unittests:
+    paths:
+      - "app/"
+      - "core/"
+    carryforward: true
+  python:
+    paths:
+      - "python/"
+    carryforward: true
+
 ignore:
   - "external/**"
+  - "python/test_*.py"

@@ -344,7 +344,7 @@ class InputValidatorTest {
         // Note: In practice, empty device names ARE allowed by skipping validation
         // when deviceName.isBlank(). This test verifies the validator itself rejects
         // empty strings, but the validator is only called for non-blank names.
-        // See InterfaceRepository.kt and PythonReticulumProtocol.kt for usage.
+        // See InterfaceRepository.kt for usage.
         val result = InputValidator.validateDeviceName("")
         assertTrue(result is ValidationResult.Error)
     }

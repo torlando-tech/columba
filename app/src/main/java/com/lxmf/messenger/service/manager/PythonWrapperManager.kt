@@ -290,6 +290,38 @@ class PythonWrapperManager(
     }
 
     /**
+     * Set alternative relay request callback.
+     * Called by Python when propagation to current relay fails and alternative is needed.
+     */
+    fun setAlternativeRelayCallback(callback: (String) -> Unit) {
+        withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("set_kotlin_request_alternative_relay_callback", callback)
+                Log.d(TAG, "Alternative relay callback registered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set alternative relay callback: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Provide alternative relay to Python for message retry.
+     * Called after finding an alternative relay via PropagationNodeManager.
+     *
+     * @param relayHash 16-byte destination hash, or null if no alternatives available
+     */
+    fun provideAlternativeRelay(relayHash: ByteArray?) {
+        withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("on_alternative_relay_received", relayHash)
+                Log.d(TAG, "Alternative relay provided: ${relayHash?.let { it.toHexString().take(16) } ?: "null"}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to provide alternative relay: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
      * Get debug info from the wrapper.
      */
     fun getDebugInfo(): PyObject? =
@@ -338,4 +370,9 @@ class PythonWrapperManager(
             else -> error
         }
     }
+
+    /**
+     * Convert ByteArray to hex string for logging.
+     */
+    private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
 }

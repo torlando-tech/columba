@@ -37,6 +37,8 @@ data class Message(
     val isFromMe: Boolean,
     val status: String = "sent",
     val fieldsJson: String? = null,
+    val deliveryMethod: String? = null,
+    val errorMessage: String? = null,
 )
 
 @Singleton
@@ -261,6 +263,8 @@ class ConversationRepository
                         status = message.status,
                         isRead = message.isFromMe, // Our own messages are always "read"
                         fieldsJson = message.fieldsJson, // LXMF fields (attachments, images, etc.)
+                        deliveryMethod = message.deliveryMethod,
+                        errorMessage = message.errorMessage,
                     )
                 messageDao.insertMessage(messageEntity)
             }
@@ -394,6 +398,14 @@ class ConversationRepository
             return messageDao.getMessageById(messageId, activeIdentity.identityHash)
         }
 
+        /**
+         * Observe a message by ID for real-time updates (e.g., status changes from pending → delivered).
+         * Returns a Flow that emits whenever the message changes in the database.
+         */
+        fun observeMessageById(messageId: String): Flow<MessageEntity?> {
+            return messageDao.observeMessageById(messageId)
+        }
+
         suspend fun updateMessageStatus(
             messageId: String,
             status: String,
@@ -422,5 +434,57 @@ class ConversationRepository
                 isFromMe = isFromMe,
                 status = status,
                 fieldsJson = fieldsJson,
+                deliveryMethod = deliveryMethod,
+                errorMessage = errorMessage,
             )
+
+        /**
+         * Update message delivery details (method and error) for the active identity
+         */
+        suspend fun updateMessageDeliveryDetails(
+            messageId: String,
+            deliveryMethod: String?,
+            errorMessage: String?,
+        ) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            messageDao.updateMessageDeliveryDetails(
+                messageId,
+                activeIdentity.identityHash,
+                deliveryMethod,
+                errorMessage,
+            )
+            android.util.Log.d(
+                "ConversationRepository",
+                "Updated message $messageId delivery details: method=$deliveryMethod, error=$errorMessage",
+            )
+        }
+
+        /**
+         * Update a message's ID (for retry scenarios where the message hash changes).
+         * Since Room doesn't allow updating primary keys, this deletes the old message
+         * and inserts a new one with the updated ID.
+         *
+         * @param oldMessageId The current message ID
+         * @param newMessageId The new message ID to use
+         */
+        suspend fun updateMessageId(
+            oldMessageId: String,
+            newMessageId: String,
+        ) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            val oldMessage = messageDao.getMessageById(oldMessageId, activeIdentity.identityHash) ?: return
+
+            // Create new message with updated ID
+            val newMessage = oldMessage.copy(id = newMessageId, status = "pending")
+
+            // Delete old and insert new atomically would require @Transaction,
+            // but for simplicity we do it in sequence
+            messageDao.deleteMessageById(oldMessageId, activeIdentity.identityHash)
+            messageDao.insertMessage(newMessage)
+
+            android.util.Log.d(
+                "ConversationRepository",
+                "Updated message ID from $oldMessageId to $newMessageId",
+            )
+        }
     }

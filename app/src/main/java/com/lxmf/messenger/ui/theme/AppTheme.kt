@@ -145,7 +145,8 @@ data class CustomTheme(
     override val description: String,
     val lightColorScheme: ColorScheme,
     val darkColorScheme: ColorScheme,
-    val baseTheme: PresetTheme? = null, // If duplicated from a preset
+    // If duplicated from a preset
+    val baseTheme: PresetTheme? = null,
 ) : AppTheme {
     override fun getColorScheme(isDarkTheme: Boolean): ColorScheme {
         return if (isDarkTheme) darkColorScheme else lightColorScheme

@@ -6,12 +6,12 @@ import androidx.paging.PagingData
 import app.cash.turbine.test
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
-import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.reticulum.model.AnnounceEvent
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -77,7 +77,7 @@ class AnnounceStreamViewModelTest {
         Dispatchers.setMain(testDispatcher)
 
         // Disable periodic updates in tests to prevent OOM from infinite loop
-        AnnounceStreamViewModel.UPDATE_INTERVAL_MS = 0
+        AnnounceStreamViewModel.updateIntervalMs = 0
 
         reticulumProtocol = mockk()
         announceRepository = mockk()
@@ -117,7 +117,7 @@ class AnnounceStreamViewModelTest {
         Dispatchers.resetMain()
         clearAllMocks()
         // Reset update interval to default
-        AnnounceStreamViewModel.UPDATE_INTERVAL_MS = 30_000L
+        AnnounceStreamViewModel.updateIntervalMs = 30_000L
     }
 
     @Test

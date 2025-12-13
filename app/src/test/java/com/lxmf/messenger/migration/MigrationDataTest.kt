@@ -4,6 +4,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -188,7 +189,7 @@ class MigrationDataTest {
             )
 
         assertEquals(MigrationBundle.CURRENT_VERSION, bundle.version)
-        assertEquals(5, bundle.version)
+        assertEquals(6, bundle.version)
     }
 
     @Test
@@ -398,6 +399,76 @@ class MigrationDataTest {
         assertEquals(true, decoded.notificationReceivedMessage)
         assertEquals(15, decoded.autoAnnounceIntervalMinutes)
         assertEquals("custom:42", decoded.themePreference)
+    }
+
+    @Test
+    fun `SettingsExport propagation settings round-trip correctly`() {
+        val settings =
+            SettingsExport(
+                notificationsEnabled = true,
+                notificationReceivedMessage = true,
+                notificationReceivedMessageFavorite = false,
+                notificationHeardAnnounce = false,
+                notificationBleConnected = false,
+                notificationBleDisconnected = false,
+                autoAnnounceEnabled = true,
+                autoAnnounceIntervalMinutes = 5,
+                themePreference = "preset:VIBRANT",
+                defaultDeliveryMethod = "propagated",
+                tryPropagationOnFail = false,
+                manualPropagationNode = "abcdef1234567890",
+                lastPropagationNode = "1234567890abcdef",
+                autoSelectPropagationNode = false,
+                autoRetrieveEnabled = false,
+                retrievalIntervalSeconds = 120,
+            )
+
+        val jsonString = json.encodeToString(settings)
+        val decoded = json.decodeFromString<SettingsExport>(jsonString)
+
+        assertEquals("propagated", decoded.defaultDeliveryMethod)
+        assertEquals(false, decoded.tryPropagationOnFail)
+        assertEquals("abcdef1234567890", decoded.manualPropagationNode)
+        assertEquals("1234567890abcdef", decoded.lastPropagationNode)
+        assertEquals(false, decoded.autoSelectPropagationNode)
+        assertEquals(false, decoded.autoRetrieveEnabled)
+        assertEquals(120, decoded.retrievalIntervalSeconds)
+    }
+
+    @Test
+    fun `SettingsExport backward compatibility with v5 JSON without propagation settings`() {
+        // Simulate deserializing a v5 export without propagation settings
+        val v5Json =
+            """
+            {
+                "notificationsEnabled": true,
+                "notificationReceivedMessage": true,
+                "notificationReceivedMessageFavorite": false,
+                "notificationHeardAnnounce": false,
+                "notificationBleConnected": false,
+                "notificationBleDisconnected": false,
+                "autoAnnounceEnabled": true,
+                "autoAnnounceIntervalMinutes": 5,
+                "themePreference": "preset:VIBRANT"
+            }
+            """.trimIndent()
+
+        val decoded = json.decodeFromString<SettingsExport>(v5Json)
+
+        // Original fields should be preserved
+        assertEquals(true, decoded.notificationsEnabled)
+        assertEquals(true, decoded.notificationReceivedMessage)
+        assertEquals(5, decoded.autoAnnounceIntervalMinutes)
+        assertEquals("preset:VIBRANT", decoded.themePreference)
+
+        // New fields should be null (backward compatibility)
+        assertNull(decoded.defaultDeliveryMethod)
+        assertNull(decoded.tryPropagationOnFail)
+        assertNull(decoded.manualPropagationNode)
+        assertNull(decoded.lastPropagationNode)
+        assertNull(decoded.autoSelectPropagationNode)
+        assertNull(decoded.autoRetrieveEnabled)
+        assertNull(decoded.retrievalIntervalSeconds)
     }
 
     // endregion

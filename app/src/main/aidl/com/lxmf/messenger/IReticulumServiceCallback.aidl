@@ -41,4 +41,12 @@ interface IReticulumServiceCallback {
      * @param statusJson JSON string with delivery status data
      */
     void onDeliveryStatus(String statusJson);
+
+    /**
+     * Called when Python needs an alternative relay for message retry.
+     * The app should query PropagationNodeManager and call provideAlternativeRelay().
+     * @param requestJson JSON string with request data:
+     *        {"current_relay": "hex_hash", "exclude_relays": ["hex1", "hex2"]}
+     */
+    void onAlternativeRelayRequested(String requestJson);
 }

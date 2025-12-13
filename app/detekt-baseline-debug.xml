@@ -13,8 +13,6 @@
     <ID>CyclomaticComplexMethod:InterfaceRepository.kt$InterfaceRepository$fun entityToConfig(entity: InterfaceEntity): InterfaceConfig</ID>
     <ID>CyclomaticComplexMethod:MessageCollector.kt$MessageCollector$fun startCollecting()</ID>
     <ID>CyclomaticComplexMethod:NodeTypeDetector.kt$NodeTypeDetector$fun detectNodeType( appData: ByteArray?, aspect: String? = null, ): NodeType</ID>
-    <ID>CyclomaticComplexMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$override suspend fun getDebugInfo(): Map&lt;String, Any&gt;</ID>
-    <ID>CyclomaticComplexMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun validateReticulumConfig(config: ReticulumConfig)</ID>
     <ID>CyclomaticComplexMethod:RNodeConfigValidator.kt$RNodeConfigValidator$fun validateConfig( name: String, frequency: String, bandwidth: String, spreadingFactor: String, codingRate: String, txPower: String, stAlock: String, ltAlock: String, region: FrequencyRegion?, ): ConfigValidationResult</ID>
     <ID>CyclomaticComplexMethod:RNodeRegionalPreset.kt$FrequencySlotCalculator$fun getDefaultSlot(region: FrequencyRegion, bandwidth: Int): Int</ID>
     <ID>CyclomaticComplexMethod:RNodeWizardViewModel.kt$RNodeWizardViewModel$@SuppressLint("MissingPermission") fun initiateBluetoothPairing(device: DiscoveredRNode)</ID>
@@ -31,7 +29,6 @@
     <ID>InjectDispatcher:MigrationExporter.kt$MigrationExporter$IO</ID>
     <ID>InjectDispatcher:MigrationImporter.kt$MigrationImporter$IO</ID>
     <ID>InjectDispatcher:MigrationViewModel.kt$MigrationViewModel$IO</ID>
-    <ID>InjectDispatcher:PythonReticulumProtocol.kt$PythonReticulumProtocol$IO</ID>
     <ID>InjectDispatcher:PythonWrapperManager.kt$PythonWrapperManager$IO</ID>
     <ID>InjectDispatcher:QrCodeComposables.kt$Default</ID>
     <ID>InjectDispatcher:ReticulumService.kt$ReticulumService$Default</ID>
@@ -40,7 +37,6 @@
     <ID>InjectDispatcher:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$IO</ID>
     <ID>InjectDispatcher:ServiceReticulumProtocol.kt$ServiceReticulumProtocol.&lt;no name provided&gt;$IO</ID>
     <ID>InstanceOfCheckForException:ServiceNotificationManager.kt$ServiceNotificationManager$e is android.app.ForegroundServiceStartNotAllowedException</ID>
-    <ID>LargeClass:PythonReticulumProtocol.kt$PythonReticulumProtocol : ReticulumProtocol</ID>
     <ID>LargeClass:RNodeWizardViewModel.kt$RNodeWizardViewModel : ViewModel</ID>
     <ID>LargeClass:ServiceReticulumProtocol.kt$ServiceReticulumProtocol : ReticulumProtocol</ID>
     <ID>LongMethod:ColumbaApplication.kt$ColumbaApplication$override fun onCreate()</ID>
@@ -48,9 +44,6 @@
     <ID>LongMethod:InterfaceRepository.kt$InterfaceRepository$fun entityToConfig(entity: InterfaceEntity): InterfaceConfig</ID>
     <ID>LongMethod:MessageCollector.kt$MessageCollector$fun startCollecting()</ID>
     <ID>LongMethod:MessagingViewModel.kt$MessagingViewModel$fun sendMessage( destinationHash: String, content: String, )</ID>
-    <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$override suspend fun initialize(config: ReticulumConfig): Result&lt;Unit&gt;</ID>
-    <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun buildConfigJson(config: ReticulumConfig): String</ID>
-    <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun validateReticulumConfig(config: ReticulumConfig)</ID>
     <ID>LongMethod:RNodeWizardViewModel.kt$RNodeWizardViewModel$@SuppressLint("MissingPermission") fun initiateBluetoothPairing(device: DiscoveredRNode)</ID>
     <ID>LongMethod:ThemeEditorViewModel.kt$ThemeEditorViewModel$fun saveAndApplyTheme()</ID>
     <ID>LongMethod:ThemeEditorViewModel.kt$ThemeEditorViewModel$fun saveTheme()</ID>
@@ -63,7 +56,6 @@
     <ID>MaxLineLength:MainActivity.kt$if</ID>
     <ID>MaxLineLength:SettingsViewModel.kt$SettingsViewModel$"Settings updated: displayName=${newState.displayName}, autoAnnounce=${newState.autoAnnounceEnabled}, interval=${newState.autoAnnounceIntervalMinutes}min, theme=${newState.selectedTheme}, customThemes=${newState.customThemes.size}"</ID>
     <ID>NestedBlockDepth:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
-    <ID>NestedBlockDepth:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun buildConfigJson(config: ReticulumConfig): String</ID>
     <ID>NestedBlockDepth:SettingsViewModel.kt$SettingsViewModel$private suspend fun loadIdentityInfo(): Pair&lt;String?, String?&gt;</ID>
     <ID>NoNameShadowing:SettingsViewModel.kt$SettingsViewModel$activeIdentity</ID>
     <ID>RedundantSuspendModifier:BleStatusRepository.kt$BleStatusRepository$suspend</ID>
@@ -97,7 +89,6 @@
     <ID>ThrowsCount:IdentityManagerViewModel.kt$IdentityManagerViewModel$fun createNewIdentity(displayName: String)</ID>
     <ID>ThrowsCount:IdentityManagerViewModel.kt$IdentityManagerViewModel$fun importIdentity( fileUri: Uri, displayName: String, )</ID>
     <ID>ThrowsCount:InterfaceRepository.kt$InterfaceRepository$fun entityToConfig(entity: InterfaceEntity): InterfaceConfig</ID>
-    <ID>ThrowsCount:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun validateReticulumConfig(config: ReticulumConfig)</ID>
     <ID>ThrowsCount:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$suspend fun getLxmfDestination(): Result&lt;com.lxmf.messenger.reticulum.model.Destination&gt;</ID>
     <ID>ThrowsCount:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$suspend fun getLxmfIdentity(): Result&lt;Identity&gt;</ID>
     <ID>TooGenericExceptionThrown:AnnounceStreamViewModel.kt$AnnounceStreamViewModel$throw RuntimeException("Service error: ${status.message}")</ID>
@@ -108,13 +99,6 @@
     <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("No file_path in result")</ID>
     <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("No identity_hash in result")</ID>
     <ID>TooGenericExceptionThrown:InterfaceConfigManager.kt$InterfaceConfigManager$throw Exception("Failed to initialize Reticulum: ${error.message}", error)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Failed to build config: ${e.message}", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Failed to create wrapper: ${e.message}", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Failed to load Python module: ${e.message}", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Invalid JSON structure generated", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Invalid configuration: ${e.message}", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Python initialize failed: ${e.message}", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException(error)</ID>
     <ID>TooGenericExceptionThrown:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$throw RuntimeException( "Missing identity fields in response. hash=$hashStr, publicKey=$publicKeyStr, privateKey=$privateKeyStr", )</ID>
     <ID>TooGenericExceptionThrown:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$throw RuntimeException("Failed to restore peer identities: $error")</ID>
     <ID>TooGenericExceptionThrown:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$throw RuntimeException("Missing LXMF destination fields")</ID>
@@ -126,7 +110,6 @@
     <ID>TooGenericExceptionThrown:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$throw RuntimeException(result.optString("error", "Unknown error"))</ID>
     <ID>TooManyFunctions:InputValidator.kt$InputValidator</ID>
     <ID>TooManyFunctions:InterfaceManagementViewModel.kt$InterfaceManagementViewModel : ViewModel</ID>
-    <ID>TooManyFunctions:PythonReticulumProtocol.kt$PythonReticulumProtocol : ReticulumProtocol</ID>
     <ID>TooManyFunctions:RNodeWizardViewModel.kt$RNodeWizardViewModel : ViewModel</ID>
     <ID>TooManyFunctions:ReticulumServiceBinder.kt$ReticulumServiceBinder : Stub</ID>
     <ID>TooManyFunctions:ServiceReticulumProtocol.kt$ServiceReticulumProtocol : ReticulumProtocol</ID>
@@ -151,9 +134,6 @@
     <ID>UnsafeCallOnNullableType:DeviceDiscoveryStep.kt$state.selectedDevice!!</ID>
     <ID>UnsafeCallOnNullableType:InterfaceConfigDialog.kt$configState.nameError!!</ID>
     <ID>UnsafeCallOnNullableType:MainViewModel.kt$MainViewModel$currentIdentity!!</ID>
-    <ID>UnsafeCallOnNullableType:PythonReticulumProtocol.kt$PythonReticulumProtocol$multicastLock!!</ID>
-    <ID>UnsafeCallOnNullableType:PythonReticulumProtocol.kt$PythonReticulumProtocol$wifiLock!!</ID>
-    <ID>UnsafeCallOnNullableType:PythonReticulumProtocol.kt$PythonReticulumProtocol$wrapper!!</ID>
     <ID>UnsafeCallOnNullableType:QrCodeComposables.kt$error!!</ID>
     <ID>UnsafeCallOnNullableType:QrCodeComposables.kt$qrBitmap!!</ID>
     <ID>UnsafeCallOnNullableType:QrScannerScreen.kt$errorMessage!!</ID>
@@ -222,10 +202,6 @@
     <ID>UseOrEmpty:MigrationExporter.kt$MigrationExporter$keyData?.let { Base64.encodeToString(it, Base64.NO_WRAP) } ?: ""</ID>
     <ID>UseOrEmpty:PollingManager.kt$PollingManager$event.getDictValue("content")?.toString() ?: ""</ID>
     <ID>UseOrEmpty:PollingManager.kt$PollingManager$event.getDictValue("message_hash")?.toString() ?: ""</ID>
-    <ID>UseOrEmpty:PythonReticulumProtocol.kt$PythonReticulumProtocol$iface.getDictValue("name")?.toString() ?: ""</ID>
-    <ID>UseOrEmpty:PythonReticulumProtocol.kt$PythonReticulumProtocol$iface.getDictValue("type")?.toString() ?: ""</ID>
-    <ID>UseOrEmpty:PythonReticulumProtocol.kt$PythonReticulumProtocol$result.getDictValue("hex_hash")?.toString() ?: ""</ID>
-    <ID>UseOrEmpty:PythonReticulumProtocol.kt$PythonReticulumProtocol$result.getDictValue("storage_path")?.toString() ?: ""</ID>
     <ID>UseOrEmpty:RNodeWizardViewModel.kt$RNodeWizardViewModel$config.ltAlock?.toString() ?: ""</ID>
     <ID>UseOrEmpty:RNodeWizardViewModel.kt$RNodeWizardViewModel$config.stAlock?.toString() ?: ""</ID>
     <ID>UseOrEmpty:RegionSelectionStep.kt$state.selectedCountry ?: ""</ID>

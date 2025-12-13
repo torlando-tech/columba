@@ -3,11 +3,8 @@ package com.lxmf.messenger.reticulum.ble.bridge
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
-import com.chaquo.python.PyObject
-import com.lxmf.messenger.reticulum.ble.client.BleGattClient
 import com.lxmf.messenger.reticulum.ble.client.BleScanner
 import com.lxmf.messenger.reticulum.ble.model.BleDevice
-import com.lxmf.messenger.reticulum.ble.server.BleGattServer
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.After

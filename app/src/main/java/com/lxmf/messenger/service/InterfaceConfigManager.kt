@@ -8,6 +8,7 @@ import android.util.Log
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
+import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.LogLevel
@@ -15,6 +16,7 @@ import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -24,14 +26,16 @@ import javax.inject.Singleton
  * Manager for applying interface configuration changes to the running Reticulum instance.
  *
  * Handles the complete lifecycle of restarting Reticulum with new configuration:
- * 1. Load enabled interfaces from database
- * 2. Shutdown current Reticulum instance
- * 3. Regenerate config file
- * 4. Initialize Reticulum with new config
- * 5. Restore peer identities
- * 6. Restart message collector
+ * 1. Stop message collector and managers
+ * 2. Load enabled interfaces from database
+ * 3. Shutdown current Reticulum instance
+ * 4. Regenerate config file
+ * 5. Initialize Reticulum with new config
+ * 6. Restore peer identities
+ * 7. Restart message collector and managers (PropagationNodeManager, AutoAnnounceManager, etc.)
  */
 @Singleton
+@Suppress("LongParameterList") // Dependencies required for full restart lifecycle
 class InterfaceConfigManager
     @Inject
     constructor(
@@ -43,6 +47,10 @@ class InterfaceConfigManager
         private val messageCollector: MessageCollector,
         private val database: ColumbaDatabase,
         private val settingsRepository: SettingsRepository,
+        private val autoAnnounceManager: AutoAnnounceManager,
+        private val identityResolutionManager: IdentityResolutionManager,
+        private val propagationNodeManager: PropagationNodeManager,
+        @ApplicationScope private val applicationScope: CoroutineScope,
     ) {
         companion object {
             private const val TAG = "InterfaceConfigManager"
@@ -65,6 +73,13 @@ class InterfaceConfigManager
                 Log.d(TAG, "Step 1: Stopping message collector...")
                 messageCollector.stopCollecting()
                 Log.d(TAG, "✓ Message collector stopped")
+
+                // Step 1b: Stop managers to prepare for restart
+                Log.d(TAG, "Step 1b: Stopping managers...")
+                autoAnnounceManager.stop()
+                identityResolutionManager.stop()
+                propagationNodeManager.stop()
+                Log.d(TAG, "✓ Managers stopped")
 
                 // Step 2: Load interfaces BEFORE stopping service
                 Log.d(TAG, "Step 2: Loading interfaces from database...")
@@ -290,6 +305,13 @@ class InterfaceConfigManager
                 Log.d(TAG, "Step 11: Starting message collector...")
                 messageCollector.startCollecting()
                 Log.d(TAG, "✓ Message collector started")
+
+                // Step 12: Restart managers (same as ColumbaApplication.onCreate)
+                Log.d(TAG, "Step 12: Restarting managers...")
+                autoAnnounceManager.start()
+                identityResolutionManager.start(applicationScope)
+                propagationNodeManager.start()
+                Log.d(TAG, "✓ AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started")
 
                 Log.i(TAG, "==== Configuration Changes Applied Successfully ====")
             }

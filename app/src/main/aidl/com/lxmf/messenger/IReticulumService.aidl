@@ -297,6 +297,23 @@ interface IReticulumService {
     String getOutboundPropagationNode();
 
     /**
+     * Request/sync messages from the configured propagation node.
+     * This is the key method for RECEIVING messages sent via propagation.
+     * Call periodically (e.g., every 30-60 seconds) to retrieve waiting messages.
+     *
+     * @param identityPrivateKey Optional identity private key bytes (uses default if null)
+     * @param maxMessages Maximum number of messages to retrieve
+     * @return JSON string with result: {"success": true, "state": 0, "state_name": "idle"}
+     */
+    String requestMessagesFromPropagationNode(in byte[] identityPrivateKey, int maxMessages);
+
+    /**
+     * Get the current propagation sync state and progress.
+     * @return JSON string with result: {"success": true, "state": 0, "state_name": "idle", "progress": 0.0, "messages_received": 0}
+     */
+    String getPropagationState();
+
+    /**
      * Send an LXMF message with explicit delivery method.
      * @param destHash Destination hash bytes
      * @param content Message content string
@@ -308,4 +325,11 @@ interface IReticulumService {
      * @return JSON string with result: {"success": true, "message_hash": "...", "delivery_method": "..."}
      */
     String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat);
+
+    /**
+     * Provide an alternative relay for message retry.
+     * Called by app process in response to onAlternativeRelayRequested callback.
+     * @param relayHash 16-byte destination hash of alternative relay, or null if none available
+     */
+    void provideAlternativeRelay(in byte[] relayHash);
 }

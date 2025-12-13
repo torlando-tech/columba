@@ -5,6 +5,7 @@ import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.Announce
+import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.service.RelayInfo
 
 /**
@@ -46,20 +47,21 @@ object TestFactories {
         val addedVia: String = "MANUAL",
     )
 
-    fun createContactEntity(config: ContactConfig = ContactConfig()) = ContactEntity(
-        destinationHash = config.destinationHash,
-        identityHash = config.identityHash,
-        publicKey = config.publicKey,
-        customNickname = config.customNickname,
-        notes = null,
-        tags = null,
-        addedTimestamp = System.currentTimeMillis(),
-        addedVia = config.addedVia,
-        lastInteractionTimestamp = 0,
-        isPinned = config.isPinned,
-        status = config.status,
-        isMyRelay = config.isMyRelay,
-    )
+    fun createContactEntity(config: ContactConfig = ContactConfig()) =
+        ContactEntity(
+            destinationHash = config.destinationHash,
+            identityHash = config.identityHash,
+            publicKey = config.publicKey,
+            customNickname = config.customNickname,
+            notes = null,
+            tags = null,
+            addedTimestamp = System.currentTimeMillis(),
+            addedVia = config.addedVia,
+            lastInteractionTimestamp = 0,
+            isPinned = config.isPinned,
+            status = config.status,
+            isMyRelay = config.isMyRelay,
+        )
 
     /** Convenience overload for simple cases. */
     fun createContactEntity(
@@ -96,27 +98,28 @@ object TestFactories {
         val tags: String? = null,
     )
 
-    fun createEnrichedContact(config: EnrichedContactConfig = EnrichedContactConfig()) = EnrichedContact(
-        destinationHash = config.destinationHash,
-        publicKey = config.publicKey,
-        displayName = config.displayName,
-        customNickname = config.customNickname,
-        announceName = config.announceName ?: config.displayName,
-        lastSeenTimestamp = System.currentTimeMillis(),
-        hops = config.hops,
-        isOnline = config.isOnline,
-        hasConversation = config.hasConversation,
-        unreadCount = config.unreadCount,
-        lastMessageTimestamp = null,
-        notes = null,
-        tags = config.tags,
-        addedTimestamp = System.currentTimeMillis(),
-        addedVia = "ANNOUNCE",
-        isPinned = config.isPinned,
-        status = config.status,
-        isMyRelay = config.isMyRelay,
-        nodeType = config.nodeType,
-    )
+    fun createEnrichedContact(config: EnrichedContactConfig = EnrichedContactConfig()) =
+        EnrichedContact(
+            destinationHash = config.destinationHash,
+            publicKey = config.publicKey,
+            displayName = config.displayName,
+            customNickname = config.customNickname,
+            announceName = config.announceName ?: config.displayName,
+            lastSeenTimestamp = System.currentTimeMillis(),
+            hops = config.hops,
+            isOnline = config.isOnline,
+            hasConversation = config.hasConversation,
+            unreadCount = config.unreadCount,
+            lastMessageTimestamp = null,
+            notes = null,
+            tags = config.tags,
+            addedTimestamp = System.currentTimeMillis(),
+            addedVia = "ANNOUNCE",
+            isPinned = config.isPinned,
+            status = config.status,
+            isMyRelay = config.isMyRelay,
+            nodeType = config.nodeType,
+        )
 
     /** Convenience overload for simple cases. */
     fun createEnrichedContact(
@@ -167,4 +170,37 @@ object TestFactories {
         isAutoSelected = isAutoSelected,
         lastSeenTimestamp = lastSeenTimestamp,
     )
+
+    /**
+     * Create a test Conversation object for ChatsScreen testing.
+     */
+    fun createConversation(
+        peerHash: String = TEST_DEST_HASH,
+        peerName: String = "Test Peer",
+        peerPublicKey: ByteArray? = TEST_PUBLIC_KEY,
+        lastMessage: String = "Hello",
+        lastMessageTimestamp: Long = System.currentTimeMillis(),
+        unreadCount: Int = 0,
+    ) = Conversation(
+        peerHash = peerHash,
+        peerName = peerName,
+        peerPublicKey = peerPublicKey,
+        lastMessage = lastMessage,
+        lastMessageTimestamp = lastMessageTimestamp,
+        unreadCount = unreadCount,
+    )
+
+    /**
+     * Create multiple test conversations for list testing.
+     */
+    fun createMultipleConversations(count: Int = 3): List<Conversation> =
+        (0 until count).map { i ->
+            createConversation(
+                peerHash = "peer_hash_$i",
+                peerName = "Peer $i",
+                lastMessage = "Message from peer $i",
+                lastMessageTimestamp = System.currentTimeMillis() - (i * 60_000L),
+                unreadCount = i,
+            )
+        }
 }

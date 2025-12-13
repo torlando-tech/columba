@@ -138,6 +138,14 @@ class CallbackBroadcaster {
     }
 
     /**
+     * Broadcast alternative relay request to all registered callbacks.
+     * Used when Python needs an alternative relay for message retry.
+     */
+    fun broadcastAlternativeRelayRequest(requestJson: String) {
+        broadcast { it.onAlternativeRelayRequested(requestJson) }
+    }
+
+    /**
      * Thread-safe broadcast helper.
      * Ensures only one broadcast happens at a time (RemoteCallbackList is not re-entrant).
      */

@@ -3,17 +3,21 @@ package com.lxmf.messenger.viewmodel
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
+import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
+import com.lxmf.messenger.reticulum.protocol.DeliveryStatusUpdate
 import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
+import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -45,6 +49,7 @@ class MessagingViewModelTest {
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var activeConversationManager: ActiveConversationManager
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var viewModel: MessagingViewModel
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
@@ -65,6 +70,11 @@ class MessagingViewModelTest {
         announceRepository = mockk()
         activeConversationManager = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
+        propagationNodeManager = mockk(relaxed = true)
+
+        // Mock propagationNodeManager flows
+        every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
+        every { propagationNodeManager.manualSyncResult } returns MutableSharedFlow()
 
         // Mock default behaviors
         coEvery { reticulumProtocol.getLxmfIdentity() } returns Result.success(testIdentity)
@@ -86,7 +96,7 @@ class MessagingViewModelTest {
         // Default: no announce info
         every { announceRepository.getAnnounceFlow(any()) } returns flowOf(null)
 
-        viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, activeConversationManager, settingsRepository)
+        viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, activeConversationManager, settingsRepository, propagationNodeManager)
     }
 
     @After
@@ -346,9 +356,19 @@ class MessagingViewModelTest {
 
             val failingActiveConversationManager: ActiveConversationManager = mockk(relaxed = true)
             val failingSettingsRepository: SettingsRepository = mockk(relaxed = true)
+            val failingPropagationNodeManager: PropagationNodeManager = mockk(relaxed = true)
+            every { failingPropagationNodeManager.isSyncing } returns MutableStateFlow(false)
+            every { failingPropagationNodeManager.manualSyncResult } returns MutableSharedFlow()
 
             val viewModelWithoutIdentity =
-                MessagingViewModel(failingProtocol, failingRepository, failingAnnounceRepository, failingActiveConversationManager, failingSettingsRepository)
+                MessagingViewModel(
+                    failingProtocol,
+                    failingRepository,
+                    failingAnnounceRepository,
+                    failingActiveConversationManager,
+                    failingSettingsRepository,
+                    failingPropagationNodeManager,
+                )
 
             // Attempt to send message
             viewModelWithoutIdentity.sendMessage(testPeerHash, "Test")
@@ -720,5 +740,235 @@ class MessagingViewModelTest {
             // Assert: Image was cleared after successful send
             assertEquals(null, viewModel.selectedImageData.value)
             assertEquals(null, viewModel.selectedImageFormat.value)
+        }
+
+    // ========== DELIVERY STATUS HANDLING TESTS ==========
+
+    @Test
+    fun `retrying_propagated status updates both status and deliveryMethod`() =
+        runTest {
+            // Setup: Create a flow that emits a retrying_propagated status update
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            // Mock the message exists in database
+            val testMessageHash = "test_message_hash_123"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "sent",
+                )
+            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            // Create a new ViewModel to pick up the mocked flow
+            val testViewModel =
+                MessagingViewModel(
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                )
+            advanceUntilIdle()
+
+            // Emit a retrying_propagated status update
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = testMessageHash,
+                    status = "retrying_propagated",
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+            advanceUntilIdle()
+
+            // Verify: updateMessageStatus was called with retrying_propagated
+            coVerify {
+                conversationRepository.updateMessageStatus(testMessageHash, "retrying_propagated")
+            }
+
+            // Verify: updateMessageDeliveryDetails was called to change deliveryMethod to "propagated"
+            coVerify {
+                conversationRepository.updateMessageDeliveryDetails(
+                    messageId = testMessageHash,
+                    deliveryMethod = "propagated",
+                    errorMessage = null,
+                )
+            }
+
+            // Cleanup
+            testViewModel.viewModelScope.cancel()
+        }
+
+    @Test
+    fun `delivered status updates message status only`() =
+        runTest {
+            // Setup: Create a flow that emits a delivered status update
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            // Mock the message exists in database
+            val testMessageHash = "delivered_message_hash"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "sent",
+                )
+            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            // Create a new ViewModel to pick up the mocked flow
+            val testViewModel =
+                MessagingViewModel(
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                )
+            advanceUntilIdle()
+
+            // Emit a delivered status update
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = testMessageHash,
+                    status = "delivered",
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+            advanceUntilIdle()
+
+            // Verify: updateMessageStatus was called with delivered
+            coVerify {
+                conversationRepository.updateMessageStatus(testMessageHash, "delivered")
+            }
+
+            // Verify: updateMessageDeliveryDetails was NOT called (only called for retrying_propagated)
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageDeliveryDetails(any(), any(), any())
+            }
+
+            // Cleanup
+            testViewModel.viewModelScope.cancel()
+        }
+
+    @Test
+    fun `failed status updates message status`() =
+        runTest {
+            // Setup: Create a flow that emits a failed status update
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            // Mock the message exists in database
+            val testMessageHash = "failed_message_hash"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "sent",
+                )
+            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            // Create a new ViewModel to pick up the mocked flow
+            val testViewModel =
+                MessagingViewModel(
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                )
+            advanceUntilIdle()
+
+            // Emit a failed status update
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = testMessageHash,
+                    status = "failed",
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+            advanceUntilIdle()
+
+            // Verify: updateMessageStatus was called with failed
+            coVerify {
+                conversationRepository.updateMessageStatus(testMessageHash, "failed")
+            }
+
+            // Verify: updateMessageDeliveryDetails was NOT called (only called for retrying_propagated)
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageDeliveryDetails(any(), any(), any())
+            }
+
+            // Cleanup
+            testViewModel.viewModelScope.cancel()
+        }
+
+    @Test
+    fun `delivery status gracefully handles unknown message hash`() =
+        runTest {
+            // Setup: Create a flow that emits a status update for unknown message
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            // Mock the message does NOT exist in database (returns null after retries)
+            val unknownMessageHash = "unknown_message_hash"
+            coEvery { conversationRepository.getMessageById(unknownMessageHash) } returns null
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            // Create a new ViewModel to pick up the mocked flow
+            val testViewModel =
+                MessagingViewModel(
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                )
+            advanceUntilIdle()
+
+            // Emit a status update for unknown message
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = unknownMessageHash,
+                    status = "delivered",
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+            advanceUntilIdle()
+
+            // Verify: getMessageById was called (with retries)
+            coVerify(atLeast = 1) {
+                conversationRepository.getMessageById(unknownMessageHash)
+            }
+
+            // Verify: updateMessageStatus was NOT called (message not found)
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageStatus(unknownMessageHash, any())
+            }
+
+            // Verify: No crash occurred - test completes successfully
+
+            // Cleanup
+            testViewModel.viewModelScope.cancel()
         }
 }

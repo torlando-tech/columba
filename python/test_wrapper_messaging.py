@@ -1120,6 +1120,114 @@ class TestErrorHandling(unittest.TestCase):
         wrapper._on_message_sent(mock_message)
 
 
+class TestPathRequestRetryLogic(unittest.TestCase):
+    """Test path request retry logic when identity not immediately found"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_available = reticulum_wrapper.RETICULUM_AVAILABLE
+        reticulum_wrapper.RETICULUM_AVAILABLE = True
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+        reticulum_wrapper.RETICULUM_AVAILABLE = self.original_available
+
+    @patch('reticulum_wrapper.time.sleep')
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_requests_path_when_identity_not_found(self, mock_lxmf_module, mock_rns, mock_sleep):
+        """Test that path is requested when identity recall initially fails"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+        wrapper.local_lxmf_destination = MagicMock()
+        wrapper.display_name = "Test"
+
+        # Identity found on 3rd attempt (after path request)
+        mock_identity = MagicMock()
+        mock_identity.hash = b'0123456789abcdef'
+        # recall returns None twice, then identity on 3rd call
+        mock_rns.Identity.recall.side_effect = [None, None, None, mock_identity]
+
+        mock_dest = MagicMock()
+        mock_rns.Destination.return_value = mock_dest
+
+        mock_message = MagicMock()
+        mock_message.hash = b'msghash123456789'
+        mock_lxmf_module.LXMessage.return_value = mock_message
+
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'0123456789abcdef',
+            content="Test message",
+            source_identity_private_key=b'privkey' * 10,
+            delivery_method="direct"
+        )
+
+        # Verify path was requested
+        mock_rns.Transport.request_path.assert_called()
+        # Verify sleep was called (retry loop)
+        self.assertTrue(mock_sleep.called)
+
+    @patch('reticulum_wrapper.time.sleep')
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_path_request_timeout_returns_error(self, mock_lxmf_module, mock_rns, mock_sleep):
+        """Test error returned when path request times out after all retries"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+        wrapper.local_lxmf_destination = MagicMock()
+        wrapper.display_name = "Test"
+
+        # Identity never found
+        mock_rns.Identity.recall.return_value = None
+
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'0123456789abcdef',
+            content="Test message",
+            source_identity_private_key=b'privkey' * 10,
+            delivery_method="direct"
+        )
+
+        # Should fail with "not known" error
+        self.assertFalse(result['success'])
+        self.assertIn('not known', result['error'].lower())
+        # Verify all 10 retry attempts (sleep called 10 times)
+        self.assertEqual(mock_sleep.call_count, 10)
+
+    @patch('reticulum_wrapper.time.sleep')
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_path_request_exception_handled(self, mock_lxmf_module, mock_rns, mock_sleep):
+        """Test that request_path exception doesn't crash, continues to retry"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+        wrapper.local_lxmf_destination = MagicMock()
+        wrapper.display_name = "Test"
+
+        # request_path raises exception
+        mock_rns.Transport.request_path.side_effect = Exception("Network error")
+        # Identity never found
+        mock_rns.Identity.recall.return_value = None
+
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'0123456789abcdef',
+            content="Test message",
+            source_identity_private_key=b'privkey' * 10,
+            delivery_method="direct"
+        )
+
+        # Should still return error (not crash)
+        self.assertFalse(result['success'])
+        self.assertIn('error', result)
+
+
 if __name__ == '__main__':
     # Run tests with verbose output
     unittest.main(verbosity=2)

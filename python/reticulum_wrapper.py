@@ -130,6 +130,13 @@ class ReticulumWrapper:
         self._opportunistic_check_interval = 10  # How often to check for timeouts (seconds)
         self._opportunistic_timer = None  # Timer thread reference
 
+        # Propagation node fallback tracking
+        # When the selected relay is offline and propagation fails, we request alternative relays
+        # from Kotlin. Messages wait in pending dict until alternative is provided or all exhausted.
+        self.kotlin_request_alternative_relay_callback = None  # Callback to request alternative relay
+        self._pending_relay_fallback_messages = {}  # {msg_hash_hex: lxmf_message} - waiting for alternative
+        self._max_relay_retries = 3  # Maximum number of alternative relays to try
+
         # Set global instance so AndroidBLEDriver can access it
         _global_wrapper_instance = self
 
@@ -253,6 +260,29 @@ class ReticulumWrapper:
         self.kotlin_message_received_callback = callback
         log_info("ReticulumWrapper", "set_message_received_callback",
                 "✅ Message received callback registered (event-driven architecture enabled)")
+
+    def set_kotlin_request_alternative_relay_callback(self, callback):
+        """
+        Set callback to request alternative relay when propagation fails.
+
+        When a message fails to deliver via the current propagation node (relay is offline),
+        this callback is invoked to request Kotlin to find an alternative relay.
+
+        Callback signature: callback(request_json: str)
+
+        Request JSON format:
+        {
+            "message_hash": "abc123...",     # Hex string of message hash needing retry
+            "exclude_relays": ["def456..."], # List of relay hashes to exclude (already tried)
+            "timestamp": 1234567890000       # Milliseconds since epoch
+        }
+
+        Args:
+            callback: PyObject callable from Kotlin (passed via Chaquopy)
+        """
+        self.kotlin_request_alternative_relay_callback = callback
+        log_info("ReticulumWrapper", "set_kotlin_request_alternative_relay_callback",
+                "✅ Alternative relay callback registered (relay fallback enabled)")
 
     def _clear_stale_ble_paths(self):
         """
@@ -2529,9 +2559,10 @@ class ReticulumWrapper:
         Callback invoked by LXMF when a sent message delivery fails.
         This is called when delivery times out or is otherwise unsuccessful.
 
-        If try_propagation_on_fail is set on the message and we have an active
-        propagation node, the message will be retried via propagation instead
-        of being marked as failed.
+        Handles three cases:
+        1. First failure with try_propagation_on_fail=True: Retry via current propagation node
+        2. Propagation retry failed, retries < max: Request alternative relay from Kotlin
+        3. Max retries exceeded or no alternatives: Fail message permanently
 
         Args:
             lxmf_message: The LXMF.LXMessage that failed
@@ -2545,13 +2576,24 @@ class ReticulumWrapper:
                 log_debug("ReticulumWrapper", "_on_message_failed",
                          f"Removed {msg_hash[:16]}... from opportunistic tracking (failed)")
 
-            # Check if we should retry via propagation (Sideband pattern)
+            # Initialize tracking attributes if not present
+            if not hasattr(lxmf_message, 'propagation_retry_attempted'):
+                lxmf_message.propagation_retry_attempted = False
+            if not hasattr(lxmf_message, 'tried_relays'):
+                lxmf_message.tried_relays = []
+
+            # Case 1: First failure - try propagation if enabled (Sideband pattern)
             if (hasattr(lxmf_message, 'try_propagation_on_fail') and
                 lxmf_message.try_propagation_on_fail and
-                self.active_propagation_node):
+                self.active_propagation_node and
+                not lxmf_message.propagation_retry_attempted):
 
                 log_info("ReticulumWrapper", "_on_message_failed",
                         f"📡 Message {msg_hash[:16]}... direct delivery failed, retrying via propagation node")
+
+                # Mark that we've attempted propagation and track the relay
+                lxmf_message.propagation_retry_attempted = True
+                lxmf_message.tried_relays.append(self.active_propagation_node)
 
                 # Clear retry flag to prevent infinite loop
                 lxmf_message.try_propagation_on_fail = False
@@ -2587,34 +2629,182 @@ class ReticulumWrapper:
                                  f"Error invoking Kotlin callback: {e}")
                 return  # Don't report as failed - we're retrying
 
-            # Normal failure - no retry
-            log_error("ReticulumWrapper", "_on_message_failed",
-                     f"❌ Message {msg_hash[:16]}... FAILED!")
+            # Case 2: Propagation retry failed - try alternative relay if available
+            if (lxmf_message.propagation_retry_attempted and
+                len(lxmf_message.tried_relays) < self._max_relay_retries and
+                self.kotlin_request_alternative_relay_callback):
 
-            # Create status event for Kotlin
-            status_event = {
-                'message_hash': msg_hash,
-                'status': 'failed',
-                'timestamp': int(time.time() * 1000)
-            }
+                log_info("ReticulumWrapper", "_on_message_failed",
+                        f"📡 Message {msg_hash[:16]}... propagation failed, requesting alternative relay "
+                        f"(tried {len(lxmf_message.tried_relays)}/{self._max_relay_retries})")
 
-            # Invoke Kotlin callback if registered (same pattern as BLE bridge)
-            if self.kotlin_delivery_status_callback:
+                # Store message for later retry when alternative is provided
+                self._pending_relay_fallback_messages[msg_hash] = lxmf_message
+
+                # Request alternative from Kotlin (exclude already tried relays)
+                import json
+                request = {
+                    'message_hash': msg_hash,
+                    'exclude_relays': [r.hex() if isinstance(r, bytes) else str(r) for r in lxmf_message.tried_relays],
+                    'timestamp': int(time.time() * 1000)
+                }
                 try:
-                    import json
-                    self.kotlin_delivery_status_callback(json.dumps(status_event))
+                    self.kotlin_request_alternative_relay_callback(json.dumps(request))
                     log_debug("ReticulumWrapper", "_on_message_failed",
-                             "Kotlin callback invoked successfully")
+                             f"Requested alternative relay for {msg_hash[:16]}...")
                 except Exception as e:
                     log_error("ReticulumWrapper", "_on_message_failed",
-                             f"Error invoking Kotlin callback: {e}")
+                             f"Error requesting alternative relay: {e}")
+                    # Fall through to permanent failure
+                    del self._pending_relay_fallback_messages[msg_hash]
+
+                # Notify Kotlin of status
+                if self.kotlin_delivery_status_callback:
+                    try:
+                        status_event = {
+                            'message_hash': msg_hash,
+                            'status': 'retrying_alternative_relay',
+                            'tried_count': len(lxmf_message.tried_relays),
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        self.kotlin_delivery_status_callback(json.dumps(status_event))
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "_on_message_failed",
+                                 f"Error notifying status: {e}")
+                return  # Don't report as failed yet - waiting for alternative
+
+            # Case 3: Max retries exceeded or no callback - fail permanently
+            if len(lxmf_message.tried_relays) >= self._max_relay_retries:
+                reason = 'max_relay_retries_exceeded'
             else:
-                log_warning("ReticulumWrapper", "_on_message_failed",
-                           "No Kotlin callback registered - failure status not reported")
+                reason = 'delivery_failed'
+            self._fail_message_permanently(lxmf_message, reason)
 
         except Exception as e:
             log_error("ReticulumWrapper", "_on_message_failed",
                      f"Error in failed callback: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _fail_message_permanently(self, lxmf_message, reason: str):
+        """
+        Mark a message as permanently failed and notify Kotlin.
+
+        Args:
+            lxmf_message: The LXMF.LXMessage that failed
+            reason: Reason for failure (e.g., 'max_relay_retries_exceeded', 'no_relays_available')
+        """
+        msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
+
+        log_error("ReticulumWrapper", "_fail_message_permanently",
+                 f"❌ Message {msg_hash[:16]}... FAILED permanently: {reason}")
+
+        # Remove from pending if present
+        if msg_hash in self._pending_relay_fallback_messages:
+            del self._pending_relay_fallback_messages[msg_hash]
+
+        # Notify Kotlin with failure reason
+        if self.kotlin_delivery_status_callback:
+            try:
+                import json
+                status_event = {
+                    'message_hash': msg_hash,
+                    'status': 'failed',
+                    'reason': reason,
+                    'timestamp': int(time.time() * 1000)
+                }
+                self.kotlin_delivery_status_callback(json.dumps(status_event))
+                log_debug("ReticulumWrapper", "_fail_message_permanently",
+                         "Kotlin callback invoked successfully")
+            except Exception as e:
+                log_error("ReticulumWrapper", "_fail_message_permanently",
+                         f"Error invoking Kotlin callback: {e}")
+        else:
+            log_warning("ReticulumWrapper", "_fail_message_permanently",
+                       "No Kotlin callback registered - failure status not reported")
+
+    def on_alternative_relay_received(self, relay_hash):
+        """
+        Called from Kotlin when an alternative relay is provided.
+
+        When propagation to the current relay fails, Kotlin is asked to find an alternative.
+        This method is called with the result - either a new relay hash or None if none available.
+
+        Args:
+            relay_hash: 16-byte destination hash of alternative relay (bytes or jarray),
+                       or None if no alternatives available
+        """
+        try:
+            if not self._pending_relay_fallback_messages:
+                log_warning("ReticulumWrapper", "on_alternative_relay_received",
+                           "No pending messages for relay fallback")
+                return
+
+            if relay_hash is None:
+                # No alternatives available - fail all pending messages
+                log_warning("ReticulumWrapper", "on_alternative_relay_received",
+                           f"No alternative relays available, failing {len(self._pending_relay_fallback_messages)} messages")
+                for msg_hash, message in list(self._pending_relay_fallback_messages.items()):
+                    self._fail_message_permanently(message, 'no_relays_available')
+                self._pending_relay_fallback_messages.clear()
+                return
+
+            # Convert jarray from Java if needed
+            if hasattr(relay_hash, '__iter__') and not isinstance(relay_hash, (bytes, bytearray)):
+                relay_hash = bytes(relay_hash)
+
+            relay_hex = relay_hash.hex() if isinstance(relay_hash, bytes) else str(relay_hash)
+            log_info("ReticulumWrapper", "on_alternative_relay_received",
+                    f"📡 Received alternative relay: {relay_hex[:16]}..., retrying {len(self._pending_relay_fallback_messages)} messages")
+
+            # Update active propagation node (directly set to bypass init checks in fallback)
+            self.active_propagation_node = relay_hash
+            # Also update router if available
+            if self.initialized and self.router:
+                try:
+                    self.router.set_outbound_propagation_node(relay_hash)
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "on_alternative_relay_received",
+                               f"Could not update router propagation node: {e}")
+
+            # Retry all pending messages with new relay
+            for msg_hash, message in list(self._pending_relay_fallback_messages.items()):
+                # Track this relay attempt
+                if not hasattr(message, 'tried_relays'):
+                    message.tried_relays = []
+                message.tried_relays.append(relay_hash)
+
+                # Reset for fresh retry
+                message.delivery_attempts = 0
+                message.packed = None
+                message.propagation_packed = None
+                message.propagation_stamp = None
+                message.defer_propagation_stamp = True
+                message.desired_method = LXMF.LXMessage.PROPAGATED
+
+                # Re-submit to router
+                self.router.handle_outbound(message)
+
+                # Notify Kotlin
+                if self.kotlin_delivery_status_callback:
+                    try:
+                        import json
+                        status = {
+                            'message_hash': msg_hash,
+                            'status': 'retrying_propagated',
+                            'relay_hash': relay_hex,
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        self.kotlin_delivery_status_callback(json.dumps(status))
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "on_alternative_relay_received",
+                                 f"Error notifying status: {e}")
+
+            self._pending_relay_fallback_messages.clear()
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "on_alternative_relay_received",
+                     f"Error handling alternative relay: {e}")
             import traceback
             traceback.print_exc()
 

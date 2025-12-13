@@ -743,6 +743,9 @@ class TestPropagationFallback(unittest.TestCase):
         mock_message.hash = b'timeout_hash_123'
         mock_message.try_propagation_on_fail = True
         mock_message.delivery_attempts = 5
+        # New attributes for relay fallback tracking (first attempt)
+        mock_message.propagation_retry_attempted = False
+        mock_message.tried_relays = []
 
         # Add to tracking with time in the past
         msg_hash_hex = b'timeout_hash_123'.hex()
@@ -762,6 +765,8 @@ class TestPropagationFallback(unittest.TestCase):
         self.assertFalse(mock_message.try_propagation_on_fail)
         # Delivery attempts should be reset
         self.assertEqual(mock_message.delivery_attempts, 0)
+        # Should track propagation attempt
+        self.assertTrue(mock_message.propagation_retry_attempted)
 
     @patch.object(reticulum_wrapper, 'LXMF', mock_lxmf)
     def test_propagation_retry_sets_stamp_generation_flags(self):
@@ -786,6 +791,9 @@ class TestPropagationFallback(unittest.TestCase):
         mock_message.propagation_packed = b'old_propagation_packed'
         mock_message.propagation_stamp = b'old_invalid_stamp'
         mock_message.defer_propagation_stamp = False
+        # New attributes for relay fallback tracking (first attempt)
+        mock_message.propagation_retry_attempted = False
+        mock_message.tried_relays = []
 
         # Trigger failure callback (simulating opportunistic delivery failure)
         wrapper._on_message_failed(mock_message)

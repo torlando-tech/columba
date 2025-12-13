@@ -726,6 +726,9 @@ class TestDeliveryCallbacks(unittest.TestCase):
         mock_message = Mock()
         mock_message.hash = b'messagehash12345'
         mock_message.try_propagation_on_fail = False
+        # New attributes for relay fallback tracking
+        mock_message.propagation_retry_attempted = False
+        mock_message.tried_relays = []
 
         wrapper._on_message_failed(mock_message)
 
@@ -736,6 +739,7 @@ class TestDeliveryCallbacks(unittest.TestCase):
         status_event = json.loads(call_arg)
         self.assertEqual(status_event['status'], 'failed')
         self.assertEqual(status_event['message_hash'], mock_message.hash.hex())
+        self.assertEqual(status_event['reason'], 'delivery_failed')
 
     @patch('reticulum_wrapper.LXMF')
     def test_on_message_failed_retries_via_propagation(self, mock_lxmf):
@@ -750,6 +754,9 @@ class TestDeliveryCallbacks(unittest.TestCase):
         mock_message = Mock()
         mock_message.hash = b'messagehash12345'
         mock_message.try_propagation_on_fail = True
+        # New attributes for relay fallback tracking (first attempt)
+        mock_message.propagation_retry_attempted = False
+        mock_message.tried_relays = []
 
         wrapper._on_message_failed(mock_message)
 
@@ -767,6 +774,10 @@ class TestDeliveryCallbacks(unittest.TestCase):
         # Flag should be cleared to prevent infinite retry
         self.assertFalse(mock_message.try_propagation_on_fail)
 
+        # Should track propagation attempt
+        self.assertTrue(mock_message.propagation_retry_attempted)
+        self.assertIn(b'propnode12345678', mock_message.tried_relays)
+
     def test_on_message_failed_no_retry_without_propagation_node(self):
         """Test _on_message_failed doesn't retry when no propagation node"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -779,6 +790,9 @@ class TestDeliveryCallbacks(unittest.TestCase):
         mock_message = Mock()
         mock_message.hash = b'messagehash12345'
         mock_message.try_propagation_on_fail = True
+        # New attributes for relay fallback tracking
+        mock_message.propagation_retry_attempted = False
+        mock_message.tried_relays = []
 
         wrapper._on_message_failed(mock_message)
 

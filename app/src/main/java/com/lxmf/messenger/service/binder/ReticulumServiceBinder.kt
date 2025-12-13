@@ -607,6 +607,18 @@ class ReticulumServiceBinder(
         }
     }
 
+    override fun provideAlternativeRelay(relayHash: ByteArray?) {
+        try {
+            Log.d(
+                TAG,
+                "Providing alternative relay: ${relayHash?.joinToString("") { "%02x".format(it) }?.take(16) ?: "null"}",
+            )
+            wrapperManager.provideAlternativeRelay(relayHash)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error providing alternative relay", e)
+        }
+    }
+
     // ===========================================
     // Private Helpers
     // ===========================================
@@ -673,6 +685,16 @@ class ReticulumServiceBinder(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set message received callback: ${e.message}", e)
+        }
+
+        // Setup alternative relay callback for propagation failover
+        try {
+            wrapperManager.setAlternativeRelayCallback { requestJson ->
+                Log.d(TAG, "Alternative relay requested: $requestJson")
+                broadcaster.broadcastAlternativeRelayRequest(requestJson)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set alternative relay callback: ${e.message}", e)
         }
     }
 

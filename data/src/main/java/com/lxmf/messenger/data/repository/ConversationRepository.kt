@@ -458,4 +458,33 @@ class ConversationRepository
                 "Updated message $messageId delivery details: method=$deliveryMethod, error=$errorMessage",
             )
         }
+
+        /**
+         * Update a message's ID (for retry scenarios where the message hash changes).
+         * Since Room doesn't allow updating primary keys, this deletes the old message
+         * and inserts a new one with the updated ID.
+         *
+         * @param oldMessageId The current message ID
+         * @param newMessageId The new message ID to use
+         */
+        suspend fun updateMessageId(
+            oldMessageId: String,
+            newMessageId: String,
+        ) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            val oldMessage = messageDao.getMessageById(oldMessageId, activeIdentity.identityHash) ?: return
+
+            // Create new message with updated ID
+            val newMessage = oldMessage.copy(id = newMessageId, status = "pending")
+
+            // Delete old and insert new atomically would require @Transaction,
+            // but for simplicity we do it in sequence
+            messageDao.deleteMessageById(oldMessageId, activeIdentity.identityHash)
+            messageDao.insertMessage(newMessage)
+
+            android.util.Log.d(
+                "ConversationRepository",
+                "Updated message ID from $oldMessageId to $newMessageId",
+            )
+        }
     }

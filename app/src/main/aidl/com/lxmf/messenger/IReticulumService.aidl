@@ -325,4 +325,11 @@ interface IReticulumService {
      * @return JSON string with result: {"success": true, "message_hash": "...", "delivery_method": "..."}
      */
     String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat);
+
+    /**
+     * Provide an alternative relay for message retry.
+     * Called by app process in response to onAlternativeRelayRequested callback.
+     * @param relayHash 16-byte destination hash of alternative relay, or null if none available
+     */
+    void provideAlternativeRelay(in byte[] relayHash);
 }

@@ -153,4 +153,14 @@ interface MessageDao {
      */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertMessagesIgnoreDuplicates(messages: List<MessageEntity>)
+
+    /**
+     * Delete a message by ID.
+     * Used when updating message ID (primary key cannot be updated directly).
+     */
+    @Query("DELETE FROM messages WHERE id = :messageId AND identityHash = :identityHash")
+    suspend fun deleteMessageById(
+        messageId: String,
+        identityHash: String,
+    )
 }

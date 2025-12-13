@@ -1652,4 +1652,171 @@ class PropagationNodeManagerTest {
                 cancelAndConsumeRemainingEvents()
             }
         }
+
+    // ========== getAlternativeRelay Tests ==========
+
+    @Test
+    fun `getAlternativeRelay - returns nearest excluding current`() =
+        runTest {
+            // Given: Multiple propagation nodes, one is current (should be excluded)
+            val currentNode =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Current",
+                    hops = 2,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val alternativeNode =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    peerName = "Alternative",
+                    hops = 3,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(currentNode, alternativeNode))
+
+            // When
+            val result = manager.getAlternativeRelay(excludeHashes = listOf(testDestHash))
+
+            // Then: Should return the alternative (not excluded)
+            assert(result != null) { "Should return an alternative relay" }
+            assert(result!!.destinationHash == testDestHash2) {
+                "Should return testDestHash2, got ${result.destinationHash}"
+            }
+        }
+
+    @Test
+    fun `getAlternativeRelay - excludes multiple relays`() =
+        runTest {
+            // Given: Three nodes, two are excluded
+            val node1 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val node2 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    hops = 2,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val node3 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash3,
+                    hops = 3,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(node1, node2, node3))
+
+            // When
+            val result = manager.getAlternativeRelay(excludeHashes = listOf(testDestHash, testDestHash2))
+
+            // Then: Should return node3 (only non-excluded)
+            assert(result != null) { "Should return an alternative relay" }
+            assert(result!!.destinationHash == testDestHash3) {
+                "Should return testDestHash3, got ${result.destinationHash}"
+            }
+        }
+
+    @Test
+    fun `getAlternativeRelay - returns null when all excluded`() =
+        runTest {
+            // Given: All propagation nodes are excluded
+            val node =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(node))
+
+            // When
+            val result = manager.getAlternativeRelay(excludeHashes = listOf(testDestHash))
+
+            // Then: Should return null
+            assert(result == null) { "Should return null when all nodes excluded" }
+        }
+
+    @Test
+    fun `getAlternativeRelay - selects by hop count among available`() =
+        runTest {
+            // Given: Multiple alternatives available with different hop counts
+            val farNode =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    hops = 5,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val nearNode =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    hops = 2,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val excludedNode =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash3,
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(farNode, nearNode, excludedNode))
+
+            // When
+            val result = manager.getAlternativeRelay(excludeHashes = listOf(testDestHash3))
+
+            // Then: Should return nearest non-excluded (nearNode at 2 hops)
+            assert(result != null) { "Should return an alternative relay" }
+            assert(result!!.destinationHash == testDestHash2) {
+                "Should return testDestHash2 (nearest), got ${result.destinationHash}"
+            }
+            assert(result.hops == 2) { "Should have 2 hops, got ${result.hops}" }
+        }
+
+    @Test
+    fun `getAlternativeRelay - returns null when no propagation nodes available`() =
+        runTest {
+            // Given: No propagation nodes
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(emptyList())
+
+            // When
+            val result = manager.getAlternativeRelay(excludeHashes = emptyList())
+
+            // Then: Should return null
+            assert(result == null) { "Should return null when no propagation nodes" }
+        }
+
+    @Test
+    fun `getAlternativeRelay - with empty exclude list returns nearest`() =
+        runTest {
+            // Given: Multiple propagation nodes
+            val farNode =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    hops = 5,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val nearNode =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(farNode, nearNode))
+
+            // When: No exclusions
+            val result = manager.getAlternativeRelay(excludeHashes = emptyList())
+
+            // Then: Should return nearest (nearNode)
+            assert(result != null) { "Should return a relay" }
+            assert(result!!.destinationHash == testDestHash2) {
+                "Should return nearest relay, got ${result.destinationHash}"
+            }
+        }
 }

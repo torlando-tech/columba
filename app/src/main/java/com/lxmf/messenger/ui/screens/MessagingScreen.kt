@@ -364,6 +364,7 @@ fun MessagingScreen(
                                         isFromMe = message.isFromMe,
                                         clipboardManager = clipboardManager,
                                         onViewDetails = onViewMessageDetails,
+                                        onRetry = { viewModel.retryFailedMessage(message.id) },
                                     )
                                 }
                             }
@@ -403,6 +404,7 @@ fun MessageBubble(
     isFromMe: Boolean,
     clipboardManager: androidx.compose.ui.platform.ClipboardManager,
     onViewDetails: (messageId: String) -> Unit = {},
+    onRetry: () -> Unit = {},
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var showMenu by remember { mutableStateOf(false) }
@@ -524,10 +526,20 @@ fun MessageBubble(
                     showMenu = false
                 },
                 isFromMe = isFromMe,
+                isFailed = message.status == "failed",
                 onViewDetails =
                     if (isFromMe) {
                         {
                             onViewDetails(message.id)
+                            showMenu = false
+                        }
+                    } else {
+                        null
+                    },
+                onRetry =
+                    if (isFromMe && message.status == "failed") {
+                        {
+                            onRetry()
                             showMenu = false
                         }
                     } else {
@@ -544,7 +556,9 @@ fun MessageContextMenu(
     onDismiss: () -> Unit,
     onCopy: () -> Unit,
     isFromMe: Boolean = false,
+    isFailed: Boolean = false,
     onViewDetails: (() -> Unit)? = null,
+    onRetry: (() -> Unit)? = null,
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -553,6 +567,20 @@ fun MessageContextMenu(
         tonalElevation = 3.dp,
         offset = DpOffset(x = 0.dp, y = 0.dp),
     ) {
+        // Show "Retry" for failed messages
+        if (isFailed && onRetry != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text("Retry") },
+                onClick = onRetry,
+            )
+        }
+
         DropdownMenuItem(
             leadingIcon = {
                 Icon(

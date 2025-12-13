@@ -376,6 +376,45 @@ class PropagationNodeManager
         }
 
         /**
+         * Get an alternative propagation node, excluding specified relays.
+         *
+         * Used when the current relay is unreachable and message needs retry via a different relay.
+         * Returns the nearest available relay by hop count that is not in the exclude list.
+         *
+         * @param excludeHashes List of relay destination hashes to exclude (already tried)
+         * @return RelayInfo for nearest available relay, or null if none available
+         */
+        suspend fun getAlternativeRelay(excludeHashes: List<String>): RelayInfo? {
+            val propagationNodes = announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")).first()
+
+            // Filter out excluded relays
+            val availableNodes = propagationNodes.filter { node ->
+                node.destinationHash !in excludeHashes
+            }
+
+            // Find the nearest available relay by hop count
+            val nearest = availableNodes.minByOrNull { it.hops }
+
+            return if (nearest != null) {
+                Log.i(
+                    TAG,
+                    "Found alternative relay: ${nearest.peerName} (${nearest.destinationHash}) at ${nearest.hops} hops " +
+                        "(excluded ${excludeHashes.size} relays)",
+                )
+                RelayInfo(
+                    destinationHash = nearest.destinationHash,
+                    displayName = nearest.peerName,
+                    hops = nearest.hops,
+                    isAutoSelected = true,
+                    lastSeenTimestamp = nearest.lastSeenTimestamp,
+                )
+            } else {
+                Log.w(TAG, "No alternative relays available (excluded ${excludeHashes.size} relays)")
+                null
+            }
+        }
+
+        /**
          * Observe propagation node announces for auto-selection.
          */
         private suspend fun observePropagationNodeAnnounces() {

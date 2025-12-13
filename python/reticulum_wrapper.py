@@ -2510,27 +2510,43 @@ class ReticulumWrapper:
 
     def _on_message_delivered(self, lxmf_message):
         """
-        Callback invoked by LXMF when a sent message is successfully delivered.
-        This is called when the recipient sends back a cryptographic proof of delivery.
+        Callback invoked by LXMF when a sent message acknowledgment is received.
+
+        For DIRECT messages: Called when recipient sends back proof of delivery.
+        For PROPAGATED messages: Called when relay accepts the message (NOT end recipient).
+
+        LXMF sets different states before calling this callback:
+        - DELIVERED (0x08): Direct delivery confirmed by recipient
+        - SENT (0x04): Propagated to relay, awaiting recipient sync
 
         Args:
-            lxmf_message: The LXMF.LXMessage that was delivered
+            lxmf_message: The LXMF.LXMessage that was acknowledged
         """
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
-            log_info("ReticulumWrapper", "_on_message_delivered",
-                    f"✅ Message {msg_hash[:16]}... DELIVERED!")
+
+            # Determine status based on LXMF message state
+            # LXMF sets state=DELIVERED for direct, state=SENT for propagated
+            if lxmf_message.state == LXMF.LXMessage.DELIVERED:
+                status = 'delivered'
+                log_info("ReticulumWrapper", "_on_message_delivered",
+                        f"✅ Message {msg_hash[:16]}... DELIVERED (confirmed by recipient)")
+            else:
+                # state == SENT means propagated (relay accepted, recipient unknown)
+                status = 'propagated'
+                log_info("ReticulumWrapper", "_on_message_delivered",
+                        f"📤 Message {msg_hash[:16]}... PROPAGATED (stored on relay)")
 
             # Remove from opportunistic tracking (if it was being tracked)
             if msg_hash in self._opportunistic_messages:
                 del self._opportunistic_messages[msg_hash]
                 log_debug("ReticulumWrapper", "_on_message_delivered",
-                         f"Removed {msg_hash[:16]}... from opportunistic tracking (delivered)")
+                         f"Removed {msg_hash[:16]}... from opportunistic tracking ({status})")
 
             # Create status event for Kotlin
             status_event = {
                 'message_hash': msg_hash,
-                'status': 'delivered',
+                'status': status,
                 'timestamp': int(time.time() * 1000)
             }
 

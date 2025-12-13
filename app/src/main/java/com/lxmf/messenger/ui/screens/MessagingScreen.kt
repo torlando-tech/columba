@@ -504,8 +504,8 @@ fun MessageBubble(
                                 text =
                                     when (message.status) {
                                         "pending" -> "○" // Hollow circle - message created, waiting to send
-                                        "sent", "retrying_propagated" -> "✓" // Single check - transmitted/retrying
-                                        "delivered" -> "✓✓" // Double check - delivered and acknowledged
+                                        "sent", "retrying_propagated", "propagated" -> "✓" // Single check - transmitted/retrying/stored on relay
+                                        "delivered" -> "✓✓" // Double check - delivered and acknowledged by recipient
                                         "failed" -> "!" // Exclamation - delivery failed
                                         else -> ""
                                     },

@@ -7,7 +7,6 @@ import com.lxmf.messenger.ui.model.MessageUi
  * Test fixtures for MessagingScreen UI tests.
  */
 object MessagingTestFixtures {
-
     object Constants {
         const val TEST_DESTINATION_HASH = "1234567890abcdef1234567890abcdef"
         const val TEST_PEER_NAME = "Test Peer"

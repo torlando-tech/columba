@@ -8,7 +8,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
-import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.test.TestFactories
 import com.lxmf.messenger.viewmodel.ChatsViewModel
 import io.mockk.every
@@ -20,6 +20,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -32,8 +33,13 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class ChatsScreenTest {
+    private val registerActivityRule = RegisterComponentActivityRule()
+    private val composeRule = createComposeRule()
+
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
+
+    val composeTestRule get() = composeRule
 
     // ========== EmptyChatsState Tests ==========
 
@@ -557,9 +563,10 @@ class ChatsScreenTest {
     @Test
     fun chatsScreen_displaysConversationCount_singular() {
         // Given
-        val mockViewModel = createMockChatsViewModel(
-            conversations = listOf(TestFactories.createConversation()),
-        )
+        val mockViewModel =
+            createMockChatsViewModel(
+                conversations = listOf(TestFactories.createConversation()),
+            )
 
         // When
         composeTestRule.setContent {
@@ -577,9 +584,10 @@ class ChatsScreenTest {
     @Test
     fun chatsScreen_displaysConversationCount_plural() {
         // Given
-        val mockViewModel = createMockChatsViewModel(
-            conversations = TestFactories.createMultipleConversations(3),
-        )
+        val mockViewModel =
+            createMockChatsViewModel(
+                conversations = TestFactories.createMultipleConversations(3),
+            )
 
         // When
         composeTestRule.setContent {
@@ -615,10 +623,11 @@ class ChatsScreenTest {
     @Test
     fun chatsScreen_withConversations_displaysCards() {
         // Given
-        val conversations = listOf(
-            TestFactories.createConversation(peerHash = "peer1", peerName = "Alice"),
-            TestFactories.createConversation(peerHash = "peer2", peerName = "Bob"),
-        )
+        val conversations =
+            listOf(
+                TestFactories.createConversation(peerHash = "peer1", peerName = "Alice"),
+                TestFactories.createConversation(peerHash = "peer2", peerName = "Bob"),
+            )
         val mockViewModel = createMockChatsViewModel(conversations = conversations)
 
         // When
@@ -642,9 +651,10 @@ class ChatsScreenTest {
         // Given
         var clickedPeerHash: String? = null
         var clickedPeerName: String? = null
-        val conversations = listOf(
-            TestFactories.createConversation(peerHash = "alice_hash", peerName = "Alice"),
-        )
+        val conversations =
+            listOf(
+                TestFactories.createConversation(peerHash = "alice_hash", peerName = "Alice"),
+            )
         val mockViewModel = createMockChatsViewModel(conversations = conversations)
 
         composeTestRule.setContent {
@@ -669,9 +679,10 @@ class ChatsScreenTest {
     @Test
     fun chatsScreen_syncButton_triggersSync() {
         // Given
-        val mockViewModel = createMockChatsViewModel(
-            conversations = listOf(TestFactories.createConversation()),
-        )
+        val mockViewModel =
+            createMockChatsViewModel(
+                conversations = listOf(TestFactories.createConversation()),
+            )
 
         composeTestRule.setContent {
             ChatsScreen(

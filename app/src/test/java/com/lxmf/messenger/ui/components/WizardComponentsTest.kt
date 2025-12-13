@@ -10,9 +10,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.lxmf.messenger.test.RegisterComponentActivityRule
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -24,8 +26,14 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class WizardComponentsTest {
+    private val registerActivityRule = RegisterComponentActivityRule()
+    private val composeRule = createComposeRule()
+
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
+
+    // Helper to access composeRule
+    val composeTestRule get() = composeRule
 
     // ========== CustomSettingsCard Tests ==========
 

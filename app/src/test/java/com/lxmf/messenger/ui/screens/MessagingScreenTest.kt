@@ -10,8 +10,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.paging.PagingData
-import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.test.MessagingTestFixtures
+import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.viewmodel.MessagingViewModel
 import io.mockk.every
 import io.mockk.mockk
@@ -23,6 +23,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -34,8 +35,13 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MessagingScreenTest {
+    private val registerActivityRule = RegisterComponentActivityRule()
+    private val composeRule = createComposeRule()
+
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
+
+    val composeTestRule get() = composeRule
 
     private lateinit var mockViewModel: MessagingViewModel
 
@@ -181,9 +187,10 @@ class MessagingScreenTest {
     @Test
     fun onlineStatus_displaysOnline_whenRecentlySeen() {
         // Given - announce with recent lastSeenTimestamp (< 5 minutes ago)
-        every { mockViewModel.announceInfo } returns MutableStateFlow(
-            MessagingTestFixtures.createOnlineAnnounce(),
-        )
+        every { mockViewModel.announceInfo } returns
+            MutableStateFlow(
+                MessagingTestFixtures.createOnlineAnnounce(),
+            )
 
         // When
         composeTestRule.setContent {
@@ -202,9 +209,10 @@ class MessagingScreenTest {
     @Test
     fun onlineStatus_displaysOffline_whenNotRecentlySeen() {
         // Given - announce with old lastSeenTimestamp (> 5 minutes ago)
-        every { mockViewModel.announceInfo } returns MutableStateFlow(
-            MessagingTestFixtures.createOfflineAnnounce(),
-        )
+        every { mockViewModel.announceInfo } returns
+            MutableStateFlow(
+                MessagingTestFixtures.createOfflineAnnounce(),
+            )
 
         // When
         composeTestRule.setContent {
@@ -283,9 +291,10 @@ class MessagingScreenTest {
     @Test
     fun inputBar_withImageOnly_sendButtonEnabled() {
         // Given - image selected but no text
-        every { mockViewModel.selectedImageData } returns MutableStateFlow(
-            MessagingTestFixtures.createTestImageData(),
-        )
+        every { mockViewModel.selectedImageData } returns
+            MutableStateFlow(
+                MessagingTestFixtures.createTestImageData(),
+            )
 
         composeTestRule.setContent {
             MessagingScreen(
@@ -342,9 +351,10 @@ class MessagingScreenTest {
     @Test
     fun inputBar_imagePreview_shown_whenImageSelected() {
         // Given - image selected
-        every { mockViewModel.selectedImageData } returns MutableStateFlow(
-            MessagingTestFixtures.createTestImageData(),
-        )
+        every { mockViewModel.selectedImageData } returns
+            MutableStateFlow(
+                MessagingTestFixtures.createTestImageData(),
+            )
 
         // When
         composeTestRule.setContent {
@@ -364,9 +374,10 @@ class MessagingScreenTest {
     @Test
     fun inputBar_clearImageButton_callsClearSelectedImage() {
         // Given - image selected
-        every { mockViewModel.selectedImageData } returns MutableStateFlow(
-            MessagingTestFixtures.createTestImageData(),
-        )
+        every { mockViewModel.selectedImageData } returns
+            MutableStateFlow(
+                MessagingTestFixtures.createTestImageData(),
+            )
 
         composeTestRule.setContent {
             MessagingScreen(

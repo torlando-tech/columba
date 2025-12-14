@@ -13,12 +13,11 @@ import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.MessageCollector
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.startup.StartupConfigLoader
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -33,20 +32,14 @@ import javax.inject.Inject
 class ColumbaApplication : Application() {
     companion object {
         /** Timeout for IPC calls to prevent ANR during initialization */
-        private const val IPC_TIMEOUT_MS = 5000L
+        internal const val IPC_TIMEOUT_MS = 5000L
     }
-
-    /** Data class to enable parallel loading of initialization config */
-    private data class InitConfig(
-        val interfaces: List<com.lxmf.messenger.reticulum.model.InterfaceConfig>,
-        val identity: com.lxmf.messenger.data.db.entity.LocalIdentityEntity?,
-        val preferOwn: Boolean,
-        val rpcKey: String?,
-        val transport: Boolean,
-    )
 
     @Inject
     lateinit var reticulumProtocol: ReticulumProtocol
+
+    @Inject
+    lateinit var startupConfigLoader: StartupConfigLoader
 
     @Inject
     lateinit var messageCollector: MessageCollector
@@ -256,23 +249,12 @@ class ColumbaApplication : Application() {
 
                     // Load all configuration from database in parallel for faster startup
                     android.util.Log.d("ColumbaApplication", "Loading configuration from database (parallel)...")
-                    val (enabledInterfaces, activeIdentity, preferOwnInstance, rpcKey, transportNodeEnabled) =
-                        coroutineScope {
-                            val interfacesDeferred = async { interfaceRepository.enabledInterfaces.first() }
-                            val identityDeferred = async { identityRepository.getActiveIdentitySync() }
-                            val preferOwnDeferred = async { settingsRepository.preferOwnInstanceFlow.first() }
-                            val rpcKeyDeferred = async { settingsRepository.rpcKeyFlow.first() }
-                            val transportDeferred = async { settingsRepository.getTransportNodeEnabled() }
-
-                            // Await all in parallel
-                            InitConfig(
-                                interfaces = interfacesDeferred.await(),
-                                identity = identityDeferred.await(),
-                                preferOwn = preferOwnDeferred.await(),
-                                rpcKey = rpcKeyDeferred.await(),
-                                transport = transportDeferred.await(),
-                            )
-                        }
+                    val startupConfig = startupConfigLoader.loadConfig()
+                    val enabledInterfaces = startupConfig.interfaces
+                    val activeIdentity = startupConfig.identity
+                    val preferOwnInstance = startupConfig.preferOwn
+                    val rpcKey = startupConfig.rpcKey
+                    val transportNodeEnabled = startupConfig.transport
                     android.util.Log.d("ColumbaApplication", "Loaded ${enabledInterfaces.size} enabled interface(s)")
                     android.util.Log.d("ColumbaApplication", "Prefer own instance: $preferOwnInstance")
                     android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")

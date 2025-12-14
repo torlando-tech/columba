@@ -3,7 +3,6 @@ package com.lxmf.messenger.data.db.dao
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.db.entity.ContactStatus
@@ -16,7 +15,10 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import android.app.Application
 import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Instrumented tests for ContactDao relay functionality.
@@ -28,7 +30,8 @@ import org.junit.runner.RunWith
  * - setAsMyRelay() only sets isMyRelay, does NOT touch isPinned
  * - clearMyRelay() only clears isMyRelay, does NOT touch isPinned
  */
-@RunWith(AndroidJUnit4::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
 class ContactDaoRelayTest {
     private lateinit var database: ColumbaDatabase
     private lateinit var contactDao: ContactDao

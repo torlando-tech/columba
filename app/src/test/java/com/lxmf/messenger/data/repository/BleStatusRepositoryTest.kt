@@ -2,7 +2,6 @@ package com.lxmf.messenger.data.repository
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.cash.turbine.test
 import com.lxmf.messenger.data.model.BleConnectionsState
 import com.lxmf.messenger.data.model.ConnectionType
@@ -26,13 +25,17 @@ import org.junit.Before
 import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
+import android.app.Application
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import kotlin.time.Duration.Companion.seconds
 
 /**
  * Instrumented tests for BleStatusRepository.
  * Tests IPC calls, JSON parsing, Flow emissions, and error handling.
  */
-@RunWith(AndroidJUnit4::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
 @OptIn(ExperimentalCoroutinesApi::class)
 class BleStatusRepositoryTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -266,7 +269,7 @@ class BleStatusRepositoryTest {
             every { mockProtocol.getBleConnectionDetails() } answers {
                 attemptCount++
                 if (attemptCount == 1) {
-                    throw RuntimeException("First attempt fails")
+                    throw java.io.IOException("First attempt fails")
                 } else {
                     BleTestFixtures.createEmptyJson()
                 }

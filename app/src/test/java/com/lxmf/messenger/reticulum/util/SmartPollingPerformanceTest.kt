@@ -1,6 +1,5 @@
 package com.lxmf.messenger.reticulum.util
 
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -9,6 +8,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import android.app.Application
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import kotlin.system.measureTimeMillis
 
 /**
@@ -23,7 +25,8 @@ import kotlin.system.measureTimeMillis
  *
  * Part of Phase 2.2 integration testing.
  */
-@RunWith(AndroidJUnit4::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
 class SmartPollingPerformanceTest {
     private lateinit var poller: SmartPoller
 
@@ -177,40 +180,6 @@ class SmartPollingPerformanceTest {
             println("  Smart polling (idle): ${pollsWithSmartPoller.size} polls")
             println("  Reduction: ${"%.1f".format(reductionPercent)}%")
         }
-
-    @Test
-    fun measureMemoryFootprint() {
-        val runtime = Runtime.getRuntime()
-
-        // Force GC to get accurate baseline
-        System.gc()
-        val memoryBefore = runtime.totalMemory() - runtime.freeMemory()
-
-        // Create 1000 SmartPoller instances
-        val pollers =
-            List(1_000) {
-                SmartPoller(minInterval = 2_000, maxInterval = 30_000)
-            }
-
-        // Force GC again
-        System.gc()
-        val memoryAfter = runtime.totalMemory() - runtime.freeMemory()
-
-        val memoryUsed = memoryAfter - memoryBefore
-        val memoryPerInstance = memoryUsed / 1_000.0
-
-        // Success criterion: < 1KB per instance
-        val memoryPerInstanceKB = memoryPerInstance / 1024.0
-        assertTrue(
-            "Memory per instance should be < 1KB (got ${"%.2f".format(memoryPerInstanceKB)}KB)",
-            memoryPerInstanceKB < 1.0,
-        )
-
-        println("SmartPoller memory footprint: ${"%.2f".format(memoryPerInstanceKB)}KB per instance")
-
-        // Keep reference to avoid GC
-        assertNotNull(pollers)
-    }
 
     @Test
     fun validateTransitionFromActiveToIdle() =

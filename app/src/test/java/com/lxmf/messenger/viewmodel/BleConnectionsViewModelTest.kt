@@ -1,6 +1,5 @@
 package com.lxmf.messenger.viewmodel
 
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.cash.turbine.test
 import com.lxmf.messenger.data.model.BleConnectionsState
 import com.lxmf.messenger.data.model.ConnectionType
@@ -26,13 +25,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import android.app.Application
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import kotlin.time.Duration.Companion.seconds
 
 /**
  * Instrumented tests for BleConnectionsViewModel.
  * Tests state management, Flow observation, statistics calculation, and user actions.
  */
-@RunWith(AndroidJUnit4::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
 @OptIn(ExperimentalCoroutinesApi::class)
 class BleConnectionsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -117,7 +120,7 @@ class BleConnectionsViewModelTest {
             // Given
             every { mockRepository.getConnectedPeersFlow() } returns
                 flow {
-                    throw RuntimeException("Test error")
+                    throw java.io.IOException("Test error")
                 }
 
             // When
@@ -560,7 +563,7 @@ class BleConnectionsViewModelTest {
             val errorMessage = "Custom network error"
             every { mockRepository.getConnectedPeersFlow() } returns
                 flow {
-                    throw RuntimeException(errorMessage)
+                    throw java.io.IOException(errorMessage)
                 }
 
             // When
@@ -581,7 +584,7 @@ class BleConnectionsViewModelTest {
             // Given
             every { mockRepository.getConnectedPeersFlow() } returns
                 flow {
-                    throw RuntimeException(null as String?)
+                    throw java.io.IOException(null as String?)
                 }
 
             // When

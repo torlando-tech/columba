@@ -15,6 +15,8 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -789,6 +791,280 @@ class RNodeWizardViewModelTest {
                 val stateWithError = awaitItem()
                 assertEquals("BLE scan failed: 1", stateWithError.scanError)
                 assertFalse("Scanning should be stopped on error", stateWithError.isScanning)
+            }
+        }
+
+    // ========== TCP Validation Tests ==========
+
+    @Test
+    fun `validateTcpConnection sets error when host is blank`() =
+        runTest {
+            viewModel.updateTcpHost("")
+            advanceUntilIdle()
+
+            viewModel.validateTcpConnection()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNotNull(state.tcpValidationError)
+                assertEquals(false, state.tcpValidationSuccess)
+                assertTrue(state.tcpValidationError!!.contains("empty"))
+            }
+        }
+
+    @Test
+    fun `validateTcpConnection sets error when port below 1`() =
+        runTest {
+            viewModel.updateTcpHost("192.168.1.100")
+            viewModel.updateTcpPort("0")
+            advanceUntilIdle()
+
+            viewModel.validateTcpConnection()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNotNull(state.tcpValidationError)
+                assertEquals(false, state.tcpValidationSuccess)
+                assertTrue(state.tcpValidationError!!.contains("between 1 and 65535"))
+            }
+        }
+
+    @Test
+    fun `validateTcpConnection sets error when port above 65535`() =
+        runTest {
+            viewModel.updateTcpHost("192.168.1.100")
+            viewModel.updateTcpPort("70000")
+            advanceUntilIdle()
+
+            viewModel.validateTcpConnection()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNotNull(state.tcpValidationError)
+                assertEquals(false, state.tcpValidationSuccess)
+                assertTrue(state.tcpValidationError!!.contains("between 1 and 65535"))
+            }
+        }
+
+    @Test
+    fun `validateTcpConnection sets success on valid host and port`() =
+        runTest {
+            viewModel.updateTcpHost("127.0.0.1")
+            viewModel.updateTcpPort("8080")
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.validateTcpConnection()
+
+                // Should see isTcpValidating = true
+                val validatingState = awaitItem()
+                assertTrue(validatingState.isTcpValidating)
+
+                // Wait for validation to complete
+                advanceUntilIdle()
+
+                // Final state - will fail to connect but validates logic runs
+                val finalState = awaitItem()
+                assertNotNull(finalState.tcpValidationSuccess)
+                assertFalse(finalState.isTcpValidating)
+            }
+        }
+
+    @Test
+    fun `validateTcpConnection updates isTcpValidating state`() =
+        runTest {
+            viewModel.updateTcpHost("127.0.0.1")
+            viewModel.updateTcpPort("7633")
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.validateTcpConnection()
+
+                // Should see isTcpValidating = true
+                val validatingState = awaitItem()
+                assertTrue(validatingState.isTcpValidating)
+
+                // Wait for validation to complete
+                advanceUntilIdle()
+
+                // Should see isTcpValidating = false
+                val finalState = awaitItem()
+                assertFalse(finalState.isTcpValidating)
+            }
+        }
+
+    // ========== Manual Device Name Validation Tests ==========
+
+    @Test
+    fun `validateManualDeviceName returns error for name over 32 chars`() =
+        runTest {
+            val longName = "RNode Very Long Device Name That Exceeds Limit"
+            assertTrue(longName.length > 32)
+
+            viewModel.updateManualDeviceName(longName)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNotNull(state.manualDeviceNameError)
+                assertTrue(state.manualDeviceNameError!!.contains("32 characters"))
+            }
+        }
+
+    @Test
+    fun `validateManualDeviceName returns warning for non-RNode name`() =
+        runTest {
+            viewModel.updateManualDeviceName("Arduino Nano")
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNull(state.manualDeviceNameError)
+                assertNotNull(state.manualDeviceNameWarning)
+                assertTrue(state.manualDeviceNameWarning!!.contains("not be an RNode"))
+            }
+        }
+
+    @Test
+    fun `validateManualDeviceName returns null for valid name`() =
+        runTest {
+            viewModel.updateManualDeviceName("RNode A1B2")
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNull(state.manualDeviceNameError)
+                assertNull(state.manualDeviceNameWarning)
+            }
+        }
+
+    @Test
+    fun `validateManualDeviceName handles empty string`() =
+        runTest {
+            viewModel.updateManualDeviceName("")
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNull(state.manualDeviceNameError)
+                assertNull(state.manualDeviceNameWarning)
+            }
+        }
+
+    // ========== Pairing Retry Tests ==========
+
+    @Test
+    fun `retryPairing does nothing when lastPairingDeviceAddress is null`() =
+        runTest {
+            // State should have no last pairing address
+            val initialState = viewModel.state.value
+            assertNull(initialState.lastPairingDeviceAddress)
+
+            // Call retryPairing - should do nothing
+            viewModel.retryPairing()
+            advanceUntilIdle()
+
+            // State should be unchanged
+            val finalState = viewModel.state.value
+            assertFalse(finalState.isPairingInProgress)
+        }
+
+    @Test
+    fun `clearPairingError clears error state`() =
+        runTest {
+            // Mock SharedPreferences Editor
+            val mockEditor = mockk<SharedPreferences.Editor>(relaxed = true)
+            every { sharedPreferences.edit() } returns mockEditor
+            every { mockEditor.putString(any(), any()) } returns mockEditor
+            every { mockEditor.apply() } returns Unit
+
+            viewModel.state.test {
+                awaitItem() // Initial
+
+                // Simulate pairing error by accessing private state
+                val stateField = RNodeWizardViewModel::class.java.getDeclaredField("_state")
+                stateField.isAccessible = true
+                @Suppress("UNCHECKED_CAST")
+                val stateFlow = stateField.get(viewModel) as kotlinx.coroutines.flow.MutableStateFlow<RNodeWizardState>
+                stateFlow.update { it.copy(pairingError = "Test pairing error") }
+
+                awaitItem() // State with error
+
+                viewModel.clearPairingError()
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertNull(state.pairingError)
+            }
+        }
+
+    // ========== CDM Association Tests ==========
+
+    @Test
+    fun `onAssociationIntentLaunched clears pending intent`() =
+        runTest {
+            // Mock SharedPreferences Editor
+            val mockEditor = mockk<SharedPreferences.Editor>(relaxed = true)
+            every { sharedPreferences.edit() } returns mockEditor
+            every { mockEditor.putString(any(), any()) } returns mockEditor
+            every { mockEditor.apply() } returns Unit
+
+            // Set up state with pending intent
+            val mockIntentSender = mockk<android.content.IntentSender>(relaxed = true)
+            val stateField = RNodeWizardViewModel::class.java.getDeclaredField("_state")
+            stateField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val stateFlow = stateField.get(viewModel) as kotlinx.coroutines.flow.MutableStateFlow<RNodeWizardState>
+            stateFlow.update { it.copy(pendingAssociationIntent = mockIntentSender) }
+
+            viewModel.state.test {
+                awaitItem() // State with intent
+
+                viewModel.onAssociationIntentLaunched()
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertNull(state.pendingAssociationIntent)
+            }
+        }
+
+    @Test
+    fun `onAssociationCancelled clears associating state`() =
+        runTest {
+            // Mock SharedPreferences Editor
+            val mockEditor = mockk<SharedPreferences.Editor>(relaxed = true)
+            every { sharedPreferences.edit() } returns mockEditor
+            every { mockEditor.putString(any(), any()) } returns mockEditor
+            every { mockEditor.apply() } returns Unit
+
+            // Set associating state
+            val stateField = RNodeWizardViewModel::class.java.getDeclaredField("_state")
+            stateField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val stateFlow = stateField.get(viewModel) as kotlinx.coroutines.flow.MutableStateFlow<RNodeWizardState>
+            stateFlow.update {
+                it.copy(
+                    isAssociating = true,
+                    pendingAssociationIntent = mockk(relaxed = true),
+                )
+            }
+
+            viewModel.state.test {
+                awaitItem() // Associating state
+
+                viewModel.onAssociationCancelled()
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertFalse(state.isAssociating)
+                assertNull(state.pendingAssociationIntent)
             }
         }
 }

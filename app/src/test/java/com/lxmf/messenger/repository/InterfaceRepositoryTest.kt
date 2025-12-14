@@ -637,4 +637,152 @@ class InterfaceRepositoryTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    // ========== Additional Validation Tests ==========
+
+    @Test
+    fun `enabledInterfaces skips UDP with invalid listen port`() =
+        runTest {
+            val invalidListenPort =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Invalid Listen Port UDP",
+                    type = "UDP",
+                    enabled = true,
+                    configJson = """{"listen_ip":"0.0.0.0","listen_port":70000,"forward_ip":"255.255.255.255","forward_port":4242}""",
+                    displayOrder = 0,
+                )
+            val validTcp = createValidTcpClientEntity(id = 2)
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(invalidListenPort, validTcp))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                // UDP with invalid listen port should be skipped
+                assertEquals(1, interfaces.size)
+                assertTrue(interfaces[0] is InterfaceConfig.TCPClient)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces skips UDP with invalid forward port`() =
+        runTest {
+            val invalidForwardPort =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Invalid Forward Port UDP",
+                    type = "UDP",
+                    enabled = true,
+                    configJson = """{"listen_ip":"0.0.0.0","listen_port":4242,"forward_ip":"255.255.255.255","forward_port":-1}""",
+                    displayOrder = 0,
+                )
+            val validAuto = createValidAutoInterfaceEntity(id = 2)
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(invalidForwardPort, validAuto))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                // UDP with invalid forward port should be skipped
+                assertEquals(1, interfaces.size)
+                assertTrue(interfaces[0] is InterfaceConfig.AutoInterface)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces skips AutoInterface with invalid discovery_port`() =
+        runTest {
+            val invalidDiscoveryPort =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Invalid Discovery Port Auto",
+                    type = "AutoInterface",
+                    enabled = true,
+                    configJson = """{"group_id":"default","discovery_scope":"link","discovery_port":100000,"mode":"full"}""",
+                    displayOrder = 0,
+                )
+            val validTcp = createValidTcpClientEntity(id = 2)
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(invalidDiscoveryPort, validTcp))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                // AutoInterface with invalid discovery port should be skipped
+                assertEquals(1, interfaces.size)
+                assertTrue(interfaces[0] is InterfaceConfig.TCPClient)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces skips AutoInterface with invalid data_port`() =
+        runTest {
+            val invalidDataPort =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Invalid Data Port Auto",
+                    type = "AutoInterface",
+                    enabled = true,
+                    configJson = """{"group_id":"default","discovery_scope":"link","data_port":0,"mode":"full"}""",
+                    displayOrder = 0,
+                )
+            val validRNode = createValidRNodeEntity(id = 2)
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(invalidDataPort, validRNode))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                // AutoInterface with invalid data port should be skipped
+                assertEquals(1, interfaces.size)
+                assertTrue(interfaces[0] is InterfaceConfig.RNode)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces skips AndroidBLE with invalid device_name`() =
+        runTest {
+            val invalidDeviceName =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Invalid Device Name BLE",
+                    type = "AndroidBLE",
+                    enabled = true,
+                    // Device name too long (max is 30 characters)
+                    configJson = """{"device_name":"ThisDeviceNameIsWayTooLongToBeValid1234567890","max_connections":7,"mode":"full"}""",
+                    displayOrder = 0,
+                )
+            val validTcp = createValidTcpClientEntity(id = 2)
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(invalidDeviceName, validTcp))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                // AndroidBLE with invalid device name should be skipped
+                assertEquals(1, interfaces.size)
+                assertTrue(interfaces[0] is InterfaceConfig.TCPClient)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

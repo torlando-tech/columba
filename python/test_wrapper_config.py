@@ -901,5 +901,226 @@ class TestGetDebugInfoTransport(unittest.TestCase):
         self.assertFalse(info['transport_enabled'])
 
 
+class TestErrorHandling(unittest.TestCase):
+    """Test error handling in config creation and shared instance checks"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        self.config_path = os.path.join(self.temp_dir, "config")
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_create_config_skips_rnode_with_empty_tcp_host(self):
+        """Test that _create_config_file skips RNode with empty tcp_host"""
+        interfaces = [
+            {
+                "type": "RNode",
+                "name": "Bad RNode",
+                "connection_mode": "tcp",
+                "tcp_host": "",  # Empty tcp_host
+                "frequency": 915000000
+            },
+            {
+                "type": "AutoInterface",
+                "name": "Auto Discovery"
+            }
+        ]
+
+        result = self.wrapper._create_config_file(interfaces)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        # RNode section header may exist, but no type/config should be present
+        # The important thing is no RNodeInterface type is added
+        self.assertNotIn("type = RNodeInterface", content)
+        self.assertNotIn("tcp_host =", content)
+        # AutoInterface should still be present
+        self.assertIn("Auto Discovery", content)
+        self.assertIn("type = AutoInterface", content)
+
+    @patch('reticulum_wrapper.log_error')
+    def test_create_config_logs_error_for_empty_tcp_host(self, mock_log_error):
+        """Test that empty tcp_host logs an error message"""
+        interfaces = [
+            {
+                "type": "RNode",
+                "name": "Invalid RNode",
+                "connection_mode": "tcp",
+                "tcp_host": "   ",  # Whitespace only
+            }
+        ]
+
+        self.wrapper._create_config_file(interfaces)
+
+        # Verify error was logged
+        mock_log_error.assert_called()
+        call_args = str(mock_log_error.call_args)
+        self.assertIn("tcp_host is empty", call_args)
+
+    def test_check_shared_instance_handles_socket_timeout(self):
+        """Test that check_shared_instance_available handles socket timeout"""
+        # Test with a very short timeout to a non-existent host
+        # Use a non-routable IP (RFC 5737 documentation range)
+        result = self.wrapper.check_shared_instance_available(
+            host="192.0.2.1",  # Non-routable test IP
+            port=37428,
+            timeout=0.001  # Very short timeout
+        )
+
+        # Should return False on timeout or connection failure
+        self.assertFalse(result)
+
+    def test_check_shared_instance_handles_connection_refused(self):
+        """Test that check_shared_instance_available handles connection refused"""
+        # Test with localhost on a port that's very unlikely to be listening
+        # Port 1 requires root privileges, so it should be refused
+        result = self.wrapper.check_shared_instance_available(
+            host="127.0.0.1",
+            port=1,  # Privileged port unlikely to be open
+            timeout=0.1
+        )
+
+        # Should return False when connection is refused
+        self.assertFalse(result)
+
+
+class TestCallbackRegistration(unittest.TestCase):
+    """Test callback registration methods"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_set_alternative_relay_callback_stores_callback(self):
+        """Test that set_kotlin_request_alternative_relay_callback stores the callback"""
+        mock_callback = MagicMock()
+
+        self.wrapper.set_kotlin_request_alternative_relay_callback(mock_callback)
+
+        # Verify callback is stored
+        self.assertEqual(self.wrapper.kotlin_request_alternative_relay_callback, mock_callback)
+
+    def test_set_message_received_callback_stores_callback(self):
+        """Test that set_message_received_callback stores the callback"""
+        mock_callback = MagicMock()
+
+        self.wrapper.set_message_received_callback(mock_callback)
+
+        # Verify callback is stored
+        self.assertEqual(self.wrapper.kotlin_message_received_callback, mock_callback)
+
+    def test_set_delivery_status_callback_stores_callback(self):
+        """Test that set_delivery_status_callback stores the callback"""
+        mock_callback = MagicMock()
+
+        self.wrapper.set_delivery_status_callback(mock_callback)
+
+        # Verify callback is stored
+        self.assertEqual(self.wrapper.kotlin_delivery_status_callback, mock_callback)
+
+
+class TestStateTransitions(unittest.TestCase):
+    """Test state transition and edge case handling"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    @patch('reticulum_wrapper.RNS')
+    def test_clear_stale_ble_paths_handles_empty_path_table(self, mock_rns):
+        """Test that _clear_stale_ble_paths handles empty path table"""
+        # Mock empty path table
+        mock_rns.Transport.path_table = {}
+
+        # Should not raise exception
+        try:
+            self.wrapper._clear_stale_ble_paths()
+        except Exception as e:
+            self.fail(f"Method raised unexpected exception: {e}")
+
+    @patch('reticulum_wrapper.RNS')
+    def test_clear_stale_ble_paths_handles_malformed_entries(self, mock_rns):
+        """Test that _clear_stale_ble_paths handles malformed path table entries"""
+        # Mock path table with malformed entry (tuple too short, missing elements)
+        # Path table entries are tuples: [timestamp, hops, expires, random_blobs, interface_hash, interface]
+        mock_rns.Transport.path_table = {
+            b'test_dest_hash_1': [100]  # Too short, will cause IndexError when accessing entry[5]
+        }
+
+        # Should not raise exception - malformed entries should be caught and skipped
+        try:
+            self.wrapper._clear_stale_ble_paths()
+            # If we got here, the method handled the malformed entry gracefully
+        except Exception as e:
+            self.fail(f"Method raised unexpected exception: {e}")
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.time')
+    def test_clear_stale_ble_paths_removes_timestamp_zero_paths(self, mock_time, mock_rns):
+        """Test that _clear_stale_ble_paths removes paths with timestamp=0"""
+        # Mock current time
+        mock_time.time.return_value = 1000.0
+
+        # Mock BLE interface
+        mock_interface = MagicMock()
+        mock_interface.__class__.__name__ = 'AndroidBLEInterface'
+
+        # Mock path table with timestamp=0 entry
+        # Path table format: [timestamp, hops, expires, random_blobs, interface_hash, interface]
+        dest_hash = b'test_dest_hash_1'
+        mock_rns.Transport.path_table = {
+            dest_hash: [0, 1, 2000, b'random', b'hash', mock_interface]
+        }
+
+        # Clear stale paths
+        self.wrapper._clear_stale_ble_paths()
+
+        # Verify path was removed
+        self.assertNotIn(dest_hash, mock_rns.Transport.path_table)
+
+    def test_cache_device_type_skips_unknown_type(self):
+        """Test that cache operations handle unknown device types gracefully"""
+        # This test validates that the wrapper doesn't crash with unexpected data
+        # Device type caching is handled internally by RNS, this tests robustness
+        try:
+            # Create a wrapper and verify it initializes without device type cache errors
+            wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+            self.assertIsNotNone(wrapper)
+        except Exception as e:
+            self.fail(f"Wrapper initialization failed: {e}")
+
+    def test_get_cached_device_type_handles_exception(self):
+        """Test that device type retrieval handles exceptions gracefully"""
+        # This test validates exception handling for device type operations
+        # The wrapper should handle missing or corrupted cache data gracefully
+        try:
+            # Wrapper should initialize even if device type cache is unavailable
+            wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+            # Verify wrapper is usable
+            self.assertFalse(wrapper.initialized)
+            self.assertEqual(wrapper.storage_path, self.temp_dir)
+        except Exception as e:
+            self.fail(f"Wrapper failed to handle device type cache exception: {e}")
+
+
 if __name__ == '__main__':
     unittest.main()

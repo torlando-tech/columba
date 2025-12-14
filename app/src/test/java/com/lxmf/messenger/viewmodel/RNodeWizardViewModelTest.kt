@@ -12,6 +12,8 @@ import com.lxmf.messenger.data.model.ModemPreset
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.slot
 import kotlinx.coroutines.flow.flowOf
 import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
@@ -1582,6 +1584,303 @@ class RNodeWizardViewModelTest {
                 val state = awaitItem()
                 assertTrue(state.isEditMode)
                 assertEquals(interfaceId, state.editingInterfaceId)
+            }
+        }
+
+    @Test
+    fun `saveConfiguration returns early when validation fails`() =
+        runTest {
+            // Setup: Leave interface name empty (required field)
+            viewModel.updateInterfaceName("")
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            // Should not call insertInterface because validation fails
+            coVerify(exactly = 0) { interfaceRepository.insertInterface(any()) }
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.saveSuccess)
+                assertFalse(state.isSaving)
+            }
+        }
+
+    @Test
+    fun `saveConfiguration TCP mode uses tcp connectionMode and calls insertInterface`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            // Setup TCP mode with valid config
+            viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
+            viewModel.updateTcpHost("192.168.1.100")
+            viewModel.updateTcpPort("7633")
+            viewModel.updateInterfaceName("TCP RNode")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            coVerify { interfaceRepository.insertInterface(any()) }
+            val savedConfig = configSlot.captured as InterfaceConfig.RNode
+            assertEquals("tcp", savedConfig.connectionMode)
+            assertEquals("192.168.1.100", savedConfig.tcpHost)
+            assertEquals(7633, savedConfig.tcpPort)
+            assertEquals("", savedConfig.targetDeviceName)
+        }
+
+    @Test
+    fun `saveConfiguration TCP mode uses custom port when valid`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
+            viewModel.updateTcpHost("10.0.0.1")
+            viewModel.updateTcpPort("8080")
+            viewModel.updateInterfaceName("TCP RNode Custom Port")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.RNode
+            assertEquals(8080, savedConfig.tcpPort)
+        }
+
+    @Test
+    fun `saveConfiguration TCP mode defaults port to 7633 when invalid`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
+            viewModel.updateTcpHost("10.0.0.1")
+            viewModel.updateTcpPort("invalid")
+            viewModel.updateInterfaceName("TCP RNode Invalid Port")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.RNode
+            assertEquals(7633, savedConfig.tcpPort)
+        }
+
+    @Test
+    fun `saveConfiguration BLE device uses ble connectionMode`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            val bleDevice = DiscoveredRNode(
+                name = "RNode BLE",
+                address = "11:22:33:44:55:66",
+                type = BluetoothType.BLE,
+                rssi = -60,
+                isPaired = true,
+            )
+
+            viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
+            viewModel.selectDevice(bleDevice)
+            viewModel.updateInterfaceName("BLE RNode")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.RNode
+            assertEquals("ble", savedConfig.connectionMode)
+            assertEquals("RNode BLE", savedConfig.targetDeviceName)
+            assertNull(savedConfig.tcpHost)
+        }
+
+    @Test
+    fun `saveConfiguration Classic device uses classic connectionMode`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            val classicDevice = DiscoveredRNode(
+                name = "RNode Classic",
+                address = "AA:BB:CC:DD:EE:FF",
+                type = BluetoothType.CLASSIC,
+                rssi = -55,
+                isPaired = true,
+            )
+
+            viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
+            viewModel.selectDevice(classicDevice)
+            viewModel.updateInterfaceName("Classic RNode")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.RNode
+            assertEquals("classic", savedConfig.connectionMode)
+            assertEquals("RNode Classic", savedConfig.targetDeviceName)
+        }
+
+    @Test
+    fun `saveConfiguration Unknown device type defaults to classic`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            val unknownDevice = DiscoveredRNode(
+                name = "RNode Unknown",
+                address = "FF:EE:DD:CC:BB:AA",
+                type = BluetoothType.UNKNOWN,
+                rssi = -65,
+                isPaired = true,
+            )
+
+            viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
+            viewModel.selectDevice(unknownDevice)
+            viewModel.updateInterfaceName("Unknown Type RNode")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.RNode
+            assertEquals("classic", savedConfig.connectionMode)
+        }
+
+    @Test
+    fun `saveConfiguration manual entry BLE uses ble connectionMode`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
+            viewModel.showManualEntry()
+            viewModel.updateManualDeviceName("Manual BLE RNode")
+            viewModel.updateManualBluetoothType(BluetoothType.BLE)
+            viewModel.updateInterfaceName("Manual BLE")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.RNode
+            assertEquals("ble", savedConfig.connectionMode)
+            assertEquals("Manual BLE RNode", savedConfig.targetDeviceName)
+        }
+
+    @Test
+    fun `saveConfiguration manual entry Classic uses classic connectionMode`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
+            viewModel.showManualEntry()
+            viewModel.updateManualDeviceName("Manual Classic RNode")
+            viewModel.updateManualBluetoothType(BluetoothType.CLASSIC)
+            viewModel.updateInterfaceName("Manual Classic")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.RNode
+            assertEquals("classic", savedConfig.connectionMode)
+            assertEquals("Manual Classic RNode", savedConfig.targetDeviceName)
+        }
+
+    @Test
+    fun `saveConfiguration manual entry Unknown defaults to classic`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
+            viewModel.showManualEntry()
+            viewModel.updateManualDeviceName("Manual Unknown RNode")
+            viewModel.updateManualBluetoothType(BluetoothType.UNKNOWN)
+            viewModel.updateInterfaceName("Manual Unknown")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.RNode
+            assertEquals("classic", savedConfig.connectionMode)
+        }
+
+    @Test
+    fun `saveConfiguration calls updateInterface in edit mode`() =
+        runTest {
+            val interfaceId = 42L
+            val entity = InterfaceEntity(
+                id = interfaceId,
+                name = "Existing RNode",
+                type = "RNode",
+                enabled = true,
+                configJson = """{"connection_mode":"tcp","tcp_host":"10.0.0.1"}""",
+            )
+            val existingConfig = InterfaceConfig.RNode(
+                name = "Existing RNode",
+                enabled = true,
+                connectionMode = "tcp",
+                tcpHost = "10.0.0.1",
+                tcpPort = 7633,
+                targetDeviceName = "",
+                frequency = 915000000,
+                bandwidth = 125000,
+                txPower = 17,
+                spreadingFactor = 8,
+                codingRate = 5,
+            )
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns existingConfig
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            // Modify and save
+            viewModel.updateInterfaceName("Updated RNode")
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            coVerify { interfaceRepository.updateInterface(interfaceId, any()) }
+            coVerify(exactly = 0) { interfaceRepository.insertInterface(any()) }
+        }
+
+    @Test
+    fun `saveConfiguration sets saveError on repository exception`() =
+        runTest {
+            coEvery { interfaceRepository.insertInterface(any()) } throws RuntimeException("Database error")
+
+            viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
+            viewModel.updateTcpHost("192.168.1.1")
+            viewModel.updateInterfaceName("Error Test RNode")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNotNull(state.saveError)
+                assertTrue(state.saveError!!.contains("Database error"))
+                assertFalse(state.isSaving)
+                assertFalse(state.saveSuccess)
             }
         }
 

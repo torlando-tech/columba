@@ -17,9 +17,12 @@ import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /**
@@ -28,6 +31,20 @@ import javax.inject.Inject
  */
 @HiltAndroidApp
 class ColumbaApplication : Application() {
+    companion object {
+        /** Timeout for IPC calls to prevent ANR during initialization */
+        private const val IPC_TIMEOUT_MS = 5000L
+    }
+
+    /** Data class to enable parallel loading of initialization config */
+    private data class InitConfig(
+        val interfaces: List<com.lxmf.messenger.reticulum.model.InterfaceConfig>,
+        val identity: com.lxmf.messenger.data.db.entity.LocalIdentityEntity?,
+        val preferOwn: Boolean,
+        val rpcKey: String?,
+        val transport: Boolean,
+    )
+
     @Inject
     lateinit var reticulumProtocol: ReticulumProtocol
 
@@ -113,7 +130,10 @@ class ColumbaApplication : Application() {
         // Register existing companion device associations (Android 12+)
         // This ensures RNodeCompanionService is bound when associated devices connect,
         // even for associations created before this code was added
-        registerExistingCompanionDevices()
+        // Run on IO dispatcher to avoid blocking main thread with system service calls
+        applicationScope.launch(Dispatchers.IO) {
+            registerExistingCompanionDevices()
+        }
 
         // Initialize Python environment
         PythonBridge.initialize(this)
@@ -146,7 +166,10 @@ class ColumbaApplication : Application() {
 
                         // Check if service is actually being configured, or if the flag is stale
                         // from a crashed/failed previous config apply
-                        val status = (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
+                        // Use timeout to prevent ANR if service is slow
+                        val status = withTimeoutOrNull(IPC_TIMEOUT_MS) {
+                            (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
+                        }
                         android.util.Log.d("ColumbaApplication", "Service status with config flag set: $status")
 
                         if (status == "SHUTDOWN" || status == null || status.startsWith("ERROR:")) {
@@ -159,7 +182,7 @@ class ColumbaApplication : Application() {
                             getSharedPreferences("columba_prefs", MODE_PRIVATE)
                                 .edit()
                                 .putBoolean("is_applying_config", false)
-                                .commit()
+                                .apply()
                             // Fall through to normal initialization below
                         } else {
                             // Service is INITIALIZING or READY - InterfaceConfigManager is handling it
@@ -175,7 +198,10 @@ class ColumbaApplication : Application() {
                     android.util.Log.d("ColumbaApplication", "Successfully bound to ReticulumService")
 
                     // Check if service is already initialized (handle service process surviving app restart)
-                    val currentStatus = (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
+                    // Use timeout to prevent ANR if service is slow
+                    val currentStatus = withTimeoutOrNull(IPC_TIMEOUT_MS) {
+                        (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
+                    }
                     android.util.Log.d("ColumbaApplication", "Service status after binding: $currentStatus")
 
                     if (currentStatus == "READY") {
@@ -183,9 +209,10 @@ class ColumbaApplication : Application() {
 
                         // Verify service identity matches database active identity
                         // This catches mismatches from interrupted identity switches or data imports
-                        val serviceIdentity =
+                        val serviceIdentity = withTimeoutOrNull(IPC_TIMEOUT_MS) {
                             (reticulumProtocol as ServiceReticulumProtocol)
                                 .getLxmfIdentity().getOrNull()
+                        }
                         val serviceIdentityHash = serviceIdentity?.hash?.toHexString()
 
                         val activeIdentity = identityRepository.getActiveIdentitySync()
@@ -227,14 +254,28 @@ class ColumbaApplication : Application() {
                     // Service is SHUTDOWN or ERROR - need to initialize
                     android.util.Log.d("ColumbaApplication", "Service needs initialization (status: $currentStatus)")
 
-                    // Load interfaces from database
-                    android.util.Log.d("ColumbaApplication", "Loading interfaces from database...")
-                    val enabledInterfaces = interfaceRepository.enabledInterfaces.first()
-                    android.util.Log.d("ColumbaApplication", "Loaded ${enabledInterfaces.size} enabled interface(s)")
+                    // Load all configuration from database in parallel for faster startup
+                    android.util.Log.d("ColumbaApplication", "Loading configuration from database (parallel)...")
+                    val (enabledInterfaces, activeIdentity, preferOwnInstance, rpcKey, transportNodeEnabled) =
+                        coroutineScope {
+                            val interfacesDeferred = async { interfaceRepository.enabledInterfaces.first() }
+                            val identityDeferred = async { identityRepository.getActiveIdentitySync() }
+                            val preferOwnDeferred = async { settingsRepository.preferOwnInstanceFlow.first() }
+                            val rpcKeyDeferred = async { settingsRepository.rpcKeyFlow.first() }
+                            val transportDeferred = async { settingsRepository.getTransportNodeEnabled() }
 
-                    // Load active identity from database
-                    android.util.Log.d("ColumbaApplication", "Loading active identity from database...")
-                    val activeIdentity = identityRepository.getActiveIdentitySync()
+                            // Await all in parallel
+                            InitConfig(
+                                interfaces = interfacesDeferred.await(),
+                                identity = identityDeferred.await(),
+                                preferOwn = preferOwnDeferred.await(),
+                                rpcKey = rpcKeyDeferred.await(),
+                                transport = transportDeferred.await(),
+                            )
+                        }
+                    android.util.Log.d("ColumbaApplication", "Loaded ${enabledInterfaces.size} enabled interface(s)")
+                    android.util.Log.d("ColumbaApplication", "Prefer own instance: $preferOwnInstance")
+                    android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")
 
                     // Ensure identity file exists (recover from keyData if missing)
                     var identityPath: String? = null
@@ -260,17 +301,6 @@ class ColumbaApplication : Application() {
                     } else {
                         android.util.Log.d("ColumbaApplication", "No active identity found, Python will create default")
                     }
-
-                    // Load shared instance preferences
-                    val preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first()
-                    android.util.Log.d("ColumbaApplication", "Prefer own instance: $preferOwnInstance")
-
-                    // Load RPC key for shared instance authentication
-                    val rpcKey = settingsRepository.rpcKeyFlow.first()
-
-                    // Load transport node setting
-                    val transportNodeEnabled = settingsRepository.getTransportNodeEnabled()
-                    android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")
 
                     // Auto-initialize Reticulum with config from database
                     android.util.Log.d("ColumbaApplication", "Auto-initializing Reticulum...")

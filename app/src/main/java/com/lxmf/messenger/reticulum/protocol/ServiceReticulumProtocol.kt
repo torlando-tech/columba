@@ -702,7 +702,8 @@ class ServiceReticulumProtocol(
         }
     }
 
-    private fun buildConfigJson(config: ReticulumConfig): String {
+    @androidx.annotation.VisibleForTesting
+    internal fun buildConfigJson(config: ReticulumConfig): String {
         val json = JSONObject()
         json.put("storagePath", config.storagePath)
         json.put("logLevel", config.logLevel.name)

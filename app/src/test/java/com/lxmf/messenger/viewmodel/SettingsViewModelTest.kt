@@ -1637,14 +1637,33 @@ class SettingsViewModelTest {
     @Test
     fun `setTransportNodeEnabled does not restart if already restarting`() =
         runTest {
+            // Make applyInterfaceChanges suspend indefinitely so isRestarting stays true
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } coAnswers {
+                kotlinx.coroutines.delay(Long.MAX_VALUE)
+                Result.success(Unit)
+            }
+
             viewModel = createViewModel()
 
-            // First call - should trigger restart
+            // First call - should trigger restart (but won't complete due to delay)
             viewModel.setTransportNodeEnabled(false)
-            coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges() }
 
-            // Note: In real usage, isRestarting would be true and block second restart
-            // But with mocked manager that returns immediately, the flag is already cleared
+            // Wait for the state to show isRestarting = true
+            viewModel.state.test {
+                var state = awaitItem()
+                var attempts = 0
+                while (!state.isRestarting && attempts++ < 50) {
+                    state = awaitItem()
+                }
+                assertTrue("isRestarting should be true", state.isRestarting)
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Second call while isRestarting is true - should NOT trigger restart
+            viewModel.setTransportNodeEnabled(true)
+
+            // Should only have called applyInterfaceChanges once (from the first call)
+            coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges() }
         }
 
     @Test

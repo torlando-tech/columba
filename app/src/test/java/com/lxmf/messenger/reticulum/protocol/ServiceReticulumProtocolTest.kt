@@ -455,4 +455,82 @@ class ServiceReticulumProtocolTest {
         // Then
         assertEquals(mockService, result)
     }
+
+    // ===========================================
+    // buildConfigJson Tests
+    // ===========================================
+
+    @Test
+    fun `buildConfigJson - includes enable_transport true by default`() {
+        // Given
+        val config = ReticulumConfig(
+            storagePath = "/test/path",
+            enabledInterfaces = emptyList(),
+        )
+
+        // When
+        val json = protocol.buildConfigJson(config)
+
+        // Then
+        val jsonObject = org.json.JSONObject(json)
+        assertTrue("enable_transport should be true by default", jsonObject.getBoolean("enable_transport"))
+    }
+
+    @Test
+    fun `buildConfigJson - includes enable_transport false when set`() {
+        // Given
+        val config = ReticulumConfig(
+            storagePath = "/test/path",
+            enabledInterfaces = emptyList(),
+            enableTransport = false,
+        )
+
+        // When
+        val json = protocol.buildConfigJson(config)
+
+        // Then
+        val jsonObject = org.json.JSONObject(json)
+        assertFalse("enable_transport should be false when set", jsonObject.getBoolean("enable_transport"))
+    }
+
+    @Test
+    fun `buildConfigJson - includes enable_transport true when explicitly set`() {
+        // Given
+        val config = ReticulumConfig(
+            storagePath = "/test/path",
+            enabledInterfaces = emptyList(),
+            enableTransport = true,
+        )
+
+        // When
+        val json = protocol.buildConfigJson(config)
+
+        // Then
+        val jsonObject = org.json.JSONObject(json)
+        assertTrue("enable_transport should be true when explicitly set", jsonObject.getBoolean("enable_transport"))
+    }
+
+    @Test
+    fun `buildConfigJson - includes all required fields`() {
+        // Given
+        val config = ReticulumConfig(
+            storagePath = "/test/storage",
+            enabledInterfaces = emptyList(),
+            logLevel = LogLevel.DEBUG,
+            allowAnonymous = true,
+            preferOwnInstance = true,
+            enableTransport = false,
+        )
+
+        // When
+        val json = protocol.buildConfigJson(config)
+
+        // Then
+        val jsonObject = org.json.JSONObject(json)
+        assertEquals("/test/storage", jsonObject.getString("storagePath"))
+        assertEquals("DEBUG", jsonObject.getString("logLevel"))
+        assertTrue(jsonObject.getBoolean("allowAnonymous"))
+        assertTrue(jsonObject.getBoolean("prefer_own_instance"))
+        assertFalse(jsonObject.getBoolean("enable_transport"))
+    }
 }

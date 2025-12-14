@@ -382,10 +382,6 @@ class ConversationRepository
 
             val identitiesWithKeys =
                 allPeerIdentities.map { peerIdentity ->
-                    android.util.Log.d(
-                        "ConversationRepository",
-                        "Peer ${peerIdentity.peerHash}: has public key, length=${peerIdentity.publicKey.size}",
-                    )
                     peerIdentity.peerHash to peerIdentity.publicKey
                 }
 

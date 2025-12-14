@@ -68,6 +68,7 @@ import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.Identicon
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
+import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.viewmodel.ChatsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -169,6 +170,23 @@ fun ChatsScreen(
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 showMenu = true
                             },
+                            onStarClick = {
+                                if (isSaved) {
+                                    viewModel.removeFromContacts(conversation.peerHash)
+                                    Toast.makeText(
+                                        context,
+                                        "Removed ${conversation.peerName} from Contacts",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                } else {
+                                    viewModel.saveToContacts(conversation)
+                                    Toast.makeText(
+                                        context,
+                                        "Saved ${conversation.peerName} to Contacts",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            },
                         )
 
                         // Context menu anchored to this card
@@ -238,6 +256,7 @@ fun ConversationCard(
     isSaved: Boolean = false,
     onClick: () -> Unit = {},
     onLongPress: () -> Unit = {},
+    onStarClick: () -> Unit = {},
 ) {
     Card(
         modifier =
@@ -254,15 +273,17 @@ fun ConversationCard(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
             ),
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            // Identicon (reuse from AnnounceStreamScreen)
-            Box(modifier = Modifier.align(Alignment.CenterVertically)) {
+        Box {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .padding(end = 32.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // Identicon (reuse from AnnounceStreamScreen)
+                Box(modifier = Modifier.align(Alignment.CenterVertically)) {
                 Identicon(
                     hash = conversation.peerPublicKey ?: conversation.peerHash.hexStringToByteArray(),
                     size = 56.dp,
@@ -347,6 +368,17 @@ fun ConversationCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.Top),
+            )
+        }
+
+            // Star button overlay
+            StarToggleButton(
+                isStarred = isSaved,
+                onClick = onStarClick,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp),
             )
         }
     }

@@ -145,6 +145,7 @@ object TestFactories {
         hops: Int = 1,
         nodeType: String = "PROPAGATION_NODE",
         lastSeenTimestamp: Long = System.currentTimeMillis(),
+        isFavorite: Boolean = false,
     ) = Announce(
         destinationHash = destinationHash,
         peerName = peerName,
@@ -154,7 +155,7 @@ object TestFactories {
         lastSeenTimestamp = lastSeenTimestamp,
         nodeType = nodeType,
         receivingInterface = null,
-        isFavorite = false,
+        isFavorite = isFavorite,
     )
 
     fun createRelayInfo(

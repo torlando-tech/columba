@@ -4,11 +4,15 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.DiscoveredRNode
 import com.lxmf.messenger.data.model.FrequencyRegions
 import com.lxmf.messenger.data.model.ModemPreset
 import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.reticulum.model.InterfaceConfig
+import io.mockk.coEvery
+import kotlinx.coroutines.flow.flowOf
 import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.every
@@ -1257,5 +1261,459 @@ class RNodeWizardViewModelTest {
             val presets = viewModel.getPopularPresetsForRegion()
             // US presets should not include 2.4 GHz frequencies
             assertTrue(presets.none { it.frequency in 2_400_000_000..2_500_000_000 })
+        }
+
+    // ========== loadExistingConfig Tests ==========
+
+    @Test
+    fun `loadExistingConfig loads TCP RNode configuration correctly`() =
+        runTest {
+            val interfaceId = 1L
+            val entity = InterfaceEntity(
+                id = interfaceId,
+                name = "Test TCP RNode",
+                type = "RNode",
+                enabled = true,
+                configJson = """{"connection_mode":"tcp","tcp_host":"192.168.1.100","tcp_port":7633}""",
+            )
+            val rnodeConfig = InterfaceConfig.RNode(
+                name = "Test TCP RNode",
+                enabled = true,
+                connectionMode = "tcp",
+                tcpHost = "192.168.1.100",
+                tcpPort = 7633,
+                targetDeviceName = "",
+                frequency = 915000000,
+                bandwidth = 125000,
+                txPower = 17,
+                spreadingFactor = 8,
+                codingRate = 5,
+            )
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.isEditMode)
+                assertEquals(interfaceId, state.editingInterfaceId)
+                assertEquals(RNodeConnectionType.TCP_WIFI, state.connectionType)
+                assertEquals("192.168.1.100", state.tcpHost)
+                assertEquals("7633", state.tcpPort)
+                assertNull(state.selectedDevice)
+            }
+        }
+
+    @Test
+    fun `loadExistingConfig loads Classic Bluetooth RNode and sets edit mode`() =
+        runTest {
+            val interfaceId = 2L
+            val entity = InterfaceEntity(
+                id = interfaceId,
+                name = "Test Classic RNode",
+                type = "RNode",
+                enabled = true,
+                configJson = """{"connection_mode":"classic","target_device_name":"RNode Classic123"}""",
+            )
+            val rnodeConfig = InterfaceConfig.RNode(
+                name = "Test Classic RNode",
+                enabled = true,
+                connectionMode = "classic", // classic doesn't trigger RSSI polling
+                targetDeviceName = "RNode Classic123",
+                tcpHost = null,
+                tcpPort = 7633,
+                frequency = 915000000,
+                bandwidth = 125000,
+                txPower = 17,
+                spreadingFactor = 8,
+                codingRate = 5,
+            )
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.isEditMode)
+                assertEquals(interfaceId, state.editingInterfaceId)
+                assertEquals(RNodeConnectionType.BLUETOOTH, state.connectionType)
+                assertNotNull(state.selectedDevice)
+                assertEquals("RNode Classic123", state.selectedDevice?.name)
+                assertEquals(BluetoothType.CLASSIC, state.selectedDevice?.type)
+            }
+        }
+
+    @Test
+    fun `loadExistingConfig handles interface not found`() =
+        runTest {
+            val interfaceId = 999L
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(null)
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                // Should remain in default state (not edit mode)
+                assertFalse(state.isEditMode)
+                assertNull(state.editingInterfaceId)
+            }
+        }
+
+    @Test
+    fun `loadExistingConfig handles non-RNode interface type`() =
+        runTest {
+            val interfaceId = 4L
+            val entity = InterfaceEntity(
+                id = interfaceId,
+                name = "TCP Client",
+                type = "TCPClient",
+                enabled = true,
+                configJson = """{"target_host":"10.0.0.1","target_port":4242}""",
+            )
+            val tcpConfig = InterfaceConfig.TCPClient(
+                name = "TCP Client",
+                enabled = true,
+                targetHost = "10.0.0.1",
+                targetPort = 4242,
+            )
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns tcpConfig
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                // Should remain in default state (not edit mode) for non-RNode types
+                assertFalse(state.isEditMode)
+                assertNull(state.editingInterfaceId)
+            }
+        }
+
+    @Test
+    fun `loadExistingConfig sets custom mode when no matching preset found`() =
+        runTest {
+            val interfaceId = 5L
+            val entity = InterfaceEntity(
+                id = interfaceId,
+                name = "Custom RNode",
+                type = "RNode",
+                enabled = true,
+                configJson = """{"connection_mode":"tcp","tcp_host":"10.0.0.1"}""",
+            )
+            // Custom frequency that doesn't match any preset
+            val rnodeConfig = InterfaceConfig.RNode(
+                name = "Custom RNode",
+                enabled = true,
+                connectionMode = "tcp",
+                tcpHost = "10.0.0.1",
+                tcpPort = 7633,
+                targetDeviceName = "",
+                frequency = 433500000, // Custom frequency
+                bandwidth = 62500, // Custom bandwidth
+                txPower = 10,
+                spreadingFactor = 9,
+                codingRate = 6,
+            )
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.isEditMode)
+                assertTrue(state.isCustomMode)
+                assertNull(state.selectedPreset)
+                assertEquals("433500000", state.frequency)
+                assertEquals("62500", state.bandwidth)
+            }
+        }
+
+    @Test
+    fun `loadExistingConfig populates all configuration fields`() =
+        runTest {
+            val interfaceId = 6L
+            val entity = InterfaceEntity(
+                id = interfaceId,
+                name = "Full Config RNode",
+                type = "RNode",
+                enabled = true,
+                configJson = """{"connection_mode":"tcp","tcp_host":"192.168.1.50"}""",
+            )
+            val rnodeConfig = InterfaceConfig.RNode(
+                name = "Full Config RNode",
+                enabled = true,
+                connectionMode = "tcp",
+                tcpHost = "192.168.1.50",
+                tcpPort = 8000,
+                targetDeviceName = "",
+                frequency = 869525000,
+                bandwidth = 250000,
+                txPower = 14,
+                spreadingFactor = 10,
+                codingRate = 5,
+                stAlock = 15.0,
+                ltAlock = 5.0,
+                mode = "gateway",
+                enableFramebuffer = false,
+            )
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.isEditMode)
+                assertEquals("Full Config RNode", state.interfaceName)
+                assertEquals("869525000", state.frequency)
+                assertEquals("250000", state.bandwidth)
+                assertEquals("14", state.txPower)
+                assertEquals("10", state.spreadingFactor)
+                assertEquals("5", state.codingRate)
+                assertEquals("15.0", state.stAlock)
+                assertEquals("5.0", state.ltAlock)
+                assertEquals("gateway", state.interfaceMode)
+                assertFalse(state.enableFramebuffer)
+            }
+        }
+
+    @Test
+    fun `loadExistingConfig handles exception gracefully`() =
+        runTest {
+            val interfaceId = 7L
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } throws RuntimeException("Database error")
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                // Should remain in default state on exception
+                assertFalse(state.isEditMode)
+                assertNull(state.editingInterfaceId)
+            }
+        }
+
+    // ========== validateTcpConnection Tests ==========
+
+    @Test
+    fun `validateTcpConnection sets error for empty host`() =
+        runTest {
+            viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
+            advanceUntilIdle()
+
+            // Host is empty by default
+            viewModel.validateTcpConnection()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNotNull(state.tcpValidationError)
+                assertTrue(state.tcpValidationError!!.contains("empty", ignoreCase = true))
+            }
+        }
+
+    // ========== saveConfiguration Tests ==========
+
+    @Test
+    fun `saveConfiguration calls insertInterface for new config`() =
+        runTest {
+            // Setup: Configure a valid RNode
+            viewModel.selectDevice(testBleDevice)
+            viewModel.selectFrequencyRegion(usRegion)
+            viewModel.selectModemPreset(ModemPreset.LONG_FAST)
+            advanceUntilIdle()
+
+            // Ensure not in edit mode
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.isEditMode)
+            }
+        }
+
+    @Test
+    fun `saveConfiguration uses editingInterfaceId in edit mode`() =
+        runTest {
+            val interfaceId = 10L
+            val entity = InterfaceEntity(
+                id = interfaceId,
+                name = "Existing RNode",
+                type = "RNode",
+                enabled = true,
+                configJson = """{"connection_mode":"tcp","tcp_host":"10.0.0.1"}""",
+            )
+            val rnodeConfig = InterfaceConfig.RNode(
+                name = "Existing RNode",
+                enabled = true,
+                connectionMode = "tcp",
+                tcpHost = "10.0.0.1",
+                tcpPort = 7633,
+                targetDeviceName = "",
+                frequency = 915000000,
+                bandwidth = 125000,
+                txPower = 17,
+                spreadingFactor = 8,
+                codingRate = 5,
+            )
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.isEditMode)
+                assertEquals(interfaceId, state.editingInterfaceId)
+            }
+        }
+
+    // ========== Connection Type Tests ==========
+
+    @Test
+    fun `setConnectionType to TCP_WIFI updates connectionType state`() =
+        runTest {
+            viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(RNodeConnectionType.TCP_WIFI, state.connectionType)
+            }
+        }
+
+    @Test
+    fun `setConnectionType to BLUETOOTH updates connectionType state`() =
+        runTest {
+            viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(RNodeConnectionType.BLUETOOTH, state.connectionType)
+            }
+        }
+
+    @Test
+    fun `isTcpMode returns true for TCP_WIFI connection type`() =
+        runTest {
+            viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.isTcpMode())
+        }
+
+    @Test
+    fun `isTcpMode returns false for BLUETOOTH connection type`() =
+        runTest {
+            viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.isTcpMode())
+        }
+
+    // ========== Slot Selection Tests ==========
+
+    @Test
+    fun `selectSlot updates frequency based on region and slot`() =
+        runTest {
+            viewModel.selectFrequencyRegion(usRegion)
+            viewModel.selectModemPreset(ModemPreset.LONG_FAST)
+            advanceUntilIdle()
+
+            val numSlots = viewModel.getNumSlots()
+            assertTrue(numSlots > 0)
+
+            viewModel.selectSlot(0)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(0, state.selectedSlot)
+                // Frequency should be set based on slot calculation
+                assertTrue(state.frequency.isNotEmpty())
+            }
+        }
+
+    @Test
+    fun `getFrequencyForSlot returns valid frequency within region bounds`() =
+        runTest {
+            viewModel.selectFrequencyRegion(usRegion)
+            viewModel.selectModemPreset(ModemPreset.LONG_FAST)
+            advanceUntilIdle()
+
+            val freq = viewModel.getFrequencyForSlot(0)
+            // US region is 902-928 MHz
+            assertTrue(freq in 902_000_000..928_000_000)
+        }
+
+    // ========== Additional Advanced Settings Tests ==========
+
+    @Test
+    fun `toggleAdvancedSettings flips showAdvancedSettings state twice`() =
+        runTest {
+            viewModel.state.test {
+                var state = awaitItem()
+                assertFalse(state.showAdvancedSettings)
+
+                viewModel.toggleAdvancedSettings()
+                advanceUntilIdle()
+
+                state = awaitItem()
+                assertTrue(state.showAdvancedSettings)
+
+                viewModel.toggleAdvancedSettings()
+                advanceUntilIdle()
+
+                state = awaitItem()
+                assertFalse(state.showAdvancedSettings)
+            }
+        }
+
+    @Test
+    fun `updateEnableFramebuffer to false disables framebuffer`() =
+        runTest {
+            viewModel.state.test {
+                var state = awaitItem()
+                assertTrue(state.enableFramebuffer) // Default is true
+
+                viewModel.updateEnableFramebuffer(false)
+                advanceUntilIdle()
+
+                state = awaitItem()
+                assertFalse(state.enableFramebuffer)
+            }
+        }
+
+    @Test
+    fun `updateInterfaceMode to gateway changes mode`() =
+        runTest {
+            viewModel.state.test {
+                var state = awaitItem()
+                assertEquals("full", state.interfaceMode) // Default
+
+                viewModel.updateInterfaceMode("gateway")
+                advanceUntilIdle()
+
+                state = awaitItem()
+                assertEquals("gateway", state.interfaceMode)
+            }
         }
 }

@@ -553,19 +553,19 @@ class ReticulumWrapper:
                 connection_mode = iface.get("connection_mode", "classic")
 
                 if connection_mode == "tcp":
-                    # TCP/WiFi RNode - write to config file for standard RNodeInterface
-                    # TCP sockets are standard Python and work fine with Chaquopy
+                    # TCP/WiFi RNode - uses Android RNodeInterface with tcp_host parameter
+                    # Port 7633 is hardcoded in RNS TCPConnection class
                     tcp_host = iface.get("tcp_host", "")
-                    tcp_port = iface.get("tcp_port", 7633)
+
+                    # Validate TCP host - skip this interface if empty
+                    if not tcp_host or not tcp_host.strip():
+                        log_error("ReticulumWrapper", "_create_config_file",
+                                f"Skipping RNode TCP interface '{iface_name}': tcp_host is empty")
+                        continue
 
                     config_lines.append("    type = RNodeInterface")
                     config_lines.append("    enabled = yes")
-
-                    # Format port as tcp://host:port (or just tcp://host if default port)
-                    if tcp_port == 7633:
-                        config_lines.append(f"    port = tcp://{tcp_host}")
-                    else:
-                        config_lines.append(f"    port = tcp://{tcp_host}:{tcp_port}")
+                    config_lines.append(f"    tcp_host = {tcp_host}")
 
                     # LoRa parameters
                     frequency = iface.get("frequency", 915000000)
@@ -593,7 +593,7 @@ class ReticulumWrapper:
                         config_lines.append(f"    interface_mode = {mode}")
 
                     log_info("ReticulumWrapper", "_create_config_file",
-                            f"RNode TCP config written: tcp://{tcp_host}:{tcp_port}")
+                            f"RNode TCP config written: tcp_host={tcp_host}")
                 else:
                     # Bluetooth RNode - handled specially via ColumbaRNodeInterface
                     # Don't write to config file - standard RNodeInterface uses jnius which doesn't work with Chaquopy
@@ -708,24 +708,29 @@ class ReticulumWrapper:
                                 os.remove(pyc_path)
                                 log_debug("ReticulumWrapper", "initialize", f"Deleted {pyc_file}")
 
-                        # Deploy patches
-                        patch_files = ['Destination.py', '__init__.py']
+                        # Deploy patches - list of (resource_path, dest_subpath) tuples
+                        patch_files = [
+                            ('Destination.py', 'Destination.py'),
+                            ('__init__.py', '__init__.py'),
+                        ]
                         patches_applied = 0
 
-                        for patch_file in patch_files:
+                        for resource_subpath, dest_subpath in patch_files:
                             try:
-                                patch_resource_path = f"patches/RNS/{patch_file}"
+                                patch_resource_path = f"patches/RNS/{resource_subpath}"
                                 patch_data = pkgutil.get_data(__name__.split('.')[0], patch_resource_path)
 
                                 if patch_data:
-                                    patch_dest = os.path.join(rns_module_path, patch_file)
+                                    patch_dest = os.path.join(rns_module_path, dest_subpath)
+                                    # Ensure parent directory exists
+                                    os.makedirs(os.path.dirname(patch_dest), exist_ok=True)
                                     with open(patch_dest, 'wb') as dest:
                                         dest.write(patch_data)
 
-                                    log_info("ReticulumWrapper", "initialize", f"✓ Applied patch: {patch_file}")
+                                    log_info("ReticulumWrapper", "initialize", f"✓ Applied patch: {dest_subpath}")
                                     patches_applied += 1
                             except Exception as e:
-                                log_warning("ReticulumWrapper", "initialize", f"Failed to apply patch {patch_file}: {e}")
+                                log_warning("ReticulumWrapper", "initialize", f"Failed to apply patch {dest_subpath}: {e}")
 
                         if patches_applied > 0:
                             log_info("ReticulumWrapper", "initialize", f"Successfully applied {patches_applied} RNS patch(es)")

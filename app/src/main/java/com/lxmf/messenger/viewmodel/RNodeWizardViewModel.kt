@@ -1921,20 +1921,40 @@ class RNodeWizardViewModel
 
         /**
          * Get the effective device name for display.
+         * For TCP mode, shows the host:port. For Bluetooth, shows device name.
          */
         fun getEffectiveDeviceName(): String {
             val state = _state.value
-            return state.selectedDevice?.name
-                ?: state.manualDeviceName.ifBlank { "No device selected" }
+            return if (state.connectionType == RNodeConnectionType.TCP_WIFI) {
+                val port = state.tcpPort.toIntOrNull() ?: 7633
+                if (state.tcpHost.isNotBlank()) {
+                    if (port == 7633) state.tcpHost else "${state.tcpHost}:$port"
+                } else {
+                    "No host specified"
+                }
+            } else {
+                state.selectedDevice?.name
+                    ?: state.manualDeviceName.ifBlank { "No device selected" }
+            }
         }
 
         /**
          * Get the effective Bluetooth type for display.
+         * Returns null for TCP mode.
          */
-        fun getEffectiveBluetoothType(): BluetoothType {
+        fun getEffectiveBluetoothType(): BluetoothType? {
             val state = _state.value
-            return state.selectedDevice?.type ?: state.manualBluetoothType
+            return if (state.connectionType == RNodeConnectionType.TCP_WIFI) {
+                null
+            } else {
+                state.selectedDevice?.type ?: state.manualBluetoothType
+            }
         }
+
+        /**
+         * Check if currently in TCP/WiFi mode.
+         */
+        fun isTcpMode(): Boolean = _state.value.connectionType == RNodeConnectionType.TCP_WIFI
 
         /**
          * Cleanup when ViewModel is cleared.

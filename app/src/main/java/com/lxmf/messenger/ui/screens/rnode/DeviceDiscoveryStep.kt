@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Check
@@ -32,7 +31,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SignalCellular4Bar
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -165,12 +163,10 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
             RNodeConnectionType.TCP_WIFI -> {
                 TcpConnectionForm(
                     tcpHost = state.tcpHost,
-                    tcpPort = state.tcpPort,
                     isValidating = state.isTcpValidating,
                     validationSuccess = state.tcpValidationSuccess,
                     validationError = state.tcpValidationError,
                     onHostChange = { viewModel.updateTcpHost(it) },
-                    onPortChange = { viewModel.updateTcpPort(it) },
                     onTestConnection = { viewModel.validateTcpConnection() },
                 )
             }
@@ -187,17 +183,15 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
 @Composable
 private fun TcpConnectionForm(
     tcpHost: String,
-    tcpPort: String,
     isValidating: Boolean,
     validationSuccess: Boolean?,
     validationError: String?,
     onHostChange: (String) -> Unit,
-    onPortChange: (String) -> Unit,
     onTestConnection: () -> Unit,
 ) {
     Column {
         Text(
-            "Connect to an RNode device over WiFi/TCP.",
+            "Connect to an RNode device over WiFi/TCP (port 7633).",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -213,18 +207,6 @@ private fun TcpConnectionForm(
             leadingIcon = {
                 Icon(Icons.Default.Wifi, contentDescription = null)
             },
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = tcpPort,
-            onValueChange = onPortChange,
-            label = { Text("Port") },
-            placeholder = { Text("7633") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
 
         Spacer(Modifier.height(16.dp))

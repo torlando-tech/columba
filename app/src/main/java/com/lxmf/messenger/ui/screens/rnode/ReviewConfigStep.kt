@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -64,6 +65,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                 .verticalScroll(rememberScrollState()),
     ) {
         // Device summary
+        val isTcpMode = viewModel.isTcpMode()
         Card(
             colors =
                 CardDefaults.cardColors(
@@ -76,14 +78,14 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    Icons.Default.Bluetooth,
+                    if (isTcpMode) Icons.Default.Wifi else Icons.Default.Bluetooth,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        "Device",
+                        if (isTcpMode) "Connection" else "Device",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                     )
@@ -93,10 +95,14 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                     Text(
-                        when (viewModel.getEffectiveBluetoothType()) {
-                            BluetoothType.CLASSIC -> "Bluetooth Classic"
-                            BluetoothType.BLE -> "Bluetooth LE"
-                            BluetoothType.UNKNOWN -> "Unknown"
+                        if (isTcpMode) {
+                            "WiFi / TCP"
+                        } else {
+                            when (viewModel.getEffectiveBluetoothType()) {
+                                BluetoothType.CLASSIC -> "Bluetooth Classic"
+                                BluetoothType.BLE -> "Bluetooth LE"
+                                else -> "Unknown"
+                            }
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),

@@ -21,6 +21,12 @@ data class ReticulumConfig(
      * Format: Hexadecimal string (e.g., "e5c032d3ec4e64a6aca9927ba8ab73336780f6d71790")
      */
     val rpcKey: String? = null,
+    /**
+     * When true (default), this device acts as a transport node and forwards
+     * traffic for the mesh network (caching path announces, relaying packets).
+     * When false, only handles its own traffic without relaying for other peers.
+     */
+    val enableTransport: Boolean = true,
 )
 
 /**

@@ -665,5 +665,176 @@ class TestSetupInterface(unittest.TestCase):
         self.assertFalse(mock_rns.Interfaces.AutoInterface.AutoInterface.called)
 
 
+class TestTransportNodeConfig(unittest.TestCase):
+    """Test _create_config_file transport node setting"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        self.config_path = os.path.join(self.temp_dir, "config")
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_standalone_mode_transport_enabled_by_default(self):
+        """Test that standalone mode has transport enabled by default"""
+        interfaces = []
+
+        result = self.wrapper._create_config_file(interfaces)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        self.assertIn("enable_transport = yes", content)
+
+    def test_standalone_mode_transport_enabled_explicit(self):
+        """Test that standalone mode with enable_transport=True generates yes"""
+        interfaces = []
+
+        result = self.wrapper._create_config_file(interfaces, enable_transport=True)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        self.assertIn("enable_transport = yes", content)
+        self.assertNotIn("enable_transport = no", content)
+
+    def test_standalone_mode_transport_disabled(self):
+        """Test that standalone mode with enable_transport=False generates no"""
+        interfaces = []
+
+        result = self.wrapper._create_config_file(interfaces, enable_transport=False)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        self.assertIn("enable_transport = no", content)
+        self.assertNotIn("enable_transport = yes", content)
+
+    def test_shared_instance_mode_transport_enabled_by_default(self):
+        """Test that shared instance mode has transport enabled by default"""
+        interfaces = []
+
+        result = self.wrapper._create_config_file(
+            interfaces,
+            use_shared_instance=True
+        )
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        self.assertIn("enable_transport = yes", content)
+
+    def test_shared_instance_mode_transport_enabled_explicit(self):
+        """Test that shared instance mode with enable_transport=True generates yes"""
+        interfaces = []
+
+        result = self.wrapper._create_config_file(
+            interfaces,
+            use_shared_instance=True,
+            enable_transport=True
+        )
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        self.assertIn("enable_transport = yes", content)
+        self.assertNotIn("enable_transport = no", content)
+
+    def test_shared_instance_mode_transport_disabled(self):
+        """Test that shared instance mode with enable_transport=False generates no"""
+        interfaces = []
+
+        result = self.wrapper._create_config_file(
+            interfaces,
+            use_shared_instance=True,
+            enable_transport=False
+        )
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        self.assertIn("enable_transport = no", content)
+        self.assertNotIn("enable_transport = yes", content)
+
+    def test_standalone_with_interfaces_transport_enabled(self):
+        """Test standalone mode with interfaces and transport enabled"""
+        interfaces = [
+            {"type": "AutoInterface", "name": "Auto Discovery"}
+        ]
+
+        result = self.wrapper._create_config_file(interfaces, enable_transport=True)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        self.assertIn("enable_transport = yes", content)
+        self.assertIn("[[Auto Discovery]]", content)
+
+    def test_standalone_with_interfaces_transport_disabled(self):
+        """Test standalone mode with interfaces and transport disabled"""
+        interfaces = [
+            {"type": "AutoInterface", "name": "Auto Discovery"}
+        ]
+
+        result = self.wrapper._create_config_file(interfaces, enable_transport=False)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        self.assertIn("enable_transport = no", content)
+        self.assertIn("[[Auto Discovery]]", content)
+
+    def test_shared_instance_with_rpc_key_transport_disabled(self):
+        """Test shared instance with RPC key and transport disabled"""
+        interfaces = []
+
+        result = self.wrapper._create_config_file(
+            interfaces,
+            use_shared_instance=True,
+            rpc_key="abc123def456",
+            enable_transport=False
+        )
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        self.assertIn("enable_transport = no", content)
+        self.assertIn("rpc_key = abc123def456", content)
+
+    def test_transport_setting_appears_in_reticulum_section(self):
+        """Test that enable_transport appears in [reticulum] section"""
+        interfaces = []
+
+        result = self.wrapper._create_config_file(interfaces, enable_transport=False)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        # Verify enable_transport comes after [reticulum] and before [interfaces]
+        reticulum_pos = content.find("[reticulum]")
+        transport_pos = content.find("enable_transport = no")
+        interfaces_pos = content.find("[interfaces]")
+
+        self.assertNotEqual(reticulum_pos, -1)
+        self.assertNotEqual(transport_pos, -1)
+        self.assertNotEqual(interfaces_pos, -1)
+        self.assertGreater(transport_pos, reticulum_pos)
+        self.assertLess(transport_pos, interfaces_pos)
+
+
 if __name__ == '__main__':
     unittest.main()

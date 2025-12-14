@@ -58,6 +58,8 @@ data class SettingsState(
     val retrievalIntervalSeconds: Int = 30,
     val lastSyncTimestamp: Long? = null,
     val isSyncing: Boolean = false,
+    // Transport node state
+    val transportNodeEnabled: Boolean = true,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -148,6 +150,7 @@ class SettingsViewModel
                         settingsRepository.preferOwnInstanceFlow,
                         settingsRepository.isSharedInstanceFlow,
                         settingsRepository.rpcKeyFlow,
+                        settingsRepository.transportNodeEnabledFlow,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as com.lxmf.messenger.data.db.entity.LocalIdentityEntity?
@@ -175,6 +178,9 @@ class SettingsViewModel
 
                         @Suppress("UNCHECKED_CAST")
                         val rpcKey = flows[8] as String?
+
+                        @Suppress("UNCHECKED_CAST")
+                        val transportNodeEnabled = flows[9] as Boolean
 
                         val displayName = activeIdentity?.displayName ?: defaultName
 
@@ -208,6 +214,8 @@ class SettingsViewModel
                             currentRelayName = _state.value.currentRelayName,
                             currentRelayHops = _state.value.currentRelayHops,
                             autoSelectPropagationNode = _state.value.autoSelectPropagationNode,
+                            // Transport node state
+                            transportNodeEnabled = transportNodeEnabled,
                         )
                     }.collect { newState ->
                         val previousState = _state.value
@@ -1001,6 +1009,25 @@ class SettingsViewModel
             viewModelScope.launch {
                 Log.d(TAG, "User triggered manual sync")
                 propagationNodeManager.triggerSync()
+            }
+        }
+
+        // Transport node methods
+
+        /**
+         * Set the transport node enabled setting.
+         * When enabled, this device forwards traffic for the mesh network.
+         * When disabled, only handles its own traffic.
+         * Requires service restart to apply.
+         */
+        fun setTransportNodeEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveTransportNodeEnabled(enabled)
+                Log.d(TAG, "Transport node ${if (enabled) "enabled" else "disabled"}")
+                // Restart service to apply the change
+                if (!_state.value.isRestarting) {
+                    restartService()
+                }
             }
         }
     }

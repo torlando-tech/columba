@@ -216,6 +216,10 @@ class InterfaceConfigManager
                     Log.d(TAG, "RPC key configured for shared instance auth")
                 }
 
+                // Load transport node setting
+                val transportNodeEnabled = settingsRepository.getTransportNodeEnabled()
+                Log.d(TAG, "Transport node enabled: $transportNodeEnabled")
+
                 val config =
                     ReticulumConfig(
                         storagePath = context.filesDir.absolutePath + "/reticulum",
@@ -226,6 +230,7 @@ class InterfaceConfigManager
                         allowAnonymous = false,
                         preferOwnInstance = preferOwnInstance,
                         rpcKey = rpcKey,
+                        enableTransport = transportNodeEnabled,
                     )
 
                 reticulumProtocol.initialize(config)

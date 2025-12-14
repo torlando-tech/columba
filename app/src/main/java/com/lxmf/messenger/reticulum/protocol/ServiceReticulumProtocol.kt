@@ -783,6 +783,9 @@ class ServiceReticulumProtocol(
         // RPC key for shared instance authentication (optional)
         config.rpcKey?.let { json.put("rpc_key", it) }
 
+        // Transport node setting
+        json.put("enable_transport", config.enableTransport)
+
         return json.toString()
     }
 

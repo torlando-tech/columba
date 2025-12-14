@@ -1,6 +1,7 @@
 package com.lxmf.messenger.reticulum.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
@@ -347,5 +348,105 @@ class DataModelsTest {
         assertTrue(announce is PacketType)
         assertTrue(linkRequest is PacketType)
         assertTrue(proof is PacketType)
+    }
+
+    @Test
+    fun `ReticulumConfig enableTransport defaults to true`() {
+        val config =
+            ReticulumConfig(
+                storagePath = "/tmp/reticulum",
+                enabledInterfaces = emptyList(),
+            )
+
+        assertTrue(
+            "enableTransport should default to true",
+            config.enableTransport,
+        )
+    }
+
+    @Test
+    fun `ReticulumConfig enableTransport can be set to false`() {
+        val config =
+            ReticulumConfig(
+                storagePath = "/tmp/reticulum",
+                enabledInterfaces = emptyList(),
+                enableTransport = false,
+            )
+
+        assertFalse(
+            "enableTransport should be false when explicitly set",
+            config.enableTransport,
+        )
+    }
+
+    @Test
+    fun `ReticulumConfig enableTransport can be set to true explicitly`() {
+        val config =
+            ReticulumConfig(
+                storagePath = "/tmp/reticulum",
+                enabledInterfaces = emptyList(),
+                enableTransport = true,
+            )
+
+        assertTrue(
+            "enableTransport should be true when explicitly set",
+            config.enableTransport,
+        )
+    }
+
+    @Test
+    fun `ReticulumConfig with all options including enableTransport`() {
+        val config =
+            ReticulumConfig(
+                storagePath = "/tmp/reticulum",
+                enabledInterfaces =
+                    listOf(
+                        InterfaceConfig.AutoInterface(),
+                    ),
+                identityFilePath = "/path/to/identity",
+                displayName = "TestNode",
+                logLevel = LogLevel.DEBUG,
+                allowAnonymous = false,
+                preferOwnInstance = true,
+                rpcKey = "abc123",
+                enableTransport = false,
+            )
+
+        assertEquals("/tmp/reticulum", config.storagePath)
+        assertEquals(1, config.enabledInterfaces.size)
+        assertEquals("/path/to/identity", config.identityFilePath)
+        assertEquals("TestNode", config.displayName)
+        assertEquals(LogLevel.DEBUG, config.logLevel)
+        assertFalse(config.allowAnonymous)
+        assertTrue(config.preferOwnInstance)
+        assertEquals("abc123", config.rpcKey)
+        assertFalse(config.enableTransport)
+    }
+
+    @Test
+    fun `ReticulumConfig equality with enableTransport`() {
+        val config1 =
+            ReticulumConfig(
+                storagePath = "/tmp",
+                enabledInterfaces = emptyList(),
+                enableTransport = true,
+            )
+
+        val config2 =
+            ReticulumConfig(
+                storagePath = "/tmp",
+                enabledInterfaces = emptyList(),
+                enableTransport = true,
+            )
+
+        val config3 =
+            ReticulumConfig(
+                storagePath = "/tmp",
+                enabledInterfaces = emptyList(),
+                enableTransport = false,
+            )
+
+        assertEquals(config1, config2)
+        assertNotEquals(config1, config3)
     }
 }

@@ -79,6 +79,9 @@ class SettingsRepository
             val AUTO_RETRIEVE_ENABLED = booleanPreferencesKey("auto_retrieve_enabled")
             val RETRIEVAL_INTERVAL_SECONDS = intPreferencesKey("retrieval_interval_seconds")
             val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
+
+            // Transport node preferences
+            val TRANSPORT_NODE_ENABLED = booleanPreferencesKey("transport_node_enabled")
         }
 
         // Notification preferences
@@ -750,6 +753,40 @@ class SettingsRepository
         suspend fun saveLastSyncTimestamp(timestamp: Long) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP] = timestamp
+            }
+        }
+
+        // Transport node preferences
+
+        /**
+         * Flow of the transport node enabled setting.
+         * When enabled (default), this device forwards traffic for the mesh network.
+         * When disabled, only handles its own traffic.
+         * Defaults to true if not set.
+         */
+        val transportNodeEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: true
+                }
+
+        /**
+         * Get the transport node enabled setting (non-flow).
+         */
+        suspend fun getTransportNodeEnabled(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: true
+            }.first()
+        }
+
+        /**
+         * Save the transport node enabled setting.
+         *
+         * @param enabled Whether transport node is enabled
+         */
+        suspend fun saveTransportNodeEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] = enabled
             }
         }
 

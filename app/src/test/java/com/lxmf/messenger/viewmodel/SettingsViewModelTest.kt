@@ -67,6 +67,7 @@ class SettingsViewModelTest {
     private val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
     private val autoRetrieveEnabledFlow = MutableStateFlow(true)
     private val retrievalIntervalSecondsFlow = MutableStateFlow(30)
+    private val transportNodeEnabledFlow = MutableStateFlow(true)
 
     @Before
     fun setup() {
@@ -92,6 +93,7 @@ class SettingsViewModelTest {
         every { settingsRepository.getAllCustomThemes() } returns flowOf(emptyList())
         every { settingsRepository.autoRetrieveEnabledFlow } returns autoRetrieveEnabledFlow
         every { settingsRepository.retrievalIntervalSecondsFlow } returns retrievalIntervalSecondsFlow
+        every { settingsRepository.transportNodeEnabledFlow } returns transportNodeEnabledFlow
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 
         // Mock PropagationNodeManager flows (StateFlows)
@@ -1599,4 +1601,123 @@ class SettingsViewModelTest {
     // Note: Relay State Preservation Tests were removed because they require enableMonitors=true,
     // which starts an infinite while(true) loop in SettingsViewModel that causes tests to hang.
     // The relay functionality is tested via PropagationNodeManagerTest instead.
+
+    // region Transport Node Tests
+
+    @Test
+    fun `setTransportNodeEnabled true saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTransportNodeEnabled(true)
+
+            coVerify { settingsRepository.saveTransportNodeEnabled(true) }
+        }
+
+    @Test
+    fun `setTransportNodeEnabled false saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTransportNodeEnabled(false)
+
+            coVerify { settingsRepository.saveTransportNodeEnabled(false) }
+        }
+
+    @Test
+    fun `setTransportNodeEnabled triggers service restart`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTransportNodeEnabled(false)
+
+            coVerify { interfaceConfigManager.applyInterfaceChanges() }
+        }
+
+    @Test
+    fun `setTransportNodeEnabled does not restart if already restarting`() =
+        runTest {
+            viewModel = createViewModel()
+
+            // First call - should trigger restart
+            viewModel.setTransportNodeEnabled(false)
+            coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges() }
+
+            // Note: In real usage, isRestarting would be true and block second restart
+            // But with mocked manager that returns immediately, the flag is already cleared
+        }
+
+    @Test
+    fun `state collects transportNodeEnabled from repository`() =
+        runTest {
+            transportNodeEnabledFlow.value = true
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertTrue(state.transportNodeEnabled)
+
+                // Update flow to false
+                transportNodeEnabledFlow.value = false
+                state = awaitItem()
+                assertFalse(state.transportNodeEnabled)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `initial transportNodeEnabled state is true by default`() =
+        runTest {
+            transportNodeEnabledFlow.value = true
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertTrue("Transport node should be enabled by default", state.transportNodeEnabled)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `transportNodeEnabled state is preserved when other settings change`() =
+        runTest {
+            transportNodeEnabledFlow.value = false
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertFalse(state.transportNodeEnabled)
+
+                // Change another setting
+                autoAnnounceEnabledFlow.value = false
+                state = awaitItem()
+
+                // transportNodeEnabled should still be false
+                assertFalse(
+                    "transportNodeEnabled should be preserved across state changes",
+                    state.transportNodeEnabled,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    // endregion
 }

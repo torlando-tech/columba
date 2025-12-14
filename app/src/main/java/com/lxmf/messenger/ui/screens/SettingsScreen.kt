@@ -143,6 +143,8 @@ fun SettingsScreen(
                     onManageInterfaces = onNavigateToInterfaces,
                     isSharedInstance = state.isSharedInstance,
                     sharedInstanceOnline = state.sharedInstanceOnline,
+                    transportNodeEnabled = state.transportNodeEnabled,
+                    onTransportNodeToggle = { viewModel.setTransportNodeEnabled(it) },
                 )
 
                 IdentityCard(

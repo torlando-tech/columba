@@ -13,7 +13,11 @@ import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.MessageCollector
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.startup.ConfigApplyFlagManager
+import com.lxmf.messenger.startup.ServiceIdentityVerifier
 import com.lxmf.messenger.startup.StartupConfigLoader
+import com.lxmf.messenger.util.HexUtils.hexStringToByteArray
+import com.lxmf.messenger.util.HexUtils.toHexString
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +44,12 @@ class ColumbaApplication : Application() {
 
     @Inject
     lateinit var startupConfigLoader: StartupConfigLoader
+
+    @Inject
+    lateinit var configApplyFlagManager: ConfigApplyFlagManager
+
+    @Inject
+    lateinit var serviceIdentityVerifier: ServiceIdentityVerifier
 
     @Inject
     lateinit var messageCollector: MessageCollector
@@ -148,9 +158,7 @@ class ColumbaApplication : Application() {
             applicationScope.launch {
                 try {
                     // Check if we're in the middle of applying config changes
-                    val isApplyingConfig =
-                        getSharedPreferences("columba_prefs", MODE_PRIVATE)
-                            .getBoolean("is_applying_config", false)
+                    val isApplyingConfig = configApplyFlagManager.isApplyingConfig()
 
                     if (isApplyingConfig) {
                         android.util.Log.d("ColumbaApp", "Config apply flag set - checking service...")
@@ -165,17 +173,14 @@ class ColumbaApplication : Application() {
                         }
                         android.util.Log.d("ColumbaApplication", "Service status with config flag set: $status")
 
-                        if (status == "SHUTDOWN" || status == null || status.startsWith("ERROR:")) {
+                        if (configApplyFlagManager.isStaleFlag(status)) {
                             // Service is not running/ready - the flag is stale from a failed config apply
                             // Clear it and proceed with normal initialization
                             android.util.Log.w(
                                 "ColumbaApp",
                                 "Stale config flag (status: $status) - clearing",
                             )
-                            getSharedPreferences("columba_prefs", MODE_PRIVATE)
-                                .edit()
-                                .putBoolean("is_applying_config", false)
-                                .apply()
+                            configApplyFlagManager.clearFlag()
                             // Fall through to normal initialization below
                         } else {
                             // Service is INITIALIZING or READY - InterfaceConfigManager is handling it
@@ -206,24 +211,19 @@ class ColumbaApplication : Application() {
                             (reticulumProtocol as ServiceReticulumProtocol)
                                 .getLxmfIdentity().getOrNull()
                         }
-                        val serviceIdentityHash = serviceIdentity?.hash?.toHexString()
+                        val verificationResult = serviceIdentityVerifier.verify(serviceIdentity)
 
-                        val activeIdentity = identityRepository.getActiveIdentitySync()
-                        val dbIdentityHash = activeIdentity?.identityHash
-
-                        if (serviceIdentityHash != null && dbIdentityHash != null &&
-                            serviceIdentityHash != dbIdentityHash
-                        ) {
+                        if (!verificationResult.isMatch) {
                             android.util.Log.w(
                                 "ColumbaApplication",
-                                "Identity mismatch detected! Service: ${serviceIdentityHash.take(8)}..., " +
-                                    "DB: ${dbIdentityHash.take(8)}... - forcing reinitialization",
+                                "Identity mismatch detected! Service: ${verificationResult.serviceIdentityHash?.take(8)}..., " +
+                                    "DB: ${verificationResult.dbIdentityHash?.take(8)}... - forcing reinitialization",
                             )
                             // Fall through to initialization code below to fix the mismatch
                         } else {
                             android.util.Log.d(
                                 "ColumbaApplication",
-                                "Identity verified (${dbIdentityHash?.take(8) ?: "none"}...) - reconnecting",
+                                "Identity verified (${verificationResult.dbIdentityHash?.take(8) ?: "none"}...) - reconnecting",
                             )
                             // Identity matches - reconnect collectors and managers
                             messageCollector.startCollecting()
@@ -451,22 +451,6 @@ class ColumbaApplication : Application() {
         } catch (e: ClassNotFoundException) {
             false
         }
-    }
-
-    /**
-     * Convert ByteArray to hex string.
-     */
-    private fun ByteArray.toHexString(): String {
-        return joinToString("") { "%02x".format(it) }
-    }
-
-    /**
-     * Convert hex string to ByteArray.
-     */
-    private fun String.hexStringToByteArray(): ByteArray {
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
     }
 
     /**

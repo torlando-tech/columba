@@ -310,6 +310,38 @@ class ServiceReticulumProtocolTest {
         assertEquals("abc123", config.rpcKey)
     }
 
+    @Test
+    fun `ReticulumConfig - enableTransport defaults to true`() {
+        val config = ReticulumConfig(
+            storagePath = "/test/path",
+            enabledInterfaces = emptyList(),
+        )
+
+        assertTrue("enableTransport should default to true", config.enableTransport)
+    }
+
+    @Test
+    fun `ReticulumConfig - enableTransport can be set to false`() {
+        val config = ReticulumConfig(
+            storagePath = "/test/path",
+            enabledInterfaces = emptyList(),
+            enableTransport = false,
+        )
+
+        assertFalse("enableTransport should be false when explicitly set", config.enableTransport)
+    }
+
+    @Test
+    fun `ReticulumConfig - enableTransport can be set to true explicitly`() {
+        val config = ReticulumConfig(
+            storagePath = "/test/path",
+            enabledInterfaces = emptyList(),
+            enableTransport = true,
+        )
+
+        assertTrue("enableTransport should be true when explicitly set", config.enableTransport)
+    }
+
     // ===========================================
     // InterfaceConfig Tests
     // ===========================================

@@ -106,6 +106,7 @@ class InterfaceConfigManagerTest {
         // Setup settings repository mock
         every { settingsRepository.preferOwnInstanceFlow } returns flowOf(true)
         every { settingsRepository.rpcKeyFlow } returns flowOf(null)
+        coEvery { settingsRepository.getTransportNodeEnabled() } returns true
 
         // Setup identity repository mock
         coEvery { identityRepository.getActiveIdentitySync() } returns null
@@ -261,5 +262,52 @@ class InterfaceConfigManagerTest {
         verify(exactly = 1) { autoAnnounceManager.stop() }
         verify(exactly = 1) { identityResolutionManager.stop() }
         verify(exactly = 1) { propagationNodeManager.stop() }
+    }
+
+    // ========== Transport Node Setting Tests ==========
+
+    @Test
+    fun `applyInterfaceChanges - loads transport node enabled setting`() = runTest {
+        // When
+        manager.applyInterfaceChanges()
+
+        // Then: Should load transport node setting from repository
+        coVerify { settingsRepository.getTransportNodeEnabled() }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - passes transport enabled true to config`() = runTest {
+        // Given: Transport node is enabled
+        coEvery { settingsRepository.getTransportNodeEnabled() } returns true
+
+        // When
+        manager.applyInterfaceChanges()
+
+        // Then: Config passed to initialize should have enableTransport = true
+        coVerify {
+            reticulumProtocol.initialize(
+                match { config ->
+                    config.enableTransport == true
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - passes transport enabled false to config`() = runTest {
+        // Given: Transport node is disabled
+        coEvery { settingsRepository.getTransportNodeEnabled() } returns false
+
+        // When
+        manager.applyInterfaceChanges()
+
+        // Then: Config passed to initialize should have enableTransport = false
+        coVerify {
+            reticulumProtocol.initialize(
+                match { config ->
+                    config.enableTransport == false
+                },
+            )
+        }
     }
 }

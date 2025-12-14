@@ -836,5 +836,70 @@ class TestTransportNodeConfig(unittest.TestCase):
         self.assertLess(transport_pos, interfaces_pos)
 
 
+class TestGetDebugInfoTransport(unittest.TestCase):
+    """Test get_debug_info transport_enabled field"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_get_debug_info_transport_enabled_true(self, mock_rns):
+        """Test that get_debug_info returns transport_enabled=True when enabled"""
+        # Setup mocks
+        mock_rns.Transport.interfaces = []
+        mock_rns.Transport.identity = MagicMock()
+        mock_rns.Reticulum.transport_enabled.return_value = True
+
+        # Make wrapper appear initialized
+        self.wrapper.initialized = True
+        self.wrapper.reticulum = MagicMock()
+
+        # Call get_debug_info
+        info = self.wrapper.get_debug_info()
+
+        # Verify transport_enabled is True
+        self.assertTrue(info['transport_enabled'])
+        mock_rns.Reticulum.transport_enabled.assert_called_once()
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_get_debug_info_transport_enabled_false(self, mock_rns):
+        """Test that get_debug_info returns transport_enabled=False when disabled"""
+        # Setup mocks
+        mock_rns.Transport.interfaces = []
+        mock_rns.Transport.identity = None
+        mock_rns.Reticulum.transport_enabled.return_value = False
+
+        # Make wrapper appear initialized
+        self.wrapper.initialized = True
+        self.wrapper.reticulum = MagicMock()
+
+        # Call get_debug_info
+        info = self.wrapper.get_debug_info()
+
+        # Verify transport_enabled is False
+        self.assertFalse(info['transport_enabled'])
+        mock_rns.Reticulum.transport_enabled.assert_called_once()
+
+    def test_get_debug_info_transport_enabled_false_when_not_initialized(self):
+        """Test that get_debug_info returns transport_enabled=False when not initialized"""
+        # Wrapper not initialized
+        self.wrapper.initialized = False
+
+        # Call get_debug_info
+        info = self.wrapper.get_debug_info()
+
+        # Verify transport_enabled is False when not initialized
+        self.assertFalse(info['transport_enabled'])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -47,6 +47,7 @@ class MessagingViewModel
         private val reticulumProtocol: ReticulumProtocol,
         private val conversationRepository: com.lxmf.messenger.data.repository.ConversationRepository,
         private val announceRepository: com.lxmf.messenger.data.repository.AnnounceRepository,
+        private val contactRepository: com.lxmf.messenger.data.repository.ContactRepository,
         private val activeConversationManager: com.lxmf.messenger.service.ActiveConversationManager,
         private val settingsRepository: SettingsRepository,
         private val propagationNodeManager: PropagationNodeManager,
@@ -114,6 +115,50 @@ class MessagingViewModel
 
         // Manual sync result events for Snackbar notifications
         val manualSyncResult: SharedFlow<SyncResult> = propagationNodeManager.manualSyncResult
+
+        // Contact status for current conversation - updates reactively
+        val isContactSaved: StateFlow<Boolean> =
+            _currentConversation
+                .flatMapLatest { peerHash ->
+                    if (peerHash != null) {
+                        contactRepository.hasContactFlow(peerHash)
+                    } else {
+                        flowOf(false)
+                    }
+                }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = false,
+                )
+
+        /**
+         * Toggle contact status for the current conversation.
+         * If the peer is already a contact, removes them. Otherwise, adds them.
+         */
+        fun toggleContact() {
+            val peerHash = _currentConversation.value ?: return
+            viewModelScope.launch {
+                try {
+                    val isContact = contactRepository.hasContact(peerHash)
+                    if (isContact) {
+                        contactRepository.deleteContact(peerHash)
+                        Log.d(TAG, "Removed $peerHash from contacts")
+                    } else {
+                        // Get public key from conversation
+                        val publicKey = conversationRepository.getPeerPublicKey(peerHash)
+                        if (publicKey != null) {
+                            contactRepository.addContactFromConversation(peerHash, publicKey)
+                            Log.d(TAG, "Added $peerHash to contacts from messaging")
+                        } else {
+                            Log.e(TAG, "Cannot add contact: public key not available for $peerHash")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error toggling contact status", e)
+                }
+            }
+        }
 
         init {
             // NOTE: Message collection has been moved to MessageCollector service

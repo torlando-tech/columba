@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
+import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
@@ -47,6 +48,7 @@ class MessagingViewModelTest {
     private lateinit var reticulumProtocol: ServiceReticulumProtocol
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var announceRepository: AnnounceRepository
+    private lateinit var contactRepository: ContactRepository
     private lateinit var activeConversationManager: ActiveConversationManager
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
@@ -68,9 +70,16 @@ class MessagingViewModelTest {
         reticulumProtocol = mockk()
         conversationRepository = mockk()
         announceRepository = mockk()
+        contactRepository = mockk()
         activeConversationManager = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
+
+        // Mock default contact repository behavior
+        every { contactRepository.hasContactFlow(any()) } returns flowOf(false)
+        coEvery { contactRepository.hasContact(any()) } returns false
+        coEvery { contactRepository.addContactFromConversation(any(), any()) } returns Result.success(Unit)
+        coEvery { contactRepository.deleteContact(any()) } just Runs
 
         // Mock propagationNodeManager flows
         every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
@@ -96,7 +105,7 @@ class MessagingViewModelTest {
         // Default: no announce info
         every { announceRepository.getAnnounceFlow(any()) } returns flowOf(null)
 
-        viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, activeConversationManager, settingsRepository, propagationNodeManager)
+        viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, contactRepository, activeConversationManager, settingsRepository, propagationNodeManager)
     }
 
     @After
@@ -354,6 +363,9 @@ class MessagingViewModelTest {
             val failingAnnounceRepository: AnnounceRepository = mockk()
             every { failingAnnounceRepository.getAnnounceFlow(any()) } returns flowOf(null)
 
+            val failingContactRepository: ContactRepository = mockk()
+            every { failingContactRepository.hasContactFlow(any()) } returns flowOf(false)
+
             val failingActiveConversationManager: ActiveConversationManager = mockk(relaxed = true)
             val failingSettingsRepository: SettingsRepository = mockk(relaxed = true)
             val failingPropagationNodeManager: PropagationNodeManager = mockk(relaxed = true)
@@ -365,6 +377,7 @@ class MessagingViewModelTest {
                     failingProtocol,
                     failingRepository,
                     failingAnnounceRepository,
+                    failingContactRepository,
                     failingActiveConversationManager,
                     failingSettingsRepository,
                     failingPropagationNodeManager,
@@ -772,6 +785,7 @@ class MessagingViewModelTest {
                     reticulumProtocol,
                     conversationRepository,
                     announceRepository,
+                    contactRepository,
                     activeConversationManager,
                     settingsRepository,
                     propagationNodeManager,
@@ -834,6 +848,7 @@ class MessagingViewModelTest {
                     reticulumProtocol,
                     conversationRepository,
                     announceRepository,
+                    contactRepository,
                     activeConversationManager,
                     settingsRepository,
                     propagationNodeManager,
@@ -892,6 +907,7 @@ class MessagingViewModelTest {
                     reticulumProtocol,
                     conversationRepository,
                     announceRepository,
+                    contactRepository,
                     activeConversationManager,
                     settingsRepository,
                     propagationNodeManager,
@@ -940,6 +956,7 @@ class MessagingViewModelTest {
                     reticulumProtocol,
                     conversationRepository,
                     announceRepository,
+                    contactRepository,
                     activeConversationManager,
                     settingsRepository,
                     propagationNodeManager,
@@ -971,4 +988,148 @@ class MessagingViewModelTest {
             // Cleanup
             testViewModel.viewModelScope.cancel()
         }
+
+    // ========== CONTACT TOGGLE TESTS ==========
+
+    @Test
+    fun `isContactSaved returns false when contact not saved`() =
+        runTest {
+            // Setup: Contact is not saved (default mock behavior)
+            every { contactRepository.hasContactFlow(testPeerHash) } returns flowOf(false)
+
+            // Load conversation to set current peer
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Assert: isContactSaved is false
+            assertEquals(false, viewModel.isContactSaved.value)
+        }
+
+    @Test
+    fun `isContactSaved has initial value of false before loading conversation`() =
+        runTest {
+            // Assert: Before loading any conversation, isContactSaved is false
+            assertEquals(false, viewModel.isContactSaved.value)
+        }
+
+    @Test
+    fun `toggleContact adds contact when not saved`() =
+        runTest {
+            // Setup: Contact is not saved
+            coEvery { contactRepository.hasContact(testPeerHash) } returns false
+            val testPublicKey = ByteArray(64) { it.toByte() }
+            coEvery { conversationRepository.getPeerPublicKey(testPeerHash) } returns testPublicKey
+
+            // Load conversation to set current peer
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Toggle contact (should add)
+            viewModel.toggleContact()
+            advanceUntilIdle()
+
+            // Assert: addContactFromConversation was called
+            coVerify {
+                contactRepository.addContactFromConversation(testPeerHash, testPublicKey)
+            }
+
+            // Assert: deleteContact was NOT called
+            coVerify(exactly = 0) {
+                contactRepository.deleteContact(any())
+            }
+        }
+
+    @Test
+    fun `toggleContact removes contact when already saved`() =
+        runTest {
+            // Setup: Contact is already saved
+            coEvery { contactRepository.hasContact(testPeerHash) } returns true
+
+            // Load conversation to set current peer
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Toggle contact (should remove)
+            viewModel.toggleContact()
+            advanceUntilIdle()
+
+            // Assert: deleteContact was called
+            coVerify {
+                contactRepository.deleteContact(testPeerHash)
+            }
+
+            // Assert: addContactFromConversation was NOT called
+            coVerify(exactly = 0) {
+                contactRepository.addContactFromConversation(any(), any())
+            }
+        }
+
+    @Test
+    fun `toggleContact does nothing when no conversation loaded`() =
+        runTest {
+            // Don't load any conversation - _currentConversation is null
+
+            // Act: Toggle contact (should do nothing)
+            viewModel.toggleContact()
+            advanceUntilIdle()
+
+            // Assert: No contact repository methods were called
+            coVerify(exactly = 0) {
+                contactRepository.hasContact(any())
+            }
+            coVerify(exactly = 0) {
+                contactRepository.addContactFromConversation(any(), any())
+            }
+            coVerify(exactly = 0) {
+                contactRepository.deleteContact(any())
+            }
+        }
+
+    @Test
+    fun `toggleContact handles missing public key gracefully`() =
+        runTest {
+            // Setup: Contact is not saved, but public key is not available
+            coEvery { contactRepository.hasContact(testPeerHash) } returns false
+            coEvery { conversationRepository.getPeerPublicKey(testPeerHash) } returns null
+
+            // Load conversation to set current peer
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Toggle contact (should fail gracefully)
+            viewModel.toggleContact()
+            advanceUntilIdle()
+
+            // Assert: addContactFromConversation was NOT called (no public key)
+            coVerify(exactly = 0) {
+                contactRepository.addContactFromConversation(any(), any())
+            }
+
+            // Assert: deleteContact was NOT called
+            coVerify(exactly = 0) {
+                contactRepository.deleteContact(any())
+            }
+        }
+
+    @Test
+    fun `toggleContact handles repository exception gracefully`() =
+        runTest {
+            // Setup: Contact is not saved, repository throws exception
+            coEvery { contactRepository.hasContact(testPeerHash) } throws RuntimeException("Database error")
+
+            // Load conversation to set current peer
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Toggle contact (should not crash)
+            viewModel.toggleContact()
+            advanceUntilIdle()
+
+            // Assert: No crash occurred - test completes successfully
+            // Verify hasContact was called
+            coVerify {
+                contactRepository.hasContact(testPeerHash)
+            }
+        }
+
 }

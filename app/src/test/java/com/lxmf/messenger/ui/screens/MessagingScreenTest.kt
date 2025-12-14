@@ -56,6 +56,7 @@ class MessagingScreenTest {
         every { mockViewModel.selectedImageFormat } returns MutableStateFlow(null)
         every { mockViewModel.isProcessingImage } returns MutableStateFlow(false)
         every { mockViewModel.isSyncing } returns MutableStateFlow(false)
+        every { mockViewModel.isContactSaved } returns MutableStateFlow(false)
         every { mockViewModel.manualSyncResult } returns MutableSharedFlow()
     }
 
@@ -180,6 +181,88 @@ class MessagingScreenTest {
         // Then - sync button should not be clickable (disabled state)
         // When syncing, a CircularProgressIndicator is shown instead of the icon
         composeTestRule.onNodeWithContentDescription("Sync messages").assertDoesNotExist()
+    }
+
+    // ========== Star Toggle Button Tests ==========
+
+    @Test
+    fun topAppBar_starButton_displaysCorrectContentDescription_whenNotSaved() {
+        // Given
+        every { mockViewModel.isContactSaved } returns MutableStateFlow(false)
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then
+        composeTestRule.onNodeWithContentDescription("Save to contacts").assertIsDisplayed()
+    }
+
+    @Test
+    fun topAppBar_starButton_displaysCorrectContentDescription_whenSaved() {
+        // Given
+        every { mockViewModel.isContactSaved } returns MutableStateFlow(true)
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then
+        composeTestRule.onNodeWithContentDescription("Remove from contacts").assertIsDisplayed()
+    }
+
+    @Test
+    fun topAppBar_starButton_callsToggleContact() {
+        // Given
+        every { mockViewModel.isContactSaved } returns MutableStateFlow(false)
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // When
+        composeTestRule.onNodeWithContentDescription("Save to contacts").performClick()
+
+        // Then
+        verify { mockViewModel.toggleContact() }
+    }
+
+    @Test
+    fun topAppBar_starButton_whenSaved_callsToggleContact() {
+        // Given
+        every { mockViewModel.isContactSaved } returns MutableStateFlow(true)
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // When
+        composeTestRule.onNodeWithContentDescription("Remove from contacts").performClick()
+
+        // Then
+        verify { mockViewModel.toggleContact() }
     }
 
     // ========== Online Status Tests ==========

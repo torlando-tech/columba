@@ -87,6 +87,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
 import com.lxmf.messenger.util.formatRelativeTime
@@ -118,6 +119,7 @@ fun MessagingScreen(
     val selectedImageFormat by viewModel.selectedImageFormat.collectAsStateWithLifecycle()
     val isProcessingImage by viewModel.isProcessingImage.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val isContactSaved by viewModel.isContactSaved.collectAsStateWithLifecycle()
 
     // Lifecycle-aware coroutine scope for image processing
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -295,6 +297,22 @@ fun MessagingScreen(
                     }
                 },
                 actions = {
+                    // Star toggle button for contact status
+                    StarToggleButton(
+                        isStarred = isContactSaved,
+                        onClick = {
+                            viewModel.toggleContact()
+                            val message =
+                                if (isContactSaved) {
+                                    "Removed $peerName from Contacts"
+                                } else {
+                                    "Saved $peerName to Contacts"
+                                }
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        },
+                    )
+
+                    // Sync button
                     IconButton(
                         onClick = { viewModel.syncFromPropagationNode() },
                         enabled = !isSyncing,

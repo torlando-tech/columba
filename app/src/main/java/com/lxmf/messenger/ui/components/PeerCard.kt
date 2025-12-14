@@ -12,16 +12,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -146,44 +142,14 @@ fun PeerCard(
             }
 
             // Star button overlay
-            IconButton(
+            StarToggleButton(
+                isStarred = announce.isFavorite || !showFavoriteToggle,
                 onClick = onFavoriteClick,
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
                         .padding(4.dp),
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (announce.isFavorite || !showFavoriteToggle) {
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                                } else {
-                                    Color.Transparent
-                                },
-                            ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector =
-                            if (announce.isFavorite || !showFavoriteToggle) {
-                                Icons.Default.Star
-                            } else {
-                                Icons.Default.StarBorder
-                            },
-                        contentDescription = if (announce.isFavorite) "Remove from saved" else "Save peer",
-                        tint =
-                            if (announce.isFavorite || !showFavoriteToggle) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                    )
-                }
-            }
+            )
         }
     }
 }

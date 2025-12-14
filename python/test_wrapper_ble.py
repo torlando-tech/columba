@@ -10,6 +10,8 @@ import os
 import unittest
 from unittest.mock import Mock, MagicMock, patch, call
 import threading
+import tempfile
+import shutil
 
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -681,6 +683,101 @@ class TestRNodeInterfaceEdgeCases(unittest.TestCase):
         # The actual implementation uses a context manager, so the flag
         # should still be False after the method completes
         self.assertFalse(self.wrapper._rnode_initializing)
+
+
+class TestGetPairedRNodes(unittest.TestCase):
+    """Test get_paired_rnodes method"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_get_paired_rnodes_returns_device_list(self):
+        """Test successful device retrieval from bridge."""
+        # Create a mock bridge
+        mock_bridge = MagicMock()
+        mock_bridge.getPairedRNodes.return_value = ["RNode A1B2", "RNode C3D4"]
+
+        # Set the bridge
+        self.wrapper.set_rnode_bridge(mock_bridge)
+
+        # Call the method
+        result = self.wrapper.get_paired_rnodes()
+
+        # Verify the result
+        self.assertTrue(result['success'])
+        self.assertEqual(result['devices'], ["RNode A1B2", "RNode C3D4"])
+        self.assertNotIn('error', result)
+
+    def test_get_paired_rnodes_returns_error_when_no_bridge(self):
+        """Test returns error dict when rnode_bridge not set."""
+        # Don't set any bridge (it's None by default)
+        self.assertIsNone(self.wrapper.kotlin_rnode_bridge)
+
+        # Call the method
+        result = self.wrapper.get_paired_rnodes()
+
+        # Verify the result
+        self.assertFalse(result['success'])
+        self.assertEqual(result['devices'], [])
+        self.assertEqual(result['error'], 'KotlinRNodeBridge not set')
+
+    def test_get_paired_rnodes_handles_bridge_exception(self):
+        """Test exception handling when bridge.getPairedRNodes() throws."""
+        # Create a mock bridge that raises an exception
+        mock_bridge = MagicMock()
+        mock_bridge.getPairedRNodes.side_effect = Exception("Connection failed")
+
+        # Set the bridge
+        self.wrapper.set_rnode_bridge(mock_bridge)
+
+        # Call the method
+        result = self.wrapper.get_paired_rnodes()
+
+        # Verify the result
+        self.assertFalse(result['success'])
+        self.assertEqual(result['devices'], [])
+        self.assertEqual(result['error'], 'Connection failed')
+
+    def test_get_paired_rnodes_handles_empty_device_list(self):
+        """Test empty list from bridge returns empty devices."""
+        # Create a mock bridge that returns empty list
+        mock_bridge = MagicMock()
+        mock_bridge.getPairedRNodes.return_value = []
+
+        # Set the bridge
+        self.wrapper.set_rnode_bridge(mock_bridge)
+
+        # Call the method
+        result = self.wrapper.get_paired_rnodes()
+
+        # Verify the result
+        self.assertTrue(result['success'])
+        self.assertEqual(result['devices'], [])
+        self.assertNotIn('error', result)
+
+    def test_get_paired_rnodes_handles_none_from_bridge(self):
+        """Test None response from bridge returns empty devices."""
+        # Create a mock bridge that returns None
+        mock_bridge = MagicMock()
+        mock_bridge.getPairedRNodes.return_value = None
+
+        # Set the bridge
+        self.wrapper.set_rnode_bridge(mock_bridge)
+
+        # Call the method
+        result = self.wrapper.get_paired_rnodes()
+
+        # Verify the result
+        self.assertTrue(result['success'])
+        self.assertEqual(result['devices'], [])
+        self.assertNotIn('error', result)
 
 
 if __name__ == '__main__':

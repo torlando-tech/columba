@@ -747,6 +747,8 @@ class ServiceReticulumProtocol(
                     ifaceJson.put("name", iface.name)
                     ifaceJson.put("target_device_name", iface.targetDeviceName)
                     ifaceJson.put("connection_mode", iface.connectionMode)
+                    iface.tcpHost?.let { ifaceJson.put("tcp_host", it) }
+                    ifaceJson.put("tcp_port", iface.tcpPort)
                     ifaceJson.put("frequency", iface.frequency)
                     ifaceJson.put("bandwidth", iface.bandwidth)
                     ifaceJson.put("tx_power", iface.txPower)

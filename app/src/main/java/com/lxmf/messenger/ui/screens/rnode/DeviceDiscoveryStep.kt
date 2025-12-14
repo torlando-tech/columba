@@ -23,11 +23,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SignalCellular4Bar
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -55,6 +58,8 @@ import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.DiscoveredRNode
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
+import com.lxmf.messenger.viewmodel.RNodeConnectionType
+import com.lxmf.messenger.viewmodel.RNodeWizardState
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
 
 @Composable
@@ -92,26 +97,28 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
         }
     }
 
-    // Auto-start scan when entering this step (always scan to detect correct device types)
-    LaunchedEffect(Unit) {
-        val requiredPermissions =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                arrayOf(
-                    Manifest.permission.BLUETOOTH_SCAN,
-                    Manifest.permission.BLUETOOTH_CONNECT,
-                )
-            } else {
-                arrayOf(
-                    Manifest.permission.BLUETOOTH,
-                    Manifest.permission.BLUETOOTH_ADMIN,
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                )
-            }
+    // Auto-start scan when entering this step in Bluetooth mode
+    LaunchedEffect(state.connectionType) {
+        if (state.connectionType == RNodeConnectionType.BLUETOOTH) {
+            val requiredPermissions =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    arrayOf(
+                        Manifest.permission.BLUETOOTH_SCAN,
+                        Manifest.permission.BLUETOOTH_CONNECT,
+                    )
+                } else {
+                    arrayOf(
+                        Manifest.permission.BLUETOOTH,
+                        Manifest.permission.BLUETOOTH_ADMIN,
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                    )
+                }
 
-        if (BlePermissionManager.hasAllPermissions(context)) {
-            viewModel.startDeviceScan()
-        } else {
-            permissionLauncher.launch(requiredPermissions)
+            if (BlePermissionManager.hasAllPermissions(context)) {
+                viewModel.startDeviceScan()
+            } else {
+                permissionLauncher.launch(requiredPermissions)
+            }
         }
     }
 
@@ -121,6 +128,172 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                 .fillMaxSize()
                 .padding(16.dp),
     ) {
+        // Connection type selector
+        Text(
+            "Connection Method",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = state.connectionType == RNodeConnectionType.BLUETOOTH,
+                onClick = { viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH) },
+                label = { Text("Bluetooth") },
+                leadingIcon = {
+                    Icon(Icons.Default.Bluetooth, contentDescription = null, Modifier.size(18.dp))
+                },
+            )
+            FilterChip(
+                selected = state.connectionType == RNodeConnectionType.TCP_WIFI,
+                onClick = { viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI) },
+                label = { Text("WiFi / TCP") },
+                leadingIcon = {
+                    Icon(Icons.Default.Wifi, contentDescription = null, Modifier.size(18.dp))
+                },
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // Show content based on connection type
+        when (state.connectionType) {
+            RNodeConnectionType.TCP_WIFI -> {
+                TcpConnectionForm(
+                    tcpHost = state.tcpHost,
+                    isValidating = state.isTcpValidating,
+                    validationSuccess = state.tcpValidationSuccess,
+                    validationError = state.tcpValidationError,
+                    onHostChange = { viewModel.updateTcpHost(it) },
+                    onTestConnection = { viewModel.validateTcpConnection() },
+                )
+            }
+            RNodeConnectionType.BLUETOOTH -> {
+                BluetoothDeviceDiscovery(
+                    viewModel = viewModel,
+                    state = state,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TcpConnectionForm(
+    tcpHost: String,
+    isValidating: Boolean,
+    validationSuccess: Boolean?,
+    validationError: String?,
+    onHostChange: (String) -> Unit,
+    onTestConnection: () -> Unit,
+) {
+    Column {
+        Text(
+            "Connect to an RNode device over WiFi/TCP (port 7633).",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = tcpHost,
+            onValueChange = onHostChange,
+            label = { Text("IP Address or Hostname") },
+            placeholder = { Text("e.g., 10.0.0.1 or rnode.local") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            leadingIcon = {
+                Icon(Icons.Default.Wifi, contentDescription = null)
+            },
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Button(
+                onClick = onTestConnection,
+                enabled = tcpHost.isNotBlank() && !isValidating,
+            ) {
+                if (isValidating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text("Test Connection")
+            }
+
+            // Validation result
+            when {
+                validationSuccess == true -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = "Success",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "Connected",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+                validationSuccess == false -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Error,
+                            contentDescription = "Failed",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "Failed",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+        }
+
+        // Error message
+        validationError?.let { error ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        Text(
+            "The RNode must be connected to the same network and have WiFi/TCP enabled. " +
+                "Default port is 7633.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun BluetoothDeviceDiscovery(
+    viewModel: RNodeWizardViewModel,
+    state: RNodeWizardState,
+) {
+    Column {
         // Scanning indicator
         if (state.isScanning) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())

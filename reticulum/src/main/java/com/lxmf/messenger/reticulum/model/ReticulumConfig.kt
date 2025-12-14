@@ -86,12 +86,14 @@ sealed class InterfaceConfig {
     /**
      * RNode - LoRa radio interface using RNode hardware.
      * Provides long-range, low-bandwidth communication.
-     * On Android, connects via Bluetooth (Classic SPP or BLE) to paired RNode device.
+     * Supports Bluetooth (Classic SPP or BLE) or TCP/WiFi connections.
      *
      * @param name User-friendly name for this interface
      * @param enabled Whether this interface should be initialized
-     * @param targetDeviceName Bluetooth device name of the paired RNode
-     * @param connectionMode Bluetooth connection mode: "classic" (SPP/RFCOMM) or "ble" (GATT)
+     * @param targetDeviceName Bluetooth device name of the paired RNode (required for Bluetooth)
+     * @param connectionMode Connection mode: "classic" (SPP/RFCOMM), "ble" (GATT), or "tcp" (WiFi)
+     * @param tcpHost IP address or hostname for TCP/WiFi mode (required when connectionMode="tcp")
+     * @param tcpPort TCP port for WiFi mode (default: 7633, the RNode standard port)
      * @param frequency LoRa frequency in Hz (137000000 - 3000000000)
      * @param bandwidth LoRa bandwidth in Hz (7800 - 1625000)
      * @param txPower Transmission power in dBm (0-22)
@@ -105,8 +107,10 @@ sealed class InterfaceConfig {
     data class RNode(
         override val name: String = "RNode LoRa",
         override val enabled: Boolean = true,
-        val targetDeviceName: String,
-        val connectionMode: String = "classic", // "classic" or "ble"
+        val targetDeviceName: String = "", // Required for Bluetooth, empty for TCP
+        val connectionMode: String = "classic", // "classic", "ble", or "tcp"
+        val tcpHost: String? = null, // IP/hostname for TCP mode
+        val tcpPort: Int = 7633, // RNode TCP port (default)
         val frequency: Long = 915000000, // 915 MHz (US)
         val bandwidth: Int = 125000, // 125 KHz
         val txPower: Int = 7, // 7 dBm

@@ -349,7 +349,8 @@ class ColumbaApplication : Application() {
                             }
 
                             // Restore peer identities from database to enable message sending
-                            applicationScope.launch {
+                            // Run on IO dispatcher to avoid blocking main thread during JSON serialization
+                            applicationScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                 try {
                                     val peerIdentities = conversationRepository.getAllPeerIdentities()
                                     if (peerIdentities.isNotEmpty()) {

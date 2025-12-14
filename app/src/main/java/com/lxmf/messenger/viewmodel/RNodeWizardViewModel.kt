@@ -35,9 +35,13 @@ import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.service.InterfaceConfigManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
+import java.net.InetSocketAddress
+import java.net.Socket
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
@@ -56,6 +60,14 @@ enum class WizardStep {
     MODEM_PRESET,
     FREQUENCY_SLOT,
     REVIEW_CONFIGURE,
+}
+
+/**
+ * Connection type for RNode devices.
+ */
+enum class RNodeConnectionType {
+    BLUETOOTH, // Classic or BLE Bluetooth
+    TCP_WIFI, // TCP over WiFi
 }
 
 /**
@@ -80,6 +92,7 @@ data class RNodeWizardState(
     val editingInterfaceId: Long? = null,
     val isEditMode: Boolean = false,
     // Step 1: Device Discovery
+    val connectionType: RNodeConnectionType = RNodeConnectionType.BLUETOOTH,
     val isScanning: Boolean = false,
     val discoveredDevices: List<DiscoveredRNode> = emptyList(),
     val selectedDevice: DiscoveredRNode? = null,
@@ -95,6 +108,12 @@ data class RNodeWizardState(
     val lastPairingDeviceAddress: String? = null,
     val isWaitingForReconnect: Boolean = false,
     val reconnectDeviceName: String? = null,
+    // TCP/WiFi connection fields
+    val tcpHost: String = "",
+    val tcpPort: String = "7633",
+    val isTcpValidating: Boolean = false,
+    val tcpValidationSuccess: Boolean? = null,
+    val tcpValidationError: String? = null,
     // Companion Device Association (Android 12+)
     val isAssociating: Boolean = false,
     val pendingAssociationIntent: IntentSender? = null,
@@ -165,6 +184,7 @@ class RNodeWizardViewModel
             private const val RECONNECT_SCAN_TIMEOUT_MS = 15_000L // 15s to find device after reboot
             private const val RSSI_UPDATE_INTERVAL_MS = 3000L // Update RSSI every 3s
             private const val MAX_DEVICE_NAME_LENGTH = 32 // Standard Bluetooth device name limit
+            private const val TCP_CONNECTION_TIMEOUT_MS = 5000 // 5 second TCP connection timeout
         }
 
         private val _state = MutableStateFlow(RNodeWizardState())
@@ -252,21 +272,31 @@ class RNodeWizardViewModel
                             config.spreadingFactor,
                         )
 
+                    val isTcp = config.connectionMode == "tcp"
                     val isBle = config.connectionMode == "ble"
 
                     _state.update { state ->
                         state.copy(
                             editingInterfaceId = interfaceId,
                             isEditMode = true,
-                            // Pre-populate device
+                            // Connection type
+                            connectionType = if (isTcp) RNodeConnectionType.TCP_WIFI else RNodeConnectionType.BLUETOOTH,
+                            // Pre-populate TCP fields (for TCP mode)
+                            tcpHost = config.tcpHost ?: "",
+                            tcpPort = config.tcpPort.toString(),
+                            // Pre-populate device (for Bluetooth mode)
                             selectedDevice =
-                                DiscoveredRNode(
-                                    name = config.targetDeviceName,
-                                    address = "",
-                                    type = if (isBle) BluetoothType.BLE else BluetoothType.CLASSIC,
-                                    rssi = null,
-                                    isPaired = true,
-                                ),
+                                if (isTcp) {
+                                    null
+                                } else {
+                                    DiscoveredRNode(
+                                        name = config.targetDeviceName,
+                                        address = "",
+                                        type = if (isBle) BluetoothType.BLE else BluetoothType.CLASSIC,
+                                        rssi = null,
+                                        isPaired = true,
+                                    )
+                                },
                             // Pre-populate region
                             selectedPreset = matchingPreset,
                             selectedCountry = matchingPreset?.countryName,
@@ -285,8 +315,8 @@ class RNodeWizardViewModel
                         )
                     }
 
-                    // Start RSSI polling for BLE devices
-                    if (isBle) {
+                    // Start RSSI polling for BLE devices (not TCP)
+                    if (isBle && !isTcp) {
                         startRssiPolling()
                     }
 
@@ -395,12 +425,17 @@ class RNodeWizardViewModel
             val state = _state.value
             return when (state.currentStep) {
                 WizardStep.DEVICE_DISCOVERY ->
-                    state.selectedDevice != null ||
-                        (
-                            state.showManualEntry &&
-                                state.manualDeviceName.isNotBlank() &&
-                                state.manualDeviceNameError == null
-                        )
+                    when (state.connectionType) {
+                        RNodeConnectionType.TCP_WIFI ->
+                            state.tcpHost.isNotBlank()
+                        RNodeConnectionType.BLUETOOTH ->
+                            state.selectedDevice != null ||
+                                (
+                                    state.showManualEntry &&
+                                        state.manualDeviceName.isNotBlank() &&
+                                        state.manualDeviceNameError == null
+                                )
+                    }
                 WizardStep.REGION_SELECTION ->
                     state.selectedFrequencyRegion != null || state.isCustomMode
                 WizardStep.MODEM_PRESET ->
@@ -1240,6 +1275,118 @@ class RNodeWizardViewModel
             _state.update { it.copy(manualBluetoothType = type) }
         }
 
+        // ========== TCP/WiFi Connection Methods ==========
+
+        /**
+         * Set the connection type (Bluetooth or TCP/WiFi).
+         * Clears device selection when switching modes.
+         */
+        fun setConnectionType(type: RNodeConnectionType) {
+            _state.update {
+                it.copy(
+                    connectionType = type,
+                    // Clear Bluetooth selection when switching to TCP
+                    selectedDevice = if (type == RNodeConnectionType.TCP_WIFI) null else it.selectedDevice,
+                    // Clear TCP validation when switching to Bluetooth
+                    tcpValidationSuccess = if (type == RNodeConnectionType.BLUETOOTH) null else it.tcpValidationSuccess,
+                    tcpValidationError = if (type == RNodeConnectionType.BLUETOOTH) null else it.tcpValidationError,
+                )
+            }
+        }
+
+        /**
+         * Update the TCP host (IP address or hostname).
+         * Clears any previous validation result.
+         */
+        fun updateTcpHost(host: String) {
+            _state.update {
+                it.copy(
+                    tcpHost = host,
+                    tcpValidationSuccess = null,
+                    tcpValidationError = null,
+                )
+            }
+        }
+
+        /**
+         * Update the TCP port.
+         * Clears any previous validation result.
+         */
+        fun updateTcpPort(port: String) {
+            _state.update {
+                it.copy(
+                    tcpPort = port,
+                    tcpValidationSuccess = null,
+                    tcpValidationError = null,
+                )
+            }
+        }
+
+        /**
+         * Validate the TCP connection by attempting to connect to the RNode.
+         * Uses a 5-second timeout for the connection attempt.
+         */
+        fun validateTcpConnection() {
+            val state = _state.value
+            val host = state.tcpHost.trim()
+            val port = state.tcpPort.toIntOrNull() ?: 7633
+
+            if (host.isBlank()) {
+                _state.update {
+                    it.copy(
+                        tcpValidationSuccess = false,
+                        tcpValidationError = "Host cannot be empty",
+                    )
+                }
+                return
+            }
+
+            if (port !in 1..65535) {
+                _state.update {
+                    it.copy(
+                        tcpValidationSuccess = false,
+                        tcpValidationError = "Port must be between 1 and 65535",
+                    )
+                }
+                return
+            }
+
+            viewModelScope.launch {
+                _state.update { it.copy(isTcpValidating = true, tcpValidationError = null) }
+
+                try {
+                    val success = withContext(Dispatchers.IO) {
+                        try {
+                            Socket().use { socket ->
+                                socket.connect(InetSocketAddress(host, port), TCP_CONNECTION_TIMEOUT_MS)
+                                true
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "TCP connection test failed: ${e.message}")
+                            false
+                        }
+                    }
+
+                    _state.update {
+                        it.copy(
+                            isTcpValidating = false,
+                            tcpValidationSuccess = success,
+                            tcpValidationError = if (!success) "Could not connect to $host:$port" else null,
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "TCP validation error", e)
+                    _state.update {
+                        it.copy(
+                            isTcpValidating = false,
+                            tcpValidationSuccess = false,
+                            tcpValidationError = e.message ?: "Connection failed",
+                        )
+                    }
+                }
+            }
+        }
+
         // Pairing handler to auto-confirm Just Works pairing
         private var pairingHandler: BlePairingHandler? = null
 
@@ -1675,6 +1822,7 @@ class RNodeWizardViewModel
             return result.isValid
         }
 
+        @Suppress("CyclomaticComplexMethod")
         fun saveConfiguration() {
             if (!validateConfiguration()) return
 
@@ -1684,23 +1832,43 @@ class RNodeWizardViewModel
                 try {
                     val state = _state.value
 
-                    // Determine device name and connection mode
-                    val (deviceName, connectionMode) =
-                        if (state.selectedDevice != null) {
-                            state.selectedDevice.name to
-                                when (state.selectedDevice.type) {
-                                    BluetoothType.CLASSIC -> "classic"
-                                    BluetoothType.BLE -> "ble"
-                                    BluetoothType.UNKNOWN -> "classic" // Default to classic
-                                }
-                        } else {
-                            state.manualDeviceName to
-                                when (state.manualBluetoothType) {
-                                    BluetoothType.CLASSIC -> "classic"
-                                    BluetoothType.BLE -> "ble"
-                                    BluetoothType.UNKNOWN -> "classic"
-                                }
-                        }
+                    // Determine connection parameters based on connection type
+                    val isTcpMode = state.connectionType == RNodeConnectionType.TCP_WIFI
+
+                    val deviceName: String
+                    val connectionMode: String
+                    val tcpHost: String?
+                    val tcpPort: Int
+
+                    if (isTcpMode) {
+                        // TCP/WiFi mode
+                        deviceName = ""
+                        connectionMode = "tcp"
+                        tcpHost = state.tcpHost.trim()
+                        tcpPort = state.tcpPort.toIntOrNull() ?: 7633
+                    } else {
+                        // Bluetooth mode
+                        val (name, mode) =
+                            if (state.selectedDevice != null) {
+                                state.selectedDevice.name to
+                                    when (state.selectedDevice.type) {
+                                        BluetoothType.CLASSIC -> "classic"
+                                        BluetoothType.BLE -> "ble"
+                                        BluetoothType.UNKNOWN -> "classic"
+                                    }
+                            } else {
+                                state.manualDeviceName to
+                                    when (state.manualBluetoothType) {
+                                        BluetoothType.CLASSIC -> "classic"
+                                        BluetoothType.BLE -> "ble"
+                                        BluetoothType.UNKNOWN -> "classic"
+                                    }
+                            }
+                        deviceName = name
+                        connectionMode = mode
+                        tcpHost = null
+                        tcpPort = 7633
+                    }
 
                     val config =
                         InterfaceConfig.RNode(
@@ -1708,6 +1876,8 @@ class RNodeWizardViewModel
                             enabled = true,
                             targetDeviceName = deviceName,
                             connectionMode = connectionMode,
+                            tcpHost = tcpHost,
+                            tcpPort = tcpPort,
                             frequency = state.frequency.toLongOrNull() ?: 915000000,
                             bandwidth = state.bandwidth.toIntOrNull() ?: 125000,
                             txPower = state.txPower.toIntOrNull() ?: 7,
@@ -1751,20 +1921,40 @@ class RNodeWizardViewModel
 
         /**
          * Get the effective device name for display.
+         * For TCP mode, shows the host:port. For Bluetooth, shows device name.
          */
         fun getEffectiveDeviceName(): String {
             val state = _state.value
-            return state.selectedDevice?.name
-                ?: state.manualDeviceName.ifBlank { "No device selected" }
+            return if (state.connectionType == RNodeConnectionType.TCP_WIFI) {
+                val port = state.tcpPort.toIntOrNull() ?: 7633
+                if (state.tcpHost.isNotBlank()) {
+                    if (port == 7633) state.tcpHost else "${state.tcpHost}:$port"
+                } else {
+                    "No host specified"
+                }
+            } else {
+                state.selectedDevice?.name
+                    ?: state.manualDeviceName.ifBlank { "No device selected" }
+            }
         }
 
         /**
          * Get the effective Bluetooth type for display.
+         * Returns null for TCP mode.
          */
-        fun getEffectiveBluetoothType(): BluetoothType {
+        fun getEffectiveBluetoothType(): BluetoothType? {
             val state = _state.value
-            return state.selectedDevice?.type ?: state.manualBluetoothType
+            return if (state.connectionType == RNodeConnectionType.TCP_WIFI) {
+                null
+            } else {
+                state.selectedDevice?.type ?: state.manualBluetoothType
+            }
         }
+
+        /**
+         * Check if currently in TCP/WiFi mode.
+         */
+        fun isTcpMode(): Boolean = _state.value.connectionType == RNodeConnectionType.TCP_WIFI
 
         /**
          * Cleanup when ViewModel is cleared.

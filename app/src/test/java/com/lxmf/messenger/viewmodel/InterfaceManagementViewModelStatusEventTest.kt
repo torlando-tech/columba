@@ -59,6 +59,9 @@ class InterfaceManagementViewModelStatusEventTest {
         // CRITICAL: Disable polling to prevent OOM in tests
         InterfaceManagementViewModel.STATUS_POLL_INTERVAL_MS = 0
 
+        // Use test dispatcher for IO operations
+        InterfaceManagementViewModel.ioDispatcher = testDispatcher
+
         interfaceRepository = mockk()
         configManager = mockk()
         bleStatusRepository = mockk()
@@ -97,6 +100,8 @@ class InterfaceManagementViewModelStatusEventTest {
             viewModel.viewModelScope.cancel()
         }
         Dispatchers.resetMain()
+        // Reset IO dispatcher to default
+        InterfaceManagementViewModel.ioDispatcher = Dispatchers.IO
         clearAllMocks()
         // Reset polling interval to default
         InterfaceManagementViewModel.STATUS_POLL_INTERVAL_MS = 3000L

@@ -119,6 +119,9 @@ class InterfaceManagementViewModel
 
             // Made internal var (not const) to allow disabling polling in tests
             internal var STATUS_POLL_INTERVAL_MS = 3000L
+
+            // Made internal var to allow injecting test dispatcher
+            internal var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
         }
 
         private val _state = MutableStateFlow(InterfaceManagementState())
@@ -158,7 +161,7 @@ class InterfaceManagementViewModel
                 Log.d(TAG, "Polling disabled (interval <= 0)")
                 return
             }
-            viewModelScope.launch {
+            viewModelScope.launch(ioDispatcher) {
                 while (true) {
                     try {
                         fetchInterfaceStatus()
@@ -184,7 +187,7 @@ class InterfaceManagementViewModel
                 return
             }
 
-            viewModelScope.launch {
+            viewModelScope.launch(ioDispatcher) {
                 serviceProtocol.interfaceStatusChanged.collect {
                     Log.d(TAG, "████ INTERFACE STATUS EVENT ████ Triggering immediate refresh")
                     try {

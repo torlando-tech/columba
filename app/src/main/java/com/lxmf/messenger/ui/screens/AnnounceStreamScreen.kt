@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
@@ -52,8 +54,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
@@ -80,6 +84,12 @@ fun AnnounceStreamScreen(
     var isSearching by remember { mutableStateOf(false) }
     val selectedNodeTypes by viewModel.selectedNodeTypes.collectAsState()
     val showAudioAnnounces by viewModel.showAudioAnnounces.collectAsState()
+
+    // Announce button state
+    val isAnnouncing by viewModel.isAnnouncing.collectAsState()
+    val announceSuccess by viewModel.announceSuccess.collectAsState()
+    val announceError by viewModel.announceError.collectAsState()
+    val context = LocalContext.current
 
     // Context menu state
     var showContextMenu by remember { mutableStateOf(false) }
@@ -109,6 +119,18 @@ fun AnnounceStreamScreen(
         }
     }
 
+    // Show toast for announce success/error
+    LaunchedEffect(announceSuccess) {
+        if (announceSuccess) {
+            Toast.makeText(context, "Announce sent!", Toast.LENGTH_SHORT).show()
+        }
+    }
+    LaunchedEffect(announceError) {
+        announceError?.let { error ->
+            Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
+        }
+    }
+
     Scaffold(
         topBar = {
             SearchableTopAppBar(
@@ -120,6 +142,26 @@ fun AnnounceStreamScreen(
                 onSearchToggle = { isSearching = !isSearching },
                 searchPlaceholder = "Search by name or hash...",
                 additionalActions = {
+                    // Announce button
+                    IconButton(
+                        onClick = { viewModel.triggerAnnounce() },
+                        enabled = !isAnnouncing,
+                    ) {
+                        if (isAnnouncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Campaign,
+                                contentDescription = "Announce now",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    }
+                    // Filter button
                     IconButton(onClick = { showFilterDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.FilterList,

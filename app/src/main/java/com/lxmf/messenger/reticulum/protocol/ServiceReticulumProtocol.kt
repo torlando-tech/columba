@@ -702,7 +702,8 @@ class ServiceReticulumProtocol(
         }
     }
 
-    private fun buildConfigJson(config: ReticulumConfig): String {
+    @androidx.annotation.VisibleForTesting
+    internal fun buildConfigJson(config: ReticulumConfig): String {
         val json = JSONObject()
         json.put("storagePath", config.storagePath)
         json.put("logLevel", config.logLevel.name)
@@ -782,6 +783,9 @@ class ServiceReticulumProtocol(
 
         // RPC key for shared instance authentication (optional)
         config.rpcKey?.let { json.put("rpc_key", it) }
+
+        // Transport node setting
+        json.put("enable_transport", config.enableTransport)
 
         return json.toString()
     }

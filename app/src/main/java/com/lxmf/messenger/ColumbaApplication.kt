@@ -268,6 +268,10 @@ class ColumbaApplication : Application() {
                     // Load RPC key for shared instance authentication
                     val rpcKey = settingsRepository.rpcKeyFlow.first()
 
+                    // Load transport node setting
+                    val transportNodeEnabled = settingsRepository.getTransportNodeEnabled()
+                    android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")
+
                     // Auto-initialize Reticulum with config from database
                     android.util.Log.d("ColumbaApplication", "Auto-initializing Reticulum...")
                     val config =
@@ -280,6 +284,7 @@ class ColumbaApplication : Application() {
                             allowAnonymous = false,
                             preferOwnInstance = preferOwnInstance,
                             rpcKey = rpcKey,
+                            enableTransport = transportNodeEnabled,
                         )
 
                     reticulumProtocol.initialize(config)

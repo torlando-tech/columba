@@ -1,8 +1,5 @@
 package com.lxmf.messenger.service
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lxmf.messenger.data.model.ConnectionType
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
@@ -14,6 +11,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
+import android.app.Application
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Integration tests for BLE connection details via IPC.
@@ -21,10 +21,9 @@ import org.junit.runner.RunWith
  *
  * Note: These tests require the ReticulumService to be running.
  */
-@RunWith(AndroidJUnit4::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
 class ReticulumServiceBleTest {
-    private val context: Context = ApplicationProvider.getApplicationContext()
-
     // ========== JSON Format Tests ==========
 
     @Test
@@ -215,7 +214,8 @@ class ReticulumServiceBleTest {
             JSONArray(invalidJson)
             fail("Should have thrown JSONException")
         } catch (e: JSONException) {
-            // Expected
+            // Expected - verify exception contains useful message
+            assertNotNull(e.message)
         }
     }
 
@@ -240,7 +240,8 @@ class ReticulumServiceBleTest {
             jsonObj.getString("peerName")
             fail("Should have thrown JSONException for missing field")
         } catch (e: JSONException) {
-            // Expected
+            // Expected - verify exception indicates missing key
+            assertTrue(e.message?.contains("peerName") == true)
         }
     }
 

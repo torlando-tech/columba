@@ -550,26 +550,71 @@ class ReticulumWrapper:
                     config_lines.append(f"    mode = {mode}")
 
             elif iface_type == "RNode":
-                # RNode interfaces are handled specially via ColumbaRNodeInterface
-                # Don't write to config file - standard RNodeInterface uses jnius which doesn't work with Chaquopy
-                # Store the config for later use by ColumbaRNodeInterface
-                self._pending_rnode_config = {
-                    "name": iface.get("name", "RNode LoRa"),
-                    "target_device_name": iface.get("target_device_name", iface.get("port", "")),
-                    "connection_mode": iface.get("connection_mode", "classic"),
-                    "frequency": iface.get("frequency", 915000000),
-                    "bandwidth": iface.get("bandwidth", 125000),
-                    "tx_power": iface.get("tx_power", 7),
-                    "spreading_factor": iface.get("spreading_factor", 7),
-                    "coding_rate": iface.get("coding_rate", 5),
-                    "st_alock": iface.get("st_alock"),
-                    "lt_alock": iface.get("lt_alock"),
-                    "mode": iface.get("mode", "full"),
-                    "enable_framebuffer": iface.get("enable_framebuffer", True),  # Display Columba logo on RNode
-                }
-                log_info("ReticulumWrapper", "_create_config_file",
-                        f"RNode config stored for ColumbaRNodeInterface: {self._pending_rnode_config['target_device_name']}")
-                continue  # Skip writing to config file
+                connection_mode = iface.get("connection_mode", "classic")
+
+                if connection_mode == "tcp":
+                    # TCP/WiFi RNode - write to config file for standard RNodeInterface
+                    # TCP sockets are standard Python and work fine with Chaquopy
+                    tcp_host = iface.get("tcp_host", "")
+                    tcp_port = iface.get("tcp_port", 7633)
+
+                    config_lines.append("    type = RNodeInterface")
+                    config_lines.append("    enabled = yes")
+
+                    # Format port as tcp://host:port (or just tcp://host if default port)
+                    if tcp_port == 7633:
+                        config_lines.append(f"    port = tcp://{tcp_host}")
+                    else:
+                        config_lines.append(f"    port = tcp://{tcp_host}:{tcp_port}")
+
+                    # LoRa parameters
+                    frequency = iface.get("frequency", 915000000)
+                    bandwidth = iface.get("bandwidth", 125000)
+                    tx_power = iface.get("tx_power", 7)
+                    spreading_factor = iface.get("spreading_factor", 7)
+                    coding_rate = iface.get("coding_rate", 5)
+
+                    config_lines.append(f"    frequency = {frequency}")
+                    config_lines.append(f"    bandwidth = {bandwidth}")
+                    config_lines.append(f"    txpower = {tx_power}")
+                    config_lines.append(f"    spreadingfactor = {spreading_factor}")
+                    config_lines.append(f"    codingrate = {coding_rate}")
+
+                    # Optional airtime limits
+                    st_alock = iface.get("st_alock")
+                    lt_alock = iface.get("lt_alock")
+                    if st_alock is not None:
+                        config_lines.append(f"    airtime_limit_short = {st_alock}")
+                    if lt_alock is not None:
+                        config_lines.append(f"    airtime_limit_long = {lt_alock}")
+
+                    mode = iface.get("mode", "full")
+                    if mode != "full":
+                        config_lines.append(f"    interface_mode = {mode}")
+
+                    log_info("ReticulumWrapper", "_create_config_file",
+                            f"RNode TCP config written: tcp://{tcp_host}:{tcp_port}")
+                else:
+                    # Bluetooth RNode - handled specially via ColumbaRNodeInterface
+                    # Don't write to config file - standard RNodeInterface uses jnius which doesn't work with Chaquopy
+                    # Store the config for later use by ColumbaRNodeInterface
+                    self._pending_rnode_config = {
+                        "name": iface.get("name", "RNode LoRa"),
+                        "target_device_name": iface.get("target_device_name", iface.get("port", "")),
+                        "connection_mode": connection_mode,
+                        "frequency": iface.get("frequency", 915000000),
+                        "bandwidth": iface.get("bandwidth", 125000),
+                        "tx_power": iface.get("tx_power", 7),
+                        "spreading_factor": iface.get("spreading_factor", 7),
+                        "coding_rate": iface.get("coding_rate", 5),
+                        "st_alock": iface.get("st_alock"),
+                        "lt_alock": iface.get("lt_alock"),
+                        "mode": iface.get("mode", "full"),
+                        "enable_framebuffer": iface.get("enable_framebuffer", True),  # Display Columba logo on RNode
+                    }
+                    log_info("ReticulumWrapper", "_create_config_file",
+                            f"RNode Bluetooth config stored for ColumbaRNodeInterface: {self._pending_rnode_config['target_device_name']}")
+                    continue  # Skip writing to config file for Bluetooth
 
             elif iface_type == "AndroidBLE":
                 config_lines.append("    type = AndroidBLE")

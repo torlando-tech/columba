@@ -226,19 +226,46 @@ class InterfaceRepository
                     }
 
                     "RNode" -> {
-                        val targetDeviceName = json.getString("target_device_name")
+                        val targetDeviceName = json.optString("target_device_name", "")
+                        val connectionMode = json.optString("connection_mode", "classic")
+                        val tcpHost = json.optString("tcp_host", "").ifEmpty { null }
+                        val tcpPort = json.optInt("tcp_port", 7633)
 
-                        // Validate device name (basic check - should be non-empty)
-                        if (targetDeviceName.isBlank()) {
-                            Log.e(TAG, "Empty RNode target device name in database")
-                            error("Empty RNode target device name")
+                        // Validate based on connection mode
+                        if (connectionMode == "tcp") {
+                            // TCP mode requires host
+                            if (tcpHost.isNullOrBlank()) {
+                                Log.e(TAG, "Empty RNode TCP host in database")
+                                error("Empty RNode TCP host")
+                            }
+                            // Validate TCP host format
+                            when (val result = InputValidator.validateHostname(tcpHost)) {
+                                is ValidationResult.Error -> {
+                                    Log.e(TAG, "Invalid RNode TCP host: $tcpHost - ${result.message}")
+                                    error("Invalid RNode TCP host: $tcpHost")
+                                }
+                                else -> {}
+                            }
+                            // Validate TCP port
+                            if (tcpPort !in 1..65535) {
+                                Log.e(TAG, "Invalid RNode TCP port: $tcpPort")
+                                error("Invalid RNode TCP port: $tcpPort")
+                            }
+                        } else {
+                            // Bluetooth modes require device name
+                            if (targetDeviceName.isBlank()) {
+                                Log.e(TAG, "Empty RNode target device name in database")
+                                error("Empty RNode target device name")
+                            }
                         }
 
                         InterfaceConfig.RNode(
                             name = entity.name,
                             enabled = entity.enabled,
                             targetDeviceName = targetDeviceName,
-                            connectionMode = json.optString("connection_mode", "classic"),
+                            connectionMode = connectionMode,
+                            tcpHost = tcpHost,
+                            tcpPort = tcpPort,
                             frequency = json.optLong("frequency", 915000000),
                             bandwidth = json.optInt("bandwidth", 125000),
                             txPower = json.optInt("tx_power", 7),

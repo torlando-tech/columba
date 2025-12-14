@@ -501,4 +501,140 @@ class InterfaceRepositoryTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    // ========== TCP RNode Tests ==========
+
+    private fun createValidTcpRNodeEntity(
+        id: Long = 5,
+        name: String = "RNode WiFi",
+        enabled: Boolean = true,
+    ) = InterfaceEntity(
+        id = id,
+        name = name,
+        type = "RNode",
+        enabled = enabled,
+        configJson =
+            """{"target_device_name":"","connection_mode":"tcp","tcp_host":"10.0.0.50","tcp_port":7633,""" +
+                """"frequency":915000000,"bandwidth":125000,"tx_power":7,""" +
+                """"spreading_factor":7,"coding_rate":5,"mode":"full","enable_framebuffer":true}""",
+        displayOrder = 4,
+    )
+
+    @Test
+    fun `enabledInterfaces correctly converts valid TCP RNode`() =
+        runTest {
+            val entity = createValidTcpRNodeEntity()
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(entity))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                assertEquals(1, interfaces.size)
+                val config = interfaces[0] as InterfaceConfig.RNode
+                assertEquals("RNode WiFi", config.name)
+                assertEquals("tcp", config.connectionMode)
+                assertEquals("10.0.0.50", config.tcpHost)
+                assertEquals(7633, config.tcpPort)
+                assertEquals("", config.targetDeviceName) // Empty for TCP mode
+                assertEquals(915000000L, config.frequency)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces skips TCP RNode with empty tcp_host`() =
+        runTest {
+            val invalidTcpRNode =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Invalid TCP RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson =
+                        """{"target_device_name":"","connection_mode":"tcp","tcp_host":"","tcp_port":7633,""" +
+                            """"frequency":915000000}""",
+                    displayOrder = 0,
+                )
+            val validAuto = createValidAutoInterfaceEntity(id = 2)
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(invalidTcpRNode, validAuto))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                // TCP RNode with empty host should be skipped
+                assertEquals(1, interfaces.size)
+                assertTrue(interfaces[0] is InterfaceConfig.AutoInterface)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces allows TCP RNode without target_device_name`() =
+        runTest {
+            // TCP mode should work even without target_device_name (it's not used)
+            val tcpRNodeNoDeviceName =
+                InterfaceEntity(
+                    id = 1,
+                    name = "TCP RNode No Device",
+                    type = "RNode",
+                    enabled = true,
+                    configJson =
+                        """{"connection_mode":"tcp","tcp_host":"192.168.1.100","tcp_port":7633,""" +
+                            """"frequency":915000000,"bandwidth":125000}""",
+                    displayOrder = 0,
+                )
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(tcpRNodeNoDeviceName))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                assertEquals(1, interfaces.size)
+                val config = interfaces[0] as InterfaceConfig.RNode
+                assertEquals("tcp", config.connectionMode)
+                assertEquals("192.168.1.100", config.tcpHost)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces skips TCP RNode with invalid tcp_port`() =
+        runTest {
+            val invalidPortRNode =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Invalid Port TCP RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson =
+                        """{"connection_mode":"tcp","tcp_host":"10.0.0.1","tcp_port":99999,""" +
+                            """"frequency":915000000}""",
+                    displayOrder = 0,
+                )
+            val validAuto = createValidAutoInterfaceEntity(id = 2)
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(invalidPortRNode, validAuto))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                // TCP RNode with invalid port should be skipped
+                assertEquals(1, interfaces.size)
+                assertTrue(interfaces[0] is InterfaceConfig.AutoInterface)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

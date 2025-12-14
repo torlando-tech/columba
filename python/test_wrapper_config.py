@@ -1122,5 +1122,173 @@ class TestStateTransitions(unittest.TestCase):
             self.fail(f"Wrapper failed to handle device type cache exception: {e}")
 
 
+class TestTcpRNodeConfigGeneration(unittest.TestCase):
+    """Test TCP RNode configuration generation in _create_config_file"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        self.config_path = os.path.join(self.temp_dir, "config")
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_create_config_tcp_rnode_writes_complete_config(self):
+        """Test TCP RNode with all LoRa parameters writes complete config file."""
+        interfaces = [{
+            "type": "RNode",
+            "name": "Test TCP RNode",
+            "connection_mode": "tcp",
+            "tcp_host": "192.168.1.100",
+            "frequency": 915000000,
+            "bandwidth": 125000,
+            "tx_power": 17,
+            "spreading_factor": 8,
+            "coding_rate": 5
+        }]
+
+        result = self.wrapper._create_config_file(interfaces)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        # Verify all required parameters are present
+        self.assertIn("type = RNodeInterface", content)
+        self.assertIn("enabled = yes", content)
+        self.assertIn("tcp_host = 192.168.1.100", content)
+        self.assertIn("frequency = 915000000", content)
+        self.assertIn("bandwidth = 125000", content)
+        self.assertIn("txpower = 17", content)
+        self.assertIn("spreadingfactor = 8", content)
+        self.assertIn("codingrate = 5", content)
+
+    def test_create_config_tcp_rnode_includes_airtime_limits(self):
+        """Test st_alock and lt_alock are written when present."""
+        interfaces = [{
+            "type": "RNode",
+            "name": "RNode with Limits",
+            "connection_mode": "tcp",
+            "tcp_host": "192.168.1.100",
+            "frequency": 869525000,
+            "bandwidth": 250000,
+            "tx_power": 14,
+            "spreading_factor": 10,
+            "coding_rate": 5,
+            "st_alock": 15,
+            "lt_alock": 5
+        }]
+
+        result = self.wrapper._create_config_file(interfaces)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        # Verify airtime limits are present
+        self.assertIn("airtime_limit_short = 15", content)
+        self.assertIn("airtime_limit_long = 5", content)
+
+    def test_create_config_tcp_rnode_omits_airtime_limits_when_none(self):
+        """Test airtime limits are omitted when not specified."""
+        interfaces = [{
+            "type": "RNode",
+            "name": "RNode No Limits",
+            "connection_mode": "tcp",
+            "tcp_host": "192.168.1.100",
+            "frequency": 915000000,
+            "bandwidth": 125000,
+            "tx_power": 17,
+            "spreading_factor": 8,
+            "coding_rate": 5
+            # No st_alock or lt_alock specified
+        }]
+
+        result = self.wrapper._create_config_file(interfaces)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        # Verify airtime limits are not present
+        self.assertNotIn("airtime_limit_short", content)
+        self.assertNotIn("airtime_limit_long", content)
+
+    def test_create_config_tcp_rnode_handles_gateway_mode(self):
+        """Test interface_mode is written for non-full modes."""
+        interfaces = [{
+            "type": "RNode",
+            "name": "Gateway RNode",
+            "connection_mode": "tcp",
+            "tcp_host": "192.168.1.100",
+            "frequency": 915000000,
+            "bandwidth": 125000,
+            "tx_power": 17,
+            "spreading_factor": 8,
+            "coding_rate": 5,
+            "mode": "gateway"
+        }]
+
+        result = self.wrapper._create_config_file(interfaces)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        # Verify interface_mode is present for non-full mode
+        self.assertIn("interface_mode = gateway", content)
+
+    def test_create_config_tcp_rnode_omits_mode_when_full(self):
+        """Test interface_mode is omitted when mode is 'full' (default)."""
+        interfaces = [{
+            "type": "RNode",
+            "name": "Full Mode RNode",
+            "connection_mode": "tcp",
+            "tcp_host": "192.168.1.100",
+            "frequency": 915000000,
+            "bandwidth": 125000,
+            "tx_power": 17,
+            "spreading_factor": 8,
+            "coding_rate": 5,
+            "mode": "full"
+        }]
+
+        result = self.wrapper._create_config_file(interfaces)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        # Verify interface_mode is not present for full mode
+        self.assertNotIn("interface_mode", content)
+
+    def test_create_config_tcp_rnode_with_boundary_mode(self):
+        """Test interface_mode is written for boundary mode."""
+        interfaces = [{
+            "type": "RNode",
+            "name": "Boundary RNode",
+            "connection_mode": "tcp",
+            "tcp_host": "192.168.1.100",
+            "frequency": 915000000,
+            "bandwidth": 125000,
+            "tx_power": 17,
+            "spreading_factor": 8,
+            "coding_rate": 5,
+            "mode": "boundary"
+        }]
+
+        result = self.wrapper._create_config_file(interfaces)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        # Verify interface_mode is present for boundary mode
+        self.assertIn("interface_mode = boundary", content)
+
+
 if __name__ == '__main__':
     unittest.main()

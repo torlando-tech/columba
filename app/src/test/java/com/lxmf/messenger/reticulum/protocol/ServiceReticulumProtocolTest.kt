@@ -533,4 +533,74 @@ class ServiceReticulumProtocolTest {
         assertTrue(jsonObject.getBoolean("prefer_own_instance"))
         assertFalse(jsonObject.getBoolean("enable_transport"))
     }
+
+    @Test
+    fun `buildConfigJson - includes RNode TCP host and port when set`() {
+        // Given
+        val rnodeConfig = InterfaceConfig.RNode(
+            name = "Test TCP RNode",
+            enabled = true,
+            connectionMode = "tcp",
+            tcpHost = "192.168.1.100",
+            tcpPort = 7633,
+            frequency = 915000000,
+            bandwidth = 125000,
+            txPower = 17,
+            spreadingFactor = 8,
+            codingRate = 5,
+        )
+        val config = ReticulumConfig(
+            storagePath = "/test/path",
+            enabledInterfaces = listOf(rnodeConfig),
+        )
+
+        // When
+        val json = protocol.buildConfigJson(config)
+
+        // Then
+        val jsonObject = org.json.JSONObject(json)
+        val interfaces = jsonObject.getJSONArray("enabledInterfaces")
+        assertEquals(1, interfaces.length())
+
+        val ifaceJson = interfaces.getJSONObject(0)
+        assertEquals("RNode", ifaceJson.getString("type"))
+        assertEquals("tcp", ifaceJson.getString("connection_mode"))
+        assertEquals("192.168.1.100", ifaceJson.getString("tcp_host"))
+        assertEquals(7633, ifaceJson.getInt("tcp_port"))
+    }
+
+    @Test
+    fun `buildConfigJson - RNode omits tcp_host when null`() {
+        // Given - Bluetooth RNode without tcp_host
+        val rnodeConfig = InterfaceConfig.RNode(
+            name = "Test BLE RNode",
+            enabled = true,
+            targetDeviceName = "RNode A1B2",
+            connectionMode = "ble",
+            tcpHost = null,
+            tcpPort = 7633,
+            frequency = 915000000,
+            bandwidth = 125000,
+            txPower = 17,
+            spreadingFactor = 8,
+            codingRate = 5,
+        )
+        val config = ReticulumConfig(
+            storagePath = "/test/path",
+            enabledInterfaces = listOf(rnodeConfig),
+        )
+
+        // When
+        val json = protocol.buildConfigJson(config)
+
+        // Then
+        val jsonObject = org.json.JSONObject(json)
+        val interfaces = jsonObject.getJSONArray("enabledInterfaces")
+        val ifaceJson = interfaces.getJSONObject(0)
+
+        // tcp_host should not be present when null
+        assertFalse(ifaceJson.has("tcp_host"))
+        // tcp_port is always included
+        assertEquals(7633, ifaceJson.getInt("tcp_port"))
+    }
 }

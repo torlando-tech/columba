@@ -1067,4 +1067,195 @@ class RNodeWizardViewModelTest {
                 assertNull(state.pendingAssociationIntent)
             }
         }
+
+    // ========== getPopularPresetsForRegion Tests ==========
+
+    @Test
+    fun `getPopularPresetsForRegion returns empty when no region selected`() =
+        runTest {
+            // No region selected by default
+            val presets = viewModel.getPopularPresetsForRegion()
+            assertTrue(presets.isEmpty())
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns US presets for US region`() =
+        runTest {
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            assertTrue(presets.isNotEmpty())
+            assertTrue(presets.all { it.countryCode == "US" })
+            assertTrue(presets.size <= 5)
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns AU presets for Australia region`() =
+        runTest {
+            val auRegion = FrequencyRegions.findById("au_915")!!
+            viewModel.selectFrequencyRegion(auRegion)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            assertTrue(presets.isNotEmpty())
+            assertTrue(presets.all { it.countryCode == "AU" })
+            assertTrue(presets.size <= 5)
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns EU_L presets for EU 868 L region`() =
+        runTest {
+            viewModel.selectFrequencyRegion(euRegionL)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            // EU_L is 865-868 MHz, presets should be in that range
+            assertTrue(presets.all { it.frequency in 865_000_000..867_999_999 })
+            assertTrue(presets.size <= 5)
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns EU_M presets for EU 868 M region`() =
+        runTest {
+            val euRegionM = FrequencyRegions.findById("eu_868_m")!!
+            viewModel.selectFrequencyRegion(euRegionM)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            // EU_M is 868-868.6 MHz
+            assertTrue(presets.all { it.frequency in 868_000_000..868_599_999 })
+            assertTrue(presets.size <= 5)
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns EU_P presets for EU 868 P region`() =
+        runTest {
+            viewModel.selectFrequencyRegion(euRegionP)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            // EU_P is 869.4-869.65 MHz
+            assertTrue(presets.all { it.frequency in 869_400_000..869_650_000 })
+            assertTrue(presets.size <= 5)
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns EU_Q presets for EU 868 Q region`() =
+        runTest {
+            val euRegionQ = FrequencyRegions.findById("eu_868_q")!!
+            viewModel.selectFrequencyRegion(euRegionQ)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            // EU_Q is 869.7-870 MHz
+            assertTrue(presets.all { it.frequency in 869_700_000..869_999_999 })
+            assertTrue(presets.size <= 5)
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns 433 MHz presets for EU 433 region`() =
+        runTest {
+            val eu433Region = FrequencyRegions.findById("eu_433")!!
+            viewModel.selectFrequencyRegion(eu433Region)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            // EU 433 MHz band is 430-440 MHz
+            assertTrue(presets.all { it.frequency in 430_000_000..440_000_000 })
+            assertTrue(presets.size <= 5)
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns 2_4 GHz presets for lora_24 region`() =
+        runTest {
+            val lora24Region = FrequencyRegions.findById("lora_24")!!
+            viewModel.selectFrequencyRegion(lora24Region)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            // 2.4 GHz band is 2400-2500 MHz
+            assertTrue(presets.all { it.frequency in 2_400_000_000..2_500_000_000 })
+            assertTrue(presets.size <= 5)
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns empty for Brazil region`() =
+        runTest {
+            viewModel.selectFrequencyRegion(brazilRegion)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            assertTrue(presets.isEmpty())
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns empty for Russia region`() =
+        runTest {
+            val ruRegion = FrequencyRegions.findById("ru_868")!!
+            viewModel.selectFrequencyRegion(ruRegion)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            assertTrue(presets.isEmpty())
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns empty for Japan region`() =
+        runTest {
+            val jpRegion = FrequencyRegions.findById("jp_920")!!
+            viewModel.selectFrequencyRegion(jpRegion)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            assertTrue(presets.isEmpty())
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns Asia-Pacific presets for Malaysia region`() =
+        runTest {
+            val myRegion = FrequencyRegions.findById("my_919")!!
+            viewModel.selectFrequencyRegion(myRegion)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            // Asia-Pacific countries share presets
+            assertTrue(presets.all { it.countryCode in listOf("MY", "SG", "TH") })
+            assertTrue(presets.size <= 5)
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion returns Asia-Pacific presets for Singapore region`() =
+        runTest {
+            val sgRegion = FrequencyRegions.findById("sg_923")!!
+            viewModel.selectFrequencyRegion(sgRegion)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            // Asia-Pacific countries share presets
+            assertTrue(presets.all { it.countryCode in listOf("MY", "SG", "TH") })
+            assertTrue(presets.size <= 5)
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion excludes 433 MHz from non-433 regions`() =
+        runTest {
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            // US presets should not include 433 MHz frequencies
+            assertTrue(presets.none { it.frequency in 430_000_000..440_000_000 })
+        }
+
+    @Test
+    fun `getPopularPresetsForRegion excludes 2_4 GHz from non-2_4 regions`() =
+        runTest {
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            val presets = viewModel.getPopularPresetsForRegion()
+            // US presets should not include 2.4 GHz frequencies
+            assertTrue(presets.none { it.frequency in 2_400_000_000..2_500_000_000 })
+        }
 }

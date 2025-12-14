@@ -785,4 +785,36 @@ class InterfaceRepositoryTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    @Test
+    fun `enabledInterfaces skips TCP RNode with invalid tcp_host format`() =
+        runTest {
+            // Host with invalid characters should be rejected
+            val invalidHostRNode =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Invalid Host TCP RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson =
+                        """{"connection_mode":"tcp","tcp_host":"invalid host with spaces","tcp_port":7633,""" +
+                            """"frequency":915000000}""",
+                    displayOrder = 0,
+                )
+            val validAuto = createValidAutoInterfaceEntity(id = 2)
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(invalidHostRNode, validAuto))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                // TCP RNode with invalid hostname format should be skipped
+                assertEquals(1, interfaces.size)
+                assertTrue(interfaces[0] is InterfaceConfig.AutoInterface)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

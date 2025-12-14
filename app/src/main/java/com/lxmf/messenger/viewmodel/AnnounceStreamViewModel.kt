@@ -9,10 +9,13 @@ import androidx.paging.filter
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.PropagationNodeManager
+import kotlinx.coroutines.delay
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
+@Suppress("TooManyFunctions") // ViewModels naturally have many public functions for UI interactions
 @HiltViewModel
 class AnnounceStreamViewModel
     @Inject
@@ -35,6 +39,7 @@ class AnnounceStreamViewModel
         private val announceRepository: AnnounceRepository,
         private val contactRepository: com.lxmf.messenger.data.repository.ContactRepository,
         private val propagationNodeManager: PropagationNodeManager,
+        private val identityRepository: IdentityRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "AnnounceStreamViewModel"
@@ -106,6 +111,16 @@ class AnnounceStreamViewModel
 
         private val _initializationStatus = MutableStateFlow<String>("Initializing...")
         val initializationStatus: StateFlow<String> = _initializationStatus.asStateFlow()
+
+        // Manual announce state
+        private val _isAnnouncing = MutableStateFlow(false)
+        val isAnnouncing: StateFlow<Boolean> = _isAnnouncing.asStateFlow()
+
+        private val _announceSuccess = MutableStateFlow(false)
+        val announceSuccess: StateFlow<Boolean> = _announceSuccess.asStateFlow()
+
+        private val _announceError = MutableStateFlow<String?>(null)
+        val announceError: StateFlow<String?> = _announceError.asStateFlow()
 
         init {
             // Reticulum is now initialized by ColumbaApplication with config from database
@@ -307,6 +322,72 @@ class AnnounceStreamViewModel
 
         fun updateShowAudioAnnounces(show: Boolean) {
             _showAudioAnnounces.value = show
+        }
+
+        /**
+         * Trigger a manual announce immediately.
+         */
+        fun triggerAnnounce() {
+            viewModelScope.launch {
+                try {
+                    _isAnnouncing.value = true
+                    _announceSuccess.value = false
+                    _announceError.value = null
+                    Log.d(TAG, "Triggering manual announce...")
+
+                    // Get display name from active identity
+                    val displayName = identityRepository.getActiveIdentitySync()?.displayName ?: "Unknown"
+
+                    // Trigger announce if using ServiceReticulumProtocol
+                    val protocol = reticulumProtocol
+                    if (protocol is ServiceReticulumProtocol) {
+                        val result = protocol.triggerAutoAnnounce(displayName)
+
+                        if (result.isSuccess) {
+                            _isAnnouncing.value = false
+                            _announceSuccess.value = true
+                            Log.d(TAG, "Manual announce successful")
+
+                            // Auto-dismiss success message after 3 seconds
+                            delay(3000)
+                            clearAnnounceStatus()
+                        } else {
+                            val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                            _isAnnouncing.value = false
+                            _announceError.value = error
+                            Log.e(TAG, "Manual announce failed: $error")
+
+                            // Auto-dismiss error message after 5 seconds
+                            delay(5000)
+                            clearAnnounceStatus()
+                        }
+                    } else {
+                        _isAnnouncing.value = false
+                        _announceError.value = "Service not available"
+                        Log.w(TAG, "Manual announce skipped: ReticulumProtocol is not ServiceReticulumProtocol")
+
+                        // Auto-dismiss error message after 5 seconds
+                        delay(5000)
+                        clearAnnounceStatus()
+                    }
+                } catch (e: Exception) {
+                    _isAnnouncing.value = false
+                    _announceError.value = e.message ?: "Error triggering announce"
+                    Log.e(TAG, "Error triggering manual announce", e)
+
+                    // Auto-dismiss error message after 5 seconds
+                    delay(5000)
+                    clearAnnounceStatus()
+                }
+            }
+        }
+
+        /**
+         * Clear manual announce status messages.
+         */
+        fun clearAnnounceStatus() {
+            _announceSuccess.value = false
+            _announceError.value = null
         }
 
         /**

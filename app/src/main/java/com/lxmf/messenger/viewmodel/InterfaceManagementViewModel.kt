@@ -548,6 +548,28 @@ class InterfaceManagementViewModel
                 }
             }
 
+            // VALIDATION: Check for duplicate interface names
+            // RNS config uses section names like [[Interface Name]], so duplicates cause parsing errors
+            if (isValid) { // Only check if name is otherwise valid
+                val existingNames = _state.value.interfaces.map { it.name }
+                val excludeName = _state.value.editingInterface?.name
+                when (
+                    val uniqueResult = InputValidator.validateInterfaceNameUniqueness(
+                        config.name,
+                        existingNames,
+                        excludeName,
+                    )
+                ) {
+                    is ValidationResult.Error -> {
+                        _configState.value = _configState.value.copy(nameError = uniqueResult.message)
+                        isValid = false
+                    }
+                    is ValidationResult.Success -> {
+                        // Name is unique, keep any previous success state
+                    }
+                }
+            }
+
             // Type-specific validation
             when (config.type) {
                 "TCPClient" -> {

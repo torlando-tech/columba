@@ -372,6 +372,36 @@ object InputValidator {
     }
 
     /**
+     * Validates that an interface name is unique among existing interfaces.
+     *
+     * RNS config files use section names like [[Interface Name]], so duplicate names
+     * will cause config parsing errors that crash the service.
+     *
+     * @param name The interface name to validate
+     * @param existingNames List of names already in use by other interfaces
+     * @param excludeName Optional name to exclude from the check (for editing existing interfaces)
+     * @return ValidationResult.Success if unique, or ValidationResult.Error if duplicate
+     */
+    fun validateInterfaceNameUniqueness(
+        name: String,
+        existingNames: List<String>,
+        excludeName: String? = null,
+    ): ValidationResult<String> {
+        val trimmed = name.trim()
+        val namesToCheck = if (excludeName != null) {
+            existingNames.filter { it != excludeName }
+        } else {
+            existingNames
+        }
+
+        return if (namesToCheck.any { it.equals(trimmed, ignoreCase = true) }) {
+            ValidationResult.Error("An interface with this name already exists")
+        } else {
+            ValidationResult.Success(trimmed)
+        }
+    }
+
+    /**
      * Validates a BLE device name.
      *
      * Checks:

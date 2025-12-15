@@ -418,4 +418,230 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     // endregion
+
+    // region Duplicate Interface Name Validation Tests
+
+    @Test
+    fun `validateConfig sets nameError for duplicate interface name`() =
+        runTest {
+            // Create existing interface
+            val existingEntity =
+                InterfaceEntity(
+                    id = 1L,
+                    name = "Existing Interface",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson = """{"target_host": "10.0.0.1", "target_port": 4242}""",
+                    displayOrder = 0,
+                )
+
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(listOf(existingEntity))
+            every { interfaceRepository.entityToConfig(existingEntity) } returns
+                InterfaceConfig.TCPClient(
+                    name = "Existing Interface",
+                    enabled = true,
+                    targetHost = "10.0.0.1",
+                    targetPort = 4242,
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Show add dialog (not editing)
+            viewModel.showAddDialog()
+            advanceUntilIdle()
+
+            // Set name to duplicate using updateConfigState
+            viewModel.updateConfigState { it.copy(
+                name = "Existing Interface",
+                type = "TCPClient",
+                targetHost = "192.168.1.1",
+                targetPort = "4242",
+            ) }
+            advanceUntilIdle()
+
+            // Try to save - should fail validation
+            viewModel.saveInterface()
+            advanceUntilIdle()
+
+            // Check nameError is set
+            viewModel.configState.test {
+                val configState = awaitItem()
+                assertNotNull(configState.nameError)
+                assertTrue(configState.nameError!!.contains("already exists"))
+            }
+        }
+
+    @Test
+    fun `validateConfig sets nameError for case-insensitive duplicate`() =
+        runTest {
+            val existingEntity =
+                InterfaceEntity(
+                    id = 1L,
+                    name = "My Interface",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson = """{"target_host": "10.0.0.1", "target_port": 4242}""",
+                    displayOrder = 0,
+                )
+
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(listOf(existingEntity))
+            every { interfaceRepository.entityToConfig(existingEntity) } returns
+                InterfaceConfig.TCPClient(
+                    name = "My Interface",
+                    enabled = true,
+                    targetHost = "10.0.0.1",
+                    targetPort = 4242,
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.showAddDialog()
+            advanceUntilIdle()
+
+            // Set name to case-insensitive duplicate using updateConfigState
+            viewModel.updateConfigState { it.copy(
+                name = "my interface",
+                type = "TCPClient",
+                targetHost = "192.168.1.1",
+                targetPort = "4242",
+            ) }
+            advanceUntilIdle()
+
+            viewModel.saveInterface()
+            advanceUntilIdle()
+
+            viewModel.configState.test {
+                val configState = awaitItem()
+                assertNotNull(configState.nameError)
+                assertTrue(configState.nameError!!.contains("already exists"))
+            }
+        }
+
+    @Test
+    fun `validateConfig allows same name when editing existing interface`() =
+        runTest {
+            val existingEntity =
+                InterfaceEntity(
+                    id = 1L,
+                    name = "My Interface",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson = """{"target_host": "10.0.0.1", "target_port": 4242}""",
+                    displayOrder = 0,
+                )
+
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(listOf(existingEntity))
+            every { interfaceRepository.entityToConfig(existingEntity) } returns
+                InterfaceConfig.TCPClient(
+                    name = "My Interface",
+                    enabled = true,
+                    targetHost = "10.0.0.1",
+                    targetPort = 4242,
+                )
+            coEvery { interfaceRepository.updateInterface(any(), any()) } returns Unit
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Edit existing interface (same name should be allowed)
+            viewModel.showEditDialog(existingEntity)
+            advanceUntilIdle()
+
+            // Keep the same name, just change host
+            viewModel.updateConfigState { it.copy(targetHost = "192.168.1.100") }
+            advanceUntilIdle()
+
+            viewModel.saveInterface()
+            advanceUntilIdle()
+
+            // Should not have name error (same name is allowed when editing)
+            viewModel.configState.test {
+                val configState = awaitItem()
+                assertEquals(null, configState.nameError)
+            }
+        }
+
+    @Test
+    fun `validateConfig rejects duplicate when editing to another existing name`() =
+        runTest {
+            val existingEntity1 =
+                InterfaceEntity(
+                    id = 1L,
+                    name = "Interface One",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson = """{"target_host": "10.0.0.1", "target_port": 4242}""",
+                    displayOrder = 0,
+                )
+            val existingEntity2 =
+                InterfaceEntity(
+                    id = 2L,
+                    name = "Interface Two",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson = """{"target_host": "10.0.0.2", "target_port": 4242}""",
+                    displayOrder = 1,
+                )
+
+            every { interfaceRepository.allInterfaceEntities } returns
+                flowOf(listOf(existingEntity1, existingEntity2))
+            every { interfaceRepository.entityToConfig(existingEntity1) } returns
+                InterfaceConfig.TCPClient(
+                    name = "Interface One",
+                    enabled = true,
+                    targetHost = "10.0.0.1",
+                    targetPort = 4242,
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Edit Interface One and try to rename to Interface Two
+            viewModel.showEditDialog(existingEntity1)
+            advanceUntilIdle()
+
+            viewModel.updateConfigState { it.copy(name = "Interface Two") } // Duplicate of other interface
+            advanceUntilIdle()
+
+            viewModel.saveInterface()
+            advanceUntilIdle()
+
+            viewModel.configState.test {
+                val configState = awaitItem()
+                assertNotNull(configState.nameError)
+                assertTrue(configState.nameError!!.contains("already exists"))
+            }
+        }
+
+    // endregion
 }

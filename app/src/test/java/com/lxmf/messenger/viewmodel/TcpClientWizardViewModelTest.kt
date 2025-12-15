@@ -9,10 +9,12 @@ import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -63,6 +65,9 @@ class TcpClientWizardViewModelTest {
 
         interfaceRepository = mockk(relaxed = true)
         configManager = mockk(relaxed = true)
+
+        // Mock allInterfaces to return empty list (no duplicates)
+        every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
 
         viewModel = TcpClientWizardViewModel(interfaceRepository, configManager)
     }
@@ -795,6 +800,112 @@ class TcpClientWizardViewModelTest {
                 val clearedState = awaitItem()
                 assertNull(clearedState.saveError)
             }
+        }
+
+    // ========== Duplicate Interface Name Tests ==========
+
+    @Test
+    fun `saveConfiguration fails with duplicate interface name`() =
+        runTest {
+            // Mock existing interfaces with a name that will conflict
+            val existingInterface = InterfaceConfig.TCPClient(
+                name = "Test Server",
+                enabled = true,
+                targetHost = "existing.example.com",
+                targetPort = 4242,
+            )
+            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                // Try to save with duplicate name
+                viewModel.selectServer(testServer) // Sets name to "Test Server"
+                advanceUntilIdle()
+                awaitItem() // Server selected
+
+                viewModel.saveConfiguration()
+                advanceUntilIdle()
+
+                val finalState = expectMostRecentItem()
+                assertNotNull(finalState.saveError)
+                assertTrue(finalState.saveError!!.contains("already exists"))
+                assertFalse(finalState.saveSuccess)
+                assertFalse(finalState.isSaving)
+            }
+        }
+
+    @Test
+    fun `saveConfiguration fails with case-insensitive duplicate name`() =
+        runTest {
+            // Mock existing interface with different case
+            val existingInterface = InterfaceConfig.TCPClient(
+                name = "test server",
+                enabled = true,
+                targetHost = "existing.example.com",
+                targetPort = 4242,
+            )
+            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                // Try to save with "Test Server" (different case)
+                viewModel.selectServer(testServer)
+                advanceUntilIdle()
+                awaitItem()
+
+                viewModel.saveConfiguration()
+                advanceUntilIdle()
+
+                val finalState = expectMostRecentItem()
+                assertNotNull(finalState.saveError)
+                assertTrue(finalState.saveError!!.contains("already exists"))
+            }
+        }
+
+    @Test
+    fun `saveConfiguration succeeds with unique interface name`() =
+        runTest {
+            // Mock no existing interfaces
+            every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
+            coEvery { interfaceRepository.insertInterface(any()) } returns 1L
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.selectServer(testServer)
+                advanceUntilIdle()
+                awaitItem()
+
+                viewModel.saveConfiguration()
+                advanceUntilIdle()
+
+                val finalState = expectMostRecentItem()
+                assertNull(finalState.saveError)
+                assertTrue(finalState.saveSuccess)
+            }
+        }
+
+    @Test
+    fun `saveConfiguration does not call repository when duplicate name detected`() =
+        runTest {
+            val existingInterface = InterfaceConfig.TCPClient(
+                name = "Test Server",
+                enabled = true,
+                targetHost = "existing.example.com",
+                targetPort = 4242,
+            )
+            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+
+            viewModel.selectServer(testServer)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            // Should NOT call insertInterface because duplicate was detected
+            coVerify(exactly = 0) { interfaceRepository.insertInterface(any()) }
         }
 
     // ========== Community Servers Tests ==========

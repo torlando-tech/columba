@@ -331,6 +331,68 @@ class InputValidatorTest {
         assertTrue(result is ValidationResult.Error)
     }
 
+    // ========== INTERFACE NAME UNIQUENESS TESTS ==========
+
+    @Test
+    fun `validateInterfaceNameUniqueness - unique name passes`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
+        val result = InputValidator.validateInterfaceNameUniqueness("TCP Client 2", existingNames)
+        assertTrue(result is ValidationResult.Success)
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - duplicate name fails`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
+        val result = InputValidator.validateInterfaceNameUniqueness("RNode LoRa", existingNames)
+        assertTrue(result is ValidationResult.Error)
+        assertTrue((result as ValidationResult.Error).message.contains("already exists"))
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - case insensitive duplicate fails`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
+        val result = InputValidator.validateInterfaceNameUniqueness("rnode lora", existingNames)
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - excludeName allows editing same interface`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
+        // When editing "RNode LoRa", we should exclude it from the duplicate check
+        val result = InputValidator.validateInterfaceNameUniqueness(
+            "RNode LoRa",
+            existingNames,
+            excludeName = "RNode LoRa",
+        )
+        assertTrue(result is ValidationResult.Success)
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - excludeName still catches other duplicates`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
+        // When editing "TCP Client 1" but trying to rename to "RNode LoRa"
+        val result = InputValidator.validateInterfaceNameUniqueness(
+            "RNode LoRa",
+            existingNames,
+            excludeName = "TCP Client 1",
+        )
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - trims whitespace before comparison`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa")
+        val result = InputValidator.validateInterfaceNameUniqueness("  RNode LoRa  ", existingNames)
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - empty existing names passes`() {
+        val existingNames = emptyList<String>()
+        val result = InputValidator.validateInterfaceNameUniqueness("Any Name", existingNames)
+        assertTrue(result is ValidationResult.Success)
+    }
+
     // ========== DEVICE NAME VALIDATION TESTS ==========
 
     @Test

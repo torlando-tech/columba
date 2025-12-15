@@ -1,32 +1,36 @@
 package com.lxmf.messenger.data.repository
 
+import android.app.Application
+import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import com.lxmf.messenger.data.model.BleConnectionsState
 import com.lxmf.messenger.data.model.ConnectionType
+import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.test.BleTestFixtures
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
-import android.app.Application
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.time.Duration.Companion.seconds
@@ -42,17 +46,27 @@ class BleStatusRepositoryTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var mockProtocol: ServiceReticulumProtocol
     private lateinit var mockContext: Context
+    private lateinit var mockBridge: KotlinBLEBridge
     private lateinit var repository: BleStatusRepository
+    private lateinit var adapterStateFlow: MutableStateFlow<Int>
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         mockProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
         mockContext = ApplicationProvider.getApplicationContext()
+
+        // Mock the KotlinBLEBridge singleton
+        mockBridge = mockk(relaxed = true)
+        adapterStateFlow = MutableStateFlow(BluetoothAdapter.STATE_ON)
+        mockkObject(KotlinBLEBridge.Companion)
+        every { KotlinBLEBridge.getInstance(any()) } returns mockBridge
+        every { mockBridge.adapterState } returns adapterStateFlow
     }
 
     @After
     fun tearDown() {
+        unmockkObject(KotlinBLEBridge.Companion)
         clearAllMocks()
     }
 
@@ -201,7 +215,6 @@ class BleStatusRepositoryTest {
     // ========== getConnectedPeersFlow() Event-Driven Tests ==========
 
     @Test
-    @Ignore("Requires KotlinBLEBridge initialization which needs Android Bluetooth framework")
     fun getConnectedPeersFlow_emits_on_bleConnectionsFlow_event() =
         runTest {
             // Given - Mock the event-driven flow
@@ -210,7 +223,9 @@ class BleStatusRepositoryTest {
             repository = BleStatusRepository(mockContext, mockProtocol)
 
             // When - Emit connection event
-            bleConnectionsFlow.emit("""[{"identityHash":"abc123","address":"AA:BB:CC:DD:EE:FF","hasCentralConnection":true,"hasPeripheralConnection":false,"mtu":512}]""")
+            bleConnectionsFlow.emit(
+                """[{"identityHash":"abc123","address":"AA:BB:CC:DD:EE:FF","hasCentralConnection":true,"hasPeripheralConnection":false,"mtu":512}]""",
+            )
 
             // Then - Flow should emit immediately (no polling delay)
             repository.getConnectedPeersFlow().test(timeout = 5.seconds) {
@@ -221,7 +236,6 @@ class BleStatusRepositoryTest {
         }
 
     @Test
-    @Ignore("Requires KotlinBLEBridge initialization which needs Android Bluetooth framework")
     fun getConnectedPeersFlow_handles_empty_event() =
         runTest {
             // Given
@@ -242,7 +256,6 @@ class BleStatusRepositoryTest {
         }
 
     @Test
-    @Ignore("Requires KotlinBLEBridge initialization which needs Android Bluetooth framework")
     fun getConnectedPeersFlow_handles_malformed_event_json() =
         runTest {
             // Given
@@ -258,6 +271,118 @@ class BleStatusRepositoryTest {
                 val emission = awaitItem()
                 assertTrue(emission is BleConnectionsState.Success)
                 assertTrue((emission as BleConnectionsState.Success).connections.isEmpty())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getConnectedPeersFlow_emits_BluetoothDisabled_when_adapter_off() =
+        runTest {
+            // Given
+            val bleConnectionsFlow = MutableSharedFlow<String>(replay = 1)
+            every { mockProtocol.bleConnectionsFlow } returns bleConnectionsFlow
+            adapterStateFlow.value = BluetoothAdapter.STATE_OFF
+            repository = BleStatusRepository(mockContext, mockProtocol)
+
+            // When
+            bleConnectionsFlow.emit("[]")
+
+            // Then
+            repository.getConnectedPeersFlow().test(timeout = 5.seconds) {
+                val emission = awaitItem()
+                assertTrue("Expected BluetoothDisabled", emission is BleConnectionsState.BluetoothDisabled)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getConnectedPeersFlow_emits_Loading_when_adapter_turning_on() =
+        runTest {
+            // Given
+            val bleConnectionsFlow = MutableSharedFlow<String>(replay = 1)
+            every { mockProtocol.bleConnectionsFlow } returns bleConnectionsFlow
+            adapterStateFlow.value = BluetoothAdapter.STATE_TURNING_ON
+            repository = BleStatusRepository(mockContext, mockProtocol)
+
+            // When
+            bleConnectionsFlow.emit("[]")
+
+            // Then
+            repository.getConnectedPeersFlow().test(timeout = 5.seconds) {
+                val emission = awaitItem()
+                assertTrue("Expected Loading", emission is BleConnectionsState.Loading)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getConnectedPeersFlow_emits_BluetoothDisabled_when_adapter_turning_off() =
+        runTest {
+            // Given
+            val bleConnectionsFlow = MutableSharedFlow<String>(replay = 1)
+            every { mockProtocol.bleConnectionsFlow } returns bleConnectionsFlow
+            adapterStateFlow.value = BluetoothAdapter.STATE_TURNING_OFF
+            repository = BleStatusRepository(mockContext, mockProtocol)
+
+            // When
+            bleConnectionsFlow.emit("[]")
+
+            // Then
+            repository.getConnectedPeersFlow().test(timeout = 5.seconds) {
+                val emission = awaitItem()
+                assertTrue("Expected BluetoothDisabled", emission is BleConnectionsState.BluetoothDisabled)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getConnectedPeersFlow_parses_multiple_connections_correctly() =
+        runTest {
+            // Given
+            val bleConnectionsFlow = MutableSharedFlow<String>(replay = 1)
+            every { mockProtocol.bleConnectionsFlow } returns bleConnectionsFlow
+            repository = BleStatusRepository(mockContext, mockProtocol)
+
+            // When - Emit multiple connections
+            val json = """[
+                {"identityHash":"abc123","address":"AA:BB:CC:DD:EE:FF","hasCentralConnection":true,"hasPeripheralConnection":false,"mtu":512,"rssi":-50},
+                {"identityHash":"def456","address":"11:22:33:44:55:66","hasCentralConnection":false,"hasPeripheralConnection":true,"mtu":256,"rssi":-70}
+            ]"""
+            bleConnectionsFlow.emit(json)
+
+            // Then
+            repository.getConnectedPeersFlow().test(timeout = 5.seconds) {
+                val emission = awaitItem()
+                assertTrue(emission is BleConnectionsState.Success)
+                val connections = (emission as BleConnectionsState.Success).connections
+                assertEquals(2, connections.size)
+                assertEquals("abc123", connections[0].identityHash)
+                assertEquals(ConnectionType.CENTRAL, connections[0].connectionType)
+                assertEquals("def456", connections[1].identityHash)
+                assertEquals(ConnectionType.PERIPHERAL, connections[1].connectionType)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getConnectedPeersFlow_parses_BOTH_connection_type() =
+        runTest {
+            // Given
+            val bleConnectionsFlow = MutableSharedFlow<String>(replay = 1)
+            every { mockProtocol.bleConnectionsFlow } returns bleConnectionsFlow
+            repository = BleStatusRepository(mockContext, mockProtocol)
+
+            // When - Emit connection with both central and peripheral
+            val json = """[{"identityHash":"xyz789","address":"FF:EE:DD:CC:BB:AA","hasCentralConnection":true,"hasPeripheralConnection":true,"mtu":512}]"""
+            bleConnectionsFlow.emit(json)
+
+            // Then
+            repository.getConnectedPeersFlow().test(timeout = 5.seconds) {
+                val emission = awaitItem()
+                assertTrue(emission is BleConnectionsState.Success)
+                val connections = (emission as BleConnectionsState.Success).connections
+                assertEquals(1, connections.size)
+                assertEquals(ConnectionType.BOTH, connections[0].connectionType)
                 cancelAndIgnoreRemainingEvents()
             }
         }

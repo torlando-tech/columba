@@ -693,6 +693,10 @@ class ReticulumServiceBinder(
         // Note: BLE bridge is set in beforeInit callback (before Python initialization)
         // because AndroidBLEDriver needs it during Reticulum startup
 
+        // Wire up BLE coordinator to broadcast connection changes via IPC
+        bleCoordinator.setCallbackBroadcaster(broadcaster)
+        Log.d(TAG, "BLE coordinator callback broadcaster connected")
+
         // Initialize RNode interface if configured
         // (RNode bridge was set in beforeInit, but interface needs to be started after RNS init)
         try {

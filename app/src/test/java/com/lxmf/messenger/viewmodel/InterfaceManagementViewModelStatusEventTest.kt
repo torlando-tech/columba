@@ -1,10 +1,13 @@
 package com.lxmf.messenger.viewmodel
 
+import android.bluetooth.BluetoothAdapter
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
+import com.lxmf.messenger.data.model.BleConnectionInfo
 import com.lxmf.messenger.data.model.BleConnectionsState
+import com.lxmf.messenger.data.model.ConnectionType
 import com.lxmf.messenger.data.repository.BleStatusRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
@@ -424,12 +427,14 @@ class InterfaceManagementViewModelStatusEventTest {
             advanceUntilIdle()
 
             // Set name to duplicate using updateConfigState
-            viewModel.updateConfigState { it.copy(
-                name = "Existing Interface",
-                type = "TCPClient",
-                targetHost = "192.168.1.1",
-                targetPort = "4242",
-            ) }
+            viewModel.updateConfigState {
+                it.copy(
+                    name = "Existing Interface",
+                    type = "TCPClient",
+                    targetHost = "192.168.1.1",
+                    targetPort = "4242",
+                )
+            }
             advanceUntilIdle()
 
             // Try to save - should fail validation
@@ -480,12 +485,14 @@ class InterfaceManagementViewModelStatusEventTest {
             advanceUntilIdle()
 
             // Set name to case-insensitive duplicate using updateConfigState
-            viewModel.updateConfigState { it.copy(
-                name = "my interface",
-                type = "TCPClient",
-                targetHost = "192.168.1.1",
-                targetPort = "4242",
-            ) }
+            viewModel.updateConfigState {
+                it.copy(
+                    name = "my interface",
+                    type = "TCPClient",
+                    targetHost = "192.168.1.1",
+                    targetPort = "4242",
+                )
+            }
             advanceUntilIdle()
 
             viewModel.saveInterface()
@@ -607,6 +614,59 @@ class InterfaceManagementViewModelStatusEventTest {
                 assertTrue(configState.nameError!!.contains("already exists"))
             }
         }
+
+    // endregion
+
+    // region handleBluetoothStateChange Tests
+
+    @Test
+    fun `handleBluetoothStateChange returns early when no BLE interfaces enabled`() =
+        runTest {
+            // Given - no interfaces at all
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(emptyList())
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // When - Bluetooth state changes (no BLE interfaces = no infoMessage shown)
+            every { bleStatusRepository.getConnectedPeersFlow() } returns
+                flowOf(BleConnectionsState.BluetoothDisabled)
+
+            advanceUntilIdle()
+
+            // Then - No info message should be shown (early return path)
+            assertEquals(null, viewModel.state.value.infoMessage)
+        }
+
+    @Test
+    fun `observeBluetoothState handles BleConnectionsState Error variant`() =
+        runTest {
+            // Given - flow emits Error state
+            every { bleStatusRepository.getConnectedPeersFlow() } returns
+                flowOf(BleConnectionsState.Error("Test error message"))
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Then - Should treat as STATE_ON (assuming BT is on but there's an error)
+            assertEquals(BluetoothAdapter.STATE_ON, viewModel.state.value.bluetoothState)
+        }
+
+    // endregion
 
     // endregion
 }

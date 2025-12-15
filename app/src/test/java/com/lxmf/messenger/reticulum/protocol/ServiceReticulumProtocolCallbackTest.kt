@@ -218,4 +218,44 @@ class ServiceReticulumProtocolCallbackTest {
             val emitted = withTimeout(1000) { protocol.debugInfoFlow.first() }
             assertEquals("""{"version":3}""", emitted)
         }
+
+    @Test
+    fun `bleConnectionsFlow has replay of 1 for late subscribers`() =
+        runTest {
+            // Given - emit before subscribing
+            val callbackField =
+                ServiceReticulumProtocol::class.java
+                    .getDeclaredField("serviceCallback")
+            callbackField.isAccessible = true
+            val callback = callbackField.get(protocol) as IReticulumServiceCallback
+
+            val testJson = """[{"identityHash":"abc123"}]"""
+            callback.onBleConnectionChanged(testJson)
+
+            // When - subscribe after emission
+            val emitted = withTimeout(1000) { protocol.bleConnectionsFlow.first() }
+
+            // Then - should receive the replayed value
+            assertEquals(testJson, emitted)
+        }
+
+    @Test
+    fun `interfaceStatusFlow has replay of 1 for late subscribers`() =
+        runTest {
+            // Given - emit before subscribing
+            val callbackField =
+                ServiceReticulumProtocol::class.java
+                    .getDeclaredField("serviceCallback")
+            callbackField.isAccessible = true
+            val callback = callbackField.get(protocol) as IReticulumServiceCallback
+
+            val testJson = """{"WiFi":true,"BLE":false}"""
+            callback.onInterfaceStatusChanged(testJson)
+
+            // When - subscribe after emission
+            val emitted = withTimeout(1000) { protocol.interfaceStatusFlow.first() }
+
+            // Then - should receive the replayed value
+            assertEquals(testJson, emitted)
+        }
 }

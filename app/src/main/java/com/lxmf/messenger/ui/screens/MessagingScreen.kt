@@ -121,6 +121,9 @@ fun MessagingScreen(
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val isContactSaved by viewModel.isContactSaved.collectAsStateWithLifecycle()
 
+    // Observe loaded image IDs to trigger recomposition when images become available
+    val loadedImageIds by viewModel.loadedImageIds.collectAsStateWithLifecycle()
+
     // Lifecycle-aware coroutine scope for image processing
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -377,9 +380,40 @@ fun MessagingScreen(
                             ) { index ->
                                 val message = pagingItems[index]
                                 if (message != null) {
+                                    // Async image loading: check if this message has an uncached image
+                                    // Using loadedImageIds in the key triggers recomposition when
+                                    // the image is decoded and cached
+                                    val needsImageLoading =
+                                        message.hasImageAttachment &&
+                                            message.decodedImage == null &&
+                                            !loadedImageIds.contains(message.id)
+
+                                    // Trigger async loading if needed
+                                    LaunchedEffect(message.id, needsImageLoading) {
+                                        if (needsImageLoading && message.fieldsJson != null) {
+                                            viewModel.loadImageAsync(message.id, message.fieldsJson)
+                                        }
+                                    }
+
+                                    // Get cached image if it was loaded after initial render
+                                    val cachedImage =
+                                        if (message.decodedImage == null && loadedImageIds.contains(message.id)) {
+                                            com.lxmf.messenger.ui.model.ImageCache.get(message.id)
+                                        } else {
+                                            message.decodedImage
+                                        }
+
+                                    // Create updated message with cached image
+                                    val displayMessage =
+                                        if (cachedImage != null && message.decodedImage == null) {
+                                            message.copy(decodedImage = cachedImage)
+                                        } else {
+                                            message
+                                        }
+
                                     MessageBubble(
-                                        message = message,
-                                        isFromMe = message.isFromMe,
+                                        message = displayMessage,
+                                        isFromMe = displayMessage.isFromMe,
                                         clipboardManager = clipboardManager,
                                         onViewDetails = onViewMessageDetails,
                                         onRetry = { viewModel.retryFailedMessage(message.id) },

@@ -12,7 +12,9 @@ import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.ui.model.ImageCache
 import com.lxmf.messenger.ui.model.MessageUi
+import com.lxmf.messenger.ui.model.decodeAndCacheImage
 import com.lxmf.messenger.ui.model.toMessageUi
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
@@ -24,15 +26,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
 import com.lxmf.messenger.data.repository.Message as DataMessage
@@ -63,8 +66,8 @@ class MessagingViewModel
         // Messages automatically update when conversation changes OR database changes
         // Uses Paging3 for efficient infinite scroll: loads 30 messages initially,
         // then loads more in background as user scrolls up
-        // PERFORMANCE: Maps to MessageUi with pre-decoded images to avoid expensive
-        // decoding during composition (critical for smooth 60 FPS scrolling)
+        // PERFORMANCE: toMessageUi() is now fast (cache lookup only, no disk I/O)
+        // Image decoding happens asynchronously via loadImageAsync()
         val messages: Flow<PagingData<MessageUi>> =
             _currentConversation
                 .flatMapLatest { peerHash ->
@@ -74,7 +77,6 @@ class MessagingViewModel
                             .map { pagingData ->
                                 pagingData.map { it.toMessageUi() }
                             }
-                            .flowOn(Dispatchers.Default) // Decode images off main thread
                     } else {
                         flowOf(PagingData.empty())
                     }
@@ -115,6 +117,11 @@ class MessagingViewModel
 
         // Manual sync result events for Snackbar notifications
         val manualSyncResult: SharedFlow<SyncResult> = propagationNodeManager.manualSyncResult
+
+        // Track which images have been decoded - used to trigger recomposition
+        // when images become available. The UI observes this to know when to re-check the cache.
+        private val _loadedImageIds = MutableStateFlow<Set<String>>(emptySet())
+        val loadedImageIds: StateFlow<Set<String>> = _loadedImageIds.asStateFlow()
 
         // Contact status for current conversation - updates reactively
         val isContactSaved: StateFlow<Boolean> =
@@ -448,6 +455,44 @@ class MessagingViewModel
 
         fun setProcessingImage(processing: Boolean) {
             _isProcessingImage.value = processing
+        }
+
+        /**
+         * Load an image attachment asynchronously.
+         *
+         * Called by the UI when a message has hasImageAttachment=true but decodedImage=null.
+         * Decodes the image on IO thread, caches it, and updates loadedImageIds to trigger
+         * recomposition so the UI can display the decoded image.
+         *
+         * @param messageId The message ID (used as cache key)
+         * @param fieldsJson The message's fields JSON containing image data
+         */
+        fun loadImageAsync(
+            messageId: String,
+            fieldsJson: String?,
+        ) {
+            // Skip if already loaded/loading
+            if (ImageCache.contains(messageId) || _loadedImageIds.value.contains(messageId)) {
+                return
+            }
+
+            viewModelScope.launch {
+                try {
+                    // Decode on IO thread
+                    val decoded =
+                        withContext(Dispatchers.IO) {
+                            decodeAndCacheImage(messageId, fieldsJson)
+                        }
+
+                    if (decoded != null) {
+                        // Signal that this image is now available
+                        _loadedImageIds.update { it + messageId }
+                        Log.d(TAG, "Image loaded async: ${messageId.take(8)}...")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error loading image async: ${messageId.take(8)}...", e)
+                }
+            }
         }
 
         /**

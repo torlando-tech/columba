@@ -8,12 +8,14 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.util.IdentityQrCodeUtils
 import com.lxmf.messenger.util.generateDefaultDisplayName
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @androidx.compose.runtime.Immutable
@@ -129,10 +131,16 @@ class DebugViewModel
         private fun fetchDebugInfo() {
             viewModelScope.launch {
                 try {
-                    // Get real debug info from Python
-                    val pythonDebugInfo = reticulumProtocol.getDebugInfo()
+                    // Fetch debug info on IO thread to avoid blocking main thread
+                    // (service.debugInfo is a synchronous AIDL IPC call)
+                    val (pythonDebugInfo, failedInterfaces) =
+                        withContext(Dispatchers.IO) {
+                            val debugInfo = reticulumProtocol.getDebugInfo()
+                            val failed = reticulumProtocol.getFailedInterfaces()
+                            Pair(debugInfo, failed)
+                        }
 
-                    // Extract interface information
+                    // Extract interface information (runs on main thread - just data transformation)
                     @Suppress("UNCHECKED_CAST")
                     val interfacesData = pythonDebugInfo["interfaces"] as? List<Map<String, Any>> ?: emptyList()
                     val activeInterfaces =
@@ -144,8 +152,6 @@ class DebugViewModel
                             )
                         }
 
-                    // Get failed interfaces and add them to the list
-                    val failedInterfaces = reticulumProtocol.getFailedInterfaces()
                     val failedInterfaceInfos =
                         failedInterfaces.map { failed ->
                             InterfaceInfo(
@@ -161,7 +167,8 @@ class DebugViewModel
 
                     // Get status
                     val status = reticulumProtocol.networkStatus.value
-                    val isReady = status is com.lxmf.messenger.reticulum.model.NetworkStatus.READY
+
+                    @Suppress("UNUSED_VARIABLE")
                     val statusString =
                         when (status) {
                             is com.lxmf.messenger.reticulum.model.NetworkStatus.READY -> "READY"

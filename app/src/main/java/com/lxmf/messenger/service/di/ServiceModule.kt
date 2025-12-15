@@ -7,6 +7,7 @@ import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
+import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.PollingManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
@@ -42,6 +43,7 @@ object ServiceModule {
     data class ServiceManagers(
         val state: ServiceState,
         val lockManager: LockManager,
+        val maintenanceManager: MaintenanceManager,
         val notificationManager: ServiceNotificationManager,
         val broadcaster: CallbackBroadcaster,
         val bleCoordinator: BleCoordinator,
@@ -66,6 +68,7 @@ object ServiceModule {
         // Phase 1: Foundation (no dependencies)
         val state = ServiceState()
         val lockManager = LockManager(context)
+        val maintenanceManager = MaintenanceManager(lockManager, scope)
         val notificationManager = ServiceNotificationManager(context, state)
         val broadcaster = CallbackBroadcaster()
         val bleCoordinator = BleCoordinator(context)
@@ -87,6 +90,7 @@ object ServiceModule {
         return ServiceManagers(
             state = state,
             lockManager = lockManager,
+            maintenanceManager = maintenanceManager,
             notificationManager = notificationManager,
             broadcaster = broadcaster,
             bleCoordinator = bleCoordinator,
@@ -126,6 +130,7 @@ object ServiceModule {
             pollingManager = managers.pollingManager,
             broadcaster = managers.broadcaster,
             lockManager = managers.lockManager,
+            maintenanceManager = managers.maintenanceManager,
             notificationManager = managers.notificationManager,
             bleCoordinator = managers.bleCoordinator,
             scope = scope,

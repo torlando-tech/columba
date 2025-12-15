@@ -12,6 +12,7 @@ import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
+import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.PollingManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
@@ -46,6 +47,7 @@ class ReticulumServiceBinder(
     private val pollingManager: PollingManager,
     private val broadcaster: CallbackBroadcaster,
     private val lockManager: LockManager,
+    private val maintenanceManager: MaintenanceManager,
     private val notificationManager: ServiceNotificationManager,
     private val bleCoordinator: BleCoordinator,
     private val scope: CoroutineScope,
@@ -92,6 +94,9 @@ class ReticulumServiceBinder(
 
                             // Acquire locks
                             lockManager.acquireAll()
+
+                            // Start maintenance job to refresh locks before timeout
+                            maintenanceManager.start()
 
                             // Start polling
                             pollingManager.startAnnouncesPolling()
@@ -213,6 +218,9 @@ class ReticulumServiceBinder(
             val stackTrace = Thread.currentThread().stackTrace.take(10).joinToString("\n  ")
             Log.i(TAG, "shutdown() called from:\n  $stackTrace")
             Log.d(TAG, "Shutting down Reticulum (async)")
+
+            // Stop maintenance job
+            maintenanceManager.stop()
 
             // Stop polling immediately
             pollingManager.stopAll()

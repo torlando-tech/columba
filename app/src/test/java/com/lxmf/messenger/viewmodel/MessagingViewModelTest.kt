@@ -106,6 +106,10 @@ class MessagingViewModelTest {
         every { announceRepository.getAnnounceFlow(any()) } returns flowOf(null)
 
         viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, contactRepository, activeConversationManager, settingsRepository, propagationNodeManager)
+
+        // Advance the dispatcher to process all init coroutines (delivery status collection, etc.)
+        // This prevents UncaughtExceptionsBeforeTest errors from coroutines started during ViewModel init
+        testDispatcher.scheduler.advanceUntilIdle()
     }
 
     @After
@@ -114,6 +118,8 @@ class MessagingViewModelTest {
         if (::viewModel.isInitialized) {
             viewModel.viewModelScope.cancel()
         }
+        // Advance to process any cancellation effects
+        testDispatcher.scheduler.advanceUntilIdle()
         Dispatchers.resetMain()
         clearAllMocks()
     }

@@ -86,6 +86,9 @@ class RNodeWizardViewModelTest {
         // Mock BluetoothManager as null to avoid Bluetooth calls
         every { context.getSystemService(Context.BLUETOOTH_SERVICE) } returns null
 
+        // Mock allInterfaces to return empty list (no duplicates)
+        every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
+
         viewModel = RNodeWizardViewModel(context, interfaceRepository, configManager)
     }
 
@@ -1882,6 +1885,133 @@ class RNodeWizardViewModelTest {
                 assertFalse(state.isSaving)
                 assertFalse(state.saveSuccess)
             }
+        }
+
+    // ========== Duplicate Interface Name Tests ==========
+
+    @Test
+    fun `saveConfiguration fails with duplicate interface name`() =
+        runTest {
+            // Mock existing interface with conflicting name
+            val existingInterface = InterfaceConfig.RNode(
+                name = "My RNode",
+                enabled = true,
+                connectionMode = "tcp",
+                tcpHost = "192.168.1.50",
+                tcpPort = 7633,
+                targetDeviceName = "",
+                frequency = 915000000,
+                bandwidth = 125000,
+                txPower = 17,
+                spreadingFactor = 8,
+                codingRate = 5,
+            )
+            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+
+            viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
+            viewModel.updateTcpHost("10.0.0.1")
+            viewModel.updateInterfaceName("My RNode") // Duplicate name
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNotNull(state.nameError)
+                assertTrue(state.nameError!!.contains("already exists"))
+                assertFalse(state.isSaving)
+                assertFalse(state.saveSuccess)
+            }
+        }
+
+    @Test
+    fun `saveConfiguration fails with case-insensitive duplicate name`() =
+        runTest {
+            // Mock existing interface with different case name
+            val existingInterface = InterfaceConfig.RNode(
+                name = "my rnode",
+                enabled = true,
+                connectionMode = "tcp",
+                tcpHost = "192.168.1.50",
+                tcpPort = 7633,
+                targetDeviceName = "",
+                frequency = 915000000,
+                bandwidth = 125000,
+                txPower = 17,
+                spreadingFactor = 8,
+                codingRate = 5,
+            )
+            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+
+            viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
+            viewModel.updateTcpHost("10.0.0.1")
+            viewModel.updateInterfaceName("My RNode") // Different case
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNotNull(state.nameError)
+                assertTrue(state.nameError!!.contains("already exists"))
+            }
+        }
+
+    @Test
+    fun `saveConfiguration succeeds with unique interface name`() =
+        runTest {
+            every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
+            coEvery { interfaceRepository.insertInterface(any()) } returns 1L
+
+            viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
+            viewModel.updateTcpHost("192.168.1.100")
+            viewModel.updateInterfaceName("Unique RNode Name")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNull(state.nameError)
+                assertTrue(state.saveSuccess)
+            }
+        }
+
+    @Test
+    fun `saveConfiguration does not call repository when duplicate name detected`() =
+        runTest {
+            val existingInterface = InterfaceConfig.RNode(
+                name = "Duplicate RNode",
+                enabled = true,
+                connectionMode = "tcp",
+                tcpHost = "192.168.1.50",
+                tcpPort = 7633,
+                targetDeviceName = "",
+                frequency = 915000000,
+                bandwidth = 125000,
+                txPower = 17,
+                spreadingFactor = 8,
+                codingRate = 5,
+            )
+            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+
+            viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
+            viewModel.updateTcpHost("10.0.0.1")
+            viewModel.updateInterfaceName("Duplicate RNode")
+            viewModel.selectFrequencyRegion(usRegion)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            // Should NOT call insertInterface because duplicate was detected
+            coVerify(exactly = 0) { interfaceRepository.insertInterface(any()) }
         }
 
     // ========== Connection Type Tests ==========

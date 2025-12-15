@@ -8,6 +8,9 @@ import com.lxmf.messenger.data.model.TcpCommunityServers
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.util.validation.InputValidator
+import com.lxmf.messenger.util.validation.ValidationResult
+import kotlinx.coroutines.flow.first
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -165,10 +168,31 @@ class TcpClientWizardViewModel
 
                 try {
                     val currentState = _state.value
+                    val interfaceName = currentState.interfaceName.trim().ifEmpty { "TCP Connection" }
+
+                    // Check for duplicate interface names before saving
+                    val existingNames = interfaceRepository.allInterfaces.first().map { it.name }
+                    when (
+                        val uniqueResult = InputValidator.validateInterfaceNameUniqueness(
+                            interfaceName,
+                            existingNames,
+                        )
+                    ) {
+                        is ValidationResult.Error -> {
+                            _state.update {
+                                it.copy(
+                                    isSaving = false,
+                                    saveError = uniqueResult.message,
+                                )
+                            }
+                            return@launch
+                        }
+                        is ValidationResult.Success -> { /* Name is unique, continue */ }
+                    }
 
                     val config =
                         InterfaceConfig.TCPClient(
-                            name = currentState.interfaceName.trim().ifEmpty { "TCP Connection" },
+                            name = interfaceName,
                             enabled = true,
                             targetHost = currentState.targetHost.trim(),
                             targetPort = currentState.targetPort.toIntOrNull() ?: 4242,

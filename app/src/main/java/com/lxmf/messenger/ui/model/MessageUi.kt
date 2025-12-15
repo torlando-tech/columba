@@ -24,12 +24,25 @@ data class MessageUi(
     val status: String,
     /**
      * Pre-decoded image bitmap. If the message contains an LXMF image field (type 6),
-     * it's decoded in the repository layer (off the UI thread) and cached here.
+     * it's decoded asynchronously and cached in ImageCache.
      *
      * This avoids expensive hex parsing and BitmapFactory.decodeByteArray() calls
      * during composition, which was the primary cause of scroll lag.
+     *
+     * The decoding happens on IO threads and is retrieved from cache during composition.
      */
     val decodedImage: ImageBitmap? = null,
+    /**
+     * Indicates whether this message has an image attachment that needs to be decoded.
+     * When true but decodedImage is null, the UI should show a loading placeholder
+     * while the image is being decoded asynchronously.
+     */
+    val hasImageAttachment: Boolean = false,
+    /**
+     * Raw LXMF fields JSON. Included when hasImageAttachment is true to enable
+     * async image loading. Null for messages without image attachments.
+     */
+    val fieldsJson: String? = null,
     /**
      * Delivery method used when sending: "opportunistic", "direct", or "propagated".
      * Null for received messages or messages sent before this feature was added.

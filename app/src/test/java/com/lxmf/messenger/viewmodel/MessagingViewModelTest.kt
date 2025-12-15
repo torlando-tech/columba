@@ -106,6 +106,10 @@ class MessagingViewModelTest {
         every { announceRepository.getAnnounceFlow(any()) } returns flowOf(null)
 
         viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, contactRepository, activeConversationManager, settingsRepository, propagationNodeManager)
+
+        // Advance the dispatcher to process all init coroutines (delivery status collection, etc.)
+        // This prevents UncaughtExceptionsBeforeTest errors from coroutines started during ViewModel init
+        testDispatcher.scheduler.advanceUntilIdle()
     }
 
     @After
@@ -114,6 +118,8 @@ class MessagingViewModelTest {
         if (::viewModel.isInitialized) {
             viewModel.viewModelScope.cancel()
         }
+        // Advance to process any cancellation effects
+        testDispatcher.scheduler.advanceUntilIdle()
         Dispatchers.resetMain()
         clearAllMocks()
     }
@@ -1130,6 +1136,39 @@ class MessagingViewModelTest {
             coVerify {
                 contactRepository.hasContact(testPeerHash)
             }
+        }
+
+    // ========== ASYNC IMAGE LOADING TESTS ==========
+    // Note: More comprehensive tests for loadImageAsync are in MessageMapperTest and ImageCacheTest
+    // using Robolectric. These tests verify the basic behavior without requiring Robolectric.
+
+    @Test
+    fun `loadImageAsync does not crash on null fieldsJson`() =
+        runTest {
+            // Call with null fieldsJson - should not crash
+            viewModel.loadImageAsync("test-msg", null)
+            advanceUntilIdle()
+
+            // Assert: No crash occurred, loadedImageIds unchanged
+            assertEquals(emptySet<String>(), viewModel.loadedImageIds.value)
+        }
+
+    @Test
+    fun `loadImageAsync does not crash on invalid JSON`() =
+        runTest {
+            // Call with invalid JSON - should not crash
+            viewModel.loadImageAsync("test-msg", "not valid json")
+            advanceUntilIdle()
+
+            // Assert: No crash occurred, loadedImageIds unchanged (decode failed)
+            assertEquals(emptySet<String>(), viewModel.loadedImageIds.value)
+        }
+
+    @Test
+    fun `loadedImageIds initial state is empty`() =
+        runTest {
+            // Assert: Initial state is empty set
+            assertEquals(emptySet<String>(), viewModel.loadedImageIds.value)
         }
 
 }

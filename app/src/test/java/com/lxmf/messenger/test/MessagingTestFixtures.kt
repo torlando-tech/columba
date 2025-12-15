@@ -153,6 +153,49 @@ object MessagingTestFixtures {
     // ========== Image Data Fixtures ==========
 
     /**
+     * Creates a message with an uncached image attachment.
+     * hasImageAttachment=true, decodedImage=null, fieldsJson has image data.
+     */
+    fun createMessageWithUncachedImage(
+        id: String = "msg_with_image_001",
+        content: String = "Message with image",
+    ) = MessageUi(
+        id = id,
+        destinationHash = Constants.TEST_DESTINATION_HASH,
+        content = content,
+        timestamp = System.currentTimeMillis(),
+        isFromMe = false,
+        status = "delivered",
+        decodedImage = null,
+        hasImageAttachment = true,
+        fieldsJson = """{"6": "ffd8ffe0"}""", // Needs async loading
+        deliveryMethod = null,
+        errorMessage = null,
+    )
+
+    /**
+     * Creates a message where the image is already decoded and cached.
+     * hasImageAttachment=true, fieldsJson=null (since image is already loaded).
+     */
+    fun createMessageWithCachedImage(
+        id: String = "msg_cached_image_001",
+        content: String = "Message with cached image",
+        decodedImage: androidx.compose.ui.graphics.ImageBitmap? = null,
+    ) = MessageUi(
+        id = id,
+        destinationHash = Constants.TEST_DESTINATION_HASH,
+        content = content,
+        timestamp = System.currentTimeMillis(),
+        isFromMe = false,
+        status = "delivered",
+        decodedImage = decodedImage,
+        hasImageAttachment = true,
+        fieldsJson = null, // Image already cached, no need for JSON
+        deliveryMethod = null,
+        errorMessage = null,
+    )
+
+    /**
      * Creates a minimal valid PNG image as ByteArray for testing.
      * This is a 1x1 pixel transparent PNG.
      */

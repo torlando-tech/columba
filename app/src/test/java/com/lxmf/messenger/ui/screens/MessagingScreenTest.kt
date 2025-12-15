@@ -58,6 +58,7 @@ class MessagingScreenTest {
         every { mockViewModel.isSyncing } returns MutableStateFlow(false)
         every { mockViewModel.isContactSaved } returns MutableStateFlow(false)
         every { mockViewModel.manualSyncResult } returns MutableSharedFlow()
+        every { mockViewModel.loadedImageIds } returns MutableStateFlow(emptySet())
     }
 
     // ========== Empty State Tests ==========
@@ -664,5 +665,151 @@ class MessagingScreenTest {
 
         // Then
         composeTestRule.onNodeWithText("Type a message...").assertIsDisplayed()
+    }
+
+    // ========== Async Image Loading Tests ==========
+
+    @Test
+    fun messageWithUncachedImage_triggersAsyncLoad() {
+        // Given - message with image that needs async loading
+        val messageWithImage = MessagingTestFixtures.createMessageWithUncachedImage()
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(messageWithImage)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should trigger async image loading
+        verify { mockViewModel.loadImageAsync(messageWithImage.id, messageWithImage.fieldsJson) }
+    }
+
+    @Test
+    fun messageWithCachedImage_doesNotTriggerAsyncLoad() {
+        // Given - message with already cached image (decodedImage is non-null)
+        // Since we can't easily create an ImageBitmap in tests, we simulate
+        // a message that has hasImageAttachment but with the image in loadedImageIds
+        val messageId = "cached-img-msg"
+        val messageWithCachedId = MessagingTestFixtures.createMessageWithUncachedImage(id = messageId)
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(messageWithCachedId)))
+        every { mockViewModel.loadedImageIds } returns MutableStateFlow(setOf(messageId))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should NOT trigger async image loading (already in loadedImageIds)
+        verify(exactly = 0) { mockViewModel.loadImageAsync(messageId, any()) }
+    }
+
+    @Test
+    fun messageWithNoImage_doesNotTriggerAsyncLoad() {
+        // Given - regular text message without image
+        val textMessage = MessagingTestFixtures.createReceivedMessage()
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(textMessage)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should NOT trigger async image loading
+        verify(exactly = 0) { mockViewModel.loadImageAsync(any(), any()) }
+    }
+
+    @Test
+    fun loadedImageIds_update_triggersRecomposition() {
+        // Given - message that initially needs loading
+        val messageId = "loading-msg"
+        val message = MessagingTestFixtures.createMessageWithUncachedImage(id = messageId)
+        val loadedIdsFlow = MutableStateFlow<Set<String>>(emptySet())
+
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(message)))
+        every { mockViewModel.loadedImageIds } returns loadedIdsFlow
+
+        // When - render initially
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Initial load should be triggered
+        verify { mockViewModel.loadImageAsync(messageId, any()) }
+
+        // Then - update loadedImageIds (simulating image loaded)
+        loadedIdsFlow.value = setOf(messageId)
+        composeTestRule.waitForIdle()
+
+        // Second load should not be triggered (image already in loadedImageIds)
+        verify(exactly = 1) { mockViewModel.loadImageAsync(messageId, any()) }
+    }
+
+    @Test
+    fun multipleMessagesWithImages_triggerIndependentLoads() {
+        // Given - multiple messages with uncached images
+        val message1 = MessagingTestFixtures.createMessageWithUncachedImage(id = "img-msg-1")
+        val message2 = MessagingTestFixtures.createMessageWithUncachedImage(id = "img-msg-2")
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(message1, message2)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - both should trigger async loads
+        verify { mockViewModel.loadImageAsync("img-msg-1", any()) }
+        verify { mockViewModel.loadImageAsync("img-msg-2", any()) }
+    }
+
+    @Test
+    fun messageWithImageAndNullFieldsJson_doesNotTriggerLoad() {
+        // Given - message where hasImageAttachment is true but fieldsJson is null
+        // (image was already cached at mapping time)
+        val message = MessagingTestFixtures.createMessageWithCachedImage(id = "cached-msg")
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(message)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should NOT trigger async load (fieldsJson is null)
+        verify(exactly = 0) { mockViewModel.loadImageAsync(any(), any()) }
     }
 }

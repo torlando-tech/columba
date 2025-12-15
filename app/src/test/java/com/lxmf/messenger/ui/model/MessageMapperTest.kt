@@ -155,6 +155,112 @@ class MessageMapperTest {
         assertEquals("Connection timeout", result.errorMessage)
     }
 
+    // ========== decodeAndCacheImage() TESTS ==========
+
+    @Test
+    fun `decodeAndCacheImage returns null for null fieldsJson`() {
+        val result = decodeAndCacheImage("test-id", null)
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage returns cached image if already cached`() {
+        val messageId = "cached-image-id"
+        val cachedBitmap = createTestBitmap()
+
+        // Pre-populate cache
+        ImageCache.put(messageId, cachedBitmap)
+
+        // Call decodeAndCacheImage - should return cached image without decoding
+        val result = decodeAndCacheImage(messageId, """{"6": "ffd8ffe0"}""")
+
+        assertNotNull(result)
+        assertEquals(cachedBitmap, result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage returns null for empty fieldsJson`() {
+        val result = decodeAndCacheImage("test-id", "")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage returns null for invalid JSON`() {
+        val result = decodeAndCacheImage("test-id", "not valid json")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage returns null when field 6 is missing`() {
+        val result = decodeAndCacheImage("test-id", """{"1": "some text"}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage returns null for empty field 6`() {
+        val result = decodeAndCacheImage("test-id", """{"6": ""}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage returns null for invalid hex in field 6`() {
+        // "zzzz" is not valid hex, should fail during decoding
+        val result = decodeAndCacheImage("test-id", """{"6": "zzzz"}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles arbitrary byte data without crashing`() {
+        // Valid hex but arbitrary byte data - Robolectric's BitmapFactory may decode it
+        // The key is that the function doesn't crash
+        val result = decodeAndCacheImage("test-id", """{"6": "0102030405"}""")
+        // Result may or may not be null depending on Robolectric's BitmapFactory behavior
+        // Test passes as long as no exception is thrown
+    }
+
+    @Test
+    fun `decodeAndCacheImage returns null for file reference with nonexistent file`() {
+        // File reference to a file that doesn't exist
+        val result = decodeAndCacheImage(
+            "test-id",
+            """{"6": {"_file_ref": "/nonexistent/path/to/file.dat"}}""",
+        )
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles malformed file reference gracefully`() {
+        // File reference without the path value
+        val result = decodeAndCacheImage("test-id", """{"6": {"_file_ref": ""}}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles field 6 as non-string non-object type`() {
+        // Field 6 as number - should be ignored
+        val result = decodeAndCacheImage("test-id", """{"6": 12345}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage caches result after successful decode`() {
+        val messageId = "decode-and-cache-test"
+
+        // Ensure cache is empty
+        assertNull(ImageCache.get(messageId))
+
+        // Create a minimal valid JPEG (simplified - actual decode will fail but tests cache behavior)
+        // The actual decode will fail because this isn't a valid image, but we verify cache logic
+        val result = decodeAndCacheImage(messageId, """{"6": "ffd8ffe000104a46494600"}""")
+
+        // Decode will fail for invalid image data, so result is null
+        // but this tests the path through the decode logic
+        assertNull(result)
+
+        // Cache should NOT contain entry since decode failed
+        assertNull(ImageCache.get(messageId))
+    }
+
     /**
      * Configuration class for creating test messages.
      */

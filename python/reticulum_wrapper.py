@@ -748,6 +748,18 @@ class ReticulumWrapper:
                     LXMF = _LXMF
                     RETICULUM_AVAILABLE = True
                     log_info("ReticulumWrapper", "initialize", "✓ RNS and LXMF imported successfully")
+
+                    # Configure TCPClientInterface for asynchronous startup
+                    # This prevents blocking when TCP targets are unreachable
+                    # The interface's initial_connect() already handles success/failure
+                    # and spawns reconnect threads - we just move it off the main thread
+                    try:
+                        from RNS.Interfaces.TCPInterface import TCPClientInterface
+                        TCPClientInterface.SYNCHRONOUS_START = False
+                        log_info("ReticulumWrapper", "initialize", "✓ TCPClientInterface configured for async startup")
+                    except (ImportError, AttributeError) as tcp_err:
+                        log_warning("ReticulumWrapper", "initialize", f"Could not configure async TCP startup: {tcp_err}")
+
                 except ImportError as e:
                     RETICULUM_AVAILABLE = False
                     log_error("ReticulumWrapper", "initialize", f"Failed to import RNS/LXMF: {e}")

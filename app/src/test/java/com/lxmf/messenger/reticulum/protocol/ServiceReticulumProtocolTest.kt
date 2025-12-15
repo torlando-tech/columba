@@ -861,4 +861,79 @@ class ServiceReticulumProtocolTest {
         assertEquals("ghi789", result.messageHash)
         assertEquals(null, result.publicKey)
     }
+
+    @Test
+    fun `parseMessageJson - parses message with fields object`() {
+        // Given
+        val sourceHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { it.toByte() })
+        val destHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { (it + 1).toByte() })
+
+        val messageJson = """
+            {
+                "message_hash": "jkl012",
+                "content": "Message with fields",
+                "source_hash": "$sourceHashB64",
+                "destination_hash": "$destHashB64",
+                "timestamp": 1234567890,
+                "fields": {"image": "base64data", "filename": "test.jpg"}
+            }
+        """.trimIndent()
+
+        // When
+        val result = protocol.parseMessageJson(messageJson)
+
+        // Then
+        assertEquals("jkl012", result.messageHash)
+        assertEquals("Message with fields", result.content)
+        assertTrue("fieldsJson should not be null", result.fieldsJson != null)
+        assertTrue("fieldsJson should contain image", result.fieldsJson!!.contains("image"))
+    }
+
+    @Test
+    fun `parseMessageJson - handles missing optional fields with defaults`() {
+        // Given - minimal message with only required fields
+        val sourceHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { it.toByte() })
+        val destHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { (it + 1).toByte() })
+
+        val messageJson = """
+            {
+                "source_hash": "$sourceHashB64",
+                "destination_hash": "$destHashB64"
+            }
+        """.trimIndent()
+
+        // When
+        val result = protocol.parseMessageJson(messageJson)
+
+        // Then - default values should be used
+        assertEquals("", result.messageHash)
+        assertEquals("", result.content)
+        assertEquals(null, result.fieldsJson)
+        assertEquals(null, result.publicKey)
+    }
+
+    @Test
+    fun `parseMessageJson - uses current time when timestamp missing`() {
+        // Given
+        val sourceHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { it.toByte() })
+        val destHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { (it + 1).toByte() })
+        val beforeTime = System.currentTimeMillis()
+
+        val messageJson = """
+            {
+                "message_hash": "notime",
+                "content": "No timestamp",
+                "source_hash": "$sourceHashB64",
+                "destination_hash": "$destHashB64"
+            }
+        """.trimIndent()
+
+        // When
+        val result = protocol.parseMessageJson(messageJson)
+        val afterTime = System.currentTimeMillis()
+
+        // Then - timestamp should be between beforeTime and afterTime
+        assertTrue("Timestamp should use current time", result.timestamp >= beforeTime)
+        assertTrue("Timestamp should use current time", result.timestamp <= afterTime)
+    }
 }

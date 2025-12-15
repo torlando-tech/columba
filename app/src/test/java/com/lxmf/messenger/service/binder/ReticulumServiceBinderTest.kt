@@ -175,4 +175,254 @@ class ReticulumServiceBinderTest {
         verify { pollingManager.stopAll() }
         verify { lockManager.releaseAll() }
     }
+
+    // ========== IsInitialized Tests ==========
+
+    @Test
+    fun `isInitialized returns true when state is initialized`() {
+        every { state.isInitialized() } returns true
+
+        val result = binder.isInitialized()
+
+        assert(result)
+    }
+
+    @Test
+    fun `isInitialized returns false when state is not initialized`() {
+        every { state.isInitialized() } returns false
+        every { state.wrapper } returns null
+
+        val result = binder.isInitialized()
+
+        assert(!result)
+    }
+
+    // ========== Identity Delegation Tests ==========
+
+    @Test
+    fun `createIdentity delegates to identityManager`() {
+        every { identityManager.createIdentity() } returns """{"hash": "abc123"}"""
+
+        val result = binder.createIdentity()
+
+        verify { identityManager.createIdentity() }
+        assert(result == """{"hash": "abc123"}""")
+    }
+
+    @Test
+    fun `loadIdentity delegates to identityManager`() {
+        every { identityManager.loadIdentity("/test/path") } returns """{"hash": "abc123"}"""
+
+        val result = binder.loadIdentity("/test/path")
+
+        verify { identityManager.loadIdentity("/test/path") }
+        assert(result == """{"hash": "abc123"}""")
+    }
+
+    @Test
+    fun `saveIdentity delegates to identityManager`() {
+        val privateKey = byteArrayOf(1, 2, 3)
+        every { identityManager.saveIdentity(privateKey, "/test/path") } returns """{"success": true}"""
+
+        val result = binder.saveIdentity(privateKey, "/test/path")
+
+        verify { identityManager.saveIdentity(privateKey, "/test/path") }
+        assert(result == """{"success": true}""")
+    }
+
+    @Test
+    fun `getLxmfIdentity delegates to identityManager`() {
+        every { identityManager.getLxmfIdentity() } returns """{"hash": "lxmf123"}"""
+
+        val result = binder.lxmfIdentity
+
+        verify { identityManager.getLxmfIdentity() }
+        assert(result == """{"hash": "lxmf123"}""")
+    }
+
+    @Test
+    fun `getLxmfDestination delegates to identityManager`() {
+        every { identityManager.getLxmfDestination() } returns """{"hash": "dest123"}"""
+
+        val result = binder.lxmfDestination
+
+        verify { identityManager.getLxmfDestination() }
+        assert(result == """{"hash": "dest123"}""")
+    }
+
+    // ========== Routing Delegation Tests ==========
+
+    @Test
+    fun `hasPath delegates to routingManager`() {
+        val destHash = byteArrayOf(1, 2, 3)
+        every { routingManager.hasPath(destHash) } returns true
+
+        val result = binder.hasPath(destHash)
+
+        verify { routingManager.hasPath(destHash) }
+        assert(result)
+    }
+
+    @Test
+    fun `requestPath delegates to routingManager`() {
+        val destHash = byteArrayOf(1, 2, 3)
+        every { routingManager.requestPath(destHash) } returns """{"success": true}"""
+
+        val result = binder.requestPath(destHash)
+
+        verify { routingManager.requestPath(destHash) }
+        assert(result == """{"success": true}""")
+    }
+
+    @Test
+    fun `getHopCount delegates to routingManager`() {
+        val destHash = byteArrayOf(1, 2, 3)
+        every { routingManager.getHopCount(destHash) } returns 3
+
+        val result = binder.getHopCount(destHash)
+
+        verify { routingManager.getHopCount(destHash) }
+        assert(result == 3)
+    }
+
+    // ========== Messaging Delegation Tests ==========
+
+    @Test
+    fun `sendLxmfMessage delegates to messagingManager`() {
+        val destHash = byteArrayOf(1, 2, 3)
+        val content = "Hello"
+        val privateKey = byteArrayOf(4, 5, 6)
+        every { messagingManager.sendLxmfMessage(destHash, content, privateKey, null, null) } returns """{"success": true}"""
+
+        val result = binder.sendLxmfMessage(destHash, content, privateKey, null, null)
+
+        verify { messagingManager.sendLxmfMessage(destHash, content, privateKey, null, null) }
+        assert(result == """{"success": true}""")
+    }
+
+    // ========== Callback Tests ==========
+
+    @Test
+    fun `registerCallback delegates to broadcaster`() {
+        val callback = mockk<com.lxmf.messenger.IReticulumServiceCallback>(relaxed = true)
+
+        binder.registerCallback(callback)
+
+        verify { broadcaster.register(callback) }
+    }
+
+    @Test
+    fun `unregisterCallback delegates to broadcaster`() {
+        val callback = mockk<com.lxmf.messenger.IReticulumServiceCallback>(relaxed = true)
+
+        binder.unregisterCallback(callback)
+
+        verify { broadcaster.unregister(callback) }
+    }
+
+    @Test
+    fun `setConversationActive delegates to pollingManager`() {
+        binder.setConversationActive(true)
+
+        verify { pollingManager.setConversationActive(true) }
+    }
+
+    // ========== BLE Connection Tests ==========
+
+    @Test
+    fun `getBleConnectionDetails delegates to bleCoordinator`() {
+        every { bleCoordinator.getConnectionDetailsJson() } returns """[{"device": "test"}]"""
+
+        val result = binder.bleConnectionDetails
+
+        verify { bleCoordinator.getConnectionDetailsJson() }
+        assert(result == """[{"device": "test"}]""")
+    }
+
+    // ========== IsSharedInstanceAvailable Tests ==========
+
+    @Test
+    fun `isSharedInstanceAvailable returns false when wrapper returns null`() {
+        every { wrapperManager.withWrapper<Boolean?>(any()) } returns null
+
+        val result = binder.isSharedInstanceAvailable
+
+        assert(!result)
+    }
+
+    @Test
+    fun `isSharedInstanceAvailable returns false on exception`() {
+        every { wrapperManager.withWrapper<Boolean?>(any()) } throws RuntimeException("Test error")
+
+        val result = binder.isSharedInstanceAvailable
+
+        assert(!result)
+    }
+
+    // ========== GetFailedInterfaces Tests ==========
+
+    @Test
+    fun `getFailedInterfaces returns empty array when wrapper returns null`() {
+        every { wrapperManager.withWrapper<String?>(any()) } returns null
+
+        val result = binder.failedInterfaces
+
+        assert(result == "[]")
+    }
+
+    @Test
+    fun `getFailedInterfaces returns empty array on exception`() {
+        every { wrapperManager.withWrapper<String?>(any()) } throws RuntimeException("Test error")
+
+        val result = binder.failedInterfaces
+
+        assert(result == "[]")
+    }
+
+    // ========== Propagation Node Tests ==========
+
+    @Test
+    fun `setOutboundPropagationNode returns error when wrapper null`() {
+        every { wrapperManager.withWrapper<String?>(any()) } returns null
+
+        val result = binder.setOutboundPropagationNode(byteArrayOf(1, 2, 3))
+
+        assert(result.contains("Wrapper not initialized"))
+    }
+
+    @Test
+    fun `setOutboundPropagationNode returns error on exception`() {
+        every { wrapperManager.withWrapper<String?>(any()) } throws RuntimeException("Test error")
+
+        val result = binder.setOutboundPropagationNode(byteArrayOf(1, 2, 3))
+
+        assert(result.contains("Test error"))
+    }
+
+    @Test
+    fun `getOutboundPropagationNode returns error when wrapper null`() {
+        every { wrapperManager.withWrapper<String?>(any()) } returns null
+
+        val result = binder.outboundPropagationNode
+
+        assert(result.contains("Wrapper not initialized"))
+    }
+
+    @Test
+    fun `getPropagationState returns error when wrapper null`() {
+        every { wrapperManager.withWrapper<String?>(any()) } returns null
+
+        val result = binder.propagationState
+
+        assert(result.contains("Wrapper not initialized"))
+    }
+
+    @Test
+    fun `requestMessagesFromPropagationNode returns error when wrapper null`() {
+        every { wrapperManager.withWrapper<String?>(any()) } returns null
+
+        val result = binder.requestMessagesFromPropagationNode(null, 10)
+
+        assert(result.contains("Wrapper not initialized"))
+    }
 }

@@ -668,5 +668,133 @@ class InterfaceManagementViewModelStatusEventTest {
 
     // endregion
 
+    // region entityToConfigState Tests - Unsupported Type
+
+    @Test
+    fun `showEditDialog with unsupported interface type returns default config state`() =
+        runTest {
+            // Create test entity with unsupported type
+            val entity =
+                InterfaceEntity(
+                    id = 1L,
+                    name = "Unknown Interface",
+                    type = "UnknownType",
+                    enabled = true,
+                    configJson = """{}""",
+                    displayOrder = 0,
+                )
+
+            // Mock entityToConfig to return an unsupported type (UDP which isn't handled)
+            every { interfaceRepository.entityToConfig(entity) } returns
+                InterfaceConfig.UDP(
+                    name = "Unknown Interface",
+                    enabled = true,
+                    listenIp = "0.0.0.0",
+                    listenPort = 4242,
+                    forwardIp = "127.0.0.1",
+                    forwardPort = 4243,
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Call showEditDialog which triggers entityToConfigState
+            viewModel.showEditDialog(entity)
+            advanceUntilIdle()
+
+            // Verify configState returns default values for unsupported type
+            viewModel.configState.test {
+                val configState = awaitItem()
+                // Default type should be AutoInterface as per InterfaceConfigState defaults
+                assertEquals("AutoInterface", configState.type)
+            }
+        }
+
+    // endregion
+
+    // region Message Clear Tests
+
+    @Test
+    fun `clearError clears error message`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Trigger an error (showAddDialog and try to save invalid config)
+            viewModel.showAddDialog()
+            viewModel.updateConfigState { it.copy(name = "", type = "TCPClient", targetHost = "", targetPort = "") }
+            viewModel.saveInterface()
+            advanceUntilIdle()
+
+            // Clear error
+            viewModel.clearError()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(null, state.errorMessage)
+            }
+        }
+
+    @Test
+    fun `clearSuccess clears success message`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Clear success
+            viewModel.clearSuccess()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(null, state.successMessage)
+            }
+        }
+
+    @Test
+    fun `clearInfo clears info message`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Clear info
+            viewModel.clearInfo()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(null, state.infoMessage)
+            }
+        }
+
     // endregion
 }

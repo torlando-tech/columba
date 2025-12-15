@@ -505,4 +505,32 @@ class BleStatusRepositoryTest {
             assertEquals(-120, result[0].rssi)
             assertEquals(0, result[1].rssi)
         }
+
+    // ========== disconnectPeer Tests ==========
+
+    @Test
+    fun disconnectPeer_handles_address_gracefully() =
+        runTest {
+            // Given
+            repository = BleStatusRepository(mockContext, mockProtocol)
+
+            // When - disconnectPeer is called (it just logs a warning, doesn't throw)
+            repository.disconnectPeer("AA:BB:CC:DD:EE:FF")
+
+            // Then - no exception should be thrown
+            assertTrue(true)
+        }
+
+    @Test
+    fun disconnectPeer_handles_empty_address() =
+        runTest {
+            // Given
+            repository = BleStatusRepository(mockContext, mockProtocol)
+
+            // When - disconnectPeer with empty address
+            repository.disconnectPeer("")
+
+            // Then - no exception should be thrown
+            assertTrue(true)
+        }
 }

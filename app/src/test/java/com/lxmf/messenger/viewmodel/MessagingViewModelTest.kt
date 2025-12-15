@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -1136,6 +1137,129 @@ class MessagingViewModelTest {
             coVerify {
                 contactRepository.hasContact(testPeerHash)
             }
+        }
+
+    // ========== CONTACT TOGGLE RESULT EMISSION TESTS ==========
+
+    @Test
+    fun `toggleContact emits Added result when contact successfully added`() =
+        runTest {
+            // Setup: Contact is not saved, public key is available
+            coEvery { contactRepository.hasContact(testPeerHash) } returns false
+            val testPublicKey = ByteArray(64) { it.toByte() }
+            coEvery { conversationRepository.getPeerPublicKey(testPeerHash) } returns testPublicKey
+
+            // Load conversation to set current peer
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Collect result emissions
+            var emittedResult: ContactToggleResult? = null
+            val job = launch {
+                viewModel.contactToggleResult.first { result ->
+                    emittedResult = result
+                    true
+                }
+            }
+
+            // Act: Toggle contact (should add)
+            viewModel.toggleContact()
+            advanceUntilIdle()
+
+            // Assert: ContactToggleResult.Added was emitted
+            assertEquals(ContactToggleResult.Added, emittedResult)
+
+            job.cancel()
+        }
+
+    @Test
+    fun `toggleContact emits Removed result when contact successfully removed`() =
+        runTest {
+            // Setup: Contact is already saved
+            coEvery { contactRepository.hasContact(testPeerHash) } returns true
+
+            // Load conversation to set current peer
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Collect result emissions
+            var emittedResult: ContactToggleResult? = null
+            val job = launch {
+                viewModel.contactToggleResult.first { result ->
+                    emittedResult = result
+                    true
+                }
+            }
+
+            // Act: Toggle contact (should remove)
+            viewModel.toggleContact()
+            advanceUntilIdle()
+
+            // Assert: ContactToggleResult.Removed was emitted
+            assertEquals(ContactToggleResult.Removed, emittedResult)
+
+            job.cancel()
+        }
+
+    @Test
+    fun `toggleContact emits Error result when public key unavailable`() =
+        runTest {
+            // Setup: Contact is not saved, but public key is not available
+            coEvery { contactRepository.hasContact(testPeerHash) } returns false
+            coEvery { conversationRepository.getPeerPublicKey(testPeerHash) } returns null
+
+            // Load conversation to set current peer
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Collect result emissions
+            var emittedResult: ContactToggleResult? = null
+            val job = launch {
+                viewModel.contactToggleResult.first { result ->
+                    emittedResult = result
+                    true
+                }
+            }
+
+            // Act: Toggle contact (should fail with error)
+            viewModel.toggleContact()
+            advanceUntilIdle()
+
+            // Assert: ContactToggleResult.Error was emitted with appropriate message
+            assert(emittedResult is ContactToggleResult.Error)
+            assert((emittedResult as ContactToggleResult.Error).message.contains("Identity not available"))
+
+            job.cancel()
+        }
+
+    @Test
+    fun `toggleContact emits Error result on repository exception`() =
+        runTest {
+            // Setup: Contact is not saved, repository throws exception
+            coEvery { contactRepository.hasContact(testPeerHash) } throws RuntimeException("Database error")
+
+            // Load conversation to set current peer
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Collect result emissions
+            var emittedResult: ContactToggleResult? = null
+            val job = launch {
+                viewModel.contactToggleResult.first { result ->
+                    emittedResult = result
+                    true
+                }
+            }
+
+            // Act: Toggle contact (should fail with error)
+            viewModel.toggleContact()
+            advanceUntilIdle()
+
+            // Assert: ContactToggleResult.Error was emitted
+            assert(emittedResult is ContactToggleResult.Error)
+            assert((emittedResult as ContactToggleResult.Error).message.contains("Database error"))
+
+            job.cancel()
         }
 
     // ========== ASYNC IMAGE LOADING TESTS ==========

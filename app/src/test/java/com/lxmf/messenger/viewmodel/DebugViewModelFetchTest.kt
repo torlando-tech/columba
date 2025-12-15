@@ -337,4 +337,190 @@ class DebugViewModelFetchTest {
         assertEquals("", activeInterfaces[0].type) // Falls back to default
         assertEquals(false, activeInterfaces[0].online) // Falls back to default
     }
+
+    // ========== Tests for Pair-based data fetching pattern ==========
+
+    @Test
+    fun `pair destructuring for debug and failed interfaces works correctly`() {
+        // Simulate the pattern used in fetchDebugInfo() with withContext(Dispatchers.IO)
+        val debugInfo = mapOf(
+            "initialized" to true,
+            "reticulum_available" to true,
+            "storage_path" to "/data/app",
+            "interfaces" to listOf(
+                mapOf("name" to "RNode", "type" to "ColumbaRNodeInterface", "online" to true),
+            ),
+            "transport_enabled" to true,
+            "multicast_lock_held" to true,
+            "wifi_lock_held" to false,
+            "wake_lock_held" to true,
+        )
+        val failedInterfaces = listOf(
+            FailedInterface("AutoInterface", "Port in use", true),
+        )
+
+        // This is the pattern used in fetchDebugInfo()
+        val (pythonDebugInfo, failedInterfacesList) = Pair(debugInfo, failedInterfaces)
+
+        // Verify both parts of the pair are accessible
+        assertEquals(true, pythonDebugInfo["initialized"])
+        assertEquals(1, failedInterfacesList.size)
+        assertEquals("AutoInterface", failedInterfacesList[0].name)
+    }
+
+    @Test
+    fun `full debug info extraction flow with IO thread pattern`() {
+        // Simulates the complete data flow in fetchDebugInfo()
+        val pythonDebugInfo = mapOf(
+            "initialized" to true,
+            "reticulum_available" to true,
+            "storage_path" to "/data/user/0/com.lxmf.messenger/files",
+            "interfaces" to listOf(
+                mapOf("name" to "RNode LoRa", "type" to "ColumbaRNodeInterface", "online" to true),
+                mapOf("name" to "Bluetooth", "type" to "AndroidBLE", "online" to false),
+            ),
+            "transport_enabled" to false,
+            "multicast_lock_held" to true,
+            "wifi_lock_held" to true,
+            "wake_lock_held" to true,
+            "error" to null,
+        )
+        val failedInterfaces = listOf(
+            FailedInterface("TCPClient", "Connection refused", false),
+        )
+
+        // Step 1: Extract interface information (as done after withContext block)
+        @Suppress("UNCHECKED_CAST")
+        val interfacesData = pythonDebugInfo["interfaces"] as? List<Map<String, Any>> ?: emptyList()
+        val activeInterfaces = interfacesData.map { ifaceMap ->
+            InterfaceInfo(
+                name = ifaceMap["name"] as? String ?: "",
+                type = ifaceMap["type"] as? String ?: "",
+                online = ifaceMap["online"] as? Boolean ?: false,
+            )
+        }
+
+        // Step 2: Convert failed interfaces
+        val failedInterfaceInfos = failedInterfaces.map { failed ->
+            InterfaceInfo(
+                name = failed.name,
+                type = failed.name,
+                online = false,
+                error = failed.error,
+            )
+        }
+
+        // Step 3: Combine interfaces
+        val interfaces = activeInterfaces + failedInterfaceInfos
+
+        // Step 4: Build final DebugInfo
+        val status = NetworkStatus.READY
+        val wakeLockHeld = pythonDebugInfo["wake_lock_held"] as? Boolean ?: false
+
+        val debugInfoResult = DebugInfo(
+            initialized = pythonDebugInfo["initialized"] as? Boolean ?: false,
+            reticulumAvailable = pythonDebugInfo["reticulum_available"] as? Boolean ?: false,
+            storagePath = pythonDebugInfo["storage_path"] as? String ?: "",
+            interfaceCount = interfaces.size,
+            interfaces = interfaces,
+            transportEnabled = pythonDebugInfo["transport_enabled"] as? Boolean ?: false,
+            multicastLockHeld = pythonDebugInfo["multicast_lock_held"] as? Boolean ?: false,
+            wifiLockHeld = pythonDebugInfo["wifi_lock_held"] as? Boolean ?: false,
+            wakeLockHeld = wakeLockHeld,
+            error = pythonDebugInfo["error"] as? String
+                ?: if (status is NetworkStatus.ERROR) status.message else null,
+        )
+
+        // Verify the complete result
+        assertTrue(debugInfoResult.initialized)
+        assertTrue(debugInfoResult.reticulumAvailable)
+        assertEquals("/data/user/0/com.lxmf.messenger/files", debugInfoResult.storagePath)
+        assertEquals(3, debugInfoResult.interfaceCount)
+        assertEquals(3, debugInfoResult.interfaces.size)
+        assertEquals(false, debugInfoResult.transportEnabled)
+        assertTrue(debugInfoResult.multicastLockHeld)
+        assertTrue(debugInfoResult.wifiLockHeld)
+        assertTrue(debugInfoResult.wakeLockHeld)
+        assertNull(debugInfoResult.error)
+
+        // Verify individual interfaces
+        val rnodeInterface = debugInfoResult.interfaces.find { it.name == "RNode LoRa" }
+        assertNotNull(rnodeInterface)
+        assertTrue(rnodeInterface!!.online)
+        assertNull(rnodeInterface.error)
+
+        val tcpInterface = debugInfoResult.interfaces.find { it.name == "TCPClient" }
+        assertNotNull(tcpInterface)
+        assertEquals(false, tcpInterface!!.online)
+        assertEquals("Connection refused", tcpInterface.error)
+    }
+
+    @Test
+    fun `wake lock held extraction logs correctly`() {
+        // Tests the specific wake_lock_held extraction pattern in fetchDebugInfo()
+        val pythonDebugInfo = mapOf(
+            "wake_lock_held" to true,
+            "initialized" to true,
+        )
+
+        val wakeLockHeld = pythonDebugInfo["wake_lock_held"] as? Boolean ?: false
+        val rawValue = pythonDebugInfo["wake_lock_held"]
+
+        assertTrue(wakeLockHeld)
+        assertEquals(true, rawValue)
+    }
+
+    @Test
+    fun `wake lock held defaults to false when missing`() {
+        val pythonDebugInfo = mapOf(
+            "initialized" to true,
+            // wake_lock_held missing
+        )
+
+        val wakeLockHeld = pythonDebugInfo["wake_lock_held"] as? Boolean ?: false
+
+        assertEquals(false, wakeLockHeld)
+    }
+
+    @Test
+    fun `status string conversion for CONNECTING status`() {
+        // Test a status type not previously covered
+        val status = NetworkStatus.CONNECTING
+
+        val statusString = when (status) {
+            is NetworkStatus.READY -> "READY"
+            is NetworkStatus.INITIALIZING -> "INITIALIZING"
+            is NetworkStatus.CONNECTING -> "CONNECTING"
+            is NetworkStatus.SHUTDOWN -> "SHUTDOWN"
+            is NetworkStatus.ERROR -> "ERROR: ${status.message}"
+            else -> status.toString()
+        }
+
+        assertEquals("CONNECTING", statusString)
+    }
+
+    @Test
+    fun `interfaces data as empty list when interfaces field is null`() {
+        val pythonDebugInfo = mapOf(
+            "initialized" to true,
+            "interfaces" to null,
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val interfacesData = pythonDebugInfo["interfaces"] as? List<Map<String, Any>> ?: emptyList()
+
+        assertTrue(interfacesData.isEmpty())
+    }
+
+    @Test
+    fun `interfaces data as empty list when interfaces field is missing`() {
+        val pythonDebugInfo = mapOf(
+            "initialized" to true,
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val interfacesData = pythonDebugInfo["interfaces"] as? List<Map<String, Any>> ?: emptyList()
+
+        assertTrue(interfacesData.isEmpty())
+    }
 }

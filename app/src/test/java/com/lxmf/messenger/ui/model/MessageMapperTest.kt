@@ -374,4 +374,235 @@ class MessageMapperTest {
 
     private fun createTestBitmap() =
         Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).asImageBitmap()
+
+    // ========== hasImageField() coverage through toMessageUi() ==========
+
+    @Test
+    fun `toMessageUi sets hasImageAttachment false for empty JSON object`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = "{}"))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasImageAttachment)
+        assertNull(result.fieldsJson)
+    }
+
+    @Test
+    fun `toMessageUi sets hasImageAttachment false when field 6 is null`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"6": null}"""))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasImageAttachment)
+    }
+
+    @Test
+    fun `toMessageUi sets hasImageAttachment false when field 6 is number`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"6": 12345}"""))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasImageAttachment)
+    }
+
+    @Test
+    fun `toMessageUi sets hasImageAttachment false when field 6 is boolean`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"6": true}"""))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasImageAttachment)
+    }
+
+    @Test
+    fun `toMessageUi sets hasImageAttachment false when field 6 is array`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"6": [1, 2, 3]}"""))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasImageAttachment)
+    }
+
+    @Test
+    fun `toMessageUi sets hasImageAttachment false for malformed JSON`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = "not valid json {{{"))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasImageAttachment)
+        assertNull(result.fieldsJson)
+    }
+
+    @Test
+    fun `toMessageUi sets hasImageAttachment true for file reference with valid path`() {
+        val message = createMessage(
+            TestMessageConfig(fieldsJson = """{"6": {"_file_ref": "/data/attachments/img.dat"}}"""),
+        )
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasImageAttachment)
+    }
+
+    @Test
+    fun `toMessageUi sets hasImageAttachment false when file reference object has wrong key`() {
+        // Object in field 6 but without _file_ref key
+        val message = createMessage(
+            TestMessageConfig(fieldsJson = """{"6": {"wrong_key": "/path/to/file"}}"""),
+        )
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasImageAttachment)
+    }
+
+    @Test
+    fun `toMessageUi sets hasImageAttachment false for empty file reference path`() {
+        // _file_ref exists but value is empty
+        val message = createMessage(
+            TestMessageConfig(fieldsJson = """{"6": {"_file_ref": ""}}"""),
+        )
+
+        val result = message.toMessageUi()
+
+        // hasImageField checks if _file_ref key exists, not if value is non-empty
+        // So this should still be true
+        assertTrue(result.hasImageAttachment)
+    }
+
+    @Test
+    fun `toMessageUi handles deeply nested JSON without crashing`() {
+        val message = createMessage(
+            TestMessageConfig(fieldsJson = """{"1": {"nested": {"deep": "value"}}, "6": "image_hex"}"""),
+        )
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasImageAttachment)
+    }
+
+    @Test
+    fun `toMessageUi handles JSON with multiple fields including image`() {
+        val message = createMessage(
+            TestMessageConfig(fieldsJson = """{"1": "text content", "6": "image_hex_data", "7": "other"}"""),
+        )
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasImageAttachment)
+    }
+
+    // ========== decodeAndCacheImage() additional coverage ==========
+
+    @Test
+    fun `decodeAndCacheImage handles file reference with empty _file_ref value`() {
+        val result = decodeAndCacheImage(
+            "empty-path-test",
+            """{"6": {"_file_ref": ""}}""",
+        )
+
+        // Empty path should fail to read
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles field 6 as JSONObject without _file_ref key`() {
+        val result = decodeAndCacheImage(
+            "no-file-ref-key",
+            """{"6": {"other_key": "value"}}""",
+        )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles very long hex string without crashing`() {
+        // Generate a long but invalid hex string
+        val longHex = "ff".repeat(10000)
+        val result = decodeAndCacheImage(
+            "long-hex-test",
+            """{"6": "$longHex"}""",
+        )
+
+        // May or may not decode, but shouldn't crash
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles odd-length hex string gracefully`() {
+        // Odd-length hex strings may or may not decode depending on implementation
+        // This test verifies no exception is thrown
+        val result = decodeAndCacheImage(
+            "odd-hex-test",
+            """{"6": "fff"}""", // 3 chars, not valid hex pair
+        )
+
+        // Result may be null or non-null depending on Robolectric's BitmapFactory
+        // The important thing is it doesn't crash
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles uppercase hex string`() {
+        val result = decodeAndCacheImage(
+            "uppercase-hex-test",
+            """{"6": "FFD8FFE0"}""",
+        )
+
+        // Should handle uppercase hex - whether decode succeeds depends on BitmapFactory
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles mixed case hex string`() {
+        val result = decodeAndCacheImage(
+            "mixed-case-test",
+            """{"6": "FfD8fFe0"}""",
+        )
+
+        // Should handle mixed case
+    }
+
+    @Test
+    fun `toMessageUi correctly maps all MessageUi fields`() {
+        val message = createMessage(
+            TestMessageConfig(
+                id = "complete-test-id",
+                destinationHash = "dest123",
+                content = "Complete message content",
+                timestamp = 1700000000000L,
+                isFromMe = true,
+                status = "delivered",
+                fieldsJson = null,
+                deliveryMethod = "direct",
+                errorMessage = null,
+            ),
+        )
+
+        val result = message.toMessageUi()
+
+        assertEquals("complete-test-id", result.id)
+        assertEquals("dest123", result.destinationHash)
+        assertEquals("Complete message content", result.content)
+        assertEquals(1700000000000L, result.timestamp)
+        assertTrue(result.isFromMe)
+        assertEquals("delivered", result.status)
+        assertNull(result.decodedImage)
+        assertFalse(result.hasImageAttachment)
+        assertNull(result.fieldsJson)
+        assertEquals("direct", result.deliveryMethod)
+        assertNull(result.errorMessage)
+    }
+
+    @Test
+    fun `toMessageUi with failed message includes error message`() {
+        val message = createMessage(
+            TestMessageConfig(
+                status = "failed",
+                errorMessage = "Network timeout",
+            ),
+        )
+
+        val result = message.toMessageUi()
+
+        assertEquals("failed", result.status)
+        assertEquals("Network timeout", result.errorMessage)
+    }
 }

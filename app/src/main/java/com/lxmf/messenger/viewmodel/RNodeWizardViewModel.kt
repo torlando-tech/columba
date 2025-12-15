@@ -33,6 +33,8 @@ import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePairingHandler
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.util.validation.InputValidator
+import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -1822,7 +1824,7 @@ class RNodeWizardViewModel
             return result.isValid
         }
 
-        @Suppress("CyclomaticComplexMethod")
+        @Suppress("CyclomaticComplexMethod", "LongMethod")
         fun saveConfiguration() {
             if (!validateConfiguration()) return
 
@@ -1831,6 +1833,21 @@ class RNodeWizardViewModel
 
                 try {
                     val state = _state.value
+
+                    // Check for duplicate interface names before saving
+                    val existingNames = interfaceRepository.allInterfaces.first().map { it.name }
+                    when (
+                        val uniqueResult = InputValidator.validateInterfaceNameUniqueness(
+                            state.interfaceName,
+                            existingNames,
+                        )
+                    ) {
+                        is ValidationResult.Error -> {
+                            _state.update { it.copy(nameError = uniqueResult.message, isSaving = false) }
+                            return@launch
+                        }
+                        is ValidationResult.Success -> { /* Name is unique, continue */ }
+                    }
 
                     // Determine connection parameters based on connection type
                     val isTcpMode = state.connectionType == RNodeConnectionType.TCP_WIFI

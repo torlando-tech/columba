@@ -255,8 +255,8 @@ class InterfaceConfigManager
                         throw Exception("Failed to initialize Reticulum: ${error.message}", error)
                     }
 
-                // Step 10: Restore peer identities
-                Log.d(TAG, "Step 10: Restoring peer identities...")
+                // Step 10: Restore peer identities (uses bulk restore with lightweight hash computation)
+                Log.d(TAG, "Step 10: Bulk restoring peer identities...")
                 try {
                     val peerIdentities = conversationRepository.getAllPeerIdentities()
                     Log.d(TAG, "Retrieved ${peerIdentities.size} peer identities from database")
@@ -264,45 +264,45 @@ class InterfaceConfigManager
                     if (peerIdentities.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
                         reticulumProtocol.restorePeerIdentities(peerIdentities)
                             .onSuccess { count ->
-                                Log.d(TAG, "✓ Restored $count peer identities")
+                                Log.d(TAG, "✓ Bulk restored $count peer identities")
                             }
                             .onFailure { error ->
-                                Log.w(TAG, "Failed to restore peer identities: ${error.message}", error)
+                                Log.w(TAG, "Failed to bulk restore peer identities: ${error.message}", error)
                                 // Not fatal - continue
                             }
                     } else {
                         Log.d(TAG, "No peer identities to restore")
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error restoring peer identities", e)
+                    Log.w(TAG, "Error bulk restoring peer identities", e)
                     // Not fatal - continue
                 }
 
-                // Step 10b: Restore announce peer identities
-                Log.d(TAG, "Step 10b: Restoring announce peer identities...")
+                // Step 10b: Restore announce identities (uses fast bulk restore with direct dict population)
+                Log.d(TAG, "Step 10b: Bulk restoring announce identities...")
                 try {
                     val announces = database.announceDao().getAllAnnouncesSync()
-                    Log.d(TAG, "Retrieved ${announces.size} announce peer identities from database")
+                    Log.d(TAG, "Retrieved ${announces.size} announce identities from database")
 
                     if (announces.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
-                        // Map announces to peer identity format (destinationHash, publicKey)
-                        val announcePeerIdentities =
+                        // Map announces to (destinationHash, publicKey) - no hash computation needed
+                        val announceIdentities =
                             announces.map { announce ->
                                 announce.destinationHash to announce.publicKey
                             }
-                        reticulumProtocol.restorePeerIdentities(announcePeerIdentities)
+                        reticulumProtocol.restoreAnnounceIdentities(announceIdentities)
                             .onSuccess { count ->
-                                Log.d(TAG, "✓ Restored $count announce peer identities")
+                                Log.d(TAG, "✓ Bulk restored $count announce identities")
                             }
                             .onFailure { error ->
-                                Log.w(TAG, "Failed to restore announce peer identities: ${error.message}", error)
+                                Log.w(TAG, "Failed to bulk restore announce identities: ${error.message}", error)
                                 // Not fatal - continue
                             }
                     } else {
-                        Log.d(TAG, "No announce peer identities to restore")
+                        Log.d(TAG, "No announce identities to restore")
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error restoring announce peer identities", e)
+                    Log.w(TAG, "Error bulk restoring announce identities", e)
                     // Not fatal - continue
                 }
 

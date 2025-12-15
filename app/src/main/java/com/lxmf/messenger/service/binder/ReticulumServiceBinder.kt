@@ -351,6 +351,10 @@ class ReticulumServiceBinder(
         return messagingManager.restorePeerIdentities(peerIdentitiesJson)
     }
 
+    override fun restoreAnnounceIdentities(announcesJson: String): String {
+        return messagingManager.restoreAnnounceIdentities(announcesJson)
+    }
+
     // ===========================================
     // Callback Methods
     // ===========================================

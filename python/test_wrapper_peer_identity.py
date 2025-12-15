@@ -1034,6 +1034,644 @@ class TestPeerIdentityIntegration(unittest.TestCase):
         self.assertGreater(len(wrapper.identities), 0)
 
 
+class TestBulkRestoreAnnounceIdentities(unittest.TestCase):
+    """Test the bulk_restore_announce_identities method for fast announce restoration"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', False)
+    def test_bulk_restore_announces_reticulum_not_available(self):
+        """Test that bulk_restore_announce_identities returns error when Reticulum is not available"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        announce_data = [
+            {"destination_hash": "aabbccdd" * 4, "public_key": base64.b64encode(b'key1' * 16).decode()}
+        ]
+
+        result = wrapper.bulk_restore_announce_identities(announce_data)
+
+        self.assertEqual(result['success_count'], 0)
+        self.assertIn('errors', result)
+        self.assertEqual(result['errors'], ["Reticulum not available"])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_success(self, mock_rns):
+        """Test successful bulk restore of announce identities"""
+        # Setup mock for known_destinations dict
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512  # 64 bytes
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Create test data - 64 byte public keys
+        public_key_1 = b'k' * 64
+        public_key_2 = b'm' * 64
+        announce_data = [
+            {
+                "destination_hash": "aabbccdd" * 4,  # 32 hex chars = 16 bytes
+                "public_key": base64.b64encode(public_key_1).decode()
+            },
+            {
+                "destination_hash": "11223344" * 4,
+                "public_key": base64.b64encode(public_key_2).decode()
+            }
+        ]
+
+        result = wrapper.bulk_restore_announce_identities(announce_data)
+
+        # Both should succeed
+        self.assertEqual(result['success_count'], 2)
+        self.assertEqual(len(result['errors']), 0)
+
+        # Verify entries were added to Identity.known_destinations
+        self.assertEqual(len(mock_rns.Identity.known_destinations), 2)
+
+        # Verify the dict entries have correct structure
+        dest_hash_1 = bytes.fromhex("aabbccdd" * 4)
+        self.assertIn(dest_hash_1, mock_rns.Identity.known_destinations)
+        entry = mock_rns.Identity.known_destinations[dest_hash_1]
+        self.assertEqual(len(entry), 4)  # [time, packet_hash, public_key, app_data]
+        self.assertEqual(entry[2], public_key_1)  # public key at index 2
+        self.assertIsNone(entry[1])  # packet_hash is None
+        self.assertIsNone(entry[3])  # app_data is None
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_with_json_string(self, mock_rns):
+        """Test bulk_restore_announce_identities with JSON string input"""
+        import json
+
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        announce_data = [
+            {
+                "destination_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(b'x' * 64).decode()
+            }
+        ]
+        json_string = json.dumps(announce_data)
+
+        result = wrapper.bulk_restore_announce_identities(json_string)
+
+        self.assertEqual(result['success_count'], 1)
+        self.assertEqual(len(result['errors']), 0)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_missing_destination_hash(self, mock_rns):
+        """Test bulk_restore_announce_identities with missing destination_hash field"""
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        announce_data = [
+            {"public_key": base64.b64encode(b'k' * 64).decode()}  # Missing destination_hash
+        ]
+
+        result = wrapper.bulk_restore_announce_identities(announce_data)
+
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('missing destination_hash', result['errors'][0])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_missing_public_key(self, mock_rns):
+        """Test bulk_restore_announce_identities with missing public_key field"""
+        mock_rns.Identity.known_destinations = {}
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        announce_data = [
+            {"destination_hash": "aabbccdd" * 4}  # Missing public_key
+        ]
+
+        result = wrapper.bulk_restore_announce_identities(announce_data)
+
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('missing public_key', result['errors'][0])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_invalid_hex(self, mock_rns):
+        """Test bulk_restore_announce_identities with invalid hex in destination_hash"""
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        announce_data = [
+            {
+                "destination_hash": "ZZZZZZZZ" * 4,  # Invalid hex
+                "public_key": base64.b64encode(b'k' * 64).decode()
+            }
+        ]
+
+        result = wrapper.bulk_restore_announce_identities(announce_data)
+
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('Error processing announce', result['errors'][0])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_invalid_base64(self, mock_rns):
+        """Test bulk_restore_announce_identities with invalid base64 in public_key"""
+        mock_rns.Identity.known_destinations = {}
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        announce_data = [
+            {
+                "destination_hash": "aabbccdd" * 4,
+                "public_key": "!!!INVALID_BASE64!!!"
+            }
+        ]
+
+        result = wrapper.bulk_restore_announce_identities(announce_data)
+
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('Error processing announce', result['errors'][0])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_empty_list(self, mock_rns):
+        """Test bulk_restore_announce_identities with empty list"""
+        mock_rns.Identity.known_destinations = {}
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        result = wrapper.bulk_restore_announce_identities([])
+
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 0)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_large_batch(self, mock_rns):
+        """Test bulk_restore_announce_identities with large batch (1000 announces)"""
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Create 1000 announces
+        announce_data = []
+        for i in range(1000):
+            announce_data.append({
+                "destination_hash": f"{i:032x}",  # 32 hex chars
+                "public_key": base64.b64encode(f"key{i:06d}".ljust(64, '0').encode()).decode()
+            })
+
+        result = wrapper.bulk_restore_announce_identities(announce_data)
+
+        # All should succeed
+        self.assertEqual(result['success_count'], 1000)
+        self.assertEqual(len(result['errors']), 0)
+        self.assertEqual(len(mock_rns.Identity.known_destinations), 1000)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_partial_success(self, mock_rns):
+        """Test bulk_restore_announce_identities with mix of valid and invalid entries"""
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        announce_data = [
+            {
+                "destination_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(b'k' * 64).decode()
+            },
+            {
+                "destination_hash": "INVALID_HEX",
+                "public_key": base64.b64encode(b'm' * 64).decode()
+            },
+            {
+                "destination_hash": "11223344" * 4,
+                "public_key": base64.b64encode(b'n' * 64).decode()
+            }
+        ]
+
+        result = wrapper.bulk_restore_announce_identities(announce_data)
+
+        self.assertEqual(result['success_count'], 2)
+        self.assertEqual(len(result['errors']), 1)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_populates_local_cache(self, mock_rns):
+        """Test that bulk_restore_announce_identities also populates wrapper.identities cache"""
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        announce_data = [
+            {
+                "destination_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(b'k' * 64).decode()
+            }
+        ]
+
+        result = wrapper.bulk_restore_announce_identities(announce_data)
+
+        self.assertEqual(result['success_count'], 1)
+        # Check local cache is populated
+        dest_hash_hex = "aabbccdd" * 4
+        self.assertIn(dest_hash_hex, wrapper.identities)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_wrong_public_key_size(self, mock_rns):
+        """Test bulk_restore_announce_identities with wrong public key size"""
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512  # Expects 64 byte keys
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        announce_data = [
+            {
+                "destination_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(b'short').decode()  # Too short
+            }
+        ]
+
+        result = wrapper.bulk_restore_announce_identities(announce_data)
+
+        # Should fail due to wrong key size
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('public key size', result['errors'][0].lower())
+
+
+class TestBulkRestorePeerIdentities(unittest.TestCase):
+    """Test the bulk_restore_peer_identities method for fast peer identity restoration"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', False)
+    def test_bulk_restore_peers_reticulum_not_available(self):
+        """Test that bulk_restore_peer_identities returns error when Reticulum is not available"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {"identity_hash": "aabbccdd" * 4, "public_key": base64.b64encode(b'key1' * 16).decode()}
+        ]
+
+        result = wrapper.bulk_restore_peer_identities(peer_data)
+
+        self.assertEqual(result['success_count'], 0)
+        self.assertIn('errors', result)
+        self.assertEqual(result['errors'], ["Reticulum not available"])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_peers_success(self, mock_rns):
+        """Test successful bulk restore of peer identities"""
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+        mock_rns.Identity.NAME_HASH_LENGTH = 80
+        mock_rns.Identity.full_hash = lambda x: b'h' * 32  # Mock hash function
+        mock_rns.Reticulum.TRUNCATED_HASHLENGTH = 128  # 16 bytes
+        mock_rns.Identity.truncated_hash = lambda x: b't' * 16
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {
+                "identity_hash": "aabbccdd" * 4,  # 32 hex chars = 16 bytes
+                "public_key": base64.b64encode(b'k' * 64).decode()
+            },
+            {
+                "identity_hash": "11223344" * 4,
+                "public_key": base64.b64encode(b'm' * 64).decode()
+            }
+        ]
+
+        result = wrapper.bulk_restore_peer_identities(peer_data)
+
+        # Both should succeed
+        self.assertEqual(result['success_count'], 2)
+        self.assertEqual(len(result['errors']), 0)
+
+        # Verify entries were added to Identity.known_destinations
+        self.assertGreater(len(mock_rns.Identity.known_destinations), 0)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_peers_with_json_string(self, mock_rns):
+        """Test bulk_restore_peer_identities with JSON string input"""
+        import json
+
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+        mock_rns.Identity.NAME_HASH_LENGTH = 80
+        mock_rns.Identity.full_hash = lambda x: b'h' * 32
+        mock_rns.Reticulum.TRUNCATED_HASHLENGTH = 128
+        mock_rns.Identity.truncated_hash = lambda x: b't' * 16
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {
+                "identity_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(b'x' * 64).decode()
+            }
+        ]
+        json_string = json.dumps(peer_data)
+
+        result = wrapper.bulk_restore_peer_identities(json_string)
+
+        self.assertEqual(result['success_count'], 1)
+        self.assertEqual(len(result['errors']), 0)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_peers_missing_identity_hash(self, mock_rns):
+        """Test bulk_restore_peer_identities with missing identity_hash field"""
+        mock_rns.Identity.known_destinations = {}
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {"public_key": base64.b64encode(b'k' * 64).decode()}  # Missing identity_hash
+        ]
+
+        result = wrapper.bulk_restore_peer_identities(peer_data)
+
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('missing identity_hash', result['errors'][0])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_peers_missing_public_key(self, mock_rns):
+        """Test bulk_restore_peer_identities with missing public_key field"""
+        mock_rns.Identity.known_destinations = {}
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {"identity_hash": "aabbccdd" * 4}  # Missing public_key
+        ]
+
+        result = wrapper.bulk_restore_peer_identities(peer_data)
+
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('missing public_key', result['errors'][0])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_peers_invalid_hex_in_identity_hash_is_ignored(self, mock_rns):
+        """Test bulk_restore_peer_identities ignores invalid hex in identity_hash field.
+
+        The identity_hash field is not validated because the implementation computes
+        the actual identity hash from the public key (which is the source of truth).
+        This is by design - the stored identity_hash may be stale/incorrect.
+        """
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+        mock_rns.Identity.NAME_HASH_LENGTH = 80
+        mock_rns.Identity.full_hash = lambda x: b'h' * 32
+        mock_rns.Reticulum.TRUNCATED_HASHLENGTH = 128
+        mock_rns.Identity.truncated_hash = lambda x: b't' * 16
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {
+                "identity_hash": "ZZZZZZZZ" * 4,  # Invalid hex - ignored since we compute from public_key
+                "public_key": base64.b64encode(b'k' * 64).decode()
+            }
+        ]
+
+        result = wrapper.bulk_restore_peer_identities(peer_data)
+
+        # Should succeed - identity_hash is not validated, we compute from public_key
+        self.assertEqual(result['success_count'], 1)
+        self.assertEqual(len(result['errors']), 0)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_peers_invalid_base64(self, mock_rns):
+        """Test bulk_restore_peer_identities with invalid base64 in public_key"""
+        mock_rns.Identity.known_destinations = {}
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {
+                "identity_hash": "aabbccdd" * 4,
+                "public_key": "!!!INVALID_BASE64!!!"
+            }
+        ]
+
+        result = wrapper.bulk_restore_peer_identities(peer_data)
+
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('Error processing peer', result['errors'][0])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_peers_empty_list(self, mock_rns):
+        """Test bulk_restore_peer_identities with empty list"""
+        mock_rns.Identity.known_destinations = {}
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        result = wrapper.bulk_restore_peer_identities([])
+
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 0)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_peers_large_batch(self, mock_rns):
+        """Test bulk_restore_peer_identities with large batch (1000 peers)"""
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+        mock_rns.Identity.NAME_HASH_LENGTH = 80
+        mock_rns.Identity.full_hash = lambda x: b'h' * 32
+        mock_rns.Reticulum.TRUNCATED_HASHLENGTH = 128
+        mock_rns.Identity.truncated_hash = lambda x: b't' * 16
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Create 1000 peers
+        peer_data = []
+        for i in range(1000):
+            peer_data.append({
+                "identity_hash": f"{i:032x}",  # 32 hex chars
+                "public_key": base64.b64encode(f"key{i:06d}".ljust(64, '0').encode()).decode()
+            })
+
+        result = wrapper.bulk_restore_peer_identities(peer_data)
+
+        # All should succeed
+        self.assertEqual(result['success_count'], 1000)
+        self.assertEqual(len(result['errors']), 0)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_peers_partial_success(self, mock_rns):
+        """Test bulk_restore_peer_identities with mix of valid and invalid entries.
+
+        Note: Invalid identity_hash does NOT cause failure - we compute from public_key.
+        Only invalid public_key (bad base64) causes failure.
+        """
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+        mock_rns.Identity.NAME_HASH_LENGTH = 80
+        mock_rns.Identity.full_hash = lambda x: b'h' * 32
+        mock_rns.Reticulum.TRUNCATED_HASHLENGTH = 128
+        mock_rns.Identity.truncated_hash = lambda x: b't' * 16
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {
+                "identity_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(b'k' * 64).decode()
+            },
+            {
+                "identity_hash": "11223344" * 4,
+                "public_key": "INVALID_BASE64!!!"  # This causes failure
+            },
+            {
+                "identity_hash": "55667788" * 4,
+                "public_key": base64.b64encode(b'n' * 64).decode()
+            }
+        ]
+
+        result = wrapper.bulk_restore_peer_identities(peer_data)
+
+        self.assertEqual(result['success_count'], 2)
+        self.assertEqual(len(result['errors']), 1)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_peers_populates_local_cache(self, mock_rns):
+        """Test that bulk_restore_peer_identities also populates wrapper.identities cache"""
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+        mock_rns.Identity.NAME_HASH_LENGTH = 80
+        mock_rns.Identity.full_hash = lambda x: b'h' * 32
+        mock_rns.Reticulum.TRUNCATED_HASHLENGTH = 128
+        mock_rns.Identity.truncated_hash = lambda x: b't' * 16
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {
+                "identity_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(b'k' * 64).decode()
+            }
+        ]
+
+        result = wrapper.bulk_restore_peer_identities(peer_data)
+
+        self.assertEqual(result['success_count'], 1)
+        # Check local cache is populated (either by identity_hash or computed dest_hash)
+        self.assertGreater(len(wrapper.identities), 0)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_peers_wrong_public_key_size(self, mock_rns):
+        """Test bulk_restore_peer_identities with wrong public key size"""
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512  # Expects 64 byte keys
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        peer_data = [
+            {
+                "identity_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(b'short').decode()  # Too short
+            }
+        ]
+
+        result = wrapper.bulk_restore_peer_identities(peer_data)
+
+        # Should fail due to wrong key size
+        self.assertEqual(result['success_count'], 0)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('public key size', result['errors'][0].lower())
+
+
+class TestBulkRestoreEquivalence(unittest.TestCase):
+    """Test that bulk restore produces equivalent results to individual store"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    def test_bulk_restore_announces_same_format_as_remember(self, mock_rns):
+        """Test that bulk_restore_announce_identities produces same dict format as Identity.remember()"""
+        mock_rns.Identity.known_destinations = {}
+        mock_rns.Identity.KEYSIZE = 512
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        public_key = b'k' * 64
+        announce_data = [
+            {
+                "destination_hash": "aabbccdd" * 4,
+                "public_key": base64.b64encode(public_key).decode()
+            }
+        ]
+
+        result = wrapper.bulk_restore_announce_identities(announce_data)
+        self.assertEqual(result['success_count'], 1)
+
+        # Check the format matches what Identity.remember() would produce
+        dest_hash = bytes.fromhex("aabbccdd" * 4)
+        entry = mock_rns.Identity.known_destinations[dest_hash]
+
+        # Format should be: [timestamp, packet_hash, public_key, app_data]
+        self.assertIsInstance(entry[0], float)  # timestamp
+        self.assertIsNone(entry[1])  # packet_hash
+        self.assertEqual(entry[2], public_key)  # public_key
+        self.assertIsNone(entry[3])  # app_data
+
+
 if __name__ == '__main__':
     # Run tests with verbose output
     unittest.main(verbosity=2)

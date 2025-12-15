@@ -3257,6 +3257,185 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "restore_all_peer_identities", f"Error restoring peer identities: {e}")
             return {"success_count": 0, "errors": [str(e)]}
 
+    def bulk_restore_announce_identities(self, announce_data) -> Dict:
+        """
+        Bulk restore announce identities by directly populating Identity.known_destinations.
+        For announces, we have destination_hash directly - no computation needed.
+        This is much faster than creating full RNS Identity/Destination objects.
+
+        Args:
+            announce_data: JSON string or List of dicts with 'destination_hash' and 'public_key' keys
+
+        Returns:
+            Dict with 'success_count' and 'errors' list
+        """
+        try:
+            if not RETICULUM_AVAILABLE:
+                return {"success_count": 0, "errors": ["Reticulum not available"]}
+
+            # Parse JSON string if needed
+            if isinstance(announce_data, str):
+                import json
+                announce_data = json.loads(announce_data)
+
+            log_debug("ReticulumWrapper", "bulk_restore_announce_identities",
+                     f"Bulk restoring {len(announce_data)} announce identities")
+
+            import time
+            import base64
+
+            success_count = 0
+            errors = []
+            expected_key_size = RNS.Identity.KEYSIZE // 8  # Convert bits to bytes (512 bits = 64 bytes)
+
+            for i, announce in enumerate(announce_data):
+                try:
+                    dest_hash_str = announce.get('destination_hash')
+                    public_key_str = announce.get('public_key')
+
+                    if not dest_hash_str:
+                        errors.append(f"Announce {i}: missing destination_hash")
+                        continue
+                    if not public_key_str:
+                        errors.append(f"Announce {i}: missing public_key")
+                        continue
+
+                    # Convert hex string to bytes
+                    dest_hash = bytes.fromhex(dest_hash_str)
+
+                    # Decode base64 string to bytes
+                    public_key = base64.b64decode(public_key_str)
+
+                    # Validate public key size
+                    if len(public_key) != expected_key_size:
+                        errors.append(f"Announce {i}: Invalid public key size {len(public_key)}, expected {expected_key_size}")
+                        continue
+
+                    # Directly populate Identity.known_destinations
+                    # Format: [timestamp, packet_hash, public_key, app_data]
+                    RNS.Identity.known_destinations[dest_hash] = [
+                        time.time(),  # timestamp
+                        None,         # packet_hash (not needed for recall)
+                        public_key,   # public key bytes
+                        None          # app_data
+                    ]
+
+                    # Also store in local identities cache for wrapper lookups
+                    # Create a lightweight identity object for local cache
+                    identity = RNS.Identity(create_keys=False)
+                    identity.load_public_key(public_key)
+                    self.identities[dest_hash_str] = identity
+
+                    success_count += 1
+
+                except Exception as e:
+                    errors.append(f"Error processing announce {i}: {e}")
+
+            log_info("ReticulumWrapper", "bulk_restore_announce_identities",
+                    f"Bulk restored {success_count} announce identities, {len(errors)} errors")
+            return {"success_count": success_count, "errors": errors}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "bulk_restore_announce_identities",
+                     f"Error bulk restoring announce identities: {e}")
+            return {"success_count": 0, "errors": [str(e)]}
+
+    def bulk_restore_peer_identities(self, peer_data) -> Dict:
+        """
+        Bulk restore peer identities using lightweight hash computation.
+        For peer identities, we must compute destination_hash from identity_hash.
+        This is faster than creating full RNS Identity/Destination objects.
+
+        Args:
+            peer_data: JSON string or List of dicts with 'identity_hash' and 'public_key' keys
+
+        Returns:
+            Dict with 'success_count' and 'errors' list
+        """
+        try:
+            if not RETICULUM_AVAILABLE:
+                return {"success_count": 0, "errors": ["Reticulum not available"]}
+
+            # Parse JSON string if needed
+            if isinstance(peer_data, str):
+                import json
+                peer_data = json.loads(peer_data)
+
+            log_debug("ReticulumWrapper", "bulk_restore_peer_identities",
+                     f"Bulk restoring {len(peer_data)} peer identities")
+
+            import time
+            import base64
+
+            success_count = 0
+            errors = []
+            expected_key_size = RNS.Identity.KEYSIZE // 8  # Convert bits to bytes
+
+            # Precompute the LXMF name_hash (constant for all LXMF delivery destinations)
+            # This is: hash("lxmf.delivery")[:NAME_HASH_LENGTH//8]
+            lxmf_name = "lxmf.delivery"
+            lxmf_name_hash = RNS.Identity.full_hash(lxmf_name.encode("utf-8"))[:(RNS.Identity.NAME_HASH_LENGTH // 8)]
+
+            for i, peer in enumerate(peer_data):
+                try:
+                    identity_hash_str = peer.get('identity_hash')
+                    public_key_str = peer.get('public_key')
+
+                    if not identity_hash_str:
+                        errors.append(f"Peer {i}: missing identity_hash")
+                        continue
+                    if not public_key_str:
+                        errors.append(f"Peer {i}: missing public_key")
+                        continue
+
+                    # Decode base64 string to bytes
+                    public_key = base64.b64decode(public_key_str)
+
+                    # Validate public key size
+                    if len(public_key) != expected_key_size:
+                        errors.append(f"Peer {i}: Invalid public key size {len(public_key)}, expected {expected_key_size}")
+                        continue
+
+                    # Compute the identity hash from the public key (this is the authoritative hash)
+                    # Identity hash = truncated_hash(public_key)
+                    actual_identity_hash = RNS.Identity.truncated_hash(public_key)
+
+                    # Compute the LXMF delivery destination hash
+                    # dest_hash = full_hash(name_hash + identity_hash)[:TRUNCATED_HASHLENGTH//8]
+                    addr_hash_material = lxmf_name_hash + actual_identity_hash
+                    dest_hash = RNS.Identity.full_hash(addr_hash_material)[:RNS.Reticulum.TRUNCATED_HASHLENGTH // 8]
+
+                    # Directly populate Identity.known_destinations
+                    # Format: [timestamp, packet_hash, public_key, app_data]
+                    RNS.Identity.known_destinations[dest_hash] = [
+                        time.time(),  # timestamp
+                        None,         # packet_hash (not needed for recall)
+                        public_key,   # public key bytes
+                        None          # app_data
+                    ]
+
+                    # Also store in local identities cache for wrapper lookups
+                    identity = RNS.Identity(create_keys=False)
+                    identity.load_public_key(public_key)
+
+                    # Store by multiple keys for lookup flexibility
+                    self.identities[actual_identity_hash.hex()] = identity
+                    self.identities[dest_hash.hex()] = identity
+
+                    success_count += 1
+
+                except Exception as e:
+                    errors.append(f"Error processing peer {i}: {e}")
+
+            log_info("ReticulumWrapper", "bulk_restore_peer_identities",
+                    f"Bulk restored {success_count} peer identities, {len(errors)} errors")
+            return {"success_count": success_count, "errors": errors}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "bulk_restore_peer_identities",
+                     f"Error bulk restoring peer identities: {e}")
+            return {"success_count": 0, "errors": [str(e)]}
+
     def get_lxmf_destination(self) -> Dict:
         """
         Get the local LXMF delivery destination hash.

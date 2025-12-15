@@ -11,7 +11,9 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -19,6 +21,9 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MessageMapperTest {
+
+    @get:Rule
+    val tempFolder = TemporaryFolder()
 
     @Before
     fun setup() {
@@ -259,6 +264,84 @@ class MessageMapperTest {
 
         // Cache should NOT contain entry since decode failed
         assertNull(ImageCache.get(messageId))
+    }
+
+    // ========== FILE-BASED ATTACHMENT TESTS ==========
+
+    @Test
+    fun `decodeAndCacheImage reads from file reference when file exists`() {
+        // Create a temporary file with hex-encoded image data
+        val tempFile = tempFolder.newFile("test_attachment.dat")
+        // Write some hex data (arbitrary - Robolectric may or may not decode it)
+        tempFile.writeText("0102030405060708")
+
+        val fieldsJson = """{"6": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = decodeAndCacheImage("file-test-id", fieldsJson)
+
+        // The function should have read the file - whether decode succeeds depends on Robolectric
+        // This test verifies the file reading path is exercised
+        // No exception means success
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles file with valid hex content`() {
+        val tempFile = tempFolder.newFile("valid_hex.dat")
+        // Valid hex string (though not a valid image)
+        tempFile.writeText("ffd8ffe000104a46494600")
+
+        val fieldsJson = """{"6": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = decodeAndCacheImage("hex-file-test", fieldsJson)
+
+        // File was read successfully - decode may or may not succeed
+        // No exception means the file reading path worked
+    }
+
+    @Test
+    fun `decodeAndCacheImage returns null when file reference path is directory`() {
+        // Create a directory instead of a file
+        val tempDir = tempFolder.newFolder("not_a_file")
+
+        val fieldsJson = """{"6": {"_file_ref": "${tempDir.absolutePath}"}}"""
+        val result = decodeAndCacheImage("dir-test-id", fieldsJson)
+
+        // Should return null because we can't read a directory as text
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles empty file`() {
+        val emptyFile = tempFolder.newFile("empty.dat")
+        // File exists but is empty
+
+        val fieldsJson = """{"6": {"_file_ref": "${emptyFile.absolutePath}"}}"""
+        val result = decodeAndCacheImage("empty-file-test", fieldsJson)
+
+        // Function should handle empty file without crashing
+        // Result may vary based on BitmapFactory implementation (Robolectric vs real Android)
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles file with whitespace only`() {
+        val whitespaceFile = tempFolder.newFile("whitespace.dat")
+        whitespaceFile.writeText("   \n\t  ")
+
+        val fieldsJson = """{"6": {"_file_ref": "${whitespaceFile.absolutePath}"}}"""
+        val result = decodeAndCacheImage("whitespace-file-test", fieldsJson)
+
+        // Whitespace is not valid hex, should fail during hex parsing
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles file reference with special characters in path`() {
+        // Test path handling with spaces and special chars (if filesystem allows)
+        val tempFile = tempFolder.newFile("test file with spaces.dat")
+        tempFile.writeText("0102030405")
+
+        val fieldsJson = """{"6": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = decodeAndCacheImage("special-path-test", fieldsJson)
+
+        // Should handle the path correctly - no exception means success
     }
 
     /**

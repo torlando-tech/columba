@@ -569,6 +569,133 @@ class ServiceReticulumProtocolTest {
         assertEquals(7633, ifaceJson.getInt("tcp_port"))
     }
 
+    // ===========================================
+    // restorePeerIdentities Tests
+    // ===========================================
+
+    @Test
+    fun `restorePeerIdentities - returns error when service not bound`() {
+        // When
+        val result = protocol.restorePeerIdentities(emptyList())
+
+        // Then
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+    }
+
+    @Test
+    fun `restorePeerIdentities - returns success with count when service returns success`() {
+        // Given: Inject mock service via reflection
+        every { mockService.restorePeerIdentities(any()) } returns """{"success":true,"restored_count":5}"""
+        injectMockService(protocol, mockService)
+
+        // When
+        val peerIdentities = listOf(
+            Pair("abc123", byteArrayOf(1, 2, 3)),
+            Pair("def456", byteArrayOf(4, 5, 6)),
+        )
+        val result = protocol.restorePeerIdentities(peerIdentities)
+
+        // Then
+        assertTrue("Result should be success", result.isSuccess)
+        assertEquals(5, result.getOrNull())
+    }
+
+    @Test
+    fun `restorePeerIdentities - returns failure when service returns error`() {
+        // Given: Inject mock service via reflection
+        every { mockService.restorePeerIdentities(any()) } returns """{"success":false,"error":"Test error"}"""
+        injectMockService(protocol, mockService)
+
+        // When
+        val result = protocol.restorePeerIdentities(emptyList())
+
+        // Then
+        assertTrue("Result should be failure", result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("Test error") == true)
+    }
+
+    @Test
+    fun `restorePeerIdentities - handles empty list`() {
+        // Given: Inject mock service via reflection
+        every { mockService.restorePeerIdentities(any()) } returns """{"success":true,"restored_count":0}"""
+        injectMockService(protocol, mockService)
+
+        // When
+        val result = protocol.restorePeerIdentities(emptyList())
+
+        // Then
+        assertTrue("Result should be success for empty list", result.isSuccess)
+        assertEquals(0, result.getOrNull())
+    }
+
+    // ===========================================
+    // restoreAnnounceIdentities Tests
+    // ===========================================
+
+    @Test
+    fun `restoreAnnounceIdentities - returns error when service not bound`() {
+        // When
+        val result = protocol.restoreAnnounceIdentities(emptyList())
+
+        // Then
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+    }
+
+    @Test
+    fun `restoreAnnounceIdentities - returns success with count when service returns success`() {
+        // Given: Inject mock service via reflection
+        every { mockService.restoreAnnounceIdentities(any()) } returns """{"success":true,"restored_count":10}"""
+        injectMockService(protocol, mockService)
+
+        // When
+        val announces = listOf(
+            Pair("destHash1", byteArrayOf(1, 2, 3)),
+            Pair("destHash2", byteArrayOf(4, 5, 6)),
+        )
+        val result = protocol.restoreAnnounceIdentities(announces)
+
+        // Then
+        assertTrue("Result should be success", result.isSuccess)
+        assertEquals(10, result.getOrNull())
+    }
+
+    @Test
+    fun `restoreAnnounceIdentities - returns failure when service returns error`() {
+        // Given: Inject mock service via reflection
+        every { mockService.restoreAnnounceIdentities(any()) } returns """{"success":false,"error":"Announce restore failed"}"""
+        injectMockService(protocol, mockService)
+
+        // When
+        val result = protocol.restoreAnnounceIdentities(emptyList())
+
+        // Then
+        assertTrue("Result should be failure", result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("Announce restore failed") == true)
+    }
+
+    @Test
+    fun `restoreAnnounceIdentities - handles empty list`() {
+        // Given: Inject mock service via reflection
+        every { mockService.restoreAnnounceIdentities(any()) } returns """{"success":true,"restored_count":0}"""
+        injectMockService(protocol, mockService)
+
+        // When
+        val result = protocol.restoreAnnounceIdentities(emptyList())
+
+        // Then
+        assertTrue("Result should be success for empty list", result.isSuccess)
+        assertEquals(0, result.getOrNull())
+    }
+
+    // Helper to inject mock service via reflection
+    private fun injectMockService(protocol: ServiceReticulumProtocol, mockService: IReticulumService) {
+        val serviceField = ServiceReticulumProtocol::class.java.getDeclaredField("service")
+        serviceField.isAccessible = true
+        serviceField.set(protocol, mockService)
+    }
+
     @Test
     fun `buildConfigJson - RNode omits tcp_host when null`() {
         // Given - Bluetooth RNode without tcp_host

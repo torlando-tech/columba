@@ -200,10 +200,20 @@ interface IReticulumService {
 
     /**
      * Restore peer identities to enable message sending to previously known peers.
-     * @param peerIdentitiesJson JSON array containing objects with 'hash' and 'public_key' fields
+     * Uses bulk restore for performance optimization.
+     * @param peerIdentitiesJson JSON array containing objects with 'identity_hash' and 'public_key' fields
      * @return JSON string with result: {"success": true/false, "restored_count": N, "error": "..."}
      */
     String restorePeerIdentities(String peerIdentitiesJson);
+
+    /**
+     * Restore announce identities to enable message sending to announced peers.
+     * Uses bulk restore with direct dict population for maximum performance.
+     * For announces, we have destination_hash directly - no hash computation needed.
+     * @param announcesJson JSON array containing objects with 'destination_hash' and 'public_key' fields
+     * @return JSON string with result: {"success": true/false, "restored_count": N, "error": "..."}
+     */
+    String restoreAnnounceIdentities(String announcesJson);
 
     /**
      * Force service process to exit (for clean restart).

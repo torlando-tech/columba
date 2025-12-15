@@ -9,7 +9,9 @@ import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import io.mockk.Ordering
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -309,5 +311,259 @@ class InterfaceConfigManagerTest {
                 },
             )
         }
+    }
+
+    // ========== Bulk Restore Tests ==========
+
+    @Test
+    fun `applyInterfaceChanges - calls restorePeerIdentities when peer identities exist`() = runTest {
+        // Given: ServiceReticulumProtocol with peer identities
+        val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+        coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
+        coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+        coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.success(5)
+
+        val peerIdentities = listOf(
+            Pair("hash1", byteArrayOf(1, 2, 3)),
+            Pair("hash2", byteArrayOf(4, 5, 6)),
+        )
+        coEvery { conversationRepository.getAllPeerIdentities() } returns peerIdentities
+
+        val managerWithServiceProtocol = InterfaceConfigManager(
+            context = context,
+            reticulumProtocol = serviceProtocol,
+            interfaceRepository = interfaceRepository,
+            identityRepository = identityRepository,
+            conversationRepository = conversationRepository,
+            messageCollector = messageCollector,
+            database = database,
+            settingsRepository = settingsRepository,
+            autoAnnounceManager = autoAnnounceManager,
+            identityResolutionManager = identityResolutionManager,
+            propagationNodeManager = propagationNodeManager,
+            applicationScope = applicationScope,
+        )
+
+        // When
+        managerWithServiceProtocol.applyInterfaceChanges()
+
+        // Then: restorePeerIdentities should be called with the peer identities
+        coVerify { serviceProtocol.restorePeerIdentities(peerIdentities) }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - calls restoreAnnounceIdentities when announces exist`() = runTest {
+        // Given: ServiceReticulumProtocol with announce identities
+        val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+        coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
+        coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+        coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.success(3)
+
+        val announces = listOf(
+            AnnounceEntity(
+                destinationHash = "destHash1",
+                peerName = "Test1",
+                publicKey = byteArrayOf(1, 2, 3),
+                appData = null,
+                hops = 1,
+                lastSeenTimestamp = System.currentTimeMillis(),
+                nodeType = "lxmf",
+                receivingInterface = null,
+                aspect = "lxmf.delivery",
+            ),
+            AnnounceEntity(
+                destinationHash = "destHash2",
+                peerName = "Test2",
+                publicKey = byteArrayOf(4, 5, 6),
+                appData = null,
+                hops = 2,
+                lastSeenTimestamp = System.currentTimeMillis(),
+                nodeType = "lxmf",
+                receivingInterface = null,
+                aspect = "lxmf.delivery",
+            ),
+        )
+        val announceDao = mockk<AnnounceDao>()
+        every { database.announceDao() } returns announceDao
+        coEvery { announceDao.getAllAnnouncesSync() } returns announces
+
+        val managerWithServiceProtocol = InterfaceConfigManager(
+            context = context,
+            reticulumProtocol = serviceProtocol,
+            interfaceRepository = interfaceRepository,
+            identityRepository = identityRepository,
+            conversationRepository = conversationRepository,
+            messageCollector = messageCollector,
+            database = database,
+            settingsRepository = settingsRepository,
+            autoAnnounceManager = autoAnnounceManager,
+            identityResolutionManager = identityResolutionManager,
+            propagationNodeManager = propagationNodeManager,
+            applicationScope = applicationScope,
+        )
+
+        // When
+        managerWithServiceProtocol.applyInterfaceChanges()
+
+        // Then: restoreAnnounceIdentities should be called with mapped announce data
+        coVerify {
+            serviceProtocol.restoreAnnounceIdentities(
+                match { list ->
+                    list.size == 2 &&
+                        list[0].first == "destHash1" &&
+                        list[1].first == "destHash2"
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - skips restorePeerIdentities when list is empty`() = runTest {
+        // Given: ServiceReticulumProtocol with no peer identities
+        val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+        coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
+        coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+
+        coEvery { conversationRepository.getAllPeerIdentities() } returns emptyList()
+
+        val managerWithServiceProtocol = InterfaceConfigManager(
+            context = context,
+            reticulumProtocol = serviceProtocol,
+            interfaceRepository = interfaceRepository,
+            identityRepository = identityRepository,
+            conversationRepository = conversationRepository,
+            messageCollector = messageCollector,
+            database = database,
+            settingsRepository = settingsRepository,
+            autoAnnounceManager = autoAnnounceManager,
+            identityResolutionManager = identityResolutionManager,
+            propagationNodeManager = propagationNodeManager,
+            applicationScope = applicationScope,
+        )
+
+        // When
+        managerWithServiceProtocol.applyInterfaceChanges()
+
+        // Then: restorePeerIdentities should NOT be called
+        coVerify(exactly = 0) { serviceProtocol.restorePeerIdentities(any()) }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - skips restoreAnnounceIdentities when list is empty`() = runTest {
+        // Given: ServiceReticulumProtocol with no announces
+        val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+        coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
+        coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+
+        val announceDao = mockk<AnnounceDao>()
+        every { database.announceDao() } returns announceDao
+        coEvery { announceDao.getAllAnnouncesSync() } returns emptyList()
+
+        val managerWithServiceProtocol = InterfaceConfigManager(
+            context = context,
+            reticulumProtocol = serviceProtocol,
+            interfaceRepository = interfaceRepository,
+            identityRepository = identityRepository,
+            conversationRepository = conversationRepository,
+            messageCollector = messageCollector,
+            database = database,
+            settingsRepository = settingsRepository,
+            autoAnnounceManager = autoAnnounceManager,
+            identityResolutionManager = identityResolutionManager,
+            propagationNodeManager = propagationNodeManager,
+            applicationScope = applicationScope,
+        )
+
+        // When
+        managerWithServiceProtocol.applyInterfaceChanges()
+
+        // Then: restoreAnnounceIdentities should NOT be called
+        coVerify(exactly = 0) { serviceProtocol.restoreAnnounceIdentities(any()) }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - continues when restorePeerIdentities fails`() = runTest {
+        // Given: ServiceReticulumProtocol where restorePeerIdentities fails
+        val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+        coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
+        coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+        coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.failure(Exception("Test failure"))
+
+        val peerIdentities = listOf(Pair("hash1", byteArrayOf(1, 2, 3)))
+        coEvery { conversationRepository.getAllPeerIdentities() } returns peerIdentities
+
+        val managerWithServiceProtocol = InterfaceConfigManager(
+            context = context,
+            reticulumProtocol = serviceProtocol,
+            interfaceRepository = interfaceRepository,
+            identityRepository = identityRepository,
+            conversationRepository = conversationRepository,
+            messageCollector = messageCollector,
+            database = database,
+            settingsRepository = settingsRepository,
+            autoAnnounceManager = autoAnnounceManager,
+            identityResolutionManager = identityResolutionManager,
+            propagationNodeManager = propagationNodeManager,
+            applicationScope = applicationScope,
+        )
+
+        // When
+        val result = managerWithServiceProtocol.applyInterfaceChanges()
+
+        // Then: Should still succeed (peer restore failure is not fatal)
+        assertTrue("applyInterfaceChanges should succeed even if peer restore fails", result.isSuccess)
+
+        // And: Message collector should still be started
+        verify { messageCollector.startCollecting() }
+    }
+
+    @Test
+    fun `applyInterfaceChanges - continues when restoreAnnounceIdentities fails`() = runTest {
+        // Given: ServiceReticulumProtocol where restoreAnnounceIdentities fails
+        val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+        coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
+        coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+        coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.failure(Exception("Test failure"))
+
+        val announces = listOf(
+            AnnounceEntity(
+                destinationHash = "destHash1",
+                peerName = "Test1",
+                publicKey = byteArrayOf(1, 2, 3),
+                appData = null,
+                hops = 1,
+                lastSeenTimestamp = System.currentTimeMillis(),
+                nodeType = "lxmf",
+                receivingInterface = null,
+                aspect = "lxmf.delivery",
+            ),
+        )
+        val announceDao = mockk<AnnounceDao>()
+        every { database.announceDao() } returns announceDao
+        coEvery { announceDao.getAllAnnouncesSync() } returns announces
+
+        val managerWithServiceProtocol = InterfaceConfigManager(
+            context = context,
+            reticulumProtocol = serviceProtocol,
+            interfaceRepository = interfaceRepository,
+            identityRepository = identityRepository,
+            conversationRepository = conversationRepository,
+            messageCollector = messageCollector,
+            database = database,
+            settingsRepository = settingsRepository,
+            autoAnnounceManager = autoAnnounceManager,
+            identityResolutionManager = identityResolutionManager,
+            propagationNodeManager = propagationNodeManager,
+            applicationScope = applicationScope,
+        )
+
+        // When
+        val result = managerWithServiceProtocol.applyInterfaceChanges()
+
+        // Then: Should still succeed (announce restore failure is not fatal)
+        assertTrue("applyInterfaceChanges should succeed even if announce restore fails", result.isSuccess)
+
+        // And: Message collector should still be started
+        verify { messageCollector.startCollecting() }
     }
 }

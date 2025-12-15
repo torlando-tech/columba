@@ -3500,6 +3500,22 @@ class ReticulumWrapper:
                             'timestamp': int(lxmf_message.timestamp * 1000) if lxmf_message.timestamp else int(time.time() * 1000)
                         }
 
+                        # Try to get sender's public key from RNS identity cache
+                        try:
+                            source_identity = RNS.Identity.recall(lxmf_message.source_hash)
+                            if source_identity is not None:
+                                public_key = source_identity.get_public_key()
+                                if public_key:
+                                    message_event['public_key'] = public_key
+                                    log_debug("ReticulumWrapper", "poll_received_messages",
+                                             f"✅ Found public key for sender {lxmf_message.source_hash.hex()[:16]}")
+                            else:
+                                log_debug("ReticulumWrapper", "poll_received_messages",
+                                         f"⚠️ No identity found for sender {lxmf_message.source_hash.hex()[:16]}")
+                        except Exception as e:
+                            log_debug("ReticulumWrapper", "poll_received_messages",
+                                     f"⚠️ Error getting public key: {e}")
+
                         # Extract LXMF fields (attachments, images, etc.)
                         if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
                             fields_serialized = {}

@@ -59,6 +59,7 @@ class MessagingScreenTest {
         every { mockViewModel.isContactSaved } returns MutableStateFlow(false)
         every { mockViewModel.manualSyncResult } returns MutableSharedFlow()
         every { mockViewModel.loadedImageIds } returns MutableStateFlow(emptySet())
+        every { mockViewModel.contactToggleResult } returns MutableSharedFlow()
     }
 
     // ========== Empty State Tests ==========

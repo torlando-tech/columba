@@ -92,6 +92,7 @@ import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
 import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.ValidationConstants
+import com.lxmf.messenger.viewmodel.ContactToggleResult
 import com.lxmf.messenger.viewmodel.MessagingViewModel
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -135,6 +136,19 @@ fun MessagingScreen(
                     is SyncResult.Success -> "Sync complete"
                     is SyncResult.Error -> "Sync failed: ${result.message}"
                     is SyncResult.NoRelay -> "No relay configured"
+                }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Observe contact toggle results and show Toast
+    LaunchedEffect(Unit) {
+        viewModel.contactToggleResult.collect { result ->
+            val message =
+                when (result) {
+                    is ContactToggleResult.Added -> "Saved $peerName to Contacts"
+                    is ContactToggleResult.Removed -> "Removed $peerName from Contacts"
+                    is ContactToggleResult.Error -> result.message
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -303,16 +317,7 @@ fun MessagingScreen(
                     // Star toggle button for contact status
                     StarToggleButton(
                         isStarred = isContactSaved,
-                        onClick = {
-                            viewModel.toggleContact()
-                            val message =
-                                if (isContactSaved) {
-                                    "Removed $peerName from Contacts"
-                                } else {
-                                    "Saved $peerName to Contacts"
-                                }
-                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                        },
+                        onClick = { viewModel.toggleContact() },
                     )
 
                     // Sync button

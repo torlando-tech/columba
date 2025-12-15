@@ -300,6 +300,9 @@ class ServiceReticulumProtocol(
                     val timestamp = json.optLong("timestamp", System.currentTimeMillis())
                     // Extract LXMF fields (attachments, images, etc.) if present
                     val fieldsJson = json.optJSONObject("fields")?.toString()
+                    // Extract sender's public key if available
+                    val publicKeyB64 = json.optString("public_key", null)
+                    val publicKey = publicKeyB64?.takeIf { it.isNotEmpty() }?.toByteArrayFromBase64()
 
                     val message =
                         ReceivedMessage(
@@ -309,10 +312,11 @@ class ServiceReticulumProtocol(
                             destinationHash = destHash,
                             timestamp = timestamp,
                             fieldsJson = fieldsJson,
+                            publicKey = publicKey,
                         )
 
                     messageFlow.tryEmit(message)
-                    Log.d(TAG, "Message received via service: ${messageHash.take(16)}")
+                    Log.d(TAG, "Message received via service: ${messageHash.take(16)} (publicKey=${publicKey != null})")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling message callback", e)
                 }

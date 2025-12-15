@@ -22,9 +22,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
@@ -139,30 +141,43 @@ class MessagingViewModel
                     initialValue = false,
                 )
 
+        // Contact toggle result events for toast notifications
+        private val _contactToggleResult = MutableSharedFlow<ContactToggleResult>()
+        val contactToggleResult: SharedFlow<ContactToggleResult> = _contactToggleResult.asSharedFlow()
+
         /**
          * Toggle contact status for the current conversation.
          * If the peer is already a contact, removes them. Otherwise, adds them.
+         * Emits result via [contactToggleResult] for UI feedback.
          */
         fun toggleContact() {
             val peerHash = _currentConversation.value ?: return
             viewModelScope.launch {
                 try {
-                    val isContact = contactRepository.hasContact(peerHash)
-                    if (isContact) {
+                    val wasContact = contactRepository.hasContact(peerHash)
+                    if (wasContact) {
                         contactRepository.deleteContact(peerHash)
                         Log.d(TAG, "Removed $peerHash from contacts")
+                        _contactToggleResult.emit(ContactToggleResult.Removed)
                     } else {
                         // Get public key from conversation
                         val publicKey = conversationRepository.getPeerPublicKey(peerHash)
                         if (publicKey != null) {
                             contactRepository.addContactFromConversation(peerHash, publicKey)
                             Log.d(TAG, "Added $peerHash to contacts from messaging")
+                            _contactToggleResult.emit(ContactToggleResult.Added)
                         } else {
                             Log.e(TAG, "Cannot add contact: public key not available for $peerHash")
+                            _contactToggleResult.emit(
+                                ContactToggleResult.Error("Identity not available - peer hasn't announced"),
+                            )
                         }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error toggling contact status", e)
+                    _contactToggleResult.emit(
+                        ContactToggleResult.Error(e.message ?: "Failed to update contact"),
+                    )
                 }
             }
         }
@@ -709,4 +724,18 @@ private fun parseImageFromFieldsJson(fieldsJson: String): ByteArray? {
         Log.w(HELPER_TAG, "Failed to parse image from fieldsJson: ${e.message}")
         null
     }
+}
+
+/**
+ * Result of a contact toggle operation.
+ */
+sealed class ContactToggleResult {
+    /** Contact was successfully added */
+    data object Added : ContactToggleResult()
+
+    /** Contact was successfully removed */
+    data object Removed : ContactToggleResult()
+
+    /** Operation failed with the given message */
+    data class Error(val message: String) : ContactToggleResult()
 }

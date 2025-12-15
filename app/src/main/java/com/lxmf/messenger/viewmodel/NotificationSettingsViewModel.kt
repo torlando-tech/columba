@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -64,7 +65,7 @@ class NotificationSettingsViewModel
                             hasRequestedNotificationPermission = values[6],
                             isLoading = false,
                         )
-                    }.collect { newState ->
+                    }.distinctUntilChanged().collect { newState ->
                         _state.value = newState
                         Log.d(TAG, "Notification settings updated: $newState")
                     }

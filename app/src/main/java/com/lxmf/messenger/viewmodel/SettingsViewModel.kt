@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -217,7 +218,7 @@ class SettingsViewModel
                             // Transport node state
                             transportNodeEnabled = transportNodeEnabled,
                         )
-                    }.collect { newState ->
+                    }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value
 
                         // Initialize sharedInstanceOnline on first load:

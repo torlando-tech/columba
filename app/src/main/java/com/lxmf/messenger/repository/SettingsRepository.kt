@@ -95,6 +95,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATIONS_ENABLED] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the master notifications enabled state.
@@ -116,6 +117,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_RECEIVED_MESSAGE] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the received message notification preference.
@@ -137,6 +139,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_RECEIVED_MESSAGE_FAVORITE] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the received message from favorite notification preference.
@@ -158,6 +161,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_HEARD_ANNOUNCE] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the heard announce notification preference.
@@ -179,6 +183,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_BLE_CONNECTED] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the BLE connected notification preference.
@@ -200,6 +205,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_BLE_DISCONNECTED] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the BLE disconnected notification preference.
@@ -221,6 +227,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.HAS_REQUESTED_NOTIFICATION_PERMISSION] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Mark that we've requested notification permission from the user.
@@ -243,6 +250,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.HAS_COMPLETED_ONBOARDING] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Mark that the user has completed onboarding.
@@ -265,6 +273,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.AUTO_ANNOUNCE_ENABLED] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the auto-announce enabled state.
@@ -286,6 +295,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.AUTO_ANNOUNCE_INTERVAL_MINUTES] ?: 5
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the auto-announce interval in minutes.
@@ -307,6 +317,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.LAST_AUTO_ANNOUNCE_TIME]
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the last auto-announce timestamp.
@@ -330,6 +341,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.LAST_SERVICE_STATUS] ?: "UNKNOWN"
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the last known service status for persistence across app restarts.
@@ -441,6 +453,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.PREFER_OWN_INSTANCE] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the prefer own instance setting.
@@ -463,6 +476,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.IS_SHARED_INSTANCE] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the current shared instance status.
@@ -487,6 +501,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.RPC_KEY]
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the RPC key for shared instance authentication.
@@ -515,6 +530,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.DEFAULT_DELIVERY_METHOD] ?: "direct"
                 }
+                .distinctUntilChanged()
 
         /**
          * Get the default delivery method (non-flow for use in sending).
@@ -545,6 +561,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.TRY_PROPAGATION_ON_FAIL] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Get try propagation on fail setting (non-flow for use in sending).
@@ -575,6 +592,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.MANUAL_PROPAGATION_NODE]
                 }
+                .distinctUntilChanged()
 
         /**
          * Get the manually selected propagation node (non-flow).
@@ -609,6 +627,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.LAST_PROPAGATION_NODE]
                 }
+                .distinctUntilChanged()
 
         /**
          * Get the last used propagation node (non-flow).
@@ -639,6 +658,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.AUTO_SELECT_PROPAGATION_NODE] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Get the auto-select propagation node setting (non-flow).
@@ -672,6 +692,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.AUTO_RETRIEVE_ENABLED] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Get the auto-retrieve enabled setting (non-flow).
@@ -735,6 +756,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP]
                 }
+                .distinctUntilChanged()
 
         /**
          * Get the last sync timestamp (non-flow).
@@ -769,6 +791,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Get the transport node enabled setting (non-flow).

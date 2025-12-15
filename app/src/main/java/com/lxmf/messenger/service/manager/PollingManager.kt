@@ -352,6 +352,9 @@ class PollingManager(
             val destHash = event.getDictValue("destination_hash")?.toJava(ByteArray::class.java) as? ByteArray
             val timestamp = event.getDictValue("timestamp")?.toLong() ?: System.currentTimeMillis()
 
+            // Extract sender's public key if available (from RNS identity cache)
+            val publicKey = event.getDictValue("public_key")?.toJava(ByteArray::class.java) as? ByteArray
+
             // Extract LXMF fields (attachments, images, etc.) if present
             val fieldsObj = event.getDictValue("fields")
             var fieldsJson =
@@ -378,6 +381,7 @@ class PollingManager(
                     put("destination_hash", destHash.toBase64())
                     put("timestamp", timestamp)
                     fieldsJson?.let { put("fields", it) }
+                    publicKey?.let { put("public_key", it.toBase64()) }
                 }
 
             broadcaster.broadcastMessage(messageJson.toString())

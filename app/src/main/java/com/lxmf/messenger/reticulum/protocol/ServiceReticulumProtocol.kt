@@ -126,6 +126,31 @@ class ServiceReticulumProtocol(
             extraBufferCapacity = 100,
         )
 
+    // Event-driven flows (Phase: eliminate polling)
+    // BLE connection state changes
+    private val _bleConnectionsFlow =
+        MutableSharedFlow<String>(
+            replay = 1,
+            extraBufferCapacity = 1,
+        )
+    val bleConnectionsFlow: SharedFlow<String> = _bleConnectionsFlow.asSharedFlow()
+
+    // Debug info changes (lock state, interface status, etc.)
+    private val _debugInfoFlow =
+        MutableSharedFlow<String>(
+            replay = 1,
+            extraBufferCapacity = 1,
+        )
+    val debugInfoFlow: SharedFlow<String> = _debugInfoFlow.asSharedFlow()
+
+    // Interface online/offline status changes
+    private val _interfaceStatusFlow =
+        MutableSharedFlow<String>(
+            replay = 1,
+            extraBufferCapacity = 1,
+        )
+    val interfaceStatusFlow: SharedFlow<String> = _interfaceStatusFlow.asSharedFlow()
+
     /**
      * Handler for alternative relay requests from the service.
      * Set by ColumbaApplication to provide PropagationNodeManager integration.
@@ -266,28 +291,9 @@ class ServiceReticulumProtocol(
 
             override fun onMessage(messageJson: String) {
                 try {
-                    val json = JSONObject(messageJson)
-
-                    val messageHash = json.optString("message_hash", "")
-                    val content = json.optString("content", "")
-                    val sourceHash = json.optString("source_hash").toByteArrayFromBase64() ?: byteArrayOf()
-                    val destHash = json.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
-                    val timestamp = json.optLong("timestamp", System.currentTimeMillis())
-                    // Extract LXMF fields (attachments, images, etc.) if present
-                    val fieldsJson = json.optJSONObject("fields")?.toString()
-
-                    val message =
-                        ReceivedMessage(
-                            messageHash = messageHash,
-                            content = content,
-                            sourceHash = sourceHash,
-                            destinationHash = destHash,
-                            timestamp = timestamp,
-                            fieldsJson = fieldsJson,
-                        )
-
+                    val message = parseMessageJson(messageJson)
                     messageFlow.tryEmit(message)
-                    Log.d(TAG, "Message received via service: ${messageHash.take(16)}")
+                    Log.d(TAG, "Message received via service: ${message.messageHash.take(16)} (publicKey=${message.publicKey != null})")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling message callback", e)
                 }
@@ -393,6 +399,35 @@ class ServiceReticulumProtocol(
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error parsing alternative relay request", e)
+                }
+            }
+
+            override fun onBleConnectionChanged(connectionDetailsJson: String) {
+                try {
+                    Log.d(TAG, "BLE connection changed: ${connectionDetailsJson.take(100)}...")
+                    _bleConnectionsFlow.tryEmit(connectionDetailsJson)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling BLE connection callback", e)
+                }
+            }
+
+            override fun onDebugInfoChanged(debugInfoJson: String) {
+                try {
+                    Log.d(TAG, "Debug info changed")
+                    _debugInfoFlow.tryEmit(debugInfoJson)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling debug info callback", e)
+                }
+            }
+
+            override fun onInterfaceStatusChanged(interfaceStatusJson: String) {
+                try {
+                    Log.d(TAG, "Interface status changed: $interfaceStatusJson")
+                    _interfaceStatusFlow.tryEmit(interfaceStatusJson)
+                    // Also trigger the existing interface status changed flow for backwards compatibility
+                    _interfaceStatusChanged.tryEmit(Unit)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling interface status callback", e)
                 }
             }
         }
@@ -1667,6 +1702,35 @@ class ServiceReticulumProtocol(
 
             Log.d(TAG, "Auto-announce successful")
         }
+    }
+
+    /**
+     * Parse a message JSON string into a ReceivedMessage.
+     * Extracted for testability.
+     */
+    internal fun parseMessageJson(messageJson: String): ReceivedMessage {
+        val json = JSONObject(messageJson)
+
+        val messageHash = json.optString("message_hash", "")
+        val content = json.optString("content", "")
+        val sourceHash = json.optString("source_hash").toByteArrayFromBase64() ?: byteArrayOf()
+        val destHash = json.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
+        val timestamp = json.optLong("timestamp", System.currentTimeMillis())
+        // Extract LXMF fields (attachments, images, etc.) if present
+        val fieldsJson = json.optJSONObject("fields")?.toString()
+        // Extract sender's public key if available
+        val publicKeyB64 = json.optString("public_key", null)
+        val publicKey = publicKeyB64?.takeIf { it.isNotEmpty() }?.toByteArrayFromBase64()
+
+        return ReceivedMessage(
+            messageHash = messageHash,
+            content = content,
+            sourceHash = sourceHash,
+            destinationHash = destHash,
+            timestamp = timestamp,
+            fieldsJson = fieldsJson,
+            publicKey = publicKey,
+        )
     }
 
     // Helper extension functions

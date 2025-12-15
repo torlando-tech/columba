@@ -250,6 +250,8 @@ data class ReceivedMessage(
     val timestamp: Long,
     // LXMF fields as JSON: {"6": "hex_image_data", "7": "hex_audio_data"}
     val fieldsJson: String? = null,
+    // Sender's public key (if available from RNS identity cache)
+    val publicKey: ByteArray? = null,
 )
 
 /**

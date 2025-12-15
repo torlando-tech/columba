@@ -1,10 +1,13 @@
 package com.lxmf.messenger.viewmodel
 
+import android.bluetooth.BluetoothAdapter
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
+import com.lxmf.messenger.data.model.BleConnectionInfo
 import com.lxmf.messenger.data.model.BleConnectionsState
+import com.lxmf.messenger.data.model.ConnectionType
 import com.lxmf.messenger.data.repository.BleStatusRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
@@ -49,15 +52,12 @@ class InterfaceManagementViewModelStatusEventTest {
     private lateinit var configManager: InterfaceConfigManager
     private lateinit var bleStatusRepository: BleStatusRepository
     private lateinit var serviceProtocol: ServiceReticulumProtocol
-    private lateinit var interfaceStatusFlow: MutableSharedFlow<Unit>
+    private lateinit var interfaceStatusFlow: MutableSharedFlow<String>
     private lateinit var viewModel: InterfaceManagementViewModel
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-
-        // CRITICAL: Disable polling to prevent OOM in tests
-        InterfaceManagementViewModel.STATUS_POLL_INTERVAL_MS = 0
 
         // Use test dispatcher for IO operations
         InterfaceManagementViewModel.ioDispatcher = testDispatcher
@@ -79,11 +79,11 @@ class InterfaceManagementViewModelStatusEventTest {
         // Mock InterfaceConfigManager
         every { configManager.checkAndClearPendingChanges() } returns false
 
-        // Mock interfaceStatusChanged flow for ServiceReticulumProtocol
-        interfaceStatusFlow = MutableSharedFlow(replay = 0, extraBufferCapacity = 1)
-        every { serviceProtocol.interfaceStatusChanged } returns interfaceStatusFlow
+        // Mock interfaceStatusFlow for ServiceReticulumProtocol (event-driven updates)
+        interfaceStatusFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
+        every { serviceProtocol.interfaceStatusFlow } returns interfaceStatusFlow
 
-        // Mock getDebugInfo for status polling
+        // Mock getDebugInfo for initial status fetch
         coEvery { serviceProtocol.getDebugInfo() } returns
             mapOf(
                 "interfaces" to
@@ -103,8 +103,6 @@ class InterfaceManagementViewModelStatusEventTest {
         // Reset IO dispatcher to default
         InterfaceManagementViewModel.ioDispatcher = Dispatchers.IO
         clearAllMocks()
-        // Reset polling interval to default
-        InterfaceManagementViewModel.STATUS_POLL_INTERVAL_MS = 3000L
     }
 
     @Test
@@ -125,7 +123,7 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     @Test
-    fun `ViewModel observes ServiceReticulumProtocol interfaceStatusChanged flow`() =
+    fun `ViewModel observes ServiceReticulumProtocol interfaceStatusFlow`() =
         runTest {
             viewModel =
                 InterfaceManagementViewModel(
@@ -137,12 +135,12 @@ class InterfaceManagementViewModelStatusEventTest {
 
             advanceUntilIdle()
 
-            // Verify interfaceStatusChanged was accessed
-            verify { serviceProtocol.interfaceStatusChanged }
+            // Verify interfaceStatusFlow was accessed
+            verify { serviceProtocol.interfaceStatusFlow }
         }
 
     @Test
-    fun `interface status event triggers immediate debug info fetch`() =
+    fun `interface status event triggers state update`() =
         runTest {
             viewModel =
                 InterfaceManagementViewModel(
@@ -154,21 +152,12 @@ class InterfaceManagementViewModelStatusEventTest {
 
             advanceUntilIdle()
 
-            // Reset mock to track new calls
-            coEvery { serviceProtocol.getDebugInfo() } returns
-                mapOf(
-                    "interfaces" to
-                        listOf(
-                            mapOf("name" to "ble0", "online" to false),
-                        ),
-                )
-
-            // Emit interface status event
-            interfaceStatusFlow.emit(Unit)
+            // Emit interface status event with JSON data
+            interfaceStatusFlow.emit("""{"ble0": false}""")
             advanceUntilIdle()
 
-            // Verify getDebugInfo was called after event
-            io.mockk.coVerify(atLeast = 1) { serviceProtocol.getDebugInfo() }
+            // Verify state was updated from the event
+            assertEquals(false, viewModel.state.value.interfaceOnlineStatus["ble0"])
         }
 
     @Test
@@ -184,27 +173,16 @@ class InterfaceManagementViewModelStatusEventTest {
 
             advanceUntilIdle()
 
-            // Since polling is disabled in tests, initial state has empty status map
-            // Emit first event to populate initial status
-            interfaceStatusFlow.emit(Unit)
+            // Emit first event to populate initial status with JSON data
+            interfaceStatusFlow.emit("""{"ble0": true}""")
             advanceUntilIdle()
 
             viewModel.state.test {
                 val initialState = awaitItem()
                 assertEquals(true, initialState.interfaceOnlineStatus["ble0"])
 
-                // Update mock to return different status
-                coEvery { serviceProtocol.getDebugInfo() } returns
-                    mapOf(
-                        "interfaces" to
-                            listOf(
-                                mapOf("name" to "ble0", "online" to false),
-                                mapOf("name" to "rnode0", "online" to true),
-                            ),
-                    )
-
-                // Emit status change event
-                interfaceStatusFlow.emit(Unit)
+                // Emit status change event with new status
+                interfaceStatusFlow.emit("""{"ble0": false, "rnode0": true}""")
                 advanceUntilIdle()
 
                 // Should receive updated state
@@ -215,20 +193,8 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     @Test
-    fun `multiple interface status events all trigger refreshes`() =
+    fun `multiple interface status events all update state`() =
         runTest {
-            var callCount = 0
-            coEvery { serviceProtocol.getDebugInfo() } answers {
-                callCount++
-                val isOnline: Boolean = callCount % 2 == 0
-                mapOf(
-                    "interfaces" to
-                        listOf(
-                            mapOf("name" to "ble0", "online" to isOnline),
-                        ),
-                )
-            }
-
             viewModel =
                 InterfaceManagementViewModel(
                     interfaceRepository,
@@ -238,18 +204,20 @@ class InterfaceManagementViewModelStatusEventTest {
                 )
 
             advanceUntilIdle()
-            val initialCallCount = callCount
 
-            // Emit multiple events
-            interfaceStatusFlow.emit(Unit)
+            // Emit multiple events with different states
+            interfaceStatusFlow.emit("""{"ble0": true}""")
             advanceUntilIdle()
-            interfaceStatusFlow.emit(Unit)
-            advanceUntilIdle()
-            interfaceStatusFlow.emit(Unit)
-            advanceUntilIdle()
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["ble0"])
 
-            // Should have called getDebugInfo multiple times
-            assertTrue("Expected at least 3 additional calls", callCount >= initialCallCount + 3)
+            interfaceStatusFlow.emit("""{"ble0": false}""")
+            advanceUntilIdle()
+            assertEquals(false, viewModel.state.value.interfaceOnlineStatus["ble0"])
+
+            interfaceStatusFlow.emit("""{"ble0": true, "rnode0": true}""")
+            advanceUntilIdle()
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["ble0"])
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["rnode0"])
         }
 
     @Test
@@ -459,12 +427,14 @@ class InterfaceManagementViewModelStatusEventTest {
             advanceUntilIdle()
 
             // Set name to duplicate using updateConfigState
-            viewModel.updateConfigState { it.copy(
-                name = "Existing Interface",
-                type = "TCPClient",
-                targetHost = "192.168.1.1",
-                targetPort = "4242",
-            ) }
+            viewModel.updateConfigState {
+                it.copy(
+                    name = "Existing Interface",
+                    type = "TCPClient",
+                    targetHost = "192.168.1.1",
+                    targetPort = "4242",
+                )
+            }
             advanceUntilIdle()
 
             // Try to save - should fail validation
@@ -515,12 +485,14 @@ class InterfaceManagementViewModelStatusEventTest {
             advanceUntilIdle()
 
             // Set name to case-insensitive duplicate using updateConfigState
-            viewModel.updateConfigState { it.copy(
-                name = "my interface",
-                type = "TCPClient",
-                targetHost = "192.168.1.1",
-                targetPort = "4242",
-            ) }
+            viewModel.updateConfigState {
+                it.copy(
+                    name = "my interface",
+                    type = "TCPClient",
+                    targetHost = "192.168.1.1",
+                    targetPort = "4242",
+                )
+            }
             advanceUntilIdle()
 
             viewModel.saveInterface()
@@ -640,6 +612,297 @@ class InterfaceManagementViewModelStatusEventTest {
                 val configState = awaitItem()
                 assertNotNull(configState.nameError)
                 assertTrue(configState.nameError!!.contains("already exists"))
+            }
+        }
+
+    // endregion
+
+    // region handleBluetoothStateChange Tests
+
+    @Test
+    fun `handleBluetoothStateChange returns early when no BLE interfaces enabled`() =
+        runTest {
+            // Given - no interfaces at all
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(emptyList())
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // When - Bluetooth state changes (no BLE interfaces = no infoMessage shown)
+            every { bleStatusRepository.getConnectedPeersFlow() } returns
+                flowOf(BleConnectionsState.BluetoothDisabled)
+
+            advanceUntilIdle()
+
+            // Then - No info message should be shown (early return path)
+            assertEquals(null, viewModel.state.value.infoMessage)
+        }
+
+    @Test
+    fun `observeBluetoothState handles BleConnectionsState Error variant`() =
+        runTest {
+            // Given - flow emits Error state
+            every { bleStatusRepository.getConnectedPeersFlow() } returns
+                flowOf(BleConnectionsState.Error("Test error message"))
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Then - Should treat as STATE_ON (assuming BT is on but there's an error)
+            assertEquals(BluetoothAdapter.STATE_ON, viewModel.state.value.bluetoothState)
+        }
+
+    // endregion
+
+    // region entityToConfigState Tests - Unsupported Type
+
+    @Test
+    fun `showEditDialog with unsupported interface type returns default config state`() =
+        runTest {
+            // Create test entity with unsupported type
+            val entity =
+                InterfaceEntity(
+                    id = 1L,
+                    name = "Unknown Interface",
+                    type = "UnknownType",
+                    enabled = true,
+                    configJson = """{}""",
+                    displayOrder = 0,
+                )
+
+            // Mock entityToConfig to return an unsupported type (UDP which isn't handled)
+            every { interfaceRepository.entityToConfig(entity) } returns
+                InterfaceConfig.UDP(
+                    name = "Unknown Interface",
+                    enabled = true,
+                    listenIp = "0.0.0.0",
+                    listenPort = 4242,
+                    forwardIp = "127.0.0.1",
+                    forwardPort = 4243,
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Call showEditDialog which triggers entityToConfigState
+            viewModel.showEditDialog(entity)
+            advanceUntilIdle()
+
+            // Verify configState returns default values for unsupported type
+            viewModel.configState.test {
+                val configState = awaitItem()
+                // Default type should be AutoInterface as per InterfaceConfigState defaults
+                assertEquals("AutoInterface", configState.type)
+            }
+        }
+
+    // endregion
+
+    // region Message Clear Tests
+
+    @Test
+    fun `clearError clears error message`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Trigger an error (showAddDialog and try to save invalid config)
+            viewModel.showAddDialog()
+            viewModel.updateConfigState { it.copy(name = "", type = "TCPClient", targetHost = "", targetPort = "") }
+            viewModel.saveInterface()
+            advanceUntilIdle()
+
+            // Clear error
+            viewModel.clearError()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(null, state.errorMessage)
+            }
+        }
+
+    @Test
+    fun `clearSuccess clears success message`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Clear success
+            viewModel.clearSuccess()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(null, state.successMessage)
+            }
+        }
+
+    @Test
+    fun `clearInfo clears info message`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // Clear info
+            viewModel.clearInfo()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(null, state.infoMessage)
+            }
+        }
+
+    // endregion
+
+    // region Interface Status Flow Tests
+
+    @Test
+    fun `interfaceStatusFlow updates interfaceOnlineStatus in state`() =
+        runTest {
+            // Given - emit interface status JSON to the flow
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // When - emit status update
+            interfaceStatusFlow.emit("""{"WiFi": true, "BLE": false, "RNode": true}""")
+            advanceUntilIdle()
+
+            // Then - state should have updated interface status
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(true, state.interfaceOnlineStatus["WiFi"])
+                assertEquals(false, state.interfaceOnlineStatus["BLE"])
+                assertEquals(true, state.interfaceOnlineStatus["RNode"])
+            }
+        }
+
+    @Test
+    fun `interfaceStatusFlow handles malformed JSON gracefully`() =
+        runTest {
+            // Given
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // When - emit malformed JSON
+            interfaceStatusFlow.emit("not valid json {{{")
+            advanceUntilIdle()
+
+            // Then - should not crash, state remains unchanged
+            viewModel.state.test {
+                val state = awaitItem()
+                // interfaceOnlineStatus should be empty or unchanged
+                assertTrue("Should not crash on malformed JSON", true)
+            }
+        }
+
+    @Test
+    fun `interfaceStatusFlow handles empty JSON object`() =
+        runTest {
+            // Given
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // When - emit empty JSON object
+            interfaceStatusFlow.emit("{}")
+            advanceUntilIdle()
+
+            // Then - state should have empty map
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue("Should handle empty JSON object", state.interfaceOnlineStatus.isEmpty())
+            }
+        }
+
+    @Test
+    fun `multiple interfaceStatusFlow emissions update state correctly`() =
+        runTest {
+            // Given
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // When - emit multiple status updates
+            interfaceStatusFlow.emit("""{"WiFi": false}""")
+            advanceUntilIdle()
+            interfaceStatusFlow.emit("""{"WiFi": true, "BLE": true}""")
+            advanceUntilIdle()
+
+            // Then - state should reflect latest emission
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(true, state.interfaceOnlineStatus["WiFi"])
+                assertEquals(true, state.interfaceOnlineStatus["BLE"])
             }
         }
 

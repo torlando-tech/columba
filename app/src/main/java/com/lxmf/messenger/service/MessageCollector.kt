@@ -119,12 +119,21 @@ class MessageCollector
 
                         // Save to database - this creates/updates the conversation and adds the message
                         try {
-                            // Look up public key from peer_identities if available
-                            // This must be done OUTSIDE the transaction to avoid nesting issues
-                            val publicKey = conversationRepository.getPeerPublicKey(sourceHash)
+                            // Prefer public key from message (directly from RNS identity cache)
+                            // Fall back to peer_identities lookup if not in message
+                            val messagePublicKey = receivedMessage.publicKey
+                            val publicKey = messagePublicKey
+                                ?: conversationRepository.getPeerPublicKey(sourceHash)
+
+                            // Store public key to peer_identities if we got it from the message
+                            // This ensures future lookups will find it
+                            if (messagePublicKey != null) {
+                                conversationRepository.updatePeerPublicKey(sourceHash, messagePublicKey)
+                                Log.d(TAG, "Stored sender's public key for $sourceHash")
+                            }
 
                             conversationRepository.saveMessage(sourceHash, peerName, dataMessage, publicKey)
-                            Log.d(TAG, "Message saved to database for peer: $peerName ($sourceHash)")
+                            Log.d(TAG, "Message saved to database for peer: $peerName ($sourceHash) (hasPublicKey=${publicKey != null})")
 
                             // Check if sender is a saved peer (favorite)
                             val isFavorite =

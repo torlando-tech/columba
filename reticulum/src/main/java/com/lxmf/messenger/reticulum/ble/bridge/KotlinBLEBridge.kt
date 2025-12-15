@@ -256,6 +256,81 @@ class KotlinBLEBridge(
         onAddressChanged = callback
     }
 
+    // Native connection change listeners (for IPC callbacks, not Python)
+    private val connectionChangeListeners = mutableListOf<ConnectionChangeListener>()
+    private val listenerLock = Any()
+
+    /**
+     * Listener interface for BLE connection state changes.
+     * Used by BleCoordinator to broadcast events via AIDL.
+     */
+    interface ConnectionChangeListener {
+        fun onConnectionsChanged(connectionDetailsJson: String)
+    }
+
+    /**
+     * Register a listener for connection state changes.
+     * Thread-safe: synchronized on listenerLock.
+     */
+    fun addConnectionChangeListener(listener: ConnectionChangeListener) {
+        synchronized(listenerLock) {
+            connectionChangeListeners.add(listener)
+            Log.d(TAG, "Connection change listener added (total: ${connectionChangeListeners.size})")
+        }
+    }
+
+    /**
+     * Unregister a connection state listener.
+     * Thread-safe: synchronized on listenerLock.
+     */
+    fun removeConnectionChangeListener(listener: ConnectionChangeListener) {
+        synchronized(listenerLock) {
+            connectionChangeListeners.remove(listener)
+            Log.d(TAG, "Connection change listener removed (total: ${connectionChangeListeners.size})")
+        }
+    }
+
+    /**
+     * Notify all listeners of connection changes.
+     * Called internally when connections are established or dropped.
+     */
+    private fun notifyConnectionChange() {
+        val json = buildConnectionDetailsJson()
+        synchronized(listenerLock) {
+            connectionChangeListeners.forEach { listener ->
+                try {
+                    listener.onConnectionsChanged(json)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error notifying connection change listener", e)
+                }
+            }
+        }
+    }
+
+    /**
+     * Build JSON string of current connection details for listeners.
+     */
+    private fun buildConnectionDetailsJson(): String {
+        return try {
+            val jsonArray = org.json.JSONArray()
+            connectedPeers.values.forEach { peer ->
+                val jsonObj = org.json.JSONObject().apply {
+                    put("identityHash", peer.identityHash ?: "unknown")
+                    put("address", peer.address)
+                    put("hasCentralConnection", peer.isCentral)
+                    put("hasPeripheralConnection", peer.isPeripheral)
+                    put("mtu", peer.mtu)
+                    put("connectedAt", peer.connectedAt)
+                }
+                jsonArray.put(jsonObj)
+            }
+            jsonArray.toString()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error building connection details JSON", e)
+            "[]"
+        }
+    }
+
     // State
     @Volatile
     private var isStarted = false
@@ -1285,6 +1360,9 @@ class KotlinBLEBridge(
                 Log.d(TAG, "Disconnect central request completed for $address")
             }
         }
+
+        // Notify native listeners of connection state change
+        notifyConnectionChange()
     }
 
     /**
@@ -1339,6 +1417,9 @@ class KotlinBLEBridge(
                 Log.d(TAG, "Peer $address partially disconnected (central=${peer.isCentral}, peripheral=${peer.isPeripheral})")
             }
         }
+
+        // Notify native listeners of connection state change
+        notifyConnectionChange()
     }
 
     /**

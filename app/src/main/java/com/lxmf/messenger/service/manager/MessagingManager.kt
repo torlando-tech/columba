@@ -259,22 +259,23 @@ class MessagingManager(private val wrapperManager: PythonWrapperManager) {
 
     /**
      * Restore peer identities to enable message sending to previously known peers.
+     * Uses bulk restore for performance optimization.
      *
-     * @param peerIdentitiesJson JSON array containing objects with 'hash' and 'public_key' fields
+     * @param peerIdentitiesJson JSON array containing objects with 'identity_hash' and 'public_key' fields
      * @return JSON string with result
      */
     fun restorePeerIdentities(peerIdentitiesJson: String): String {
         return wrapperManager.withWrapper { wrapper ->
             try {
-                Log.d(TAG, "Restoring peer identities")
-                val result = wrapper.callAttr("restore_all_peer_identities", peerIdentitiesJson)
+                Log.d(TAG, "Bulk restoring peer identities")
+                val result = wrapper.callAttr("bulk_restore_peer_identities", peerIdentitiesJson)
 
                 // Python returns {"success_count": int, "errors": list}
                 val successCount = result.getDictValue("success_count")?.toInt() ?: 0
                 val errors = result.getDictValue("errors")?.toString() ?: "[]"
 
-                val success = successCount > 0
-                Log.d(TAG, "Restored $successCount peer identities")
+                val success = successCount > 0 || peerIdentitiesJson == "[]"
+                Log.d(TAG, "Bulk restored $successCount peer identities")
 
                 if (errors != "[]") {
                     Log.e(TAG, "Some identities failed to restore: $errors")
@@ -288,7 +289,53 @@ class MessagingManager(private val wrapperManager: PythonWrapperManager) {
                     }
                 }.toString()
             } catch (e: Exception) {
-                Log.e(TAG, "Error restoring peer identities", e)
+                Log.e(TAG, "Error bulk restoring peer identities", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        } ?: run {
+            JSONObject().apply {
+                put("success", false)
+                put("error", "Wrapper not initialized")
+            }.toString()
+        }
+    }
+
+    /**
+     * Restore announce identities to enable message sending to announced peers.
+     * Uses bulk restore with direct dict population for maximum performance.
+     *
+     * @param announcesJson JSON array containing objects with 'destination_hash' and 'public_key' fields
+     * @return JSON string with result
+     */
+    fun restoreAnnounceIdentities(announcesJson: String): String {
+        return wrapperManager.withWrapper { wrapper ->
+            try {
+                Log.d(TAG, "Bulk restoring announce identities")
+                val result = wrapper.callAttr("bulk_restore_announce_identities", announcesJson)
+
+                // Python returns {"success_count": int, "errors": list}
+                val successCount = result.getDictValue("success_count")?.toInt() ?: 0
+                val errors = result.getDictValue("errors")?.toString() ?: "[]"
+
+                val success = successCount > 0 || announcesJson == "[]"
+                Log.d(TAG, "Bulk restored $successCount announce identities")
+
+                if (errors != "[]") {
+                    Log.e(TAG, "Some announce identities failed to restore: $errors")
+                }
+
+                JSONObject().apply {
+                    put("success", success)
+                    put("restored_count", successCount)
+                    if (!success) {
+                        put("error", if (errors != "[]") errors else "No identities restored")
+                    }
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error bulk restoring announce identities", e)
                 JSONObject().apply {
                     put("success", false)
                     put("error", e.message)

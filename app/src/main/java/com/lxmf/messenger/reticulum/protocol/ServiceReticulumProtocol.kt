@@ -1274,7 +1274,60 @@ class ServiceReticulumProtocol(
             } else {
                 val error = result.optString("error", "Unknown error")
                 Log.e(TAG, "Failed to restore peer identities: $error")
-                throw RuntimeException("Failed to restore peer identities: $error")
+                error("Failed to restore peer identities: $error")
+            }
+        }
+    }
+
+    /**
+     * Restore announce identities from stored public keys to enable message sending to announced peers.
+     * Uses bulk restore with direct dict population for maximum performance.
+     */
+    fun restoreAnnounceIdentities(announces: List<Pair<String, ByteArray>>): Result<Int> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            Log.d(TAG, "restoreAnnounceIdentities: Processing ${announces.size} announce identities")
+
+            // Build JSON array of announce identities
+            val announcesArray = JSONArray()
+            for ((index, pair) in announces.withIndex()) {
+                val (destHashStr, publicKey) = pair
+
+                // Log details for first few announces
+                if (index < 3) {
+                    Log.d(TAG, "restoreAnnounceIdentities: [$index] destHash=$destHashStr, publicKeyLength=${publicKey.size}")
+                }
+
+                val base64Key = publicKey.toBase64()
+                if (base64Key == null) {
+                    Log.e(TAG, "restoreAnnounceIdentities: [$index] Failed to encode public key to base64 for hash $destHashStr")
+                    continue
+                }
+
+                val announceObj =
+                    JSONObject().apply {
+                        put("destination_hash", destHashStr)
+                        put("public_key", base64Key)
+                    }
+                announcesArray.put(announceObj)
+            }
+
+            Log.d(TAG, "restoreAnnounceIdentities: Built JSON array with ${announcesArray.length()} announces")
+
+            val resultJson = service.restoreAnnounceIdentities(announcesArray.toString())
+            Log.d(TAG, "restoreAnnounceIdentities: Got result from service: $resultJson")
+
+            val result = JSONObject(resultJson)
+
+            if (result.optBoolean("success", false)) {
+                val restoredCount = result.optInt("restored_count", 0)
+                Log.d(TAG, "Restored $restoredCount announce identities")
+                restoredCount
+            } else {
+                val error = result.optString("error", "Unknown error")
+                Log.e(TAG, "Failed to restore announce identities: $error")
+                error("Failed to restore announce identities: $error")
             }
         }
     }

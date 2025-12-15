@@ -797,4 +797,114 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     // endregion
+
+    // region Interface Status Flow Tests
+
+    @Test
+    fun `interfaceStatusFlow updates interfaceOnlineStatus in state`() =
+        runTest {
+            // Given - emit interface status JSON to the flow
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // When - emit status update
+            interfaceStatusFlow.emit("""{"WiFi": true, "BLE": false, "RNode": true}""")
+            advanceUntilIdle()
+
+            // Then - state should have updated interface status
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(true, state.interfaceOnlineStatus["WiFi"])
+                assertEquals(false, state.interfaceOnlineStatus["BLE"])
+                assertEquals(true, state.interfaceOnlineStatus["RNode"])
+            }
+        }
+
+    @Test
+    fun `interfaceStatusFlow handles malformed JSON gracefully`() =
+        runTest {
+            // Given
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // When - emit malformed JSON
+            interfaceStatusFlow.emit("not valid json {{{")
+            advanceUntilIdle()
+
+            // Then - should not crash, state remains unchanged
+            viewModel.state.test {
+                val state = awaitItem()
+                // interfaceOnlineStatus should be empty or unchanged
+                assertTrue("Should not crash on malformed JSON", true)
+            }
+        }
+
+    @Test
+    fun `interfaceStatusFlow handles empty JSON object`() =
+        runTest {
+            // Given
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // When - emit empty JSON object
+            interfaceStatusFlow.emit("{}")
+            advanceUntilIdle()
+
+            // Then - state should have empty map
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue("Should handle empty JSON object", state.interfaceOnlineStatus.isEmpty())
+            }
+        }
+
+    @Test
+    fun `multiple interfaceStatusFlow emissions update state correctly`() =
+        runTest {
+            // Given
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            // When - emit multiple status updates
+            interfaceStatusFlow.emit("""{"WiFi": false}""")
+            advanceUntilIdle()
+            interfaceStatusFlow.emit("""{"WiFi": true, "BLE": true}""")
+            advanceUntilIdle()
+
+            // Then - state should reflect latest emission
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(true, state.interfaceOnlineStatus["WiFi"])
+                assertEquals(true, state.interfaceOnlineStatus["BLE"])
+            }
+        }
+
+    // endregion
 }

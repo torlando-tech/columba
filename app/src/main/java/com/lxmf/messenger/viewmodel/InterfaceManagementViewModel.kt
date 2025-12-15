@@ -10,20 +10,22 @@ import com.lxmf.messenger.data.repository.BleStatusRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import javax.inject.Inject
 
 /**
@@ -117,9 +119,6 @@ class InterfaceManagementViewModel
         companion object {
             private const val TAG = "InterfaceMgmtVM"
 
-            // Made internal var (not const) to allow disabling polling in tests
-            internal var STATUS_POLL_INTERVAL_MS = 3000L
-
             // Made internal var to allow injecting test dispatcher
             internal var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
         }
@@ -138,7 +137,6 @@ class InterfaceManagementViewModel
             loadInterfaces()
             observeBluetoothState()
             checkExternalPendingChanges()
-            startPollingInterfaceStatus()
             observeInterfaceStatusChanges()
         }
 
@@ -153,49 +151,52 @@ class InterfaceManagementViewModel
         }
 
         /**
-         * Start polling for interface online status from Python/RNS.
-         * Polling is skipped when STATUS_POLL_INTERVAL_MS is 0 (for testing).
+         * Observe interface status change events (event-driven, no polling).
+         * Uses the JSON-based interfaceStatusFlow for immediate updates when
+         * interfaces go online or offline.
          */
-        private fun startPollingInterfaceStatus() {
-            if (STATUS_POLL_INTERVAL_MS <= 0) {
-                Log.d(TAG, "Polling disabled (interval <= 0)")
+        private fun observeInterfaceStatusChanges() {
+            // Check if protocol is ServiceReticulumProtocol which has the event flow
+            val serviceProtocol = reticulumProtocol as? ServiceReticulumProtocol
+            if (serviceProtocol == null) {
+                Log.d(TAG, "Protocol is not ServiceReticulumProtocol, falling back to initial fetch")
+                viewModelScope.launch(ioDispatcher) {
+                    fetchInterfaceStatus()
+                }
                 return
             }
+
             viewModelScope.launch(ioDispatcher) {
-                while (true) {
-                    try {
+                serviceProtocol.interfaceStatusFlow
+                    .onStart {
+                        // Fetch initial status before first event arrives
                         fetchInterfaceStatus()
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error polling interface status", e)
                     }
-                    delay(STATUS_POLL_INTERVAL_MS)
-                }
+                    .collect { statusJson ->
+                        Log.d(TAG, "████ INTERFACE STATUS EVENT ████ Received: $statusJson")
+                        try {
+                            parseAndUpdateInterfaceStatus(statusJson)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error parsing interface status from event", e)
+                        }
+                    }
             }
         }
 
         /**
-         * Observe interface status change events for immediate refresh.
-         * This provides event-driven updates when RNode connects/disconnects,
-         * supplementing the polling mechanism for faster UI updates.
+         * Parse interface status JSON and update state.
          */
-        private fun observeInterfaceStatusChanges() {
-            // Check if protocol is ServiceReticulumProtocol which has the event flow
-            val serviceProtocol =
-                reticulumProtocol as? com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
-            if (serviceProtocol == null) {
-                Log.d(TAG, "Protocol is not ServiceReticulumProtocol, skipping event observation")
-                return
-            }
-
-            viewModelScope.launch(ioDispatcher) {
-                serviceProtocol.interfaceStatusChanged.collect {
-                    Log.d(TAG, "████ INTERFACE STATUS EVENT ████ Triggering immediate refresh")
-                    try {
-                        fetchInterfaceStatus()
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error refreshing interface status after event", e)
-                    }
+        private fun parseAndUpdateInterfaceStatus(statusJson: String) {
+            try {
+                val json = JSONObject(statusJson)
+                val statusMap = mutableMapOf<String, Boolean>()
+                json.keys().forEach { name ->
+                    statusMap[name] = json.optBoolean(name, false)
                 }
+                _state.value = _state.value.copy(interfaceOnlineStatus = statusMap)
+                Log.d(TAG, "Interface status updated from event: $statusMap")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing interface status JSON", e)
             }
         }
 

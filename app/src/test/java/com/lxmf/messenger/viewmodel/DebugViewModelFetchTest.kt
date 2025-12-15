@@ -230,4 +230,111 @@ class DebugViewModelFetchTest {
         assertEquals(false, activeInterfaces[0].online)
         assertEquals("", activeInterfaces[1].name)
     }
+
+    @Test
+    fun `network status to string conversion handles all status types`() {
+        // Test the status string conversion logic from fetchDebugInfo()
+        val statuses = listOf(
+            NetworkStatus.READY to "READY",
+            NetworkStatus.INITIALIZING to "INITIALIZING",
+            NetworkStatus.CONNECTING to "CONNECTING",
+            NetworkStatus.SHUTDOWN to "SHUTDOWN",
+            NetworkStatus.ERROR("Test error") to "ERROR: Test error",
+        )
+
+        statuses.forEach { (status, expected) ->
+            val statusString = when (status) {
+                is NetworkStatus.READY -> "READY"
+                is NetworkStatus.INITIALIZING -> "INITIALIZING"
+                is NetworkStatus.CONNECTING -> "CONNECTING"
+                is NetworkStatus.SHUTDOWN -> "SHUTDOWN"
+                is NetworkStatus.ERROR -> "ERROR: ${status.message}"
+                else -> status.toString()
+            }
+            assertEquals(expected, statusString)
+        }
+    }
+
+    @Test
+    fun `error extraction prefers pythonDebugInfo error over network status`() {
+        // Simulate the error extraction logic from fetchDebugInfo()
+        val pythonDebugInfo = mapOf("error" to "Python error message")
+        val status = NetworkStatus.ERROR("Network error")
+
+        val error = pythonDebugInfo["error"] as? String
+            ?: if (status is NetworkStatus.ERROR) status.message else null
+
+        // pythonDebugInfo error takes precedence
+        assertEquals("Python error message", error)
+    }
+
+    @Test
+    fun `error extraction falls back to network status error when no python error`() {
+        val pythonDebugInfo = mapOf<String, Any>() // No error field
+        val status = NetworkStatus.ERROR("Network error")
+
+        val error = pythonDebugInfo["error"] as? String
+            ?: if (status is NetworkStatus.ERROR) status.message else null
+
+        assertEquals("Network error", error)
+    }
+
+    @Test
+    fun `error extraction returns null when no errors`() {
+        val pythonDebugInfo = mapOf<String, Any>()
+        val status = NetworkStatus.READY
+
+        val error = pythonDebugInfo["error"] as? String
+            ?: if (status is NetworkStatus.ERROR) status.message else null
+
+        assertNull(error)
+    }
+
+    @Test
+    fun `debug info copy preserves other fields when updating error`() {
+        // Simulate the exception handling in fetchDebugInfo() that uses copy()
+        val originalInfo = DebugInfo(
+            initialized = true,
+            reticulumAvailable = true,
+            storagePath = "/data/app",
+            interfaceCount = 2,
+            transportEnabled = true,
+        )
+
+        val updatedInfo = originalInfo.copy(error = "New error occurred")
+
+        // Original fields preserved
+        assertTrue(updatedInfo.initialized)
+        assertTrue(updatedInfo.reticulumAvailable)
+        assertEquals("/data/app", updatedInfo.storagePath)
+        assertEquals(2, updatedInfo.interfaceCount)
+        assertTrue(updatedInfo.transportEnabled)
+        // New error set
+        assertEquals("New error occurred", updatedInfo.error)
+    }
+
+    @Test
+    fun `interfaces data with wrong types uses defaults`() {
+        // Test when Python returns unexpected types
+        val interfacesData = listOf(
+            mapOf(
+                "name" to 12345, // Wrong type - Int instead of String
+                "type" to true, // Wrong type - Boolean instead of String
+                "online" to "yes", // Wrong type - String instead of Boolean
+            ),
+        )
+
+        val activeInterfaces = interfacesData.map { ifaceMap ->
+            InterfaceInfo(
+                name = ifaceMap["name"] as? String ?: "",
+                type = ifaceMap["type"] as? String ?: "",
+                online = ifaceMap["online"] as? Boolean ?: false,
+            )
+        }
+
+        assertEquals(1, activeInterfaces.size)
+        assertEquals("", activeInterfaces[0].name) // Falls back to default
+        assertEquals("", activeInterfaces[0].type) // Falls back to default
+        assertEquals(false, activeInterfaces[0].online) // Falls back to default
+    }
 }

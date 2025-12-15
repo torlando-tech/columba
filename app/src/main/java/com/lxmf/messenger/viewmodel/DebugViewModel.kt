@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.util.IdentityQrCodeUtils
 import com.lxmf.messenger.util.generateDefaultDisplayName
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,8 +15,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import javax.inject.Inject
 
 @androidx.compose.runtime.Immutable
@@ -58,7 +61,6 @@ class DebugViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "DebugViewModel"
-            private const val POLL_INTERVAL_MS = 2000L
             private const val DEFAULT_IDENTITY_FILE = "default_identity"
         }
 
@@ -92,21 +94,97 @@ class DebugViewModel
         val isRestarting: StateFlow<Boolean> = _isRestarting.asStateFlow()
 
         init {
-            startPollingDebugInfo()
+            observeDebugInfo()
             observeNetworkStatus()
             loadIdentityData()
         }
 
-        private fun startPollingDebugInfo() {
+        /**
+         * Observe debug info changes from the service via event-driven flow.
+         * Falls back to initial fetch if flow doesn't emit quickly.
+         */
+        private fun observeDebugInfo() {
             viewModelScope.launch {
-                while (true) {
-                    try {
-                        fetchDebugInfo()
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error fetching debug info", e)
-                    }
-                    delay(POLL_INTERVAL_MS)
+                if (reticulumProtocol is ServiceReticulumProtocol) {
+                    // Event-driven: collect debug info from service callbacks
+                    (reticulumProtocol as ServiceReticulumProtocol).debugInfoFlow
+                        .onStart {
+                            // Trigger initial fetch to get data before first event
+                            fetchDebugInfo()
+                        }
+                        .collect { debugInfoJson ->
+                            try {
+                                parseAndUpdateDebugInfo(debugInfoJson)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error parsing debug info from event", e)
+                            }
+                        }
+                } else {
+                    // Fallback for non-service protocol: just fetch once
+                    fetchDebugInfo()
                 }
+            }
+        }
+
+        /**
+         * Parse debug info JSON from service callback and update state.
+         */
+        private suspend fun parseAndUpdateDebugInfo(debugInfoJson: String) {
+            try {
+                val json = JSONObject(debugInfoJson)
+
+                // Extract interface information
+                val interfacesArray = json.optJSONArray("interfaces")
+                val activeInterfaces = mutableListOf<InterfaceInfo>()
+                if (interfacesArray != null) {
+                    for (i in 0 until interfacesArray.length()) {
+                        val iface = interfacesArray.getJSONObject(i)
+                        activeInterfaces.add(
+                            InterfaceInfo(
+                                name = iface.optString("name", ""),
+                                type = iface.optString("type", ""),
+                                online = iface.optBoolean("online", false),
+                            ),
+                        )
+                    }
+                }
+
+                // Get failed interfaces
+                val failedInterfaces = reticulumProtocol.getFailedInterfaces()
+                val failedInterfaceInfos =
+                    failedInterfaces.map { failed ->
+                        InterfaceInfo(
+                            name = failed.name,
+                            type = failed.name,
+                            online = false,
+                            error = failed.error,
+                        )
+                    }
+
+                val interfaces = activeInterfaces + failedInterfaceInfos
+
+                // Get status for error message
+                val status = reticulumProtocol.networkStatus.value
+
+                _debugInfo.value =
+                    DebugInfo(
+                        initialized = json.optBoolean("initialized", false),
+                        reticulumAvailable = json.optBoolean("reticulum_available", false),
+                        storagePath = json.optString("storage_path", ""),
+                        interfaceCount = interfaces.size,
+                        interfaces = interfaces,
+                        transportEnabled = json.optBoolean("transport_enabled", false),
+                        multicastLockHeld = json.optBoolean("multicast_lock_held", false),
+                        wifiLockHeld = json.optBoolean("wifi_lock_held", false),
+                        wakeLockHeld = json.optBoolean("wake_lock_held", false),
+                        error =
+                            json.optString("error", null)
+                                ?: if (status is com.lxmf.messenger.reticulum.model.NetworkStatus.ERROR) status.message else null,
+                    )
+
+                Log.d(TAG, "Debug info updated from event")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing debug info JSON", e)
             }
         }
 

@@ -118,6 +118,10 @@ class ReticulumServiceBinder(
                             broadcaster.broadcastStatusChange("READY")
                             notificationManager.updateNotification("READY")
 
+                            // Broadcast initial state for event-driven updates
+                            broadcastDebugInfoUpdate()
+                            broadcastInterfaceStatusUpdate()
+
                             onInitialized()
                         } catch (e: Exception) {
                             Log.e(TAG, "Error during post-initialization setup", e)
@@ -190,6 +194,11 @@ class ReticulumServiceBinder(
                         broadcaster.broadcastStatusChange(
                             if (isOnline) "RNODE_ONLINE" else "RNODE_OFFLINE",
                         )
+                        // Also broadcast interface status and debug info for event-driven updates
+                        scope.launch(Dispatchers.IO) {
+                            broadcastInterfaceStatusUpdate()
+                            broadcastDebugInfoUpdate()
+                        }
                     }
                 },
             )
@@ -628,6 +637,51 @@ class ReticulumServiceBinder(
             wrapperManager.provideAlternativeRelay(relayHash)
         } catch (e: Exception) {
             Log.e(TAG, "Error providing alternative relay", e)
+        }
+    }
+
+    // ===========================================
+    // Event Broadcasting Helpers
+    // ===========================================
+
+    /**
+     * Broadcast current debug info to all registered callbacks.
+     * Called when relevant state changes (initialization, lock changes, interface status).
+     */
+    private fun broadcastDebugInfoUpdate() {
+        try {
+            val debugInfoJson = getDebugInfo()
+            broadcaster.broadcastDebugInfoChange(debugInfoJson)
+            Log.d(TAG, "Debug info broadcast sent")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error broadcasting debug info", e)
+        }
+    }
+
+    /**
+     * Broadcast current interface status to all registered callbacks.
+     * Called when interface online/offline status changes.
+     */
+    private fun broadcastInterfaceStatusUpdate() {
+        try {
+            val result = wrapperManager.getDebugInfo()
+            val interfacesList = result?.getDictValue("interfaces")?.asList()
+
+            val statusMap = JSONObject()
+            interfacesList?.mapNotNull { ifaceObj ->
+                (ifaceObj as? com.chaquo.python.PyObject)?.let { iface ->
+                    val name = iface.getDictValue("name")?.toString()
+                    val online = iface.getDictValue("online")?.toBoolean() ?: false
+                    name?.let { Pair(it, online) }
+                }
+            }?.forEach { (name, online) ->
+                statusMap.put(name, online)
+            }
+
+            broadcaster.broadcastInterfaceStatusChange(statusMap.toString())
+            Log.d(TAG, "Interface status broadcast sent: $statusMap")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error broadcasting interface status", e)
         }
     }
 

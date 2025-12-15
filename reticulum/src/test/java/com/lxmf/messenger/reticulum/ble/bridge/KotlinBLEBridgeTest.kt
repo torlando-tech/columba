@@ -669,4 +669,108 @@ class KotlinBLEBridgeTest {
             )
             // Fix: handleIdentityReceived uses peer's CURRENT flags for notifyPythonConnected
         }
+
+    // ========== ConnectionChangeListener Tests ==========
+
+    @Test
+    fun `addConnectionChangeListener registers listener successfully`() =
+        runTest {
+            // Given
+            val bridge = createBridgeWithMockScanner()
+            val listener =
+                object : KotlinBLEBridge.ConnectionChangeListener {
+                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                        // No-op for this test
+                    }
+                }
+
+            // When
+            bridge.addConnectionChangeListener(listener)
+
+            // Then - verify via reflection that listener was added
+            val listenersField = KotlinBLEBridge::class.java.getDeclaredField("connectionChangeListeners")
+            listenersField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val listeners = listenersField.get(bridge) as MutableList<KotlinBLEBridge.ConnectionChangeListener>
+            assertEquals(1, listeners.size)
+        }
+
+    @Test
+    fun `removeConnectionChangeListener unregisters listener`() =
+        runTest {
+            // Given
+            val bridge = createBridgeWithMockScanner()
+            val listener =
+                object : KotlinBLEBridge.ConnectionChangeListener {
+                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                        // No-op
+                    }
+                }
+
+            // When
+            bridge.addConnectionChangeListener(listener)
+            bridge.removeConnectionChangeListener(listener)
+
+            // Then - verify listener was removed
+            val listenersField = KotlinBLEBridge::class.java.getDeclaredField("connectionChangeListeners")
+            listenersField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val listeners = listenersField.get(bridge) as MutableList<KotlinBLEBridge.ConnectionChangeListener>
+            assertEquals(0, listeners.size)
+        }
+
+    @Test
+    fun `notifyConnectionChange delivers JSON to all listeners`() =
+        runTest {
+            // Given
+            val bridge = createBridgeWithMockScanner()
+            val receivedJson = mutableListOf<String>()
+
+            val listener1 =
+                object : KotlinBLEBridge.ConnectionChangeListener {
+                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                        receivedJson.add("L1:$connectionDetailsJson")
+                    }
+                }
+            val listener2 =
+                object : KotlinBLEBridge.ConnectionChangeListener {
+                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                        receivedJson.add("L2:$connectionDetailsJson")
+                    }
+                }
+
+            bridge.addConnectionChangeListener(listener1)
+            bridge.addConnectionChangeListener(listener2)
+
+            // When - trigger notifyConnectionChange via reflection
+            val method = KotlinBLEBridge::class.java.getDeclaredMethod("notifyConnectionChange")
+            method.isAccessible = true
+            method.invoke(bridge)
+
+            // Then
+            assertEquals(2, receivedJson.size)
+            assertTrue(receivedJson[0].startsWith("L1:"))
+            assertTrue(receivedJson[1].startsWith("L2:"))
+        }
+
+    @Test
+    fun `buildConnectionDetailsJson returns valid JSON array`() =
+        runTest {
+            // Given
+            val bridge = createBridgeWithMockScanner()
+            coEvery { mockScanner.getDevicesSortedByPriority() } returns emptyList()
+            addMockPeer(bridge, "AA:BB:CC:DD:EE:FF", "test123hash")
+
+            // When - invoke buildConnectionDetailsJson via reflection
+            val method = KotlinBLEBridge::class.java.getDeclaredMethod("buildConnectionDetailsJson")
+            method.isAccessible = true
+            val json = method.invoke(bridge) as String
+
+            // Then
+            val jsonArray = org.json.JSONArray(json)
+            assertEquals(1, jsonArray.length())
+            val peer = jsonArray.getJSONObject(0)
+            assertEquals("test123hash", peer.getString("identityHash"))
+            assertEquals("AA:BB:CC:DD:EE:FF", peer.getString("address"))
+        }
 }

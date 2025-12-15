@@ -49,4 +49,24 @@ interface IReticulumServiceCallback {
      *        {"current_relay": "hex_hash", "exclude_relays": ["hex1", "hex2"]}
      */
     void onAlternativeRelayRequested(String requestJson);
+
+    /**
+     * Called when BLE connection state changes (connect/disconnect).
+     * @param connectionDetailsJson JSON string with connection details:
+     *        [{"address": "XX:XX:XX:XX:XX:XX", "name": "device_name", "rssi": -50}]
+     */
+    void onBleConnectionChanged(String connectionDetailsJson);
+
+    /**
+     * Called when debug info changes (lock state, interface status, etc.).
+     * @param debugInfoJson JSON string with debug info data
+     */
+    void onDebugInfoChanged(String debugInfoJson);
+
+    /**
+     * Called when interface online/offline status changes.
+     * @param interfaceStatusJson JSON string with interface status map:
+     *        {"InterfaceName1": true, "InterfaceName2": false}
+     */
+    void onInterfaceStatusChanged(String interfaceStatusJson);
 }

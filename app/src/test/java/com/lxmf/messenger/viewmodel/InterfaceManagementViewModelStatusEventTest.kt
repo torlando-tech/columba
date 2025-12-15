@@ -49,15 +49,12 @@ class InterfaceManagementViewModelStatusEventTest {
     private lateinit var configManager: InterfaceConfigManager
     private lateinit var bleStatusRepository: BleStatusRepository
     private lateinit var serviceProtocol: ServiceReticulumProtocol
-    private lateinit var interfaceStatusFlow: MutableSharedFlow<Unit>
+    private lateinit var interfaceStatusFlow: MutableSharedFlow<String>
     private lateinit var viewModel: InterfaceManagementViewModel
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-
-        // CRITICAL: Disable polling to prevent OOM in tests
-        InterfaceManagementViewModel.STATUS_POLL_INTERVAL_MS = 0
 
         // Use test dispatcher for IO operations
         InterfaceManagementViewModel.ioDispatcher = testDispatcher
@@ -79,11 +76,11 @@ class InterfaceManagementViewModelStatusEventTest {
         // Mock InterfaceConfigManager
         every { configManager.checkAndClearPendingChanges() } returns false
 
-        // Mock interfaceStatusChanged flow for ServiceReticulumProtocol
-        interfaceStatusFlow = MutableSharedFlow(replay = 0, extraBufferCapacity = 1)
-        every { serviceProtocol.interfaceStatusChanged } returns interfaceStatusFlow
+        // Mock interfaceStatusFlow for ServiceReticulumProtocol (event-driven updates)
+        interfaceStatusFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
+        every { serviceProtocol.interfaceStatusFlow } returns interfaceStatusFlow
 
-        // Mock getDebugInfo for status polling
+        // Mock getDebugInfo for initial status fetch
         coEvery { serviceProtocol.getDebugInfo() } returns
             mapOf(
                 "interfaces" to
@@ -103,8 +100,6 @@ class InterfaceManagementViewModelStatusEventTest {
         // Reset IO dispatcher to default
         InterfaceManagementViewModel.ioDispatcher = Dispatchers.IO
         clearAllMocks()
-        // Reset polling interval to default
-        InterfaceManagementViewModel.STATUS_POLL_INTERVAL_MS = 3000L
     }
 
     @Test
@@ -125,7 +120,7 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     @Test
-    fun `ViewModel observes ServiceReticulumProtocol interfaceStatusChanged flow`() =
+    fun `ViewModel observes ServiceReticulumProtocol interfaceStatusFlow`() =
         runTest {
             viewModel =
                 InterfaceManagementViewModel(
@@ -137,12 +132,12 @@ class InterfaceManagementViewModelStatusEventTest {
 
             advanceUntilIdle()
 
-            // Verify interfaceStatusChanged was accessed
-            verify { serviceProtocol.interfaceStatusChanged }
+            // Verify interfaceStatusFlow was accessed
+            verify { serviceProtocol.interfaceStatusFlow }
         }
 
     @Test
-    fun `interface status event triggers immediate debug info fetch`() =
+    fun `interface status event triggers state update`() =
         runTest {
             viewModel =
                 InterfaceManagementViewModel(
@@ -154,21 +149,12 @@ class InterfaceManagementViewModelStatusEventTest {
 
             advanceUntilIdle()
 
-            // Reset mock to track new calls
-            coEvery { serviceProtocol.getDebugInfo() } returns
-                mapOf(
-                    "interfaces" to
-                        listOf(
-                            mapOf("name" to "ble0", "online" to false),
-                        ),
-                )
-
-            // Emit interface status event
-            interfaceStatusFlow.emit(Unit)
+            // Emit interface status event with JSON data
+            interfaceStatusFlow.emit("""{"ble0": false}""")
             advanceUntilIdle()
 
-            // Verify getDebugInfo was called after event
-            io.mockk.coVerify(atLeast = 1) { serviceProtocol.getDebugInfo() }
+            // Verify state was updated from the event
+            assertEquals(false, viewModel.state.value.interfaceOnlineStatus["ble0"])
         }
 
     @Test
@@ -184,27 +170,16 @@ class InterfaceManagementViewModelStatusEventTest {
 
             advanceUntilIdle()
 
-            // Since polling is disabled in tests, initial state has empty status map
-            // Emit first event to populate initial status
-            interfaceStatusFlow.emit(Unit)
+            // Emit first event to populate initial status with JSON data
+            interfaceStatusFlow.emit("""{"ble0": true}""")
             advanceUntilIdle()
 
             viewModel.state.test {
                 val initialState = awaitItem()
                 assertEquals(true, initialState.interfaceOnlineStatus["ble0"])
 
-                // Update mock to return different status
-                coEvery { serviceProtocol.getDebugInfo() } returns
-                    mapOf(
-                        "interfaces" to
-                            listOf(
-                                mapOf("name" to "ble0", "online" to false),
-                                mapOf("name" to "rnode0", "online" to true),
-                            ),
-                    )
-
-                // Emit status change event
-                interfaceStatusFlow.emit(Unit)
+                // Emit status change event with new status
+                interfaceStatusFlow.emit("""{"ble0": false, "rnode0": true}""")
                 advanceUntilIdle()
 
                 // Should receive updated state
@@ -215,20 +190,8 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     @Test
-    fun `multiple interface status events all trigger refreshes`() =
+    fun `multiple interface status events all update state`() =
         runTest {
-            var callCount = 0
-            coEvery { serviceProtocol.getDebugInfo() } answers {
-                callCount++
-                val isOnline: Boolean = callCount % 2 == 0
-                mapOf(
-                    "interfaces" to
-                        listOf(
-                            mapOf("name" to "ble0", "online" to isOnline),
-                        ),
-                )
-            }
-
             viewModel =
                 InterfaceManagementViewModel(
                     interfaceRepository,
@@ -238,18 +201,20 @@ class InterfaceManagementViewModelStatusEventTest {
                 )
 
             advanceUntilIdle()
-            val initialCallCount = callCount
 
-            // Emit multiple events
-            interfaceStatusFlow.emit(Unit)
+            // Emit multiple events with different states
+            interfaceStatusFlow.emit("""{"ble0": true}""")
             advanceUntilIdle()
-            interfaceStatusFlow.emit(Unit)
-            advanceUntilIdle()
-            interfaceStatusFlow.emit(Unit)
-            advanceUntilIdle()
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["ble0"])
 
-            // Should have called getDebugInfo multiple times
-            assertTrue("Expected at least 3 additional calls", callCount >= initialCallCount + 3)
+            interfaceStatusFlow.emit("""{"ble0": false}""")
+            advanceUntilIdle()
+            assertEquals(false, viewModel.state.value.interfaceOnlineStatus["ble0"])
+
+            interfaceStatusFlow.emit("""{"ble0": true, "rnode0": true}""")
+            advanceUntilIdle()
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["ble0"])
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["rnode0"])
         }
 
     @Test

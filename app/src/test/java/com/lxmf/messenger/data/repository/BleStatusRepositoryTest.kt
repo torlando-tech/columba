@@ -14,6 +14,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
@@ -197,61 +198,41 @@ class BleStatusRepositoryTest {
             assertEquals(ConnectionType.BOTH, result[0].connectionType)
         }
 
-    // ========== getConnectedPeersFlow() Tests ==========
+    // ========== getConnectedPeersFlow() Event-Driven Tests ==========
 
     @Test
-    @Ignore("Flaky on CI: Flow timing-sensitive test fails on resource-constrained runners")
-    fun getConnectedPeersFlow_emits_initial_data_immediately() =
+    @Ignore("Requires KotlinBLEBridge initialization which needs Android Bluetooth framework")
+    fun getConnectedPeersFlow_emits_on_bleConnectionsFlow_event() =
         runTest {
-            // Given
-            val testConnections = BleTestFixtures.createMultipleConnections(count = 2)
-            val jsonResponse = BleTestFixtures.createBleConnectionsJson(testConnections)
-            every { mockProtocol.getBleConnectionDetails() } returns jsonResponse
+            // Given - Mock the event-driven flow
+            val bleConnectionsFlow = MutableSharedFlow<String>(replay = 1)
+            every { mockProtocol.bleConnectionsFlow } returns bleConnectionsFlow
             repository = BleStatusRepository(mockContext, mockProtocol)
 
-            // When/Then
+            // When - Emit connection event
+            bleConnectionsFlow.emit("""[{"identityHash":"abc123","address":"AA:BB:CC:DD:EE:FF","hasCentralConnection":true,"hasPeripheralConnection":false,"mtu":512}]""")
+
+            // Then - Flow should emit immediately (no polling delay)
             repository.getConnectedPeersFlow().test(timeout = 5.seconds) {
-                val firstEmission = awaitItem()
-                assertTrue(firstEmission is BleConnectionsState.Success)
-                assertEquals(2, (firstEmission as BleConnectionsState.Success).connections.size)
+                val emission = awaitItem()
+                assertTrue(emission is BleConnectionsState.Success)
                 cancelAndIgnoreRemainingEvents()
             }
         }
 
     @Test
-    @Ignore("Flaky on CI: Flow timing-sensitive test fails on resource-constrained runners")
-    fun getConnectedPeersFlow_emits_periodically_every_3_seconds() =
+    @Ignore("Requires KotlinBLEBridge initialization which needs Android Bluetooth framework")
+    fun getConnectedPeersFlow_handles_empty_event() =
         runTest {
             // Given
-            var callCount = 0
-            every { mockProtocol.getBleConnectionDetails() } answers {
-                callCount++
-                BleTestFixtures.createEmptyJson()
-            }
+            val bleConnectionsFlow = MutableSharedFlow<String>(replay = 1)
+            every { mockProtocol.bleConnectionsFlow } returns bleConnectionsFlow
             repository = BleStatusRepository(mockContext, mockProtocol)
 
-            // When/Then
-            repository.getConnectedPeersFlow().test(timeout = 10.seconds) {
-                awaitItem() // First emission (immediate)
-                advanceTimeBy(3000) // Advance 3 seconds
-                awaitItem() // Second emission
-                advanceTimeBy(3000) // Advance 3 more seconds
-                awaitItem() // Third emission
+            // When - Emit empty array
+            bleConnectionsFlow.emit("[]")
 
-                assertTrue(callCount >= 3)
-                cancelAndIgnoreRemainingEvents()
-            }
-        }
-
-    @Test
-    @Ignore("Flaky on CI: Flow timing-sensitive test fails on resource-constrained runners")
-    fun getConnectedPeersFlow_emits_empty_list_on_error() =
-        runTest {
-            // Given
-            every { mockProtocol.getBleConnectionDetails() } throws RuntimeException("Test error")
-            repository = BleStatusRepository(mockContext, mockProtocol)
-
-            // When/Then
+            // Then
             repository.getConnectedPeersFlow().test(timeout = 5.seconds) {
                 val emission = awaitItem()
                 assertTrue(emission is BleConnectionsState.Success)
@@ -261,33 +242,22 @@ class BleStatusRepositoryTest {
         }
 
     @Test
-    @Ignore("Flaky on CI: Flow timing-sensitive test fails on resource-constrained runners")
-    fun getConnectedPeersFlow_continues_emitting_after_error() =
+    @Ignore("Requires KotlinBLEBridge initialization which needs Android Bluetooth framework")
+    fun getConnectedPeersFlow_handles_malformed_event_json() =
         runTest {
             // Given
-            var attemptCount = 0
-            every { mockProtocol.getBleConnectionDetails() } answers {
-                attemptCount++
-                if (attemptCount == 1) {
-                    throw java.io.IOException("First attempt fails")
-                } else {
-                    BleTestFixtures.createEmptyJson()
-                }
-            }
+            val bleConnectionsFlow = MutableSharedFlow<String>(replay = 1)
+            every { mockProtocol.bleConnectionsFlow } returns bleConnectionsFlow
             repository = BleStatusRepository(mockContext, mockProtocol)
 
-            // When/Then
-            repository.getConnectedPeersFlow().test(timeout = 10.seconds) {
-                val firstEmission = awaitItem() // Error case, should emit empty list
-                assertTrue(firstEmission is BleConnectionsState.Success)
-                assertTrue((firstEmission as BleConnectionsState.Success).connections.isEmpty())
+            // When - Emit malformed JSON
+            bleConnectionsFlow.emit("not valid json")
 
-                advanceTimeBy(3000)
-                val secondEmission = awaitItem() // Should recover
-                assertTrue(secondEmission is BleConnectionsState.Success)
-                assertTrue((secondEmission as BleConnectionsState.Success).connections.isEmpty())
-
-                assertTrue(attemptCount >= 2)
+            // Then - Should handle gracefully and emit empty list
+            repository.getConnectedPeersFlow().test(timeout = 5.seconds) {
+                val emission = awaitItem()
+                assertTrue(emission is BleConnectionsState.Success)
+                assertTrue((emission as BleConnectionsState.Success).connections.isEmpty())
                 cancelAndIgnoreRemainingEvents()
             }
         }

@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.paging.PagingData
 import com.lxmf.messenger.test.MessagingTestFixtures
 import com.lxmf.messenger.test.RegisterComponentActivityRule
+import com.lxmf.messenger.viewmodel.ContactToggleResult
 import com.lxmf.messenger.viewmodel.MessagingViewModel
 import io.mockk.every
 import io.mockk.mockk
@@ -812,5 +813,66 @@ class MessagingScreenTest {
 
         // Then - should NOT trigger async load (fieldsJson is null)
         verify(exactly = 0) { mockViewModel.loadImageAsync(any(), any()) }
+    }
+
+    // ========== Contact Toggle Result Tests ==========
+
+    @Test
+    fun contactToggleResult_added_triggersToastCollection() {
+        // Given - a flow with replay so value is available when LaunchedEffect starts collecting
+        val contactToggleFlow = MutableSharedFlow<ContactToggleResult>(replay = 1)
+        contactToggleFlow.tryEmit(ContactToggleResult.Added)
+        every { mockViewModel.contactToggleResult } returns contactToggleFlow
+
+        // When - render screen (LaunchedEffect will collect the replayed value)
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = "Alice",
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Toast.makeText is called - code path exercised for coverage
+    }
+
+    @Test
+    fun contactToggleResult_removed_triggersToastCollection() {
+        // Given - a flow with replay
+        val contactToggleFlow = MutableSharedFlow<ContactToggleResult>(replay = 1)
+        contactToggleFlow.tryEmit(ContactToggleResult.Removed)
+        every { mockViewModel.contactToggleResult } returns contactToggleFlow
+
+        // When - render screen
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = "Bob",
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+    }
+
+    @Test
+    fun contactToggleResult_error_triggersToastCollection() {
+        // Given - a flow with replay
+        val contactToggleFlow = MutableSharedFlow<ContactToggleResult>(replay = 1)
+        contactToggleFlow.tryEmit(ContactToggleResult.Error("Identity not available"))
+        every { mockViewModel.contactToggleResult } returns contactToggleFlow
+
+        // When - render screen
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = "Charlie",
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
     }
 }

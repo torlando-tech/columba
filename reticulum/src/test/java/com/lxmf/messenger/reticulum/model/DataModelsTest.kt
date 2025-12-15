@@ -1,5 +1,7 @@
 package com.lxmf.messenger.reticulum.model
 
+import com.lxmf.messenger.reticulum.protocol.ReceivedMessage
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -448,5 +450,54 @@ class DataModelsTest {
 
         assertEquals(config1, config2)
         assertNotEquals(config1, config3)
+    }
+
+    // ========== ReceivedMessage Tests ==========
+
+    @Test
+    fun `ReceivedMessage with publicKey stores value correctly`() {
+        val publicKey = ByteArray(32) { it.toByte() }
+        val message =
+            ReceivedMessage(
+                messageHash = "abc123",
+                content = "Hello",
+                sourceHash = ByteArray(16) { it.toByte() },
+                destinationHash = ByteArray(16) { (it + 1).toByte() },
+                timestamp = 1234567890L,
+                fieldsJson = null,
+                publicKey = publicKey,
+            )
+
+        assertNotNull(message.publicKey)
+        assertArrayEquals(publicKey, message.publicKey)
+    }
+
+    @Test
+    fun `ReceivedMessage without publicKey has null value`() {
+        val message =
+            ReceivedMessage(
+                messageHash = "abc123",
+                content = "Hello",
+                sourceHash = ByteArray(16) { it.toByte() },
+                destinationHash = ByteArray(16) { (it + 1).toByte() },
+                timestamp = 1234567890L,
+            )
+
+        assertEquals(null, message.publicKey)
+    }
+
+    @Test
+    fun `ReceivedMessage publicKey defaults to null`() {
+        val message =
+            ReceivedMessage(
+                messageHash = "abc123",
+                content = "Hello",
+                sourceHash = ByteArray(16),
+                destinationHash = ByteArray(16),
+                timestamp = 0L,
+                fieldsJson = """{"6": "image_data"}""",
+            )
+
+        assertEquals(null, message.publicKey)
     }
 }

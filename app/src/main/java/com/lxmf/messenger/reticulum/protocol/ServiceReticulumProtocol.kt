@@ -291,32 +291,9 @@ class ServiceReticulumProtocol(
 
             override fun onMessage(messageJson: String) {
                 try {
-                    val json = JSONObject(messageJson)
-
-                    val messageHash = json.optString("message_hash", "")
-                    val content = json.optString("content", "")
-                    val sourceHash = json.optString("source_hash").toByteArrayFromBase64() ?: byteArrayOf()
-                    val destHash = json.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
-                    val timestamp = json.optLong("timestamp", System.currentTimeMillis())
-                    // Extract LXMF fields (attachments, images, etc.) if present
-                    val fieldsJson = json.optJSONObject("fields")?.toString()
-                    // Extract sender's public key if available
-                    val publicKeyB64 = json.optString("public_key", null)
-                    val publicKey = publicKeyB64?.takeIf { it.isNotEmpty() }?.toByteArrayFromBase64()
-
-                    val message =
-                        ReceivedMessage(
-                            messageHash = messageHash,
-                            content = content,
-                            sourceHash = sourceHash,
-                            destinationHash = destHash,
-                            timestamp = timestamp,
-                            fieldsJson = fieldsJson,
-                            publicKey = publicKey,
-                        )
-
+                    val message = parseMessageJson(messageJson)
                     messageFlow.tryEmit(message)
-                    Log.d(TAG, "Message received via service: ${messageHash.take(16)} (publicKey=${publicKey != null})")
+                    Log.d(TAG, "Message received via service: ${message.messageHash.take(16)} (publicKey=${message.publicKey != null})")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling message callback", e)
                 }
@@ -1725,6 +1702,35 @@ class ServiceReticulumProtocol(
 
             Log.d(TAG, "Auto-announce successful")
         }
+    }
+
+    /**
+     * Parse a message JSON string into a ReceivedMessage.
+     * Extracted for testability.
+     */
+    internal fun parseMessageJson(messageJson: String): ReceivedMessage {
+        val json = JSONObject(messageJson)
+
+        val messageHash = json.optString("message_hash", "")
+        val content = json.optString("content", "")
+        val sourceHash = json.optString("source_hash").toByteArrayFromBase64() ?: byteArrayOf()
+        val destHash = json.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
+        val timestamp = json.optLong("timestamp", System.currentTimeMillis())
+        // Extract LXMF fields (attachments, images, etc.) if present
+        val fieldsJson = json.optJSONObject("fields")?.toString()
+        // Extract sender's public key if available
+        val publicKeyB64 = json.optString("public_key", null)
+        val publicKey = publicKeyB64?.takeIf { it.isNotEmpty() }?.toByteArrayFromBase64()
+
+        return ReceivedMessage(
+            messageHash = messageHash,
+            content = content,
+            sourceHash = sourceHash,
+            destinationHash = destHash,
+            timestamp = timestamp,
+            fieldsJson = fieldsJson,
+            publicKey = publicKey,
+        )
     }
 
     // Helper extension functions

@@ -569,6 +569,34 @@ class ServiceReticulumProtocolTest {
         assertEquals(7633, ifaceJson.getInt("tcp_port"))
     }
 
+    // ===========================================
+    // restorePeerIdentities Tests
+    // ===========================================
+
+    @Test
+    fun `restorePeerIdentities - returns error when service not bound`() {
+        // When
+        val result = protocol.restorePeerIdentities(emptyList())
+
+        // Then
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+    }
+
+    // ===========================================
+    // restoreAnnounceIdentities Tests
+    // ===========================================
+
+    @Test
+    fun `restoreAnnounceIdentities - returns error when service not bound`() {
+        // When
+        val result = protocol.restoreAnnounceIdentities(emptyList())
+
+        // Then
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+    }
+
     @Test
     fun `buildConfigJson - RNode omits tcp_host when null`() {
         // Given - Bluetooth RNode without tcp_host

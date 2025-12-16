@@ -159,8 +159,8 @@ jobs:
           rm -rf build/reports/jacoco
           rm -rf */build/reports/jacoco
 
-      - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --stacktrace --max-workers=2 --no-build-cache
+      - name: Run unit tests and generate coverage report
+        run: ./gradlew testDebugUnitTest jacocoTestReport --stacktrace --max-workers=2 --no-build-cache
 
       - name: Upload unit test results
         if: always()
@@ -179,9 +179,6 @@ jobs:
           name: unit-test-reports
           path: |
             **/build/reports/tests/
-
-      - name: Generate code coverage report
-        run: ./gradlew jacocoTestReport --stacktrace
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

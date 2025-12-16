@@ -342,8 +342,8 @@ class PythonWrapperManager(
 
         val generator = checkNotNull(stampGeneratorInstance) { "StampGenerator not initialized" }
 
-        // Run the coroutine blocking since Python expects synchronous return
-        val result = runBlocking(Dispatchers.Default) {
+        // Python expects synchronous return from this callback
+        val result = runBlocking(Dispatchers.Default) { // THREADING: allowed
             generator.generateStamp(workblock, stampCost)
         }
 

@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
 
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
@@ -32,6 +34,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -41,14 +45,8 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run ktlint
-        run: ./gradlew ktlintCheck --continue
-
-      - name: Run detekt
-        run: ./gradlew detekt --continue
-
-      - name: Run CPD (duplicate code detection)
-        run: ./gradlew cpdCheck --continue
+      - name: Run all lint checks
+        run: ./gradlew ktlintCheck detekt cpdCheck --continue
 
       - name: Upload lint reports
         if: always()
@@ -69,6 +67,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
 
       - name: Make audit script executable
         run: chmod +x audit-dispatchers.sh
@@ -112,6 +112,7 @@ jobs:
 
   unit-tests:
     name: Unit Tests
+    needs: [lint, validate-wrapper]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -120,6 +121,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: recursive
+          fetch-depth: 1
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -130,6 +132,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install Python build dependencies
         run: pip install build pytest pytest-cov

@@ -68,6 +68,7 @@ class SettingsViewModelTest {
     private val autoRetrieveEnabledFlow = MutableStateFlow(true)
     private val retrievalIntervalSecondsFlow = MutableStateFlow(30)
     private val transportNodeEnabledFlow = MutableStateFlow(true)
+    private val defaultDeliveryMethodFlow = MutableStateFlow("direct")
 
     @Before
     fun setup() {
@@ -94,6 +95,7 @@ class SettingsViewModelTest {
         every { settingsRepository.autoRetrieveEnabledFlow } returns autoRetrieveEnabledFlow
         every { settingsRepository.retrievalIntervalSecondsFlow } returns retrievalIntervalSecondsFlow
         every { settingsRepository.transportNodeEnabledFlow } returns transportNodeEnabledFlow
+        every { settingsRepository.defaultDeliveryMethodFlow } returns defaultDeliveryMethodFlow
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 
         // Mock PropagationNodeManager flows (StateFlows)
@@ -1732,6 +1734,59 @@ class SettingsViewModelTest {
                 assertFalse(
                     "transportNodeEnabled should be preserved across state changes",
                     state.transportNodeEnabled,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    // endregion
+
+    // region Default Delivery Method Tests
+
+    @Test
+    fun `state collects defaultDeliveryMethod from repository`() =
+        runTest {
+            defaultDeliveryMethodFlow.value = "propagated"
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertEquals("propagated", state.defaultDeliveryMethod)
+
+                // Update flow to direct
+                defaultDeliveryMethodFlow.value = "direct"
+                state = awaitItem()
+                assertEquals("direct", state.defaultDeliveryMethod)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `defaultDeliveryMethod persists across navigation`() =
+        runTest {
+            // Simulate the scenario where user sets to propagated, navigates away and back
+            defaultDeliveryMethodFlow.value = "propagated"
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Should load as "propagated" from the repository flow
+                assertEquals(
+                    "defaultDeliveryMethod should be loaded from repository",
+                    "propagated",
+                    state.defaultDeliveryMethod,
                 )
 
                 cancelAndConsumeRemainingEvents()

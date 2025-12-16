@@ -152,6 +152,7 @@ class SettingsViewModel
                         settingsRepository.isSharedInstanceFlow,
                         settingsRepository.rpcKeyFlow,
                         settingsRepository.transportNodeEnabledFlow,
+                        settingsRepository.defaultDeliveryMethodFlow,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as com.lxmf.messenger.data.db.entity.LocalIdentityEntity?
@@ -182,6 +183,9 @@ class SettingsViewModel
 
                         @Suppress("UNCHECKED_CAST")
                         val transportNodeEnabled = flows[9] as Boolean
+
+                        @Suppress("UNCHECKED_CAST")
+                        val defaultDeliveryMethod = flows[10] as String
 
                         val displayName = activeIdentity?.displayName ?: defaultName
 
@@ -217,6 +221,8 @@ class SettingsViewModel
                             autoSelectPropagationNode = _state.value.autoSelectPropagationNode,
                             // Transport node state
                             transportNodeEnabled = transportNodeEnabled,
+                            // Message delivery state
+                            defaultDeliveryMethod = defaultDeliveryMethod,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value

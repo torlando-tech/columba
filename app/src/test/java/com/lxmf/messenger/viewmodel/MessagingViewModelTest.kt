@@ -849,16 +849,15 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
-            val testViewModel =
-                MessagingViewModel(
-                    reticulumProtocol,
-                    conversationRepository,
-                    announceRepository,
-                    contactRepository,
-                    activeConversationManager,
-                    settingsRepository,
-                    propagationNodeManager,
-                )
+            MessagingViewModel(
+                reticulumProtocol,
+                conversationRepository,
+                announceRepository,
+                contactRepository,
+                activeConversationManager,
+                settingsRepository,
+                propagationNodeManager,
+            )
             advanceUntilIdle()
 
             // Emit a retrying_propagated status update
@@ -909,16 +908,15 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
-            val testViewModel =
-                MessagingViewModel(
-                    reticulumProtocol,
-                    conversationRepository,
-                    announceRepository,
-                    contactRepository,
-                    activeConversationManager,
-                    settingsRepository,
-                    propagationNodeManager,
-                )
+            MessagingViewModel(
+                reticulumProtocol,
+                conversationRepository,
+                announceRepository,
+                contactRepository,
+                activeConversationManager,
+                settingsRepository,
+                propagationNodeManager,
+            )
             advanceUntilIdle()
 
             // Emit a delivered status update
@@ -965,16 +963,15 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
-            val testViewModel =
-                MessagingViewModel(
-                    reticulumProtocol,
-                    conversationRepository,
-                    announceRepository,
-                    contactRepository,
-                    activeConversationManager,
-                    settingsRepository,
-                    propagationNodeManager,
-                )
+            MessagingViewModel(
+                reticulumProtocol,
+                conversationRepository,
+                announceRepository,
+                contactRepository,
+                activeConversationManager,
+                settingsRepository,
+                propagationNodeManager,
+            )
             advanceUntilIdle()
 
             // Emit a failed status update
@@ -1011,16 +1008,15 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
-            val testViewModel =
-                MessagingViewModel(
-                    reticulumProtocol,
-                    conversationRepository,
-                    announceRepository,
-                    contactRepository,
-                    activeConversationManager,
-                    settingsRepository,
-                    propagationNodeManager,
-                )
+            MessagingViewModel(
+                reticulumProtocol,
+                conversationRepository,
+                announceRepository,
+                contactRepository,
+                activeConversationManager,
+                settingsRepository,
+                propagationNodeManager,
+            )
             advanceUntilIdle()
 
             // Emit a status update for unknown message

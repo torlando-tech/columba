@@ -37,7 +37,6 @@ class IdentityManagerViewModelTest {
     @get:Rule
     val instantExecutorRule = InstantTaskExecutorRule()
 
-    private lateinit var viewModel: IdentityManagerViewModel
     private lateinit var mockContext: Context
     private lateinit var mockRepository: IdentityRepository
     private lateinit var mockProtocol: ReticulumProtocol
@@ -56,8 +55,6 @@ class IdentityManagerViewModelTest {
         // Default mocks
         every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
         every { mockRepository.activeIdentity } returns MutableStateFlow(null)
-
-        viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
     }
 
     @After
@@ -65,6 +62,13 @@ class IdentityManagerViewModelTest {
         Dispatchers.resetMain()
         clearAllMocks()
     }
+
+    /**
+     * Creates a new ViewModel instance inside a test's runTest scope.
+     * This ensures coroutines are properly tracked by the test infrastructure.
+     */
+    private fun createTestViewModel(): IdentityManagerViewModel =
+        IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
 
     // ========== Helper Functions ==========
 
@@ -103,6 +107,7 @@ class IdentityManagerViewModelTest {
     @Test
     fun initialState_isIdle() =
         runTest {
+            val viewModel = createTestViewModel()
             // When/Then
             viewModel.uiState.test {
                 assertTrue(awaitItem() is IdentityManagerUiState.Idle)
@@ -117,8 +122,8 @@ class IdentityManagerViewModelTest {
             every { mockRepository.allIdentities } returns MutableStateFlow(testIdentities)
             every { mockRepository.activeIdentity } returns MutableStateFlow(null)
 
-            // Re-create ViewModel with new mock
-            viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+            // Create ViewModel with configured mocks
+            val viewModel = createTestViewModel()
 
             // When/Then
             viewModel.identities.test {
@@ -142,7 +147,7 @@ class IdentityManagerViewModelTest {
             every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
             every { mockRepository.activeIdentity } returns MutableStateFlow(activeIdentity)
 
-            viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+            val viewModel = createTestViewModel()
 
             // When/Then
             viewModel.activeIdentity.test {
@@ -161,6 +166,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun createNewIdentity_success_transitionsToSuccessState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             val pythonResult = mockPythonCreateSuccess()
             coEvery { mockProtocol.createIdentityWithName("Work") } returns pythonResult
@@ -188,6 +195,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun createNewIdentity_pythonError_transitionsToErrorState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             coEvery { mockProtocol.createIdentityWithName(any()) } returns mockPythonError()
 
@@ -209,6 +218,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun createNewIdentity_missingIdentityHash_transitionsToErrorState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given - Python returns success but missing identity_hash
             coEvery { mockProtocol.createIdentityWithName(any()) } returns
                 mapOf(
@@ -234,6 +245,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun createNewIdentity_databaseError_transitionsToErrorState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             coEvery { mockProtocol.createIdentityWithName(any()) } returns mockPythonCreateSuccess()
             coEvery { mockRepository.createIdentity(any(), any(), any(), any()) } returns
@@ -261,6 +274,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun switchToIdentity_success_transitionsToSuccess() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             coEvery { mockRepository.getIdentity("id2") } returns null
             coEvery { mockRepository.switchActiveIdentity("id2") } returns Result.success(Unit)
@@ -284,6 +299,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun switchToIdentity_failure_transitionsToErrorState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             coEvery { mockRepository.getIdentity(any()) } returns null
             coEvery { mockRepository.switchActiveIdentity(any()) } returns
@@ -314,7 +331,7 @@ class IdentityManagerViewModelTest {
             // Given
             every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
             every { mockRepository.activeIdentity } returns MutableStateFlow(createTestIdentity(hash = "active", isActive = true))
-            viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
 
             coEvery { mockProtocol.deleteIdentityFile("id1") } returns mapOf("success" to true)
             coEvery { mockRepository.deleteIdentity("id1") } returns Result.success(Unit)
@@ -340,7 +357,7 @@ class IdentityManagerViewModelTest {
             // Given - trying to delete the active identity
             every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
             every { mockRepository.activeIdentity } returns MutableStateFlow(createTestIdentity(hash = "id1", isActive = true))
-            viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
 
             // WhileSubscribed requires active collector - subscribe to activeIdentity to start the flow
             val identityJob =
@@ -380,7 +397,7 @@ class IdentityManagerViewModelTest {
             // Given
             every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
             every { mockRepository.activeIdentity } returns MutableStateFlow(createTestIdentity(hash = "active", isActive = true))
-            viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
 
             coEvery { mockProtocol.deleteIdentityFile("id1") } returns
                 mapOf(
@@ -409,7 +426,7 @@ class IdentityManagerViewModelTest {
             // Given
             every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
             every { mockRepository.activeIdentity } returns MutableStateFlow(createTestIdentity(hash = "active", isActive = true))
-            viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
 
             coEvery { mockProtocol.deleteIdentityFile("id1") } returns mapOf("success" to true)
             coEvery { mockRepository.deleteIdentity("id1") } returns
@@ -437,6 +454,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun renameIdentity_success_transitionsToSuccessState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             coEvery { mockRepository.updateDisplayName("id1", "New Name") } returns Result.success(Unit)
 
@@ -458,6 +477,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun renameIdentity_failure_transitionsToErrorState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             coEvery { mockRepository.updateDisplayName(any(), any()) } returns
                 Result.failure(
@@ -484,6 +505,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun importIdentity_success_transitionsToSuccessState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             val mockUri = mockk<Uri>()
             val mockContentResolver = mockk<ContentResolver>()
@@ -523,6 +546,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun importIdentity_fileReadError_transitionsToErrorState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             val mockUri = mockk<Uri>()
             val mockContentResolver = mockk<ContentResolver>()
@@ -548,6 +573,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun importIdentity_pythonError_transitionsToErrorState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             val mockUri = mockk<Uri>()
             val mockContentResolver = mockk<ContentResolver>()
@@ -578,6 +605,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun exportIdentity_success_transitionsToExportReadyState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             val fileData = "identity_data".toByteArray()
             val mockUri = mockk<Uri>()
@@ -603,6 +632,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun exportIdentity_emptyFileData_transitionsToErrorState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns byteArrayOf()
 
@@ -624,6 +655,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun exportIdentity_repositoryError_transitionsToErrorState() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             val fileData = "identity_data".toByteArray()
             coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns fileData
@@ -652,6 +685,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun resetUiState_transitionsToIdle() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given - set state to Error
             coEvery { mockRepository.updateDisplayName(any(), any()) } returns
                 Result.failure(
@@ -680,6 +715,8 @@ class IdentityManagerViewModelTest {
     @Test
     fun createNewIdentity_callsPythonWithCorrectDisplayName() =
         runTest {
+            val viewModel = createTestViewModel()
+
             // Given
             coEvery { mockProtocol.createIdentityWithName("My Work Identity") } returns mockPythonCreateSuccess()
             coEvery { mockRepository.createIdentity(any(), any(), any(), any()) } returns
@@ -701,7 +738,7 @@ class IdentityManagerViewModelTest {
             // Given
             every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
             every { mockRepository.activeIdentity } returns MutableStateFlow(createTestIdentity(hash = "active", isActive = true))
-            viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
 
             coEvery { mockProtocol.deleteIdentityFile("id_to_delete") } returns mapOf("success" to true)
             coEvery { mockRepository.deleteIdentity(any()) } returns Result.success(Unit)

@@ -2,6 +2,10 @@ package com.lxmf.messenger.viewmodel
 
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.Destination
+import com.lxmf.messenger.reticulum.model.DestinationType
+import com.lxmf.messenger.reticulum.model.Direction
+import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.FailedInterface
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
@@ -73,10 +77,33 @@ class DebugViewModelEventDrivenTest {
 
         // Setup identity repository
         coEvery { mockIdentityRepo.activeIdentity } returns flowOf(null)
+
+        // Setup LXMF identity and destination for loadIdentityData
+        val mockIdentity = Identity(
+            hash = ByteArray(16) { it.toByte() },
+            publicKey = ByteArray(32) { it.toByte() },
+            privateKey = ByteArray(32) { it.toByte() },
+        )
+        val mockDestination = Destination(
+            hash = ByteArray(16) { it.toByte() },
+            hexHash = "000102030405060708090a0b0c0d0e0f",
+            identity = mockIdentity,
+            direction = Direction.IN,
+            type = DestinationType.SINGLE,
+            appName = "lxmf",
+            aspects = listOf("delivery"),
+        )
+        every { mockProtocol.getLxmfIdentity() } returns Result.success(mockIdentity)
+        every { mockProtocol.getLxmfDestination() } returns Result.success(mockDestination)
+        // Also mock createIdentity in case the code falls back to it
+        coEvery { mockProtocol.createIdentity() } returns Result.success(mockIdentity)
     }
 
     @After
     fun tearDown() {
+        // Allow pending IO operations to complete before resetting Main dispatcher
+        // This prevents "Dispatchers.Main was accessed when the platform dispatcher was absent" errors
+        Thread.sleep(50)
         Dispatchers.resetMain()
         clearAllMocks()
     }
@@ -350,7 +377,10 @@ class DebugViewModelEventDrivenTest {
     @Test
     fun `generateShareText returns null when publicKey is null`() =
         runTest {
-            // Given - create ViewModel but publicKey remains null (no identity loaded)
+            // Given - make identity loading fail so publicKey remains null
+            every { mockProtocol.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
+            coEvery { mockProtocol.createIdentity() } returns Result.failure(RuntimeException("Cannot create identity"))
+
             val viewModel =
                 DebugViewModel(
                     mockProtocol,
@@ -358,6 +388,7 @@ class DebugViewModelEventDrivenTest {
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
                 )
+            advanceUntilIdle()
 
             // When
             val result = viewModel.generateShareText("TestUser")
@@ -369,7 +400,10 @@ class DebugViewModelEventDrivenTest {
     @Test
     fun `generateShareText returns null when destinationHash is null`() =
         runTest {
-            // Given - create ViewModel but destination hash remains null
+            // Given - make destination loading fail so destinationHash remains null
+            every { mockProtocol.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
+            coEvery { mockProtocol.createIdentity() } returns Result.failure(RuntimeException("Cannot create identity"))
+
             val viewModel =
                 DebugViewModel(
                     mockProtocol,
@@ -377,6 +411,7 @@ class DebugViewModelEventDrivenTest {
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
                 )
+            advanceUntilIdle()
 
             // When
             val result = viewModel.generateShareText("TestUser")

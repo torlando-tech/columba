@@ -1159,6 +1159,107 @@ class TestPollReceivedMessages(unittest.TestCase):
         messages = wrapper.poll_received_messages()
         self.assertEqual(messages, [])
 
+    @patch('reticulum_wrapper.RNS')
+    def test_poll_extracts_public_key_when_identity_found(self, mock_rns):
+        """Test that poll_received_messages extracts public key from RNS.Identity.recall()"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+
+        # Mock router with pending message
+        mock_router = Mock()
+        mock_message = MagicMock()
+        mock_message.source_hash = b'source123source1'  # 16 bytes
+        mock_message.destination_hash = b'dest456dest45678'  # 16 bytes
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash123456789'
+
+        mock_router.pending_inbound = [mock_message]
+        wrapper.router = mock_router
+
+        # Mock identity with public key
+        test_public_key = b'test_public_key_32bytes_exactly!'
+        mock_identity = Mock()
+        mock_identity.get_public_key.return_value = test_public_key
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        messages = wrapper.poll_received_messages()
+
+        # Should retrieve message
+        self.assertEqual(len(messages), 1)
+
+        # Verify public key is included
+        msg = messages[0]
+        self.assertIn('public_key', msg)
+        self.assertEqual(msg['public_key'], test_public_key)
+
+        # Verify Identity.recall was called with source_hash
+        mock_rns.Identity.recall.assert_called_once_with(mock_message.source_hash)
+
+    @patch('reticulum_wrapper.RNS')
+    def test_poll_handles_identity_not_found(self, mock_rns):
+        """Test that poll_received_messages handles RNS.Identity.recall() returning None"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+
+        # Mock router with pending message
+        mock_router = Mock()
+        mock_message = MagicMock()
+        mock_message.source_hash = b'source123source1'  # 16 bytes
+        mock_message.destination_hash = b'dest456dest45678'  # 16 bytes
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash567891234'
+
+        mock_router.pending_inbound = [mock_message]
+        wrapper.router = mock_router
+
+        # Mock identity recall returning None
+        mock_rns.Identity.recall.return_value = None
+
+        messages = wrapper.poll_received_messages()
+
+        # Should retrieve message
+        self.assertEqual(len(messages), 1)
+
+        # Verify public_key is NOT in message (identity not found)
+        msg = messages[0]
+        self.assertNotIn('public_key', msg)
+
+    @patch('reticulum_wrapper.RNS')
+    def test_poll_handles_identity_recall_exception(self, mock_rns):
+        """Test that poll_received_messages handles exceptions from RNS.Identity.recall()"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+
+        # Mock router with pending message
+        mock_router = Mock()
+        mock_message = MagicMock()
+        mock_message.source_hash = b'source123source1'  # 16 bytes
+        mock_message.destination_hash = b'dest456dest45678'  # 16 bytes
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash891234567'
+
+        mock_router.pending_inbound = [mock_message]
+        wrapper.router = mock_router
+
+        # Mock identity recall raising exception
+        mock_rns.Identity.recall.side_effect = Exception("Network error")
+
+        # Should not crash
+        messages = wrapper.poll_received_messages()
+
+        # Should still retrieve message
+        self.assertEqual(len(messages), 1)
+
+        # Verify public_key is NOT in message (exception occurred)
+        msg = messages[0]
+        self.assertNotIn('public_key', msg)
+
 
 class TestErrorHandling(unittest.TestCase):
     """Test error handling across messaging methods"""

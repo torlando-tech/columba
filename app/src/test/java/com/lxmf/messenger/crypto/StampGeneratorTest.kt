@@ -298,7 +298,7 @@ class StampGeneratorTest {
         val result = StampGenerator.StampResult(stamp, 10, 1000L)
 
         assertFalse(result.equals("not a StampResult"))
-        assertFalse(result.equals(null))
+        assertFalse(result == null)
     }
 
     @Test

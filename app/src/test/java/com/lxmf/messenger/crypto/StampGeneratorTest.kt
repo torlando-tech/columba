@@ -241,6 +241,155 @@ class StampGeneratorTest {
         assertTrue(stampGenerator.isStampValid(result.stamp!!, stampCost, workblock))
     }
 
+    // ==================== StampResult Tests ====================
+
+    @Test
+    fun `StampResult equals returns true for identical stamps`() {
+        val stamp = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        val result1 = StampGenerator.StampResult(stamp, 10, 1000L)
+        val result2 = StampGenerator.StampResult(stamp.copyOf(), 10, 1000L)
+
+        assertEquals(result1, result2)
+    }
+
+    @Test
+    fun `StampResult equals returns false for different stamps`() {
+        val stamp1 = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        val stamp2 = hexToBytes("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210")
+        val result1 = StampGenerator.StampResult(stamp1, 10, 1000L)
+        val result2 = StampGenerator.StampResult(stamp2, 10, 1000L)
+
+        assertFalse(result1 == result2)
+    }
+
+    @Test
+    fun `StampResult equals returns false for different values`() {
+        val stamp = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        val result1 = StampGenerator.StampResult(stamp, 10, 1000L)
+        val result2 = StampGenerator.StampResult(stamp.copyOf(), 11, 1000L)
+
+        assertFalse(result1 == result2)
+    }
+
+    @Test
+    fun `StampResult equals returns false for different rounds`() {
+        val stamp = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        val result1 = StampGenerator.StampResult(stamp, 10, 1000L)
+        val result2 = StampGenerator.StampResult(stamp.copyOf(), 10, 2000L)
+
+        assertFalse(result1 == result2)
+    }
+
+    @Test
+    fun `StampResult equals handles null stamps`() {
+        val result1 = StampGenerator.StampResult(null, 0, 0L)
+        val result2 = StampGenerator.StampResult(null, 0, 0L)
+        val stamp = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        val result3 = StampGenerator.StampResult(stamp, 0, 0L)
+
+        assertEquals(result1, result2)
+        assertFalse(result1 == result3)
+        assertFalse(result3 == result1)
+    }
+
+    @Test
+    fun `StampResult equals returns false for non-StampResult`() {
+        val stamp = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        val result = StampGenerator.StampResult(stamp, 10, 1000L)
+
+        assertFalse(result.equals("not a StampResult"))
+        assertFalse(result.equals(null))
+    }
+
+    @Test
+    fun `StampResult equals reflexive`() {
+        val stamp = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        val result = StampGenerator.StampResult(stamp, 10, 1000L)
+
+        assertTrue(result == result)
+    }
+
+    @Test
+    fun `StampResult hashCode consistent for equal objects`() {
+        val stamp = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        val result1 = StampGenerator.StampResult(stamp, 10, 1000L)
+        val result2 = StampGenerator.StampResult(stamp.copyOf(), 10, 1000L)
+
+        assertEquals(result1.hashCode(), result2.hashCode())
+    }
+
+    @Test
+    fun `StampResult hashCode handles null stamp`() {
+        val result = StampGenerator.StampResult(null, 0, 0L)
+
+        // Should not throw and should return consistent value
+        val hash1 = result.hashCode()
+        val hash2 = result.hashCode()
+        assertEquals(hash1, hash2)
+    }
+
+    // ==================== Edge Case Tests ====================
+
+    @Test
+    fun `stampValue returns 0 for worst case stamp`() {
+        val material = hexToBytes("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+        val workblock = stampGenerator.generateWorkblock(material, 2)
+
+        // A stamp that produces a hash with high first byte
+        // This tests the edge case where stampValue returns low value
+        val badStamp = hexToBytes("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+        val value = stampGenerator.stampValue(workblock, badStamp)
+
+        // Should return a small value (likely 0-4)
+        assertTrue(value < 10)
+    }
+
+    @Test
+    fun `generateStamp with very low cost finds stamp quickly`() = runTest {
+        val material = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        val workblock = stampGenerator.generateWorkblock(material, 1) // Minimal workblock
+        val stampCost = 1 // Very easy
+
+        val result = stampGenerator.generateStamp(workblock, stampCost)
+
+        assertNotNull(result.stamp)
+        assertTrue(result.value >= stampCost)
+        // Should find in very few rounds with cost 1
+        assertTrue(result.rounds < 100)
+    }
+
+    @Test
+    fun `sha256 empty input`() {
+        val expected = hexToBytes("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        val result = stampGenerator.sha256(ByteArray(0))
+        assertArrayEquals(expected, result)
+    }
+
+    @Test
+    fun `hkdfExpand with empty IKM`() {
+        val result = stampGenerator.hkdfExpand(
+            ikm = ByteArray(0),
+            salt = ByteArray(16),
+            info = ByteArray(0),
+            length = 32
+        )
+        assertEquals(32, result.size)
+    }
+
+    @Test
+    fun `packInt encodes max positive fixint correctly`() {
+        // 0x7f is the max value for positive fixint encoding
+        val result = stampGenerator.packInt(0x7f)
+        assertArrayEquals(hexToBytes("7f"), result)
+    }
+
+    @Test
+    fun `packInt encodes 2999 correctly for workblock rounds`() {
+        // WORKBLOCK_EXPAND_ROUNDS - 1 = 2999
+        val result = stampGenerator.packInt(2999)
+        assertArrayEquals(hexToBytes("cd0bb7"), result)
+    }
+
     // ==================== Helper Functions ====================
 
     private fun hexToBytes(hex: String): ByteArray {

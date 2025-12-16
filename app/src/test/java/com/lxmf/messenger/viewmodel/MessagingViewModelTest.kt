@@ -884,9 +884,6 @@ class MessagingViewModelTest {
                     errorMessage = null,
                 )
             }
-
-            // Cleanup
-            testViewModel.viewModelScope.cancel()
         }
 
     @Test
@@ -943,9 +940,6 @@ class MessagingViewModelTest {
             coVerify(exactly = 0) {
                 conversationRepository.updateMessageDeliveryDetails(any(), any(), any())
             }
-
-            // Cleanup
-            testViewModel.viewModelScope.cancel()
         }
 
     @Test
@@ -1002,9 +996,6 @@ class MessagingViewModelTest {
             coVerify(exactly = 0) {
                 conversationRepository.updateMessageDeliveryDetails(any(), any(), any())
             }
-
-            // Cleanup
-            testViewModel.viewModelScope.cancel()
         }
 
     @Test
@@ -1053,9 +1044,6 @@ class MessagingViewModelTest {
             }
 
             // Verify: No crash occurred - test completes successfully
-
-            // Cleanup
-            testViewModel.viewModelScope.cancel()
         }
 
     // ========== CONTACT TOGGLE TESTS ==========

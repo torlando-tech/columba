@@ -2546,6 +2546,21 @@ class ReticulumWrapper:
             log_info("ReticulumWrapper", "send_lxmf_message_with_method",
                     f"✅ Message {msg_hash.hex()[:16] if msg_hash else 'unknown'}... handed to router")
 
+            # Check if message transitioned to SENT state (0x04) immediately
+            # This happens for PROPAGATED messages when the relay accepts them
+            try:
+                if hasattr(lxmf_message, 'state') and lxmf_message.state == LXMF.LXMessage.SENT:
+                    log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                            f"✅ Message state: SENT (0x04) - transmitted to network")
+                    self._on_message_sent(lxmf_message)
+                else:
+                    current_state = lxmf_message.state if hasattr(lxmf_message, 'state') else 'unknown'
+                    log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                             f"Message state after send: {current_state}")
+            except Exception as e:
+                log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                           f"Could not check message state: {e}")
+
             # Track opportunistic messages for timeout fallback
             # If an opportunistic message doesn't get delivered within the timeout period,
             # we'll trigger the failure callback to initiate propagation fallback

@@ -53,7 +53,6 @@ class MessagingViewModelTest {
     private lateinit var activeConversationManager: ActiveConversationManager
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
-    private lateinit var viewModel: MessagingViewModel
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
     private val testPeerName = "Test Peer"
@@ -105,29 +104,35 @@ class MessagingViewModelTest {
 
         // Default: no announce info
         every { announceRepository.getAnnounceFlow(any()) } returns flowOf(null)
-
-        viewModel = MessagingViewModel(reticulumProtocol, conversationRepository, announceRepository, contactRepository, activeConversationManager, settingsRepository, propagationNodeManager)
-
-        // Advance the dispatcher to process all init coroutines (delivery status collection, etc.)
-        // This prevents UncaughtExceptionsBeforeTest errors from coroutines started during ViewModel init
-        testDispatcher.scheduler.advanceUntilIdle()
     }
 
     @After
     fun tearDown() {
-        // Cancel any running coroutines in the ViewModel to prevent UncompletedCoroutinesError
-        if (::viewModel.isInitialized) {
-            viewModel.viewModelScope.cancel()
-        }
-        // Advance to process any cancellation effects
-        testDispatcher.scheduler.advanceUntilIdle()
         Dispatchers.resetMain()
         clearAllMocks()
     }
 
+    /**
+     * Creates a new ViewModel instance inside a test's runTest scope.
+     * This ensures coroutines launched during init are properly tracked by the test infrastructure.
+     */
+    private fun createTestViewModel(): MessagingViewModel =
+        MessagingViewModel(
+            reticulumProtocol,
+            conversationRepository,
+            announceRepository,
+            contactRepository,
+            activeConversationManager,
+            settingsRepository,
+            propagationNodeManager,
+        )
+
     @Test
     fun `initial state has empty messages`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Before loadMessages is called, the messages flow returns empty PagingData
             // Verify the repository method is not called until loadMessages() is invoked
             coVerify(exactly = 0) { conversationRepository.getMessagesPaged(any()) }
@@ -136,6 +141,9 @@ class MessagingViewModelTest {
     @Test
     fun `loadMessages updates current conversation and triggers flow`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Act: Load messages for conversation
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
@@ -157,6 +165,9 @@ class MessagingViewModelTest {
     @Test
     fun `loadMessages marks conversation as read`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -166,6 +177,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage success saves message to database with sent status`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Setup: Mock successful LXMF send
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
@@ -215,6 +229,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage failure saves message to database with failed status`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Setup: Mock failed LXMF send
             coEvery {
                 reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
@@ -244,6 +261,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage converts destination hash to bytes correctly`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -290,6 +310,9 @@ class MessagingViewModelTest {
     @Test
     fun `markAsRead calls repository`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             viewModel.markAsRead(testPeerHash)
             advanceUntilIdle()
 
@@ -299,6 +322,9 @@ class MessagingViewModelTest {
     @Test
     fun `switching conversations updates message flow`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             val conversation1Hash = "peer1"
             val conversation2Hash = "peer2"
 
@@ -332,6 +358,9 @@ class MessagingViewModelTest {
     @Test
     fun `identity loads successfully on init`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Identity loading is now lazy - happens when sending messages, not during init
             // This avoids crashes when LXMF router isn't ready yet
             // Send a message to trigger identity loading
@@ -404,6 +433,9 @@ class MessagingViewModelTest {
     @Test
     fun `messages flow updates when database changes`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Create a mutable flow to simulate database changes (using PagingData)
             val messagesFlow = MutableStateFlow<PagingData<DataMessage>>(PagingData.empty())
             coEvery { conversationRepository.getMessagesPaged(testPeerHash) } returns messagesFlow
@@ -437,6 +469,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with invalid destination hash does not send or save`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             val invalidHash = "invalid!hash@123" // Contains invalid characters
 
             viewModel.loadMessages(testPeerHash, testPeerName)
@@ -460,6 +495,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with non-hex destination hash does not send`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             val nonHexHash = "ghijklmn" // Valid characters but not hex
 
             viewModel.loadMessages(testPeerHash, testPeerName)
@@ -482,6 +520,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with empty content does not send`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -503,6 +544,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with whitespace-only content does not send`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -524,6 +568,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with too-long content does not send`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Create message longer than MAX_MESSAGE_LENGTH (10000 chars)
             val tooLongMessage = "a".repeat(10001)
 
@@ -548,6 +595,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage sanitizes content before sending`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -597,6 +647,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage accepts valid message at max length`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -634,6 +687,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with valid hex hash succeeds`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             val validHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
             val destHashBytes = validHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
@@ -678,6 +734,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with empty content but image attached succeeds`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -727,6 +786,9 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage clears image after successful send`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -1001,6 +1063,9 @@ class MessagingViewModelTest {
     @Test
     fun `isContactSaved returns false when contact not saved`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Setup: Contact is not saved (default mock behavior)
             every { contactRepository.hasContactFlow(testPeerHash) } returns flowOf(false)
 
@@ -1015,6 +1080,9 @@ class MessagingViewModelTest {
     @Test
     fun `isContactSaved has initial value of false before loading conversation`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Assert: Before loading any conversation, isContactSaved is false
             assertEquals(false, viewModel.isContactSaved.value)
         }
@@ -1022,6 +1090,9 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact adds contact when not saved`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Setup: Contact is not saved
             coEvery { contactRepository.hasContact(testPeerHash) } returns false
             val testPublicKey = ByteArray(64) { it.toByte() }
@@ -1049,6 +1120,9 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact removes contact when already saved`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Setup: Contact is already saved
             coEvery { contactRepository.hasContact(testPeerHash) } returns true
 
@@ -1074,6 +1148,9 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact does nothing when no conversation loaded`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Don't load any conversation - _currentConversation is null
 
             // Act: Toggle contact (should do nothing)
@@ -1095,6 +1172,9 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact handles missing public key gracefully`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Setup: Contact is not saved, but public key is not available
             coEvery { contactRepository.hasContact(testPeerHash) } returns false
             coEvery { conversationRepository.getPeerPublicKey(testPeerHash) } returns null
@@ -1121,6 +1201,9 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact handles repository exception gracefully`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Setup: Contact is not saved, repository throws exception
             coEvery { contactRepository.hasContact(testPeerHash) } throws RuntimeException("Database error")
 
@@ -1144,6 +1227,9 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact emits Added result when contact successfully added`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Setup: Contact is not saved, public key is available
             coEvery { contactRepository.hasContact(testPeerHash) } returns false
             val testPublicKey = ByteArray(64) { it.toByte() }
@@ -1170,6 +1256,9 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact emits Removed result when contact successfully removed`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Setup: Contact is already saved
             coEvery { contactRepository.hasContact(testPeerHash) } returns true
 
@@ -1194,6 +1283,9 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact emits Error result when public key unavailable`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Setup: Contact is not saved, but public key is not available
             coEvery { contactRepository.hasContact(testPeerHash) } returns false
             coEvery { conversationRepository.getPeerPublicKey(testPeerHash) } returns null
@@ -1220,6 +1312,9 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact emits Error result on repository exception`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Setup: Contact is not saved, repository throws exception
             coEvery { contactRepository.hasContact(testPeerHash) } throws RuntimeException("Database error")
 
@@ -1249,6 +1344,9 @@ class MessagingViewModelTest {
     @Test
     fun `loadImageAsync does not crash on null fieldsJson`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Call with null fieldsJson - should not crash
             viewModel.loadImageAsync("test-msg", null)
             advanceUntilIdle()
@@ -1260,6 +1358,9 @@ class MessagingViewModelTest {
     @Test
     fun `loadImageAsync does not crash on invalid JSON`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Call with invalid JSON - should not crash
             viewModel.loadImageAsync("test-msg", "not valid json")
             advanceUntilIdle()
@@ -1271,6 +1372,9 @@ class MessagingViewModelTest {
     @Test
     fun `loadedImageIds initial state is empty`() =
         runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
             // Assert: Initial state is empty set
             assertEquals(emptySet<String>(), viewModel.loadedImageIds.value)
         }

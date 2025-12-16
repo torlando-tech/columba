@@ -1153,13 +1153,10 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Collect result emissions
+            // Collect result emissions - job completes after first() returns
             var emittedResult: ContactToggleResult? = null
-            val job = launch {
-                viewModel.contactToggleResult.first { result ->
-                    emittedResult = result
-                    true
-                }
+            launch {
+                emittedResult = viewModel.contactToggleResult.first()
             }
 
             // Act: Toggle contact (should add)
@@ -1168,8 +1165,6 @@ class MessagingViewModelTest {
 
             // Assert: ContactToggleResult.Added was emitted
             assertEquals(ContactToggleResult.Added, emittedResult)
-
-            job.cancel()
         }
 
     @Test
@@ -1182,13 +1177,10 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Collect result emissions
+            // Collect result emissions - job completes after first() returns
             var emittedResult: ContactToggleResult? = null
-            val job = launch {
-                viewModel.contactToggleResult.first { result ->
-                    emittedResult = result
-                    true
-                }
+            launch {
+                emittedResult = viewModel.contactToggleResult.first()
             }
 
             // Act: Toggle contact (should remove)
@@ -1197,8 +1189,6 @@ class MessagingViewModelTest {
 
             // Assert: ContactToggleResult.Removed was emitted
             assertEquals(ContactToggleResult.Removed, emittedResult)
-
-            job.cancel()
         }
 
     @Test
@@ -1212,13 +1202,10 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Collect result emissions
+            // Collect result emissions - job completes after first() returns
             var emittedResult: ContactToggleResult? = null
-            val job = launch {
-                viewModel.contactToggleResult.first { result ->
-                    emittedResult = result
-                    true
-                }
+            launch {
+                emittedResult = viewModel.contactToggleResult.first()
             }
 
             // Act: Toggle contact (should fail with error)
@@ -1228,8 +1215,6 @@ class MessagingViewModelTest {
             // Assert: ContactToggleResult.Error was emitted with appropriate message
             assert(emittedResult is ContactToggleResult.Error)
             assert((emittedResult as ContactToggleResult.Error).message.contains("Identity not available"))
-
-            job.cancel()
         }
 
     @Test
@@ -1242,13 +1227,10 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Collect result emissions
+            // Collect result emissions - job completes after first() returns
             var emittedResult: ContactToggleResult? = null
-            val job = launch {
-                viewModel.contactToggleResult.first { result ->
-                    emittedResult = result
-                    true
-                }
+            launch {
+                emittedResult = viewModel.contactToggleResult.first()
             }
 
             // Act: Toggle contact (should fail with error)
@@ -1258,8 +1240,6 @@ class MessagingViewModelTest {
             // Assert: ContactToggleResult.Error was emitted
             assert(emittedResult is ContactToggleResult.Error)
             assert((emittedResult as ContactToggleResult.Error).message.contains("Database error"))
-
-            job.cancel()
         }
 
     // ========== ASYNC IMAGE LOADING TESTS ==========

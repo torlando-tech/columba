@@ -528,44 +528,57 @@ class TestSendLXMFMessageWithMethod(unittest.TestCase):
     @patch('reticulum_wrapper.RNS')
     def test_send_with_immediate_sent_state_check(self, mock_rns, mock_lxmf):
         """Test that send_lxmf_message_with_method checks for immediate SENT state"""
-        # Setup
+        # Setup module-level mocks
         reticulum_wrapper.RETICULUM_AVAILABLE = True
+        reticulum_wrapper.LXMF = mock_lxmf
+        reticulum_wrapper.RNS = mock_rns
+
+        # Set LXMF constants
+        mock_lxmf.LXMessage.SENT = 0x04
+        mock_lxmf.LXMessage.PROPAGATED = 0x03
+        mock_lxmf.LXMessage.OUTBOUND = 0x01
+
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
         wrapper.router = MagicMock()
         wrapper.active_propagation_node = b'\xaa\x01\x8e\xd2\x8f\xb6\x44\x05\xf8\x47\x78\x66\xb7\x8a\x66\x8c'
 
-        # Mock identity and destination
+        # Mock identity
         mock_identity = MagicMock()
         mock_identity.hash = b'\xde\xad\xbe\xef' * 4
+        mock_identity.load_private_key = MagicMock()
         mock_rns.Identity.recall.return_value = mock_identity
         mock_rns.Identity.return_value = mock_identity
-        mock_rns.Identity.return_value.load_private_key = MagicMock()
 
+        # Mock destination
         mock_dest = MagicMock()
         mock_dest.hash = b'\xca\xfe\xba\xbe' * 8
+        mock_dest.announce = MagicMock()  # Mock announce to avoid errors
         mock_rns.Destination.return_value = mock_dest
+        wrapper.local_lxmf_destination = mock_dest
 
-        # Create a message that transitions to SENT immediately
+        # Create a message that has SENT state immediately after handle_outbound
         mock_message = MagicMock()
         mock_message.hash = b'\xab\xcd\xef' * 10 + b'\x12\x34'
-        mock_message.state = mock_lxmf.LXMessage.SENT  # Message is SENT immediately
+        mock_message.state = 0x04  # SENT state
         mock_message.try_propagation_on_fail = False
+        mock_message.register_delivery_callback = MagicMock()
+        mock_message.register_failed_callback = MagicMock()
         mock_lxmf.LXMessage.return_value = mock_message
-        mock_lxmf.LXMessage.SENT = 0x04
-        mock_lxmf.LXMessage.PROPAGATED = 0x03
 
-        # Mock _on_message_sent
+        # Mock _on_message_sent to track calls
         wrapper._on_message_sent = MagicMock()
 
-        # Send with PROPAGATED method
-        wrapper.local_lxmf_destination = mock_dest
+        # Send message
         result = wrapper.send_lxmf_message_with_method(
             dest_hash=b'\xde\xad\xbe\xef' * 4,
             content="Test message",
             source_identity_private_key=b'\x00' * 32,
             delivery_method="propagated"
         )
+
+        # Verify result success
+        self.assertTrue(result['success'])
 
         # Verify _on_message_sent was called since state was SENT
         wrapper._on_message_sent.assert_called_once_with(mock_message)

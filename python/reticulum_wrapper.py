@@ -760,6 +760,107 @@ class ReticulumWrapper:
                     except (ImportError, AttributeError) as tcp_err:
                         log_warning("ReticulumWrapper", "initialize", f"Could not configure async TCP startup: {tcp_err}")
 
+                    # Patch LXStamper to use threading instead of multiprocessing on Android
+                    # Multiprocessing spawns child processes that get killed when app is backgrounded
+                    # Threading keeps work in the main process which is protected by foreground service
+                    try:
+                        import LXMF.LXStamper as LXStamper
+                        import concurrent.futures
+
+                        def job_android_threaded(stamp_cost, workblock, message_id):
+                            """
+                            Thread-based stamp generator for Android.
+                            Uses ThreadPoolExecutor instead of multiprocessing to avoid
+                            child processes being killed when app is backgrounded.
+                            """
+                            stamp = None
+                            start_time = time.time()
+                            total_rounds = 0
+                            rounds_per_worker = 1000
+
+                            # Try to use nacl for faster hashing
+                            use_nacl = False
+                            try:
+                                import nacl.encoding
+                                import nacl.hash
+                                use_nacl = True
+                            except:
+                                pass
+
+                            if use_nacl:
+                                def full_hash(m):
+                                    return nacl.hash.sha256(m, encoder=nacl.encoding.RawEncoder)
+                            else:
+                                def full_hash(m):
+                                    return RNS.Identity.full_hash(m)
+
+                            def stamp_valid(s, c, w):
+                                target = 0b1 << (256 - c)
+                                m = w + s
+                                result = full_hash(m)
+                                return int.from_bytes(result, byteorder="big") <= target
+
+                            def worker(worker_id, rounds):
+                                """Worker function that runs in a thread."""
+                                local_rounds = 0
+                                for _ in range(rounds):
+                                    pstamp = os.urandom(256 // 8)
+                                    local_rounds += 1
+                                    if stamp_valid(pstamp, stamp_cost, workblock):
+                                        return (pstamp, local_rounds)
+                                    if LXStamper.active_jobs.get(message_id, False):
+                                        return (None, local_rounds)
+                                return (None, local_rounds)
+
+                            # Use number of CPU cores for thread count
+                            import multiprocessing
+                            num_workers = multiprocessing.cpu_count()
+
+                            LXStamper.active_jobs[message_id] = False
+                            log_info("ReticulumWrapper", "job_android_threaded",
+                                    f"Starting threaded stamp generation with {num_workers} workers")
+
+                            with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+                                while stamp is None and not LXStamper.active_jobs.get(message_id, False):
+                                    # Submit work to all threads
+                                    futures = [
+                                        executor.submit(worker, i, rounds_per_worker)
+                                        for i in range(num_workers)
+                                    ]
+
+                                    # Collect results
+                                    for future in concurrent.futures.as_completed(futures):
+                                        result_stamp, rounds = future.result()
+                                        total_rounds += rounds
+                                        if result_stamp is not None:
+                                            stamp = result_stamp
+                                            # Cancel remaining futures
+                                            for f in futures:
+                                                f.cancel()
+                                            break
+
+                                    if stamp is None and not LXStamper.active_jobs.get(message_id, False):
+                                        elapsed = time.time() - start_time
+                                        speed = total_rounds / elapsed if elapsed > 0 else 0
+                                        log_debug("ReticulumWrapper", "job_android_threaded",
+                                                 f"Stamp generation running. {total_rounds} rounds, {int(speed)} rounds/sec")
+
+                            if message_id in LXStamper.active_jobs:
+                                del LXStamper.active_jobs[message_id]
+
+                            if stamp:
+                                log_info("ReticulumWrapper", "job_android_threaded",
+                                        f"Stamp found after {total_rounds} rounds")
+
+                            return stamp, total_rounds
+
+                        # Replace the multiprocessing-based function with our threaded version
+                        LXStamper.job_android = job_android_threaded
+                        log_info("ReticulumWrapper", "initialize", "✓ LXStamper patched to use threading (foreground-safe)")
+                    except Exception as stamp_patch_err:
+                        log_warning("ReticulumWrapper", "initialize",
+                                   f"Could not patch LXStamper for threading: {stamp_patch_err}")
+
                 except ImportError as e:
                     RETICULUM_AVAILABLE = False
                     log_error("ReticulumWrapper", "initialize", f"Failed to import RNS/LXMF: {e}")

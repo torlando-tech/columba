@@ -524,6 +524,52 @@ class TestSendLXMFMessageWithMethod(unittest.TestCase):
         # Verify flag was set on message
         self.assertTrue(mock_message.try_propagation_on_fail)
 
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_send_with_immediate_sent_state_check(self, mock_rns, mock_lxmf):
+        """Test that send_lxmf_message_with_method checks for immediate SENT state"""
+        # Setup
+        reticulum_wrapper.RETICULUM_AVAILABLE = True
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+        wrapper.active_propagation_node = b'\xaa\x01\x8e\xd2\x8f\xb6\x44\x05\xf8\x47\x78\x66\xb7\x8a\x66\x8c'
+
+        # Mock identity and destination
+        mock_identity = MagicMock()
+        mock_identity.hash = b'\xde\xad\xbe\xef' * 4
+        mock_rns.Identity.recall.return_value = mock_identity
+        mock_rns.Identity.return_value = mock_identity
+        mock_rns.Identity.return_value.load_private_key = MagicMock()
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'\xca\xfe\xba\xbe' * 8
+        mock_rns.Destination.return_value = mock_dest
+
+        # Create a message that transitions to SENT immediately
+        mock_message = MagicMock()
+        mock_message.hash = b'\xab\xcd\xef' * 10 + b'\x12\x34'
+        mock_message.state = mock_lxmf.LXMessage.SENT  # Message is SENT immediately
+        mock_message.try_propagation_on_fail = False
+        mock_lxmf.LXMessage.return_value = mock_message
+        mock_lxmf.LXMessage.SENT = 0x04
+        mock_lxmf.LXMessage.PROPAGATED = 0x03
+
+        # Mock _on_message_sent
+        wrapper._on_message_sent = MagicMock()
+
+        # Send with PROPAGATED method
+        wrapper.local_lxmf_destination = mock_dest
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'\xde\xad\xbe\xef' * 4,
+            content="Test message",
+            source_identity_private_key=b'\x00' * 32,
+            delivery_method="propagated"
+        )
+
+        # Verify _on_message_sent was called since state was SENT
+        wrapper._on_message_sent.assert_called_once_with(mock_message)
+
 
 class TestSendPacket(unittest.TestCase):
     """Test send_packet method - raw packet sending"""

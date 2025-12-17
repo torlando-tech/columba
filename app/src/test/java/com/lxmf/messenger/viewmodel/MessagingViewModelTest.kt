@@ -45,7 +45,8 @@ class MessagingViewModelTest {
     @get:Rule
     val instantExecutorRule = InstantTaskExecutorRule()
 
-    private val testDispatcher = StandardTestDispatcher()
+    // Use UnconfinedTestDispatcher to avoid race conditions in ViewModel init coroutines
+    private val testDispatcher = UnconfinedTestDispatcher()
 
     private lateinit var reticulumProtocol: ServiceReticulumProtocol
     private lateinit var conversationRepository: ConversationRepository
@@ -177,7 +178,7 @@ class MessagingViewModelTest {
 
     @Test
     fun `sendMessage success saves message to database with sent status`() =
-        runTest(UnconfinedTestDispatcher()) {
+        runTest {
             val viewModel = createTestViewModel()
             advanceUntilIdle()
 
@@ -1224,11 +1225,12 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Collect result emissions - job completes after first() returns
+            // Start collecting BEFORE toggling to ensure we catch the emission
             var emittedResult: ContactToggleResult? = null
-            launch {
-                emittedResult = viewModel.contactToggleResult.first()
-            }
+            val collectJob =
+                launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                    emittedResult = viewModel.contactToggleResult.first()
+                }
 
             // Act: Toggle contact (should add)
             viewModel.toggleContact()
@@ -1236,6 +1238,7 @@ class MessagingViewModelTest {
 
             // Assert: ContactToggleResult.Added was emitted
             assertEquals(ContactToggleResult.Added, emittedResult)
+            collectJob.cancel() // Clean up if not completed
         }
 
     @Test
@@ -1251,11 +1254,12 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Collect result emissions - job completes after first() returns
+            // Start collecting BEFORE toggling to ensure we catch the emission
             var emittedResult: ContactToggleResult? = null
-            launch {
-                emittedResult = viewModel.contactToggleResult.first()
-            }
+            val collectJob =
+                launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                    emittedResult = viewModel.contactToggleResult.first()
+                }
 
             // Act: Toggle contact (should remove)
             viewModel.toggleContact()
@@ -1263,6 +1267,7 @@ class MessagingViewModelTest {
 
             // Assert: ContactToggleResult.Removed was emitted
             assertEquals(ContactToggleResult.Removed, emittedResult)
+            collectJob.cancel()
         }
 
     @Test
@@ -1279,11 +1284,12 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Collect result emissions - job completes after first() returns
+            // Start collecting BEFORE toggling to ensure we catch the emission
             var emittedResult: ContactToggleResult? = null
-            launch {
-                emittedResult = viewModel.contactToggleResult.first()
-            }
+            val collectJob =
+                launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                    emittedResult = viewModel.contactToggleResult.first()
+                }
 
             // Act: Toggle contact (should fail with error)
             viewModel.toggleContact()
@@ -1292,6 +1298,7 @@ class MessagingViewModelTest {
             // Assert: ContactToggleResult.Error was emitted with appropriate message
             assert(emittedResult is ContactToggleResult.Error)
             assert((emittedResult as ContactToggleResult.Error).message.contains("Identity not available"))
+            collectJob.cancel()
         }
 
     @Test
@@ -1307,11 +1314,12 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Collect result emissions - job completes after first() returns
+            // Start collecting BEFORE toggling to ensure we catch the emission
             var emittedResult: ContactToggleResult? = null
-            launch {
-                emittedResult = viewModel.contactToggleResult.first()
-            }
+            val collectJob =
+                launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                    emittedResult = viewModel.contactToggleResult.first()
+                }
 
             // Act: Toggle contact (should fail with error)
             viewModel.toggleContact()
@@ -1320,6 +1328,7 @@ class MessagingViewModelTest {
             // Assert: ContactToggleResult.Error was emitted
             assert(emittedResult is ContactToggleResult.Error)
             assert((emittedResult as ContactToggleResult.Error).message.contains("Database error"))
+            collectJob.cancel()
         }
 
     // ========== ASYNC IMAGE LOADING TESTS ==========

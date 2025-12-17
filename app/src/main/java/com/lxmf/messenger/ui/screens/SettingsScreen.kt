@@ -51,7 +51,7 @@ import com.lxmf.messenger.viewmodel.SettingsViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: SettingsViewModel,
     debugViewModel: DebugViewModel = hiltViewModel(),
     onNavigateToInterfaces: () -> Unit = {},
     onNavigateToIdentity: () -> Unit = {},

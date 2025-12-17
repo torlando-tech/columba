@@ -91,9 +91,9 @@ import com.lxmf.messenger.viewmodel.TestAnnounceResult
 @Composable
 fun IdentityScreen(
     onBackClick: () -> Unit = {},
+    settingsViewModel: com.lxmf.messenger.viewmodel.SettingsViewModel,
     viewModel: DebugViewModel = hiltViewModel(),
     bleConnectionsViewModel: com.lxmf.messenger.viewmodel.BleConnectionsViewModel = hiltViewModel(),
-    settingsViewModel: com.lxmf.messenger.viewmodel.SettingsViewModel = hiltViewModel(),
     onNavigateToBleStatus: () -> Unit = {},
 ) {
     val context = LocalContext.current

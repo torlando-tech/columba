@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -176,7 +177,7 @@ class MessagingViewModelTest {
 
     @Test
     fun `sendMessage success saves message to database with sent status`() =
-        runTest {
+        runTest(UnconfinedTestDispatcher()) {
             val viewModel = createTestViewModel()
             advanceUntilIdle()
 

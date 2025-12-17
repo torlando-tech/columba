@@ -381,6 +381,12 @@ class RNodeWizardViewModel
                             // Also expand advanced settings by default
                             _state.update { it.copy(showAdvancedSettings = true) }
                             WizardStep.REVIEW_CONFIGURE
+                        } else if (currentState.selectedPreset != null) {
+                            // Popular local preset: skip modem and slot, go straight to review
+                            // Preset already contains all modem/frequency settings
+                            // Also expand advanced settings so user can see the configured values
+                            _state.update { it.copy(showAdvancedSettings = true) }
+                            WizardStep.REVIEW_CONFIGURE
                         } else {
                             // Apply frequency region settings when moving to modem step
                             applyFrequencyRegionSettings()
@@ -413,8 +419,8 @@ class RNodeWizardViewModel
                     WizardStep.MODEM_PRESET -> WizardStep.REGION_SELECTION
                     WizardStep.FREQUENCY_SLOT -> WizardStep.MODEM_PRESET
                     WizardStep.REVIEW_CONFIGURE ->
-                        if (currentState.isCustomMode) {
-                            // Custom mode: go back to region selection (skipping modem and slot)
+                        if (currentState.isCustomMode || currentState.selectedPreset != null) {
+                            // Custom mode or preset: go back to region selection (skipping modem and slot)
                             WizardStep.REGION_SELECTION
                         } else {
                             WizardStep.FREQUENCY_SLOT
@@ -439,7 +445,7 @@ class RNodeWizardViewModel
                                 )
                     }
                 WizardStep.REGION_SELECTION ->
-                    state.selectedFrequencyRegion != null || state.isCustomMode
+                    state.selectedFrequencyRegion != null || state.isCustomMode || state.selectedPreset != null
                 WizardStep.MODEM_PRESET ->
                     true // Default preset is pre-selected, user can always proceed
                 WizardStep.FREQUENCY_SLOT ->

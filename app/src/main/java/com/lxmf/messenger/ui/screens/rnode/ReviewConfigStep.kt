@@ -126,9 +126,9 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
 
         Spacer(Modifier.height(16.dp))
 
-        // In custom mode, skip showing region/modem/slot summary cards
-        // since user is configuring everything manually
-        if (!state.isCustomMode) {
+        // In custom mode or when using a popular preset, skip showing region/modem/slot summary cards
+        // since user is either configuring manually or using preset values
+        if (!state.isCustomMode && state.selectedPreset == null) {
             // Frequency region summary
             state.selectedFrequencyRegion?.let { region ->
                 Card(

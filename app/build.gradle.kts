@@ -279,6 +279,9 @@ dependencies {
     implementation(libs.cameraX.lifecycle)
     implementation(libs.cameraX.view)
 
+    // MessagePack - for LXMF stamp generation
+    implementation("org.msgpack:msgpack-core:0.9.8")
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)

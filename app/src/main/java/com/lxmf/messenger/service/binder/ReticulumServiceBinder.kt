@@ -6,6 +6,7 @@ import com.lxmf.messenger.IInitializationCallback
 import com.lxmf.messenger.IReadinessCallback
 import com.lxmf.messenger.IReticulumService
 import com.lxmf.messenger.IReticulumServiceCallback
+import com.lxmf.messenger.crypto.StampGenerator
 import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
 import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
 import com.lxmf.messenger.service.manager.BleCoordinator
@@ -765,6 +766,15 @@ class ReticulumServiceBinder(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set alternative relay callback: ${e.message}", e)
+        }
+
+        // Setup native stamp generator (bypasses Python multiprocessing issues)
+        try {
+            val stampGenerator = StampGenerator()
+            wrapperManager.setStampGeneratorCallback(stampGenerator)
+            Log.d(TAG, "Native Kotlin stamp generator registered")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set stamp generator callback: ${e.message}", e)
         }
     }
 

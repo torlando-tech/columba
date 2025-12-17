@@ -527,6 +527,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                     composable(Screen.Identity.route) {
                         IdentityScreen(
                             onBackClick = { navController.popBackStack() },
+                            settingsViewModel = settingsViewModel,
                             onNavigateToBleStatus = {
                                 navController.navigate("ble_connection_status")
                             },
@@ -535,6 +536,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
 
                     composable(Screen.Settings.route) {
                         SettingsScreen(
+                            viewModel = settingsViewModel,
                             onNavigateToInterfaces = {
                                 navController.navigate("interface_management")
                             },
@@ -681,6 +683,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                     composable("my_identity") {
                         MyIdentityScreen(
                             onNavigateBack = { navController.popBackStack() },
+                            settingsViewModel = settingsViewModel,
                             onNavigateToIdentityManager = {
                                 navController.navigate("identity_manager")
                             },
@@ -690,6 +693,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                     composable("network_status") {
                         IdentityScreen(
                             onBackClick = { navController.popBackStack() },
+                            settingsViewModel = settingsViewModel,
                             onNavigateToBleStatus = {
                                 navController.navigate("ble_connection_status")
                             },

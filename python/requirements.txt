@@ -5,5 +5,8 @@
 # Patch: catch exceptions in __update_phy_stats() to prevent crashes when
 # connecting to another app's shared instance with mismatched RPC keys
 rns @ git+https://github.com/torlando-tech/Reticulum@fix-phy-stats-rpc
-lxmf>=0.8.0
+
+# LXMF from fork with external stamp generator support
+# Patch: adds set_external_generator() to bypass Python multiprocessing on Android
+lxmf @ git+https://github.com/torlando-tech/LXMF@feature/external-stamp-generator
 cryptography>=42.0.0

@@ -137,6 +137,10 @@ class ReticulumWrapper:
         self._pending_relay_fallback_messages = {}  # {msg_hash_hex: lxmf_message} - waiting for alternative
         self._max_relay_retries = 3  # Maximum number of alternative relays to try
 
+        # Native stamp generator callback (Kotlin)
+        # Used to bypass Python multiprocessing issues on Android
+        self.kotlin_stamp_generator_callback = None
+
         # Set global instance so AndroidBLEDriver can access it
         _global_wrapper_instance = self
 
@@ -283,6 +287,30 @@ class ReticulumWrapper:
         self.kotlin_request_alternative_relay_callback = callback
         log_info("ReticulumWrapper", "set_kotlin_request_alternative_relay_callback",
                 "✅ Alternative relay callback registered (relay fallback enabled)")
+
+    def set_stamp_generator_callback(self, callback):
+        """
+        Set native Kotlin callback for stamp generation.
+
+        This bypasses Python multiprocessing-based stamp generation which fails on Android
+        due to lack of sem_open support and aggressive process killing by Android.
+
+        Callback signature: callback(workblock: bytes, stamp_cost: int) -> (stamp: bytes, rounds: int)
+
+        Args:
+            callback: PyObject callable from Kotlin (passed via Chaquopy)
+        """
+        self.kotlin_stamp_generator_callback = callback
+
+        # Register with LXMF's LXStamper module
+        try:
+            from LXMF import LXStamper
+            LXStamper.set_external_generator(callback)
+            log_info("ReticulumWrapper", "set_stamp_generator_callback",
+                    "✅ Native stamp generator registered with LXMF")
+        except Exception as e:
+            log_error("ReticulumWrapper", "set_stamp_generator_callback",
+                     f"Failed to register stamp generator: {e}")
 
     def _clear_stale_ble_paths(self):
         """

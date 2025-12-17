@@ -9,6 +9,7 @@ import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.DiscoveredRNode
 import com.lxmf.messenger.data.model.FrequencyRegions
 import com.lxmf.messenger.data.model.ModemPreset
+import com.lxmf.messenger.data.model.RNodeRegionalPreset
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import io.mockk.coEvery
@@ -254,6 +255,89 @@ class RNodeWizardViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.canProceed())
+        }
+
+    @Test
+    fun `canProceed true when popular preset selected on REGION_SELECTION`() =
+        runTest {
+            viewModel.goToStep(WizardStep.REGION_SELECTION)
+            advanceUntilIdle()
+
+            val testPreset = RNodeRegionalPreset(
+                id = "test_preset",
+                countryCode = "US",
+                countryName = "United States",
+                cityOrRegion = "Test City",
+                frequency = 915_000_000,
+                bandwidth = 125_000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 17,
+                description = "Test preset",
+            )
+            viewModel.selectPreset(testPreset)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.canProceed())
+        }
+
+    @Test
+    fun `goToNextStep skips to REVIEW_CONFIGURE when preset selected`() =
+        runTest {
+            viewModel.goToStep(WizardStep.REGION_SELECTION)
+            advanceUntilIdle()
+
+            val testPreset = RNodeRegionalPreset(
+                id = "test_preset",
+                countryCode = "US",
+                countryName = "United States",
+                cityOrRegion = "Test City",
+                frequency = 915_000_000,
+                bandwidth = 125_000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 17,
+                description = "Test preset",
+            )
+            viewModel.selectPreset(testPreset)
+            advanceUntilIdle()
+
+            viewModel.goToNextStep()
+            advanceUntilIdle()
+
+            assertEquals(WizardStep.REVIEW_CONFIGURE, viewModel.state.value.currentStep)
+            assertTrue(viewModel.state.value.showAdvancedSettings)
+        }
+
+    @Test
+    fun `goToPreviousStep returns to REGION_SELECTION from REVIEW when preset selected`() =
+        runTest {
+            viewModel.goToStep(WizardStep.REGION_SELECTION)
+            advanceUntilIdle()
+
+            val testPreset = RNodeRegionalPreset(
+                id = "test_preset",
+                countryCode = "US",
+                countryName = "United States",
+                cityOrRegion = "Test City",
+                frequency = 915_000_000,
+                bandwidth = 125_000,
+                spreadingFactor = 9,
+                codingRate = 5,
+                txPower = 17,
+                description = "Test preset",
+            )
+            viewModel.selectPreset(testPreset)
+            advanceUntilIdle()
+
+            viewModel.goToNextStep()
+            advanceUntilIdle()
+            assertEquals(WizardStep.REVIEW_CONFIGURE, viewModel.state.value.currentStep)
+
+            viewModel.goToPreviousStep()
+            advanceUntilIdle()
+
+            assertEquals(WizardStep.REGION_SELECTION, viewModel.state.value.currentStep)
         }
 
     // ========== Region Selection Tests ==========

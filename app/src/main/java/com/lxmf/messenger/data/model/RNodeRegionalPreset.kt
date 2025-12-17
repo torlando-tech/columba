@@ -872,12 +872,12 @@ object RNodeRegionalPresets {
                 countryCode = "NO",
                 countryName = "Norway",
                 cityOrRegion = null,
-                frequency = 869525000,
-                bandwidth = 125000,
-                spreadingFactor = 8,
+                frequency = 869431250,
+                bandwidth = 62500,
+                spreadingFactor = 7,
                 codingRate = 5,
                 txPower = 14,
-                description = "868 MHz EU band",
+                description = "Norway narrowband",
             ),
             // ==================== SINGAPORE ====================
             RNodeRegionalPreset(

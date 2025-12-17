@@ -3496,25 +3496,24 @@ class ReticulumWrapper:
 
     def poll_received_messages(self) -> List[Dict]:
         """
-        Poll for received LXMF messages (fallback mechanism).
+        Fetch and clear pending LXMF messages from the queue.
 
-        Message delivery is primarily event-driven via _on_lxmf_delivery callback.
-        This polling serves as a safety net for messages that arrive before
-        callback registration or during edge cases.
+        Called by:
+        - Startup drain: catches messages that arrived before callback registration
+        - Event-driven fetch: retrieves message when callback notification fires
 
         Returns:
             List of received message dicts
         """
-        # Skip logging on every poll - this is now a fallback mechanism
         if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
             return []
 
         try:
             new_messages = []
 
-            # Check pending inbound messages (fallback for pre-callback messages)
+            # Check pending inbound messages
             if hasattr(self.router, 'pending_inbound') and self.router.pending_inbound:
-                log_info("ReticulumWrapper", "poll_received_messages", f"✅ Fallback poll found {len(self.router.pending_inbound)} pending messages")
+                log_info("ReticulumWrapper", "poll_received_messages", f"📬 Found {len(self.router.pending_inbound)} pending message(s)")
 
                 for lxmf_message in list(self.router.pending_inbound):
                     try:

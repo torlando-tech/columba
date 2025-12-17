@@ -99,9 +99,9 @@ class ReticulumServiceBinder(
                             // Start maintenance job to refresh locks before timeout
                             maintenanceManager.start()
 
-                            // Start polling
+                            // Start announce polling and drain any pending messages
                             pollingManager.startAnnouncesPolling()
-                            pollingManager.startMessagesPolling()
+                            pollingManager.drainPendingMessages()
 
                             // Announce LXMF destination
                             announceLxmfDestination()

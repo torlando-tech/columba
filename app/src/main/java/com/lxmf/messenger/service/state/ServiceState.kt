@@ -62,12 +62,6 @@ class ServiceState {
     var pollingJob: Job? = null
 
     /**
-     * Active message polling coroutine job.
-     */
-    @Volatile
-    var messagePollingJob: Job? = null
-
-    /**
      * Active shutdown coroutine job.
      * Tracked so new initializations can wait for pending shutdowns.
      */
@@ -100,7 +94,6 @@ class ServiceState {
         isConversationActive.set(false)
         wrapper = null
         pollingJob = null
-        messagePollingJob = null
         shutdownJob = null
         // Note: initializationGeneration is NOT reset to preserve race condition protection
     }

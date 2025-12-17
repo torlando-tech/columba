@@ -13,12 +13,11 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
- * Manages polling for announces and messages from Python wrapper.
+ * Manages polling for announces and event-driven message delivery.
  *
- * Message delivery is primarily event-driven via Python callbacks.
- * Polling serves as a fallback safety net with adaptive intervals:
- * - Announces: 2-10s adaptive
- * - Messages: 2-30s adaptive (event callbacks handle immediate delivery)
+ * Message delivery is 100% event-driven via Python callbacks.
+ * A one-time startup drain catches any messages that arrived before callback registration.
+ * Announce polling uses adaptive intervals (2-10s).
  */
 class PollingManager(
     private val state: ServiceState,
@@ -49,17 +48,11 @@ class PollingManager(
         }
     }
 
-    // Smart pollers for adaptive polling
+    // Smart poller for adaptive announce polling
     private val announcesPoller =
         SmartPoller(
             minInterval = 2_000, // 2s when active
             maxInterval = 10_000, // 10s max (reduced from 30s for better responsiveness)
-        )
-
-    private val messagesPoller =
-        SmartPoller(
-            minInterval = 2_000, // 2s when active
-            maxInterval = 30_000, // 30s max when idle
         )
 
     // Mutex for thread-safe job start/stop operations
@@ -116,87 +109,45 @@ class PollingManager(
     }
 
     /**
-     * Start message polling.
-     * Thread-safe: synchronized on jobLock.
+     * Drain any pending messages from the queue.
      *
-     * Note: Message delivery is primarily event-driven via Python callbacks.
-     * This polling loop serves as a fallback safety net (2-30s adaptive).
+     * Called once at startup to catch messages that arrived before the
+     * event-driven callback was registered. After this, all message delivery
+     * is handled via handleMessageReceivedEvent().
      */
-    fun startMessagesPolling() {
-        synchronized(jobLock) {
-            state.messagePollingJob?.cancel()
-            state.messagePollingJob =
-                scope.launch {
-                    Log.d(TAG, "Started messages polling (fallback, event-driven is primary)")
-                    messagesPoller.reset()
-                    var pollCount = 0
-                    var lastError: String? = null
+    fun drainPendingMessages() {
+        scope.launch {
+            try {
+                Log.d(TAG, "Draining pending messages from startup queue...")
 
-                    while (isActive) {
-                        try {
-                            pollCount++
-                            if (pollCount % 10 == 0) {
-                                Log.d(TAG, "Fallback message poll iteration $pollCount")
-                            }
-
-                            if (state.wrapper == null) {
-                                if (lastError != "wrapper_null") {
-                                    Log.e(TAG, "Wrapper is null, cannot poll messages")
-                                    lastError = "wrapper_null"
-                                }
-                                delay(messagesPoller.getNextInterval())
-                                continue
-                            }
-
-                            val messages =
-                                wrapperManager.withWrapper { wrapper ->
-                                    try {
-                                        wrapper.callAttr("poll_received_messages")?.asList()
-                                    } catch (e: com.chaquo.python.PyException) {
-                                        if (lastError != e.message) {
-                                            Log.e(TAG, "PyException calling poll_received_messages: ${e.message}", e)
-                                            lastError = e.message
-                                        }
-                                        null
-                                    }
-                                }
-
-                            if (messages != null && messages.isNotEmpty()) {
-                                Log.d(TAG, "Fallback poll found ${messages.size} message(s)")
-                                messagesPoller.markActive()
-
-                                for (messageObj in messages) {
-                                    handleMessageEvent(messageObj as PyObject)
-                                }
-                            } else {
-                                messagesPoller.markIdle()
-                            }
-                        } catch (e: CancellationException) {
-                            Log.d(TAG, "Message polling cancelled")
-                            throw e
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error in message polling loop", e)
-                            messagesPoller.markIdle()
-                        }
-
-                        val nextInterval = messagesPoller.getNextInterval()
-                        delay(nextInterval)
+                val messages =
+                    wrapperManager.withWrapper { wrapper ->
+                        wrapper.callAttr("poll_received_messages")?.asList()
                     }
+
+                if (messages != null && messages.isNotEmpty()) {
+                    Log.i(TAG, "Startup drain found ${messages.size} pending message(s)")
+                    for (messageObj in messages) {
+                        handleMessageEvent(messageObj as PyObject)
+                    }
+                } else {
+                    Log.d(TAG, "No pending messages in startup queue")
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error draining pending messages", e)
+            }
         }
     }
 
     /**
-     * Stop all polling.
+     * Stop announce polling.
      * Thread-safe: synchronized on jobLock.
      */
     fun stopAll() {
         synchronized(jobLock) {
             state.pollingJob?.cancel()
             state.pollingJob = null
-            state.messagePollingJob?.cancel()
-            state.messagePollingJob = null
-            Log.d(TAG, "All polling stopped")
+            Log.d(TAG, "Announce polling stopped")
         }
     }
 
@@ -228,14 +179,12 @@ class PollingManager(
 
     /**
      * Handle message received event from Python callback.
-     * Triggers immediate message fetch.
-     * Uses scope's default context for consistency with polling loops.
+     * Fetches and processes messages from the pending queue.
      */
     fun handleMessageReceivedEvent(messageJson: String) {
         try {
             Log.d(TAG, "Message received event: $messageJson")
 
-            // Use scope's default context (same as polling loops) for consistent Python wrapper access
             scope.launch {
                 try {
                     val startTime = System.currentTimeMillis()
@@ -249,16 +198,14 @@ class PollingManager(
                         val latency = System.currentTimeMillis() - startTime
                         Log.d(TAG, "Event-driven fetch retrieved ${messages.size} message(s) in ${latency}ms")
 
-                        messagesPoller.markActive()
-
                         for (messageObj in messages) {
                             handleMessageEvent(messageObj as PyObject)
                         }
                     } else {
-                        Log.d(TAG, "Event notification received but no messages in queue (may have been polled already)")
+                        Log.d(TAG, "Event notification received but no messages in queue (already processed)")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error processing event-driven message notification", e)
+                    Log.e(TAG, "Error processing message event", e)
                 }
             }
         } catch (e: Exception) {

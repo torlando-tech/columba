@@ -3496,35 +3496,25 @@ class ReticulumWrapper:
 
     def poll_received_messages(self) -> List[Dict]:
         """
-        Poll for received LXMF messages.
-        Accesses LXMRouter's internal message queue - bypasses broken delivery callbacks.
+        Poll for received LXMF messages (fallback mechanism).
+
+        Message delivery is primarily event-driven via _on_lxmf_delivery callback.
+        This polling serves as a safety net for messages that arrive before
+        callback registration or during edge cases.
 
         Returns:
             List of received message dicts
         """
-        log_info("ReticulumWrapper", "poll_received_messages", f"poll_received_messages() called - RETICULUM_AVAILABLE={RETICULUM_AVAILABLE}, initialized={self.initialized}, router={self.router is not None}")
+        # Skip logging on every poll - this is now a fallback mechanism
         if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
-            log_debug("ReticulumWrapper", "poll_received_messages", f"poll_received_messages() returning early - conditions not met")
             return []
 
         try:
             new_messages = []
 
-            # Debug: Check what attributes the router has
-            router_attrs = [attr for attr in dir(self.router) if not attr.startswith('_')]
-            log_debug("ReticulumWrapper", "poll_received_messages", f"Router has these public attributes: {router_attrs[:10]}...")
-
-            # Check if pending_inbound exists
-            has_pending = hasattr(self.router, 'pending_inbound')
-            log_debug("ReticulumWrapper", "poll_received_messages", f"Router has 'pending_inbound' attribute: {has_pending}")
-
-            if has_pending:
-                pending_count = len(self.router.pending_inbound) if self.router.pending_inbound else 0
-                log_debug("ReticulumWrapper", "poll_received_messages", f"pending_inbound has {pending_count} messages")
-
-            # Check pending inbound messages
+            # Check pending inbound messages (fallback for pre-callback messages)
             if hasattr(self.router, 'pending_inbound') and self.router.pending_inbound:
-                log_info("ReticulumWrapper", "poll_received_messages", f"✅ Checking pending_inbound, has {len(self.router.pending_inbound)} messages")
+                log_info("ReticulumWrapper", "poll_received_messages", f"✅ Fallback poll found {len(self.router.pending_inbound)} pending messages")
 
                 for lxmf_message in list(self.router.pending_inbound):
                     try:
@@ -3584,36 +3574,6 @@ class ReticulumWrapper:
 
                         new_messages.append(message_event)
                         log_debug("ReticulumWrapper", "poll_received_messages", f"📨 Found new message from {lxmf_message.source_hash.hex()[:16]}")
-
-                        # === PATH TABLE DIAGNOSTIC AFTER MESSAGE RECEIPT ===
-                        try:
-                            import RNS.Transport as Transport
-                            source_hash = lxmf_message.source_hash
-                            source_hex = source_hash.hex()[:16]
-
-                            log_separator("ReticulumWrapper", "poll_received_messages", "=", 60)
-                            log_info("ReticulumWrapper", "poll_received_messages", f"🔍 PATH TABLE CHECK AFTER RECEIVING MESSAGE FROM {source_hex}")
-
-                            # Check if sender is in path_table
-                            if hasattr(Transport, 'path_table'):
-                                if source_hash in Transport.path_table:
-                                    log_info("ReticulumWrapper", "poll_received_messages", f"✅ Sender {source_hex} IS in path_table!")
-                                    path_info = Transport.path_table[source_hash]
-                                    log_debug("ReticulumWrapper", "poll_received_messages", f"Path info: {path_info}")
-                                else:
-                                    log_warning("ReticulumWrapper", "poll_received_messages", f"⚠️  Sender {source_hex} NOT in path_table!")
-
-                                # Log all current paths
-                                path_count = len(Transport.path_table)
-                                log_debug("ReticulumWrapper", "poll_received_messages", f"Current path_table has {path_count} entries")
-                                if path_count > 0:
-                                    all_paths = [h.hex()[:16] for h in Transport.path_table.keys()]
-                                    log_debug("ReticulumWrapper", "poll_received_messages", f"All paths: {all_paths}")
-
-                            log_separator("ReticulumWrapper", "poll_received_messages", "=", 60)
-                        except Exception as e:
-                            log_warning("ReticulumWrapper", "poll_received_messages", f"Error checking path_table after receipt: {e}")
-                        # === END PATH TABLE DIAGNOSTIC ===
 
                     except Exception as e:
                         log_error("ReticulumWrapper", "poll_received_messages", f"Error processing message: {e}")

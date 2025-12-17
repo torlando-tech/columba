@@ -15,11 +15,10 @@ import org.json.JSONObject
 /**
  * Manages polling for announces and messages from Python wrapper.
  *
- * Implements context-aware adaptive polling:
- * - Announces: 2-10s adaptive (shorter for better responsiveness)
- * - Messages: 2-30s adaptive when background, 1s when conversation active
- *
- * Also handles event-driven notifications for immediate delivery when available.
+ * Message delivery is primarily event-driven via Python callbacks.
+ * Polling serves as a fallback safety net with adaptive intervals:
+ * - Announces: 2-10s adaptive
+ * - Messages: 2-30s adaptive (event callbacks handle immediate delivery)
  */
 class PollingManager(
     private val state: ServiceState,
@@ -61,13 +60,6 @@ class PollingManager(
         SmartPoller(
             minInterval = 2_000, // 2s when active
             maxInterval = 30_000, // 30s max when idle
-        )
-
-    // Fast poller for when conversation is actively open
-    private val conversationPoller =
-        SmartPoller(
-            minInterval = 1_000, // 1s fixed interval when conversation active
-            maxInterval = 1_000, // No backoff - always 1s
         )
 
     // Mutex for thread-safe job start/stop operations
@@ -126,15 +118,17 @@ class PollingManager(
     /**
      * Start message polling.
      * Thread-safe: synchronized on jobLock.
+     *
+     * Note: Message delivery is primarily event-driven via Python callbacks.
+     * This polling loop serves as a fallback safety net (2-30s adaptive).
      */
     fun startMessagesPolling() {
         synchronized(jobLock) {
             state.messagePollingJob?.cancel()
             state.messagePollingJob =
                 scope.launch {
-                    Log.d(TAG, "Started messages polling with context-aware smart polling")
+                    Log.d(TAG, "Started messages polling (fallback, event-driven is primary)")
                     messagesPoller.reset()
-                    conversationPoller.reset()
                     var pollCount = 0
                     var lastError: String? = null
 
@@ -142,7 +136,7 @@ class PollingManager(
                         try {
                             pollCount++
                             if (pollCount % 10 == 0) {
-                                Log.d(TAG, "Message polling iteration $pollCount, wrapper=${state.wrapper != null}, conversationActive=${state.isConversationActive.get()}")
+                                Log.d(TAG, "Fallback message poll iteration $pollCount")
                             }
 
                             if (state.wrapper == null) {
@@ -150,8 +144,7 @@ class PollingManager(
                                     Log.e(TAG, "Wrapper is null, cannot poll messages")
                                     lastError = "wrapper_null"
                                 }
-                                val currentPoller = if (state.isConversationActive.get()) conversationPoller else messagesPoller
-                                delay(currentPoller.getNextInterval())
+                                delay(messagesPoller.getNextInterval())
                                 continue
                             }
 
@@ -169,9 +162,8 @@ class PollingManager(
                                 }
 
                             if (messages != null && messages.isNotEmpty()) {
-                                Log.d(TAG, "Polled ${messages.size} new messages")
+                                Log.d(TAG, "Fallback poll found ${messages.size} message(s)")
                                 messagesPoller.markActive()
-                                conversationPoller.markActive()
 
                                 for (messageObj in messages) {
                                     handleMessageEvent(messageObj as PyObject)
@@ -187,10 +179,7 @@ class PollingManager(
                             messagesPoller.markIdle()
                         }
 
-                        // Use conversation poller (1s) when active, otherwise standard adaptive poller
-                        val currentPoller = if (state.isConversationActive.get()) conversationPoller else messagesPoller
-                        val nextInterval = currentPoller.getNextInterval()
-                        Log.d(TAG, "Next message check in ${nextInterval}ms (conversation=${state.isConversationActive.get()})")
+                        val nextInterval = messagesPoller.getNextInterval()
                         delay(nextInterval)
                     }
                 }
@@ -212,21 +201,17 @@ class PollingManager(
     }
 
     /**
-     * Set conversation active state for context-aware polling.
+     * Set conversation active state.
+     *
+     * Note: Message delivery is event-driven via Python callbacks.
+     * This method now just tracks state for potential future use.
      *
      * @param active true if conversation screen is open
      */
     fun setConversationActive(active: Boolean) {
         Log.d(TAG, "Conversation active state changed: $active")
         state.isConversationActive.set(active)
-
-        if (active) {
-            conversationPoller.reset()
-            conversationPoller.markActive()
-            Log.d(TAG, "Switched to fast 1s polling for active conversation")
-        } else {
-            Log.d(TAG, "Returned to adaptive 2-30s polling")
-        }
+        // Message delivery is event-driven; no special polling needed for active conversations
     }
 
     /**
@@ -265,7 +250,6 @@ class PollingManager(
                         Log.d(TAG, "Event-driven fetch retrieved ${messages.size} message(s) in ${latency}ms")
 
                         messagesPoller.markActive()
-                        conversationPoller.markActive()
 
                         for (messageObj in messages) {
                             handleMessageEvent(messageObj as PyObject)

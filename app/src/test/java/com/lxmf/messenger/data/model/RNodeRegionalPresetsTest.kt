@@ -184,7 +184,7 @@ class RNodeRegionalPresetsTest {
 
     @Test
     fun `all presets have valid bandwidth`() {
-        val validBandwidths = setOf(125_000, 250_000, 500_000, 812_500)
+        val validBandwidths = setOf(31_250, 41_670, 62_500, 125_000, 250_000, 500_000, 812_500)
         RNodeRegionalPresets.presets.forEach { preset ->
             assertTrue(
                 "Preset ${preset.id} should have valid bandwidth, got ${preset.bandwidth}",

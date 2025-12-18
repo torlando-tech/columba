@@ -1667,6 +1667,383 @@ class TestPathRequestRetryLogic(unittest.TestCase):
         self.assertIn('error', result)
 
 
+class TestFileAttachments(unittest.TestCase):
+    """Test file attachment handling in send_lxmf_message and send_lxmf_message_with_method"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_available = reticulum_wrapper.RETICULUM_AVAILABLE
+        reticulum_wrapper.RETICULUM_AVAILABLE = True
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+        reticulum_wrapper.RETICULUM_AVAILABLE = self.original_available
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_send_with_file_attachments_list_format(self, mock_lxmf, mock_rns):
+        """Test sending with file attachments in [filename, bytes] list format"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+
+        mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
+        wrapper.local_lxmf_destination = mock_local_dest
+
+        mock_identity = MagicMock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
+
+        mock_message = MagicMock()
+        mock_message.hash = b'msghash123456789'
+        mock_lxmf.LXMessage.return_value = mock_message
+
+        file_attachments = [
+            ['test.txt', b'Hello, World!'],
+            ['data.bin', b'\x00\x01\x02\x03']
+        ]
+
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'0123456789abcdef',
+            content="Test with files",
+            source_identity_private_key=b'privkey' * 10,
+            delivery_method="direct",
+            file_attachments=file_attachments
+        )
+
+        self.assertTrue(result['success'])
+        # Verify LXMessage was created with fields containing file attachments
+        call_kwargs = mock_lxmf.LXMessage.call_args[1]
+        self.assertIn('fields', call_kwargs)
+        self.assertIn(5, call_kwargs['fields'])
+        self.assertEqual(len(call_kwargs['fields'][5]), 2)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_send_with_file_attachments_tuple_format(self, mock_lxmf, mock_rns):
+        """Test sending with file attachments in (filename, bytes) tuple format"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+
+        mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
+        wrapper.local_lxmf_destination = mock_local_dest
+
+        mock_identity = MagicMock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
+
+        mock_message = MagicMock()
+        mock_message.hash = b'msghash123456789'
+        mock_lxmf.LXMessage.return_value = mock_message
+
+        # Tuple format
+        file_attachments = [
+            ('document.pdf', b'%PDF-1.4...'),
+        ]
+
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'0123456789abcdef',
+            content="Test with PDF",
+            source_identity_private_key=b'privkey' * 10,
+            delivery_method="direct",
+            file_attachments=file_attachments
+        )
+
+        self.assertTrue(result['success'])
+        call_kwargs = mock_lxmf.LXMessage.call_args[1]
+        self.assertIn(5, call_kwargs['fields'])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_opportunistic_falls_back_for_file_attachments(self, mock_lxmf, mock_rns):
+        """Test OPPORTUNISTIC falls back to DIRECT when file attachments present"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+
+        mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
+        wrapper.local_lxmf_destination = mock_local_dest
+
+        mock_identity = MagicMock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
+
+        mock_message = MagicMock()
+        mock_message.hash = b'msghash123456789'
+        mock_lxmf.LXMessage.return_value = mock_message
+
+        file_attachments = [['small.txt', b'tiny']]
+
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'0123456789abcdef',
+            content="Short",
+            source_identity_private_key=b'privkey' * 10,
+            delivery_method="opportunistic",
+            file_attachments=file_attachments
+        )
+
+        self.assertTrue(result['success'])
+        # Should fall back to direct due to file attachment
+        call_kwargs = mock_lxmf.LXMessage.call_args[1]
+        self.assertEqual(call_kwargs['desired_method'], mock_lxmf.LXMessage.DIRECT)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_send_with_both_image_and_file_attachments(self, mock_lxmf, mock_rns):
+        """Test sending with both image (field 6) and file attachments (field 5)"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+
+        mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
+        wrapper.local_lxmf_destination = mock_local_dest
+
+        mock_identity = MagicMock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
+
+        mock_message = MagicMock()
+        mock_message.hash = b'msghash123456789'
+        mock_lxmf.LXMessage.return_value = mock_message
+
+        file_attachments = [['doc.txt', b'Document content']]
+
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'0123456789abcdef',
+            content="Test with both",
+            source_identity_private_key=b'privkey' * 10,
+            delivery_method="direct",
+            image_data=b'\xff\xd8\xff\xe0...',
+            image_format='jpg',
+            file_attachments=file_attachments
+        )
+
+        self.assertTrue(result['success'])
+        call_kwargs = mock_lxmf.LXMessage.call_args[1]
+        # Should have both field 5 (files) and field 6 (image)
+        self.assertIn(5, call_kwargs['fields'])
+        self.assertIn(6, call_kwargs['fields'])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_send_with_empty_file_attachments_list(self, mock_lxmf, mock_rns):
+        """Test that empty file_attachments list doesn't add field 5"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+
+        mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
+        wrapper.local_lxmf_destination = mock_local_dest
+
+        mock_identity = MagicMock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
+
+        mock_message = MagicMock()
+        mock_message.hash = b'msghash123456789'
+        mock_lxmf.LXMessage.return_value = mock_message
+
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'0123456789abcdef',
+            content="No attachments",
+            source_identity_private_key=b'privkey' * 10,
+            delivery_method="direct",
+            file_attachments=[]
+        )
+
+        self.assertTrue(result['success'])
+        call_kwargs = mock_lxmf.LXMessage.call_args[1]
+        # Fields should be None or not contain field 5
+        if call_kwargs.get('fields'):
+            self.assertNotIn(5, call_kwargs['fields'])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_send_lxmf_message_with_file_attachments(self, mock_lxmf, mock_rns):
+        """Test send_lxmf_message (not with_method) with file attachments"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+
+        mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
+        wrapper.local_lxmf_destination = mock_local_dest
+
+        mock_identity = MagicMock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
+
+        mock_message = MagicMock()
+        mock_message.hash = b'msghash123456789'
+        mock_lxmf.LXMessage.return_value = mock_message
+
+        file_attachments = [
+            ['report.pdf', b'PDF content here'],
+            ['data.csv', b'a,b,c\n1,2,3']
+        ]
+
+        result = wrapper.send_lxmf_message(
+            dest_hash=b'0123456789abcdef',
+            content="Test message",
+            source_identity_private_key=b'privkey' * 10,
+            file_attachments=file_attachments
+        )
+
+        self.assertTrue(result['success'])
+        call_kwargs = mock_lxmf.LXMessage.call_args[1]
+        self.assertIn(5, call_kwargs['fields'])
+        self.assertEqual(len(call_kwargs['fields'][5]), 2)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_file_attachment_dict_format(self, mock_lxmf, mock_rns):
+        """Test file attachments in dict format with 'filename' and 'data' keys"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+
+        mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
+        wrapper.local_lxmf_destination = mock_local_dest
+
+        mock_identity = MagicMock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
+
+        mock_message = MagicMock()
+        mock_message.hash = b'msghash123456789'
+        mock_lxmf.LXMessage.return_value = mock_message
+
+        # Dict format (used by send_lxmf_message)
+        file_attachments = [
+            {'filename': 'config.json', 'data': b'{"key": "value"}'},
+        ]
+
+        result = wrapper.send_lxmf_message(
+            dest_hash=b'0123456789abcdef',
+            content="Dict format test",
+            source_identity_private_key=b'privkey' * 10,
+            file_attachments=file_attachments
+        )
+
+        self.assertTrue(result['success'])
+        call_kwargs = mock_lxmf.LXMessage.call_args[1]
+        self.assertIn(5, call_kwargs['fields'])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_file_attachment_skips_invalid_format(self, mock_lxmf, mock_rns):
+        """Test that invalid attachment formats are skipped without crashing"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+
+        mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
+        wrapper.local_lxmf_destination = mock_local_dest
+
+        mock_identity = MagicMock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
+
+        mock_message = MagicMock()
+        mock_message.hash = b'msghash123456789'
+        mock_lxmf.LXMessage.return_value = mock_message
+
+        # Mix of valid and invalid formats
+        file_attachments = [
+            ['valid.txt', b'Valid content'],
+            'invalid_string',  # Invalid - should be skipped
+            123,  # Invalid - should be skipped
+            ['another_valid.bin', b'\x00\x01'],
+        ]
+
+        result = wrapper.send_lxmf_message(
+            dest_hash=b'0123456789abcdef',
+            content="Mixed formats",
+            source_identity_private_key=b'privkey' * 10,
+            file_attachments=file_attachments
+        )
+
+        self.assertTrue(result['success'])
+        call_kwargs = mock_lxmf.LXMessage.call_args[1]
+        # Only 2 valid attachments should be in field 5
+        self.assertEqual(len(call_kwargs['fields'][5]), 2)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_file_attachment_binary_data_conversion(self, mock_lxmf, mock_rns):
+        """Test that non-bytes data is converted to bytes"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+
+        mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
+        wrapper.local_lxmf_destination = mock_local_dest
+
+        mock_identity = MagicMock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
+
+        mock_message = MagicMock()
+        mock_message.hash = b'msghash123456789'
+        mock_lxmf.LXMessage.return_value = mock_message
+
+        # Use bytearray instead of bytes
+        file_attachments = [
+            ['array.bin', bytearray([0, 1, 2, 3, 4])],
+        ]
+
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'0123456789abcdef',
+            content="Bytearray test",
+            source_identity_private_key=b'privkey' * 10,
+            delivery_method="direct",
+            file_attachments=file_attachments
+        )
+
+        self.assertTrue(result['success'])
+
+
 if __name__ == '__main__':
     # Run tests with verbose output
     unittest.main(verbosity=2)

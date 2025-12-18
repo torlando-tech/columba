@@ -18,6 +18,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.test.MessageDeliveryRetrievalTestFixtures
 import com.lxmf.messenger.test.MessageDeliveryRetrievalTestFixtures.CardConfig
 import com.lxmf.messenger.test.RegisterComponentActivityRule
@@ -55,6 +56,8 @@ class MessageDeliveryRetrievalCardTest {
     private var autoRetrieveToggled: Boolean? = null
     private var intervalChanged: Int? = null
     private var syncNowCalled = false
+    private var manualRelayAdded: Pair<String, String?>? = null
+    private var relaySelected: Pair<String, String>? = null
 
     @Before
     fun resetCallbackTrackers() {
@@ -64,11 +67,21 @@ class MessageDeliveryRetrievalCardTest {
         autoRetrieveToggled = null
         intervalChanged = null
         syncNowCalled = false
+        manualRelayAdded = null
+        relaySelected = null
     }
 
     // ========== Setup Helper ==========
 
     private fun setUpCardWithConfig(config: CardConfig) {
+        setUpCardWithConfigAndRelays(config, emptyList())
+    }
+
+    private fun setUpCardWithConfigAndRelays(
+        config: CardConfig,
+        availableRelays: List<RelayInfo>,
+        currentRelayHash: String? = null,
+    ) {
         composeTestRule.setContent {
             // Wrap in a scrollable column so performScrollTo() works
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -77,14 +90,14 @@ class MessageDeliveryRetrievalCardTest {
                     tryPropagationOnFail = config.tryPropagationOnFail,
                     currentRelayName = config.currentRelayName,
                     currentRelayHops = config.currentRelayHops,
-                    currentRelayHash = null,
+                    currentRelayHash = currentRelayHash,
                     isAutoSelect = config.isAutoSelect,
-                    availableRelays = emptyList(),
+                    availableRelays = availableRelays,
                     onMethodChange = { methodChanged = it },
                     onTryPropagationToggle = { propagationToggled = it },
                     onAutoSelectToggle = { autoSelectToggled = it },
-                    onAddManualRelay = { _, _ -> },
-                    onSelectRelay = { _, _ -> },
+                    onAddManualRelay = { hash, nickname -> manualRelayAdded = hash to nickname },
+                    onSelectRelay = { hash, name -> relaySelected = hash to name },
                     autoRetrieveEnabled = config.autoRetrieveEnabled,
                     retrievalIntervalSeconds = config.retrievalIntervalSeconds,
                     lastSyncTimestamp = config.lastSyncTimestamp,
@@ -1094,5 +1107,303 @@ class MessageDeliveryRetrievalCardTest {
         // Click sync button - this IS a button so it should work
         composeTestRule.onNodeWithText("Sync Now").performScrollTo().performClick()
         assertTrue(syncNowCalled)
+    }
+
+    // ========== Category N: Manual Relay Input Tests (8 tests) ==========
+
+    @Test
+    fun manualInput_showsWhenManualSelectionMode() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.manualRelaySelectionState())
+
+        composeTestRule.onNodeWithText("Enter relay destination hash:")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun manualInput_hiddenWhenAutoSelectMode() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText("Enter relay destination hash:")
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun manualInput_displaysDestinationHashField() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.manualRelaySelectionState())
+
+        composeTestRule.onNodeWithText("Destination Hash")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun manualInput_displaysNicknameField() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.manualRelaySelectionState())
+
+        composeTestRule.onNodeWithText("Nickname (optional)")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun manualInput_displaysSetAsRelayButton() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.manualRelaySelectionState())
+
+        composeTestRule.onNodeWithText("Set as Relay")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun manualInput_buttonDisabledWithEmptyHash() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.manualRelaySelectionState())
+
+        composeTestRule.onNodeWithText("Set as Relay")
+            .performScrollTo()
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun manualInput_buttonEnabledWithValidHash() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.manualRelaySelectionState())
+
+        // Enter a valid 32-character hex hash
+        composeTestRule.onNodeWithText("Destination Hash")
+            .performScrollTo()
+            .performTextInput("abcd1234abcd1234abcd1234abcd1234")
+
+        composeTestRule.onNodeWithText("Set as Relay")
+            .performScrollTo()
+            .assertIsEnabled()
+    }
+
+    @Test
+    fun manualInput_showsCharacterCount() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.manualRelaySelectionState())
+
+        composeTestRule.onNodeWithText("0/32")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun manualInput_showsErrorForInvalidHash() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.manualRelaySelectionState())
+
+        // Enter an incomplete hash
+        composeTestRule.onNodeWithText("Destination Hash")
+            .performScrollTo()
+            .performTextInput("abcd1234")
+
+        // Error message format: "Hash must be 32 characters (got X)"
+        composeTestRule.onNodeWithText("Hash must be 32 characters (got 8)")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun manualInput_confirmInvokesCallback() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.manualRelaySelectionState())
+
+        // Enter a valid hash
+        composeTestRule.onNodeWithText("Destination Hash")
+            .performScrollTo()
+            .performTextInput("abcd1234abcd1234abcd1234abcd1234")
+
+        // Enter a nickname
+        composeTestRule.onNodeWithText("Nickname (optional)")
+            .performScrollTo()
+            .performTextInput("My Relay")
+
+        // Click confirm
+        composeTestRule.onNodeWithText("Set as Relay")
+            .performScrollTo()
+            .performClick()
+
+        assertEquals("abcd1234abcd1234abcd1234abcd1234", manualRelayAdded?.first)
+        assertEquals("My Relay", manualRelayAdded?.second)
+    }
+
+    // ========== Category O: Relay Selection Hint Tests (2 tests) ==========
+
+    @Test
+    fun relaySelectionHint_displaysWhenRelayConfigured() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText("Tap to select a different relay")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun relaySelectionHint_hiddenWhenNoRelay() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.noRelayState())
+
+        composeTestRule.onNodeWithText("Tap to select a different relay")
+            .assertDoesNotExist()
+    }
+
+    // ========== Category P: Relay Selection Dialog Tests (6 tests) ==========
+
+    @Test
+    fun relaySelectionDialog_opensOnRelayCardClick() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        // Click on the relay card
+        composeTestRule.onNodeWithText("TestRelay01")
+            .performScrollTo()
+            .performClick()
+
+        // Dialog should appear
+        composeTestRule.onNodeWithText("Select Relay")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun relaySelectionDialog_showsNoRelaysMessage() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        // Click on the relay card
+        composeTestRule.onNodeWithText("TestRelay01")
+            .performScrollTo()
+            .performClick()
+
+        // Should show no relays message since availableRelays is empty
+        composeTestRule.onNodeWithText("No propagation nodes discovered yet", substring = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun relaySelectionDialog_showsAvailableRelays() {
+        val testRelays = listOf(
+            RelayInfo(
+                destinationHash = "hash1",
+                displayName = "Relay 1",
+                hops = 1,
+                isAutoSelected = false,
+                lastSeenTimestamp = System.currentTimeMillis(),
+            ),
+            RelayInfo(
+                destinationHash = "hash2",
+                displayName = "Relay 2",
+                hops = 3,
+                isAutoSelected = false,
+                lastSeenTimestamp = System.currentTimeMillis(),
+            ),
+        )
+        setUpCardWithConfigAndRelays(
+            MessageDeliveryRetrievalTestFixtures.defaultState(),
+            testRelays,
+        )
+
+        // Click on the relay card
+        composeTestRule.onNodeWithText("TestRelay01")
+            .performScrollTo()
+            .performClick()
+
+        // Dialog should show available relays
+        composeTestRule.onNodeWithText("Relay 1").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Relay 2").assertIsDisplayed()
+    }
+
+    @Test
+    fun relaySelectionDialog_showsHopCount() {
+        val testRelays = listOf(
+            RelayInfo(
+                destinationHash = "hash1",
+                displayName = "Relay 1",
+                hops = 2,
+                isAutoSelected = false,
+                lastSeenTimestamp = System.currentTimeMillis(),
+            ),
+        )
+        setUpCardWithConfigAndRelays(
+            MessageDeliveryRetrievalTestFixtures.defaultState(),
+            testRelays,
+        )
+
+        // Click on the relay card
+        composeTestRule.onNodeWithText("TestRelay01")
+            .performScrollTo()
+            .performClick()
+
+        // Dialog should show relay name and the hop count exists in the dialog
+        composeTestRule.onNodeWithText("Relay 1").assertIsDisplayed()
+        // Use assertExists() for the hop count since it may not be "displayed" due to LazyColumn
+        composeTestRule.onAllNodesWithText("2 hops away", substring = true)[0].assertExists()
+    }
+
+    @Test
+    fun relaySelectionDialog_selectRelay_invokesCallback() {
+        val testRelays = listOf(
+            RelayInfo(
+                destinationHash = "hash1",
+                displayName = "Relay 1",
+                hops = 1,
+                isAutoSelected = false,
+                lastSeenTimestamp = System.currentTimeMillis(),
+            ),
+        )
+        setUpCardWithConfigAndRelays(
+            MessageDeliveryRetrievalTestFixtures.defaultState(),
+            testRelays,
+        )
+
+        // Click on the relay card
+        composeTestRule.onNodeWithText("TestRelay01")
+            .performScrollTo()
+            .performClick()
+
+        // Select the relay
+        composeTestRule.onNodeWithText("Relay 1")
+            .performClick()
+
+        assertEquals("hash1", relaySelected?.first)
+        assertEquals("Relay 1", relaySelected?.second)
+    }
+
+    @Test
+    fun relaySelectionDialog_cancelDismisses() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        // Click on the relay card
+        composeTestRule.onNodeWithText("TestRelay01")
+            .performScrollTo()
+            .performClick()
+
+        // Click cancel
+        composeTestRule.onNodeWithText("Cancel")
+            .performClick()
+
+        // Dialog should be dismissed
+        composeTestRule.onNodeWithText("Select Relay")
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun relaySelectionDialog_showsViewAllRelaysOption() {
+        val testRelays = listOf(
+            RelayInfo(
+                destinationHash = "hash1",
+                displayName = "Relay 1",
+                hops = 1,
+                isAutoSelected = false,
+                lastSeenTimestamp = System.currentTimeMillis(),
+            ),
+        )
+        setUpCardWithConfigAndRelays(
+            MessageDeliveryRetrievalTestFixtures.defaultState(),
+            testRelays,
+        )
+
+        // Click on the relay card
+        composeTestRule.onNodeWithText("TestRelay01")
+            .performScrollTo()
+            .performClick()
+
+        // Should show "View All Relays..." option
+        composeTestRule.onNodeWithText("View All Relays...")
+            .assertIsDisplayed()
     }
 }

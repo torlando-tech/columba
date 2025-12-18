@@ -7,8 +7,10 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.PresetTheme
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -102,6 +104,8 @@ class SettingsViewModelTest {
         every { propagationNodeManager.currentRelay } returns MutableStateFlow(null)
         every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
         every { propagationNodeManager.lastSyncTimestamp } returns MutableStateFlow(null)
+        every { propagationNodeManager.availableRelaysState } returns
+            MutableStateFlow(AvailableRelaysState.Loaded(emptyList()))
 
         // Mock other required methods
         coEvery { identityRepository.getActiveIdentitySync() } returns null
@@ -1879,6 +1883,45 @@ class SettingsViewModelTest {
                 assertFalse(state.isRestarting)
                 cancelAndConsumeRemainingEvents()
             }
+        }
+
+    // endregion
+
+    // region Manual Propagation Node Tests
+
+    @Test
+    fun `addManualPropagationNode calls propagationNodeManager setManualRelayByHash`() =
+        runTest {
+            viewModel = createViewModel()
+            val testHash = "abcd1234abcd1234abcd1234abcd1234"
+            val testNickname = "My Test Relay"
+
+            viewModel.addManualPropagationNode(testHash, testNickname)
+
+            coVerify { propagationNodeManager.setManualRelayByHash(testHash, testNickname) }
+        }
+
+    @Test
+    fun `addManualPropagationNode with null nickname calls propagationNodeManager`() =
+        runTest {
+            viewModel = createViewModel()
+            val testHash = "abcd1234abcd1234abcd1234abcd1234"
+
+            viewModel.addManualPropagationNode(testHash, null)
+
+            coVerify { propagationNodeManager.setManualRelayByHash(testHash, null) }
+        }
+
+    @Test
+    fun `selectRelay calls propagationNodeManager setManualRelay`() =
+        runTest {
+            viewModel = createViewModel()
+            val testHash = "abcd1234abcd1234abcd1234abcd1234"
+            val testName = "Selected Relay"
+
+            viewModel.selectRelay(testHash, testName)
+
+            coVerify { propagationNodeManager.setManualRelay(testHash, testName) }
         }
 
     // endregion

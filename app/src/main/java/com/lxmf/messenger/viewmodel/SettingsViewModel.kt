@@ -8,6 +8,8 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.AvailableRelaysState
+import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -54,6 +56,9 @@ data class SettingsState(
     val autoSelectPropagationNode: Boolean = true,
     val currentRelayName: String? = null,
     val currentRelayHops: Int? = null,
+    val currentRelayHash: String? = null,
+    val availableRelays: List<RelayInfo> = emptyList(),
+    val availableRelaysLoading: Boolean = true,
     // Message retrieval state
     val autoRetrieveEnabled: Boolean = true,
     val retrievalIntervalSeconds: Int = 30,
@@ -218,7 +223,10 @@ class SettingsViewModel
                             // Preserve relay state from startRelayMonitor()
                             currentRelayName = _state.value.currentRelayName,
                             currentRelayHops = _state.value.currentRelayHops,
+                            currentRelayHash = _state.value.currentRelayHash,
                             autoSelectPropagationNode = _state.value.autoSelectPropagationNode,
+                            availableRelays = _state.value.availableRelays,
+                            availableRelaysLoading = _state.value.availableRelaysLoading,
                             // Transport node state
                             transportNodeEnabled = transportNodeEnabled,
                             // Message delivery state
@@ -940,6 +948,37 @@ class SettingsViewModel
         }
 
         /**
+         * Manually add a propagation node by destination hash.
+         * Used when user enters a relay hash directly.
+         *
+         * @param destinationHash 32-character hex destination hash (already validated)
+         * @param nickname Optional display name for this relay
+         */
+        fun addManualPropagationNode(
+            destinationHash: String,
+            nickname: String?,
+        ) {
+            viewModelScope.launch {
+                propagationNodeManager.setManualRelayByHash(destinationHash, nickname)
+                Log.d(TAG, "Manual propagation node added: $destinationHash")
+            }
+        }
+
+        /**
+         * Select a relay from the available relays list.
+         * Used when user taps on the current relay card and selects a different one.
+         */
+        fun selectRelay(
+            destinationHash: String,
+            displayName: String,
+        ) {
+            viewModelScope.launch {
+                propagationNodeManager.setManualRelay(destinationHash, displayName)
+                Log.d(TAG, "Relay selected from list: $displayName")
+            }
+        }
+
+        /**
          * Start observing current relay info from PropagationNodeManager.
          * Call this after init to update state with relay information.
          */
@@ -951,10 +990,32 @@ class SettingsViewModel
                             currentRelayName = relayInfo?.displayName,
                             // -1 means unknown hops (relay restored without announce data)
                             currentRelayHops = relayInfo?.hops?.takeIf { it >= 0 },
+                            currentRelayHash = relayInfo?.destinationHash,
                             autoSelectPropagationNode = relayInfo?.isAutoSelected ?: true,
                         )
                     if (relayInfo != null) {
                         Log.d(TAG, "Current relay updated: ${relayInfo.displayName} (${relayInfo.hops} hops)")
+                    }
+                }
+            }
+
+            // Monitor available relays for selection UI
+            viewModelScope.launch {
+                propagationNodeManager.availableRelaysState.collect { state ->
+                    when (state) {
+                        is AvailableRelaysState.Loading -> {
+                            Log.d(TAG, "SettingsViewModel: available relays loading")
+                            _state.value = _state.value.copy(
+                                availableRelaysLoading = true,
+                            )
+                        }
+                        is AvailableRelaysState.Loaded -> {
+                            Log.d(TAG, "SettingsViewModel received ${state.relays.size} available relays")
+                            _state.value = _state.value.copy(
+                                availableRelays = state.relays,
+                                availableRelaysLoading = false,
+                            )
+                        }
                     }
                 }
             }

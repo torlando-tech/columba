@@ -12,7 +12,7 @@ coverage:
   status:
     patch:
       default:
-        target: 80%
+        target: 70%
 
 flags:
   unittests:

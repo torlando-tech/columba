@@ -60,6 +60,7 @@ fun SettingsScreen(
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToCustomThemes: () -> Unit = {},
     onNavigateToMigration: () -> Unit = {},
+    onNavigateToAnnounces: (filterType: String?) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
@@ -173,10 +174,18 @@ fun SettingsScreen(
                     tryPropagationOnFail = state.tryPropagationOnFail,
                     currentRelayName = state.currentRelayName,
                     currentRelayHops = state.currentRelayHops,
+                    currentRelayHash = state.currentRelayHash,
                     isAutoSelect = state.autoSelectPropagationNode,
+                    availableRelays = state.availableRelays,
                     onMethodChange = { viewModel.setDefaultDeliveryMethod(it) },
                     onTryPropagationToggle = { viewModel.setTryPropagationOnFail(it) },
                     onAutoSelectToggle = { viewModel.setAutoSelectPropagationNode(it) },
+                    onAddManualRelay = { hash, nickname ->
+                        viewModel.addManualPropagationNode(hash, nickname)
+                    },
+                    onSelectRelay = { hash, name ->
+                        viewModel.selectRelay(hash, name)
+                    },
                     // Retrieval settings
                     autoRetrieveEnabled = state.autoRetrieveEnabled,
                     retrievalIntervalSeconds = state.retrievalIntervalSeconds,
@@ -185,6 +194,7 @@ fun SettingsScreen(
                     onAutoRetrieveToggle = { viewModel.setAutoRetrieveEnabled(it) },
                     onIntervalChange = { viewModel.setRetrievalIntervalSeconds(it) },
                     onSyncNow = { viewModel.syncNow() },
+                    onViewMoreRelays = { onNavigateToAnnounces("PROPAGATION_NODE") },
                 )
 
                 ThemeSelectionCard(

@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,6 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.service.RelayInfo
+import com.lxmf.messenger.util.DestinationHashValidator
 
 /**
  * Settings card for message delivery and retrieval options.
@@ -70,10 +74,14 @@ fun MessageDeliveryRetrievalCard(
     tryPropagationOnFail: Boolean,
     currentRelayName: String?,
     currentRelayHops: Int?,
+    currentRelayHash: String?,
     isAutoSelect: Boolean,
+    availableRelays: List<RelayInfo>,
     onMethodChange: (String) -> Unit,
     onTryPropagationToggle: (Boolean) -> Unit,
     onAutoSelectToggle: (Boolean) -> Unit,
+    onAddManualRelay: (destinationHash: String, nickname: String?) -> Unit,
+    onSelectRelay: (destinationHash: String, displayName: String) -> Unit,
     // Retrieval settings
     autoRetrieveEnabled: Boolean,
     retrievalIntervalSeconds: Int,
@@ -82,10 +90,14 @@ fun MessageDeliveryRetrievalCard(
     onAutoRetrieveToggle: (Boolean) -> Unit,
     onIntervalChange: (Int) -> Unit,
     onSyncNow: () -> Unit,
+    onViewMoreRelays: () -> Unit = {},
 ) {
     var showMethodDropdown by remember { mutableStateOf(false) }
     var showCustomIntervalDialog by remember { mutableStateOf(false) }
+    var showRelaySelectionDialog by remember { mutableStateOf(false) }
     var customIntervalInput by remember { mutableStateOf("") }
+    var manualHashInput by remember { mutableStateOf("") }
+    var manualNicknameInput by remember { mutableStateOf("") }
 
     val presetIntervals = listOf(30, 60, 120, 300)
 
@@ -314,17 +326,41 @@ fun MessageDeliveryRetrievalCard(
 
             // Current relay display
             if (currentRelayName != null) {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Tap to select a different relay",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 CurrentRelayInfo(
                     relayName = currentRelayName,
                     hops = currentRelayHops,
                     isAutoSelected = isAutoSelect,
+                    onClick = { showRelaySelectionDialog = true },
                 )
-            } else {
+            } else if (isAutoSelect) {
+                // Auto-select mode with no relay yet
                 Text(
-                    text = "No relay configured. Select a propagation node from the Announce Stream.",
+                    text = "No relay configured. Waiting for propagation node announces...",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // Manual entry - always show when "Use specific relay" is selected
+            if (!isAutoSelect) {
+                Spacer(modifier = Modifier.height(8.dp))
+                ManualRelayInput(
+                    hashInput = manualHashInput,
+                    onHashChange = { manualHashInput = it },
+                    nicknameInput = manualNicknameInput,
+                    onNicknameChange = { manualNicknameInput = it },
+                    onConfirm = { hash, nickname ->
+                        onAddManualRelay(hash, nickname)
+                        // Clear inputs after confirmation
+                        manualHashInput = ""
+                        manualNicknameInput = ""
+                    },
                 )
             }
 
@@ -478,6 +514,20 @@ fun MessageDeliveryRetrievalCard(
             onDismiss = { showCustomIntervalDialog = false },
         )
     }
+
+    // Relay selection dialog
+    if (showRelaySelectionDialog) {
+        RelaySelectionDialog(
+            availableRelays = availableRelays,
+            currentRelayHash = currentRelayHash,
+            onSelectRelay = { hash, name ->
+                onSelectRelay(hash, name)
+                showRelaySelectionDialog = false
+            },
+            onViewMoreRelays = onViewMoreRelays,
+            onDismiss = { showRelaySelectionDialog = false },
+        )
+    }
 }
 
 @Composable
@@ -500,9 +550,13 @@ private fun CurrentRelayInfo(
     relayName: String,
     hops: Int?,
     isAutoSelected: Boolean,
+    onClick: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
         shape = RoundedCornerShape(8.dp),
         colors =
             CardDefaults.cardColors(
@@ -651,4 +705,239 @@ private fun CustomRetrievalIntervalDialog(
             }
         },
     )
+}
+
+/**
+ * Input form for manually entering a propagation node destination hash.
+ */
+@Composable
+private fun ManualRelayInput(
+    hashInput: String,
+    onHashChange: (String) -> Unit,
+    nicknameInput: String,
+    onNicknameChange: (String) -> Unit,
+    onConfirm: (hash: String, nickname: String?) -> Unit,
+) {
+    val validationResult = DestinationHashValidator.validate(hashInput)
+    val isValid = validationResult is DestinationHashValidator.ValidationResult.Valid
+    val errorMessage = (validationResult as? DestinationHashValidator.ValidationResult.Error)?.message
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Enter relay destination hash:",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        OutlinedTextField(
+            value = hashInput,
+            onValueChange = { input ->
+                // Only allow hex characters, up to 32 chars
+                val filtered = input.filter { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
+                if (filtered.length <= 32) {
+                    onHashChange(filtered)
+                }
+            },
+            label = { Text("Destination Hash") },
+            placeholder = { Text("32-character hex") },
+            singleLine = true,
+            isError = hashInput.isNotEmpty() && !isValid,
+            supportingText = {
+                if (hashInput.isEmpty()) {
+                    Text(DestinationHashValidator.getCharacterCount(hashInput))
+                } else if (!isValid && errorMessage != null) {
+                    Text(errorMessage)
+                } else {
+                    Text(DestinationHashValidator.getCharacterCount(hashInput))
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        OutlinedTextField(
+            value = nicknameInput,
+            onValueChange = onNicknameChange,
+            label = { Text("Nickname (optional)") },
+            placeholder = { Text("e.g., My Home Relay") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Button(
+            onClick = {
+                val normalizedHash =
+                    (validationResult as DestinationHashValidator.ValidationResult.Valid).normalizedHash
+                val nickname = nicknameInput.trim().takeIf { it.isNotEmpty() }
+                onConfirm(normalizedHash, nickname)
+            },
+            enabled = isValid,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Set as Relay")
+        }
+    }
+}
+
+/**
+ * Dialog for selecting a relay from the list of available propagation nodes.
+ */
+@Composable
+private fun RelaySelectionDialog(
+    availableRelays: List<RelayInfo>,
+    currentRelayHash: String?,
+    onSelectRelay: (hash: String, name: String) -> Unit,
+    onViewMoreRelays: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Relay") },
+        text = {
+            // Skip loading state - query is fast enough. Just show relays or empty message.
+            if (availableRelays.isEmpty()) {
+                Text(
+                    text = "No propagation nodes discovered yet. Wait for announces or enter a hash manually.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(availableRelays, key = { it.destinationHash }) { relay ->
+                        RelayListItem(
+                            relay = relay,
+                            isSelected = relay.destinationHash == currentRelayHash,
+                            onClick = { onSelectRelay(relay.destinationHash, relay.displayName) },
+                        )
+                    }
+                    // "More..." item to view all relays in the announces screen
+                    item(key = "more_relays") {
+                        MoreRelaysItem(
+                            onClick = {
+                                onViewMoreRelays()
+                                onDismiss()
+                            },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+/**
+ * A single relay item in the selection list.
+ */
+@Composable
+private fun RelayListItem(
+    relay: RelayInfo,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+            ),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // Hub icon
+            Icon(
+                imageVector = Icons.Default.Hub,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+            )
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = relay.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                )
+                Text(
+                    text = "${relay.hops} ${if (relay.hops == 1) "hop" else "hops"} away",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (isSelected) {
+                Text(
+                    text = "Current",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A "More..." item at the end of the relay list to view all relays.
+ */
+@Composable
+private fun MoreRelaysItem(onClick: () -> Unit) {
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+            ),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = "View All Relays...",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+        }
+    }
 }

@@ -60,6 +60,18 @@ sealed class RelayLoadState {
 }
 
 /**
+ * Represents the loading state of available relays list.
+ * Used to distinguish between "not yet loaded from DB" and "loaded, no relays available".
+ */
+sealed class AvailableRelaysState {
+    /** Relays are being loaded from database */
+    data object Loading : AvailableRelaysState()
+
+    /** Relays have been loaded from database */
+    data class Loaded(val relays: List<RelayInfo>) : AvailableRelaysState()
+}
+
+/**
  * Manages propagation node (relay) selection for LXMF message delivery.
  *
  * This class implements Sideband's auto-selection algorithm:
@@ -132,6 +144,29 @@ class PropagationNodeManager
                 .map { state -> (state as? RelayLoadState.Loaded)?.relay }
                 .stateIn(scope, SharingStarted.Eagerly, null)
 
+        /**
+         * Available propagation nodes sorted by hop count (ascending), limited to 10.
+         * Used for relay selection UI.
+         *
+         * Uses optimized SQL query with LIMIT to fetch only 10 rows.
+         */
+        val availableRelaysState: StateFlow<AvailableRelaysState> =
+            announceRepository.getTopPropagationNodes(limit = 10)
+                .map { announces ->
+                    Log.d(TAG, "availableRelays: got ${announces.size} top propagation nodes from DB")
+                    val relays = announces.map { announce ->
+                        RelayInfo(
+                            destinationHash = announce.destinationHash,
+                            displayName = announce.peerName,
+                            hops = announce.hops,
+                            isAutoSelected = false,
+                            lastSeenTimestamp = announce.lastSeenTimestamp,
+                        )
+                    }
+                    AvailableRelaysState.Loaded(relays)
+                }
+                .stateIn(scope, SharingStarted.Eagerly, AvailableRelaysState.Loading)
+
         private val _isSyncing = MutableStateFlow(false)
         val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
@@ -154,6 +189,24 @@ class PropagationNodeManager
          */
         fun start() {
             Log.d(TAG, "Starting PropagationNodeManager")
+
+            // Debug: Log nodeType distribution on startup
+            scope.launch {
+                try {
+                    val nodeTypeCounts = announceRepository.getNodeTypeCounts()
+                    Log.i(TAG, "📊 Database nodeType distribution:")
+                    nodeTypeCounts.forEach { (nodeType, count) ->
+                        Log.i(TAG, "   $nodeType: $count")
+                    }
+                    val propagationCount = nodeTypeCounts.find { it.first == "PROPAGATION_NODE" }?.second ?: 0
+                    if (propagationCount == 0) {
+                        Log.w(TAG, "⚠️ No PROPAGATION_NODE entries in database! Relay modal will be empty.")
+                        Log.w(TAG, "   This is expected if no LXMF propagation nodes have announced with aspect 'lxmf.propagation'")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error getting nodeType counts", e)
+                }
+            }
 
             // Load last sync timestamp
             scope.launch {
@@ -341,6 +394,42 @@ class PropagationNodeManager
             settingsRepository.saveManualPropagationNode(null)
             // Database update triggers currentRelay Flow → observeRelayChanges() → Python sync
             contactRepository.clearMyRelay()
+        }
+
+        /**
+         * Manually set a propagation node by destination hash only.
+         * Used when user enters a hash directly without having received an announce.
+         * Creates a contact if needed and sets as relay.
+         *
+         * @param destinationHash 32-character hex destination hash (already validated)
+         * @param nickname Optional display name for this relay
+         */
+        suspend fun setManualRelayByHash(
+            destinationHash: String,
+            nickname: String?,
+        ) {
+            Log.i(TAG, "User manually entered relay hash: $destinationHash")
+
+            // Disable auto-select and save manual selection
+            settingsRepository.saveAutoSelectPropagationNode(false)
+            settingsRepository.saveManualPropagationNode(destinationHash)
+
+            // Add contact if it doesn't exist
+            // addPendingContact handles both cases:
+            // - If announce exists, creates full contact with public key
+            // - If no announce, creates pending contact
+            if (!contactRepository.hasContact(destinationHash)) {
+                val result = contactRepository.addPendingContact(destinationHash, nickname)
+                result.onSuccess { addResult ->
+                    Log.d(TAG, "Added contact for manual relay: $addResult")
+                }.onFailure { error ->
+                    Log.e(TAG, "Failed to add contact for manual relay: ${error.message}")
+                }
+            }
+
+            // This updates the database, which triggers currentRelay Flow,
+            // which triggers observeRelayChanges() to sync Python layer
+            contactRepository.setAsMyRelay(destinationHash, clearOther = true)
         }
 
         /**

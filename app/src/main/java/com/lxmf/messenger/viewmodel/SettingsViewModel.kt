@@ -8,6 +8,7 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -54,6 +55,8 @@ data class SettingsState(
     val autoSelectPropagationNode: Boolean = true,
     val currentRelayName: String? = null,
     val currentRelayHops: Int? = null,
+    val currentRelayHash: String? = null,
+    val availableRelays: List<RelayInfo> = emptyList(),
     // Message retrieval state
     val autoRetrieveEnabled: Boolean = true,
     val retrievalIntervalSeconds: Int = 30,
@@ -957,6 +960,20 @@ class SettingsViewModel
         }
 
         /**
+         * Select a relay from the available relays list.
+         * Used when user taps on the current relay card and selects a different one.
+         */
+        fun selectRelay(
+            destinationHash: String,
+            displayName: String,
+        ) {
+            viewModelScope.launch {
+                propagationNodeManager.setManualRelay(destinationHash, displayName)
+                Log.d(TAG, "Relay selected from list: $displayName")
+            }
+        }
+
+        /**
          * Start observing current relay info from PropagationNodeManager.
          * Call this after init to update state with relay information.
          */
@@ -968,11 +985,19 @@ class SettingsViewModel
                             currentRelayName = relayInfo?.displayName,
                             // -1 means unknown hops (relay restored without announce data)
                             currentRelayHops = relayInfo?.hops?.takeIf { it >= 0 },
+                            currentRelayHash = relayInfo?.destinationHash,
                             autoSelectPropagationNode = relayInfo?.isAutoSelected ?: true,
                         )
                     if (relayInfo != null) {
                         Log.d(TAG, "Current relay updated: ${relayInfo.displayName} (${relayInfo.hops} hops)")
                     }
+                }
+            }
+
+            // Monitor available relays for selection UI
+            viewModelScope.launch {
+                propagationNodeManager.availableRelays.collect { relays ->
+                    _state.value = _state.value.copy(availableRelays = relays)
                 }
             }
 

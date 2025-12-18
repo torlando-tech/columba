@@ -132,6 +132,28 @@ class PropagationNodeManager
                 .map { state -> (state as? RelayLoadState.Loaded)?.relay }
                 .stateIn(scope, SharingStarted.Eagerly, null)
 
+        /**
+         * Available propagation nodes sorted by hop count (ascending), limited to 10.
+         * Used for relay selection UI.
+         */
+        val availableRelays: StateFlow<List<RelayInfo>> =
+            announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE"))
+                .map { announces ->
+                    announces
+                        .sortedBy { it.hops }
+                        .take(10)
+                        .map { announce ->
+                            RelayInfo(
+                                destinationHash = announce.destinationHash,
+                                displayName = announce.peerName,
+                                hops = announce.hops,
+                                isAutoSelected = false,
+                                lastSeenTimestamp = announce.lastSeenTimestamp,
+                            )
+                        }
+                }
+                .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
         private val _isSyncing = MutableStateFlow(false)
         val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 

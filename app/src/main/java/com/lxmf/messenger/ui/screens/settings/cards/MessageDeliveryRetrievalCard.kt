@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.util.DestinationHashValidator
 
 /**
@@ -71,11 +74,14 @@ fun MessageDeliveryRetrievalCard(
     tryPropagationOnFail: Boolean,
     currentRelayName: String?,
     currentRelayHops: Int?,
+    currentRelayHash: String?,
     isAutoSelect: Boolean,
+    availableRelays: List<RelayInfo>,
     onMethodChange: (String) -> Unit,
     onTryPropagationToggle: (Boolean) -> Unit,
     onAutoSelectToggle: (Boolean) -> Unit,
     onAddManualRelay: (destinationHash: String, nickname: String?) -> Unit,
+    onSelectRelay: (destinationHash: String, displayName: String) -> Unit,
     // Retrieval settings
     autoRetrieveEnabled: Boolean,
     retrievalIntervalSeconds: Int,
@@ -87,6 +93,7 @@ fun MessageDeliveryRetrievalCard(
 ) {
     var showMethodDropdown by remember { mutableStateOf(false) }
     var showCustomIntervalDialog by remember { mutableStateOf(false) }
+    var showRelaySelectionDialog by remember { mutableStateOf(false) }
     var customIntervalInput by remember { mutableStateOf("") }
     var manualHashInput by remember { mutableStateOf("") }
     var manualNicknameInput by remember { mutableStateOf("") }
@@ -323,6 +330,7 @@ fun MessageDeliveryRetrievalCard(
                     relayName = currentRelayName,
                     hops = currentRelayHops,
                     isAutoSelected = isAutoSelect,
+                    onClick = { showRelaySelectionDialog = true },
                 )
             } else if (isAutoSelect) {
                 // Auto-select mode with no relay yet
@@ -500,6 +508,19 @@ fun MessageDeliveryRetrievalCard(
             onDismiss = { showCustomIntervalDialog = false },
         )
     }
+
+    // Relay selection dialog
+    if (showRelaySelectionDialog) {
+        RelaySelectionDialog(
+            availableRelays = availableRelays,
+            currentRelayHash = currentRelayHash,
+            onSelectRelay = { hash, name ->
+                onSelectRelay(hash, name)
+                showRelaySelectionDialog = false
+            },
+            onDismiss = { showRelaySelectionDialog = false },
+        )
+    }
 }
 
 @Composable
@@ -522,9 +543,13 @@ private fun CurrentRelayInfo(
     relayName: String,
     hops: Int?,
     isAutoSelected: Boolean,
+    onClick: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
         shape = RoundedCornerShape(8.dp),
         colors =
             CardDefaults.cardColors(
@@ -748,6 +773,119 @@ private fun ManualRelayInput(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Set as Relay")
+        }
+    }
+}
+
+/**
+ * Dialog for selecting a relay from the list of available propagation nodes.
+ */
+@Composable
+private fun RelaySelectionDialog(
+    availableRelays: List<RelayInfo>,
+    currentRelayHash: String?,
+    onSelectRelay: (hash: String, name: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Relay") },
+        text = {
+            if (availableRelays.isEmpty()) {
+                Text(
+                    text = "No propagation nodes discovered yet. Wait for announces or enter a hash manually.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(availableRelays, key = { it.destinationHash }) { relay ->
+                        RelayListItem(
+                            relay = relay,
+                            isSelected = relay.destinationHash == currentRelayHash,
+                            onClick = { onSelectRelay(relay.destinationHash, relay.displayName) },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+/**
+ * A single relay item in the selection list.
+ */
+@Composable
+private fun RelayListItem(
+    relay: RelayInfo,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+            ),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // Hub icon
+            Icon(
+                imageVector = Icons.Default.Hub,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+            )
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = relay.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                )
+                Text(
+                    text = "${relay.hops} ${if (relay.hops == 1) "hop" else "hops"} away",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (isSelected) {
+                Text(
+                    text = "Current",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
 }

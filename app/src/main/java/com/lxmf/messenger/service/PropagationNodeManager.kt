@@ -60,6 +60,18 @@ sealed class RelayLoadState {
 }
 
 /**
+ * Represents the loading state of available relays list.
+ * Used to distinguish between "not yet loaded from DB" and "loaded, no relays available".
+ */
+sealed class AvailableRelaysState {
+    /** Relays are being loaded from database */
+    data object Loading : AvailableRelaysState()
+
+    /** Relays have been loaded from database */
+    data class Loaded(val relays: List<RelayInfo>) : AvailableRelaysState()
+}
+
+/**
  * Manages propagation node (relay) selection for LXMF message delivery.
  *
  * This class implements Sideband's auto-selection algorithm:
@@ -135,24 +147,25 @@ class PropagationNodeManager
         /**
          * Available propagation nodes sorted by hop count (ascending), limited to 10.
          * Used for relay selection UI.
+         *
+         * Uses optimized SQL query with LIMIT to fetch only 10 rows.
          */
-        val availableRelays: StateFlow<List<RelayInfo>> =
-            announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE"))
+        val availableRelaysState: StateFlow<AvailableRelaysState> =
+            announceRepository.getTopPropagationNodes(limit = 10)
                 .map { announces ->
-                    announces
-                        .sortedBy { it.hops }
-                        .take(10)
-                        .map { announce ->
-                            RelayInfo(
-                                destinationHash = announce.destinationHash,
-                                displayName = announce.peerName,
-                                hops = announce.hops,
-                                isAutoSelected = false,
-                                lastSeenTimestamp = announce.lastSeenTimestamp,
-                            )
-                        }
+                    Log.d(TAG, "availableRelays: got ${announces.size} top propagation nodes from DB")
+                    val relays = announces.map { announce ->
+                        RelayInfo(
+                            destinationHash = announce.destinationHash,
+                            displayName = announce.peerName,
+                            hops = announce.hops,
+                            isAutoSelected = false,
+                            lastSeenTimestamp = announce.lastSeenTimestamp,
+                        )
+                    }
+                    AvailableRelaysState.Loaded(relays)
                 }
-                .stateIn(scope, SharingStarted.Eagerly, emptyList())
+                .stateIn(scope, SharingStarted.Eagerly, AvailableRelaysState.Loading)
 
         private val _isSyncing = MutableStateFlow(false)
         val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
@@ -176,6 +189,24 @@ class PropagationNodeManager
          */
         fun start() {
             Log.d(TAG, "Starting PropagationNodeManager")
+
+            // Debug: Log nodeType distribution on startup
+            scope.launch {
+                try {
+                    val nodeTypeCounts = announceRepository.getNodeTypeCounts()
+                    Log.i(TAG, "📊 Database nodeType distribution:")
+                    nodeTypeCounts.forEach { (nodeType, count) ->
+                        Log.i(TAG, "   $nodeType: $count")
+                    }
+                    val propagationCount = nodeTypeCounts.find { it.first == "PROPAGATION_NODE" }?.second ?: 0
+                    if (propagationCount == 0) {
+                        Log.w(TAG, "⚠️ No PROPAGATION_NODE entries in database! Relay modal will be empty.")
+                        Log.w(TAG, "   This is expected if no LXMF propagation nodes have announced with aspect 'lxmf.propagation'")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error getting nodeType counts", e)
+                }
+            }
 
             // Load last sync timestamp
             scope.launch {

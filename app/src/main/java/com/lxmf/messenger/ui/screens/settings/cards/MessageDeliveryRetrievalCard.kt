@@ -791,6 +791,7 @@ private fun RelaySelectionDialog(
         onDismissRequest = onDismiss,
         title = { Text("Select Relay") },
         text = {
+            // Skip loading state - query is fast enough. Just show relays or empty message.
             if (availableRelays.isEmpty()) {
                 Text(
                     text = "No propagation nodes discovered yet. Wait for announces or enter a hash manually.",

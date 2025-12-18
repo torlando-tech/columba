@@ -8,6 +8,7 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -57,6 +58,7 @@ data class SettingsState(
     val currentRelayHops: Int? = null,
     val currentRelayHash: String? = null,
     val availableRelays: List<RelayInfo> = emptyList(),
+    val availableRelaysLoading: Boolean = true,
     // Message retrieval state
     val autoRetrieveEnabled: Boolean = true,
     val retrievalIntervalSeconds: Int = 30,
@@ -221,7 +223,10 @@ class SettingsViewModel
                             // Preserve relay state from startRelayMonitor()
                             currentRelayName = _state.value.currentRelayName,
                             currentRelayHops = _state.value.currentRelayHops,
+                            currentRelayHash = _state.value.currentRelayHash,
                             autoSelectPropagationNode = _state.value.autoSelectPropagationNode,
+                            availableRelays = _state.value.availableRelays,
+                            availableRelaysLoading = _state.value.availableRelaysLoading,
                             // Transport node state
                             transportNodeEnabled = transportNodeEnabled,
                             // Message delivery state
@@ -996,8 +1001,22 @@ class SettingsViewModel
 
             // Monitor available relays for selection UI
             viewModelScope.launch {
-                propagationNodeManager.availableRelays.collect { relays ->
-                    _state.value = _state.value.copy(availableRelays = relays)
+                propagationNodeManager.availableRelaysState.collect { state ->
+                    when (state) {
+                        is AvailableRelaysState.Loading -> {
+                            Log.d(TAG, "SettingsViewModel: available relays loading")
+                            _state.value = _state.value.copy(
+                                availableRelaysLoading = true,
+                            )
+                        }
+                        is AvailableRelaysState.Loaded -> {
+                            Log.d(TAG, "SettingsViewModel received ${state.relays.size} available relays")
+                            _state.value = _state.value.copy(
+                                availableRelays = state.relays,
+                                availableRelaysLoading = false,
+                            )
+                        }
+                    }
                 }
             }
 

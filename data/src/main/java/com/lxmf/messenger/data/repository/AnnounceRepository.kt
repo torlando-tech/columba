@@ -120,6 +120,20 @@ class AnnounceRepository
         }
 
         /**
+         * Get top propagation nodes sorted by hop count (ascending).
+         * Optimized query with LIMIT in SQL - only fetches the requested number of rows.
+         * Used for relay selection UI.
+         *
+         * @param limit Maximum number of nodes to return (default 10)
+         * @return Flow of propagation node announces sorted by nearest first
+         */
+        fun getTopPropagationNodes(limit: Int = 10): Flow<List<Announce>> {
+            return announceDao.getTopPropagationNodes(limit).map { entities ->
+                entities.map { it.toAnnounce() }
+            }
+        }
+
+        /**
          * Get announces with pagination support. Combines node type filtering and search query.
          * Initial load: 30 items, Page size: 30 items, Prefetch distance: 10 items.
          *
@@ -318,6 +332,15 @@ class AnnounceRepository
          */
         suspend fun deleteAllAnnounces() {
             announceDao.deleteAllAnnounces()
+        }
+
+        /**
+         * Get count of announces grouped by nodeType.
+         * Used for debugging relay selection issues.
+         * Returns list of (nodeType, count) pairs.
+         */
+        suspend fun getNodeTypeCounts(): List<Pair<String, Int>> {
+            return announceDao.getNodeTypeCounts().map { it.nodeType to it.count }
         }
 
         private fun AnnounceEntity.toAnnounce() =

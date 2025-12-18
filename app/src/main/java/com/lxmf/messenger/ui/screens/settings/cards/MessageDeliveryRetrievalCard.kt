@@ -325,7 +325,12 @@ fun MessageDeliveryRetrievalCard(
 
             // Current relay display
             if (currentRelayName != null) {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Tap to select a different relay",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 CurrentRelayInfo(
                     relayName = currentRelayName,
                     hops = currentRelayHops,

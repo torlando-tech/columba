@@ -1955,4 +1955,219 @@ class PropagationNodeManagerTest {
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
+    // ========== start() Debug Logging Tests ==========
+
+    @Test
+    fun `start - logs nodeType counts with propagation nodes present`() =
+        runTest {
+            // Given: Database has propagation nodes
+            // Clear existing mock state and set up fresh behavior
+            clearAllMocks()
+            coEvery { announceRepository.getNodeTypeCounts() } returns listOf(
+                Pair("PROPAGATION_NODE", 5),
+                Pair("PEER", 10),
+            )
+            every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(emptyList())
+            every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
+            coEvery { announceRepository.getAnnounce(any()) } returns null
+            every { contactRepository.getMyRelayFlow() } returns flowOf(null)
+            every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(true)
+            every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(60)
+            every { settingsRepository.autoRetrieveEnabledFlow } returns flowOf(false)
+            coEvery { settingsRepository.getLastSyncTimestamp() } returns null
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            coEvery { settingsRepository.getManualPropagationNode() } returns null
+
+            // Create a fresh manager with the mock set up
+            val testManager = PropagationNodeManager(
+                settingsRepository = settingsRepository,
+                contactRepository = contactRepository,
+                announceRepository = announceRepository,
+                reticulumProtocol = reticulumProtocol,
+                scope = testScope.backgroundScope,
+            )
+
+            // When: Start is called - exercises the nodeType logging code path
+            testManager.start()
+            advanceUntilIdle()
+
+            // Then: No exception thrown (code path exercised for coverage)
+            testManager.stop()
+        }
+
+    @Test
+    fun `start - logs warning when no propagation nodes in database`() =
+        runTest {
+            // Given: Database has no propagation nodes (only peers) - triggers warning log
+            clearAllMocks()
+            coEvery { announceRepository.getNodeTypeCounts() } returns listOf(
+                Pair("PEER", 10),
+            )
+            every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(emptyList())
+            every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
+            coEvery { announceRepository.getAnnounce(any()) } returns null
+            every { contactRepository.getMyRelayFlow() } returns flowOf(null)
+            every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(true)
+            every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(60)
+            every { settingsRepository.autoRetrieveEnabledFlow } returns flowOf(false)
+            coEvery { settingsRepository.getLastSyncTimestamp() } returns null
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            coEvery { settingsRepository.getManualPropagationNode() } returns null
+
+            // Create a fresh manager with the mock set up
+            val testManager = PropagationNodeManager(
+                settingsRepository = settingsRepository,
+                contactRepository = contactRepository,
+                announceRepository = announceRepository,
+                reticulumProtocol = reticulumProtocol,
+                scope = testScope.backgroundScope,
+            )
+
+            // When: Start is called - exercises the warning log code path
+            testManager.start()
+            advanceUntilIdle()
+
+            // Then: No exception thrown (code path exercised for coverage)
+            testManager.stop()
+        }
+
+    @Test
+    fun `start - handles getNodeTypeCounts exception gracefully`() =
+        runTest {
+            // Given: getNodeTypeCounts throws an exception - exercises catch block
+            clearAllMocks()
+            coEvery { announceRepository.getNodeTypeCounts() } throws RuntimeException("Database error")
+            every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(emptyList())
+            every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
+            coEvery { announceRepository.getAnnounce(any()) } returns null
+            every { contactRepository.getMyRelayFlow() } returns flowOf(null)
+            every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(true)
+            every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(60)
+            every { settingsRepository.autoRetrieveEnabledFlow } returns flowOf(false)
+            coEvery { settingsRepository.getLastSyncTimestamp() } returns null
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            coEvery { settingsRepository.getManualPropagationNode() } returns null
+
+            // Create a fresh manager with the mock set up
+            val testManager = PropagationNodeManager(
+                settingsRepository = settingsRepository,
+                contactRepository = contactRepository,
+                announceRepository = announceRepository,
+                reticulumProtocol = reticulumProtocol,
+                scope = testScope.backgroundScope,
+            )
+
+            // When: Start is called (should not throw) - exercises exception handler
+            testManager.start()
+            advanceUntilIdle()
+
+            // Then: No exception thrown, manager continues to function
+            testManager.stop()
+        }
+
+    // ========== availableRelaysState Tests ==========
+
+    @Test
+    fun `availableRelaysState - maps announces to RelayInfo correctly`() =
+        runTest {
+            // Clear existing mock state
+            clearAllMocks()
+
+            // Given: Database has propagation node announces
+            val testAnnounce = TestFactories.createAnnounce(
+                destinationHash = testDestHash,
+                peerName = "Test Relay",
+                hops = 3,
+                nodeType = "PROPAGATION_NODE",
+            )
+            every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(listOf(testAnnounce))
+            every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
+            coEvery { announceRepository.getAnnounce(any()) } returns null
+            coEvery { announceRepository.getNodeTypeCounts() } returns emptyList()
+            every { contactRepository.getMyRelayFlow() } returns flowOf(null)
+            every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(true)
+            every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(60)
+            every { settingsRepository.autoRetrieveEnabledFlow } returns flowOf(false)
+            coEvery { settingsRepository.getLastSyncTimestamp() } returns null
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            coEvery { settingsRepository.getManualPropagationNode() } returns null
+
+            // Create a new manager to get fresh StateFlow
+            val testManager = PropagationNodeManager(
+                settingsRepository = settingsRepository,
+                contactRepository = contactRepository,
+                announceRepository = announceRepository,
+                reticulumProtocol = reticulumProtocol,
+                scope = testScope.backgroundScope,
+            )
+
+            // Wait for StateFlow to emit
+            testManager.availableRelaysState.test(timeout = 5.seconds) {
+                // Skip loading state
+                var state = awaitItem()
+                if (state is AvailableRelaysState.Loading) {
+                    state = awaitItem()
+                }
+
+                // Then: Should be Loaded with correct relay info
+                assertTrue("State should be Loaded", state is AvailableRelaysState.Loaded)
+                val loadedState = state as AvailableRelaysState.Loaded
+                assertEquals(1, loadedState.relays.size)
+                val relay = loadedState.relays[0]
+                assertEquals(testDestHash, relay.destinationHash)
+                assertEquals("Test Relay", relay.displayName)
+                assertEquals(3, relay.hops)
+
+                cancelAndConsumeRemainingEvents()
+            }
+
+            testManager.stop()
+        }
+
+    @Test
+    fun `availableRelaysState - empty when no propagation nodes`() =
+        runTest {
+            // Clear existing mock state
+            clearAllMocks()
+
+            // Given: No propagation nodes in database
+            every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(emptyList())
+            every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
+            coEvery { announceRepository.getAnnounce(any()) } returns null
+            coEvery { announceRepository.getNodeTypeCounts() } returns emptyList()
+            every { contactRepository.getMyRelayFlow() } returns flowOf(null)
+            every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(true)
+            every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(60)
+            every { settingsRepository.autoRetrieveEnabledFlow } returns flowOf(false)
+            coEvery { settingsRepository.getLastSyncTimestamp() } returns null
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            coEvery { settingsRepository.getManualPropagationNode() } returns null
+
+            // Create a new manager
+            val testManager = PropagationNodeManager(
+                settingsRepository = settingsRepository,
+                contactRepository = contactRepository,
+                announceRepository = announceRepository,
+                reticulumProtocol = reticulumProtocol,
+                scope = testScope.backgroundScope,
+            )
+
+            // Wait for StateFlow to emit
+            testManager.availableRelaysState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                if (state is AvailableRelaysState.Loading) {
+                    state = awaitItem()
+                }
+
+                // Then: Should be Loaded with empty list
+                assertTrue("State should be Loaded", state is AvailableRelaysState.Loaded)
+                val loadedState = state as AvailableRelaysState.Loaded
+                assertTrue("Relays should be empty", loadedState.relays.isEmpty())
+
+                cancelAndConsumeRemainingEvents()
+            }
+
+            testManager.stop()
+        }
+
 }

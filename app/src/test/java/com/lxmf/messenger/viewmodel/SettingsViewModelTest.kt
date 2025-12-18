@@ -1245,6 +1245,46 @@ class SettingsViewModelTest {
             }
         }
 
+    @Test
+    fun `updateDisplayName failure doesNotSetShowSaveSuccess`() =
+        runTest {
+            val testIdentity = createTestIdentity(displayName = "OldName")
+            coEvery { identityRepository.getActiveIdentitySync() } returns testIdentity
+            coEvery { identityRepository.updateDisplayName(any(), any()) } returns
+                Result.failure(RuntimeException("Database error"))
+            viewModel = createViewModel()
+
+            // Get initial state - UnconfinedTestDispatcher runs coroutines immediately
+            val initialState = viewModel.state.value
+            assertFalse("showSaveSuccess should initially be false", initialState.showSaveSuccess)
+
+            // Call updateDisplayName which should fail
+            viewModel.updateDisplayName("NewName")
+
+            // Verify the update was attempted and failed
+            coVerify { identityRepository.updateDisplayName("test123", "NewName") }
+
+            // showSaveSuccess should still be false since it failed
+            val finalState = viewModel.state.value
+            assertFalse("showSaveSuccess should be false on failure", finalState.showSaveSuccess)
+        }
+
+    @Test
+    fun `updateDisplayName exception handledGracefully`() =
+        runTest {
+            val testIdentity = createTestIdentity(displayName = "OldName")
+            coEvery { identityRepository.getActiveIdentitySync() } returns testIdentity
+            coEvery { identityRepository.updateDisplayName(any(), any()) } throws
+                RuntimeException("Unexpected error")
+            viewModel = createViewModel()
+
+            // Should not throw
+            viewModel.updateDisplayName("NewName")
+
+            // Verify the update was attempted
+            coVerify { identityRepository.updateDisplayName("test123", "NewName") }
+        }
+
     // endregion
 
     // region QR Dialog Tests
@@ -1361,6 +1401,84 @@ class SettingsViewModelTest {
                 // The method sets isManualAnnouncing=true initially, then sets it back to false
                 // with an error. We just verify the error was set (proving the method ran).
                 assertEquals("Service not available", finalState.manualAnnounceError)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `triggerManualAnnounce success with ServiceReticulumProtocol`() =
+        runTest {
+            // Given: ServiceReticulumProtocol that returns success
+            val serviceProtocol =
+                mockk<com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol>(relaxed = true) {
+                    every { networkStatus } returns networkStatusFlow
+                    coEvery { triggerAutoAnnounce(any()) } returns Result.success(Unit)
+                }
+
+            viewModel =
+                SettingsViewModel(
+                    settingsRepository = settingsRepository,
+                    identityRepository = identityRepository,
+                    reticulumProtocol = serviceProtocol,
+                    interfaceConfigManager = interfaceConfigManager,
+                    propagationNodeManager = propagationNodeManager,
+                )
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                viewModel.triggerManualAnnounce()
+
+                // Wait for success state
+                val finalState = expectMostRecentItem()
+                assertTrue("Should show success", finalState.showManualAnnounceSuccess)
+                assertFalse("Should not be announcing anymore", finalState.isManualAnnouncing)
+
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Verify announce was called and timestamp was saved
+            coVerify { serviceProtocol.triggerAutoAnnounce(any()) }
+            coVerify { settingsRepository.saveLastAutoAnnounceTime(any()) }
+        }
+
+    @Test
+    fun `triggerManualAnnounce failure with ServiceReticulumProtocol`() =
+        runTest {
+            // Given: ServiceReticulumProtocol that returns failure
+            val serviceProtocol =
+                mockk<com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol>(relaxed = true) {
+                    every { networkStatus } returns networkStatusFlow
+                    coEvery { triggerAutoAnnounce(any()) } returns Result.failure(RuntimeException("Announce failed"))
+                }
+
+            viewModel =
+                SettingsViewModel(
+                    settingsRepository = settingsRepository,
+                    identityRepository = identityRepository,
+                    reticulumProtocol = serviceProtocol,
+                    interfaceConfigManager = interfaceConfigManager,
+                    propagationNodeManager = propagationNodeManager,
+                )
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                viewModel.triggerManualAnnounce()
+
+                // Wait for error state
+                val finalState = expectMostRecentItem()
+                assertEquals("Announce failed", finalState.manualAnnounceError)
+                assertFalse("Should not be announcing anymore", finalState.isManualAnnouncing)
 
                 cancelAndConsumeRemainingEvents()
             }

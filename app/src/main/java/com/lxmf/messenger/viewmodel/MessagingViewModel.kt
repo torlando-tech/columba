@@ -1,5 +1,7 @@
 package com.lxmf.messenger.viewmodel
 
+import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,6 +17,7 @@ import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.model.ImageCache
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.ui.model.decodeAndCacheImage
+import com.lxmf.messenger.ui.model.loadFileAttachmentData
 import com.lxmf.messenger.ui.model.toMessageUi
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
@@ -564,6 +567,51 @@ class MessagingViewModel
          */
         fun setProcessingFile(processing: Boolean) {
             _isProcessingFile.value = processing
+        }
+
+        /**
+         * Save a received file attachment to the user's chosen location.
+         *
+         * @param context Android context for content resolver
+         * @param messageId The message ID containing the file attachment
+         * @param fileIndex The index of the file attachment in the message's field 5
+         * @param destinationUri The Uri where the user wants to save the file
+         * @return true if save was successful, false otherwise
+         */
+        suspend fun saveReceivedFileAttachment(
+            context: Context,
+            messageId: String,
+            fileIndex: Int,
+            destinationUri: Uri,
+        ): Boolean {
+            return try {
+                // Get the message from the database
+                val messageEntity = conversationRepository.getMessageById(messageId)
+                if (messageEntity == null) {
+                    Log.e(TAG, "Message not found: $messageId")
+                    return false
+                }
+
+                // Load the file data from the message's fieldsJson
+                val fileData = loadFileAttachmentData(messageEntity.fieldsJson, fileIndex)
+                if (fileData == null) {
+                    Log.e(TAG, "Could not load file attachment data for message $messageId index $fileIndex")
+                    return false
+                }
+
+                // Write to the destination Uri
+                context.contentResolver.openOutputStream(destinationUri)?.use { outputStream ->
+                    outputStream.write(fileData)
+                    Log.d(TAG, "Saved file attachment (${fileData.size} bytes) to $destinationUri")
+                    true
+                } ?: run {
+                    Log.e(TAG, "Could not open output stream for $destinationUri")
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save file attachment", e)
+                false
+            }
         }
 
         /**

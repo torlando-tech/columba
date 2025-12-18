@@ -220,6 +220,33 @@ fun MessagingScreen(
             }
         }
 
+    // State for saving received file attachments
+    var pendingFileSave by remember { mutableStateOf<Triple<String, Int, String>?>(null) }
+
+    // File save launcher (CreateDocument)
+    val fileSaveLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument("*/*"),
+        ) { uri ->
+            uri?.let { destinationUri ->
+                pendingFileSave?.let { (messageId, fileIndex, _) ->
+                    scope.launch(Dispatchers.IO) {
+                        val success = viewModel.saveReceivedFileAttachment(
+                            context,
+                            messageId,
+                            fileIndex,
+                            destinationUri,
+                        )
+                        withContext(Dispatchers.Main) {
+                            val message = if (success) "File saved" else "Failed to save file"
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+            pendingFileSave = null
+        }
+
     // Clipboard for copy functionality
     val clipboardManager = LocalClipboardManager.current
 
@@ -462,6 +489,10 @@ fun MessagingScreen(
                                         clipboardManager = clipboardManager,
                                         onViewDetails = onViewMessageDetails,
                                         onRetry = { viewModel.retryFailedMessage(message.id) },
+                                        onFileAttachmentTap = { messageId, fileIndex, filename ->
+                                            pendingFileSave = Triple(messageId, fileIndex, filename)
+                                            fileSaveLauncher.launch(filename)
+                                        },
                                     )
                                 }
                             }
@@ -507,6 +538,7 @@ fun MessageBubble(
     clipboardManager: androidx.compose.ui.platform.ClipboardManager,
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
+    onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var showMenu by remember { mutableStateOf(false) }
@@ -583,7 +615,11 @@ fun MessageBubble(
                             FileAttachmentCard(
                                 attachment = fileAttachment,
                                 onTap = {
-                                    // TODO: Implement file save/open functionality
+                                    onFileAttachmentTap(
+                                        message.id,
+                                        fileAttachment.index,
+                                        fileAttachment.filename,
+                                    )
                                 },
                             )
                             Spacer(modifier = Modifier.height(8.dp))

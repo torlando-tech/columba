@@ -316,10 +316,8 @@ fun loadFileAttachmentData(
             return null
         }
 
-        // Convert hex string to bytes
-        hexData.chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
+        // Convert hex string to bytes efficiently (avoid chunked/map overhead for large files)
+        hexStringToByteArray(hexData)
             .also {
                 Log.d(TAG, "Loaded file attachment at index $index (${it.size} bytes)")
             }
@@ -327,4 +325,22 @@ fun loadFileAttachmentData(
         Log.e(TAG, "Failed to load file attachment data at index $index", e)
         null
     }
+}
+
+/**
+ * Efficiently convert a hex string to byte array.
+ * Uses direct array allocation and character arithmetic instead of
+ * chunked/map which creates many intermediate objects.
+ */
+private fun hexStringToByteArray(hex: String): ByteArray {
+    val len = hex.length
+    val result = ByteArray(len / 2)
+    var i = 0
+    while (i < len) {
+        val high = Character.digit(hex[i], 16)
+        val low = Character.digit(hex[i + 1], 16)
+        result[i / 2] = ((high shl 4) or low).toByte()
+        i += 2
+    }
+    return result
 }

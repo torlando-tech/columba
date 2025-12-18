@@ -38,7 +38,7 @@ fun getVersionFromTag(): Pair<Int, String> {
     } catch (e: Exception) {
         // Not on a tag or git command failed, use defaults
         println("Warning: Could not parse version from git tag, using defaults")
-        Pair(1, "1.0.0-dev")
+        Pair(301, "3.0.1-dev")
     }
 }
 

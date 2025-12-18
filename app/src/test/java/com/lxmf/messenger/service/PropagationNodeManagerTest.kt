@@ -26,7 +26,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import kotlin.time.Duration.Companion.seconds
@@ -89,6 +91,8 @@ class PropagationNodeManagerTest {
 
         // Default repository mocks
         every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
+        every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(emptyList())
+        coEvery { announceRepository.getNodeTypeCounts() } returns emptyList()
         coEvery { announceRepository.getAnnounce(any()) } returns null
         coEvery { contactRepository.hasContact(any()) } returns false
         coEvery { contactRepository.addContactFromAnnounce(any(), any()) } returns Result.success(Unit)
@@ -1934,4 +1938,21 @@ class PropagationNodeManagerTest {
             // Then: Null nickname is passed
             coVerify { contactRepository.addPendingContact(testDestHash, null) }
         }
+
+    @Test
+    fun `setManualRelayByHash - handles addPendingContact failure gracefully`() =
+        runTest {
+            // Given: Contact does not exist but adding fails
+            coEvery { contactRepository.hasContact(testDestHash) } returns false
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.failure(RuntimeException("Database error"))
+
+            // When
+            manager.setManualRelayByHash(testDestHash, "My Relay")
+            advanceUntilIdle()
+
+            // Then: Should still set as relay even if contact add fails
+            coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
+        }
+
 }

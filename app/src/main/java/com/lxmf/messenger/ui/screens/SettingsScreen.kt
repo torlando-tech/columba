@@ -177,6 +177,9 @@ fun SettingsScreen(
                     onMethodChange = { viewModel.setDefaultDeliveryMethod(it) },
                     onTryPropagationToggle = { viewModel.setTryPropagationOnFail(it) },
                     onAutoSelectToggle = { viewModel.setAutoSelectPropagationNode(it) },
+                    onAddManualRelay = { hash, nickname ->
+                        viewModel.addManualPropagationNode(hash, nickname)
+                    },
                     // Retrieval settings
                     autoRetrieveEnabled = state.autoRetrieveEnabled,
                     retrievalIntervalSeconds = state.retrievalIntervalSeconds,

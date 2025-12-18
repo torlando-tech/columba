@@ -344,6 +344,42 @@ class PropagationNodeManager
         }
 
         /**
+         * Manually set a propagation node by destination hash only.
+         * Used when user enters a hash directly without having received an announce.
+         * Creates a contact if needed and sets as relay.
+         *
+         * @param destinationHash 32-character hex destination hash (already validated)
+         * @param nickname Optional display name for this relay
+         */
+        suspend fun setManualRelayByHash(
+            destinationHash: String,
+            nickname: String?,
+        ) {
+            Log.i(TAG, "User manually entered relay hash: $destinationHash")
+
+            // Disable auto-select and save manual selection
+            settingsRepository.saveAutoSelectPropagationNode(false)
+            settingsRepository.saveManualPropagationNode(destinationHash)
+
+            // Add contact if it doesn't exist
+            // addPendingContact handles both cases:
+            // - If announce exists, creates full contact with public key
+            // - If no announce, creates pending contact
+            if (!contactRepository.hasContact(destinationHash)) {
+                val result = contactRepository.addPendingContact(destinationHash, nickname)
+                result.onSuccess { addResult ->
+                    Log.d(TAG, "Added contact for manual relay: $addResult")
+                }.onFailure { error ->
+                    Log.e(TAG, "Failed to add contact for manual relay: ${error.message}")
+                }
+            }
+
+            // This updates the database, which triggers currentRelay Flow,
+            // which triggers observeRelayChanges() to sync Python layer
+            contactRepository.setAsMyRelay(destinationHash, clearOther = true)
+        }
+
+        /**
          * Called when the current relay contact is deleted by the user.
          * Clears current state and triggers auto-selection of a new relay if enabled.
          */

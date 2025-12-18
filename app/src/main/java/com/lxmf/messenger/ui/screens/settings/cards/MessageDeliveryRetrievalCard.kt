@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.util.DestinationHashValidator
 
 /**
  * Settings card for message delivery and retrieval options.
@@ -74,6 +75,7 @@ fun MessageDeliveryRetrievalCard(
     onMethodChange: (String) -> Unit,
     onTryPropagationToggle: (Boolean) -> Unit,
     onAutoSelectToggle: (Boolean) -> Unit,
+    onAddManualRelay: (destinationHash: String, nickname: String?) -> Unit,
     // Retrieval settings
     autoRetrieveEnabled: Boolean,
     retrievalIntervalSeconds: Int,
@@ -86,6 +88,8 @@ fun MessageDeliveryRetrievalCard(
     var showMethodDropdown by remember { mutableStateOf(false) }
     var showCustomIntervalDialog by remember { mutableStateOf(false) }
     var customIntervalInput by remember { mutableStateOf("") }
+    var manualHashInput by remember { mutableStateOf("") }
+    var manualNicknameInput by remember { mutableStateOf("") }
 
     val presetIntervals = listOf(30, 60, 120, 300)
 
@@ -320,11 +324,29 @@ fun MessageDeliveryRetrievalCard(
                     hops = currentRelayHops,
                     isAutoSelected = isAutoSelect,
                 )
-            } else {
+            } else if (isAutoSelect) {
+                // Auto-select mode with no relay yet
                 Text(
-                    text = "No relay configured. Select a propagation node from the Announce Stream.",
+                    text = "No relay configured. Waiting for propagation node announces...",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // Manual entry - always show when "Use specific relay" is selected
+            if (!isAutoSelect) {
+                Spacer(modifier = Modifier.height(8.dp))
+                ManualRelayInput(
+                    hashInput = manualHashInput,
+                    onHashChange = { manualHashInput = it },
+                    nicknameInput = manualNicknameInput,
+                    onNicknameChange = { manualNicknameInput = it },
+                    onConfirm = { hash, nickname ->
+                        onAddManualRelay(hash, nickname)
+                        // Clear inputs after confirmation
+                        manualHashInput = ""
+                        manualNicknameInput = ""
+                    },
                 )
             }
 
@@ -651,4 +673,81 @@ private fun CustomRetrievalIntervalDialog(
             }
         },
     )
+}
+
+/**
+ * Input form for manually entering a propagation node destination hash.
+ */
+@Composable
+private fun ManualRelayInput(
+    hashInput: String,
+    onHashChange: (String) -> Unit,
+    nicknameInput: String,
+    onNicknameChange: (String) -> Unit,
+    onConfirm: (hash: String, nickname: String?) -> Unit,
+) {
+    val validationResult = DestinationHashValidator.validate(hashInput)
+    val isValid = validationResult is DestinationHashValidator.ValidationResult.Valid
+    val errorMessage = (validationResult as? DestinationHashValidator.ValidationResult.Error)?.message
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Enter relay destination hash:",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        OutlinedTextField(
+            value = hashInput,
+            onValueChange = { input ->
+                // Only allow hex characters, up to 32 chars
+                val filtered = input.filter { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
+                if (filtered.length <= 32) {
+                    onHashChange(filtered)
+                }
+            },
+            label = { Text("Destination Hash") },
+            placeholder = { Text("32-character hex") },
+            singleLine = true,
+            isError = hashInput.isNotEmpty() && !isValid,
+            supportingText = {
+                if (hashInput.isEmpty()) {
+                    Text(DestinationHashValidator.getCharacterCount(hashInput))
+                } else if (!isValid && errorMessage != null) {
+                    Text(errorMessage)
+                } else {
+                    Text(DestinationHashValidator.getCharacterCount(hashInput))
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        OutlinedTextField(
+            value = nicknameInput,
+            onValueChange = onNicknameChange,
+            label = { Text("Nickname (optional)") },
+            placeholder = { Text("e.g., My Home Relay") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Button(
+            onClick = {
+                val normalizedHash =
+                    (validationResult as DestinationHashValidator.ValidationResult.Valid).normalizedHash
+                val nickname = nicknameInput.trim().takeIf { it.isNotEmpty() }
+                onConfirm(normalizedHash, nickname)
+            },
+            enabled = isValid,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Set as Relay")
+        }
+    }
 }

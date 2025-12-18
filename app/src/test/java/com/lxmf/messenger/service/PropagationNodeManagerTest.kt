@@ -1819,4 +1819,119 @@ class PropagationNodeManagerTest {
                 "Should return nearest relay, got ${result.destinationHash}"
             }
         }
+
+    // ========== setManualRelayByHash Tests ==========
+
+    @Test
+    fun `setManualRelayByHash - disables auto-select`() =
+        runTest {
+            // Given: Mock addPendingContact for when contact doesn't exist
+            coEvery { contactRepository.hasContact(testDestHash) } returns false
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
+
+            // When
+            manager.setManualRelayByHash(testDestHash, "My Relay")
+            advanceUntilIdle()
+
+            // Then
+            coVerify { settingsRepository.saveAutoSelectPropagationNode(false) }
+        }
+
+    @Test
+    fun `setManualRelayByHash - saves manual node to settings`() =
+        runTest {
+            // Given: Mock addPendingContact for when contact doesn't exist
+            coEvery { contactRepository.hasContact(testDestHash) } returns false
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
+
+            // When
+            manager.setManualRelayByHash(testDestHash, "My Relay")
+            advanceUntilIdle()
+
+            // Then
+            coVerify { settingsRepository.saveManualPropagationNode(testDestHash) }
+        }
+
+    @Test
+    fun `setManualRelayByHash - adds contact if not exists`() =
+        runTest {
+            // Given: Contact does not exist
+            coEvery { contactRepository.hasContact(testDestHash) } returns false
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
+
+            // When
+            manager.setManualRelayByHash(testDestHash, "My Relay")
+            advanceUntilIdle()
+
+            // Then
+            coVerify { contactRepository.addPendingContact(testDestHash, "My Relay") }
+        }
+
+    @Test
+    fun `setManualRelayByHash - does not add contact if exists`() =
+        runTest {
+            // Given: Contact already exists
+            coEvery { contactRepository.hasContact(testDestHash) } returns true
+
+            // When
+            manager.setManualRelayByHash(testDestHash, "My Relay")
+            advanceUntilIdle()
+
+            // Then: Should NOT add contact
+            coVerify(exactly = 0) { contactRepository.addPendingContact(any(), any()) }
+
+            // But should still set as relay
+            coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
+        }
+
+    @Test
+    fun `setManualRelayByHash - sets as my relay`() =
+        runTest {
+            // Given: Mock addPendingContact for when contact doesn't exist
+            coEvery { contactRepository.hasContact(testDestHash) } returns false
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
+
+            // When
+            manager.setManualRelayByHash(testDestHash, "My Relay")
+            advanceUntilIdle()
+
+            // Then
+            coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
+        }
+
+    @Test
+    fun `setManualRelayByHash - with nickname passes nickname to addPendingContact`() =
+        runTest {
+            // Given: Contact does not exist
+            coEvery { contactRepository.hasContact(testDestHash) } returns false
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
+
+            // When
+            manager.setManualRelayByHash(testDestHash, "Custom Nickname")
+            advanceUntilIdle()
+
+            // Then: Nickname is passed to addPendingContact
+            coVerify { contactRepository.addPendingContact(testDestHash, "Custom Nickname") }
+        }
+
+    @Test
+    fun `setManualRelayByHash - with null nickname passes null to addPendingContact`() =
+        runTest {
+            // Given: Contact does not exist
+            coEvery { contactRepository.hasContact(testDestHash) } returns false
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
+
+            // When
+            manager.setManualRelayByHash(testDestHash, null)
+            advanceUntilIdle()
+
+            // Then: Null nickname is passed
+            coVerify { contactRepository.addPendingContact(testDestHash, null) }
+        }
 }

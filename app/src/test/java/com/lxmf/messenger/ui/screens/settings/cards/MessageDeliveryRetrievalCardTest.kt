@@ -81,6 +81,7 @@ class MessageDeliveryRetrievalCardTest {
                     onMethodChange = { methodChanged = it },
                     onTryPropagationToggle = { propagationToggled = it },
                     onAutoSelectToggle = { autoSelectToggled = it },
+                    onAddManualRelay = { _, _ -> },
                     autoRetrieveEnabled = config.autoRetrieveEnabled,
                     retrievalIntervalSeconds = config.retrievalIntervalSeconds,
                     lastSyncTimestamp = config.lastSyncTimestamp,
@@ -361,10 +362,12 @@ class MessageDeliveryRetrievalCardTest {
 
     @Test
     fun currentRelayInfo_noRelay_displaysConfigureMessage() {
+        // noRelayState() has isAutoSelect=true, so when no relay is configured,
+        // we show the waiting message for auto-select mode
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.noRelayState())
 
         composeTestRule.onNodeWithText(
-            "No relay configured. Select a propagation node from the Announce Stream.",
+            "No relay configured. Waiting for propagation node announces...",
         ).performScrollTo().assertIsDisplayed()
     }
 
@@ -1002,8 +1005,9 @@ class MessageDeliveryRetrievalCardTest {
 
         // Card should still render without crashing
         composeTestRule.onNodeWithText("Message Delivery & Retrieval").assertIsDisplayed()
+        // When auto-select is enabled (default) with no relay, show waiting message
         composeTestRule.onNodeWithText(
-            "No relay configured. Select a propagation node from the Announce Stream.",
+            "No relay configured. Waiting for propagation node announces...",
         ).performScrollTo().assertIsDisplayed()
     }
 

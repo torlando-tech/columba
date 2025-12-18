@@ -940,6 +940,23 @@ class SettingsViewModel
         }
 
         /**
+         * Manually add a propagation node by destination hash.
+         * Used when user enters a relay hash directly.
+         *
+         * @param destinationHash 32-character hex destination hash (already validated)
+         * @param nickname Optional display name for this relay
+         */
+        fun addManualPropagationNode(
+            destinationHash: String,
+            nickname: String?,
+        ) {
+            viewModelScope.launch {
+                propagationNodeManager.setManualRelayByHash(destinationHash, nickname)
+                Log.d(TAG, "Manual propagation node added: $destinationHash")
+            }
+        }
+
+        /**
          * Start observing current relay info from PropagationNodeManager.
          * Call this after init to update state with relay information.
          */

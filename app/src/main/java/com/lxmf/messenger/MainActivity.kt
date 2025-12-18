@@ -481,8 +481,20 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                         )
                     }
 
-                    composable(Screen.Announces.route) {
+                    composable(
+                        route = "${Screen.Announces.route}?filterType={filterType}",
+                        arguments =
+                            listOf(
+                                navArgument("filterType") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
+                                },
+                            ),
+                    ) { backStackEntry ->
+                        val filterType = backStackEntry.arguments?.getString("filterType")
                         AnnounceStreamScreen(
+                            initialFilterType = filterType,
                             onPeerClick = { destinationHash, _ ->
                                 val encodedHash = Uri.encode(destinationHash)
                                 navController.navigate("announce_detail/$encodedHash")
@@ -557,6 +569,22 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                             },
                             onNavigateToMigration = {
                                 navController.navigate("migration")
+                            },
+                            onNavigateToAnnounces = { filterType ->
+                                selectedTab = 1 // Announces tab
+                                val route =
+                                    if (filterType != null) {
+                                        "${Screen.Announces.route}?filterType=$filterType"
+                                    } else {
+                                        Screen.Announces.route
+                                    }
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = false // Don't restore state so filter applies
+                                }
                             },
                         )
                     }

@@ -60,6 +60,7 @@ fun SettingsScreen(
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToCustomThemes: () -> Unit = {},
     onNavigateToMigration: () -> Unit = {},
+    onNavigateToAnnounces: (filterType: String?) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
@@ -193,6 +194,7 @@ fun SettingsScreen(
                     onAutoRetrieveToggle = { viewModel.setAutoRetrieveEnabled(it) },
                     onIntervalChange = { viewModel.setRetrievalIntervalSeconds(it) },
                     onSyncNow = { viewModel.syncNow() },
+                    onViewMoreRelays = { onNavigateToAnnounces("PROPAGATION_NODE") },
                 )
 
                 ThemeSelectionCard(

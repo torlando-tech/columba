@@ -90,6 +90,7 @@ fun MessageDeliveryRetrievalCard(
     onAutoRetrieveToggle: (Boolean) -> Unit,
     onIntervalChange: (Int) -> Unit,
     onSyncNow: () -> Unit,
+    onViewMoreRelays: () -> Unit = {},
 ) {
     var showMethodDropdown by remember { mutableStateOf(false) }
     var showCustomIntervalDialog by remember { mutableStateOf(false) }
@@ -523,6 +524,7 @@ fun MessageDeliveryRetrievalCard(
                 onSelectRelay(hash, name)
                 showRelaySelectionDialog = false
             },
+            onViewMoreRelays = onViewMoreRelays,
             onDismiss = { showRelaySelectionDialog = false },
         )
     }
@@ -790,6 +792,7 @@ private fun RelaySelectionDialog(
     availableRelays: List<RelayInfo>,
     currentRelayHash: String?,
     onSelectRelay: (hash: String, name: String) -> Unit,
+    onViewMoreRelays: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -812,6 +815,15 @@ private fun RelaySelectionDialog(
                             relay = relay,
                             isSelected = relay.destinationHash == currentRelayHash,
                             onClick = { onSelectRelay(relay.destinationHash, relay.displayName) },
+                        )
+                    }
+                    // "More..." item to view all relays in the announces screen
+                    item(key = "more_relays") {
+                        MoreRelaysItem(
+                            onClick = {
+                                onViewMoreRelays()
+                                onDismiss()
+                            },
                         )
                     }
                 }
@@ -892,6 +904,40 @@ private fun RelayListItem(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+        }
+    }
+}
+
+/**
+ * A "More..." item at the end of the relay list to view all relays.
+ */
+@Composable
+private fun MoreRelaysItem(onClick: () -> Unit) {
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+            ),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = "View All Relays...",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
         }
     }
 }

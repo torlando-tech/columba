@@ -76,6 +76,7 @@ import kotlinx.coroutines.launch
 fun AnnounceStreamScreen(
     onPeerClick: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
     onStartChat: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
+    initialFilterType: String? = null,
     viewModel: AnnounceStreamViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.announces.collectAsLazyPagingItems()
@@ -84,6 +85,16 @@ fun AnnounceStreamScreen(
     var isSearching by remember { mutableStateOf(false) }
     val selectedNodeTypes by viewModel.selectedNodeTypes.collectAsState()
     val showAudioAnnounces by viewModel.showAudioAnnounces.collectAsState()
+
+    // Apply initial filter if provided (e.g., from relay settings "View All Relays...")
+    LaunchedEffect(initialFilterType) {
+        if (initialFilterType != null) {
+            val nodeType = runCatching { NodeType.valueOf(initialFilterType) }.getOrNull()
+            if (nodeType != null) {
+                viewModel.updateSelectedNodeTypes(setOf(nodeType))
+            }
+        }
+    }
 
     // Announce button state
     val isAnnouncing by viewModel.isAnnouncing.collectAsState()

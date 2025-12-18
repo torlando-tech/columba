@@ -38,6 +38,8 @@ import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import java.io.ByteArrayOutputStream
+import com.lxmf.messenger.util.FileAttachment
+import com.lxmf.messenger.util.FileUtils
 import com.lxmf.messenger.data.repository.Message as DataMessage
 
 /**
@@ -1559,5 +1561,352 @@ class MessagingViewModelTest {
             fieldsJson = fieldsJson,
             deliveryMethod = null,
         )
+
+    // ========== FILE ATTACHMENT TESTS ==========
+
+    @Test
+    fun `addFileAttachment adds file to selectedFileAttachments`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            val attachment = FileAttachment(
+                filename = "test.pdf",
+                data = ByteArray(1024),
+                mimeType = "application/pdf",
+                sizeBytes = 1024,
+            )
+
+            viewModel.addFileAttachment(attachment)
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.selectedFileAttachments.value.size)
+            assertEquals("test.pdf", viewModel.selectedFileAttachments.value[0].filename)
+        }
+
+    @Test
+    fun `addFileAttachment adds multiple files`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            val attachment1 = FileAttachment(
+                filename = "test1.pdf",
+                data = ByteArray(1024),
+                mimeType = "application/pdf",
+                sizeBytes = 1024,
+            )
+            val attachment2 = FileAttachment(
+                filename = "test2.txt",
+                data = ByteArray(512),
+                mimeType = "text/plain",
+                sizeBytes = 512,
+            )
+
+            viewModel.addFileAttachment(attachment1)
+            viewModel.addFileAttachment(attachment2)
+            advanceUntilIdle()
+
+            assertEquals(2, viewModel.selectedFileAttachments.value.size)
+            assertEquals("test1.pdf", viewModel.selectedFileAttachments.value[0].filename)
+            assertEquals("test2.txt", viewModel.selectedFileAttachments.value[1].filename)
+        }
+
+    @Test
+    fun `addFileAttachment rejects file exceeding total size limit`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // First add a file that's close to the limit
+            val attachment1 = FileAttachment(
+                filename = "large.pdf",
+                data = ByteArray(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 100),
+                mimeType = "application/pdf",
+                sizeBytes = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 100,
+            )
+            viewModel.addFileAttachment(attachment1)
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.selectedFileAttachments.value.size)
+
+            // Collect error events
+            var errorMessage: String? = null
+            val job = launch {
+                viewModel.fileAttachmentError.collect { errorMessage = it }
+            }
+
+            // Try to add another file that would exceed the limit
+            val attachment2 = FileAttachment(
+                filename = "small.txt",
+                data = ByteArray(200),
+                mimeType = "text/plain",
+                sizeBytes = 200,
+            )
+            viewModel.addFileAttachment(attachment2)
+            advanceUntilIdle()
+
+            // Second file should be rejected
+            assertEquals(1, viewModel.selectedFileAttachments.value.size)
+            assertTrue(errorMessage?.contains("File too large") == true)
+
+            job.cancel()
+        }
+
+    @Test
+    fun `addFileAttachment rejects single file exceeding max single file size`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            var errorMessage: String? = null
+            val job = launch {
+                viewModel.fileAttachmentError.collect { errorMessage = it }
+            }
+
+            // Try to add a file larger than MAX_SINGLE_FILE_SIZE
+            val largeAttachment = FileAttachment(
+                filename = "huge.bin",
+                data = ByteArray(FileUtils.MAX_SINGLE_FILE_SIZE + 1),
+                mimeType = "application/octet-stream",
+                sizeBytes = FileUtils.MAX_SINGLE_FILE_SIZE + 1,
+            )
+            viewModel.addFileAttachment(largeAttachment)
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.selectedFileAttachments.value.size)
+            assertTrue(errorMessage?.contains("File too large") == true)
+
+            job.cancel()
+        }
+
+    @Test
+    fun `removeFileAttachment removes file at index`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Add two files
+            val attachment1 = FileAttachment("file1.pdf", ByteArray(100), "application/pdf", 100)
+            val attachment2 = FileAttachment("file2.txt", ByteArray(200), "text/plain", 200)
+            viewModel.addFileAttachment(attachment1)
+            viewModel.addFileAttachment(attachment2)
+            advanceUntilIdle()
+
+            assertEquals(2, viewModel.selectedFileAttachments.value.size)
+
+            // Remove first file
+            viewModel.removeFileAttachment(0)
+
+            assertEquals(1, viewModel.selectedFileAttachments.value.size)
+            assertEquals("file2.txt", viewModel.selectedFileAttachments.value[0].filename)
+        }
+
+    @Test
+    fun `removeFileAttachment does nothing for invalid index`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            val attachment = FileAttachment("file.pdf", ByteArray(100), "application/pdf", 100)
+            viewModel.addFileAttachment(attachment)
+            advanceUntilIdle()
+
+            // Try to remove at invalid index
+            viewModel.removeFileAttachment(5)
+
+            assertEquals(1, viewModel.selectedFileAttachments.value.size)
+        }
+
+    @Test
+    fun `removeFileAttachment handles negative index`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            val attachment = FileAttachment("file.pdf", ByteArray(100), "application/pdf", 100)
+            viewModel.addFileAttachment(attachment)
+            advanceUntilIdle()
+
+            // Try to remove at negative index
+            viewModel.removeFileAttachment(-1)
+
+            assertEquals(1, viewModel.selectedFileAttachments.value.size)
+        }
+
+    @Test
+    fun `clearFileAttachments removes all files`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Add multiple files
+            viewModel.addFileAttachment(FileAttachment("file1.pdf", ByteArray(100), "application/pdf", 100))
+            viewModel.addFileAttachment(FileAttachment("file2.txt", ByteArray(200), "text/plain", 200))
+            viewModel.addFileAttachment(FileAttachment("file3.zip", ByteArray(300), "application/zip", 300))
+            advanceUntilIdle()
+
+            assertEquals(3, viewModel.selectedFileAttachments.value.size)
+
+            // Clear all
+            viewModel.clearFileAttachments()
+
+            assertEquals(0, viewModel.selectedFileAttachments.value.size)
+        }
+
+    @Test
+    fun `totalAttachmentSize updates when files are added`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.totalAttachmentSize.value)
+
+            viewModel.addFileAttachment(FileAttachment("file1.pdf", ByteArray(1000), "application/pdf", 1000))
+            advanceUntilIdle()
+
+            assertEquals(1000, viewModel.totalAttachmentSize.value)
+
+            viewModel.addFileAttachment(FileAttachment("file2.txt", ByteArray(500), "text/plain", 500))
+            advanceUntilIdle()
+
+            assertEquals(1500, viewModel.totalAttachmentSize.value)
+        }
+
+    @Test
+    fun `totalAttachmentSize updates when files are removed`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.addFileAttachment(FileAttachment("file1.pdf", ByteArray(1000), "application/pdf", 1000))
+            viewModel.addFileAttachment(FileAttachment("file2.txt", ByteArray(500), "text/plain", 500))
+            advanceUntilIdle()
+
+            assertEquals(1500, viewModel.totalAttachmentSize.value)
+
+            viewModel.removeFileAttachment(0)
+            advanceUntilIdle()
+
+            assertEquals(500, viewModel.totalAttachmentSize.value)
+        }
+
+    @Test
+    fun `setProcessingFile updates isProcessingFile state`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.isProcessingFile.value)
+
+            viewModel.setProcessingFile(true)
+
+            assertEquals(true, viewModel.isProcessingFile.value)
+
+            viewModel.setProcessingFile(false)
+
+            assertEquals(false, viewModel.isProcessingFile.value)
+        }
+
+    @Test
+    fun `sendMessage with empty content but file attached succeeds`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val testReceipt =
+                MessageReceipt(
+                    messageHash = ByteArray(32) { it.toByte() },
+                    timestamp = 3000L,
+                    destinationHash = destHashBytes,
+                )
+            coEvery {
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(testReceipt)
+
+            coEvery {
+                conversationRepository.saveMessage(any(), any(), any(), any())
+            } just Runs
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Add a file attachment
+            val attachment = FileAttachment("document.pdf", ByteArray(1024), "application/pdf", 1024)
+            viewModel.addFileAttachment(attachment)
+            advanceUntilIdle()
+
+            // Send message with empty content but file attached
+            viewModel.sendMessage(testPeerHash, "")
+            advanceUntilIdle()
+
+            // Protocol should be called with file attachments
+            coVerify(exactly = 1) {
+                reticulumProtocol.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                    fileAttachments = match { it?.size == 1 && it[0].first == "document.pdf" },
+                )
+            }
+        }
+
+    @Test
+    fun `sendMessage clears file attachments after successful send`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val testReceipt =
+                MessageReceipt(
+                    messageHash = ByteArray(32) { it.toByte() },
+                    timestamp = 3000L,
+                    destinationHash = destHashBytes,
+                )
+            coEvery {
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(testReceipt)
+
+            coEvery {
+                conversationRepository.saveMessage(any(), any(), any(), any())
+            } just Runs
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Add a file attachment
+            val attachment = FileAttachment("document.pdf", ByteArray(1024), "application/pdf", 1024)
+            viewModel.addFileAttachment(attachment)
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.selectedFileAttachments.value.size)
+
+            // Send message
+            viewModel.sendMessage(testPeerHash, "Test with file")
+            advanceUntilIdle()
+
+            // File attachments should be cleared after successful send
+            assertEquals(0, viewModel.selectedFileAttachments.value.size)
+        }
+
+    @Test
+    fun `syncFromPropagationNode triggers sync`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            coEvery { propagationNodeManager.triggerSync() } just Runs
+
+            viewModel.syncFromPropagationNode()
+            advanceUntilIdle()
+
+            coVerify { propagationNodeManager.triggerSync() }
+        }
 
 }

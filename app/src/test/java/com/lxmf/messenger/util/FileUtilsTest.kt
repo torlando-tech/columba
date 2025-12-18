@@ -208,4 +208,68 @@ class FileUtilsTest {
     fun `MAX_SINGLE_FILE_SIZE is 512KB`() {
         assertEquals(512 * 1024, FileUtils.MAX_SINGLE_FILE_SIZE)
     }
+
+    // ========== Additional getMimeTypeFromFilename Tests ==========
+
+    @Test
+    fun `getMimeTypeFromFilename returns correct MIME for PPT files`() {
+        assertEquals("application/vnd.ms-powerpoint", FileUtils.getMimeTypeFromFilename("slides.ppt"))
+        assertEquals(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            FileUtils.getMimeTypeFromFilename("slides.pptx"),
+        )
+    }
+
+    @Test
+    fun `getMimeTypeFromFilename returns correct MIME for XML files`() {
+        assertEquals("application/xml", FileUtils.getMimeTypeFromFilename("config.xml"))
+    }
+
+    @Test
+    fun `getMimeTypeFromFilename returns correct MIME for SVG files`() {
+        assertEquals("image/svg+xml", FileUtils.getMimeTypeFromFilename("icon.svg"))
+    }
+
+    @Test
+    fun `getMimeTypeFromFilename returns correct MIME for APK files`() {
+        assertEquals("application/vnd.android.package-archive", FileUtils.getMimeTypeFromFilename("app.apk"))
+    }
+
+    @Test
+    fun `getMimeTypeFromFilename handles gzip extension`() {
+        assertEquals("application/gzip", FileUtils.getMimeTypeFromFilename("archive.gzip"))
+    }
+
+    @Test
+    fun `getMimeTypeFromFilename handles empty filename`() {
+        assertEquals("application/octet-stream", FileUtils.getMimeTypeFromFilename(""))
+    }
+
+    @Test
+    fun `getMimeTypeFromFilename handles filename with no extension`() {
+        assertEquals("application/octet-stream", FileUtils.getMimeTypeFromFilename("Makefile"))
+        assertEquals("application/octet-stream", FileUtils.getMimeTypeFromFilename("LICENSE"))
+    }
+
+    @Test
+    fun `getMimeTypeFromFilename handles hidden files`() {
+        assertEquals("application/octet-stream", FileUtils.getMimeTypeFromFilename(".gitignore"))
+        assertEquals("application/json", FileUtils.getMimeTypeFromFilename(".eslintrc.json"))
+    }
+
+    // ========== Additional getFileIconForMimeType Tests ==========
+
+    @Test
+    fun `getFileIconForMimeType handles null-like and edge case MIME types`() {
+        // Verify the else branch handles various edge cases
+        assertEquals(Icons.Default.InsertDriveFile, FileUtils.getFileIconForMimeType("image/png"))
+        assertEquals(Icons.Default.InsertDriveFile, FileUtils.getFileIconForMimeType("application/json"))
+        assertEquals(Icons.Default.InsertDriveFile, FileUtils.getFileIconForMimeType("font/woff2"))
+    }
+
+    @Test
+    fun `getFileIconForMimeType handles archive-like MIME types`() {
+        // Test the "archive" substring match
+        assertEquals(Icons.Default.FolderZip, FileUtils.getFileIconForMimeType("application/x-archive"))
+    }
 }

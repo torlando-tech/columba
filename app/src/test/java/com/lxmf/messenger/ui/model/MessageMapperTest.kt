@@ -894,4 +894,38 @@ class MessageMapperTest {
         val result = loadFileAttachmentData(fieldsJson, 0)
         assertNull(result)
     }
+
+    @Test
+    fun `loadFileAttachmentData handles large hex data efficiently`() {
+        // Create a 10KB hex string (20KB of hex chars)
+        val originalBytes = ByteArray(10_000) { (it % 256).toByte() }
+        val hexString = originalBytes.joinToString("") { "%02x".format(it) }
+        val fieldsJson = """{"5": [{"filename": "large.bin", "data": "$hexString", "size": 10000}]}"""
+
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals(10_000, result!!.size)
+        // Verify first and last bytes match
+        assertEquals(originalBytes[0], result[0])
+        assertEquals(originalBytes[9999], result[9999])
+        // Verify a few bytes in the middle
+        assertEquals(originalBytes[5000], result[5000])
+    }
+
+    @Test
+    fun `loadFileAttachmentData handles binary data with all byte values`() {
+        // Test all 256 byte values to ensure hex decoding works for edge cases
+        val allBytes = ByteArray(256) { it.toByte() }
+        val hexString = allBytes.joinToString("") { "%02x".format(it) }
+        val fieldsJson = """{"5": [{"filename": "allbytes.bin", "data": "$hexString", "size": 256}]}"""
+
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals(256, result!!.size)
+        for (i in 0 until 256) {
+            assertEquals("Byte $i mismatch", i.toByte(), result[i])
+        }
+    }
 }

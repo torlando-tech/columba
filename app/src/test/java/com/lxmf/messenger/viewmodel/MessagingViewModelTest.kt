@@ -31,10 +31,13 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
+import java.io.ByteArrayOutputStream
 import com.lxmf.messenger.data.repository.Message as DataMessage
 
 /**
@@ -1378,5 +1381,183 @@ class MessagingViewModelTest {
             // Assert: Initial state is empty set
             assertEquals(emptySet<String>(), viewModel.loadedImageIds.value)
         }
+
+    // ========== saveReceivedFileAttachment Tests ==========
+
+    @Test
+    fun `saveReceivedFileAttachment returns false when message not found`() =
+        runTest {
+            // Arrange
+            coEvery { conversationRepository.getMessageById("nonexistent-id") } returns null
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+            val uri = mockk<android.net.Uri>()
+
+            // Act
+            val result = viewModel.saveReceivedFileAttachment(context, "nonexistent-id", 0, uri)
+
+            // Assert
+            assertFalse(result)
+        }
+
+    @Test
+    fun `saveReceivedFileAttachment returns false when fieldsJson is null`() =
+        runTest {
+            // Arrange
+            val messageEntity = createMessageEntity(fieldsJson = null)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+            val uri = mockk<android.net.Uri>()
+
+            // Act
+            val result = viewModel.saveReceivedFileAttachment(context, "test-id", 0, uri)
+
+            // Assert
+            assertFalse(result)
+        }
+
+    @Test
+    fun `saveReceivedFileAttachment returns false when field 5 is missing`() =
+        runTest {
+            // Arrange
+            val messageEntity = createMessageEntity(fieldsJson = """{"1": "text only"}""")
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+            val uri = mockk<android.net.Uri>()
+
+            // Act
+            val result = viewModel.saveReceivedFileAttachment(context, "test-id", 0, uri)
+
+            // Assert
+            assertFalse(result)
+        }
+
+    @Test
+    fun `saveReceivedFileAttachment returns false when file index is out of bounds`() =
+        runTest {
+            // Arrange - fieldsJson with one attachment, but requesting index 5
+            val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+            val uri = mockk<android.net.Uri>()
+
+            // Act
+            val result = viewModel.saveReceivedFileAttachment(context, "test-id", 5, uri)
+
+            // Assert
+            assertFalse(result)
+        }
+
+    @Test
+    fun `saveReceivedFileAttachment writes file data to output stream`() =
+        runTest {
+            // Arrange - "Hello" in hex is "48656c6c6f"
+            val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val outputStream = ByteArrayOutputStream()
+            val context = mockk<android.content.Context>()
+            val uri = mockk<android.net.Uri>()
+            val contentResolver = mockk<android.content.ContentResolver>()
+            every { context.contentResolver } returns contentResolver
+            every { contentResolver.openOutputStream(uri) } returns outputStream
+
+            val viewModel = createTestViewModel()
+
+            // Act
+            val result = viewModel.saveReceivedFileAttachment(context, "test-id", 0, uri)
+
+            // Assert
+            assertTrue(result)
+            assertEquals("Hello", outputStream.toString())
+        }
+
+    @Test
+    fun `saveReceivedFileAttachment returns false when output stream is null`() =
+        runTest {
+            // Arrange
+            val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val context = mockk<android.content.Context>()
+            val uri = mockk<android.net.Uri>()
+            val contentResolver = mockk<android.content.ContentResolver>()
+            every { context.contentResolver } returns contentResolver
+            every { contentResolver.openOutputStream(uri) } returns null
+
+            val viewModel = createTestViewModel()
+
+            // Act
+            val result = viewModel.saveReceivedFileAttachment(context, "test-id", 0, uri)
+
+            // Assert
+            assertFalse(result)
+        }
+
+    @Test
+    fun `saveReceivedFileAttachment returns false on exception`() =
+        runTest {
+            // Arrange
+            coEvery { conversationRepository.getMessageById("test-id") } throws RuntimeException("DB error")
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+            val uri = mockk<android.net.Uri>()
+
+            // Act
+            val result = viewModel.saveReceivedFileAttachment(context, "test-id", 0, uri)
+
+            // Assert
+            assertFalse(result)
+        }
+
+    @Test
+    fun `saveReceivedFileAttachment saves correct attachment from multiple`() =
+        runTest {
+            // Arrange - Multiple attachments, save the second one ("World" = "576f726c64")
+            val fieldsJson = """{"5": [
+                {"filename": "first.txt", "data": "48656c6c6f", "size": 5},
+                {"filename": "second.txt", "data": "576f726c64", "size": 5}
+            ]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val outputStream = ByteArrayOutputStream()
+            val context = mockk<android.content.Context>()
+            val uri = mockk<android.net.Uri>()
+            val contentResolver = mockk<android.content.ContentResolver>()
+            every { context.contentResolver } returns contentResolver
+            every { contentResolver.openOutputStream(uri) } returns outputStream
+
+            val viewModel = createTestViewModel()
+
+            // Act - Request index 1 (second attachment)
+            val result = viewModel.saveReceivedFileAttachment(context, "test-id", 1, uri)
+
+            // Assert
+            assertTrue(result)
+            assertEquals("World", outputStream.toString())
+        }
+
+    private fun createMessageEntity(
+        id: String = "test-id",
+        fieldsJson: String? = null,
+    ): MessageEntity =
+        MessageEntity(
+            id = id,
+            conversationHash = "conv-123",
+            identityHash = "identity-hash",
+            content = "test content",
+            timestamp = System.currentTimeMillis(),
+            isFromMe = false,
+            status = "delivered",
+            fieldsJson = fieldsJson,
+            deliveryMethod = null,
+        )
 
 }

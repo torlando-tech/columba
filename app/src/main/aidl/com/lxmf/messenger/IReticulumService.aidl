@@ -169,9 +169,10 @@ interface IReticulumService {
      * @param sourceIdentityPrivateKey Source identity private key bytes
      * @param imageData Optional image data bytes (null if none)
      * @param imageFormat Optional image format string (e.g., "jpg", "png", null if none)
+     * @param fileAttachments Optional map of filename -> file bytes (null if none)
      * @return JSON string with result
      */
-    String sendLxmfMessage(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, in byte[] imageData, String imageFormat);
+    String sendLxmfMessage(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, in byte[] imageData, String imageFormat, in Map fileAttachments);
 
     /**
      * Get the LXMF router's identity.
@@ -332,9 +333,10 @@ interface IReticulumService {
      * @param tryPropagationOnFail If true and direct fails, retry via propagation
      * @param imageData Optional image data bytes (null if none)
      * @param imageFormat Optional image format string (e.g., "jpg", "png", null if none)
+     * @param fileAttachments Optional map of filename -> file bytes (null if none)
      * @return JSON string with result: {"success": true, "message_hash": "...", "delivery_method": "..."}
      */
-    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat);
+    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat, in Map fileAttachments);
 
     /**
      * Provide an alternative relay for message retry.

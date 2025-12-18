@@ -2,6 +2,8 @@ package com.lxmf.messenger.ui.screens
 
 import android.graphics.BitmapFactory
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -35,6 +37,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -87,14 +90,20 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.ui.components.FileAttachmentCard
+import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
+import com.lxmf.messenger.util.FileAttachment
+import com.lxmf.messenger.util.FileUtils
 import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.viewmodel.ContactToggleResult
 import com.lxmf.messenger.viewmodel.MessagingViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -122,11 +131,16 @@ fun MessagingScreen(
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val isContactSaved by viewModel.isContactSaved.collectAsStateWithLifecycle()
 
+    // File attachment state
+    val selectedFileAttachments by viewModel.selectedFileAttachments.collectAsStateWithLifecycle()
+    val totalAttachmentSize by viewModel.totalAttachmentSize.collectAsStateWithLifecycle()
+    val isProcessingFile by viewModel.isProcessingFile.collectAsStateWithLifecycle()
+
     // Observe loaded image IDs to trigger recomposition when images become available
     val loadedImageIds by viewModel.loadedImageIds.collectAsStateWithLifecycle()
 
-    // Lifecycle-aware coroutine scope for image processing
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    // Lifecycle-aware coroutine scope for image and file processing
+    val scope = rememberCoroutineScope()
 
     // Observe manual sync results and show Toast
     LaunchedEffect(Unit) {
@@ -154,27 +168,53 @@ fun MessagingScreen(
         }
     }
 
+    // Observe file attachment errors and show Toast
+    LaunchedEffect(Unit) {
+        viewModel.fileAttachmentError.collect { errorMessage ->
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // Image picker launcher
     val imageLauncher =
-        androidx.activity.compose.rememberLauncherForActivityResult(
-            contract = androidx.activity.result.contract.ActivityResultContracts.GetContent(),
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
         ) { uri: android.net.Uri? ->
             uri?.let {
                 viewModel.setProcessingImage(true)
-                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                scope.launch(Dispatchers.IO) {
                     try {
                         val compressed = com.lxmf.messenger.util.ImageUtils.compressImage(context, it)
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        withContext(Dispatchers.Main) {
                             viewModel.setProcessingImage(false)
                             if (compressed != null) {
                                 viewModel.selectImage(compressed.data, compressed.format)
                             }
                         }
                     } catch (e: Exception) {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        withContext(Dispatchers.Main) {
                             viewModel.setProcessingImage(false)
                         }
                         android.util.Log.e("MessagingScreen", "Error compressing image", e)
+                    }
+                }
+            }
+        }
+
+    // File picker launcher
+    val filePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenMultipleDocuments(),
+        ) { uris ->
+            uris.forEach { uri ->
+                viewModel.setProcessingFile(true)
+                scope.launch(Dispatchers.IO) {
+                    val attachment = FileUtils.readFileFromUri(context, uri)
+                    withContext(Dispatchers.Main) {
+                        if (attachment != null) {
+                            viewModel.addFileAttachment(attachment)
+                        }
+                        viewModel.setProcessingFile(false)
                     }
                 }
             }
@@ -440,10 +480,15 @@ fun MessagingScreen(
                     onMessageTextChange = { messageText = it },
                     selectedImageData = selectedImageData,
                     isProcessingImage = isProcessingImage,
-                    onAttachmentClick = { imageLauncher.launch("image/*") },
+                    onImageAttachmentClick = { imageLauncher.launch("image/*") },
                     onClearImage = { viewModel.clearSelectedImage() },
+                    selectedFileAttachments = selectedFileAttachments,
+                    totalAttachmentSize = totalAttachmentSize,
+                    isProcessingFile = isProcessingFile,
+                    onFileAttachmentClick = { filePickerLauncher.launch(arrayOf("*/*")) },
+                    onRemoveFileAttachment = { index -> viewModel.removeFileAttachment(index) },
                     onSendClick = {
-                        if (messageText.isNotBlank() || selectedImageData != null) {
+                        if (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()) {
                             viewModel.sendMessage(destinationHash, messageText.trim())
                             messageText = ""
                         }
@@ -531,6 +576,20 @@ fun MessageBubble(
                             onDismiss = { showFullscreenImage = false },
                         )
                     }
+
+                    // Display file attachments if present (LXMF field 5 = FILE_ATTACHMENTS)
+                    if (message.hasFileAttachments) {
+                        message.fileAttachments.forEach { fileAttachment ->
+                            FileAttachmentCard(
+                                attachment = fileAttachment,
+                                onTap = {
+                                    // TODO: Implement file save/open functionality
+                                },
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+
                     Text(
                         text = message.content,
                         style = MaterialTheme.typography.bodyLarge,
@@ -672,8 +731,13 @@ fun MessageInputBar(
     onMessageTextChange: (String) -> Unit,
     selectedImageData: ByteArray? = null,
     isProcessingImage: Boolean = false,
-    onAttachmentClick: () -> Unit = {},
+    onImageAttachmentClick: () -> Unit = {},
     onClearImage: () -> Unit = {},
+    selectedFileAttachments: List<FileAttachment> = emptyList(),
+    totalAttachmentSize: Int = 0,
+    isProcessingFile: Boolean = false,
+    onFileAttachmentClick: () -> Unit = {},
+    onRemoveFileAttachment: (Int) -> Unit = {},
     onSendClick: () -> Unit,
 ) {
     Surface(
@@ -682,6 +746,15 @@ fun MessageInputBar(
         shadowElevation = 8.dp,
     ) {
         Column {
+            // File attachment preview row (if files are selected)
+            if (selectedFileAttachments.isNotEmpty()) {
+                FileAttachmentPreviewRow(
+                    attachments = selectedFileAttachments,
+                    totalSizeBytes = totalAttachmentSize,
+                    onRemove = onRemoveFileAttachment,
+                )
+            }
+
             // Image preview (if image is selected)
             if (selectedImageData != null) {
                 Row(
@@ -785,9 +858,9 @@ fun MessageInputBar(
                         ),
                 )
 
-                // Attachment button (between text field and send button)
+                // Image attachment button
                 IconButton(
-                    onClick = onAttachmentClick,
+                    onClick = onImageAttachmentClick,
                     modifier =
                         Modifier
                             .size(48.dp)
@@ -795,7 +868,7 @@ fun MessageInputBar(
                     enabled = !isProcessingImage,
                 ) {
                     if (isProcessingImage) {
-                        androidx.compose.material3.CircularProgressIndicator(
+                        CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
                         )
@@ -808,9 +881,32 @@ fun MessageInputBar(
                     }
                 }
 
+                // File attachment button
+                IconButton(
+                    onClick = onFileAttachmentClick,
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .padding(0.dp),
+                    enabled = !isProcessingFile,
+                ) {
+                    if (isProcessingFile) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.AttachFile,
+                            contentDescription = "Attach file",
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+
                 FilledIconButton(
                     onClick = onSendClick,
-                    enabled = messageText.isNotBlank() || selectedImageData != null,
+                    enabled = messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty(),
                     modifier = Modifier.size(48.dp),
                     shape = CircleShape,
                     colors =

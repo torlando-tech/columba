@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.ImageBitmap
 
 /**
- * UI model for messages with pre-decoded images.
+ * UI model for messages with pre-decoded images and file attachments.
  *
  * This is a wrapper around the domain Message model that includes
  * pre-decoded image data to avoid expensive decoding during composition.
@@ -39,8 +39,8 @@ data class MessageUi(
      */
     val hasImageAttachment: Boolean = false,
     /**
-     * Raw LXMF fields JSON. Included when hasImageAttachment is true to enable
-     * async image loading. Null for messages without image attachments.
+     * Raw LXMF fields JSON. Included when hasImageAttachment or hasFileAttachments is true
+     * to enable async loading. Null for messages without attachments.
      */
     val fieldsJson: String? = null,
     /**
@@ -53,4 +53,35 @@ data class MessageUi(
      * Null for successful deliveries or messages without errors.
      */
     val errorMessage: String? = null,
+    /**
+     * List of file attachments (LXMF field 5).
+     * Each attachment contains metadata (filename, size, MIME type) for display.
+     * Actual file data is loaded on-demand when user taps to save/open.
+     */
+    val fileAttachments: List<FileAttachmentUi> = emptyList(),
+    /**
+     * Indicates whether this message has file attachments.
+     * Used to quickly determine if file attachment UI should be rendered.
+     */
+    val hasFileAttachments: Boolean = false,
+)
+
+/**
+ * UI representation of a file attachment.
+ *
+ * Contains metadata for display purposes. The actual file bytes are loaded
+ * on-demand when the user taps to save or open the file, avoiding memory
+ * pressure from holding large attachments in memory.
+ *
+ * @property filename The original filename including extension
+ * @property sizeBytes The size of the file in bytes
+ * @property mimeType The MIME type for icon selection and file handling
+ * @property index Position in the attachment list for loading the data later
+ */
+@Immutable
+data class FileAttachmentUi(
+    val filename: String,
+    val sizeBytes: Int,
+    val mimeType: String,
+    val index: Int,
 )

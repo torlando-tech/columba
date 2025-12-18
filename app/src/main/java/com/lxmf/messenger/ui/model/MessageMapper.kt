@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.lxmf.messenger.data.repository.Message
+import com.lxmf.messenger.util.FileUtils
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -32,6 +34,9 @@ fun Message.toMessageUi(): MessageUi {
     val hasImage = hasImageField(fieldsJson)
     val cachedImage = if (hasImage) ImageCache.get(id) else null
 
+    val hasFiles = hasFileAttachmentsField(fieldsJson)
+    val fileAttachmentsList = if (hasFiles) parseFileAttachments(fieldsJson) else emptyList()
+
     return MessageUi(
         id = id,
         destinationHash = destinationHash,
@@ -41,8 +46,10 @@ fun Message.toMessageUi(): MessageUi {
         status = status,
         decodedImage = cachedImage,
         hasImageAttachment = hasImage,
-        // Include fieldsJson only if there's an uncached image (needed for async loading)
-        fieldsJson = if (hasImage && cachedImage == null) fieldsJson else null,
+        fileAttachments = fileAttachmentsList,
+        hasFileAttachments = hasFiles,
+        // Include fieldsJson if there's an uncached image OR file attachments (needed for async loading)
+        fieldsJson = if ((hasImage && cachedImage == null) || hasFiles) fieldsJson else null,
         deliveryMethod = deliveryMethod,
         errorMessage = errorMessage,
     )
@@ -162,6 +169,162 @@ private fun loadAttachmentFromDisk(filePath: String): String? {
         }
     } catch (e: Exception) {
         Log.e(TAG, "Failed to load attachment from disk: $filePath", e)
+        null
+    }
+}
+
+/**
+ * Check if the message has a file attachments field (type 5) in its JSON.
+ * This is a fast check that doesn't decode anything.
+ * Returns false for invalid JSON (malformed messages should not show files).
+ */
+@Suppress("SwallowedException") // Invalid JSON is expected to fail silently here
+private fun hasFileAttachmentsField(fieldsJson: String?): Boolean {
+    if (fieldsJson == null) return false
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field5 = fields.opt("5")
+        when {
+            field5 is JSONObject && field5.has(FILE_REF_KEY) -> true
+            field5 is JSONArray && field5.length() > 0 -> true
+            else -> false
+        }
+    } catch (e: Exception) {
+        false
+    }
+}
+
+/**
+ * Parse file attachment metadata from LXMF field 5.
+ *
+ * Supports two formats:
+ * 1. Inline JSON array: "5": [{"filename": "doc.pdf", "data": "hex...", "size": 12345}, ...]
+ * 2. File reference: "5": {"_file_ref": "/path/to/file"} (large attachments saved to disk)
+ *
+ * This is safe to call on the main thread because it only parses metadata,
+ * not the actual file data. The hex "data" field is skipped during parsing.
+ *
+ * @param fieldsJson The message's fields JSON containing file attachment data
+ * @return List of FileAttachmentUi with metadata, or empty list if parsing fails
+ */
+@Suppress("SwallowedException", "ReturnCount") // Invalid JSON is expected to fail silently
+private fun parseFileAttachments(fieldsJson: String?): List<FileAttachmentUi> {
+    if (fieldsJson == null) return emptyList()
+
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field5 = fields.opt("5") ?: return emptyList()
+
+        // Handle file reference (load from disk)
+        if (field5 is JSONObject && field5.has(FILE_REF_KEY)) {
+            val filePath = field5.getString(FILE_REF_KEY)
+            val diskData = loadAttachmentFromDisk(filePath) ?: return emptyList()
+            // Parse the loaded JSON array from disk
+            val attachmentsArray = JSONArray(diskData)
+            parseFileAttachmentsArray(attachmentsArray)
+        } else if (field5 is JSONArray) {
+            // Handle inline array
+            parseFileAttachmentsArray(field5)
+        } else {
+            emptyList()
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to parse file attachments", e)
+        emptyList()
+    }
+}
+
+/**
+ * Parse a JSONArray of file attachments into FileAttachmentUi objects.
+ *
+ * Expected format: [{"filename": "doc.pdf", "size": 12345, "data": "hex..."}, ...]
+ *
+ * @param attachmentsArray JSONArray containing file attachment objects
+ * @return List of FileAttachmentUi with metadata
+ */
+private fun parseFileAttachmentsArray(attachmentsArray: JSONArray): List<FileAttachmentUi> {
+    val result = mutableListOf<FileAttachmentUi>()
+
+    for (i in 0 until attachmentsArray.length()) {
+        try {
+            val attachment = attachmentsArray.getJSONObject(i)
+            val filename = attachment.optString("filename", "unknown")
+            val sizeBytes = attachment.optInt("size", 0)
+            val mimeType = FileUtils.getMimeTypeFromFilename(filename)
+
+            result.add(
+                FileAttachmentUi(
+                    filename = filename,
+                    sizeBytes = sizeBytes,
+                    mimeType = mimeType,
+                    index = i,
+                ),
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse file attachment at index $i", e)
+            // Skip this attachment and continue with the rest
+        }
+    }
+
+    return result
+}
+
+/**
+ * Load file attachment data by index.
+ *
+ * IMPORTANT: This performs disk I/O and may return large byte arrays.
+ * Must be called from a background thread.
+ *
+ * @param fieldsJson The message's fields JSON containing file attachment data
+ * @param index The index of the file attachment to load
+ * @return File data as bytes, or null if not found or loading fails
+ */
+@Suppress("ReturnCount")
+fun loadFileAttachmentData(
+    fieldsJson: String?,
+    index: Int,
+): ByteArray? {
+    if (fieldsJson == null) return null
+
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field5 = fields.opt("5") ?: return null
+
+        val attachmentsArray: JSONArray =
+            when {
+                // File reference: load from disk
+                field5 is JSONObject && field5.has(FILE_REF_KEY) -> {
+                    val filePath = field5.getString(FILE_REF_KEY)
+                    val diskData = loadAttachmentFromDisk(filePath) ?: return null
+                    JSONArray(diskData)
+                }
+                // Inline array
+                field5 is JSONArray -> field5
+                else -> return null
+            }
+
+        if (index < 0 || index >= attachmentsArray.length()) {
+            Log.w(TAG, "File attachment index out of bounds: $index (array size: ${attachmentsArray.length()})")
+            return null
+        }
+
+        val attachment = attachmentsArray.getJSONObject(index)
+        val hexData = attachment.optString("data", "")
+
+        if (hexData.isEmpty()) {
+            Log.w(TAG, "File attachment at index $index has no data")
+            return null
+        }
+
+        // Convert hex string to bytes
+        hexData.chunked(2)
+            .map { it.toInt(16).toByte() }
+            .toByteArray()
+            .also {
+                Log.d(TAG, "Loaded file attachment at index $index (${it.size} bytes)")
+            }
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to load file attachment data at index $index", e)
         null
     }
 }

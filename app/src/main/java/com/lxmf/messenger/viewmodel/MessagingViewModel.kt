@@ -16,6 +16,8 @@ import com.lxmf.messenger.ui.model.ImageCache
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.ui.model.decodeAndCacheImage
 import com.lxmf.messenger.ui.model.toMessageUi
+import com.lxmf.messenger.util.FileAttachment
+import com.lxmf.messenger.util.FileUtils
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,8 +28,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flatMapLatest
@@ -113,6 +115,27 @@ class MessagingViewModel
 
         private val _isProcessingImage = MutableStateFlow(false)
         val isProcessingImage: StateFlow<Boolean> = _isProcessingImage
+
+        // File attachment state (LXMF Field 5)
+        private val _selectedFileAttachments = MutableStateFlow<List<FileAttachment>>(emptyList())
+        val selectedFileAttachments: StateFlow<List<FileAttachment>> = _selectedFileAttachments.asStateFlow()
+
+        private val _isProcessingFile = MutableStateFlow(false)
+        val isProcessingFile: StateFlow<Boolean> = _isProcessingFile.asStateFlow()
+
+        // Computed total size of all attachments (images + files)
+        val totalAttachmentSize: StateFlow<Int> =
+            _selectedFileAttachments
+                .map { files -> files.sumOf { it.sizeBytes } }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = 0,
+                )
+
+        // File attachment error events for UI feedback
+        private val _fileAttachmentError = MutableSharedFlow<String>()
+        val fileAttachmentError: SharedFlow<String> = _fileAttachmentError.asSharedFlow()
 
         // Sync state from PropagationNodeManager
         val isSyncing: StateFlow<Boolean> = propagationNodeManager.isSyncing
@@ -362,8 +385,9 @@ class MessagingViewModel
                 try {
                     val imageData = _selectedImageData.value
                     val imageFormat = _selectedImageFormat.value
+                    val fileAttachments = _selectedFileAttachments.value
 
-                    val sanitized = validateAndSanitizeContent(content, imageData) ?: return@launch
+                    val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments) ?: return@launch
                     val destHashBytes = validateDestinationHash(destinationHash) ?: return@launch
                     val identity =
                         loadIdentityIfNeeded() ?: run {
@@ -373,13 +397,17 @@ class MessagingViewModel
 
                     val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
                     val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                    val deliveryMethod = determineDeliveryMethod(sanitized, imageData, defaultMethod)
+                    val deliveryMethod = determineDeliveryMethod(sanitized, imageData, fileAttachments, defaultMethod)
                     val deliveryMethodString = deliveryMethod.toStorageString()
+
+                    // Convert file attachments to protocol format: List<Pair<String, ByteArray>>
+                    val fileAttachmentPairs = fileAttachments.map { it.filename to it.data }
 
                     Log.d(
                         TAG,
                         "Sending LXMF message to $destinationHash " +
-                            "(${sanitized.length} chars, hasImage=${imageData != null}, method=$deliveryMethod, tryPropOnFail=$tryPropOnFail)...",
+                            "(${sanitized.length} chars, hasImage=${imageData != null}, " +
+                            "files=${fileAttachments.size}, method=$deliveryMethod, tryPropOnFail=$tryPropOnFail)...",
                     )
 
                     val result =
@@ -391,10 +419,11 @@ class MessagingViewModel
                             tryPropagationOnFail = tryPropOnFail,
                             imageData = imageData,
                             imageFormat = imageFormat,
+                            fileAttachments = fileAttachmentPairs.ifEmpty { null },
                         )
 
                     result.onSuccess { receipt ->
-                        handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, deliveryMethodString)
+                        handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString)
                     }.onFailure { error ->
                         handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
                     }
@@ -410,10 +439,11 @@ class MessagingViewModel
             destinationHash: String,
             imageData: ByteArray?,
             imageFormat: String?,
+            fileAttachments: List<FileAttachment>,
             deliveryMethodString: String,
         ) {
             Log.d(TAG, "Message sent successfully")
-            val fieldsJson = buildFieldsJson(imageData, imageFormat)
+            val fieldsJson = buildFieldsJson(imageData, imageFormat, fileAttachments)
             val actualDestHash = resolveActualDestHash(receipt, destinationHash)
             Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
 
@@ -429,6 +459,7 @@ class MessagingViewModel
                     deliveryMethod = deliveryMethodString,
                 )
             clearSelectedImage()
+            clearFileAttachments()
             saveMessageToDatabase(actualDestHash, currentPeerName, message)
         }
 
@@ -470,6 +501,69 @@ class MessagingViewModel
 
         fun setProcessingImage(processing: Boolean) {
             _isProcessingImage.value = processing
+        }
+
+        /**
+         * Add a file attachment from its data.
+         * Validates size limit and adds to the list if valid.
+         *
+         * @param attachment The file attachment to add
+         */
+        fun addFileAttachment(attachment: FileAttachment) {
+            viewModelScope.launch {
+                val currentFiles = _selectedFileAttachments.value
+                val currentTotal = currentFiles.sumOf { it.sizeBytes }
+
+                // Check if adding this file would exceed the limit
+                if (FileUtils.wouldExceedSizeLimit(currentTotal, attachment.sizeBytes)) {
+                    Log.w(TAG, "File attachment rejected: would exceed size limit")
+                    _fileAttachmentError.emit(
+                        "File too large. Total attachments cannot exceed ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
+                    )
+                    return@launch
+                }
+
+                // Check single file size
+                if (attachment.sizeBytes > FileUtils.MAX_SINGLE_FILE_SIZE) {
+                    Log.w(TAG, "File attachment rejected: exceeds single file size limit")
+                    _fileAttachmentError.emit(
+                        "File too large. Maximum size is ${FileUtils.formatFileSize(FileUtils.MAX_SINGLE_FILE_SIZE)}",
+                    )
+                    return@launch
+                }
+
+                _selectedFileAttachments.value = currentFiles + attachment
+                Log.d(TAG, "Added file attachment: ${attachment.filename} (${attachment.sizeBytes} bytes)")
+            }
+        }
+
+        /**
+         * Remove a file attachment by index.
+         *
+         * @param index The index of the file to remove
+         */
+        fun removeFileAttachment(index: Int) {
+            val currentFiles = _selectedFileAttachments.value
+            if (index in currentFiles.indices) {
+                val removed = currentFiles[index]
+                _selectedFileAttachments.value = currentFiles.toMutableList().apply { removeAt(index) }
+                Log.d(TAG, "Removed file attachment: ${removed.filename}")
+            }
+        }
+
+        /**
+         * Clear all selected file attachments.
+         */
+        fun clearFileAttachments() {
+            Log.d(TAG, "Clearing all file attachments")
+            _selectedFileAttachments.value = emptyList()
+        }
+
+        /**
+         * Set the file processing state.
+         */
+        fun setProcessingFile(processing: Boolean) {
+            _isProcessingFile.value = processing
         }
 
         /**
@@ -567,10 +661,15 @@ class MessagingViewModel
                     val imageData = failedMessage.fieldsJson?.let { parseImageFromFieldsJson(it) }
                     val imageFormat = if (imageData != null) "jpg" else null
 
+                    // Parse file attachments from fieldsJson if present
+                    // For retry, we need to reconstruct file attachments from stored data
+                    // TODO: Implement file attachment parsing from fieldsJson when retrying
+                    val fileAttachments = emptyList<FileAttachment>()
+
                     // Get delivery settings
                     val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
                     val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                    val deliveryMethod = determineDeliveryMethod(failedMessage.content, imageData, defaultMethod)
+                    val deliveryMethod = determineDeliveryMethod(failedMessage.content, imageData, fileAttachments, defaultMethod)
 
                     Log.d(TAG, "Retrying message via $deliveryMethod delivery")
 
@@ -578,15 +677,16 @@ class MessagingViewModel
                     conversationRepository.updateMessageStatus(messageId, "pending")
 
                     // Send the message
-                    val result = reticulumProtocol.sendLxmfMessageWithMethod(
-                        destinationHash = destHashBytes,
-                        content = failedMessage.content,
-                        sourceIdentity = identity,
-                        deliveryMethod = deliveryMethod,
-                        tryPropagationOnFail = tryPropOnFail,
-                        imageData = imageData,
-                        imageFormat = imageFormat,
-                    )
+                    val result =
+                        reticulumProtocol.sendLxmfMessageWithMethod(
+                            destinationHash = destHashBytes,
+                            content = failedMessage.content,
+                            sourceIdentity = identity,
+                            deliveryMethod = deliveryMethod,
+                            tryPropagationOnFail = tryPropOnFail,
+                            imageData = imageData,
+                            imageFormat = imageFormat,
+                        )
 
                     result.onSuccess { receipt ->
                         val newMessageHash = receipt.messageHash.joinToString("") { "%02x".format(it) }
@@ -641,9 +741,11 @@ private const val HELPER_TAG = "MessagingViewModel"
 private fun validateAndSanitizeContent(
     content: String,
     imageData: ByteArray?,
+    fileAttachments: List<FileAttachment> = emptyList(),
 ): String? {
-    if (content.trim().isEmpty() && imageData != null) {
-        return "" // Empty content is OK when sending image-only message
+    // Empty content is OK when sending attachments only
+    if (content.trim().isEmpty() && (imageData != null || fileAttachments.isNotEmpty())) {
+        return ""
     }
     val validationResult = InputValidator.validateMessageContent(content)
     if (validationResult is ValidationResult.Error) {
@@ -675,10 +777,12 @@ private const val OPPORTUNISTIC_MAX_BYTES_HELPER = 295
 private fun determineDeliveryMethod(
     sanitized: String,
     imageData: ByteArray?,
+    fileAttachments: List<FileAttachment> = emptyList(),
     defaultMethod: String,
 ): DeliveryMethod {
     val contentSize = sanitized.toByteArray().size
-    return if (imageData == null && contentSize <= OPPORTUNISTIC_MAX_BYTES_HELPER) {
+    val hasAttachments = imageData != null || fileAttachments.isNotEmpty()
+    return if (!hasAttachments && contentSize <= OPPORTUNISTIC_MAX_BYTES_HELPER) {
         Log.d(HELPER_TAG, "Using OPPORTUNISTIC delivery (content: $contentSize bytes)")
         DeliveryMethod.OPPORTUNISTIC
     } else {
@@ -689,10 +793,35 @@ private fun determineDeliveryMethod(
 private fun buildFieldsJson(
     imageData: ByteArray?,
     imageFormat: String?,
+    fileAttachments: List<FileAttachment> = emptyList(),
 ): String? {
-    if (imageData == null || imageFormat == null) return null
-    val hexImageData = imageData.joinToString("") { "%02x".format(it) }
-    return """{"6":"$hexImageData"}"""
+    val hasImage = imageData != null && imageFormat != null
+    val hasFiles = fileAttachments.isNotEmpty()
+
+    if (!hasImage && !hasFiles) return null
+
+    val json = org.json.JSONObject()
+
+    // Add image field (Field 6)
+    if (hasImage && imageData != null) {
+        val hexImageData = imageData.joinToString("") { "%02x".format(it) }
+        json.put("6", hexImageData)
+    }
+
+    // Add file attachments field (Field 5)
+    if (hasFiles) {
+        val attachmentsArray = org.json.JSONArray()
+        for (attachment in fileAttachments) {
+            val attachmentObj = org.json.JSONObject()
+            attachmentObj.put("filename", attachment.filename)
+            attachmentObj.put("data", attachment.data.joinToString("") { "%02x".format(it) })
+            attachmentObj.put("size", attachment.sizeBytes)
+            attachmentsArray.put(attachmentObj)
+        }
+        json.put("5", attachmentsArray)
+    }
+
+    return json.toString()
 }
 
 private fun resolveActualDestHash(

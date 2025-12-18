@@ -1226,13 +1226,17 @@ class ServiceReticulumProtocol(
         sourceIdentity: Identity,
         imageData: ByteArray?,
         imageFormat: String?,
+        fileAttachments: List<Pair<String, ByteArray>>?,
     ): Result<MessageReceipt> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
 
-            val resultJson = service.sendLxmfMessage(destinationHash, content, privateKey, imageData, imageFormat)
+            // Convert List<Pair<String, ByteArray>> to Map<String, ByteArray> for AIDL
+            val fileAttachmentsMap = fileAttachments?.associate { (filename, bytes) -> filename to bytes }
+
+            val resultJson = service.sendLxmfMessage(destinationHash, content, privateKey, imageData, imageFormat, fileAttachmentsMap)
             val result = JSONObject(resultJson)
 
             if (!result.optBoolean("success", false)) {
@@ -1587,6 +1591,7 @@ class ServiceReticulumProtocol(
         tryPropagationOnFail: Boolean,
         imageData: ByteArray?,
         imageFormat: String?,
+        fileAttachments: List<Pair<String, ByteArray>>?,
     ): Result<MessageReceipt> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
@@ -1600,6 +1605,9 @@ class ServiceReticulumProtocol(
                     DeliveryMethod.PROPAGATED -> "propagated"
                 }
 
+            // Convert List<Pair<String, ByteArray>> to Map<String, ByteArray> for AIDL
+            val fileAttachmentsMap = fileAttachments?.associate { (filename, bytes) -> filename to bytes }
+
             val resultJson =
                 service.sendLxmfMessageWithMethod(
                     destinationHash,
@@ -1609,6 +1617,7 @@ class ServiceReticulumProtocol(
                     tryPropagationOnFail,
                     imageData,
                     imageFormat,
+                    fileAttachmentsMap,
                 )
             val result = JSONObject(resultJson)
 

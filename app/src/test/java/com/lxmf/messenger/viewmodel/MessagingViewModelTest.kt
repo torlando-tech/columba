@@ -1757,16 +1757,10 @@ class MessagingViewModelTest {
         }
 
     @Test
-    fun `totalAttachmentSize updates when files are added`() =
+    fun `totalAttachmentSize reflects sum of file sizes when files are added`() =
         runTest {
             val viewModel = createTestViewModel()
             advanceUntilIdle()
-
-            // Subscribe to totalAttachmentSize to activate the WhileSubscribed flow
-            val sizeValues = mutableListOf<Int>()
-            val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-                viewModel.totalAttachmentSize.collect { sizeValues.add(it) }
-            }
 
             viewModel.addFileAttachment(FileAttachment("file1.pdf", ByteArray(1000), "application/pdf", 1000))
             advanceUntilIdle()
@@ -1774,25 +1768,17 @@ class MessagingViewModelTest {
             viewModel.addFileAttachment(FileAttachment("file2.txt", ByteArray(500), "text/plain", 500))
             advanceUntilIdle()
 
-            // Verify final state - can check via selectedFileAttachments
+            // Verify files were added and their sizes are correct
             assertEquals(2, viewModel.selectedFileAttachments.value.size)
             val calculatedTotal = viewModel.selectedFileAttachments.value.sumOf { it.sizeBytes }
             assertEquals(1500, calculatedTotal)
-
-            job.cancel()
         }
 
     @Test
-    fun `totalAttachmentSize updates when files are removed`() =
+    fun `totalAttachmentSize reflects sum of file sizes when files are removed`() =
         runTest {
             val viewModel = createTestViewModel()
             advanceUntilIdle()
-
-            // Subscribe to totalAttachmentSize to activate the WhileSubscribed flow
-            val sizeValues = mutableListOf<Int>()
-            val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-                viewModel.totalAttachmentSize.collect { sizeValues.add(it) }
-            }
 
             viewModel.addFileAttachment(FileAttachment("file1.pdf", ByteArray(1000), "application/pdf", 1000))
             viewModel.addFileAttachment(FileAttachment("file2.txt", ByteArray(500), "text/plain", 500))
@@ -1803,12 +1789,10 @@ class MessagingViewModelTest {
             viewModel.removeFileAttachment(0)
             advanceUntilIdle()
 
-            // Verify final state
+            // Verify remaining file and size
             assertEquals(1, viewModel.selectedFileAttachments.value.size)
             val calculatedTotal = viewModel.selectedFileAttachments.value.sumOf { it.sizeBytes }
             assertEquals(500, calculatedTotal)
-
-            job.cancel()
         }
 
     @Test

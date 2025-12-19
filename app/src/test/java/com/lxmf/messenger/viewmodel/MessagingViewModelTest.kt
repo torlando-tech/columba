@@ -32,6 +32,8 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Ignore
@@ -1916,6 +1918,400 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             coVerify { propagationNodeManager.triggerSync() }
+        }
+
+    // ========== getFileAttachmentUri Tests ==========
+
+    @Test
+    fun `getFileAttachmentUri returns null when message not found`() =
+        runTest {
+            // Arrange
+            coEvery { conversationRepository.getMessageById("nonexistent-id") } returns null
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "nonexistent-id", 0)
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getFileAttachmentUri returns null when fieldsJson is null`() =
+        runTest {
+            // Arrange
+            val messageEntity = createMessageEntity(fieldsJson = null)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 0)
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getFileAttachmentUri returns null when field 5 is missing`() =
+        runTest {
+            // Arrange
+            val messageEntity = createMessageEntity(fieldsJson = """{"1": "text only"}""")
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 0)
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getFileAttachmentUri returns null when file index is out of bounds`() =
+        runTest {
+            // Arrange - one attachment but requesting index 5
+            val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 5)
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getFileAttachmentUri returns null when file data is empty`() =
+        runTest {
+            // Arrange - attachment with empty data
+            val fieldsJson = """{"5": [{"filename": "test.txt", "data": "", "size": 0}]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 0)
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getFileAttachmentUri returns null when file data field is missing`() =
+        runTest {
+            // Arrange - attachment without data field
+            val fieldsJson = """{"5": [{"filename": "test.txt", "size": 100}]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 0)
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getFileAttachmentUri returns null on exception`() =
+        runTest {
+            // Arrange
+            coEvery { conversationRepository.getMessageById("test-id") } throws RuntimeException("DB error")
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 0)
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getFileAttachmentUri returns null for negative index`() =
+        runTest {
+            // Arrange
+            val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", -1)
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getFileAttachmentUri returns null when field 5 is not array or file ref`() =
+        runTest {
+            // Arrange - field 5 is a string instead of array
+            val fieldsJson = """{"5": "not an array"}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 0)
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getFileAttachmentUri returns null when attachment is not JSONObject`() =
+        runTest {
+            // Arrange - array contains string instead of object
+            val fieldsJson = """{"5": ["not an object"]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 0)
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getFileAttachmentUri creates file and returns URI with correct mimeType`() =
+        runTest {
+            // Arrange - "Hello" in hex is "48656c6c6f"
+            val fieldsJson = """{"5": [{"filename": "test.pdf", "data": "48656c6c6f", "size": 5}]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val viewModel = createTestViewModel()
+
+            // Create temp directory for test
+            val tempDir = java.io.File.createTempFile("test", "dir").apply {
+                delete()
+                mkdirs()
+            }
+            val attachmentsDir = java.io.File(tempDir, "attachments")
+
+            val context = mockk<android.content.Context>()
+            every { context.filesDir } returns tempDir
+            every { context.packageName } returns "com.lxmf.messenger"
+
+            val mockUri = mockk<android.net.Uri>()
+            mockkStatic(androidx.core.content.FileProvider::class)
+            every {
+                androidx.core.content.FileProvider.getUriForFile(
+                    any(),
+                    eq("com.lxmf.messenger.fileprovider"),
+                    any(),
+                )
+            } returns mockUri
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 0)
+
+            // Assert
+            assertNotNull(result)
+            assertEquals(mockUri, result!!.first)
+            assertEquals("application/pdf", result.second)
+
+            // Verify file was created
+            val createdFile = java.io.File(attachmentsDir, "test.pdf")
+            assertTrue(createdFile.exists())
+            assertEquals("Hello", createdFile.readText())
+
+            // Cleanup
+            unmockkStatic(androidx.core.content.FileProvider::class)
+            tempDir.deleteRecursively()
+        }
+
+    @Test
+    fun `getFileAttachmentUri handles different file types correctly`() =
+        runTest {
+            // Arrange - test with text file
+            val fieldsJson = """{"5": [{"filename": "notes.txt", "data": "48656c6c6f", "size": 5}]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val viewModel = createTestViewModel()
+
+            val tempDir = java.io.File.createTempFile("test", "dir").apply {
+                delete()
+                mkdirs()
+            }
+
+            val context = mockk<android.content.Context>()
+            every { context.filesDir } returns tempDir
+            every { context.packageName } returns "com.lxmf.messenger"
+
+            val mockUri = mockk<android.net.Uri>()
+            mockkStatic(androidx.core.content.FileProvider::class)
+            every {
+                androidx.core.content.FileProvider.getUriForFile(
+                    any(),
+                    eq("com.lxmf.messenger.fileprovider"),
+                    any(),
+                )
+            } returns mockUri
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 0)
+
+            // Assert
+            assertNotNull(result)
+            assertEquals("text/plain", result!!.second)
+
+            // Cleanup
+            unmockkStatic(androidx.core.content.FileProvider::class)
+            tempDir.deleteRecursively()
+        }
+
+    @Test
+    fun `getFileAttachmentUri handles multiple attachments at different indices`() =
+        runTest {
+            // Arrange - multiple attachments
+            val fieldsJson = """{"5": [
+                {"filename": "first.pdf", "data": "4f6e65", "size": 3},
+                {"filename": "second.txt", "data": "54776f", "size": 3}
+            ]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val viewModel = createTestViewModel()
+
+            val tempDir = java.io.File.createTempFile("test", "dir").apply {
+                delete()
+                mkdirs()
+            }
+
+            val context = mockk<android.content.Context>()
+            every { context.filesDir } returns tempDir
+            every { context.packageName } returns "com.lxmf.messenger"
+
+            val mockUri = mockk<android.net.Uri>()
+            mockkStatic(androidx.core.content.FileProvider::class)
+            every {
+                androidx.core.content.FileProvider.getUriForFile(
+                    any(),
+                    eq("com.lxmf.messenger.fileprovider"),
+                    any(),
+                )
+            } returns mockUri
+
+            // Act - get second attachment (index 1)
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 1)
+
+            // Assert
+            assertNotNull(result)
+            assertEquals("text/plain", result!!.second)
+
+            // Verify correct file was created
+            val attachmentsDir = java.io.File(tempDir, "attachments")
+            val createdFile = java.io.File(attachmentsDir, "second.txt")
+            assertTrue(createdFile.exists())
+            assertEquals("Two", createdFile.readText())
+
+            // Cleanup
+            unmockkStatic(androidx.core.content.FileProvider::class)
+            tempDir.deleteRecursively()
+        }
+
+    @Test
+    fun `getFileAttachmentUri creates attachments directory if not exists`() =
+        runTest {
+            // Arrange
+            val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val viewModel = createTestViewModel()
+
+            // Create temp directory but NOT the attachments subdirectory
+            val tempDir = java.io.File.createTempFile("test", "dir").apply {
+                delete()
+                mkdirs()
+            }
+            // Ensure attachments dir does NOT exist
+            val attachmentsDir = java.io.File(tempDir, "attachments")
+            assertFalse(attachmentsDir.exists())
+
+            val context = mockk<android.content.Context>()
+            every { context.filesDir } returns tempDir
+            every { context.packageName } returns "com.lxmf.messenger"
+
+            val mockUri = mockk<android.net.Uri>()
+            mockkStatic(androidx.core.content.FileProvider::class)
+            every {
+                androidx.core.content.FileProvider.getUriForFile(
+                    any(),
+                    eq("com.lxmf.messenger.fileprovider"),
+                    any(),
+                )
+            } returns mockUri
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 0)
+
+            // Assert
+            assertNotNull(result)
+            // Verify attachments directory was created
+            assertTrue(attachmentsDir.exists())
+            assertTrue(attachmentsDir.isDirectory)
+
+            // Cleanup
+            unmockkStatic(androidx.core.content.FileProvider::class)
+            tempDir.deleteRecursively()
+        }
+
+    @Test
+    fun `getFileAttachmentUri handles unknown file extension`() =
+        runTest {
+            // Arrange - file with unknown extension
+            val fieldsJson = """{"5": [{"filename": "data.xyz", "data": "48656c6c6f", "size": 5}]}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val viewModel = createTestViewModel()
+
+            val tempDir = java.io.File.createTempFile("test", "dir").apply {
+                delete()
+                mkdirs()
+            }
+
+            val context = mockk<android.content.Context>()
+            every { context.filesDir } returns tempDir
+            every { context.packageName } returns "com.lxmf.messenger"
+
+            val mockUri = mockk<android.net.Uri>()
+            mockkStatic(androidx.core.content.FileProvider::class)
+            every {
+                androidx.core.content.FileProvider.getUriForFile(
+                    any(),
+                    eq("com.lxmf.messenger.fileprovider"),
+                    any(),
+                )
+            } returns mockUri
+
+            // Act
+            val result = viewModel.getFileAttachmentUri(context, "test-id", 0)
+
+            // Assert
+            assertNotNull(result)
+            assertEquals("application/octet-stream", result!!.second)
+
+            // Cleanup
+            unmockkStatic(androidx.core.content.FileProvider::class)
+            tempDir.deleteRecursively()
         }
 
 }

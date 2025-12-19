@@ -342,6 +342,7 @@ data class FileAttachmentInfo(
  * @param index The index of the file attachment
  * @return FileAttachmentInfo or null if not found
  */
+@Suppress("ReturnCount") // Early returns for null checks improve readability
 fun loadFileAttachmentMetadata(
     fieldsJson: String?,
     index: Int,

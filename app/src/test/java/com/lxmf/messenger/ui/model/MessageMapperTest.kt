@@ -1115,4 +1115,230 @@ class MessageMapperTest {
         assertTrue(result.hasFileAttachments)
         assertTrue(result.fileAttachments.isEmpty())
     }
+
+    // ========== loadFileAttachmentMetadata() TESTS ==========
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for null fieldsJson`() {
+        val result = loadFileAttachmentMetadata(null, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for empty fieldsJson`() {
+        val result = loadFileAttachmentMetadata("", 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for invalid JSON`() {
+        val result = loadFileAttachmentMetadata("not valid json", 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null when field 5 is missing`() {
+        val result = loadFileAttachmentMetadata("""{"1": "text", "6": "image"}""", 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for negative index`() {
+        val fieldsJson = """{"5": [{"filename": "test.pdf", "size": 1000}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, -1)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for out of bounds index`() {
+        val fieldsJson = """{"5": [{"filename": "test.pdf", "size": 1000}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 5)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns correct filename and mimeType for PDF`() {
+        val fieldsJson = """{"5": [{"filename": "document.pdf", "size": 12345}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("document.pdf", result!!.filename)
+        assertEquals("application/pdf", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns correct mimeType for image file`() {
+        val fieldsJson = """{"5": [{"filename": "photo.jpg", "size": 5000}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("photo.jpg", result!!.filename)
+        assertEquals("image/jpeg", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns correct mimeType for text file`() {
+        val fieldsJson = """{"5": [{"filename": "notes.txt", "size": 100}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("notes.txt", result!!.filename)
+        assertEquals("text/plain", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns unknown filename when missing`() {
+        val fieldsJson = """{"5": [{"size": 1000}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("unknown", result!!.filename)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata handles multiple attachments at different indices`() {
+        val fieldsJson = """{"5": [
+            {"filename": "first.pdf", "size": 1000},
+            {"filename": "second.png", "size": 2000},
+            {"filename": "third.txt", "size": 500}
+        ]}"""
+
+        val result0 = loadFileAttachmentMetadata(fieldsJson, 0)
+        val result1 = loadFileAttachmentMetadata(fieldsJson, 1)
+        val result2 = loadFileAttachmentMetadata(fieldsJson, 2)
+
+        assertNotNull(result0)
+        assertEquals("first.pdf", result0!!.filename)
+        assertEquals("application/pdf", result0.mimeType)
+
+        assertNotNull(result1)
+        assertEquals("second.png", result1!!.filename)
+        assertEquals("image/png", result1.mimeType)
+
+        assertNotNull(result2)
+        assertEquals("third.txt", result2!!.filename)
+        assertEquals("text/plain", result2.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata reads from file reference when file exists`() {
+        // Create a temporary file with JSON array of attachments
+        val tempFile = tempFolder.newFile("metadata_attachments.json")
+        tempFile.writeText("""[{"filename": "from_disk.pdf", "size": 9999, "data": "abc123"}]""")
+
+        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("from_disk.pdf", result!!.filename)
+        assertEquals("application/pdf", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for file reference with nonexistent file`() {
+        val fieldsJson = """{"5": {"_file_ref": "/nonexistent/path/attachments.json"}}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for empty file reference path`() {
+        val fieldsJson = """{"5": {"_file_ref": ""}}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null when field 5 is not array or file ref`() {
+        val fieldsJson = """{"5": "just a string"}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null when field 5 is number`() {
+        val fieldsJson = """{"5": 12345}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null when field 5 is empty array`() {
+        val fieldsJson = """{"5": []}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata handles unknown file extension`() {
+        val fieldsJson = """{"5": [{"filename": "data.xyz", "size": 100}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("data.xyz", result!!.filename)
+        // Unknown extensions default to application/octet-stream
+        assertEquals("application/octet-stream", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata handles filename with no extension`() {
+        val fieldsJson = """{"5": [{"filename": "README", "size": 100}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("README", result!!.filename)
+        assertEquals("application/octet-stream", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata handles unicode filename`() {
+        val fieldsJson = """{"5": [{"filename": "文档.pdf", "size": 100}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("文档.pdf", result!!.filename)
+        assertEquals("application/pdf", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null when attachment is not JSONObject`() {
+        // Array contains a string instead of an object
+        val fieldsJson = """{"5": ["not an object"]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata reads from disk file with multiple attachments`() {
+        val attachmentData = """[
+            {"filename": "a.pdf", "size": 100},
+            {"filename": "b.txt", "size": 200}
+        ]"""
+        val tempFile = tempFolder.newFile("multi_metadata.dat")
+        tempFile.writeText(attachmentData)
+
+        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+
+        val result0 = loadFileAttachmentMetadata(fieldsJson, 0)
+        val result1 = loadFileAttachmentMetadata(fieldsJson, 1)
+
+        assertNotNull(result0)
+        assertEquals("a.pdf", result0!!.filename)
+        assertEquals("application/pdf", result0.mimeType)
+
+        assertNotNull(result1)
+        assertEquals("b.txt", result1!!.filename)
+        assertEquals("text/plain", result1.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for invalid JSON in file reference`() {
+        val tempFile = tempFolder.newFile("invalid_metadata.dat")
+        tempFile.writeText("not valid json [{{{")
+
+        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNull(result)
+    }
 }

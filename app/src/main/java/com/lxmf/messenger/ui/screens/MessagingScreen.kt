@@ -550,6 +550,7 @@ fun MessagingScreen(
                             setDataAndType(uri, mimeType)
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
+                        @Suppress("SwallowedException") // User is notified via Toast
                         try {
                             context.startActivity(Intent.createChooser(intent, null))
                         } catch (e: Exception) {

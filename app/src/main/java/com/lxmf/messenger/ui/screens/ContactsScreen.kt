@@ -1,6 +1,7 @@
 package com.lxmf.messenger.ui.screens
 
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -28,12 +29,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Info
@@ -87,6 +90,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -104,6 +108,7 @@ import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.util.validation.ValidationResult
 import com.lxmf.messenger.viewmodel.AddContactResult
+import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import com.lxmf.messenger.viewmodel.ContactsViewModel
 import kotlinx.coroutines.launch
 
@@ -119,8 +124,10 @@ fun ContactsScreen(
     onDeepLinkContactProcessed: () -> Unit = {},
     onNavigateToConversation: (destinationHash: String) -> Unit = {},
     viewModel: ContactsViewModel = hiltViewModel(),
+    announceViewModel: AnnounceStreamViewModel = hiltViewModel(),
     onStartChat: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
 ) {
+    val context = LocalContext.current
     val groupedContacts by viewModel.groupedContacts.collectAsState()
     val contactCount by viewModel.contactCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -129,6 +136,27 @@ fun ContactsScreen(
 
     // Tab selection state
     var selectedTab by remember { mutableStateOf(ContactsTab.MY_CONTACTS) }
+
+    // Network tab state
+    val selectedNodeTypes by announceViewModel.selectedNodeTypes.collectAsState()
+    val showAudioAnnounces by announceViewModel.showAudioAnnounces.collectAsState()
+    val announceSearchQuery by announceViewModel.searchQuery.collectAsState()
+    val isAnnouncing by announceViewModel.isAnnouncing.collectAsState()
+    val announceSuccess by announceViewModel.announceSuccess.collectAsState()
+    val announceError by announceViewModel.announceError.collectAsState()
+    var showNodeTypeFilterDialog by remember { mutableStateOf(false) }
+
+    // Show toast for announce success/error
+    LaunchedEffect(announceSuccess) {
+        if (announceSuccess) {
+            Toast.makeText(context, "Announce sent!", Toast.LENGTH_SHORT).show()
+        }
+    }
+    LaunchedEffect(announceError) {
+        announceError?.let { error ->
+            Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
+        }
+    }
 
     // Debug logging
     LaunchedEffect(groupedContacts) {
@@ -213,17 +241,48 @@ fun ContactsScreen(
                         }
                     },
                     actions = {
+                        // Search button
                         IconButton(onClick = { isSearching = !isSearching }) {
                             Icon(
                                 imageVector = if (isSearching) Icons.Default.Close else Icons.Default.Search,
                                 contentDescription = if (isSearching) "Close search" else "Search",
                             )
                         }
-                        IconButton(onClick = { showAddContactSheet = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add contact",
-                            )
+                        // My Contacts tab actions
+                        if (selectedTab == ContactsTab.MY_CONTACTS) {
+                            IconButton(onClick = { showAddContactSheet = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add contact",
+                                )
+                            }
+                        }
+                        // Network tab actions
+                        if (selectedTab == ContactsTab.NETWORK) {
+                            // Announce button
+                            IconButton(
+                                onClick = { announceViewModel.triggerAnnounce() },
+                                enabled = !isAnnouncing,
+                            ) {
+                                if (isAnnouncing) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Campaign,
+                                        contentDescription = "Announce now",
+                                    )
+                                }
+                            }
+                            // Filter button
+                            IconButton(onClick = { showNodeTypeFilterDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.FilterList,
+                                    contentDescription = "Filter node types",
+                                )
+                            }
                         }
                     },
                     colors =
@@ -233,10 +292,18 @@ fun ContactsScreen(
                         ),
                 )
 
-                // Search bar (only shown for My Contacts tab)
-                AnimatedVisibility(visible = isSearching && selectedTab == ContactsTab.MY_CONTACTS) {
+                // Search bar
+                AnimatedVisibility(visible = isSearching) {
+                    val currentSearchQuery = when (selectedTab) {
+                        ContactsTab.MY_CONTACTS -> searchQuery
+                        ContactsTab.NETWORK -> announceSearchQuery
+                    }
+                    val currentPlaceholder = when (selectedTab) {
+                        ContactsTab.MY_CONTACTS -> "Search by name, hash, or tag..."
+                        ContactsTab.NETWORK -> "Search by name or hash..."
+                    }
                     OutlinedTextField(
-                        value = searchQuery,
+                        value = currentSearchQuery,
                         onValueChange = { query ->
                             // VALIDATION: Sanitize and limit search query
                             val sanitized =
@@ -244,19 +311,29 @@ fun ContactsScreen(
                                     query,
                                     ValidationConstants.MAX_SEARCH_QUERY_LENGTH,
                                 )
-                            viewModel.onSearchQueryChanged(sanitized)
+                            when (selectedTab) {
+                                ContactsTab.MY_CONTACTS -> viewModel.onSearchQueryChanged(sanitized)
+                                ContactsTab.NETWORK -> announceViewModel.searchQuery.value = sanitized
+                            }
                         },
                         modifier =
                             Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
-                        placeholder = { Text("Search by name, hash, or tag...") },
+                        placeholder = { Text(currentPlaceholder) },
                         leadingIcon = {
                             Icon(Icons.Default.Search, contentDescription = null)
                         },
                         trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                            if (currentSearchQuery.isNotEmpty()) {
+                                IconButton(
+                                    onClick = {
+                                        when (selectedTab) {
+                                            ContactsTab.MY_CONTACTS -> viewModel.onSearchQueryChanged("")
+                                            ContactsTab.NETWORK -> announceViewModel.searchQuery.value = ""
+                                        }
+                                    },
+                                ) {
                                     Icon(Icons.Default.Clear, contentDescription = "Clear search")
                                 }
                             }
@@ -684,6 +761,20 @@ fun ContactsScreen(
             },
             onRemoveContact = {
                 viewModel.deleteContact(pendingContact.destinationHash)
+            },
+        )
+    }
+
+    // Node type filter dialog (for Network tab)
+    if (showNodeTypeFilterDialog) {
+        NodeTypeFilterDialog(
+            selectedTypes = selectedNodeTypes,
+            showAudio = showAudioAnnounces,
+            onDismiss = { showNodeTypeFilterDialog = false },
+            onConfirm = { newSelection, newShowAudio ->
+                announceViewModel.updateSelectedNodeTypes(newSelection)
+                announceViewModel.updateShowAudioAnnounces(newShowAudio)
+                showNodeTypeFilterDialog = false
             },
         )
     }

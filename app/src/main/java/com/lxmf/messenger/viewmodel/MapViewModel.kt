@@ -70,8 +70,8 @@ class MapViewModel
         private val _state = MutableStateFlow(MapState())
         val state: StateFlow<MapState> = _state.asStateFlow()
 
-        // Contacts from repository
-        private val contacts: StateFlow<List<EnrichedContact>> =
+        // Contacts from repository (exposed for ShareLocationBottomSheet)
+        val contacts: StateFlow<List<EnrichedContact>> =
             contactRepository
                 .getEnrichedContacts()
                 .stateIn(

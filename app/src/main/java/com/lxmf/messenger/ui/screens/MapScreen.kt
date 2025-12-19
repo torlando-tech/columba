@@ -65,6 +65,7 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
+import com.lxmf.messenger.ui.components.ShareLocationBottomSheet
 import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.viewmodel.ContactMarker
 import com.lxmf.messenger.viewmodel.MapViewModel
@@ -101,9 +102,12 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
+    val contacts by viewModel.contacts.collectAsState()
 
     var showPermissionSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showShareLocationSheet by remember { mutableStateOf(false) }
+    val permissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val shareLocationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Map state
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
@@ -303,11 +307,9 @@ fun MapScreen(
                 Icon(Icons.Default.MyLocation, contentDescription = "My location")
             }
 
-            // Share Location button (disabled in Phase 1)
+            // Share Location button
             ExtendedFloatingActionButton(
-                onClick = {
-                    // TODO: Phase 2 - Open share location bottom sheet
-                },
+                onClick = { showShareLocationSheet = true },
                 icon = { Icon(Icons.Default.ShareLocation, contentDescription = null) },
                 text = { Text("Share Location") },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -353,7 +355,23 @@ fun MapScreen(
                     LocationPermissionManager.getRequiredPermissions().toTypedArray(),
                 )
             },
-            sheetState = sheetState,
+            sheetState = permissionSheetState,
+        )
+    }
+
+    // Share location bottom sheet
+    if (showShareLocationSheet) {
+        ShareLocationBottomSheet(
+            contacts = contacts,
+            onDismiss = { showShareLocationSheet = false },
+            onStartSharing = { selectedContacts, duration ->
+                // TODO: Phase 2 - Implement location sharing via LXMF
+                Log.d(
+                    "MapScreen",
+                    "Start sharing with ${selectedContacts.size} contacts for ${duration.displayText}",
+                )
+            },
+            sheetState = shareLocationSheetState,
         )
     }
 }

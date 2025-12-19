@@ -62,6 +62,7 @@ class MapViewModelTest {
 
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
         every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(emptyList())
+        every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(emptyList())
         every { announceDao.getAllAnnounces() } returns flowOf(emptyList())
         every { locationSharingManager.isSharing } returns MutableStateFlow(false)
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
@@ -430,6 +431,107 @@ class MapViewModelTest {
         assertEquals(originalPermission, originalState.hasLocationPermission)
         // New state should be different
         assertTrue(viewModel.state.value.hasLocationPermission)
+    }
+
+    // ===== calculateMarkerState Tests =====
+
+    @Test
+    fun `calculateMarkerState - fresh location returns FRESH`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+        val now = System.currentTimeMillis()
+
+        val state = viewModel.calculateMarkerState(
+            timestamp = now - 1_000L, // 1 second ago
+            expiresAt = now + 3600_000L, // Expires in 1 hour
+            currentTime = now,
+        )
+
+        assertEquals(MarkerState.FRESH, state)
+    }
+
+    @Test
+    fun `calculateMarkerState - location older than 5 minutes returns STALE`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+        val now = System.currentTimeMillis()
+
+        val state = viewModel.calculateMarkerState(
+            timestamp = now - (6 * 60_000L), // 6 minutes ago
+            expiresAt = now + 3600_000L, // Not expired
+            currentTime = now,
+        )
+
+        assertEquals(MarkerState.STALE, state)
+    }
+
+    @Test
+    fun `calculateMarkerState - expired within grace period returns EXPIRED_GRACE_PERIOD`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+        val now = System.currentTimeMillis()
+
+        val state = viewModel.calculateMarkerState(
+            timestamp = now - (10 * 60_000L), // 10 minutes ago
+            expiresAt = now - (5 * 60_000L), // Expired 5 minutes ago (within 1 hour grace)
+            currentTime = now,
+        )
+
+        assertEquals(MarkerState.EXPIRED_GRACE_PERIOD, state)
+    }
+
+    @Test
+    fun `calculateMarkerState - expired past grace period returns null`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+        val now = System.currentTimeMillis()
+
+        val state = viewModel.calculateMarkerState(
+            timestamp = now - (3 * 3600_000L), // 3 hours ago
+            expiresAt = now - (2 * 3600_000L), // Expired 2 hours ago (past 1 hour grace)
+            currentTime = now,
+        )
+
+        assertNull(state)
+    }
+
+    @Test
+    fun `calculateMarkerState - indefinite sharing never expires`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+        val now = System.currentTimeMillis()
+
+        val state = viewModel.calculateMarkerState(
+            timestamp = now - (6 * 60_000L), // 6 minutes ago (stale)
+            expiresAt = null, // Indefinite
+            currentTime = now,
+        )
+
+        assertEquals(MarkerState.STALE, state) // Stale but never expired
+    }
+
+    @Test
+    fun `calculateMarkerState - exactly at stale threshold returns FRESH`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+        val now = System.currentTimeMillis()
+
+        val state = viewModel.calculateMarkerState(
+            timestamp = now - (5 * 60_000L), // Exactly 5 minutes ago
+            expiresAt = null,
+            currentTime = now,
+        )
+
+        // At exactly 5 minutes, age > threshold is false (5 is not > 5)
+        assertEquals(MarkerState.FRESH, state)
+    }
+
+    @Test
+    fun `calculateMarkerState - just past stale threshold returns STALE`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+        val now = System.currentTimeMillis()
+
+        val state = viewModel.calculateMarkerState(
+            timestamp = now - (5 * 60_000L + 1L), // 5 minutes + 1ms ago
+            expiresAt = null,
+            currentTime = now,
+        )
+
+        assertEquals(MarkerState.STALE, state)
     }
 
     // Helper function to create mock Location

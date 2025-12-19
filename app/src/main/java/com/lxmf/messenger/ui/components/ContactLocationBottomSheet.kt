@@ -5,6 +5,7 @@ import android.content.Intent
 import android.location.Location
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Directions
@@ -25,14 +27,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.viewmodel.ContactMarker
+import com.lxmf.messenger.viewmodel.MarkerState
 
 /**
  * Bottom sheet displayed when tapping a contact's location marker on the map.
@@ -62,6 +67,7 @@ fun ContactLocationBottomSheet(
     val context = LocalContext.current
     val distanceText = formatDistanceAndDirection(userLocation, marker.latitude, marker.longitude)
     val updatedText = formatUpdatedTime(marker.timestamp)
+    val isStale = marker.state != MarkerState.FRESH
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -79,24 +85,38 @@ fun ContactLocationBottomSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                // Identicon avatar
-                Identicon(
-                    hash = hexStringToByteArray(marker.destinationHash),
-                    size = 48.dp,
-                )
+                // Identicon avatar (dimmed for stale locations)
+                Box {
+                    Identicon(
+                        hash = hexStringToByteArray(marker.destinationHash),
+                        size = 48.dp,
+                        modifier = if (isStale) Modifier.alpha(0.6f) else Modifier,
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(16.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = marker.displayName,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = marker.displayName,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        // Stale badge
+                        if (isStale) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            StaleLocationBadge(marker.state)
+                        }
+                    }
                     Text(
                         text = updatedText,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isStale) {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
             }
@@ -244,6 +264,34 @@ internal fun openDirectionsInMaps(context: Context, lat: Double, lng: Double) {
         val geoUri = Uri.parse("geo:$lat,$lng?q=$lat,$lng")
         val geoIntent = Intent(Intent.ACTION_VIEW, geoUri)
         context.startActivity(geoIntent)
+    }
+}
+
+/**
+ * Badge indicating the location is stale or expired.
+ *
+ * @param state The marker state (STALE or EXPIRED_GRACE_PERIOD)
+ */
+@Composable
+private fun StaleLocationBadge(state: MarkerState) {
+    if (state == MarkerState.FRESH) return
+
+    val (text, color) = when (state) {
+        MarkerState.STALE -> "Stale" to MaterialTheme.colorScheme.outline
+        MarkerState.EXPIRED_GRACE_PERIOD -> "Last known" to MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+        else -> return
+    }
+
+    Surface(
+        color = color.copy(alpha = 0.15f),
+        shape = RoundedCornerShape(4.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
     }
 }
 

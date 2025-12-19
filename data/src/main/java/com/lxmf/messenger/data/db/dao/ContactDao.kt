@@ -29,8 +29,8 @@ interface ContactDao {
     fun getAllContacts(identityHash: String): Flow<List<ContactEntity>>
 
     /**
-     * Get enriched contacts with data from announces and conversations.
-     * Combines contact data with network status and conversation info.
+     * Get enriched contacts with data from announces, conversations, and location sharing.
+     * Combines contact data with network status, conversation info, and location sharing status.
      * Filters by identity hash to ensure data isolation between identities.
      */
     @Query(
@@ -54,10 +54,21 @@ interface ContactDao {
             c.isPinned,
             c.status,
             c.isMyRelay,
-            a.nodeType
+            a.nodeType,
+            CASE WHEN loc.senderHash IS NOT NULL THEN 1 ELSE 0 END as isReceivingLocationFrom,
+            loc.expiresAt as locationSharingExpiresAt
         FROM contacts c
         LEFT JOIN announces a ON c.destinationHash = a.destinationHash
         LEFT JOIN conversations conv ON c.destinationHash = conv.peerHash AND c.identityHash = conv.identityHash
+        LEFT JOIN (
+            SELECT rl.senderHash, rl.expiresAt
+            FROM received_locations rl
+            WHERE rl.timestamp = (
+                SELECT MAX(rl2.timestamp) FROM received_locations rl2
+                WHERE rl2.senderHash = rl.senderHash
+            )
+            AND (rl.expiresAt IS NULL OR rl.expiresAt > :currentTime)
+        ) loc ON c.destinationHash = loc.senderHash
         WHERE c.identityHash = :identityHash
         ORDER BY c.isPinned DESC, displayName ASC
     """,
@@ -65,6 +76,7 @@ interface ContactDao {
     fun getEnrichedContacts(
         identityHash: String,
         onlineThreshold: Long,
+        currentTime: Long = System.currentTimeMillis(),
     ): Flow<List<EnrichedContact>>
 
     /**

@@ -68,10 +68,12 @@ import com.google.android.gms.location.Priority
 import com.lxmf.messenger.ui.components.ContactLocationBottomSheet
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.ShareLocationBottomSheet
+import com.lxmf.messenger.ui.components.SharingStatusChip
 import com.lxmf.messenger.util.LocationPermissionManager
 import org.maplibre.android.geometry.LatLng as MapLibreLatLng
 import com.lxmf.messenger.viewmodel.ContactMarker
 import com.lxmf.messenger.viewmodel.MapViewModel
+import com.lxmf.messenger.viewmodel.MarkerState
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -82,12 +84,15 @@ import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Point
+import com.lxmf.messenger.ui.util.MarkerBitmapFactory
 
 /**
  * Map screen displaying user location and contact markers.
@@ -219,6 +224,20 @@ fun MapScreen(
                                 .fromUri("https://tiles.openfreemap.org/styles/liberty"),
                         ) { style ->
                             Log.d("MapScreen", "Map style loaded")
+
+                            // Add dashed circle bitmaps for stale markers
+                            val density = ctx.resources.displayMetrics.density
+                            val staleCircleBitmap = MarkerBitmapFactory.createDashedCircle(
+                                sizeDp = 28f,
+                                strokeWidthDp = 3f,
+                                color = android.graphics.Color.parseColor("#E0E0E0"),
+                                dashLengthDp = 4f,
+                                gapLengthDp = 3f,
+                                density = density,
+                            )
+                            style.addImage("stale-dashed-circle", staleCircleBitmap)
+                            Log.d("MapScreen", "Added stale-dashed-circle image to style")
+
                             mapStyleLoaded = true
 
                             // Enable user location component (blue dot)
@@ -284,13 +303,14 @@ fun MapScreen(
             val sourceId = "contact-markers-source"
             val layerId = "contact-markers-layer"
 
-            // Create GeoJSON features from contact markers
+            // Create GeoJSON features from contact markers with state property
             val features = state.contactMarkers.map { marker ->
                 Feature.fromGeometry(
                     Point.fromLngLat(marker.longitude, marker.latitude)
                 ).apply {
                     addStringProperty("name", marker.displayName)
                     addStringProperty("hash", marker.destinationHash)
+                    addStringProperty("state", marker.state.name) // FRESH, STALE, or EXPIRED_GRACE_PERIOD
                 }
             }
             val featureCollection = FeatureCollection.fromFeatures(features)
@@ -300,14 +320,74 @@ fun MapScreen(
             if (existingSource != null) {
                 existingSource.setGeoJson(featureCollection)
             } else {
-                // Add new source and layer
+                // Add new source and layers with data-driven styling based on marker state
                 style.addSource(GeoJsonSource(sourceId, featureCollection))
+
+                // CircleLayer for the filled circle
                 style.addLayer(
                     CircleLayer(layerId, sourceId).withProperties(
                         PropertyFactory.circleRadius(12f),
-                        PropertyFactory.circleColor("#FF5722"), // Orange color
-                        PropertyFactory.circleStrokeWidth(3f),
-                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                        // Data-driven color: Orange for fresh, Gray for stale/expired
+                        PropertyFactory.circleColor(
+                            Expression.match(
+                                Expression.get("state"),
+                                Expression.literal(MarkerState.FRESH.name),
+                                Expression.color(android.graphics.Color.parseColor("#FF5722")), // Orange
+                                Expression.literal(MarkerState.STALE.name),
+                                Expression.color(android.graphics.Color.parseColor("#9E9E9E")), // Gray
+                                Expression.literal(MarkerState.EXPIRED_GRACE_PERIOD.name),
+                                Expression.color(android.graphics.Color.parseColor("#9E9E9E")), // Gray
+                                Expression.color(android.graphics.Color.parseColor("#FF5722")), // Default: Orange
+                            )
+                        ),
+                        // Data-driven opacity: 100% for fresh, 60% for stale/expired
+                        PropertyFactory.circleOpacity(
+                            Expression.match(
+                                Expression.get("state"),
+                                Expression.literal(MarkerState.FRESH.name),
+                                Expression.literal(1.0f),
+                                Expression.literal(MarkerState.STALE.name),
+                                Expression.literal(0.6f),
+                                Expression.literal(MarkerState.EXPIRED_GRACE_PERIOD.name),
+                                Expression.literal(0.6f),
+                                Expression.literal(1.0f), // Default
+                            )
+                        ),
+                        // Solid stroke only for fresh markers (stale uses dashed overlay)
+                        PropertyFactory.circleStrokeWidth(
+                            Expression.match(
+                                Expression.get("state"),
+                                Expression.literal(MarkerState.FRESH.name),
+                                Expression.literal(3f),
+                                Expression.literal(0f), // No solid stroke for stale markers
+                            )
+                        ),
+                        PropertyFactory.circleStrokeColor(
+                            Expression.color(android.graphics.Color.WHITE)
+                        ),
+                    )
+                )
+
+                // SymbolLayer for dashed outline on stale/expired markers
+                val dashedLayerId = "contact-markers-dashed-layer"
+                style.addLayer(
+                    SymbolLayer(dashedLayerId, sourceId).withProperties(
+                        PropertyFactory.iconImage("stale-dashed-circle"),
+                        PropertyFactory.iconAllowOverlap(true),
+                        PropertyFactory.iconIgnorePlacement(true),
+                        // Only show for stale/expired markers
+                        PropertyFactory.iconOpacity(
+                            Expression.match(
+                                Expression.get("state"),
+                                Expression.literal(MarkerState.FRESH.name),
+                                Expression.literal(0f), // Hidden for fresh
+                                Expression.literal(MarkerState.STALE.name),
+                                Expression.literal(0.7f),
+                                Expression.literal(MarkerState.EXPIRED_GRACE_PERIOD.name),
+                                Expression.literal(0.7f),
+                                Expression.literal(0f), // Default: hidden
+                            )
+                        ),
                     )
                 )
             }
@@ -350,6 +430,18 @@ fun MapScreen(
                     .statusBarsPadding()
                     .align(Alignment.TopStart),
         )
+
+        // Sharing status chip (shown when actively sharing)
+        if (state.isSharing && state.activeSessions.isNotEmpty()) {
+            SharingStatusChip(
+                sharingWithCount = state.activeSessions.size,
+                onStopAllClick = { viewModel.stopSharing() },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 56.dp), // Below TopAppBar
+            )
+        }
 
         // FABs positioned above navigation bar
         Column(

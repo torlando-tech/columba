@@ -74,6 +74,7 @@ class LocationSharingManager
             private const val LOCATION_UPDATE_INTERVAL_MS = 60_000L // 60 seconds
             private const val LOCATION_MIN_UPDATE_INTERVAL_MS = 30_000L // 30 seconds
             private const val SESSION_CHECK_INTERVAL_MS = 30_000L // 30 seconds
+            private const val CLEANUP_INTERVAL_MS = 5 * 60 * 1000L // 5 minutes
         }
 
         private val fusedLocationClient: FusedLocationProviderClient =
@@ -94,6 +95,7 @@ class LocationSharingManager
         // Location update job
         private var locationUpdateJob: Job? = null
         private var sessionCheckJob: Job? = null
+        private var maintenanceJob: Job? = null
         private var lastLocation: Location? = null
 
         // Location callback for updates
@@ -110,6 +112,9 @@ class LocationSharingManager
         init {
             // Start listening for incoming location telemetry
             startListeningForLocationTelemetry()
+
+            // Start periodic cleanup of expired locations
+            startMaintenanceLoop()
         }
 
         /**
@@ -298,6 +303,21 @@ class LocationSharingManager
                         checkExpiredSessions()
                     }
                 }
+        }
+
+        /**
+         * Start periodic cleanup of expired received locations.
+         * Runs every 5 minutes to remove locations that have expired past the grace period.
+         */
+        private fun startMaintenanceLoop() {
+            maintenanceJob =
+                scope.launch {
+                    while (isActive) {
+                        delay(CLEANUP_INTERVAL_MS)
+                        cleanupExpiredLocations()
+                    }
+                }
+            Log.d(TAG, "Started maintenance loop for location cleanup")
         }
 
         private suspend fun checkExpiredSessions() {

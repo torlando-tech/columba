@@ -35,6 +35,22 @@ interface ReceivedLocationDao {
     fun getLatestLocationsPerSender(currentTime: Long = System.currentTimeMillis()): Flow<List<ReceivedLocationEntity>>
 
     /**
+     * Get the latest location for each sender without expiry filtering.
+     * Used for stale/last-known location display where filtering is done in ViewModel.
+     */
+    @Query(
+        """
+        SELECT * FROM received_locations r1
+        WHERE timestamp = (
+            SELECT MAX(timestamp) FROM received_locations r2
+            WHERE r2.senderHash = r1.senderHash
+        )
+        ORDER BY timestamp DESC
+        """,
+    )
+    fun getLatestLocationsPerSenderUnfiltered(): Flow<List<ReceivedLocationEntity>>
+
+    /**
      * Get all locations for a specific sender (for trail visualization).
      */
     @Query(
@@ -61,10 +77,13 @@ interface ReceivedLocationDao {
     suspend fun getLatestLocationForSender(senderHash: String): ReceivedLocationEntity?
 
     /**
-     * Delete expired locations (cleanup job).
+     * Delete expired locations past the grace period (cleanup job).
+     * Keeps expired locations for 1 hour to display as "last known" location.
+     *
+     * @param gracePeriodCutoff Locations expired before this time will be deleted
      */
-    @Query("DELETE FROM received_locations WHERE expiresAt IS NOT NULL AND expiresAt < :currentTime")
-    suspend fun deleteExpiredLocations(currentTime: Long = System.currentTimeMillis())
+    @Query("DELETE FROM received_locations WHERE expiresAt IS NOT NULL AND expiresAt < :gracePeriodCutoff")
+    suspend fun deleteExpiredLocations(gracePeriodCutoff: Long = System.currentTimeMillis() - 3600_000L)
 
     /**
      * Delete all locations for a sender (when contact is removed).

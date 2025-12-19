@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode
@@ -1038,12 +1039,22 @@ fun ContactListItem(
                 }
             }
 
-            // Badge column (relay badge + source badge)
+            // Badge column (location badge + relay badge + source badge)
             Column(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.padding(horizontal = 4.dp),
             ) {
+                // Show location icon if contact is sharing their location with us
+                if (contact.isReceivingLocationFrom) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = "Sharing location with you",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+
                 // Show "RELAY" badge for relay contacts
                 if (contact.isMyRelay) {
                     Box(

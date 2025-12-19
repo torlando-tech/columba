@@ -6,6 +6,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,11 +16,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
@@ -30,7 +35,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -181,133 +185,160 @@ fun MapScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Map") },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                    ),
-            )
-        },
-        floatingActionButton = {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                // My Location button
-                SmallFloatingActionButton(
-                    onClick = {
-                        state.userLocation?.let { location ->
-                            mapLibreMap?.let { map ->
-                                val cameraPosition =
-                                    CameraPosition.Builder()
-                                        .target(LatLng(location.latitude, location.longitude))
-                                        .zoom(15.0)
-                                        .build()
-                                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+    // Edge-to-edge layout with map filling entire screen
+    Box(modifier = Modifier.fillMaxSize()) {
+        // MapLibre MapView - fills entire screen (edge-to-edge)
+        AndroidView(
+            factory = { ctx ->
+                // Initialize MapLibre before creating MapView
+                MapLibre.getInstance(ctx)
+                MapView(ctx).apply {
+                    mapView = this
+                    getMapAsync { map ->
+                        mapLibreMap = map
+
+                        // Use OpenFreeMap tiles (free, no API key required)
+                        // https://openfreemap.org - OpenStreetMap data with good detail
+                        map.setStyle(
+                            Style.Builder()
+                                .fromUri("https://tiles.openfreemap.org/styles/liberty"),
+                        ) { style ->
+                            Log.d("MapScreen", "Map style loaded")
+
+                            // Enable user location component (blue dot)
+                            if (state.hasLocationPermission) {
+                                @SuppressLint("MissingPermission")
+                                map.locationComponent.apply {
+                                    activateLocationComponent(
+                                        LocationComponentActivationOptions
+                                            .builder(ctx, style)
+                                            .build(),
+                                    )
+                                    isLocationComponentEnabled = true
+                                    cameraMode = CameraMode.NONE
+                                    renderMode = RenderMode.COMPASS
+                                }
                             }
                         }
-                    },
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                ) {
-                    Icon(Icons.Default.MyLocation, contentDescription = "My location")
-                }
 
-                // Share Location button (disabled in Phase 1)
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        // TODO: Phase 2 - Open share location bottom sheet
-                    },
-                    icon = { Icon(Icons.Default.ShareLocation, contentDescription = null) },
-                    text = { Text("Share Location") },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        },
-    ) { paddingValues ->
+                        // Set initial camera position (use last known location if available)
+                        val initialLat = state.userLocation?.latitude ?: 37.7749
+                        val initialLng = state.userLocation?.longitude ?: -122.4194
+                        val initialPosition =
+                            CameraPosition.Builder()
+                                .target(LatLng(initialLat, initialLng))
+                                .zoom(if (state.userLocation != null) 15.0 else 12.0)
+                                .build()
+                        map.cameraPosition = initialPosition
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        // Gradient scrim behind TopAppBar for readability
         Box(
             modifier =
                 Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors =
+                                listOf(
+                                    Color.Black.copy(alpha = 0.4f),
+                                    Color.Transparent,
+                                ),
+                        ),
+                    )
+                    .align(Alignment.TopStart),
+        )
+
+        // TopAppBar overlays map (transparent background)
+        TopAppBar(
+            title = {
+                Text(
+                    text = "Map",
+                    color = Color.White,
+                )
+            },
+            colors =
+                TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                ),
+            modifier =
+                Modifier
+                    .statusBarsPadding()
+                    .align(Alignment.TopStart),
+        )
+
+        // FABs positioned above navigation bar
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(16.dp)
+                    .padding(bottom = 80.dp), // Account for bottom navigation bar
         ) {
-            // MapLibre MapView
-            AndroidView(
-                factory = { ctx ->
-                    // Initialize MapLibre before creating MapView
-                    MapLibre.getInstance(ctx)
-                    MapView(ctx).apply {
-                        mapView = this
-                        getMapAsync { map ->
-                            mapLibreMap = map
-
-                            // Use OpenFreeMap tiles (free, no API key required)
-                            // https://openfreemap.org - OpenStreetMap data with good detail
-                            map.setStyle(
-                                Style.Builder()
-                                    .fromUri("https://tiles.openfreemap.org/styles/liberty"),
-                            ) { style ->
-                                Log.d("MapScreen", "Map style loaded")
-
-                                // Enable user location component (blue dot)
-                                if (state.hasLocationPermission) {
-                                    @SuppressLint("MissingPermission")
-                                    map.locationComponent.apply {
-                                        activateLocationComponent(
-                                            LocationComponentActivationOptions
-                                                .builder(ctx, style)
-                                                .build(),
-                                        )
-                                        isLocationComponentEnabled = true
-                                        cameraMode = CameraMode.NONE
-                                        renderMode = RenderMode.COMPASS
-                                    }
-                                }
-                            }
-
-                            // Set initial camera position (use last known location if available)
-                            val initialLat = state.userLocation?.latitude ?: 37.7749
-                            val initialLng = state.userLocation?.longitude ?: -122.4194
-                            val initialPosition =
+            // My Location button
+            SmallFloatingActionButton(
+                onClick = {
+                    state.userLocation?.let { location ->
+                        mapLibreMap?.let { map ->
+                            val cameraPosition =
                                 CameraPosition.Builder()
-                                    .target(LatLng(initialLat, initialLng))
-                                    .zoom(if (state.userLocation != null) 15.0 else 12.0)
+                                    .target(LatLng(location.latitude, location.longitude))
+                                    .zoom(15.0)
                                     .build()
-                            map.cameraPosition = initialPosition
+                            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
                         }
                     }
                 },
-                modifier = Modifier.fillMaxSize(),
-            )
-
-            // Phase 2: Contact markers will be shown here when real location sharing is implemented
-            // For now, just show a hint card if user location isn't available yet
-            if (!state.hasLocationPermission) {
-                EmptyMapStateCard(
-                    contactCount = 0,
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp)
-                            .padding(bottom = 100.dp),
-                )
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ) {
+                Icon(Icons.Default.MyLocation, contentDescription = "My location")
             }
 
-            // Loading indicator
-            if (state.isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "Loading map...",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                }
+            // Share Location button (disabled in Phase 1)
+            ExtendedFloatingActionButton(
+                onClick = {
+                    // TODO: Phase 2 - Open share location bottom sheet
+                },
+                icon = { Icon(Icons.Default.ShareLocation, contentDescription = null) },
+                text = { Text("Share Location") },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+
+        // Phase 2: Contact markers will be shown here when real location sharing is implemented
+        // For now, just show a hint card if user location isn't available yet
+        if (!state.hasLocationPermission) {
+            EmptyMapStateCard(
+                contactCount = 0,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(16.dp)
+                        .padding(bottom = 180.dp), // Above FABs and nav bar
+            )
+        }
+
+        // Loading indicator
+        if (state.isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Loading map...",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
             }
         }
     }

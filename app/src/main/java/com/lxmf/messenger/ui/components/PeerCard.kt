@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -15,6 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -32,6 +37,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.Antenna
+import com.composables.icons.lucide.Lucide
+import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshLimited
@@ -141,15 +149,26 @@ fun PeerCard(
                 }
             }
 
-            // Star button overlay
-            StarToggleButton(
-                isStarred = announce.isFavorite || !showFavoriteToggle,
-                onClick = onFavoriteClick,
+            // Star button and interface type icon overlay column
+            Box(
                 modifier =
                     Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp),
-            )
+                        .matchParentSize()
+                        .padding(end = 4.dp, top = 4.dp, bottom = 16.dp),
+                contentAlignment = Alignment.TopEnd,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxHeight(),
+                ) {
+                    StarToggleButton(
+                        isStarred = announce.isFavorite || !showFavoriteToggle,
+                        onClick = onFavoriteClick,
+                    )
+                    InterfaceTypeIcon(interfaceType = announce.receivingInterfaceType)
+                }
+            }
         }
     }
 }
@@ -196,6 +215,39 @@ fun SignalStrengthIndicator(
             fontSize = 10.sp,
         )
     }
+}
+
+/**
+ * Displays an icon representing the network interface type through which an announce was received.
+ * Returns early (renders nothing) for unknown or null interface types.
+ */
+@Composable
+fun InterfaceTypeIcon(
+    interfaceType: String?,
+    modifier: Modifier = Modifier,
+) {
+    val type =
+        interfaceType?.let {
+            runCatching { InterfaceType.valueOf(it) }.getOrNull()
+        } ?: return
+
+    if (type == InterfaceType.UNKNOWN) return
+
+    val (icon, contentDescription) =
+        when (type) {
+            InterfaceType.AUTO_INTERFACE -> Icons.Default.Wifi to "WiFi"
+            InterfaceType.TCP_CLIENT -> Icons.Default.Public to "Internet"
+            InterfaceType.ANDROID_BLE -> Icons.Default.Bluetooth to "Bluetooth"
+            InterfaceType.RNODE -> Lucide.Antenna to "LoRa/RNode"
+            InterfaceType.UNKNOWN -> return
+        }
+
+    Icon(
+        imageVector = icon,
+        contentDescription = contentDescription,
+        modifier = modifier.size(18.dp),
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable

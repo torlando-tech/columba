@@ -1026,6 +1026,31 @@ object DatabaseModule {
             }
         }
 
+    // Migration from version 23 to 24: Add receivingInterfaceType column for interface type icons
+    // Stores the type of interface (AUTO_INTERFACE, TCP_CLIENT, ANDROID_BLE, RNODE) for display
+    private val MIGRATION_23_24 =
+        object : Migration(23, 24) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add receivingInterfaceType column (nullable)
+                database.execSQL("ALTER TABLE announces ADD COLUMN receivingInterfaceType TEXT")
+
+                // Backfill existing rows based on receivingInterface pattern
+                database.execSQL(
+                    """
+                    UPDATE announces SET receivingInterfaceType =
+                        CASE
+                            WHEN receivingInterface LIKE 'AutoInterface%' THEN 'AUTO_INTERFACE'
+                            WHEN receivingInterface LIKE 'TCPClient%' OR receivingInterface LIKE 'TCPInterface%' THEN 'TCP_CLIENT'
+                            WHEN LOWER(receivingInterface) LIKE '%ble%' OR LOWER(receivingInterface) LIKE '%bluetooth%' THEN 'ANDROID_BLE'
+                            WHEN LOWER(receivingInterface) LIKE '%rnode%' THEN 'RNODE'
+                            ELSE NULL
+                        END
+                    WHERE receivingInterface IS NOT NULL AND receivingInterface != 'None'
+                    """.trimIndent(),
+                )
+            }
+        }
+
     @Provides
     @Singleton
     fun provideColumbaDatabase(
@@ -1036,7 +1061,7 @@ object DatabaseModule {
             ColumbaDatabase::class.java,
             "columba_database",
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24)
             .build()
     }
 

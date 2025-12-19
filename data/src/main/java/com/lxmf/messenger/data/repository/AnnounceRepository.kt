@@ -23,6 +23,7 @@ data class Announce(
     val lastSeenTimestamp: Long,
     val nodeType: String,
     val receivingInterface: String? = null,
+    val receivingInterfaceType: String? = null,
     val aspect: String? = null, // Destination aspect (e.g., "lxmf.delivery", "call.audio")
     val isFavorite: Boolean = false,
     val favoritedTimestamp: Long? = null,
@@ -50,6 +51,7 @@ data class Announce(
         if (lastSeenTimestamp != other.lastSeenTimestamp) return false
         if (nodeType != other.nodeType) return false
         if (receivingInterface != other.receivingInterface) return false
+        if (receivingInterfaceType != other.receivingInterfaceType) return false
         if (isFavorite != other.isFavorite) return false
         if (favoritedTimestamp != other.favoritedTimestamp) return false
         if (stampCost != other.stampCost) return false
@@ -68,6 +70,7 @@ data class Announce(
         result = 31 * result + lastSeenTimestamp.hashCode()
         result = 31 * result + nodeType.hashCode()
         result = 31 * result + (receivingInterface?.hashCode() ?: 0)
+        result = 31 * result + (receivingInterfaceType?.hashCode() ?: 0)
         result = 31 * result + isFavorite.hashCode()
         result = 31 * result + (favoritedTimestamp?.hashCode() ?: 0)
         result = 31 * result + (stampCost?.hashCode() ?: 0)
@@ -205,6 +208,7 @@ class AnnounceRepository
             timestamp: Long,
             nodeType: String,
             receivingInterface: String? = null,
+            receivingInterfaceType: String? = null,
             aspect: String? = null,
             stampCost: Int? = null,
             stampCostFlexibility: Int? = null,
@@ -223,6 +227,7 @@ class AnnounceRepository
                     lastSeenTimestamp = timestamp,
                     nodeType = nodeType,
                     receivingInterface = receivingInterface,
+                    receivingInterfaceType = receivingInterfaceType,
                     aspect = aspect,
                     isFavorite = existing?.isFavorite ?: false,
                     favoritedTimestamp = existing?.favoritedTimestamp,
@@ -353,6 +358,7 @@ class AnnounceRepository
                 lastSeenTimestamp = lastSeenTimestamp,
                 nodeType = nodeType,
                 receivingInterface = receivingInterface,
+                receivingInterfaceType = receivingInterfaceType,
                 aspect = aspect,
                 isFavorite = isFavorite,
                 favoritedTimestamp = favoritedTimestamp,

@@ -116,7 +116,7 @@ class AnnounceStreamViewModelTest {
         every { announceRepository.getAnnounces() } returns flowOf(emptyList())
         every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
         every { announceRepository.getAnnouncesPaged(any(), any()) } returns flowOf(PagingData.empty())
-        coEvery { announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any()) } just Runs
+        coEvery { announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } just Runs
         coEvery { announceRepository.getAnnounceCount() } returns 0
         coEvery { announceRepository.countReachableAnnounces(any()) } returns 0
         coEvery { reticulumProtocol.shutdown() } returns Result.success(Unit)
@@ -235,6 +235,11 @@ class AnnounceStreamViewModelTest {
                     timestamp = 1000L,
                     nodeType = "NODE",
                     receivingInterface = "ble0",
+                    receivingInterfaceType = "ANDROID_BLE",
+                    aspect = any(),
+                    stampCost = any(),
+                    stampCostFlexibility = any(),
+                    peeringCost = any(),
                 )
             }
         }
@@ -270,7 +275,7 @@ class AnnounceStreamViewModelTest {
 
             // Verify: All announces were saved
             coVerify(exactly = 3) {
-                announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any())
+                announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
         }
 
@@ -279,7 +284,7 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery {
-                announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any())
+                announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } throws Exception("Database error")
 
             viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
@@ -291,7 +296,7 @@ class AnnounceStreamViewModelTest {
 
             // Verify: saveAnnounce was attempted
             coVerify {
-                announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any())
+                announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // ViewModel should still be functioning
@@ -363,6 +368,11 @@ class AnnounceStreamViewModelTest {
                     timestamp = any(),
                     nodeType = any(),
                     receivingInterface = any(),
+                    receivingInterfaceType = any(),
+                    aspect = any(),
+                    stampCost = any(),
+                    stampCostFlexibility = any(),
+                    peeringCost = any(),
                 )
             }
         }

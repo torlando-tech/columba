@@ -138,6 +138,7 @@ object TestFactories {
         ),
     )
 
+    @Suppress("LongParameterList")
     fun createAnnounce(
         destinationHash: String = TEST_DEST_HASH,
         peerName: String = "Test Peer",
@@ -146,6 +147,8 @@ object TestFactories {
         nodeType: String = "PROPAGATION_NODE",
         lastSeenTimestamp: Long = System.currentTimeMillis(),
         isFavorite: Boolean = false,
+        receivingInterface: String? = null,
+        receivingInterfaceType: String? = null,
     ) = Announce(
         destinationHash = destinationHash,
         peerName = peerName,
@@ -154,7 +157,8 @@ object TestFactories {
         hops = hops,
         lastSeenTimestamp = lastSeenTimestamp,
         nodeType = nodeType,
-        receivingInterface = null,
+        receivingInterface = receivingInterface,
+        receivingInterfaceType = receivingInterfaceType,
         isFavorite = isFavorite,
     )
 

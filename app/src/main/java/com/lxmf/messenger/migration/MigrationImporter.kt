@@ -9,6 +9,7 @@ import com.lxmf.messenger.data.database.InterfaceDatabase
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
+import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.CustomThemeEntity
@@ -323,6 +324,11 @@ class MigrationImporter
         private suspend fun importAnnounces(announces: List<AnnounceExport>): Int {
             val entities =
                 announces.map { announce ->
+                    // Derive interface type from receivingInterface if not present (backward compatibility)
+                    val interfaceType =
+                        announce.receivingInterfaceType
+                            ?: InterfaceType.fromInterfaceName(announce.receivingInterface).name
+
                     AnnounceEntity(
                         destinationHash = announce.destinationHash,
                         peerName = announce.peerName,
@@ -332,6 +338,7 @@ class MigrationImporter
                         lastSeenTimestamp = announce.lastSeenTimestamp,
                         nodeType = announce.nodeType,
                         receivingInterface = announce.receivingInterface,
+                        receivingInterfaceType = interfaceType,
                         aspect = announce.aspect,
                         isFavorite = announce.isFavorite,
                         favoritedTimestamp = announce.favoritedTimestamp,

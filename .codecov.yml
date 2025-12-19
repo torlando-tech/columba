@@ -28,3 +28,6 @@ flags:
 ignore:
   - "external/**"
   - "python/test_*.py"
+  # Service layer code requires instrumented tests, not unit tests
+  - "app/src/main/java/com/lxmf/messenger/service/**"
+  - "app/src/main/java/com/lxmf/messenger/reticulum/protocol/**"

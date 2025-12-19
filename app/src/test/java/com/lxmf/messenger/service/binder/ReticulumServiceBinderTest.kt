@@ -81,24 +81,25 @@ class ReticulumServiceBinderTest {
         every { state.isCurrentGeneration(any()) } returns true
         coEvery { wrapperManager.shutdown(any()) } just Runs
 
-        binder = ReticulumServiceBinder(
-            context = context,
-            state = state,
-            wrapperManager = wrapperManager,
-            identityManager = identityManager,
-            routingManager = routingManager,
-            messagingManager = messagingManager,
-            pollingManager = pollingManager,
-            broadcaster = broadcaster,
-            lockManager = lockManager,
-            maintenanceManager = maintenanceManager,
-            notificationManager = notificationManager,
-            bleCoordinator = bleCoordinator,
-            scope = testScope,
-            onInitialized = {},
-            onShutdown = { onShutdownCalled = true },
-            onForceExit = {},
-        )
+        binder =
+            ReticulumServiceBinder(
+                context = context,
+                state = state,
+                wrapperManager = wrapperManager,
+                identityManager = identityManager,
+                routingManager = routingManager,
+                messagingManager = messagingManager,
+                pollingManager = pollingManager,
+                broadcaster = broadcaster,
+                lockManager = lockManager,
+                maintenanceManager = maintenanceManager,
+                notificationManager = notificationManager,
+                bleCoordinator = bleCoordinator,
+                scope = testScope,
+                onInitialized = {},
+                onShutdown = { onShutdownCalled = true },
+                onForceExit = {},
+            )
     }
 
     @After
@@ -292,11 +293,48 @@ class ReticulumServiceBinderTest {
         val destHash = byteArrayOf(1, 2, 3)
         val content = "Hello"
         val privateKey = byteArrayOf(4, 5, 6)
-        every { messagingManager.sendLxmfMessage(destHash, content, privateKey, null, null) } returns """{"success": true}"""
+        every { messagingManager.sendLxmfMessage(destHash, content, privateKey, null, null, null) } returns """{"success": true}"""
 
-        val result = binder.sendLxmfMessage(destHash, content, privateKey, null, null)
+        val result = binder.sendLxmfMessage(destHash, content, privateKey, null, null, null)
 
-        verify { messagingManager.sendLxmfMessage(destHash, content, privateKey, null, null) }
+        verify { messagingManager.sendLxmfMessage(destHash, content, privateKey, null, null, null) }
+        assert(result == """{"success": true}""")
+    }
+
+    @Test
+    fun `sendLxmfMessage with file attachments delegates to messagingManager`() {
+        val destHash = byteArrayOf(1, 2, 3)
+        val content = "Here's a file"
+        val privateKey = byteArrayOf(4, 5, 6)
+        val fileAttachmentsMap: Map<*, *> = mapOf("test.pdf" to byteArrayOf(0x25, 0x50, 0x44, 0x46))
+        // The binder converts Map to List<Pair> internally
+        every {
+            messagingManager.sendLxmfMessage(destHash, content, privateKey, null, null, any())
+        } returns """{"success": true, "message_hash": "abc123"}"""
+
+        val result = binder.sendLxmfMessage(destHash, content, privateKey, null, null, fileAttachmentsMap)
+
+        verify { messagingManager.sendLxmfMessage(destHash, content, privateKey, null, null, any()) }
+        assert(result.contains("success"))
+        assert(result.contains("true"))
+    }
+
+    @Test
+    fun `sendLxmfMessage with multiple file attachments delegates correctly`() {
+        val destHash = byteArrayOf(1, 2, 3)
+        val content = "Multiple files"
+        val privateKey = byteArrayOf(4, 5, 6)
+        val fileAttachmentsMap: Map<*, *> = mapOf(
+            "doc.pdf" to byteArrayOf(0x25, 0x50, 0x44, 0x46),
+            "notes.txt" to "Hello World".toByteArray(),
+        )
+        every {
+            messagingManager.sendLxmfMessage(destHash, content, privateKey, null, null, any())
+        } returns """{"success": true}"""
+
+        val result = binder.sendLxmfMessage(destHash, content, privateKey, null, null, fileAttachmentsMap)
+
+        verify { messagingManager.sendLxmfMessage(destHash, content, privateKey, null, null, any()) }
         assert(result == """{"success": true}""")
     }
 

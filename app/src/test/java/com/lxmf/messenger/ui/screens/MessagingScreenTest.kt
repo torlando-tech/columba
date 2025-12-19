@@ -61,6 +61,11 @@ class MessagingScreenTest {
         every { mockViewModel.manualSyncResult } returns MutableSharedFlow()
         every { mockViewModel.loadedImageIds } returns MutableStateFlow(emptySet())
         every { mockViewModel.contactToggleResult } returns MutableSharedFlow()
+        // File attachment mocks
+        every { mockViewModel.selectedFileAttachments } returns MutableStateFlow(emptyList())
+        every { mockViewModel.totalAttachmentSize } returns MutableStateFlow(0)
+        every { mockViewModel.fileAttachmentError } returns MutableSharedFlow()
+        every { mockViewModel.isProcessingFile } returns MutableStateFlow(false)
     }
 
     // ========== Empty State Tests ==========

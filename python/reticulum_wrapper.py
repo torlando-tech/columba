@@ -1974,7 +1974,7 @@ class ReticulumWrapper:
             traceback.print_exc()
             return []
 
-    def send_lxmf_message(self, dest_hash: bytes, content: str, source_identity_private_key: bytes, image_data: bytes = None, image_format: str = None) -> Dict:
+    def send_lxmf_message(self, dest_hash: bytes, content: str, source_identity_private_key: bytes, image_data: bytes = None, image_format: str = None, file_attachments: list = None) -> Dict:
         """
         Send an LXMF message to a destination.
 
@@ -1984,6 +1984,7 @@ class ReticulumWrapper:
             source_identity_private_key: Private key of sender identity
             image_data: Optional image data bytes
             image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
+            file_attachments: Optional list of [filename, bytes] tuples for file attachments (Field 5)
 
         Returns:
             Dict with 'success', 'message_hash', 'timestamp' or 'error'
@@ -2103,18 +2104,49 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "send_lxmf_message", f"Destination object hash: {recipient_lxmf_destination.hash.hex()}")
             log_debug("ReticulumWrapper", "send_lxmf_message", f"Are they equal? {dest_hash == recipient_lxmf_destination.hash}")
 
-            # Prepare fields dictionary if image is provided
+            # Prepare fields dictionary for attachments
             fields = None
+
+            # LXMF field 6 = IMAGE, format: [format_string, bytes_data]
             if image_data and image_format:
                 # Convert jarray to bytes if needed
                 if hasattr(image_data, '__iter__') and not isinstance(image_data, (bytes, bytearray)):
                     image_data = bytes(image_data)
 
-                # LXMF field 6 = IMAGE, format: [format_string, bytes_data]
                 fields = {
                     6: [image_format, image_data]
                 }
                 log_info("ReticulumWrapper", "send_lxmf_message", f"📎 Attaching image: {len(image_data)} bytes, format={image_format}")
+
+            # LXMF field 5 = FILE_ATTACHMENTS, format: list of [filename, bytes_data]
+            if file_attachments:
+                if fields is None:
+                    fields = {}
+
+                # Convert each attachment to proper format
+                field_5_data = []
+                for attachment in file_attachments:
+                    # Handle different input formats
+                    if isinstance(attachment, (list, tuple)) and len(attachment) >= 2:
+                        filename = attachment[0]
+                        data = attachment[1]
+                    elif isinstance(attachment, dict):
+                        filename = attachment.get('filename', 'unknown')
+                        data = attachment.get('data', b'')
+                    else:
+                        log_warning("ReticulumWrapper", "send_lxmf_message", f"Skipping invalid attachment format: {type(attachment)}")
+                        continue
+
+                    # Convert jarray to bytes if needed
+                    if hasattr(data, '__iter__') and not isinstance(data, (bytes, bytearray)):
+                        data = bytes(data)
+
+                    field_5_data.append([filename, data])
+                    log_debug("ReticulumWrapper", "send_lxmf_message", f"📎 File attachment: {filename} ({len(data)} bytes)")
+
+                if field_5_data:
+                    fields[5] = field_5_data
+                    log_info("ReticulumWrapper", "send_lxmf_message", f"📎 Attaching {len(field_5_data)} file(s)")
 
             # Create LXMF message using destination OBJECTS
             log_debug("ReticulumWrapper", "send_lxmf_message", f"Creating LXMessage with destination objects...")
@@ -2437,7 +2469,8 @@ class ReticulumWrapper:
 
     def send_lxmf_message_with_method(self, dest_hash: bytes, content: str, source_identity_private_key: bytes,
                                        delivery_method: str = "direct", try_propagation_on_fail: bool = True,
-                                       image_data: bytes = None, image_format: str = None) -> Dict:
+                                       image_data: bytes = None, image_format: str = None,
+                                       file_attachments: list = None) -> Dict:
         """
         Send an LXMF message with explicit delivery method.
 
@@ -2449,6 +2482,7 @@ class ReticulumWrapper:
             try_propagation_on_fail: If True and direct fails, retry via propagation
             image_data: Optional image data bytes
             image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
+            file_attachments: Optional list of [filename, bytes] pairs for Field 5
 
         Returns:
             Dict with 'success', 'message_hash', 'timestamp', 'delivery_method' or 'error'
@@ -2483,7 +2517,7 @@ class ReticulumWrapper:
                     log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
                                f"Content too large for OPPORTUNISTIC ({len(content_bytes)} bytes > 295), falling back to DIRECT")
                     lxmf_method = LXMF.LXMessage.DIRECT
-                if image_data:
+                if image_data or file_attachments:
                     log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
                                "OPPORTUNISTIC doesn't support attachments, falling back to DIRECT")
                     lxmf_method = LXMF.LXMessage.DIRECT
@@ -2535,7 +2569,7 @@ class ReticulumWrapper:
                 "delivery"
             )
 
-            # Prepare fields if image provided
+            # Prepare fields if image or file attachments provided
             fields = None
             if image_data and image_format:
                 if hasattr(image_data, '__iter__') and not isinstance(image_data, (bytes, bytearray)):
@@ -2543,6 +2577,36 @@ class ReticulumWrapper:
                 fields = {6: [image_format, image_data]}
                 log_info("ReticulumWrapper", "send_lxmf_message_with_method",
                         f"📎 Attaching image: {len(image_data)} bytes, format={image_format}")
+
+            # Add file attachments to Field 5 if provided
+            if file_attachments:
+                if fields is None:
+                    fields = {}
+                # Convert Java ArrayList to Python list if needed
+                if hasattr(file_attachments, 'toArray'):
+                    file_attachments = list(file_attachments.toArray())
+                elif hasattr(file_attachments, '__iter__') and not isinstance(file_attachments, (list, tuple)):
+                    file_attachments = list(file_attachments)
+                # Convert each attachment: [filename, bytes]
+                converted_attachments = []
+                for attachment in file_attachments:
+                    # Convert Java List to Python list if needed
+                    if hasattr(attachment, 'toArray'):
+                        attachment = list(attachment.toArray())
+                    elif hasattr(attachment, '__iter__') and not isinstance(attachment, (list, tuple)):
+                        attachment = list(attachment)
+                    if len(attachment) >= 2:
+                        filename = str(attachment[0])
+                        data = attachment[1]
+                        # Convert jarray to bytes if needed
+                        if hasattr(data, '__iter__') and not isinstance(data, (bytes, bytearray)):
+                            data = bytes(data)
+                        converted_attachments.append([filename, data])
+                if converted_attachments:
+                    fields[5] = converted_attachments
+                    total_size = sum(len(a[1]) for a in converted_attachments)
+                    log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                            f"📎 Attaching {len(converted_attachments)} file(s): {total_size} bytes total")
 
             # Create LXMF message with specified delivery method
             lxmf_message = LXMF.LXMessage(
@@ -3553,10 +3617,31 @@ class ReticulumWrapper:
                             fields_serialized = {}
                             for key, value in lxmf_message.fields.items():
                                 # Handle different LXMF field formats
+                                # Field 5 (FILE_ATTACHMENTS): list of [filename, bytes] tuples
                                 # Field 6 (IMAGE): ['format', bytes] e.g. ['jpg', b'\xff\xd8...']
                                 # Field 7 (AUDIO): ['format', bytes]
-                                # Field 5 (FILE_ATTACHMENTS): list of [filename, bytes]
-                                if isinstance(value, (list, tuple)) and len(value) >= 2:
+
+                                if key == 5 and isinstance(value, list):
+                                    # Field 5 is a list of [filename, bytes] tuples
+                                    serialized_attachments = []
+                                    for attachment in value:
+                                        if isinstance(attachment, (list, tuple)) and len(attachment) >= 2:
+                                            filename = attachment[0]
+                                            file_data = attachment[1]
+                                            if isinstance(file_data, bytes):
+                                                serialized_attachments.append({
+                                                    'filename': str(filename),
+                                                    'data': file_data.hex(),
+                                                    'size': len(file_data)
+                                                })
+                                                log_debug("ReticulumWrapper", "poll_received_messages",
+                                                         f"Field 5: file '{filename}' ({len(file_data)} bytes)")
+                                    if serialized_attachments:
+                                        fields_serialized['5'] = serialized_attachments
+                                        log_info("ReticulumWrapper", "poll_received_messages",
+                                                f"📎 Field 5: extracted {len(serialized_attachments)} file attachment(s)")
+
+                                elif isinstance(value, (list, tuple)) and len(value) >= 2:
                                     # Image/audio format: [format_string, bytes_data]
                                     if isinstance(value[1], bytes):
                                         fields_serialized[str(key)] = value[1].hex()

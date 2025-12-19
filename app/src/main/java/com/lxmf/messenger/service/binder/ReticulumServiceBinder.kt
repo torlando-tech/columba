@@ -344,7 +344,15 @@ class ReticulumServiceBinder(
         sourceIdentityPrivateKey: ByteArray,
         imageData: ByteArray?,
         imageFormat: String?,
-    ): String = messagingManager.sendLxmfMessage(destHash, content, sourceIdentityPrivateKey, imageData, imageFormat)
+        fileAttachments: Map<*, *>?,
+    ): String {
+        // Convert Map<String, ByteArray> to List of (filename, bytes) pairs for MessagingManager
+        val fileAttachmentsList =
+            fileAttachments?.map { (filename, bytes) ->
+                filename as String to bytes as ByteArray
+            }
+        return messagingManager.sendLxmfMessage(destHash, content, sourceIdentityPrivateKey, imageData, imageFormat, fileAttachmentsList)
+    }
 
     override fun sendPacket(
         destHash: ByteArray,
@@ -605,9 +613,16 @@ class ReticulumServiceBinder(
         tryPropagationOnFail: Boolean,
         imageData: ByteArray?,
         imageFormat: String?,
+        fileAttachments: Map<*, *>?,
     ): String {
         return try {
             wrapperManager.withWrapper { wrapper ->
+                // Convert Map<String, ByteArray> to List of (filename, bytes) pairs for Python
+                val fileAttachmentsList =
+                    fileAttachments?.map { (filename, bytes) ->
+                        listOf(filename as String, bytes as ByteArray)
+                    }
+
                 val result =
                     wrapper.callAttr(
                         "send_lxmf_message_with_method",
@@ -618,6 +633,7 @@ class ReticulumServiceBinder(
                         tryPropagationOnFail,
                         imageData,
                         imageFormat,
+                        fileAttachmentsList,
                     )
                 // Use PythonResultConverter to properly convert Python dict to JSON
                 // (bytes values like message_hash need Base64 encoding)

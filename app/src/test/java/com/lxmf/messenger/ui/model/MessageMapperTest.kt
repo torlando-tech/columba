@@ -21,7 +21,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MessageMapperTest {
-
     @get:Rule
     val tempFolder = TemporaryFolder()
 
@@ -37,14 +36,15 @@ class MessageMapperTest {
 
     @Test
     fun `toMessageUi maps basic fields correctly`() {
-        val message = createMessage(
-            TestMessageConfig(
-                id = "test-id",
-                content = "Hello world",
-                isFromMe = true,
-                status = "delivered",
-            ),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(
+                    id = "test-id",
+                    content = "Hello world",
+                    isFromMe = true,
+                    status = "delivered",
+                ),
+            )
 
         val result = message.toMessageUi()
 
@@ -92,9 +92,10 @@ class MessageMapperTest {
 
     @Test
     fun `toMessageUi sets hasImageAttachment true for file reference`() {
-        val message = createMessage(
-            TestMessageConfig(fieldsJson = """{"6": {"_file_ref": "/path/to/image.dat"}}"""),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(fieldsJson = """{"6": {"_file_ref": "/path/to/image.dat"}}"""),
+            )
 
         val result = message.toMessageUi()
 
@@ -111,12 +112,13 @@ class MessageMapperTest {
         // Pre-populate cache
         ImageCache.put(messageId, cachedBitmap)
 
-        val message = createMessage(
-            TestMessageConfig(
-                id = messageId,
-                fieldsJson = """{"6": "ffd8ffe0"}""",
-            ),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(
+                    id = messageId,
+                    fieldsJson = """{"6": "ffd8ffe0"}""",
+                ),
+            )
 
         val result = message.toMessageUi()
 
@@ -132,12 +134,13 @@ class MessageMapperTest {
         val messageId = "cached-id"
         ImageCache.put(messageId, createTestBitmap())
 
-        val message = createMessage(
-            TestMessageConfig(
-                id = messageId,
-                fieldsJson = """{"6": "ffd8ffe0"}""",
-            ),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(
+                    id = messageId,
+                    fieldsJson = """{"6": "ffd8ffe0"}""",
+                ),
+            )
 
         val result = message.toMessageUi()
 
@@ -147,12 +150,13 @@ class MessageMapperTest {
 
     @Test
     fun `toMessageUi includes deliveryMethod and errorMessage`() {
-        val message = createMessage(
-            TestMessageConfig(
-                deliveryMethod = "propagated",
-                errorMessage = "Connection timeout",
-            ),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(
+                    deliveryMethod = "propagated",
+                    errorMessage = "Connection timeout",
+                ),
+            )
 
         val result = message.toMessageUi()
 
@@ -226,10 +230,11 @@ class MessageMapperTest {
     @Test
     fun `decodeAndCacheImage returns null for file reference with nonexistent file`() {
         // File reference to a file that doesn't exist
-        val result = decodeAndCacheImage(
-            "test-id",
-            """{"6": {"_file_ref": "/nonexistent/path/to/file.dat"}}""",
-        )
+        val result =
+            decodeAndCacheImage(
+                "test-id",
+                """{"6": {"_file_ref": "/nonexistent/path/to/file.dat"}}""",
+            )
         assertNull(result)
     }
 
@@ -372,8 +377,7 @@ class MessageMapperTest {
             errorMessage = config.errorMessage,
         )
 
-    private fun createTestBitmap() =
-        Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).asImageBitmap()
+    private fun createTestBitmap() = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).asImageBitmap()
 
     // ========== hasImageField() coverage through toMessageUi() ==========
 
@@ -435,9 +439,10 @@ class MessageMapperTest {
 
     @Test
     fun `toMessageUi sets hasImageAttachment true for file reference with valid path`() {
-        val message = createMessage(
-            TestMessageConfig(fieldsJson = """{"6": {"_file_ref": "/data/attachments/img.dat"}}"""),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(fieldsJson = """{"6": {"_file_ref": "/data/attachments/img.dat"}}"""),
+            )
 
         val result = message.toMessageUi()
 
@@ -447,9 +452,10 @@ class MessageMapperTest {
     @Test
     fun `toMessageUi sets hasImageAttachment false when file reference object has wrong key`() {
         // Object in field 6 but without _file_ref key
-        val message = createMessage(
-            TestMessageConfig(fieldsJson = """{"6": {"wrong_key": "/path/to/file"}}"""),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(fieldsJson = """{"6": {"wrong_key": "/path/to/file"}}"""),
+            )
 
         val result = message.toMessageUi()
 
@@ -459,9 +465,10 @@ class MessageMapperTest {
     @Test
     fun `toMessageUi sets hasImageAttachment false for empty file reference path`() {
         // _file_ref exists but value is empty
-        val message = createMessage(
-            TestMessageConfig(fieldsJson = """{"6": {"_file_ref": ""}}"""),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(fieldsJson = """{"6": {"_file_ref": ""}}"""),
+            )
 
         val result = message.toMessageUi()
 
@@ -472,9 +479,10 @@ class MessageMapperTest {
 
     @Test
     fun `toMessageUi handles deeply nested JSON without crashing`() {
-        val message = createMessage(
-            TestMessageConfig(fieldsJson = """{"1": {"nested": {"deep": "value"}}, "6": "image_hex"}"""),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(fieldsJson = """{"1": {"nested": {"deep": "value"}}, "6": "image_hex"}"""),
+            )
 
         val result = message.toMessageUi()
 
@@ -483,9 +491,10 @@ class MessageMapperTest {
 
     @Test
     fun `toMessageUi handles JSON with multiple fields including image`() {
-        val message = createMessage(
-            TestMessageConfig(fieldsJson = """{"1": "text content", "6": "image_hex_data", "7": "other"}"""),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(fieldsJson = """{"1": "text content", "6": "image_hex_data", "7": "other"}"""),
+            )
 
         val result = message.toMessageUi()
 
@@ -496,10 +505,11 @@ class MessageMapperTest {
 
     @Test
     fun `decodeAndCacheImage handles file reference with empty _file_ref value`() {
-        val result = decodeAndCacheImage(
-            "empty-path-test",
-            """{"6": {"_file_ref": ""}}""",
-        )
+        val result =
+            decodeAndCacheImage(
+                "empty-path-test",
+                """{"6": {"_file_ref": ""}}""",
+            )
 
         // Empty path should fail to read
         assertNull(result)
@@ -507,10 +517,11 @@ class MessageMapperTest {
 
     @Test
     fun `decodeAndCacheImage handles field 6 as JSONObject without _file_ref key`() {
-        val result = decodeAndCacheImage(
-            "no-file-ref-key",
-            """{"6": {"other_key": "value"}}""",
-        )
+        val result =
+            decodeAndCacheImage(
+                "no-file-ref-key",
+                """{"6": {"other_key": "value"}}""",
+            )
 
         assertNull(result)
     }
@@ -519,10 +530,11 @@ class MessageMapperTest {
     fun `decodeAndCacheImage handles very long hex string without crashing`() {
         // Generate a long but invalid hex string
         val longHex = "ff".repeat(10000)
-        val result = decodeAndCacheImage(
-            "long-hex-test",
-            """{"6": "$longHex"}""",
-        )
+        val result =
+            decodeAndCacheImage(
+                "long-hex-test",
+                """{"6": "$longHex"}""",
+            )
 
         // May or may not decode, but shouldn't crash
     }
@@ -531,10 +543,11 @@ class MessageMapperTest {
     fun `decodeAndCacheImage handles odd-length hex string gracefully`() {
         // Odd-length hex strings may or may not decode depending on implementation
         // This test verifies no exception is thrown
-        val result = decodeAndCacheImage(
-            "odd-hex-test",
-            """{"6": "fff"}""", // 3 chars, not valid hex pair
-        )
+        val result =
+            decodeAndCacheImage(
+                "odd-hex-test",
+                """{"6": "fff"}""", // 3 chars, not valid hex pair
+            )
 
         // Result may be null or non-null depending on Robolectric's BitmapFactory
         // The important thing is it doesn't crash
@@ -542,39 +555,42 @@ class MessageMapperTest {
 
     @Test
     fun `decodeAndCacheImage handles uppercase hex string`() {
-        val result = decodeAndCacheImage(
-            "uppercase-hex-test",
-            """{"6": "FFD8FFE0"}""",
-        )
+        val result =
+            decodeAndCacheImage(
+                "uppercase-hex-test",
+                """{"6": "FFD8FFE0"}""",
+            )
 
         // Should handle uppercase hex - whether decode succeeds depends on BitmapFactory
     }
 
     @Test
     fun `decodeAndCacheImage handles mixed case hex string`() {
-        val result = decodeAndCacheImage(
-            "mixed-case-test",
-            """{"6": "FfD8fFe0"}""",
-        )
+        val result =
+            decodeAndCacheImage(
+                "mixed-case-test",
+                """{"6": "FfD8fFe0"}""",
+            )
 
         // Should handle mixed case
     }
 
     @Test
     fun `toMessageUi correctly maps all MessageUi fields`() {
-        val message = createMessage(
-            TestMessageConfig(
-                id = "complete-test-id",
-                destinationHash = "dest123",
-                content = "Complete message content",
-                timestamp = 1700000000000L,
-                isFromMe = true,
-                status = "delivered",
-                fieldsJson = null,
-                deliveryMethod = "direct",
-                errorMessage = null,
-            ),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(
+                    id = "complete-test-id",
+                    destinationHash = "dest123",
+                    content = "Complete message content",
+                    timestamp = 1700000000000L,
+                    isFromMe = true,
+                    status = "delivered",
+                    fieldsJson = null,
+                    deliveryMethod = "direct",
+                    errorMessage = null,
+                ),
+            )
 
         val result = message.toMessageUi()
 
@@ -593,16 +609,736 @@ class MessageMapperTest {
 
     @Test
     fun `toMessageUi with failed message includes error message`() {
-        val message = createMessage(
-            TestMessageConfig(
-                status = "failed",
-                errorMessage = "Network timeout",
-            ),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(
+                    status = "failed",
+                    errorMessage = "Network timeout",
+                ),
+            )
 
         val result = message.toMessageUi()
 
         assertEquals("failed", result.status)
         assertEquals("Network timeout", result.errorMessage)
+    }
+
+    // ========== FILE ATTACHMENT (FIELD 5) TESTS ==========
+
+    @Test
+    fun `toMessageUi sets hasFileAttachments false when no fieldsJson`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = null))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasFileAttachments)
+        assertTrue(result.fileAttachments.isEmpty())
+    }
+
+    @Test
+    fun `toMessageUi sets hasFileAttachments false when field 5 is missing`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"1": "some text"}"""))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasFileAttachments)
+        assertTrue(result.fileAttachments.isEmpty())
+    }
+
+    @Test
+    fun `toMessageUi sets hasFileAttachments true for inline array`() {
+        val fieldsJson = """{"5": [{"filename": "test.pdf", "data": "48656c6c6f", "size": 5}]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasFileAttachments)
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals("test.pdf", result.fileAttachments[0].filename)
+        assertEquals(5, result.fileAttachments[0].sizeBytes)
+        assertEquals("application/pdf", result.fileAttachments[0].mimeType)
+        assertEquals(0, result.fileAttachments[0].index)
+    }
+
+    @Test
+    fun `toMessageUi parses multiple file attachments`() {
+        val fieldsJson = """{"5": [
+            {"filename": "doc.pdf", "data": "0102", "size": 1024},
+            {"filename": "notes.txt", "data": "0304", "size": 512},
+            {"filename": "archive.zip", "data": "0506", "size": 2048}
+        ]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasFileAttachments)
+        assertEquals(3, result.fileAttachments.size)
+
+        assertEquals("doc.pdf", result.fileAttachments[0].filename)
+        assertEquals(1024, result.fileAttachments[0].sizeBytes)
+        assertEquals("application/pdf", result.fileAttachments[0].mimeType)
+        assertEquals(0, result.fileAttachments[0].index)
+
+        assertEquals("notes.txt", result.fileAttachments[1].filename)
+        assertEquals(512, result.fileAttachments[1].sizeBytes)
+        assertEquals("text/plain", result.fileAttachments[1].mimeType)
+        assertEquals(1, result.fileAttachments[1].index)
+
+        assertEquals("archive.zip", result.fileAttachments[2].filename)
+        assertEquals(2048, result.fileAttachments[2].sizeBytes)
+        assertEquals("application/zip", result.fileAttachments[2].mimeType)
+        assertEquals(2, result.fileAttachments[2].index)
+    }
+
+    @Test
+    fun `toMessageUi sets hasFileAttachments true for file reference`() {
+        val fieldsJson = """{"5": {"_file_ref": "/data/attachments/file.dat"}}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasFileAttachments)
+        // File reference loading happens async - attachments may be empty if file doesn't exist
+    }
+
+    @Test
+    fun `toMessageUi handles file attachments with missing filename`() {
+        val fieldsJson = """{"5": [{"data": "0102", "size": 100}]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasFileAttachments)
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals("unknown", result.fileAttachments[0].filename)
+    }
+
+    @Test
+    fun `toMessageUi handles file attachments with missing size`() {
+        val fieldsJson = """{"5": [{"filename": "test.txt", "data": "0102"}]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasFileAttachments)
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals(0, result.fileAttachments[0].sizeBytes)
+    }
+
+    @Test
+    fun `toMessageUi handles empty file attachments array`() {
+        val fieldsJson = """{"5": []}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        // Empty array is treated as no attachments (length > 0 check)
+        assertFalse(result.hasFileAttachments)
+        assertTrue(result.fileAttachments.isEmpty())
+    }
+
+    @Test
+    fun `toMessageUi handles malformed JSON in field 5`() {
+        val fieldsJson = """{"5": "not an array or object"}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasFileAttachments)
+        assertTrue(result.fileAttachments.isEmpty())
+    }
+
+    @Test
+    fun `toMessageUi handles field 5 as null`() {
+        val fieldsJson = """{"5": null}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasFileAttachments)
+        assertTrue(result.fileAttachments.isEmpty())
+    }
+
+    @Test
+    fun `toMessageUi handles both image and file attachments`() {
+        val fieldsJson = """{
+            "5": [{"filename": "doc.pdf", "data": "0102", "size": 1024}],
+            "6": "ffd8ffe0"
+        }"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasFileAttachments)
+        assertTrue(result.hasImageAttachment)
+        assertEquals(1, result.fileAttachments.size)
+    }
+
+    // ========== loadFileAttachmentData() TESTS ==========
+
+    @Test
+    fun `loadFileAttachmentData returns null for null fieldsJson`() {
+        val result = loadFileAttachmentData(null, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentData returns null when field 5 is missing`() {
+        val result = loadFileAttachmentData("""{"1": "text"}""", 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentData returns null for negative index`() {
+        val fieldsJson = """{"5": [{"filename": "test.pdf", "data": "48656c6c6f", "size": 5}]}"""
+        val result = loadFileAttachmentData(fieldsJson, -1)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentData returns null for out of bounds index`() {
+        val fieldsJson = """{"5": [{"filename": "test.pdf", "data": "48656c6c6f", "size": 5}]}"""
+        val result = loadFileAttachmentData(fieldsJson, 1)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentData returns data for valid index`() {
+        // "48656c6c6f" is hex for "Hello"
+        val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("Hello", String(result!!))
+    }
+
+    @Test
+    fun `loadFileAttachmentData returns correct attachment from multiple`() {
+        val fieldsJson = """{"5": [
+            {"filename": "first.txt", "data": "4f6e65", "size": 3},
+            {"filename": "second.txt", "data": "54776f", "size": 3},
+            {"filename": "third.txt", "data": "54687265", "size": 4}
+        ]}"""
+
+        val first = loadFileAttachmentData(fieldsJson, 0)
+        val second = loadFileAttachmentData(fieldsJson, 1)
+        val third = loadFileAttachmentData(fieldsJson, 2)
+
+        assertNotNull(first)
+        assertEquals("One", String(first!!))
+
+        assertNotNull(second)
+        assertEquals("Two", String(second!!))
+
+        assertNotNull(third)
+        assertEquals("Thre", String(third!!))
+    }
+
+    @Test
+    fun `loadFileAttachmentData returns null when data field is empty`() {
+        val fieldsJson = """{"5": [{"filename": "test.txt", "data": "", "size": 0}]}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentData returns null when data field is missing`() {
+        val fieldsJson = """{"5": [{"filename": "test.txt", "size": 100}]}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentData handles uppercase hex`() {
+        // "48454C4C4F" is uppercase hex for "HELLO"
+        val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48454C4C4F", "size": 5}]}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("HELLO", String(result!!))
+    }
+
+    @Test
+    fun `loadFileAttachmentData handles mixed case hex`() {
+        val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48656C6c6F", "size": 5}]}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("Hello", String(result!!))
+    }
+
+    @Test
+    fun `loadFileAttachmentData reads from file reference when file exists`() {
+        // Create a temp file with JSON array of attachments
+        val attachmentData = """[{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]"""
+        val tempFile = tempFolder.newFile("file_attachments.dat")
+        tempFile.writeText(attachmentData)
+
+        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("Hello", String(result!!))
+    }
+
+    @Test
+    fun `loadFileAttachmentData returns null for nonexistent file reference`() {
+        val fieldsJson = """{"5": {"_file_ref": "/nonexistent/path/file.dat"}}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentData returns null for empty file reference path`() {
+        val fieldsJson = """{"5": {"_file_ref": ""}}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentData handles large hex data efficiently`() {
+        // Create a 10KB hex string (20KB of hex chars)
+        val originalBytes = ByteArray(10_000) { (it % 256).toByte() }
+        val hexString = originalBytes.joinToString("") { "%02x".format(it) }
+        val fieldsJson = """{"5": [{"filename": "large.bin", "data": "$hexString", "size": 10000}]}"""
+
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals(10_000, result!!.size)
+        // Verify first and last bytes match
+        assertEquals(originalBytes[0], result[0])
+        assertEquals(originalBytes[9999], result[9999])
+        // Verify a few bytes in the middle
+        assertEquals(originalBytes[5000], result[5000])
+    }
+
+    @Test
+    fun `loadFileAttachmentData handles binary data with all byte values`() {
+        // Test all 256 byte values to ensure hex decoding works for edge cases
+        val allBytes = ByteArray(256) { it.toByte() }
+        val hexString = allBytes.joinToString("") { "%02x".format(it) }
+        val fieldsJson = """{"5": [{"filename": "allbytes.bin", "data": "$hexString", "size": 256}]}"""
+
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals(256, result!!.size)
+        for (i in 0 until 256) {
+            assertEquals("Byte $i mismatch", i.toByte(), result[i])
+        }
+    }
+
+    // ========== ADDITIONAL EDGE CASE TESTS FOR COVERAGE ==========
+
+    @Test
+    fun `toMessageUi includes fieldsJson when only file attachments present no image`() {
+        val fieldsJson = """{"5": [{"filename": "test.pdf", "data": "0102", "size": 2}]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        // fieldsJson should be included because there are file attachments (needed for loading data)
+        assertNotNull(result.fieldsJson)
+        assertTrue(result.hasFileAttachments)
+        assertFalse(result.hasImageAttachment)
+    }
+
+    @Test
+    fun `toMessageUi handles field 5 as number gracefully`() {
+        val fieldsJson = """{"5": 12345}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasFileAttachments)
+        assertTrue(result.fileAttachments.isEmpty())
+    }
+
+    @Test
+    fun `toMessageUi handles field 5 as boolean gracefully`() {
+        val fieldsJson = """{"5": true}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.hasFileAttachments)
+        assertTrue(result.fileAttachments.isEmpty())
+    }
+
+    @Test
+    fun `toMessageUi parses file attachment with unicode filename`() {
+        val fieldsJson = """{"5": [{"filename": "文档.pdf", "data": "0102", "size": 2}]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasFileAttachments)
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals("文档.pdf", result.fileAttachments[0].filename)
+    }
+
+    @Test
+    fun `toMessageUi skips malformed attachment in array and continues`() {
+        // First attachment is valid, second is malformed (not an object), third is valid
+        val fieldsJson = """{"5": [
+            {"filename": "good1.pdf", "data": "01", "size": 1},
+            "not an object",
+            {"filename": "good2.txt", "data": "02", "size": 1}
+        ]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasFileAttachments)
+        // Should have 2 valid attachments (skipped the malformed one)
+        assertEquals(2, result.fileAttachments.size)
+        assertEquals("good1.pdf", result.fileAttachments[0].filename)
+        assertEquals(0, result.fileAttachments[0].index)
+        assertEquals("good2.txt", result.fileAttachments[1].filename)
+        assertEquals(2, result.fileAttachments[1].index)
+    }
+
+    @Test
+    fun `loadFileAttachmentData handles attachment at non-zero index with valid data`() {
+        val fieldsJson = """{"5": [
+            {"filename": "first.txt", "data": "4669727374", "size": 5},
+            {"filename": "second.txt", "data": "5365636f6e64", "size": 6}
+        ]}"""
+
+        // Load second attachment (index 1)
+        val result = loadFileAttachmentData(fieldsJson, 1)
+
+        assertNotNull(result)
+        assertEquals("Second", String(result!!))
+    }
+
+    @Test
+    fun `loadFileAttachmentData handles field 5 with number type gracefully`() {
+        val fieldsJson = """{"5": 123}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentData handles field 5 with string type gracefully`() {
+        val fieldsJson = """{"5": "not an array"}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `toMessageUi reads file attachments from disk file reference`() {
+        // Create temp file with attachment array
+        val attachmentData = """[{"filename": "disk_file.txt", "data": "446973", "size": 3}]"""
+        val tempFile = tempFolder.newFile("attachments_field5.dat")
+        tempFile.writeText(attachmentData)
+
+        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasFileAttachments)
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals("disk_file.txt", result.fileAttachments[0].filename)
+    }
+
+    @Test
+    fun `loadFileAttachmentData reads from disk file reference with multiple attachments`() {
+        val attachmentData = """[
+            {"filename": "a.txt", "data": "4141", "size": 2},
+            {"filename": "b.txt", "data": "4242", "size": 2}
+        ]"""
+        val tempFile = tempFolder.newFile("multi_attach.dat")
+        tempFile.writeText(attachmentData)
+
+        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+
+        val resultA = loadFileAttachmentData(fieldsJson, 0)
+        val resultB = loadFileAttachmentData(fieldsJson, 1)
+
+        assertNotNull(resultA)
+        assertEquals("AA", String(resultA!!))
+        assertNotNull(resultB)
+        assertEquals("BB", String(resultB!!))
+    }
+
+    @Test
+    fun `loadFileAttachmentData returns null for invalid JSON in file reference`() {
+        val tempFile = tempFolder.newFile("invalid.dat")
+        tempFile.writeText("not valid json [{{{")
+
+        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentData handles attachment with special characters in data`() {
+        // Test hex data that represents special characters
+        val fieldsJson = """{"5": [{"filename": "test.bin", "data": "000102fe ff", "size": 5}]}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        // Invalid hex (spaces) should cause failure
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeAndCacheImage handles concurrent cache check`() {
+        // This tests the early cache check at the start of decodeAndCacheImage
+        val messageId = "concurrent-test"
+        val cachedBitmap = createTestBitmap()
+
+        // Pre-populate cache
+        ImageCache.put(messageId, cachedBitmap)
+
+        // Call should return cached image immediately
+        val result = decodeAndCacheImage(messageId, """{"6": "not_valid_but_irrelevant"}""")
+
+        assertEquals(cachedBitmap, result)
+    }
+
+    @Test
+    fun `toMessageUi handles file reference with malformed JSON in file`() {
+        val tempFile = tempFolder.newFile("malformed_attachments.dat")
+        tempFile.writeText("this is not json")
+
+        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        // Should gracefully handle the error - hasFileAttachments is true because
+        // _file_ref exists, but parsing fails so list is empty
+        assertTrue(result.hasFileAttachments)
+        assertTrue(result.fileAttachments.isEmpty())
+    }
+
+    // ========== loadFileAttachmentMetadata() TESTS ==========
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for null fieldsJson`() {
+        val result = loadFileAttachmentMetadata(null, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for empty fieldsJson`() {
+        val result = loadFileAttachmentMetadata("", 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for invalid JSON`() {
+        val result = loadFileAttachmentMetadata("not valid json", 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null when field 5 is missing`() {
+        val result = loadFileAttachmentMetadata("""{"1": "text", "6": "image"}""", 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for negative index`() {
+        val fieldsJson = """{"5": [{"filename": "test.pdf", "size": 1000}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, -1)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for out of bounds index`() {
+        val fieldsJson = """{"5": [{"filename": "test.pdf", "size": 1000}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 5)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns correct filename and mimeType for PDF`() {
+        val fieldsJson = """{"5": [{"filename": "document.pdf", "size": 12345}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("document.pdf", result!!.filename)
+        assertEquals("application/pdf", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns correct mimeType for image file`() {
+        val fieldsJson = """{"5": [{"filename": "photo.jpg", "size": 5000}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("photo.jpg", result!!.filename)
+        assertEquals("image/jpeg", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns correct mimeType for text file`() {
+        val fieldsJson = """{"5": [{"filename": "notes.txt", "size": 100}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("notes.txt", result!!.filename)
+        assertEquals("text/plain", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns unknown filename when missing`() {
+        val fieldsJson = """{"5": [{"size": 1000}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("unknown", result!!.filename)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata handles multiple attachments at different indices`() {
+        val fieldsJson = """{"5": [
+            {"filename": "first.pdf", "size": 1000},
+            {"filename": "second.png", "size": 2000},
+            {"filename": "third.txt", "size": 500}
+        ]}"""
+
+        val result0 = loadFileAttachmentMetadata(fieldsJson, 0)
+        val result1 = loadFileAttachmentMetadata(fieldsJson, 1)
+        val result2 = loadFileAttachmentMetadata(fieldsJson, 2)
+
+        assertNotNull(result0)
+        assertEquals("first.pdf", result0!!.filename)
+        assertEquals("application/pdf", result0.mimeType)
+
+        assertNotNull(result1)
+        assertEquals("second.png", result1!!.filename)
+        assertEquals("image/png", result1.mimeType)
+
+        assertNotNull(result2)
+        assertEquals("third.txt", result2!!.filename)
+        assertEquals("text/plain", result2.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata reads from file reference when file exists`() {
+        // Create a temporary file with JSON array of attachments
+        val tempFile = tempFolder.newFile("metadata_attachments.json")
+        tempFile.writeText("""[{"filename": "from_disk.pdf", "size": 9999, "data": "abc123"}]""")
+
+        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("from_disk.pdf", result!!.filename)
+        assertEquals("application/pdf", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for file reference with nonexistent file`() {
+        val fieldsJson = """{"5": {"_file_ref": "/nonexistent/path/attachments.json"}}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for empty file reference path`() {
+        val fieldsJson = """{"5": {"_file_ref": ""}}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null when field 5 is not array or file ref`() {
+        val fieldsJson = """{"5": "just a string"}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null when field 5 is number`() {
+        val fieldsJson = """{"5": 12345}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null when field 5 is empty array`() {
+        val fieldsJson = """{"5": []}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata handles unknown file extension`() {
+        val fieldsJson = """{"5": [{"filename": "data.xyz", "size": 100}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("data.xyz", result!!.filename)
+        // Unknown extensions default to application/octet-stream
+        assertEquals("application/octet-stream", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata handles filename with no extension`() {
+        val fieldsJson = """{"5": [{"filename": "README", "size": 100}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("README", result!!.filename)
+        assertEquals("application/octet-stream", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata handles unicode filename`() {
+        val fieldsJson = """{"5": [{"filename": "文档.pdf", "size": 100}]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("文档.pdf", result!!.filename)
+        assertEquals("application/pdf", result.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null when attachment is not JSONObject`() {
+        // Array contains a string instead of an object
+        val fieldsJson = """{"5": ["not an object"]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata reads from disk file with multiple attachments`() {
+        val attachmentData = """[
+            {"filename": "a.pdf", "size": 100},
+            {"filename": "b.txt", "size": 200}
+        ]"""
+        val tempFile = tempFolder.newFile("multi_metadata.dat")
+        tempFile.writeText(attachmentData)
+
+        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+
+        val result0 = loadFileAttachmentMetadata(fieldsJson, 0)
+        val result1 = loadFileAttachmentMetadata(fieldsJson, 1)
+
+        assertNotNull(result0)
+        assertEquals("a.pdf", result0!!.filename)
+        assertEquals("application/pdf", result0.mimeType)
+
+        assertNotNull(result1)
+        assertEquals("b.txt", result1!!.filename)
+        assertEquals("text/plain", result1.mimeType)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata returns null for invalid JSON in file reference`() {
+        val tempFile = tempFolder.newFile("invalid_metadata.dat")
+        tempFile.writeText("not valid json [{{{")
+
+        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNull(result)
     }
 }

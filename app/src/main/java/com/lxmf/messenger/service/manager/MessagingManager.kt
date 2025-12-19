@@ -36,6 +36,7 @@ class MessagingManager(private val wrapperManager: PythonWrapperManager) {
      * @param sourceIdentityPrivateKey Source identity private key bytes
      * @param imageData Optional image data bytes
      * @param imageFormat Optional image format string (e.g., "jpg", "png")
+     * @param fileAttachments Optional list of file attachments as (filename, bytes) pairs
      * @return JSON string with result
      */
     fun sendLxmfMessage(
@@ -44,13 +45,19 @@ class MessagingManager(private val wrapperManager: PythonWrapperManager) {
         sourceIdentityPrivateKey: ByteArray,
         imageData: ByteArray?,
         imageFormat: String?,
+        fileAttachments: List<Pair<String, ByteArray>>?,
     ): String {
         return wrapperManager.withWrapper { wrapper ->
             try {
                 Log.d(
                     TAG,
                     "Sending LXMF message" +
-                        if (imageData != null) " with image attachment (${imageData.size} bytes, format=$imageFormat)" else "",
+                        if (imageData != null) {
+                            " with image attachment (${imageData.size} bytes, format=$imageFormat)"
+                        } else {
+                            "" +
+                                if (fileAttachments != null) " with ${fileAttachments.size} file attachment(s)" else ""
+                        },
                 )
 
                 val result =
@@ -61,6 +68,7 @@ class MessagingManager(private val wrapperManager: PythonWrapperManager) {
                         sourceIdentityPrivateKey,
                         imageData,
                         imageFormat,
+                        fileAttachments,
                     )
 
                 val success = result.getDictValue("success")?.toBoolean() ?: false

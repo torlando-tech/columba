@@ -115,6 +115,7 @@ interface ReticulumProtocol {
         sourceIdentity: Identity,
         imageData: ByteArray? = null,
         imageFormat: String? = null,
+        fileAttachments: List<Pair<String, ByteArray>>? = null,
     ): Result<MessageReceipt>
 
     fun observeMessages(): Flow<ReceivedMessage>
@@ -203,8 +204,10 @@ interface ReticulumProtocol {
      * @param tryPropagationOnFail If true and direct fails, retry via propagation
      * @param imageData Optional image data bytes
      * @param imageFormat Optional image format (e.g., "jpg", "png", "webp")
+     * @param fileAttachments Optional list of file attachments as (filename, bytes) pairs
      * @return Result containing MessageReceipt or failure
      */
+    @Suppress("LongParameterList")
     suspend fun sendLxmfMessageWithMethod(
         destinationHash: ByteArray,
         content: String,
@@ -213,6 +216,7 @@ interface ReticulumProtocol {
         tryPropagationOnFail: Boolean = true,
         imageData: ByteArray? = null,
         imageFormat: String? = null,
+        fileAttachments: List<Pair<String, ByteArray>>? = null,
     ): Result<MessageReceipt>
 }
 

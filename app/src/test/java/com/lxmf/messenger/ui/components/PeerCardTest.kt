@@ -219,4 +219,132 @@ class PeerCardTest {
         // Then
         assertEquals(3, clickCount)
     }
+
+    // ========== Interface Type Icon Tests ==========
+
+    @Test
+    fun peerCard_displaysWiFiIcon_forAutoInterface() {
+        // Given
+        val announce = TestFactories.createAnnounce(
+            receivingInterfaceType = "AUTO_INTERFACE",
+        )
+
+        // When
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        // Then
+        composeTestRule.onNodeWithContentDescription("WiFi").assertIsDisplayed()
+    }
+
+    @Test
+    fun peerCard_displaysGlobeIcon_forTcpClient() {
+        // Given
+        val announce = TestFactories.createAnnounce(
+            receivingInterfaceType = "TCP_CLIENT",
+        )
+
+        // When
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        // Then
+        composeTestRule.onNodeWithContentDescription("Internet").assertIsDisplayed()
+    }
+
+    @Test
+    fun peerCard_displaysBluetoothIcon_forAndroidBle() {
+        // Given
+        val announce = TestFactories.createAnnounce(
+            receivingInterfaceType = "ANDROID_BLE",
+        )
+
+        // When
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        // Then
+        composeTestRule.onNodeWithContentDescription("Bluetooth").assertIsDisplayed()
+    }
+
+    @Test
+    fun peerCard_displaysAntennaIcon_forRnode() {
+        // Given
+        val announce = TestFactories.createAnnounce(
+            receivingInterfaceType = "RNODE",
+        )
+
+        // When
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        // Then
+        composeTestRule.onNodeWithContentDescription("LoRa/RNode").assertIsDisplayed()
+    }
+
+    @Test
+    fun peerCard_doesNotDisplayInterfaceIcon_forUnknown() {
+        // Given
+        val announce = TestFactories.createAnnounce(
+            receivingInterfaceType = "UNKNOWN",
+        )
+
+        // When
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        // Then - no interface icon should be displayed for unknown type
+        composeTestRule.onNodeWithContentDescription("WiFi").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Internet").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Bluetooth").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("LoRa/RNode").assertDoesNotExist()
+    }
+
+    @Test
+    fun peerCard_doesNotDisplayInterfaceIcon_forNull() {
+        // Given
+        val announce = TestFactories.createAnnounce(
+            receivingInterfaceType = null,
+        )
+
+        // When
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        // Then - no interface icon should be displayed for null type
+        composeTestRule.onNodeWithContentDescription("WiFi").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Internet").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Bluetooth").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("LoRa/RNode").assertDoesNotExist()
+    }
 }

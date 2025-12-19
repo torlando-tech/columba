@@ -235,6 +235,7 @@ class MigrationExporter
                     lastSeenTimestamp = announce.lastSeenTimestamp,
                     nodeType = announce.nodeType,
                     receivingInterface = announce.receivingInterface,
+                    receivingInterfaceType = announce.receivingInterfaceType,
                     aspect = announce.aspect,
                     isFavorite = announce.isFavorite,
                     favoritedTimestamp = announce.favoritedTimestamp,

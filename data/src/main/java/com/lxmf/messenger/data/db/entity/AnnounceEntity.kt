@@ -22,6 +22,7 @@ data class AnnounceEntity(
     val lastSeenTimestamp: Long,
     val nodeType: String,
     val receivingInterface: String?,
+    val receivingInterfaceType: String? = null,
     val aspect: String? = null,
     val isFavorite: Boolean = false,
     val favoritedTimestamp: Long? = null,
@@ -41,6 +42,7 @@ data class AnnounceEntity(
             lastSeenTimestamp == other.lastSeenTimestamp &&
             nodeType == other.nodeType &&
             receivingInterface == other.receivingInterface &&
+            receivingInterfaceType == other.receivingInterfaceType &&
             aspect == other.aspect &&
             isFavorite == other.isFavorite &&
             favoritedTimestamp == other.favoritedTimestamp &&
@@ -66,6 +68,7 @@ data class AnnounceEntity(
         result = 31 * result + lastSeenTimestamp.hashCode()
         result = 31 * result + nodeType.hashCode()
         result = 31 * result + (receivingInterface?.hashCode() ?: 0)
+        result = 31 * result + (receivingInterfaceType?.hashCode() ?: 0)
         result = 31 * result + (aspect?.hashCode() ?: 0)
         result = 31 * result + isFavorite.hashCode()
         result = 31 * result + (favoritedTimestamp?.hashCode() ?: 0)

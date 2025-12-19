@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.filter
+import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
@@ -242,6 +243,7 @@ class AnnounceStreamViewModel
                             timestamp = announce.timestamp,
                             nodeType = announce.nodeType.name,
                             receivingInterface = announce.receivingInterface,
+                            receivingInterfaceType = InterfaceType.fromInterfaceName(announce.receivingInterface).name,
                             aspect = announce.aspect,
                             stampCost = announce.stampCost,
                             stampCostFlexibility = announce.stampCostFlexibility,

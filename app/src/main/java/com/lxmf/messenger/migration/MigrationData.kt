@@ -105,6 +105,7 @@ data class AnnounceExport(
     val lastSeenTimestamp: Long,
     val nodeType: String,
     val receivingInterface: String?,
+    val receivingInterfaceType: String? = null,
     val aspect: String?,
     val isFavorite: Boolean,
     val favoritedTimestamp: Long?,

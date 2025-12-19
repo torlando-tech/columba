@@ -86,8 +86,9 @@ class MigrationDataTest {
             isPinned = true,
         )
 
-    private fun createTestAnnounce() =
-        AnnounceExport(
+    private fun createTestAnnounce(
+        receivingInterfaceType: String? = "AUTO_INTERFACE",
+    ) = AnnounceExport(
             destinationHash = "announce123",
             peerName = "Remote Node",
             publicKey = "YW5ub3VuY2VQdWJsaWNLZXk=",
@@ -96,6 +97,7 @@ class MigrationDataTest {
             lastSeenTimestamp = 1700000000000L,
             nodeType = "node",
             receivingInterface = "AutoInterface",
+            receivingInterfaceType = receivingInterfaceType,
             aspect = "lxmf.delivery",
             isFavorite = true,
             favoritedTimestamp = 1699500000000L,
@@ -469,6 +471,51 @@ class MigrationDataTest {
         assertNull(decoded.autoSelectPropagationNode)
         assertNull(decoded.autoRetrieveEnabled)
         assertNull(decoded.retrievalIntervalSeconds)
+    }
+
+    // endregion
+
+    // region AnnounceExport Tests
+
+    @Test
+    fun `AnnounceExport round-trip preserves receivingInterfaceType`() {
+        val announce = createTestAnnounce(receivingInterfaceType = "TCP_CLIENT")
+
+        val jsonString = json.encodeToString(announce)
+        val decoded = json.decodeFromString<AnnounceExport>(jsonString)
+
+        assertEquals("TCP_CLIENT", decoded.receivingInterfaceType)
+        assertEquals(announce.receivingInterface, decoded.receivingInterface)
+    }
+
+    @Test
+    fun `AnnounceExport backward compatibility with v5 JSON without receivingInterfaceType`() {
+        // Simulate deserializing a v5 export without receivingInterfaceType
+        val v5Json =
+            """
+            {
+                "destinationHash": "announce123",
+                "peerName": "Remote Node",
+                "publicKey": "YW5ub3VuY2VQdWJsaWNLZXk=",
+                "appData": "YXBwRGF0YQ==",
+                "hops": 3,
+                "lastSeenTimestamp": 1700000000000,
+                "nodeType": "node",
+                "receivingInterface": "AutoInterface",
+                "aspect": "lxmf.delivery",
+                "isFavorite": true,
+                "favoritedTimestamp": 1699500000000
+            }
+            """.trimIndent()
+
+        val decoded = json.decodeFromString<AnnounceExport>(v5Json)
+
+        // Original fields should be preserved
+        assertEquals("announce123", decoded.destinationHash)
+        assertEquals("AutoInterface", decoded.receivingInterface)
+
+        // New field should be null (backward compatibility)
+        assertNull(decoded.receivingInterfaceType)
     }
 
     // endregion

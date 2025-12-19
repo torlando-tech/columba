@@ -2,6 +2,7 @@ package com.lxmf.messenger.service
 
 import android.util.Log
 import com.lxmf.messenger.data.db.entity.ContactStatus
+import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
@@ -228,6 +229,7 @@ class MessageCollector
                                 timestamp = announce.timestamp,
                                 nodeType = announce.nodeType.name,
                                 receivingInterface = announce.receivingInterface,
+                                receivingInterfaceType = InterfaceType.fromInterfaceName(announce.receivingInterface).name,
                                 aspect = announce.aspect,
                                 stampCost = announce.stampCost,
                                 stampCostFlexibility = announce.stampCostFlexibility,

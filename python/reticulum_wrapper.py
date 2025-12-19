@@ -118,6 +118,9 @@ class ReticulumWrapper:
         # Message received callback support (Phase 2.2 - event-driven message notifications)
         self.kotlin_message_received_callback = None  # Callback to Kotlin when LXMF message received
 
+        # Location telemetry callback support (Phase 3 - location sharing over LXMF)
+        self.kotlin_location_received_callback = None  # Callback to Kotlin when location telemetry received
+
         # General Reticulum bridge for protocol-level callbacks (announces, link events, etc.)
         self.kotlin_reticulum_bridge = None  # KotlinReticulumBridge instance (passed from Kotlin)
 
@@ -264,6 +267,31 @@ class ReticulumWrapper:
         self.kotlin_message_received_callback = callback
         log_info("ReticulumWrapper", "set_message_received_callback",
                 "✅ Message received callback registered (event-driven architecture enabled)")
+
+    def set_location_received_callback(self, callback):
+        """
+        Set callback to be invoked when location telemetry is received (Phase 3 - Location Sharing).
+        Location telemetry is sent via LXMF field 7 as JSON.
+
+        Callback signature: callback(location_json: str)
+
+        Location JSON format:
+        {
+            "source_hash": "abc123...",      # Hex string of sender identity hash
+            "type": "location_share",        # Always "location_share"
+            "lat": 37.7749,                  # Latitude (WGS84)
+            "lng": -122.4194,                # Longitude (WGS84)
+            "acc": 10.0,                     # Accuracy in meters
+            "ts": 1234567890000,             # Timestamp when captured (millis)
+            "expires": 1234570890000         # When sharing ends (millis), null for indefinite
+        }
+
+        Args:
+            callback: PyObject callable from Kotlin (passed via Chaquopy)
+        """
+        self.kotlin_location_received_callback = callback
+        log_info("ReticulumWrapper", "set_location_received_callback",
+                "✅ Location received callback registered (location sharing enabled)")
 
     def set_kotlin_request_alternative_relay_callback(self, callback):
         """
@@ -1787,6 +1815,64 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Message to: {lxmf_message.destination_hash.hex()[:16]}")
             log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Content length: {len(lxmf_message.content)} bytes")
 
+            # ✅ PHASE 3: Check for location telemetry (field 7) FIRST
+            # Location-only messages should NOT be added to the regular message queue
+            LOCATION_FIELD = 7
+            is_location_only = False
+
+            if self.kotlin_location_received_callback and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
+                if LOCATION_FIELD in lxmf_message.fields:
+                    # Check if this is a location-only message (no text content or empty content)
+                    content = lxmf_message.content
+                    has_text_content = content and len(content.strip()) > 0 if isinstance(content, (str, bytes)) else False
+                    if isinstance(content, bytes):
+                        has_text_content = len(content.strip()) > 0
+
+                    if not has_text_content:
+                        is_location_only = True
+                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                f"📍 Location-only message detected (field {LOCATION_FIELD}), skipping message queue")
+
+                    # Process location telemetry
+                    try:
+                        location_data = lxmf_message.fields[LOCATION_FIELD]
+                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                f"📍 Location telemetry received in field {LOCATION_FIELD}")
+
+                        # Location data format: JSON string as bytes
+                        if isinstance(location_data, bytes):
+                            location_json = location_data.decode('utf-8')
+                        elif isinstance(location_data, str):
+                            location_json = location_data
+                        else:
+                            log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                       f"Unexpected location data type: {type(location_data)}")
+                            location_json = None
+
+                        if location_json:
+                            # Parse and augment with source hash
+                            import json
+                            location_event = json.loads(location_json)
+                            location_event['source_hash'] = lxmf_message.source_hash.hex()
+
+                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"Location: lat={location_event.get('lat')}, lng={location_event.get('lng')}")
+
+                            self.kotlin_location_received_callback(json.dumps(location_event))
+                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                    "✅ Location callback invoked successfully")
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "_on_lxmf_delivery",
+                                 f"⚠️ Error processing location telemetry: {e}")
+                        import traceback
+                        traceback.print_exc()
+
+            # Skip regular message processing for location-only messages
+            if is_location_only:
+                log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                         "Skipping regular message processing for location-only message")
+                return
+
             # Add to pending_inbound queue (maintains backward compatibility with polling)
             if not hasattr(self.router, 'pending_inbound'):
                 log_warning("ReticulumWrapper", "_on_lxmf_delivery", "Warning: Router has no pending_inbound, creating one")
@@ -2296,6 +2382,119 @@ class ReticulumWrapper:
             import traceback
             traceback.print_exc()
             log_separator("ReticulumWrapper", "send_lxmf_message", "=", 80)
+            return {"success": False, "error": str(e)}
+
+    # ==================== LOCATION TELEMETRY ====================
+
+    def send_location_telemetry(self, dest_hash: bytes, location_json: str, source_identity_private_key: bytes) -> Dict:
+        """
+        Send location telemetry to a destination via LXMF field 7.
+
+        Args:
+            dest_hash: Identity hash bytes (16 bytes) of the recipient
+            location_json: JSON string with location data (lat, lng, acc, ts, expires)
+            source_identity_private_key: Private key of sender identity
+
+        Returns:
+            Dict with 'success', 'message_hash', 'timestamp' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Convert jarray to bytes if needed
+            if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+                dest_hash = bytes(dest_hash)
+            if hasattr(source_identity_private_key, '__iter__') and not isinstance(source_identity_private_key, (bytes, bytearray)):
+                source_identity_private_key = bytes(source_identity_private_key)
+
+            log_info("ReticulumWrapper", "send_location_telemetry",
+                     f"📍 Sending location telemetry to {dest_hash.hex()[:16]}...")
+
+            # Reconstruct source identity from private key
+            source_identity = RNS.Identity()
+            try:
+                source_identity.load_private_key(source_identity_private_key)
+            except Exception as e:
+                log_error("ReticulumWrapper", "send_location_telemetry", f"❌ ERROR loading private key: {e}")
+                raise
+
+            # Get our local LXMF destination
+            if not self.local_lxmf_destination:
+                raise ValueError("Local LXMF destination not created")
+
+            # Recall recipient identity
+            recipient_identity = RNS.Identity.recall(dest_hash)
+            if not recipient_identity:
+                recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+
+            # Try local cache
+            dest_hash_hex = dest_hash.hex()
+            if not recipient_identity and dest_hash_hex in self.identities:
+                recipient_identity = self.identities[dest_hash_hex]
+
+            if not recipient_identity:
+                error_msg = f"Recipient identity {dest_hash.hex()[:16]} not known"
+                log_error("ReticulumWrapper", "send_location_telemetry", f"❌ {error_msg}")
+                return {"success": False, "error": error_msg}
+
+            # Create outgoing LXMF destination
+            recipient_lxmf_destination = RNS.Destination(
+                recipient_identity,
+                RNS.Destination.OUT,
+                RNS.Destination.SINGLE,
+                "lxmf",
+                "delivery"
+            )
+
+            # Parse and validate location JSON
+            try:
+                location_data = json.loads(location_json)
+                log_debug("ReticulumWrapper", "send_location_telemetry",
+                          f"Location data: lat={location_data.get('lat')}, lng={location_data.get('lng')}")
+            except json.JSONDecodeError as e:
+                return {"success": False, "error": f"Invalid location JSON: {e}"}
+
+            # LXMF field 7 = LOCATION TELEMETRY
+            LOCATION_FIELD = 7
+            fields = {
+                LOCATION_FIELD: location_json  # Send as JSON string
+            }
+
+            # Create LXMF message with location telemetry (empty content body)
+            lxmf_message = LXMF.LXMessage(
+                destination=recipient_lxmf_destination,
+                source=self.local_lxmf_destination,
+                content="".encode('utf-8'),  # Empty content - location is in field 7
+                title="",
+                fields=fields
+            )
+
+            # Register delivery callbacks
+            try:
+                lxmf_message.register_delivery_callback(self._on_message_delivered)
+                lxmf_message.register_failed_callback(self._on_message_failed)
+            except Exception as e:
+                log_warning("ReticulumWrapper", "send_location_telemetry",
+                            f"Could not register delivery callbacks: {e}")
+
+            # Send via router
+            self.router.handle_outbound(lxmf_message)
+
+            log_info("ReticulumWrapper", "send_location_telemetry",
+                     f"✅ Location telemetry sent to {dest_hash.hex()[:16]}")
+
+            return {
+                "success": True,
+                "message_hash": lxmf_message.hash.hex() if lxmf_message.hash else "",
+                "timestamp": int(time.time() * 1000),
+                "destination_hash": recipient_lxmf_destination.hash.hex() if recipient_lxmf_destination.hash else ""
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "send_location_telemetry", f"❌ ERROR sending location telemetry: {e}")
+            import traceback
+            traceback.print_exc()
             return {"success": False, "error": str(e)}
 
     # ==================== PROPAGATION NODE SUPPORT ====================

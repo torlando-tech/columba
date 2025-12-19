@@ -39,22 +39,25 @@ object MessageDeliveryRetrievalTestFixtures {
 
     fun propagatedMethodState() = CardConfig(defaultMethod = "propagated")
 
-    fun noRelayState() = CardConfig(
-        currentRelayName = null,
-        currentRelayHops = null,
-    )
+    fun noRelayState() =
+        CardConfig(
+            currentRelayName = null,
+            currentRelayHops = null,
+        )
 
-    fun manualRelaySelectionState() = CardConfig(
-        isAutoSelect = false,
-        currentRelayName = "ManualRelay",
-        currentRelayHops = 3,
-    )
+    fun manualRelaySelectionState() =
+        CardConfig(
+            isAutoSelect = false,
+            currentRelayName = "ManualRelay",
+            currentRelayHops = 3,
+        )
 
-    fun manualNoRelayState() = CardConfig(
-        isAutoSelect = false,
-        currentRelayName = null,
-        currentRelayHops = null,
-    )
+    fun manualNoRelayState() =
+        CardConfig(
+            isAutoSelect = false,
+            currentRelayName = null,
+            currentRelayHops = null,
+        )
 
     fun syncingState() = CardConfig(isSyncing = true)
 
@@ -124,21 +127,25 @@ object MessageDeliveryRetrievalTestFixtures {
 
     // ========== Edge Case States ==========
 
-    fun allNullOptionalFieldsState() = CardConfig(
-        currentRelayName = null,
-        currentRelayHops = null,
-        lastSyncTimestamp = null,
-    )
+    fun allNullOptionalFieldsState() =
+        CardConfig(
+            currentRelayName = null,
+            currentRelayHops = null,
+            lastSyncTimestamp = null,
+        )
 
-    fun longRelayNameState() = CardConfig(
-        currentRelayName = Constants.RELAY_NAME_LONG,
-    )
+    fun longRelayNameState() =
+        CardConfig(
+            currentRelayName = Constants.RELAY_NAME_LONG,
+        )
 
-    fun largeHopsState() = CardConfig(
-        currentRelayHops = Int.MAX_VALUE,
-    )
+    fun largeHopsState() =
+        CardConfig(
+            currentRelayHops = Int.MAX_VALUE,
+        )
 
-    fun unknownMethodState() = CardConfig(
-        defaultMethod = "unknown_method",
-    )
+    fun unknownMethodState() =
+        CardConfig(
+            defaultMethod = "unknown_method",
+        )
 }

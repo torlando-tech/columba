@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.ShareLocation
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,9 +65,11 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.lxmf.messenger.ui.components.ContactLocationBottomSheet
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.ShareLocationBottomSheet
 import com.lxmf.messenger.util.LocationPermissionManager
+import org.maplibre.android.geometry.LatLng as MapLibreLatLng
 import com.lxmf.messenger.viewmodel.ContactMarker
 import com.lxmf.messenger.viewmodel.MapViewModel
 import org.maplibre.android.MapLibre
@@ -79,6 +82,12 @@ import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.Point
 
 /**
  * Map screen displaying user location and contact markers.
@@ -97,8 +106,7 @@ import org.maplibre.android.maps.Style
 @Composable
 fun MapScreen(
     viewModel: MapViewModel = hiltViewModel(),
-    @Suppress("UNUSED_PARAMETER") // Phase 2: Used when contact markers are tapped
-    onContactClick: (destinationHash: String) -> Unit = {},
+    onNavigateToConversation: (destinationHash: String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
@@ -106,12 +114,15 @@ fun MapScreen(
 
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showShareLocationSheet by remember { mutableStateOf(false) }
+    var selectedMarker by remember { mutableStateOf<ContactMarker?>(null) }
     val permissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val shareLocationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val contactLocationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Map state
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
+    var mapStyleLoaded by remember { mutableStateOf(false) }
 
     // Location client
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -208,6 +219,7 @@ fun MapScreen(
                                 .fromUri("https://tiles.openfreemap.org/styles/liberty"),
                         ) { style ->
                             Log.d("MapScreen", "Map style loaded")
+                            mapStyleLoaded = true
 
                             // Enable user location component (blue dot)
                             if (state.hasLocationPermission) {
@@ -225,6 +237,28 @@ fun MapScreen(
                             }
                         }
 
+                        // Add click listener for contact markers
+                        map.addOnMapClickListener { latLng ->
+                            val screenPoint = map.projection.toScreenLocation(latLng)
+                            val features = map.queryRenderedFeatures(
+                                screenPoint,
+                                "contact-markers-layer",
+                            )
+                            features.firstOrNull()?.let { feature ->
+                                val hash = feature.getStringProperty("hash")
+                                if (hash != null) {
+                                    val marker = state.contactMarkers.find {
+                                        it.destinationHash == hash
+                                    }
+                                    if (marker != null) {
+                                        selectedMarker = marker
+                                        Log.d("MapScreen", "Marker tapped: ${marker.displayName}")
+                                    }
+                                }
+                            }
+                            true
+                        }
+
                         // Set initial camera position (use last known location if available)
                         val initialLat = state.userLocation?.latitude ?: 37.7749
                         val initialLng = state.userLocation?.longitude ?: -122.4194
@@ -239,6 +273,47 @@ fun MapScreen(
             },
             modifier = Modifier.fillMaxSize(),
         )
+
+        // Update contact markers on the map when they change
+        LaunchedEffect(state.contactMarkers, mapStyleLoaded) {
+            Log.d("MapScreen", "LaunchedEffect triggered: markers=${state.contactMarkers.size}, styleLoaded=$mapStyleLoaded")
+            if (!mapStyleLoaded) return@LaunchedEffect
+            val map = mapLibreMap ?: return@LaunchedEffect
+            val style = map.style ?: return@LaunchedEffect
+
+            val sourceId = "contact-markers-source"
+            val layerId = "contact-markers-layer"
+
+            // Create GeoJSON features from contact markers
+            val features = state.contactMarkers.map { marker ->
+                Feature.fromGeometry(
+                    Point.fromLngLat(marker.longitude, marker.latitude)
+                ).apply {
+                    addStringProperty("name", marker.displayName)
+                    addStringProperty("hash", marker.destinationHash)
+                }
+            }
+            val featureCollection = FeatureCollection.fromFeatures(features)
+
+            // Update or create the source
+            val existingSource = style.getSourceAs<GeoJsonSource>(sourceId)
+            if (existingSource != null) {
+                existingSource.setGeoJson(featureCollection)
+            } else {
+                // Add new source and layer
+                style.addSource(GeoJsonSource(sourceId, featureCollection))
+                style.addLayer(
+                    CircleLayer(layerId, sourceId).withProperties(
+                        PropertyFactory.circleRadius(12f),
+                        PropertyFactory.circleColor("#FF5722"), // Orange color
+                        PropertyFactory.circleStrokeWidth(3f),
+                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                    )
+                )
+            }
+
+            Log.d("MapScreen", "Updated ${state.contactMarkers.size} contact markers on map")
+        }
 
         // Gradient scrim behind TopAppBar for readability
         Box(
@@ -307,21 +382,58 @@ fun MapScreen(
                 Icon(Icons.Default.MyLocation, contentDescription = "My location")
             }
 
-            // Share Location button
+            // Share/Stop Location button
             ExtendedFloatingActionButton(
-                onClick = { showShareLocationSheet = true },
-                icon = { Icon(Icons.Default.ShareLocation, contentDescription = null) },
-                text = { Text("Share Location") },
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                onClick = {
+                    if (state.isSharing) {
+                        viewModel.stopSharing()
+                    } else {
+                        showShareLocationSheet = true
+                    }
+                },
+                icon = {
+                    Icon(
+                        if (state.isSharing) Icons.Default.Stop else Icons.Default.ShareLocation,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text(if (state.isSharing) "Stop Sharing" else "Share Location") },
+                containerColor = if (state.isSharing) {
+                    MaterialTheme.colorScheme.errorContainer
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer
+                },
+                contentColor = if (state.isSharing) {
+                    MaterialTheme.colorScheme.onErrorContainer
+                } else {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                },
             )
         }
 
-        // Phase 2: Contact markers will be shown here when real location sharing is implemented
-        // For now, just show a hint card if user location isn't available yet
+        // Contact markers overlay (shows received locations)
+        if (state.contactMarkers.isNotEmpty()) {
+            ContactMarkersOverlay(
+                markers = state.contactMarkers,
+                onContactClick = { destinationHash ->
+                    val marker = state.contactMarkers.find { it.destinationHash == destinationHash }
+                    if (marker != null) {
+                        selectedMarker = marker
+                    }
+                },
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(top = 64.dp) // Below TopAppBar
+                        .padding(end = 16.dp),
+            )
+        }
+
+        // Show hint card if no location permission
         if (!state.hasLocationPermission) {
             EmptyMapStateCard(
-                contactCount = 0,
+                contactCount = state.contactMarkers.size,
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -365,13 +477,24 @@ fun MapScreen(
             contacts = contacts,
             onDismiss = { showShareLocationSheet = false },
             onStartSharing = { selectedContacts, duration ->
-                // TODO: Phase 2 - Implement location sharing via LXMF
-                Log.d(
-                    "MapScreen",
-                    "Start sharing with ${selectedContacts.size} contacts for ${duration.displayText}",
-                )
+                viewModel.startSharing(selectedContacts, duration)
+                showShareLocationSheet = false
             },
             sheetState = shareLocationSheetState,
+        )
+    }
+
+    // Contact location bottom sheet (shown when marker is tapped)
+    selectedMarker?.let { marker ->
+        ContactLocationBottomSheet(
+            marker = marker,
+            userLocation = state.userLocation,
+            onDismiss = { selectedMarker = null },
+            onSendMessage = {
+                onNavigateToConversation(marker.destinationHash)
+                selectedMarker = null
+            },
+            sheetState = contactLocationSheetState,
         )
     }
 }

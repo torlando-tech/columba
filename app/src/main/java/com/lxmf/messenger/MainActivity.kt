@@ -542,9 +542,11 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
 
                     composable(Screen.Map.route) {
                         MapScreen(
-                            onContactClick = { destinationHash ->
+                            onNavigateToConversation = { destinationHash ->
+                                // Navigate to messaging screen with the contact
                                 val encodedHash = Uri.encode(destinationHash)
-                                navController.navigate("announce_detail/$encodedHash")
+                                // Use a placeholder name - the messaging screen will fetch the actual name
+                                navController.navigate("messaging/$encodedHash/Contact")
                             },
                         )
                     }

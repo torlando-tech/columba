@@ -69,4 +69,11 @@ interface IReticulumServiceCallback {
      *        {"InterfaceName1": true, "InterfaceName2": false}
      */
     void onInterfaceStatusChanged(String interfaceStatusJson);
+
+    /**
+     * Called when location telemetry is received from a contact.
+     * @param locationJson JSON string with location telemetry data:
+     *        {"sender_hash": "...", "lat": ..., "lng": ..., "acc": ..., "ts": ..., "expires": ...}
+     */
+    void onLocationTelemetry(String locationJson);
 }

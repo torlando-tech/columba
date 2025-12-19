@@ -41,14 +41,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.withContext
-import java.net.InetSocketAddress
-import java.net.Socket
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.UUID
 import java.util.regex.Pattern
 import javax.inject.Inject
@@ -1363,17 +1363,18 @@ class RNodeWizardViewModel
                 _state.update { it.copy(isTcpValidating = true, tcpValidationError = null) }
 
                 try {
-                    val success = withContext(Dispatchers.IO) {
-                        try {
-                            Socket().use { socket ->
-                                socket.connect(InetSocketAddress(host, port), TCP_CONNECTION_TIMEOUT_MS)
-                                true
+                    val success =
+                        withContext(Dispatchers.IO) {
+                            try {
+                                Socket().use { socket ->
+                                    socket.connect(InetSocketAddress(host, port), TCP_CONNECTION_TIMEOUT_MS)
+                                    true
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "TCP connection test failed: ${e.message}")
+                                false
                             }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "TCP connection test failed: ${e.message}")
-                            false
                         }
-                    }
 
                     _state.update {
                         it.copy(
@@ -1843,10 +1844,11 @@ class RNodeWizardViewModel
                     // Check for duplicate interface names before saving
                     val existingNames = interfaceRepository.allInterfaces.first().map { it.name }
                     when (
-                        val uniqueResult = InputValidator.validateInterfaceNameUniqueness(
-                            state.interfaceName,
-                            existingNames,
-                        )
+                        val uniqueResult =
+                            InputValidator.validateInterfaceNameUniqueness(
+                                state.interfaceName,
+                                existingNames,
+                            )
                     ) {
                         is ValidationResult.Error -> {
                             _state.update { it.copy(nameError = uniqueResult.message, isSaving = false) }

@@ -344,4 +344,15 @@ interface IReticulumService {
      * @param relayHash 16-byte destination hash of alternative relay, or null if none available
      */
     void provideAlternativeRelay(in byte[] relayHash);
+
+    // ==================== LOCATION TELEMETRY ====================
+
+    /**
+     * Send location telemetry to a destination via LXMF field 7.
+     * @param destHash Destination hash bytes (16 bytes)
+     * @param locationJson JSON string with location data: {"type": "location_share", "lat": ..., "lng": ..., "acc": ..., "ts": ..., "expires": ...}
+     * @param sourceIdentityPrivateKey Source identity private key bytes
+     * @return JSON string with result: {"success": true, "message_hash": "...", "timestamp": ...}
+     */
+    String sendLocationTelemetry(in byte[] destHash, String locationJson, in byte[] sourceIdentityPrivateKey);
 }

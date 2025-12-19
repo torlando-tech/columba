@@ -21,7 +21,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import com.lxmf.messenger.data.repository.Message as DataMessage
 
 /**
  * Unit tests for MessageCollector.
@@ -61,15 +60,16 @@ class MessageCollectorTest {
         every { reticulumProtocol.observeAnnounces() } returns flowOf() // Empty flow for announces
 
         // Mock identity repository to return active identity matching test destination
-        coEvery { identityRepository.getActiveIdentitySync() } returns LocalIdentityEntity(
-            identityHash = "test_identity_hash",
-            displayName = "Test",
-            destinationHash = testDestHashHex,
-            filePath = "/test/path",
-            createdTimestamp = System.currentTimeMillis(),
-            lastUsedTimestamp = System.currentTimeMillis(),
-            isActive = true,
-        )
+        coEvery { identityRepository.getActiveIdentitySync() } returns
+            LocalIdentityEntity(
+                identityHash = "test_identity_hash",
+                displayName = "Test",
+                destinationHash = testDestHashHex,
+                filePath = "/test/path",
+                createdTimestamp = System.currentTimeMillis(),
+                lastUsedTimestamp = System.currentTimeMillis(),
+                isActive = true,
+            )
 
         // Mock conversation repository default behaviors
         coEvery { conversationRepository.getPeerPublicKey(any()) } returns null
@@ -81,14 +81,15 @@ class MessageCollectorTest {
         // Mock announce repository
         coEvery { announceRepository.getAnnounce(any()) } returns null
 
-        messageCollector = MessageCollector(
-            reticulumProtocol = reticulumProtocol,
-            conversationRepository = conversationRepository,
-            announceRepository = announceRepository,
-            contactRepository = contactRepository,
-            identityRepository = identityRepository,
-            notificationHelper = notificationHelper,
-        )
+        messageCollector =
+            MessageCollector(
+                reticulumProtocol = reticulumProtocol,
+                conversationRepository = conversationRepository,
+                announceRepository = announceRepository,
+                contactRepository = contactRepository,
+                identityRepository = identityRepository,
+                notificationHelper = notificationHelper,
+            )
     }
 
     @After
@@ -98,130 +99,136 @@ class MessageCollectorTest {
     }
 
     @Test
-    fun `processMessage with publicKey stores key to database`() = runBlocking {
-        // Given: A message with public key
-        val testMessage = ReceivedMessage(
-            messageHash = "test_message_123",
-            content = "Hello world",
-            sourceHash = testSourceHash,
-            destinationHash = testDestHash,
-            timestamp = System.currentTimeMillis(),
-            fieldsJson = null,
-            publicKey = testPublicKey,
-        )
+    fun `processMessage with publicKey stores key to database`() =
+        runBlocking {
+            // Given: A message with public key
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "test_message_123",
+                    content = "Hello world",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = testPublicKey,
+                )
 
-        // When: Start collecting
-        messageCollector.startCollecting()
+            // When: Start collecting
+            messageCollector.startCollecting()
 
-        // Wait for collector to be ready on IO dispatcher
-        kotlinx.coroutines.delay(50)
+            // Wait for collector to be ready on IO dispatcher
+            kotlinx.coroutines.delay(50)
 
-        // Emit message
-        messageFlow.emit(testMessage)
+            // Emit message
+            messageFlow.emit(testMessage)
 
-        // Wait for IO dispatcher to process
-        kotlinx.coroutines.delay(200)
+            // Wait for IO dispatcher to process
+            kotlinx.coroutines.delay(200)
 
-        // Then: updatePeerPublicKey should be called
-        coVerify(timeout = 2000) {
-            conversationRepository.updatePeerPublicKey(testSourceHashHex, testPublicKey)
+            // Then: updatePeerPublicKey should be called
+            coVerify(timeout = 2000) {
+                conversationRepository.updatePeerPublicKey(testSourceHashHex, testPublicKey)
+            }
+
+            // And: saveMessage should be called with the message's public key
+            coVerify(timeout = 2000) {
+                conversationRepository.saveMessage(
+                    peerHash = testSourceHashHex,
+                    peerName = any(),
+                    message = any(),
+                    peerPublicKey = testPublicKey,
+                )
+            }
         }
-
-        // And: saveMessage should be called with the message's public key
-        coVerify(timeout = 2000) {
-            conversationRepository.saveMessage(
-                peerHash = testSourceHashHex,
-                peerName = any(),
-                message = any(),
-                peerPublicKey = testPublicKey,
-            )
-        }
-    }
 
     @Test
-    fun `processMessage without publicKey uses database fallback`() = runBlocking {
-        // Given: A message without public key, but database has public key
-        val testMessage = ReceivedMessage(
-            messageHash = "test_message_456",
-            content = "Hello world",
-            sourceHash = testSourceHash,
-            destinationHash = testDestHash,
-            timestamp = System.currentTimeMillis(),
-            fieldsJson = null,
-            publicKey = null, // No public key in message
-        )
+    fun `processMessage without publicKey uses database fallback`() =
+        runBlocking {
+            // Given: A message without public key, but database has public key
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "test_message_456",
+                    content = "Hello world",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null, // No public key in message
+                )
 
-        val databasePublicKey = ByteArray(64) { (it + 100).toByte() }
-        coEvery { conversationRepository.getPeerPublicKey(testSourceHashHex) } returns databasePublicKey
+            val databasePublicKey = ByteArray(64) { (it + 100).toByte() }
+            coEvery { conversationRepository.getPeerPublicKey(testSourceHashHex) } returns databasePublicKey
 
-        // When: Start collecting
-        messageCollector.startCollecting()
+            // When: Start collecting
+            messageCollector.startCollecting()
 
-        // Wait for collector to be ready on IO dispatcher
-        kotlinx.coroutines.delay(50)
+            // Wait for collector to be ready on IO dispatcher
+            kotlinx.coroutines.delay(50)
 
-        // Emit message
-        messageFlow.emit(testMessage)
+            // Emit message
+            messageFlow.emit(testMessage)
 
-        // Wait for IO dispatcher to process
-        kotlinx.coroutines.delay(200)
+            // Wait for IO dispatcher to process
+            kotlinx.coroutines.delay(200)
 
-        // Then: getPeerPublicKey should be called as fallback
-        coVerify(timeout = 2000) {
-            conversationRepository.getPeerPublicKey(testSourceHashHex)
+            // Then: getPeerPublicKey should be called as fallback
+            coVerify(timeout = 2000) {
+                conversationRepository.getPeerPublicKey(testSourceHashHex)
+            }
+
+            // And: updatePeerPublicKey should NOT be called (no message key to store)
+            coVerify(exactly = 0, timeout = 2000) {
+                conversationRepository.updatePeerPublicKey(any(), any())
+            }
+
+            // And: saveMessage should be called with the database's public key
+            coVerify(timeout = 2000) {
+                conversationRepository.saveMessage(
+                    peerHash = testSourceHashHex,
+                    peerName = any(),
+                    message = any(),
+                    peerPublicKey = databasePublicKey,
+                )
+            }
         }
-
-        // And: updatePeerPublicKey should NOT be called (no message key to store)
-        coVerify(exactly = 0, timeout = 2000) {
-            conversationRepository.updatePeerPublicKey(any(), any())
-        }
-
-        // And: saveMessage should be called with the database's public key
-        coVerify(timeout = 2000) {
-            conversationRepository.saveMessage(
-                peerHash = testSourceHashHex,
-                peerName = any(),
-                message = any(),
-                peerPublicKey = databasePublicKey,
-            )
-        }
-    }
 
     @Test
-    fun `processMessage without publicKey passes null when database also has no key`() = runBlocking {
-        // Given: A message without public key and database also has no key
-        val testMessage = ReceivedMessage(
-            messageHash = "test_message_789",
-            content = "Hello world",
-            sourceHash = testSourceHash,
-            destinationHash = testDestHash,
-            timestamp = System.currentTimeMillis(),
-            fieldsJson = null,
-            publicKey = null, // No public key in message
-        )
+    fun `processMessage without publicKey passes null when database also has no key`() =
+        runBlocking {
+            // Given: A message without public key and database also has no key
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "test_message_789",
+                    content = "Hello world",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null, // No public key in message
+                )
 
-        coEvery { conversationRepository.getPeerPublicKey(testSourceHashHex) } returns null
+            coEvery { conversationRepository.getPeerPublicKey(testSourceHashHex) } returns null
 
-        // When: Start collecting
-        messageCollector.startCollecting()
+            // When: Start collecting
+            messageCollector.startCollecting()
 
-        // Wait for collector to be ready on IO dispatcher
-        kotlinx.coroutines.delay(50)
+            // Wait for collector to be ready on IO dispatcher
+            kotlinx.coroutines.delay(50)
 
-        // Emit message
-        messageFlow.emit(testMessage)
+            // Emit message
+            messageFlow.emit(testMessage)
 
-        // Wait for IO dispatcher to process
-        kotlinx.coroutines.delay(200)
+            // Wait for IO dispatcher to process
+            kotlinx.coroutines.delay(200)
 
-        // Then: saveMessage should be called with null public key
-        coVerify(timeout = 2000) {
-            conversationRepository.saveMessage(
-                peerHash = testSourceHashHex,
-                peerName = any(),
-                message = any(),
-                peerPublicKey = null,
-            )
+            // Then: saveMessage should be called with null public key
+            coVerify(timeout = 2000) {
+                conversationRepository.saveMessage(
+                    peerHash = testSourceHashHex,
+                    peerName = any(),
+                    message = any(),
+                    peerPublicKey = null,
+                )
+            }
         }
-    }
 }

@@ -123,8 +123,9 @@ class MessageCollector
                             // Prefer public key from message (directly from RNS identity cache)
                             // Fall back to peer_identities lookup if not in message
                             val messagePublicKey = receivedMessage.publicKey
-                            val publicKey = messagePublicKey
-                                ?: conversationRepository.getPeerPublicKey(sourceHash)
+                            val publicKey =
+                                messagePublicKey
+                                    ?: conversationRepository.getPeerPublicKey(sourceHash)
 
                             // Store public key to peer_identities if we got it from the message
                             // This ensures future lookups will find it

@@ -8,8 +8,8 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
@@ -38,96 +38,103 @@ class PollingManagerTest {
         broadcaster = mockk(relaxed = true)
         testScope = TestScope(UnconfinedTestDispatcher())
 
-        pollingManager = PollingManager(
-            state = state,
-            wrapperManager = wrapperManager,
-            broadcaster = broadcaster,
-            scope = testScope,
-            attachmentStorage = null,
-        )
+        pollingManager =
+            PollingManager(
+                state = state,
+                wrapperManager = wrapperManager,
+                broadcaster = broadcaster,
+                scope = testScope,
+                attachmentStorage = null,
+            )
     }
 
     // ========== drainPendingMessages() Tests ==========
 
     @Test
-    fun `drainPendingMessages handles empty queue gracefully`() = runTest {
-        // Setup: Mock wrapper returning empty list
-        coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns emptyList()
+    fun `drainPendingMessages handles empty queue gracefully`() =
+        runTest {
+            // Setup: Mock wrapper returning empty list
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns emptyList()
 
-        // Act
-        pollingManager.drainPendingMessages()
-        testScope.advanceUntilIdle()
+            // Act
+            pollingManager.drainPendingMessages()
+            testScope.advanceUntilIdle()
 
-        // Assert: No messages broadcast
-        verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
-    }
-
-    @Test
-    fun `drainPendingMessages handles null response gracefully`() = runTest {
-        // Setup: Mock wrapper returning null
-        coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns null
-
-        // Act
-        pollingManager.drainPendingMessages()
-        testScope.advanceUntilIdle()
-
-        // Assert: No messages broadcast, no exception
-        verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
-    }
+            // Assert: No messages broadcast
+            verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
+        }
 
     @Test
-    fun `drainPendingMessages handles exception gracefully`() = runTest {
-        // Setup: Mock wrapper throwing exception
-        coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } throws RuntimeException("Test error")
+    fun `drainPendingMessages handles null response gracefully`() =
+        runTest {
+            // Setup: Mock wrapper returning null
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns null
 
-        // Act - should not throw
-        pollingManager.drainPendingMessages()
-        testScope.advanceUntilIdle()
+            // Act
+            pollingManager.drainPendingMessages()
+            testScope.advanceUntilIdle()
 
-        // Assert: No crash, no messages broadcast
-        verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
-    }
+            // Assert: No messages broadcast, no exception
+            verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
+        }
+
+    @Test
+    fun `drainPendingMessages handles exception gracefully`() =
+        runTest {
+            // Setup: Mock wrapper throwing exception
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } throws RuntimeException("Test error")
+
+            // Act - should not throw
+            pollingManager.drainPendingMessages()
+            testScope.advanceUntilIdle()
+
+            // Assert: No crash, no messages broadcast
+            verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
+        }
 
     // ========== handleMessageReceivedEvent() Tests ==========
 
     @Test
-    fun `handleMessageReceivedEvent handles empty queue gracefully`() = runTest {
-        // Setup: Mock wrapper returning empty list
-        coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns emptyList()
+    fun `handleMessageReceivedEvent handles empty queue gracefully`() =
+        runTest {
+            // Setup: Mock wrapper returning empty list
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns emptyList()
 
-        // Act
-        pollingManager.handleMessageReceivedEvent("{\"event\": \"message\"}")
-        testScope.advanceUntilIdle()
+            // Act
+            pollingManager.handleMessageReceivedEvent("{\"event\": \"message\"}")
+            testScope.advanceUntilIdle()
 
-        // Assert: No messages broadcast
-        verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
-    }
-
-    @Test
-    fun `handleMessageReceivedEvent handles null response gracefully`() = runTest {
-        // Setup: Mock wrapper returning null
-        coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns null
-
-        // Act
-        pollingManager.handleMessageReceivedEvent("{\"event\": \"message\"}")
-        testScope.advanceUntilIdle()
-
-        // Assert: No messages broadcast
-        verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
-    }
+            // Assert: No messages broadcast
+            verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
+        }
 
     @Test
-    fun `handleMessageReceivedEvent handles exception gracefully`() = runTest {
-        // Setup: Mock wrapper throwing exception
-        coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } throws RuntimeException("Test error")
+    fun `handleMessageReceivedEvent handles null response gracefully`() =
+        runTest {
+            // Setup: Mock wrapper returning null
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns null
 
-        // Act - should not throw
-        pollingManager.handleMessageReceivedEvent("{\"event\": \"message\"}")
-        testScope.advanceUntilIdle()
+            // Act
+            pollingManager.handleMessageReceivedEvent("{\"event\": \"message\"}")
+            testScope.advanceUntilIdle()
 
-        // Assert: No crash
-        verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
-    }
+            // Assert: No messages broadcast
+            verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
+        }
+
+    @Test
+    fun `handleMessageReceivedEvent handles exception gracefully`() =
+        runTest {
+            // Setup: Mock wrapper throwing exception
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } throws RuntimeException("Test error")
+
+            // Act - should not throw
+            pollingManager.handleMessageReceivedEvent("{\"event\": \"message\"}")
+            testScope.advanceUntilIdle()
+
+            // Assert: No crash
+            verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
+        }
 
     // ========== setConversationActive() Tests ==========
 

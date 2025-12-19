@@ -555,11 +555,12 @@ class InterfaceManagementViewModel
                 val existingNames = _state.value.interfaces.map { it.name }
                 val excludeName = _state.value.editingInterface?.name
                 when (
-                    val uniqueResult = InputValidator.validateInterfaceNameUniqueness(
-                        config.name,
-                        existingNames,
-                        excludeName,
-                    )
+                    val uniqueResult =
+                        InputValidator.validateInterfaceNameUniqueness(
+                            config.name,
+                            existingNames,
+                            excludeName,
+                        )
                 ) {
                     is ValidationResult.Error -> {
                         _configState.value = _configState.value.copy(nameError = uniqueResult.message)

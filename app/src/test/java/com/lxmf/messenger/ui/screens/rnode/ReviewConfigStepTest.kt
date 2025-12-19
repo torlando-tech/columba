@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -13,7 +12,6 @@ import com.lxmf.messenger.data.model.DiscoveredRNode
 import com.lxmf.messenger.data.model.FrequencyRegion
 import com.lxmf.messenger.data.model.ModemPreset
 import com.lxmf.messenger.test.RegisterComponentActivityRule
-import com.lxmf.messenger.viewmodel.RegionLimits
 import com.lxmf.messenger.viewmodel.RNodeConnectionType
 import com.lxmf.messenger.viewmodel.RNodeWizardState
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel

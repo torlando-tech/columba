@@ -171,6 +171,14 @@ class CallbackBroadcaster {
     }
 
     /**
+     * Broadcast location telemetry to all registered callbacks.
+     * Called when location sharing data is received from a contact.
+     */
+    fun broadcastLocationTelemetry(locationJson: String) {
+        broadcast { it.onLocationTelemetry(locationJson) }
+    }
+
+    /**
      * Thread-safe broadcast helper.
      * Ensures only one broadcast happens at a time (RemoteCallbackList is not re-entrant).
      */

@@ -3,13 +3,18 @@ package com.lxmf.messenger.viewmodel
 import android.location.Location
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import com.lxmf.messenger.data.db.dao.AnnounceDao
+import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
+import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.test.TestFactories
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -42,13 +47,24 @@ class MapViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
 
     private lateinit var contactRepository: ContactRepository
+    private lateinit var receivedLocationDao: ReceivedLocationDao
+    private lateinit var locationSharingManager: LocationSharingManager
+    private lateinit var announceDao: AnnounceDao
     private lateinit var viewModel: MapViewModel
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         contactRepository = mockk(relaxed = true)
+        receivedLocationDao = mockk(relaxed = true)
+        locationSharingManager = mockk(relaxed = true)
+        announceDao = mockk(relaxed = true)
+
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
+        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(emptyList())
+        every { announceDao.getAllAnnounces() } returns flowOf(emptyList())
+        every { locationSharingManager.isSharing } returns MutableStateFlow(false)
+        every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
     }
 
     @After
@@ -59,7 +75,7 @@ class MapViewModelTest {
 
     @Test
     fun `initial state has no user location`() = runTest {
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -69,7 +85,7 @@ class MapViewModelTest {
 
     @Test
     fun `initial state has no location permission`() = runTest {
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -79,7 +95,7 @@ class MapViewModelTest {
 
     @Test
     fun `initial state has no error message`() = runTest {
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -89,7 +105,7 @@ class MapViewModelTest {
 
     @Test
     fun `onPermissionResult updates hasLocationPermission to true`() = runTest {
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         viewModel.state.test {
             // Consume initial state
@@ -104,7 +120,7 @@ class MapViewModelTest {
 
     @Test
     fun `onPermissionResult updates hasLocationPermission to false`() = runTest {
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         viewModel.state.test {
             // First grant permission
@@ -122,7 +138,7 @@ class MapViewModelTest {
 
     @Test
     fun `updateUserLocation updates state with new location`() = runTest {
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
         val mockLocation = createMockLocation(37.7749, -122.4194)
 
         viewModel.state.test {
@@ -140,7 +156,7 @@ class MapViewModelTest {
 
     @Test
     fun `clearError removes error message`() = runTest {
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         // Verify initial state has no error message
         assertNull(viewModel.state.value.errorMessage)
@@ -153,7 +169,7 @@ class MapViewModelTest {
     }
 
     @Test
-    fun `contact markers generated from contacts`() = runTest {
+    fun `contact markers come from received locations`() = runTest {
         val contacts = listOf(
             TestFactories.createEnrichedContact(
                 destinationHash = "hash1",
@@ -164,40 +180,71 @@ class MapViewModelTest {
                 displayName = "Contact 2",
             ),
         )
+        val receivedLocations = listOf(
+            ReceivedLocationEntity(
+                id = "loc1",
+                senderHash = "hash1",
+                latitude = 37.7749,
+                longitude = -122.4194,
+                accuracy = 10f,
+                timestamp = System.currentTimeMillis(),
+                expiresAt = null,
+                receivedAt = System.currentTimeMillis(),
+            ),
+            ReceivedLocationEntity(
+                id = "loc2",
+                senderHash = "hash2",
+                latitude = 40.7128,
+                longitude = -74.0060,
+                accuracy = 15f,
+                timestamp = System.currentTimeMillis(),
+                expiresAt = null,
+                receivedAt = System.currentTimeMillis(),
+            ),
+        )
         every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(receivedLocations)
 
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         viewModel.state.test {
             val state = awaitItem()
             assertEquals(2, state.contactMarkers.size)
             assertEquals("hash1", state.contactMarkers[0].destinationHash)
             assertEquals("Contact 1", state.contactMarkers[0].displayName)
-            assertEquals("hash2", state.contactMarkers[1].destinationHash)
-            assertEquals("Contact 2", state.contactMarkers[1].displayName)
+            assertEquals(37.7749, state.contactMarkers[0].latitude, 0.0001)
         }
     }
 
     @Test
-    fun `contact markers use default location when no user location`() = runTest {
+    fun `contact markers use display name from contacts`() = runTest {
         val contacts = listOf(
             TestFactories.createEnrichedContact(
                 destinationHash = "hash1",
-                displayName = "Contact 1",
+                displayName = "My Friend",
+            ),
+        )
+        val receivedLocations = listOf(
+            ReceivedLocationEntity(
+                id = "loc1",
+                senderHash = "hash1",
+                latitude = 37.7749,
+                longitude = -122.4194,
+                accuracy = 10f,
+                timestamp = System.currentTimeMillis(),
+                expiresAt = null,
+                receivedAt = System.currentTimeMillis(),
             ),
         )
         every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(receivedLocations)
 
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         viewModel.state.test {
             val state = awaitItem()
             assertEquals(1, state.contactMarkers.size)
-            // Markers should be near San Francisco (default: 37.7749, -122.4194)
-            assertTrue(state.contactMarkers[0].latitude > 37.0)
-            assertTrue(state.contactMarkers[0].latitude < 38.0)
-            assertTrue(state.contactMarkers[0].longitude > -123.0)
-            assertTrue(state.contactMarkers[0].longitude < -122.0)
+            assertEquals("My Friend", state.contactMarkers[0].displayName)
         }
     }
 
@@ -205,7 +252,7 @@ class MapViewModelTest {
     fun `isLoading is false after contacts loaded`() = runTest {
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
 
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -217,7 +264,7 @@ class MapViewModelTest {
     fun `empty contacts results in empty markers`() = runTest {
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
 
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -227,7 +274,7 @@ class MapViewModelTest {
 
     @Test
     fun `multiple location updates replace previous location`() = runTest {
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
         val location1 = createMockLocation(37.7749, -122.4194)
         val location2 = createMockLocation(40.7128, -74.0060)
 
@@ -246,54 +293,68 @@ class MapViewModelTest {
     }
 
     @Test
-    fun `contact markers recenter when user location changes`() = runTest {
+    fun `markers are static from received locations - user location does not affect them`() = runTest {
         val contacts = listOf(
             TestFactories.createEnrichedContact(
                 destinationHash = "hash1",
                 displayName = "Contact 1",
             ),
         )
+        val receivedLocations = listOf(
+            ReceivedLocationEntity(
+                id = "loc1",
+                senderHash = "hash1",
+                latitude = 37.7749,
+                longitude = -122.4194,
+                accuracy = 10f,
+                timestamp = System.currentTimeMillis(),
+                expiresAt = null,
+                receivedAt = System.currentTimeMillis(),
+            ),
+        )
         every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(receivedLocations)
 
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
         val newLocation = createMockLocation(40.7128, -74.0060) // New York
 
         viewModel.state.test {
             val initialState = awaitItem()
-            // Initial markers should be near San Francisco (default)
-            assertTrue(initialState.contactMarkers[0].latitude < 38.0)
+            // Marker is at the received location
+            assertEquals(37.7749, initialState.contactMarkers[0].latitude, 0.0001)
 
             viewModel.updateUserLocation(newLocation)
 
-            // Consume state updates until we find recentered markers or run out
-            var foundRecenteredMarkers = false
-            while (!foundRecenteredMarkers) {
-                val state = expectMostRecentItem()
-                if (state.contactMarkers.isNotEmpty() &&
-                    state.contactMarkers[0].latitude > 40.0
-                ) {
-                    foundRecenteredMarkers = true
-                    // Markers should now be near New York
-                    assertTrue(state.contactMarkers[0].latitude > 40.0)
-                    assertTrue(state.contactMarkers[0].latitude < 41.0)
-                }
-                break // Only check once with expectMostRecentItem
-            }
-            assertTrue("Markers should recenter around new location", foundRecenteredMarkers)
+            // User location changed but marker should stay the same (it comes from database)
+            val state = expectMostRecentItem()
+            assertEquals(37.7749, state.contactMarkers[0].latitude, 0.0001)
         }
     }
 
     @Test
-    fun `large number of contacts generates correct number of markers`() = runTest {
+    fun `large number of received locations generates correct number of markers`() = runTest {
         val contacts = (1..50).map { i ->
             TestFactories.createEnrichedContact(
                 destinationHash = "hash$i",
                 displayName = "Contact $i",
             )
         }
+        val receivedLocations = (1..50).map { i ->
+            ReceivedLocationEntity(
+                id = "loc$i",
+                senderHash = "hash$i",
+                latitude = 37.0 + i * 0.01,
+                longitude = -122.0 + i * 0.01,
+                accuracy = 10f,
+                timestamp = System.currentTimeMillis(),
+                expiresAt = null,
+                receivedAt = System.currentTimeMillis(),
+            )
+        }
         every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(receivedLocations)
 
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -302,16 +363,29 @@ class MapViewModelTest {
     }
 
     @Test
-    fun `markers have unique positions for each contact`() = runTest {
+    fun `markers have positions from received locations`() = runTest {
         val contacts = (1..5).map { i ->
             TestFactories.createEnrichedContact(
                 destinationHash = "hash$i",
                 displayName = "Contact $i",
             )
         }
+        val receivedLocations = (1..5).map { i ->
+            ReceivedLocationEntity(
+                id = "loc$i",
+                senderHash = "hash$i",
+                latitude = 37.0 + i,
+                longitude = -122.0 + i,
+                accuracy = 10f,
+                timestamp = System.currentTimeMillis(),
+                expiresAt = null,
+                receivedAt = System.currentTimeMillis(),
+            )
+        }
         every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(receivedLocations)
 
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -323,7 +397,7 @@ class MapViewModelTest {
 
     @Test
     fun `permission and location can be set independently`() = runTest {
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
         val mockLocation = createMockLocation(37.7749, -122.4194)
 
         viewModel.state.test {
@@ -345,7 +419,7 @@ class MapViewModelTest {
 
     @Test
     fun `state is immutable - modifications dont affect original`() = runTest {
-        viewModel = MapViewModel(contactRepository)
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
         val originalState = viewModel.state.value
         val originalPermission = originalState.hasLocationPermission

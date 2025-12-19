@@ -862,10 +862,11 @@ class ChatsScreenTest {
     @Test
     fun chatsScreen_starButton_displaysCorrectState_forMultipleConversations() {
         // Given - one saved, one not saved
-        val conversations = listOf(
-            TestFactories.createConversation(peerHash = "saved_peer", peerName = "Saved"),
-            TestFactories.createConversation(peerHash = "unsaved_peer", peerName = "Unsaved"),
-        )
+        val conversations =
+            listOf(
+                TestFactories.createConversation(peerHash = "saved_peer", peerName = "Saved"),
+                TestFactories.createConversation(peerHash = "unsaved_peer", peerName = "Unsaved"),
+            )
         val mockViewModel = createMockChatsViewModel(conversations = conversations)
         every { mockViewModel.isContactSaved("saved_peer") } returns MutableStateFlow(true)
         every { mockViewModel.isContactSaved("unsaved_peer") } returns MutableStateFlow(false)

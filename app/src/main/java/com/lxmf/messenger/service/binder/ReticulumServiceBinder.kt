@@ -658,6 +658,33 @@ class ReticulumServiceBinder(
     }
 
     // ===========================================
+    // Location Telemetry
+    // ===========================================
+
+    override fun sendLocationTelemetry(
+        destHash: ByteArray,
+        locationJson: String,
+        sourceIdentityPrivateKey: ByteArray,
+    ): String {
+        return try {
+            Log.d(TAG, "📍 Sending location telemetry to ${destHash.joinToString("") { "%02x".format(it) }.take(16)}")
+            wrapperManager.withWrapper { wrapper ->
+                val result =
+                    wrapper.callAttr(
+                        "send_location_telemetry",
+                        destHash,
+                        locationJson,
+                        sourceIdentityPrivateKey,
+                    )
+                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+            } ?: """{"success": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending location telemetry", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    // ===========================================
     // Event Broadcasting Helpers
     // ===========================================
 
@@ -782,6 +809,16 @@ class ReticulumServiceBinder(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set alternative relay callback: ${e.message}", e)
+        }
+
+        // Setup location telemetry callback for map sharing
+        try {
+            wrapperManager.setLocationReceivedCallback { locationJson ->
+                Log.d(TAG, "📍 Location telemetry received: ${locationJson.take(100)}...")
+                broadcaster.broadcastLocationTelemetry(locationJson)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set location received callback: ${e.message}", e)
         }
 
         // Setup native stamp generator (bypasses Python multiprocessing issues)

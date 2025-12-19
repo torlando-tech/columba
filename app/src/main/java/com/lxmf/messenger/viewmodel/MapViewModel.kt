@@ -1,28 +1,32 @@
 package com.lxmf.messenger.viewmodel
 
 import android.location.Location
+import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.data.db.dao.AnnounceDao
+import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.service.LocationSharingManager
+import com.lxmf.messenger.service.SharingSession
+import com.lxmf.messenger.ui.model.SharingDuration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * Represents a contact's location marker on the map.
  *
- * In Phase 1 (MVP), locations are generated as static test positions.
- * In Phase 2+, these will be real locations received via LXMF telemetry.
+ * Locations come from LXMF location telemetry (field 7).
  */
 @Immutable
 data class ContactMarker(
@@ -30,6 +34,9 @@ data class ContactMarker(
     val displayName: String,
     val latitude: Double,
     val longitude: Double,
+    val accuracy: Float = 0f,
+    val timestamp: Long = 0L,
+    val expiresAt: Long? = null,
 )
 
 /**
@@ -42,6 +49,8 @@ data class MapState(
     val contactMarkers: List<ContactMarker> = emptyList(),
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
+    val isSharing: Boolean = false,
+    val activeSessions: List<SharingSession> = emptyList(),
 )
 
 /**
@@ -49,7 +58,8 @@ data class MapState(
  *
  * Manages:
  * - User's current location
- * - Contact markers (static test positions in Phase 1)
+ * - Contact markers from received location telemetry
+ * - Location sharing state
  * - Location permission state
  */
 @HiltViewModel
@@ -57,14 +67,12 @@ class MapViewModel
     @Inject
     constructor(
         private val contactRepository: ContactRepository,
+        private val receivedLocationDao: ReceivedLocationDao,
+        private val locationSharingManager: LocationSharingManager,
+        private val announceDao: AnnounceDao,
     ) : ViewModel() {
         companion object {
-            // Default map center (San Francisco) - used when no user location
-            private const val DEFAULT_LATITUDE = 37.7749
-            private const val DEFAULT_LONGITUDE = -122.4194
-
-            // Radius for distributing test markers around user location (in degrees)
-            private const val TEST_MARKER_RADIUS = 0.005
+            private const val TAG = "MapViewModel"
         }
 
         private val _state = MutableStateFlow(MapState())
@@ -81,16 +89,67 @@ class MapViewModel
                 )
 
         init {
-            // Generate static test markers from contacts
+            // Collect received locations and convert to markers
+            // Combines with both contacts and announces for display name lookup
             viewModelScope.launch {
-                contacts.collect { contactList ->
-                    val markers = generateTestMarkers(contactList)
+                combine(
+                    receivedLocationDao.getLatestLocationsPerSender(),
+                    contacts,
+                    announceDao.getAllAnnounces(),
+                ) { locations, contactList, announceList ->
+                    // Create lookup maps from contacts
+                    val contactMap = contactList.associateBy { it.destinationHash }
+                    val contactMapLower = contactList.associateBy { it.destinationHash.lowercase() }
+
+                    // Create lookup maps from announces (fallback for peers not in contacts)
+                    val announceMap = announceList.associate { it.destinationHash to it.peerName }
+                    val announceMapLower = announceList.associate { it.destinationHash.lowercase() to it.peerName }
+
+                    Log.d(TAG, "Processing ${locations.size} locations, ${contactList.size} contacts, ${announceList.size} announces")
+
+                    locations.map { loc ->
+                        // Try contacts first (exact, then case-insensitive)
+                        // Then try announces (exact, then case-insensitive)
+                        val displayName = contactMap[loc.senderHash]?.displayName
+                            ?: contactMapLower[loc.senderHash.lowercase()]?.displayName
+                            ?: announceMap[loc.senderHash]
+                            ?: announceMapLower[loc.senderHash.lowercase()]
+                            ?: loc.senderHash.take(8)
+
+                        if (displayName == loc.senderHash.take(8)) {
+                            Log.w(TAG, "No name found for senderHash: ${loc.senderHash}")
+                        }
+
+                        ContactMarker(
+                            destinationHash = loc.senderHash,
+                            displayName = displayName,
+                            latitude = loc.latitude,
+                            longitude = loc.longitude,
+                            accuracy = loc.accuracy,
+                            timestamp = loc.timestamp,
+                            expiresAt = loc.expiresAt,
+                        )
+                    }
+                }.collect { markers ->
                     _state.update { currentState ->
                         currentState.copy(
                             contactMarkers = markers,
                             isLoading = false,
                         )
                     }
+                }
+            }
+
+            // Collect sharing state
+            viewModelScope.launch {
+                locationSharingManager.isSharing.collect { isSharing ->
+                    _state.update { it.copy(isSharing = isSharing) }
+                }
+            }
+
+            viewModelScope.launch {
+                locationSharingManager.activeSessions.collect { sessions ->
+                    _state.update { it.copy(activeSessions = sessions) }
                 }
             }
         }
@@ -101,17 +160,7 @@ class MapViewModel
          */
         fun updateUserLocation(location: Location) {
             _state.update { currentState ->
-                currentState.copy(
-                    userLocation = location,
-                )
-            }
-
-            // Re-generate markers centered around user location
-            viewModelScope.launch {
-                val markers = generateTestMarkers(contacts.value)
-                _state.update { currentState ->
-                    currentState.copy(contactMarkers = markers)
-                }
+                currentState.copy(userLocation = location)
             }
         }
 
@@ -134,29 +183,30 @@ class MapViewModel
         }
 
         /**
-         * Generate static test markers for contacts.
+         * Start sharing location with selected contacts.
          *
-         * In Phase 1 (MVP), we distribute contacts in a circle around the user's location
-         * (or default location if user location is not available).
-         *
-         * In Phase 2+, this will be replaced with real location data from LXMF telemetry.
+         * @param selectedContacts Contacts to share location with
+         * @param duration How long to share
          */
-        private fun generateTestMarkers(contactList: List<EnrichedContact>): List<ContactMarker> {
-            val centerLat = _state.value.userLocation?.latitude ?: DEFAULT_LATITUDE
-            val centerLng = _state.value.userLocation?.longitude ?: DEFAULT_LONGITUDE
+        fun startSharing(
+            selectedContacts: List<EnrichedContact>,
+            duration: SharingDuration,
+        ) {
+            Log.d(TAG, "Starting location sharing with ${selectedContacts.size} contacts for $duration")
 
-            return contactList.mapIndexed { index, contact ->
-                // Distribute contacts in a circle around the center point
-                val angle = (index.toDouble() / contactList.size.coerceAtLeast(1)) * 2 * Math.PI
-                val lat = centerLat + TEST_MARKER_RADIUS * sin(angle)
-                val lng = centerLng + TEST_MARKER_RADIUS * cos(angle)
+            val contactHashes = selectedContacts.map { it.destinationHash }
+            val displayNames = selectedContacts.associate { it.destinationHash to it.displayName }
 
-                ContactMarker(
-                    destinationHash = contact.destinationHash,
-                    displayName = contact.displayName,
-                    latitude = lat,
-                    longitude = lng,
-                )
-            }
+            locationSharingManager.startSharing(contactHashes, displayNames, duration)
+        }
+
+        /**
+         * Stop sharing location.
+         *
+         * @param destinationHash Specific contact to stop sharing with, or null to stop all
+         */
+        fun stopSharing(destinationHash: String? = null) {
+            Log.d(TAG, "Stopping location sharing: ${destinationHash ?: "all"}")
+            locationSharingManager.stopSharing(destinationHash)
         }
     }

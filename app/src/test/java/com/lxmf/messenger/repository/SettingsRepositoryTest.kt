@@ -19,7 +19,6 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -67,496 +66,522 @@ class SettingsRepositoryTest {
     // ========== Transport Node Tests ==========
 
     @Test
-    fun transportNodeEnabledFlow_emitsOnlyOnChange() = runTest {
-        repository.transportNodeEnabledFlow.test(timeout = 5.seconds) {
-            // Get initial value
-            val initial = awaitItem()
+    fun transportNodeEnabledFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.transportNodeEnabledFlow.test(timeout = 5.seconds) {
+                // Get initial value
+                val initial = awaitItem()
 
-            // Save same value - should NOT emit
-            repository.saveTransportNodeEnabled(initial)
-            expectNoEvents()
+                // Save same value - should NOT emit
+                repository.saveTransportNodeEnabled(initial)
+                expectNoEvents()
 
-            // Save opposite value - should emit
-            repository.saveTransportNodeEnabled(!initial)
-            assertEquals(!initial, awaitItem())
+                // Save opposite value - should emit
+                repository.saveTransportNodeEnabled(!initial)
+                assertEquals(!initial, awaitItem())
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun transportNodeEnabled_persistsValue() = runTest {
-        // Save a specific value
-        repository.saveTransportNodeEnabled(false)
-        assertFalse(repository.getTransportNodeEnabled())
+    fun transportNodeEnabled_persistsValue() =
+        runTest {
+            // Save a specific value
+            repository.saveTransportNodeEnabled(false)
+            assertFalse(repository.getTransportNodeEnabled())
 
-        // Save opposite value
-        repository.saveTransportNodeEnabled(true)
-        assertTrue(repository.getTransportNodeEnabled())
-    }
+            // Save opposite value
+            repository.saveTransportNodeEnabled(true)
+            assertTrue(repository.getTransportNodeEnabled())
+        }
 
     @Test
-    fun flowAndGetMethod_returnSameValue() = runTest {
-        // Set to a known value
-        repository.saveTransportNodeEnabled(false)
+    fun flowAndGetMethod_returnSameValue() =
+        runTest {
+            // Set to a known value
+            repository.saveTransportNodeEnabled(false)
 
-        // When - Read from both sources
-        val flowValue = repository.transportNodeEnabledFlow.first()
-        val methodValue = repository.getTransportNodeEnabled()
+            // When - Read from both sources
+            val flowValue = repository.transportNodeEnabledFlow.first()
+            val methodValue = repository.getTransportNodeEnabled()
 
-        // Then - Both should return same value
-        assertEquals("Flow and method should return same value", flowValue, methodValue)
-    }
+            // Then - Both should return same value
+            assertEquals("Flow and method should return same value", flowValue, methodValue)
+        }
 
     // ========== Notification Preferences Flow Tests ==========
 
     @Test
-    fun notificationsEnabledFlow_emitsOnlyOnChange() = runTest {
-        repository.notificationsEnabledFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
+    fun notificationsEnabledFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.notificationsEnabledFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
 
-            // Save same value - should NOT emit
-            repository.saveNotificationsEnabled(initial)
-            expectNoEvents()
-
-            // Save opposite value - should emit
-            repository.saveNotificationsEnabled(!initial)
-            assertEquals(!initial, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun notificationReceivedMessageFlow_emitsOnlyOnChange() = runTest {
-        repository.notificationReceivedMessageFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            repository.saveNotificationReceivedMessage(initial)
-            expectNoEvents()
-
-            // Save opposite value - should emit
-            repository.saveNotificationReceivedMessage(!initial)
-            assertEquals(!initial, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun notificationReceivedMessageFavoriteFlow_emitsOnlyOnChange() = runTest {
-        repository.notificationReceivedMessageFavoriteFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            repository.saveNotificationReceivedMessageFavorite(initial)
-            expectNoEvents()
-
-            // Save opposite value - should emit
-            repository.saveNotificationReceivedMessageFavorite(!initial)
-            assertEquals(!initial, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun notificationHeardAnnounceFlow_emitsOnlyOnChange() = runTest {
-        repository.notificationHeardAnnounceFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            repository.saveNotificationHeardAnnounce(initial)
-            expectNoEvents()
-
-            // Save opposite value - should emit
-            repository.saveNotificationHeardAnnounce(!initial)
-            assertEquals(!initial, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun notificationBleConnectedFlow_emitsOnlyOnChange() = runTest {
-        repository.notificationBleConnectedFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            repository.saveNotificationBleConnected(initial)
-            expectNoEvents()
-
-            // Save opposite value - should emit
-            repository.saveNotificationBleConnected(!initial)
-            assertEquals(!initial, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun notificationBleDisconnectedFlow_emitsOnlyOnChange() = runTest {
-        repository.notificationBleDisconnectedFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            repository.saveNotificationBleDisconnected(initial)
-            expectNoEvents()
-
-            // Save opposite value - should emit
-            repository.saveNotificationBleDisconnected(!initial)
-            assertEquals(!initial, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun hasRequestedNotificationPermissionFlow_emitsOnlyOnChange() = runTest {
-        repository.hasRequestedNotificationPermissionFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            if (!initial) {
-                // Mark as requested - should emit
-                repository.markNotificationPermissionRequested()
-                assertTrue(awaitItem())
-
-                // Mark again - should NOT emit (already true)
-                repository.markNotificationPermissionRequested()
+                // Save same value - should NOT emit
+                repository.saveNotificationsEnabled(initial)
                 expectNoEvents()
-            } else {
-                // Already true, marking again should NOT emit
-                repository.markNotificationPermissionRequested()
-                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveNotificationsEnabled(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
             }
-
-            cancelAndIgnoreRemainingEvents()
         }
-    }
+
+    @Test
+    fun notificationReceivedMessageFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.notificationReceivedMessageFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveNotificationReceivedMessage(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveNotificationReceivedMessage(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun notificationReceivedMessageFavoriteFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.notificationReceivedMessageFavoriteFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveNotificationReceivedMessageFavorite(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveNotificationReceivedMessageFavorite(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun notificationHeardAnnounceFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.notificationHeardAnnounceFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveNotificationHeardAnnounce(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveNotificationHeardAnnounce(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun notificationBleConnectedFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.notificationBleConnectedFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveNotificationBleConnected(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveNotificationBleConnected(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun notificationBleDisconnectedFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.notificationBleDisconnectedFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveNotificationBleDisconnected(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveNotificationBleDisconnected(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun hasRequestedNotificationPermissionFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.hasRequestedNotificationPermissionFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                if (!initial) {
+                    // Mark as requested - should emit
+                    repository.markNotificationPermissionRequested()
+                    assertTrue(awaitItem())
+
+                    // Mark again - should NOT emit (already true)
+                    repository.markNotificationPermissionRequested()
+                    expectNoEvents()
+                } else {
+                    // Already true, marking again should NOT emit
+                    repository.markNotificationPermissionRequested()
+                    expectNoEvents()
+                }
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 
     // ========== Onboarding Flow Tests ==========
 
     @Test
-    fun hasCompletedOnboardingFlow_emitsOnlyOnChange() = runTest {
-        repository.hasCompletedOnboardingFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
+    fun hasCompletedOnboardingFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.hasCompletedOnboardingFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
 
-            if (!initial) {
-                // Mark as completed - should emit
-                repository.markOnboardingCompleted()
-                assertTrue(awaitItem())
+                if (!initial) {
+                    // Mark as completed - should emit
+                    repository.markOnboardingCompleted()
+                    assertTrue(awaitItem())
 
-                // Mark again - should NOT emit (already true)
-                repository.markOnboardingCompleted()
-                expectNoEvents()
-            } else {
-                // Already true, marking again should NOT emit
-                repository.markOnboardingCompleted()
-                expectNoEvents()
+                    // Mark again - should NOT emit (already true)
+                    repository.markOnboardingCompleted()
+                    expectNoEvents()
+                } else {
+                    // Already true, marking again should NOT emit
+                    repository.markOnboardingCompleted()
+                    expectNoEvents()
+                }
+
+                cancelAndIgnoreRemainingEvents()
             }
-
-            cancelAndIgnoreRemainingEvents()
         }
-    }
 
     // ========== Auto-Announce Flow Tests ==========
 
     @Test
-    fun autoAnnounceEnabledFlow_emitsOnlyOnChange() = runTest {
-        repository.autoAnnounceEnabledFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
+    fun autoAnnounceEnabledFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.autoAnnounceEnabledFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
 
-            // Save same value - should NOT emit
-            repository.saveAutoAnnounceEnabled(initial)
-            expectNoEvents()
-
-            // Save opposite value - should emit
-            repository.saveAutoAnnounceEnabled(!initial)
-            assertEquals(!initial, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun autoAnnounceIntervalMinutesFlow_emitsOnlyOnChange() = runTest {
-        repository.autoAnnounceIntervalMinutesFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            repository.saveAutoAnnounceIntervalMinutes(initial)
-            expectNoEvents()
-
-            // Save different value - should emit
-            val newValue = if (initial == 5) 10 else 5
-            repository.saveAutoAnnounceIntervalMinutes(newValue)
-            assertEquals(newValue, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun lastAutoAnnounceTimeFlow_emitsOnlyOnChange() = runTest {
-        repository.lastAutoAnnounceTimeFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            if (initial != null) {
-                repository.saveLastAutoAnnounceTime(initial)
+                // Save same value - should NOT emit
+                repository.saveAutoAnnounceEnabled(initial)
                 expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveAutoAnnounceEnabled(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
             }
-
-            // Save new value - should emit
-            val newValue = System.currentTimeMillis()
-            repository.saveLastAutoAnnounceTime(newValue)
-            assertEquals(newValue, awaitItem())
-
-            // Save same new value - should NOT emit
-            repository.saveLastAutoAnnounceTime(newValue)
-            expectNoEvents()
-
-            cancelAndIgnoreRemainingEvents()
         }
-    }
+
+    @Test
+    fun autoAnnounceIntervalMinutesFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.autoAnnounceIntervalMinutesFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveAutoAnnounceIntervalMinutes(initial)
+                expectNoEvents()
+
+                // Save different value - should emit
+                val newValue = if (initial == 5) 10 else 5
+                repository.saveAutoAnnounceIntervalMinutes(newValue)
+                assertEquals(newValue, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun lastAutoAnnounceTimeFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.lastAutoAnnounceTimeFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                if (initial != null) {
+                    repository.saveLastAutoAnnounceTime(initial)
+                    expectNoEvents()
+                }
+
+                // Save new value - should emit
+                val newValue = System.currentTimeMillis()
+                repository.saveLastAutoAnnounceTime(newValue)
+                assertEquals(newValue, awaitItem())
+
+                // Save same new value - should NOT emit
+                repository.saveLastAutoAnnounceTime(newValue)
+                expectNoEvents()
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 
     // ========== Service Status Flow Tests ==========
 
     @Test
-    fun lastServiceStatusFlow_emitsOnlyOnChange() = runTest {
-        repository.lastServiceStatusFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
+    fun lastServiceStatusFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.lastServiceStatusFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
 
-            // Save same value - should NOT emit
-            repository.saveServiceStatus(initial)
-            expectNoEvents()
+                // Save same value - should NOT emit
+                repository.saveServiceStatus(initial)
+                expectNoEvents()
 
-            // Save different value - should emit
-            val newValue = if (initial == "READY") "UNKNOWN" else "READY"
-            repository.saveServiceStatus(newValue)
-            assertEquals(newValue, awaitItem())
+                // Save different value - should emit
+                val newValue = if (initial == "READY") "UNKNOWN" else "READY"
+                repository.saveServiceStatus(newValue)
+                assertEquals(newValue, awaitItem())
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     // ========== Shared Instance Flow Tests ==========
 
     @Test
-    fun preferOwnInstanceFlow_emitsOnlyOnChange() = runTest {
-        repository.preferOwnInstanceFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
+    fun preferOwnInstanceFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.preferOwnInstanceFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
 
-            // Save same value - should NOT emit
-            repository.savePreferOwnInstance(initial)
-            expectNoEvents()
+                // Save same value - should NOT emit
+                repository.savePreferOwnInstance(initial)
+                expectNoEvents()
 
-            // Save opposite value - should emit
-            repository.savePreferOwnInstance(!initial)
-            assertEquals(!initial, awaitItem())
+                // Save opposite value - should emit
+                repository.savePreferOwnInstance(!initial)
+                assertEquals(!initial, awaitItem())
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun isSharedInstanceFlow_emitsOnlyOnChange() = runTest {
-        repository.isSharedInstanceFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
+    fun isSharedInstanceFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.isSharedInstanceFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
 
-            // Save same value - should NOT emit
-            repository.saveIsSharedInstance(initial)
-            expectNoEvents()
+                // Save same value - should NOT emit
+                repository.saveIsSharedInstance(initial)
+                expectNoEvents()
 
-            // Save opposite value - should emit
-            repository.saveIsSharedInstance(!initial)
-            assertEquals(!initial, awaitItem())
+                // Save opposite value - should emit
+                repository.saveIsSharedInstance(!initial)
+                assertEquals(!initial, awaitItem())
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun rpcKeyFlow_emitsOnlyOnChange() = runTest {
-        repository.rpcKeyFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
+    fun rpcKeyFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.rpcKeyFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
 
-            // Save same value - should NOT emit
-            repository.saveRpcKey(initial)
-            expectNoEvents()
+                // Save same value - should NOT emit
+                repository.saveRpcKey(initial)
+                expectNoEvents()
 
-            // Save new value - should emit
-            val newValue = "test_key_${System.currentTimeMillis()}"
-            repository.saveRpcKey(newValue)
-            assertEquals(newValue, awaitItem())
+                // Save new value - should emit
+                val newValue = "test_key_${System.currentTimeMillis()}"
+                repository.saveRpcKey(newValue)
+                assertEquals(newValue, awaitItem())
 
-            // Save same value again - should NOT emit
-            repository.saveRpcKey(newValue)
-            expectNoEvents()
+                // Save same value again - should NOT emit
+                repository.saveRpcKey(newValue)
+                expectNoEvents()
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     // ========== Message Delivery Flow Tests ==========
 
     @Test
-    fun defaultDeliveryMethodFlow_emitsOnlyOnChange() = runTest {
-        repository.defaultDeliveryMethodFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
+    fun defaultDeliveryMethodFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.defaultDeliveryMethodFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
 
-            // Save same value - should NOT emit
-            repository.saveDefaultDeliveryMethod(initial)
-            expectNoEvents()
-
-            // Save different value - should emit
-            val newValue = if (initial == "direct") "propagated" else "direct"
-            repository.saveDefaultDeliveryMethod(newValue)
-            assertEquals(newValue, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun tryPropagationOnFailFlow_emitsOnlyOnChange() = runTest {
-        repository.tryPropagationOnFailFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            repository.saveTryPropagationOnFail(initial)
-            expectNoEvents()
-
-            // Save opposite value - should emit
-            repository.saveTryPropagationOnFail(!initial)
-            assertEquals(!initial, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun manualPropagationNodeFlow_emitsOnlyOnChange() = runTest {
-        repository.manualPropagationNodeFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            repository.saveManualPropagationNode(initial)
-            expectNoEvents()
-
-            // Save new value - should emit
-            val newValue = "node_${System.currentTimeMillis()}"
-            repository.saveManualPropagationNode(newValue)
-            assertEquals(newValue, awaitItem())
-
-            // Save same value - should NOT emit
-            repository.saveManualPropagationNode(newValue)
-            expectNoEvents()
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun lastPropagationNodeFlow_emitsOnlyOnChange() = runTest {
-        repository.lastPropagationNodeFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            if (initial != null) {
-                repository.saveLastPropagationNode(initial)
+                // Save same value - should NOT emit
+                repository.saveDefaultDeliveryMethod(initial)
                 expectNoEvents()
+
+                // Save different value - should emit
+                val newValue = if (initial == "direct") "propagated" else "direct"
+                repository.saveDefaultDeliveryMethod(newValue)
+                assertEquals(newValue, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
             }
-
-            // Save new value - should emit
-            val newValue = "node_${System.currentTimeMillis()}"
-            repository.saveLastPropagationNode(newValue)
-            assertEquals(newValue, awaitItem())
-
-            // Save same value - should NOT emit
-            repository.saveLastPropagationNode(newValue)
-            expectNoEvents()
-
-            cancelAndIgnoreRemainingEvents()
         }
-    }
 
     @Test
-    fun autoSelectPropagationNodeFlow_emitsOnlyOnChange() = runTest {
-        repository.autoSelectPropagationNodeFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
+    fun tryPropagationOnFailFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.tryPropagationOnFailFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
 
-            // Save same value - should NOT emit
-            repository.saveAutoSelectPropagationNode(initial)
-            expectNoEvents()
+                // Save same value - should NOT emit
+                repository.saveTryPropagationOnFail(initial)
+                expectNoEvents()
 
-            // Save opposite value - should emit
-            repository.saveAutoSelectPropagationNode(!initial)
-            assertEquals(!initial, awaitItem())
+                // Save opposite value - should emit
+                repository.saveTryPropagationOnFail(!initial)
+                assertEquals(!initial, awaitItem())
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
+
+    @Test
+    fun manualPropagationNodeFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.manualPropagationNodeFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveManualPropagationNode(initial)
+                expectNoEvents()
+
+                // Save new value - should emit
+                val newValue = "node_${System.currentTimeMillis()}"
+                repository.saveManualPropagationNode(newValue)
+                assertEquals(newValue, awaitItem())
+
+                // Save same value - should NOT emit
+                repository.saveManualPropagationNode(newValue)
+                expectNoEvents()
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun lastPropagationNodeFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.lastPropagationNodeFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                if (initial != null) {
+                    repository.saveLastPropagationNode(initial)
+                    expectNoEvents()
+                }
+
+                // Save new value - should emit
+                val newValue = "node_${System.currentTimeMillis()}"
+                repository.saveLastPropagationNode(newValue)
+                assertEquals(newValue, awaitItem())
+
+                // Save same value - should NOT emit
+                repository.saveLastPropagationNode(newValue)
+                expectNoEvents()
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun autoSelectPropagationNodeFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.autoSelectPropagationNodeFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveAutoSelectPropagationNode(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveAutoSelectPropagationNode(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 
     // ========== Message Retrieval Flow Tests ==========
 
     @Test
-    fun autoRetrieveEnabledFlow_emitsOnlyOnChange() = runTest {
-        repository.autoRetrieveEnabledFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
+    fun autoRetrieveEnabledFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.autoRetrieveEnabledFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
 
-            // Save same value - should NOT emit
-            repository.saveAutoRetrieveEnabled(initial)
-            expectNoEvents()
-
-            // Save opposite value - should emit
-            repository.saveAutoRetrieveEnabled(!initial)
-            assertEquals(!initial, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun retrievalIntervalSecondsFlow_emitsOnlyOnChange() = runTest {
-        repository.retrievalIntervalSecondsFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            repository.saveRetrievalIntervalSeconds(initial)
-            expectNoEvents()
-
-            // Save different value - should emit
-            val newValue = if (initial == 30) 60 else 30
-            repository.saveRetrievalIntervalSeconds(newValue)
-            assertEquals(newValue, awaitItem())
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun lastSyncTimestampFlow_emitsOnlyOnChange() = runTest {
-        repository.lastSyncTimestampFlow.test(timeout = 5.seconds) {
-            val initial = awaitItem()
-
-            // Save same value - should NOT emit
-            if (initial != null) {
-                repository.saveLastSyncTimestamp(initial)
+                // Save same value - should NOT emit
+                repository.saveAutoRetrieveEnabled(initial)
                 expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveAutoRetrieveEnabled(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
             }
-
-            // Save new value - should emit
-            val newValue = System.currentTimeMillis()
-            repository.saveLastSyncTimestamp(newValue)
-            assertEquals(newValue, awaitItem())
-
-            // Save same value - should NOT emit
-            repository.saveLastSyncTimestamp(newValue)
-            expectNoEvents()
-
-            cancelAndIgnoreRemainingEvents()
         }
-    }
+
+    @Test
+    fun retrievalIntervalSecondsFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.retrievalIntervalSecondsFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveRetrievalIntervalSeconds(initial)
+                expectNoEvents()
+
+                // Save different value - should emit
+                val newValue = if (initial == 30) 60 else 30
+                repository.saveRetrievalIntervalSeconds(newValue)
+                assertEquals(newValue, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun lastSyncTimestampFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.lastSyncTimestampFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                if (initial != null) {
+                    repository.saveLastSyncTimestamp(initial)
+                    expectNoEvents()
+                }
+
+                // Save new value - should emit
+                val newValue = System.currentTimeMillis()
+                repository.saveLastSyncTimestamp(newValue)
+                assertEquals(newValue, awaitItem())
+
+                // Save same value - should NOT emit
+                repository.saveLastSyncTimestamp(newValue)
+                expectNoEvents()
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

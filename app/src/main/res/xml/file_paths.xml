@@ -2,4 +2,6 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Cache directory for sharing identity files -->
     <cache-path name="identity_files" path="." />
+    <!-- Files directory for sharing received attachments -->
+    <files-path name="attachments" path="attachments/" />
 </paths>

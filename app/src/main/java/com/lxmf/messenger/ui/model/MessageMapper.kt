@@ -328,6 +328,57 @@ fun loadFileAttachmentData(
 }
 
 /**
+ * Data class for file attachment metadata.
+ */
+data class FileAttachmentInfo(
+    val filename: String,
+    val mimeType: String,
+)
+
+/**
+ * Load file attachment metadata (filename and MIME type) by index.
+ *
+ * @param fieldsJson The message's fields JSON containing file attachment data
+ * @param index The index of the file attachment
+ * @return FileAttachmentInfo or null if not found
+ */
+fun loadFileAttachmentMetadata(
+    fieldsJson: String?,
+    index: Int,
+): FileAttachmentInfo? {
+    if (fieldsJson == null) return null
+
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field5 = fields.opt("5") ?: return null
+
+        val attachmentsArray: JSONArray =
+            when {
+                field5 is JSONObject && field5.has(FILE_REF_KEY) -> {
+                    val filePath = field5.getString(FILE_REF_KEY)
+                    val diskData = loadAttachmentFromDisk(filePath) ?: return null
+                    JSONArray(diskData)
+                }
+                field5 is JSONArray -> field5
+                else -> return null
+            }
+
+        if (index < 0 || index >= attachmentsArray.length()) {
+            return null
+        }
+
+        val attachment = attachmentsArray.getJSONObject(index)
+        val filename = attachment.optString("filename", "unknown")
+        val mimeType = FileUtils.getMimeTypeFromFilename(filename)
+
+        FileAttachmentInfo(filename = filename, mimeType = mimeType)
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to load file attachment metadata at index $index", e)
+        null
+    }
+}
+
+/**
  * Efficiently convert a hex string to byte array.
  * Uses direct array allocation and character arithmetic instead of
  * chunked/map which creates many intermediate objects.

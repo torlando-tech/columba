@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens
 
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -91,6 +92,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.FileAttachmentCard
+import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.theme.MeshConnected
@@ -219,6 +221,10 @@ fun MessagingScreen(
                 }
             }
         }
+
+    // State for file attachment options bottom sheet
+    var showFileOptionsSheet by remember { mutableStateOf(false) }
+    var selectedFileInfo by remember { mutableStateOf<Triple<String, Int, String>?>(null) }
 
     // State for saving received file attachments
     var pendingFileSave by remember { mutableStateOf<Triple<String, Int, String>?>(null) }
@@ -490,8 +496,8 @@ fun MessagingScreen(
                                         onViewDetails = onViewMessageDetails,
                                         onRetry = { viewModel.retryFailedMessage(message.id) },
                                         onFileAttachmentTap = { messageId, fileIndex, filename ->
-                                            pendingFileSave = Triple(messageId, fileIndex, filename)
-                                            fileSaveLauncher.launch(filename)
+                                            selectedFileInfo = Triple(messageId, fileIndex, filename)
+                                            showFileOptionsSheet = true
                                         },
                                     )
                                 }
@@ -527,6 +533,47 @@ fun MessagingScreen(
                 )
             }
         }
+    }
+
+    // File attachment options bottom sheet
+    if (showFileOptionsSheet && selectedFileInfo != null) {
+        val (messageId, fileIndex, filename) = selectedFileInfo!!
+        FileAttachmentOptionsSheet(
+            filename = filename,
+            onOpenWith = {
+                showFileOptionsSheet = false
+                scope.launch {
+                    val result = viewModel.getFileAttachmentUri(context, messageId, fileIndex)
+                    if (result != null) {
+                        val (uri, mimeType) = result
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(uri, mimeType)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        try {
+                            context.startActivity(Intent.createChooser(intent, null))
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "No app found to open this file", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Failed to load file", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            },
+            onSaveToDevice = {
+                showFileOptionsSheet = false
+                pendingFileSave = Triple(messageId, fileIndex, filename)
+                fileSaveLauncher.launch(filename)
+            },
+            onDismiss = {
+                showFileOptionsSheet = false
+                selectedFileInfo = null
+            },
+        )
     }
 }
 

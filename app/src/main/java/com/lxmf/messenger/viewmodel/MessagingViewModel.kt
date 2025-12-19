@@ -3,6 +3,7 @@ package com.lxmf.messenger.viewmodel
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
@@ -18,6 +19,7 @@ import com.lxmf.messenger.ui.model.ImageCache
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.ui.model.decodeAndCacheImage
 import com.lxmf.messenger.ui.model.loadFileAttachmentData
+import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
 import com.lxmf.messenger.ui.model.toMessageUi
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
@@ -43,6 +45,7 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 import com.lxmf.messenger.data.repository.Message as DataMessage
@@ -611,6 +614,71 @@ class MessagingViewModel
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to save file attachment", e)
                 false
+            }
+        }
+
+        /**
+         * Get a FileProvider URI for a received file attachment.
+         *
+         * Creates a temporary file in the attachments directory and returns a content URI
+         * that can be shared with external apps via Intent.ACTION_VIEW.
+         *
+         * @param context Android context for file operations
+         * @param messageId The message ID containing the file attachment
+         * @param fileIndex The index of the file attachment in the message's field 5
+         * @return Pair of (Uri, mimeType) or null if the file cannot be accessed
+         */
+        suspend fun getFileAttachmentUri(
+            context: Context,
+            messageId: String,
+            fileIndex: Int,
+        ): Pair<Uri, String>? {
+            return withContext(Dispatchers.IO) {
+                try {
+                    // Get the message from the database
+                    val messageEntity = conversationRepository.getMessageById(messageId)
+                    if (messageEntity == null) {
+                        Log.e(TAG, "Message not found: $messageId")
+                        return@withContext null
+                    }
+
+                    // Get file metadata (filename, MIME type)
+                    val metadata = loadFileAttachmentMetadata(messageEntity.fieldsJson, fileIndex)
+                    if (metadata == null) {
+                        Log.e(TAG, "Could not load file metadata for message $messageId index $fileIndex")
+                        return@withContext null
+                    }
+
+                    // Load the file data
+                    val fileData = loadFileAttachmentData(messageEntity.fieldsJson, fileIndex)
+                    if (fileData == null) {
+                        Log.e(TAG, "Could not load file data for message $messageId index $fileIndex")
+                        return@withContext null
+                    }
+
+                    // Create attachments directory if needed
+                    val attachmentsDir = File(context.filesDir, "attachments")
+                    if (!attachmentsDir.exists()) {
+                        attachmentsDir.mkdirs()
+                    }
+
+                    // Write to temp file with original filename
+                    val tempFile = File(attachmentsDir, metadata.filename)
+                    tempFile.writeBytes(fileData)
+                    Log.d(TAG, "Created temp file for sharing: ${tempFile.absolutePath}")
+
+                    // Get FileProvider URI
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        tempFile,
+                    )
+
+                    Pair(uri, metadata.mimeType)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to get file attachment URI", e)
+                    null
+                }
             }
         }
 

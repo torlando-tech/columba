@@ -225,6 +225,139 @@ class MapViewModelTest {
         }
     }
 
+    @Test
+    fun `multiple location updates replace previous location`() = runTest {
+        viewModel = MapViewModel(contactRepository)
+        val location1 = createMockLocation(37.7749, -122.4194)
+        val location2 = createMockLocation(40.7128, -74.0060)
+
+        viewModel.state.test {
+            awaitItem() // initial state
+
+            viewModel.updateUserLocation(location1)
+            val state1 = awaitItem()
+            assertEquals(37.7749, state1.userLocation!!.latitude, 0.0001)
+
+            viewModel.updateUserLocation(location2)
+            val state2 = awaitItem()
+            assertEquals(40.7128, state2.userLocation!!.latitude, 0.0001)
+            assertEquals(-74.0060, state2.userLocation!!.longitude, 0.0001)
+        }
+    }
+
+    @Test
+    fun `contact markers recenter when user location changes`() = runTest {
+        val contacts = listOf(
+            TestFactories.createEnrichedContact(
+                destinationHash = "hash1",
+                displayName = "Contact 1",
+            ),
+        )
+        every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+
+        viewModel = MapViewModel(contactRepository)
+        val newLocation = createMockLocation(40.7128, -74.0060) // New York
+
+        viewModel.state.test {
+            val initialState = awaitItem()
+            // Initial markers should be near San Francisco (default)
+            assertTrue(initialState.contactMarkers[0].latitude < 38.0)
+
+            viewModel.updateUserLocation(newLocation)
+
+            // Consume state updates until we find recentered markers or run out
+            var foundRecenteredMarkers = false
+            while (!foundRecenteredMarkers) {
+                val state = expectMostRecentItem()
+                if (state.contactMarkers.isNotEmpty() &&
+                    state.contactMarkers[0].latitude > 40.0
+                ) {
+                    foundRecenteredMarkers = true
+                    // Markers should now be near New York
+                    assertTrue(state.contactMarkers[0].latitude > 40.0)
+                    assertTrue(state.contactMarkers[0].latitude < 41.0)
+                }
+                break // Only check once with expectMostRecentItem
+            }
+            assertTrue("Markers should recenter around new location", foundRecenteredMarkers)
+        }
+    }
+
+    @Test
+    fun `large number of contacts generates correct number of markers`() = runTest {
+        val contacts = (1..50).map { i ->
+            TestFactories.createEnrichedContact(
+                destinationHash = "hash$i",
+                displayName = "Contact $i",
+            )
+        }
+        every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+
+        viewModel = MapViewModel(contactRepository)
+
+        viewModel.state.test {
+            val state = awaitItem()
+            assertEquals(50, state.contactMarkers.size)
+        }
+    }
+
+    @Test
+    fun `markers have unique positions for each contact`() = runTest {
+        val contacts = (1..5).map { i ->
+            TestFactories.createEnrichedContact(
+                destinationHash = "hash$i",
+                displayName = "Contact $i",
+            )
+        }
+        every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+
+        viewModel = MapViewModel(contactRepository)
+
+        viewModel.state.test {
+            val state = awaitItem()
+            val positions = state.contactMarkers.map { "${it.latitude},${it.longitude}" }.toSet()
+            // Each marker should have a unique position
+            assertEquals(5, positions.size)
+        }
+    }
+
+    @Test
+    fun `permission and location can be set independently`() = runTest {
+        viewModel = MapViewModel(contactRepository)
+        val mockLocation = createMockLocation(37.7749, -122.4194)
+
+        viewModel.state.test {
+            awaitItem() // initial
+
+            // Set location first (before permission)
+            viewModel.updateUserLocation(mockLocation)
+            val state1 = awaitItem()
+            assertFalse(state1.hasLocationPermission)
+            assertEquals(mockLocation, state1.userLocation)
+
+            // Then grant permission
+            viewModel.onPermissionResult(true)
+            val state2 = awaitItem()
+            assertTrue(state2.hasLocationPermission)
+            assertEquals(mockLocation, state2.userLocation)
+        }
+    }
+
+    @Test
+    fun `state is immutable - modifications dont affect original`() = runTest {
+        viewModel = MapViewModel(contactRepository)
+
+        val originalState = viewModel.state.value
+        val originalPermission = originalState.hasLocationPermission
+
+        viewModel.onPermissionResult(true)
+
+        // Original state reference should be unchanged
+        assertEquals(originalPermission, originalState.hasLocationPermission)
+        // New state should be different
+        assertTrue(viewModel.state.value.hasLocationPermission)
+    }
+
     // Helper function to create mock Location
     private fun createMockLocation(lat: Double, lng: Double): Location {
         val location = mockk<Location>(relaxed = true)

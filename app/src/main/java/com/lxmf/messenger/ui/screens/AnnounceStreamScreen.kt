@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,9 +28,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,11 +54,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import android.widget.Toast
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
@@ -548,6 +548,85 @@ fun PeerContextMenu(
                 onDismiss()
             },
         )
+    }
+}
+
+/**
+ * Reusable announce stream content without the scaffold/app bar.
+ * Can be embedded in other screens like ContactsScreen Network tab.
+ */
+@Composable
+fun AnnounceStreamContent(
+    viewModel: AnnounceStreamViewModel = hiltViewModel(),
+    onPeerClick: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
+    onStartChat: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
+    modifier: Modifier = Modifier,
+) {
+    val pagingItems = viewModel.announces.collectAsLazyPagingItems()
+
+    // Context menu state
+    var showContextMenu by remember { mutableStateOf(false) }
+    var contextMenuAnnounce by remember { mutableStateOf<Announce?>(null) }
+
+    // Scroll state
+    val listState = rememberLazyListState()
+
+    if (pagingItems.itemCount == 0) {
+        EmptyAnnounceState(modifier = modifier.fillMaxSize())
+    } else {
+        LazyColumn(
+            state = listState,
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(
+                count = pagingItems.itemCount,
+                key = pagingItems.itemKey { announce -> announce.destinationHash },
+            ) { index ->
+                val announce = pagingItems[index]
+                if (announce != null) {
+                    Box {
+                        AnnounceCard(
+                            announce = announce,
+                            onClick = {
+                                onPeerClick(announce.destinationHash, announce.peerName)
+                            },
+                            onFavoriteClick = {
+                                viewModel.toggleContact(announce.destinationHash)
+                            },
+                            onLongPress = {
+                                contextMenuAnnounce = announce
+                                showContextMenu = true
+                            },
+                        )
+
+                        // Show context menu for this announce
+                        if (showContextMenu && contextMenuAnnounce == announce) {
+                            PeerContextMenu(
+                                expanded = true,
+                                onDismiss = { showContextMenu = false },
+                                announce = announce,
+                                onToggleFavorite = {
+                                    viewModel.toggleContact(announce.destinationHash)
+                                },
+                                onStartChat = {
+                                    onStartChat(announce.destinationHash, announce.peerName)
+                                },
+                                onViewDetails = {
+                                    onPeerClick(announce.destinationHash, announce.peerName)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Bottom spacing for navigation bar
+            item {
+                Spacer(modifier = Modifier.height(100.dp))
+            }
+        }
     }
 }
 

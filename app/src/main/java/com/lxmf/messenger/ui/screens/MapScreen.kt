@@ -336,6 +336,10 @@ fun MapScreen(
                                 Expression.linear(),
                                 Expression.zoom(),
                                 // At lower zooms, show smaller radius (it's farther out)
+                                // Continue shrinking below zoom 10 so it doesn't stay constant
+                                Expression.stop(2, Expression.division(Expression.get("approximateRadius"), Expression.literal(500))),
+                                Expression.stop(5, Expression.division(Expression.get("approximateRadius"), Expression.literal(200))),
+                                Expression.stop(8, Expression.division(Expression.get("approximateRadius"), Expression.literal(60))),
                                 Expression.stop(10, Expression.division(Expression.get("approximateRadius"), Expression.literal(30))),
                                 Expression.stop(12, Expression.division(Expression.get("approximateRadius"), Expression.literal(10))),
                                 Expression.stop(15, Expression.division(Expression.get("approximateRadius"), Expression.literal(3))),

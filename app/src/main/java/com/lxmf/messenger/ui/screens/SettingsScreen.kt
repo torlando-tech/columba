@@ -178,8 +178,8 @@ fun SettingsScreen(
                     onStopAllSharing = { viewModel.stopAllSharing() },
                     defaultDuration = state.defaultSharingDuration,
                     onDefaultDurationChange = { viewModel.setDefaultSharingDuration(it) },
-                    locationPrecision = state.locationPrecision,
-                    onLocationPrecisionChange = { viewModel.setLocationPrecision(it) },
+                    locationPrecisionRadius = state.locationPrecisionRadius,
+                    onLocationPrecisionRadiusChange = { viewModel.setLocationPrecisionRadius(it) },
                 )
 
                 MessageDeliveryRetrievalCard(

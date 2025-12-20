@@ -303,7 +303,7 @@ fun MapScreen(
             val sourceId = "contact-markers-source"
             val layerId = "contact-markers-layer"
 
-            // Create GeoJSON features from contact markers with state property
+            // Create GeoJSON features from contact markers with state and approximateRadius properties
             val features = state.contactMarkers.map { marker ->
                 Feature.fromGeometry(
                     Point.fromLngLat(marker.longitude, marker.latitude)
@@ -311,6 +311,7 @@ fun MapScreen(
                     addStringProperty("name", marker.displayName)
                     addStringProperty("hash", marker.destinationHash)
                     addStringProperty("state", marker.state.name) // FRESH, STALE, or EXPIRED_GRACE_PERIOD
+                    addNumberProperty("approximateRadius", marker.approximateRadius) // meters, 0 = precise
                 }
             }
             val featureCollection = FeatureCollection.fromFeatures(features)
@@ -322,6 +323,47 @@ fun MapScreen(
             } else {
                 // Add new source and layers with data-driven styling based on marker state
                 style.addSource(GeoJsonSource(sourceId, featureCollection))
+
+                // Uncertainty circle layer for approximate locations (rendered behind main marker)
+                // Only visible when approximateRadius > 0
+                val uncertaintyLayerId = "contact-markers-uncertainty-layer"
+                style.addLayer(
+                    CircleLayer(uncertaintyLayerId, sourceId).withProperties(
+                        // Circle radius scales with zoom - converts meters to screen pixels
+                        // At zoom 15, 1 pixel ≈ 1 meter, so we scale accordingly
+                        PropertyFactory.circleRadius(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                // At lower zooms, show smaller radius (it's farther out)
+                                Expression.stop(10, Expression.division(Expression.get("approximateRadius"), Expression.literal(30))),
+                                Expression.stop(12, Expression.division(Expression.get("approximateRadius"), Expression.literal(10))),
+                                Expression.stop(15, Expression.division(Expression.get("approximateRadius"), Expression.literal(3))),
+                                Expression.stop(18, Expression.product(Expression.get("approximateRadius"), Expression.literal(0.8))),
+                            )
+                        ),
+                        // Semi-transparent fill
+                        PropertyFactory.circleColor(
+                            Expression.color(android.graphics.Color.parseColor("#FF5722")) // Orange
+                        ),
+                        PropertyFactory.circleOpacity(
+                            Expression.literal(0.15f)
+                        ),
+                        // Dashed stroke for the uncertainty boundary
+                        PropertyFactory.circleStrokeWidth(
+                            Expression.literal(2f)
+                        ),
+                        PropertyFactory.circleStrokeColor(
+                            Expression.color(android.graphics.Color.parseColor("#FF5722")) // Orange
+                        ),
+                        PropertyFactory.circleStrokeOpacity(
+                            Expression.literal(0.4f)
+                        ),
+                    ).withFilter(
+                        // Only show for locations with approximateRadius > 0
+                        Expression.gt(Expression.get("approximateRadius"), Expression.literal(0))
+                    )
+                )
 
                 // CircleLayer for the filled circle
                 style.addLayer(

@@ -70,7 +70,7 @@ data class SettingsState(
     val locationSharingEnabled: Boolean = true,
     val activeSharingSessions: List<com.lxmf.messenger.service.SharingSession> = emptyList(),
     val defaultSharingDuration: String = "ONE_HOUR",
-    val locationPrecision: String = "PRECISE",
+    val locationPrecisionRadius: Int = 0,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -117,6 +117,8 @@ class SettingsViewModel
 
         init {
             loadSettings()
+            // Always load location sharing settings (not dependent on monitors)
+            loadLocationSharingSettings()
             if (enableMonitors) {
                 startSharedInstanceMonitor()
                 startSharedInstanceAvailabilityMonitor()
@@ -238,6 +240,11 @@ class SettingsViewModel
                             transportNodeEnabled = transportNodeEnabled,
                             // Message delivery state
                             defaultDeliveryMethod = defaultDeliveryMethod,
+                            // Preserve location sharing state from loadLocationSharingSettings()
+                            locationSharingEnabled = _state.value.locationSharingEnabled,
+                            activeSharingSessions = _state.value.activeSharingSessions,
+                            defaultSharingDuration = _state.value.defaultSharingDuration,
+                            locationPrecisionRadius = _state.value.locationPrecisionRadius,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value
@@ -1109,18 +1116,10 @@ class SettingsViewModel
         // Location sharing methods
 
         /**
-         * Start monitoring location sharing state from the LocationSharingManager
-         * and settings repository.
+         * Load location sharing settings from the repository.
+         * Called unconditionally to ensure settings persist across navigation.
          */
-        private fun startLocationSharingMonitor() {
-            // Monitor active sharing sessions
-            viewModelScope.launch {
-                locationSharingManager.activeSessions.collect { sessions ->
-                    _state.value = _state.value.copy(activeSharingSessions = sessions)
-                }
-            }
-
-            // Monitor location sharing settings
+        private fun loadLocationSharingSettings() {
             viewModelScope.launch {
                 settingsRepository.locationSharingEnabledFlow.collect { enabled ->
                     _state.value = _state.value.copy(locationSharingEnabled = enabled)
@@ -1132,8 +1131,20 @@ class SettingsViewModel
                 }
             }
             viewModelScope.launch {
-                settingsRepository.locationPrecisionFlow.collect { precision ->
-                    _state.value = _state.value.copy(locationPrecision = precision)
+                settingsRepository.locationPrecisionRadiusFlow.collect { radiusMeters ->
+                    _state.value = _state.value.copy(locationPrecisionRadius = radiusMeters)
+                }
+            }
+        }
+
+        /**
+         * Start monitoring active location sharing sessions from the LocationSharingManager.
+         * Only called when monitors are enabled.
+         */
+        private fun startLocationSharingMonitor() {
+            viewModelScope.launch {
+                locationSharingManager.activeSessions.collect { sessions ->
+                    _state.value = _state.value.copy(activeSharingSessions = sessions)
                 }
             }
         }
@@ -1185,14 +1196,14 @@ class SettingsViewModel
         }
 
         /**
-         * Set the location precision.
+         * Set the location precision radius.
          *
-         * @param precision "PRECISE" or "APPROXIMATE"
+         * @param radiusMeters 0 for precise, or coarsening radius in meters (100, 1000, 10000, etc.)
          */
-        fun setLocationPrecision(precision: String) {
+        fun setLocationPrecisionRadius(radiusMeters: Int) {
             viewModelScope.launch {
-                settingsRepository.saveLocationPrecision(precision)
-                Log.d(TAG, "Location precision set to: $precision")
+                settingsRepository.saveLocationPrecisionRadius(radiusMeters)
+                Log.d(TAG, "Location precision radius set to: ${radiusMeters}m")
             }
         }
     }

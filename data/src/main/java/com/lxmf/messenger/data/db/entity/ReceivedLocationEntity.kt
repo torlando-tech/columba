@@ -30,4 +30,5 @@ data class ReceivedLocationEntity(
     val timestamp: Long, // When the location was captured (from sender)
     val expiresAt: Long?, // When sharing ends (null = indefinite)
     val receivedAt: Long, // When we received this update
+    val approximateRadius: Int = 0, // Coarsening radius in meters (0 = precise)
 )

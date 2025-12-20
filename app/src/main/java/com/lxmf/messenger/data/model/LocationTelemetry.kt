@@ -14,6 +14,7 @@ import kotlinx.serialization.Serializable
  * @property ts Timestamp when location was captured (millis since epoch)
  * @property expires When sharing ends (millis since epoch), null for indefinite
  * @property cease If true, recipient should delete sender's location (sharing stopped)
+ * @property approxRadius Coarsening radius in meters (0 = precise, >0 = approximate)
  */
 @Serializable
 data class LocationTelemetry(
@@ -24,6 +25,7 @@ data class LocationTelemetry(
     val ts: Long,
     val expires: Long? = null,
     val cease: Boolean = false,
+    val approxRadius: Int = 0,
 ) {
     companion object {
         const val TYPE_LOCATION_SHARE = "location_share"

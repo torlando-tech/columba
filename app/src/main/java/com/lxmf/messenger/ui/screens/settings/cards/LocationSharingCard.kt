@@ -60,8 +60,8 @@ fun LocationSharingCard(
     onStopAllSharing: () -> Unit,
     defaultDuration: String,
     onDefaultDurationChange: (String) -> Unit,
-    locationPrecision: String,
-    onLocationPrecisionChange: (String) -> Unit,
+    locationPrecisionRadius: Int,
+    onLocationPrecisionRadiusChange: (Int) -> Unit,
 ) {
     var showDurationPicker by remember { mutableStateOf(false) }
     var showPrecisionPicker by remember { mutableStateOf(false) }
@@ -136,7 +136,7 @@ fun LocationSharingCard(
             // Location precision picker
             SettingsRow(
                 label = "Location precision",
-                value = getPrecisionDisplayText(locationPrecision),
+                value = getPrecisionRadiusDisplayText(locationPrecisionRadius),
                 onClick = { showPrecisionPicker = true },
             )
         }
@@ -156,10 +156,10 @@ fun LocationSharingCard(
 
     // Precision picker dialog
     if (showPrecisionPicker) {
-        PrecisionPickerDialog(
-            currentPrecision = locationPrecision,
-            onPrecisionSelected = {
-                onLocationPrecisionChange(it)
+        PrecisionRadiusPickerDialog(
+            currentRadius = locationPrecisionRadius,
+            onRadiusSelected = {
+                onLocationPrecisionRadiusChange(it)
                 showPrecisionPicker = false
             },
             onDismiss = { showPrecisionPicker = false },
@@ -311,10 +311,21 @@ private fun DurationPickerDialog(
     )
 }
 
+/**
+ * Precision radius presets for the picker.
+ */
+private enum class PrecisionPreset(val radiusMeters: Int, val displayName: String, val description: String) {
+    PRECISE(0, "Precise", "Exact GPS location"),
+    NEIGHBORHOOD(100, "Neighborhood", "~100m radius"),
+    CITY(1000, "City", "~1km radius"),
+    REGION(10000, "Region", "~10km radius"),
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PrecisionPickerDialog(
-    currentPrecision: String,
-    onPrecisionSelected: (String) -> Unit,
+private fun PrecisionRadiusPickerDialog(
+    currentRadius: Int,
+    onRadiusSelected: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -323,24 +334,19 @@ private fun PrecisionPickerDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Choose the accuracy of your shared location:",
+                    "Choose how precisely your location is shared:",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                PrecisionOption(
-                    title = "Precise",
-                    description = "Full GPS accuracy for exact location",
-                    isSelected = currentPrecision == "PRECISE",
-                    onClick = { onPrecisionSelected("PRECISE") },
-                )
-
-                PrecisionOption(
-                    title = "Approximate",
-                    description = "Reduced accuracy (~100m radius)",
-                    isSelected = currentPrecision == "APPROXIMATE",
-                    onClick = { onPrecisionSelected("APPROXIMATE") },
-                )
+                PrecisionPreset.entries.forEach { preset ->
+                    PrecisionRadiusOption(
+                        title = preset.displayName,
+                        description = preset.description,
+                        isSelected = currentRadius == preset.radiusMeters,
+                        onClick = { onRadiusSelected(preset.radiusMeters) },
+                    )
+                }
             }
         },
         confirmButton = {
@@ -352,7 +358,7 @@ private fun PrecisionPickerDialog(
 }
 
 @Composable
-private fun PrecisionOption(
+private fun PrecisionRadiusOption(
     title: String,
     description: String,
     isSelected: Boolean,
@@ -412,12 +418,14 @@ private fun getDurationDisplayText(durationName: String): String {
 }
 
 /**
- * Get display text for a precision setting.
+ * Get display text for a precision radius setting.
  */
-private fun getPrecisionDisplayText(precision: String): String {
-    return when (precision) {
-        "PRECISE" -> "Precise"
-        "APPROXIMATE" -> "Approximate"
-        else -> "Precise"
+private fun getPrecisionRadiusDisplayText(radiusMeters: Int): String {
+    return when (radiusMeters) {
+        0 -> "Precise"
+        100 -> "Neighborhood (~100m)"
+        1000 -> "City (~1km)"
+        10000 -> "Region (~10km)"
+        else -> if (radiusMeters >= 1000) "${radiusMeters / 1000}km" else "${radiusMeters}m"
     }
 }

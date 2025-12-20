@@ -14,6 +14,7 @@ import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
 import com.lxmf.messenger.data.model.LocationTelemetry
 import com.lxmf.messenger.di.ApplicationScope
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.ui.model.SharingDuration
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
@@ -35,6 +37,7 @@ import org.json.JSONObject
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.roundToInt
 
 /**
  * Represents an active location sharing session.
@@ -67,6 +70,7 @@ class LocationSharingManager
         @ApplicationContext private val context: Context,
         private val reticulumProtocol: ReticulumProtocol,
         private val receivedLocationDao: ReceivedLocationDao,
+        private val settingsRepository: SettingsRepository,
         @ApplicationScope private val scope: CoroutineScope,
     ) {
         companion object {
@@ -375,13 +379,20 @@ class LocationSharingManager
                 // Find the first expired session end time among all sessions
                 val earliestExpiry = sessions.mapNotNull { it.endTime }.minOrNull()
 
+                // Get precision radius setting (0 = precise, >0 = coarsen to that radius)
+                val precisionRadius = settingsRepository.locationPrecisionRadiusFlow.first()
+
+                // Coarsen location if needed
+                val (finalLat, finalLng) = coarsenLocation(location.latitude, location.longitude, precisionRadius)
+
                 val telemetry =
                     LocationTelemetry(
-                        lat = location.latitude,
-                        lng = location.longitude,
-                        acc = location.accuracy,
+                        lat = finalLat,
+                        lng = finalLng,
+                        acc = if (precisionRadius > 0) precisionRadius.toFloat() else location.accuracy,
                         ts = System.currentTimeMillis(),
                         expires = earliestExpiry,
+                        approxRadius = precisionRadius,
                     )
 
                 val json = Json.encodeToString(telemetry)
@@ -399,7 +410,7 @@ class LocationSharingManager
                             )
 
                         result.onSuccess {
-                            Log.d(TAG, "Location sent to ${session.displayName}")
+                            Log.d(TAG, "Location sent to ${session.displayName} (approxRadius=$precisionRadius)")
                         }.onFailure { e ->
                             Log.e(TAG, "Failed to send location to ${session.displayName}", e)
                         }
@@ -408,6 +419,24 @@ class LocationSharingManager
                     }
                 }
             }
+        }
+
+        /**
+         * Coarsen location coordinates to a grid based on the specified radius.
+         *
+         * @param lat Latitude in decimal degrees
+         * @param lng Longitude in decimal degrees
+         * @param radiusMeters Coarsening radius in meters (0 = no coarsening)
+         * @return Pair of coarsened (lat, lng)
+         */
+        private fun coarsenLocation(lat: Double, lng: Double, radiusMeters: Int): Pair<Double, Double> {
+            if (radiusMeters <= 0) return Pair(lat, lng)
+
+            // Convert radius to degrees (approximate: 111km per degree at equator)
+            val gridSizeDegrees = radiusMeters / 111_000.0
+            val coarseLat = (lat / gridSizeDegrees).roundToInt() * gridSizeDegrees
+            val coarseLng = (lng / gridSizeDegrees).roundToInt() * gridSizeDegrees
+            return Pair(coarseLat, coarseLng)
         }
 
         private fun startListeningForLocationTelemetry() {
@@ -450,6 +479,7 @@ class LocationSharingManager
                 val acc = json.getDouble("acc").toFloat()
                 val ts = json.getLong("ts")
                 val expires = if (json.has("expires") && !json.isNull("expires")) json.getLong("expires") else null
+                val approxRadius = json.optInt("approxRadius", 0)
 
                 val entity =
                     ReceivedLocationEntity(
@@ -461,10 +491,11 @@ class LocationSharingManager
                         timestamp = ts,
                         expiresAt = expires,
                         receivedAt = System.currentTimeMillis(),
+                        approximateRadius = approxRadius,
                     )
 
                 receivedLocationDao.insert(entity)
-                Log.d(TAG, "Stored location from $senderHash: ($lat, $lng)")
+                Log.d(TAG, "Stored location from $senderHash: ($lat, $lng) approxRadius=$approxRadius")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse/store received location: $locationJson", e)
             }

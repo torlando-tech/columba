@@ -86,7 +86,7 @@ class SettingsRepository
             // Location sharing preferences
             val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
             val DEFAULT_SHARING_DURATION = stringPreferencesKey("default_sharing_duration")
-            val LOCATION_PRECISION = stringPreferencesKey("location_precision")
+            val LOCATION_PRECISION_RADIUS = intPreferencesKey("location_precision_radius")
         }
 
         // Notification preferences
@@ -867,25 +867,25 @@ class SettingsRepository
         }
 
         /**
-         * Flow of the location precision setting.
-         * Values: "PRECISE" (GPS accuracy) or "APPROXIMATE" (reduced accuracy).
-         * Defaults to "PRECISE" if not set.
+         * Flow of the location precision radius in meters.
+         * 0 = Precise (no coarsening), >0 = coarsening radius in meters.
+         * Defaults to 0 (precise) if not set.
          */
-        val locationPrecisionFlow: Flow<String> =
+        val locationPrecisionRadiusFlow: Flow<Int> =
             context.dataStore.data
                 .map { preferences ->
-                    preferences[PreferencesKeys.LOCATION_PRECISION] ?: "PRECISE"
+                    preferences[PreferencesKeys.LOCATION_PRECISION_RADIUS] ?: 0
                 }
                 .distinctUntilChanged()
 
         /**
-         * Save the location precision setting.
+         * Save the location precision radius.
          *
-         * @param precision "PRECISE" or "APPROXIMATE"
+         * @param radiusMeters 0 for precise, or coarsening radius in meters (100, 1000, 10000, etc.)
          */
-        suspend fun saveLocationPrecision(precision: String) {
+        suspend fun saveLocationPrecisionRadius(radiusMeters: Int) {
             context.dataStore.edit { preferences ->
-                preferences[PreferencesKeys.LOCATION_PRECISION] = precision
+                preferences[PreferencesKeys.LOCATION_PRECISION_RADIUS] = radiusMeters
             }
         }
 

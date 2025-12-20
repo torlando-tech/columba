@@ -1068,7 +1068,8 @@ object DatabaseModule {
                         accuracy REAL NOT NULL,
                         timestamp INTEGER NOT NULL,
                         expiresAt INTEGER,
-                        receivedAt INTEGER NOT NULL
+                        receivedAt INTEGER NOT NULL,
+                        approximateRadius INTEGER NOT NULL DEFAULT 0
                     )
                     """.trimIndent(),
                 )

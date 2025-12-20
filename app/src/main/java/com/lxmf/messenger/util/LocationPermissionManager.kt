@@ -120,13 +120,15 @@ object LocationPermissionManager {
         return buildString {
             appendLine("Columba needs location access to:")
             appendLine()
-            appendLine("Show your location on the map")
+            appendLine("Share your location with chosen contacts")
             appendLine("Help friends find you at events")
             appendLine("Calculate distance to contacts")
             appendLine()
             appendLine(
                 "You control who can see your location and for how long. " +
-                    "Location data is only shared peer-to-peer with contacts you choose.",
+                    "Location data is only shared peer-to-peer with contacts you choose. " +
+                    "Location data, like all data on Columba, is encrypted end to end, " +
+                    "never stored on a central server, and is only readable by the contacts you send it to.",
             )
         }
     }

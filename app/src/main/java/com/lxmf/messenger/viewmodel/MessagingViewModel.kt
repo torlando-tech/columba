@@ -10,7 +10,10 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
 import com.lxmf.messenger.data.model.EnrichedContact
+import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.service.InterfaceDetector
+import com.lxmf.messenger.util.ImageUtils
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
@@ -74,6 +77,7 @@ class MessagingViewModel
         private val propagationNodeManager: PropagationNodeManager,
         private val locationSharingManager: LocationSharingManager,
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
+        private val interfaceDetector: InterfaceDetector,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -159,6 +163,10 @@ class MessagingViewModel
         // File attachment error events for UI feedback
         private val _fileAttachmentError = MutableSharedFlow<String>()
         val fileAttachmentError: SharedFlow<String> = _fileAttachmentError.asSharedFlow()
+
+        // Compression warning state for large images
+        private val _compressionWarning = MutableStateFlow<CompressionWarning?>(null)
+        val compressionWarning: StateFlow<CompressionWarning?> = _compressionWarning.asStateFlow()
 
         // Sync state from PropagationNodeManager
         val isSyncing: StateFlow<Boolean> = propagationNodeManager.isSyncing
@@ -1168,6 +1176,99 @@ class MessagingViewModel
         }
 
         /**
+         * Process an image with compression and check if it exceeds the target size.
+         * If it exceeds, shows a warning dialog. Otherwise, stores the image for sending.
+         *
+         * @param context Android context for image processing
+         * @param uri URI of the image to process
+         */
+        fun processImageWithCompression(
+            context: android.content.Context,
+            uri: android.net.Uri,
+        ) {
+            viewModelScope.launch {
+                _isProcessingImage.value = true
+                try {
+                    // Get the effective preset
+                    val savedPreset = settingsRepository.getImageCompressionPreset()
+                    val effectivePreset =
+                        if (savedPreset == ImageCompressionPreset.AUTO) {
+                            interfaceDetector.detectOptimalPreset()
+                        } else {
+                            savedPreset
+                        }
+
+                    Log.d(TAG, "Processing image with preset: ${effectivePreset.name}")
+
+                    // Compress the image
+                    val result =
+                        withContext(Dispatchers.IO) {
+                            ImageUtils.compressImageWithPreset(context, uri, effectivePreset)
+                        }
+
+                    if (result == null) {
+                        Log.e(TAG, "Failed to compress image")
+                        _isProcessingImage.value = false
+                        return@launch
+                    }
+
+                    if (result.meetsTargetSize) {
+                        // Image fits within target - store for sending
+                        Log.d(TAG, "Image compressed to ${result.compressedImage.data.size} bytes, meets target")
+                        selectImage(result.compressedImage.data, result.compressedImage.format)
+                    } else {
+                        // Image exceeds target - show warning with ETA
+                        val bandwidth = interfaceDetector.getSlowestInterfaceBandwidth()
+                        val interfaceDesc = interfaceDetector.getSlowestInterfaceDescription()
+                        val transferTime = ImageUtils.calculateTransferTime(
+                            result.compressedImage.data.size.toLong(),
+                            bandwidth,
+                        )
+
+                        Log.d(
+                            TAG,
+                            "Image exceeds target: ${result.compressedImage.data.size} > ${result.targetSizeBytes}, " +
+                                "ETA: ${transferTime.formattedTime} via $interfaceDesc",
+                        )
+
+                        _compressionWarning.value =
+                            CompressionWarning(
+                                compressedSizeBytes = result.compressedImage.data.size.toLong(),
+                                targetSizeBytes = result.targetSizeBytes,
+                                estimatedTransferTime = transferTime.formattedTime,
+                                interfaceDescription = interfaceDesc,
+                                pendingImageData = result.compressedImage.data,
+                                pendingImageFormat = result.compressedImage.format,
+                                preset = effectivePreset,
+                            )
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing image with compression", e)
+                } finally {
+                    _isProcessingImage.value = false
+                }
+            }
+        }
+
+        /**
+         * Dismiss the compression warning without sending.
+         */
+        fun dismissCompressionWarning() {
+            Log.d(TAG, "Dismissing compression warning")
+            _compressionWarning.value = null
+        }
+
+        /**
+         * Confirm sending the large image despite the warning.
+         */
+        fun confirmSendLargeImage() {
+            val warning = _compressionWarning.value ?: return
+            Log.d(TAG, "User confirmed sending large image (${warning.compressedSizeBytes} bytes)")
+            selectImage(warning.pendingImageData, warning.pendingImageFormat)
+            _compressionWarning.value = null
+        }
+
+        /**
          * Load an image attachment asynchronously.
          *
          * Called by the UI when a message has hasImageAttachment=true but decodedImage=null.
@@ -1681,4 +1782,33 @@ sealed class ContactToggleResult {
 
     /** Operation failed with the given message */
     data class Error(val message: String) : ContactToggleResult()
+}
+
+/**
+ * Warning state when an image exceeds the target size for the detected network.
+ */
+data class CompressionWarning(
+    val compressedSizeBytes: Long,
+    val targetSizeBytes: Long,
+    val estimatedTransferTime: String,
+    val interfaceDescription: String,
+    val pendingImageData: ByteArray,
+    val pendingImageFormat: String,
+    val preset: ImageCompressionPreset,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        other as CompressionWarning
+        return compressedSizeBytes == other.compressedSizeBytes &&
+            targetSizeBytes == other.targetSizeBytes &&
+            pendingImageData.contentEquals(other.pendingImageData)
+    }
+
+    override fun hashCode(): Int {
+        var result = compressedSizeBytes.hashCode()
+        result = 31 * result + targetSizeBytes.hashCode()
+        result = 31 * result + pendingImageData.contentHashCode()
+        return result
+    }
 }

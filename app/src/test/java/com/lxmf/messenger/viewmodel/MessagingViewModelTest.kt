@@ -14,6 +14,7 @@ import com.lxmf.messenger.reticulum.protocol.DeliveryStatusUpdate
 import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
+import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.util.FileAttachment
@@ -65,6 +66,7 @@ class MessagingViewModelTest {
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var identityRepository: IdentityRepository
+    private lateinit var interfaceDetector: InterfaceDetector
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
     private val testPeerName = "Test Peer"
@@ -88,6 +90,7 @@ class MessagingViewModelTest {
         propagationNodeManager = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
         identityRepository = mockk(relaxed = true)
+        interfaceDetector = mockk(relaxed = true)
 
         // Mock identityRepository to return null by default (no icon set)
         coEvery { identityRepository.getActiveIdentitySync() } returns null
@@ -154,6 +157,7 @@ class MessagingViewModelTest {
             propagationNodeManager,
             locationSharingManager,
             identityRepository,
+            interfaceDetector,
         )
 
     @Test
@@ -446,6 +450,7 @@ class MessagingViewModelTest {
             every { failingPropagationNodeManager.manualSyncResult } returns MutableSharedFlow()
             every { failingLocationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
 
+            val failingInterfaceDetector = mockk<InterfaceDetector>(relaxed = true)
             val viewModelWithoutIdentity =
                 MessagingViewModel(
                     failingProtocol,
@@ -457,6 +462,7 @@ class MessagingViewModelTest {
                     failingPropagationNodeManager,
                     failingLocationSharingManager,
                     identityRepository,
+                    failingInterfaceDetector,
                 )
 
             // Attempt to send message
@@ -905,6 +911,7 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
+                interfaceDetector,
             )
             advanceUntilIdle()
 
@@ -966,6 +973,7 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
+                interfaceDetector,
             )
             advanceUntilIdle()
 
@@ -1023,6 +1031,7 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
+                interfaceDetector,
             )
             advanceUntilIdle()
 
@@ -1070,6 +1079,7 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
+                interfaceDetector,
             )
             advanceUntilIdle()
 

@@ -130,6 +130,7 @@ import com.lxmf.messenger.ui.components.FileAttachmentCard
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
 import com.lxmf.messenger.ui.components.FullEmojiPickerDialog
+import com.lxmf.messenger.ui.components.ImageCompressionWarningDialog
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.QuickShareLocationBottomSheet
 import com.lxmf.messenger.ui.components.ReactionDisplayRow
@@ -234,6 +235,9 @@ fun MessagingScreen(
     // Lifecycle-aware coroutine scope for image and file processing
     val scope = rememberCoroutineScope()
 
+    // Compression warning state
+    val compressionWarning by viewModel.compressionWarning.collectAsStateWithLifecycle()
+
     // Observe manual sync results and show Toast
     LaunchedEffect(Unit) {
         viewModel.manualSyncResult.collect { result ->
@@ -273,33 +277,13 @@ fun MessagingScreen(
         }
     }
 
-    // Image picker launcher - uses compressImagePreservingAnimation to preserve GIF animation
+    // Image picker launcher - uses adaptive compression with warning dialog
     val imageLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent(),
         ) { uri: android.net.Uri? ->
             uri?.let {
-                viewModel.setProcessingImage(true)
-                scope.launch(Dispatchers.IO) {
-                    try {
-                        val compressed = ImageUtils.compressImagePreservingAnimation(context, it)
-                        withContext(Dispatchers.Main) {
-                            viewModel.setProcessingImage(false)
-                            if (compressed != null) {
-                                viewModel.selectImage(
-                                    compressed.data,
-                                    compressed.format,
-                                    compressed.isAnimated,
-                                )
-                            }
-                        }
-                    } catch (e: Exception) {
-                        withContext(Dispatchers.Main) {
-                            viewModel.setProcessingImage(false)
-                        }
-                        android.util.Log.e("MessagingScreen", "Error compressing image", e)
-                    }
-                }
+                viewModel.processImageWithCompression(context, it)
             }
         }
 
@@ -955,6 +939,15 @@ fun MessagingScreen(
             syncProgress = syncProgress,
             onDismiss = { showSyncStatusSheet = false },
             sheetState = syncStatusSheetState,
+        )
+    }
+
+    // Compression warning dialog
+    compressionWarning?.let { warning ->
+        ImageCompressionWarningDialog(
+            warning = warning,
+            onDismiss = { viewModel.dismissCompressionWarning() },
+            onConfirm = { viewModel.confirmSendLargeImage() },
         )
     }
 }

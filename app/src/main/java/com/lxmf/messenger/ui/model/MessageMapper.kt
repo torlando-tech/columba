@@ -37,6 +37,9 @@ fun Message.toMessageUi(): MessageUi {
     val hasFiles = hasFileAttachmentsField(fieldsJson)
     val fileAttachmentsList = if (hasFiles) parseFileAttachments(fieldsJson) else emptyList()
 
+    // Get reply-to message ID: prefer DB column, fallback to parsing field 16
+    val replyId = replyToMessageId ?: parseReplyToFromField16(fieldsJson)
+
     return MessageUi(
         id = id,
         destinationHash = destinationHash,
@@ -52,7 +55,33 @@ fun Message.toMessageUi(): MessageUi {
         fieldsJson = if ((hasImage && cachedImage == null) || hasFiles) fieldsJson else null,
         deliveryMethod = deliveryMethod,
         errorMessage = errorMessage,
+        replyToMessageId = replyId,
+        // Note: replyPreview is loaded asynchronously by the ViewModel
     )
+}
+
+/**
+ * Parse the reply_to message ID from LXMF field 16 (app extensions).
+ *
+ * Field 16 is structured as: {"reply_to": "message_id", ...}
+ * This allows for future extensibility (reactions, mentions, etc.)
+ *
+ * @param fieldsJson The message's fields JSON
+ * @return The reply_to message ID, or null if not present or parsing fails
+ */
+@Suppress("SwallowedException", "ReturnCount") // Invalid JSON is expected to fail silently here
+private fun parseReplyToFromField16(fieldsJson: String?): String? {
+    if (fieldsJson == null) return null
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field16 = fields.optJSONObject("16") ?: return null
+        // Check for JSON null value explicitly
+        if (field16.isNull("reply_to")) return null
+        val replyTo = field16.optString("reply_to", "")
+        replyTo.ifEmpty { null }
+    } catch (e: Exception) {
+        null
+    }
 }
 
 /**

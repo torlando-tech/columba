@@ -58,7 +58,7 @@ import com.lxmf.messenger.reticulum.model.Message as ReticulumMessage
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
-@Suppress("TooManyFunctions") // ViewModel handles multiple UI operations
+@Suppress("TooManyFunctions", "LargeClass") // ViewModel handles multiple UI operations
 class MessagingViewModel
     @Inject
     constructor(
@@ -160,6 +160,10 @@ class MessagingViewModel
         private val _loadedImageIds = MutableStateFlow<Set<String>>(emptySet())
         val loadedImageIds: StateFlow<Set<String>> = _loadedImageIds.asStateFlow()
 
+        // Cache for loaded reply previews - maps message ID to its reply preview
+        private val _replyPreviewCache = MutableStateFlow<Map<String, com.lxmf.messenger.ui.model.ReplyPreviewUi>>(emptyMap())
+        val replyPreviewCache: StateFlow<Map<String, com.lxmf.messenger.ui.model.ReplyPreviewUi>> = _replyPreviewCache.asStateFlow()
+
         // Contact status for current conversation - updates reactively
         val isContactSaved: StateFlow<Boolean> =
             _currentConversation
@@ -215,6 +219,47 @@ class MessagingViewModel
         // Contact toggle result events for toast notifications
         private val _contactToggleResult = MutableSharedFlow<ContactToggleResult>()
         val contactToggleResult: SharedFlow<ContactToggleResult> = _contactToggleResult.asSharedFlow()
+
+        // Reply state - tracks which message is being replied to
+        private val _pendingReplyTo = MutableStateFlow<com.lxmf.messenger.ui.model.ReplyPreviewUi?>(null)
+        val pendingReplyTo: StateFlow<com.lxmf.messenger.ui.model.ReplyPreviewUi?> = _pendingReplyTo.asStateFlow()
+
+        /**
+         * Set a message to reply to. Called when user swipes on a message or selects "Reply".
+         * Loads the reply preview data from the database asynchronously.
+         *
+         * @param messageId The ID of the message to reply to
+         */
+        fun setReplyTo(messageId: String) {
+            viewModelScope.launch {
+                try {
+                    val replyPreview = conversationRepository.getReplyPreview(messageId, currentPeerName)
+                    if (replyPreview != null) {
+                        _pendingReplyTo.value = com.lxmf.messenger.ui.model.ReplyPreviewUi(
+                            messageId = replyPreview.messageId,
+                            senderName = replyPreview.senderName,
+                            contentPreview = replyPreview.contentPreview,
+                            hasImage = replyPreview.hasImage,
+                            hasFileAttachment = replyPreview.hasFileAttachment,
+                            firstFileName = replyPreview.firstFileName,
+                        )
+                        Log.d(TAG, "Set pending reply to message ${messageId.take(16)}")
+                    } else {
+                        Log.w(TAG, "Could not find message $messageId for reply preview")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error loading reply preview for $messageId", e)
+                }
+            }
+        }
+
+        /**
+         * Clear the pending reply. Called when user cancels reply or after message is sent.
+         */
+        fun clearReplyTo() {
+            _pendingReplyTo.value = null
+            Log.d(TAG, "Cleared pending reply")
+        }
 
         /**
          * Toggle contact status for the current conversation.
@@ -489,6 +534,9 @@ class MessagingViewModel
                             "files=${fileAttachments.size}, method=$deliveryMethod, tryPropOnFail=$tryPropOnFail)...",
                     )
 
+                    // Get pending reply ID if replying to a message
+                    val replyToId = _pendingReplyTo.value?.messageId
+
                     val result =
                         reticulumProtocol.sendLxmfMessageWithMethod(
                             destinationHash = destHashBytes,
@@ -499,10 +547,13 @@ class MessagingViewModel
                             imageData = imageData,
                             imageFormat = imageFormat,
                             fileAttachments = fileAttachmentPairs.ifEmpty { null },
+                            replyToMessageId = replyToId,
                         )
 
                     result.onSuccess { receipt ->
-                        handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString)
+                        // Clear pending reply after successful send
+                        handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId)
+                        clearReplyTo()
                     }.onFailure { error ->
                         handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
                     }
@@ -512,6 +563,7 @@ class MessagingViewModel
             }
         }
 
+        @Suppress("LongParameterList") // Refactoring to data class would add unnecessary complexity
         private suspend fun handleSendSuccess(
             receipt: com.lxmf.messenger.reticulum.protocol.MessageReceipt,
             sanitized: String,
@@ -520,9 +572,10 @@ class MessagingViewModel
             imageFormat: String?,
             fileAttachments: List<FileAttachment>,
             deliveryMethodString: String,
+            replyToMessageId: String? = null,
         ) {
-            Log.d(TAG, "Message sent successfully")
-            val fieldsJson = buildFieldsJson(imageData, imageFormat, fileAttachments)
+            Log.d(TAG, "Message sent successfully${if (replyToMessageId != null) " (reply to ${replyToMessageId.take(16)})" else ""}")
+            val fieldsJson = buildFieldsJson(imageData, imageFormat, fileAttachments, replyToMessageId)
             val actualDestHash = resolveActualDestHash(receipt, destinationHash)
             Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
 
@@ -536,6 +589,7 @@ class MessagingViewModel
                     status = "pending",
                     fieldsJson = fieldsJson,
                     deliveryMethod = deliveryMethodString,
+                    replyToMessageId = replyToMessageId,
                 )
             clearSelectedImage()
             clearFileAttachments()
@@ -756,6 +810,55 @@ class MessagingViewModel
         }
 
         /**
+         * Load a reply preview asynchronously.
+         *
+         * Called by the UI when a message has replyToMessageId but no cached replyPreview.
+         * Loads the preview data on IO thread, caches it, and updates replyPreviewCache to
+         * trigger recomposition so the UI can display the reply preview.
+         *
+         * @param messageId The message ID that has a reply (used as cache key)
+         * @param replyToMessageId The ID of the message being replied to
+         */
+        fun loadReplyPreviewAsync(
+            messageId: String,
+            replyToMessageId: String,
+        ) {
+            // Skip if already loaded/loading
+            if (_replyPreviewCache.value.containsKey(messageId)) {
+                return
+            }
+
+            viewModelScope.launch {
+                try {
+                    val replyPreview = conversationRepository.getReplyPreview(replyToMessageId, currentPeerName)
+                    if (replyPreview != null) {
+                        val uiPreview = com.lxmf.messenger.ui.model.ReplyPreviewUi(
+                            messageId = replyPreview.messageId,
+                            senderName = replyPreview.senderName,
+                            contentPreview = replyPreview.contentPreview,
+                            hasImage = replyPreview.hasImage,
+                            hasFileAttachment = replyPreview.hasFileAttachment,
+                            firstFileName = replyPreview.firstFileName,
+                        )
+                        _replyPreviewCache.update { it + (messageId to uiPreview) }
+                        Log.d(TAG, "Loaded reply preview for message ${messageId.take(16)}")
+                    } else {
+                        // Mark as loaded with a "deleted message" placeholder
+                        val deletedPreview = com.lxmf.messenger.ui.model.ReplyPreviewUi(
+                            messageId = replyToMessageId,
+                            senderName = "",
+                            contentPreview = "Message deleted",
+                        )
+                        _replyPreviewCache.update { it + (messageId to deletedPreview) }
+                        Log.d(TAG, "Reply target message not found: ${replyToMessageId.take(16)}")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error loading reply preview for $messageId", e)
+                }
+            }
+        }
+
+        /**
          * Load an image attachment asynchronously.
          *
          * Called by the UI when a message has hasImageAttachment=true but decodedImage=null.
@@ -875,6 +978,7 @@ class MessagingViewModel
                             tryPropagationOnFail = tryPropOnFail,
                             imageData = imageData,
                             imageFormat = imageFormat,
+                            replyToMessageId = failedMessage.replyToMessageId, // Preserve reply on retry
                         )
 
                     result.onSuccess { receipt ->
@@ -983,11 +1087,13 @@ private fun buildFieldsJson(
     imageData: ByteArray?,
     imageFormat: String?,
     fileAttachments: List<FileAttachment> = emptyList(),
+    replyToMessageId: String? = null,
 ): String? {
     val hasImage = imageData != null && imageFormat != null
     val hasFiles = fileAttachments.isNotEmpty()
+    val hasReply = replyToMessageId != null
 
-    if (!hasImage && !hasFiles) return null
+    if (!hasImage && !hasFiles && !hasReply) return null
 
     val json = org.json.JSONObject()
 
@@ -1008,6 +1114,15 @@ private fun buildFieldsJson(
             attachmentsArray.put(attachmentObj)
         }
         json.put("5", attachmentsArray)
+    }
+
+    // Add app extensions field (Field 16) for replies and future features
+    if (hasReply) {
+        val appExtensions = org.json.JSONObject()
+        appExtensions.put("reply_to", replyToMessageId)
+        // Future: appExtensions.put("reactions", ...)
+        // Future: appExtensions.put("mentions", ...)
+        json.put("16", appExtensions)
     }
 
     return json.toString()

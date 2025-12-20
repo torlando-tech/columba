@@ -64,6 +64,16 @@ data class MessageUi(
      * Used to quickly determine if file attachment UI should be rendered.
      */
     val hasFileAttachments: Boolean = false,
+    /**
+     * ID of the message this is replying to, if any.
+     * Extracted from LXMF field 16 {"reply_to": "message_id"}.
+     */
+    val replyToMessageId: String? = null,
+    /**
+     * Preview data for the message being replied to.
+     * Loaded asynchronously from the database. Null if not a reply or not yet loaded.
+     */
+    val replyPreview: ReplyPreviewUi? = null,
 )
 
 /**
@@ -84,4 +94,27 @@ data class FileAttachmentUi(
     val sizeBytes: Int,
     val mimeType: String,
     val index: Int,
+)
+
+/**
+ * UI representation of a reply preview.
+ *
+ * Contains the minimal data needed to display a reply preview in a message bubble.
+ * This includes sender info, truncated content, and attachment indicators.
+ *
+ * @property messageId The ID of the original message being replied to
+ * @property senderName "You" if from current user, otherwise the peer's display name
+ * @property contentPreview Truncated content (max 100 chars) for preview
+ * @property hasImage Whether the original message has an image attachment
+ * @property hasFileAttachment Whether the original message has file attachments
+ * @property firstFileName First filename if file attachments present
+ */
+@Immutable
+data class ReplyPreviewUi(
+    val messageId: String,
+    val senderName: String,
+    val contentPreview: String,
+    val hasImage: Boolean = false,
+    val hasFileAttachment: Boolean = false,
+    val firstFileName: String? = null,
 )

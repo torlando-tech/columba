@@ -163,4 +163,35 @@ interface MessageDao {
         messageId: String,
         identityHash: String,
     )
+
+    /**
+     * Get lightweight reply preview data for a message.
+     * Returns minimal data needed to display a reply preview (sender, content preview, attachment info).
+     * Used when displaying a message that is replying to another message.
+     */
+    @Query(
+        """
+        SELECT id, content, isFromMe, fieldsJson, conversationHash
+        FROM messages
+        WHERE id = :messageId AND identityHash = :identityHash
+        LIMIT 1
+        """,
+    )
+    suspend fun getReplyPreviewData(
+        messageId: String,
+        identityHash: String,
+    ): ReplyPreviewEntity?
 }
+
+/**
+ * Lightweight entity for reply preview data.
+ * Contains only the fields needed to display a reply preview, avoiding
+ * loading full message data with large attachment payloads.
+ */
+data class ReplyPreviewEntity(
+    val id: String,
+    val content: String,
+    val isFromMe: Boolean,
+    val fieldsJson: String?,
+    val conversationHash: String,
+)

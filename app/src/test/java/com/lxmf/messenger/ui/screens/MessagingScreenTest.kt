@@ -70,6 +70,9 @@ class MessagingScreenTest {
         // Location sharing mocks
         every { mockViewModel.contacts } returns MutableStateFlow(emptyList())
         every { mockViewModel.locationSharingState } returns MutableStateFlow(LocationSharingState.NONE)
+        // Reply mocks
+        every { mockViewModel.pendingReplyTo } returns MutableStateFlow(null)
+        every { mockViewModel.replyPreviewCache } returns MutableStateFlow(emptyMap())
     }
 
     // ========== Empty State Tests ==========

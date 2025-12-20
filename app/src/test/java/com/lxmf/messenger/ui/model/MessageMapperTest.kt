@@ -349,6 +349,179 @@ class MessageMapperTest {
         // Should handle the path correctly - no exception means success
     }
 
+    // ========== REPLY (FIELD 16) TESTS ==========
+
+    @Test
+    fun `toMessageUi maps replyToMessageId from Message data class`() {
+        val message = createMessage(
+            TestMessageConfig(
+                replyToMessageId = "original-message-hash-12345",
+            ),
+        )
+
+        val result = message.toMessageUi()
+
+        assertEquals("original-message-hash-12345", result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi extracts replyToMessageId from field 16 when not in data class`() {
+        // Field 16 contains reply_to as part of app extensions dict
+        val fieldsJson = """{"16": {"reply_to": "f4a3b2c1d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2"}}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertEquals(
+            "f4a3b2c1d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2",
+            result.replyToMessageId,
+        )
+    }
+
+    @Test
+    fun `toMessageUi prefers replyToMessageId from data class over field 16`() {
+        // Both data class and field 16 have reply info - prefer data class
+        val fieldsJson = """{"16": {"reply_to": "from_field_16"}}"""
+        val message = createMessage(
+            TestMessageConfig(
+                fieldsJson = fieldsJson,
+                replyToMessageId = "from_data_class",
+            ),
+        )
+
+        val result = message.toMessageUi()
+
+        assertEquals("from_data_class", result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi returns null replyToMessageId when field 16 is missing`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"6": "image_hex"}"""))
+
+        val result = message.toMessageUi()
+
+        assertNull(result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi returns null replyToMessageId when field 16 has no reply_to key`() {
+        // Field 16 exists but doesn't have reply_to key (maybe only reactions)
+        val fieldsJson = """{"16": {"reactions": {"👍": ["user1"]}}}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertNull(result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi returns null replyToMessageId when reply_to is empty`() {
+        val fieldsJson = """{"16": {"reply_to": ""}}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertNull(result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi handles field 16 as non-object type gracefully`() {
+        // Field 16 is a string instead of object
+        val fieldsJson = """{"16": "not an object"}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertNull(result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi handles field 16 as number gracefully`() {
+        val fieldsJson = """{"16": 12345}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertNull(result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi handles field 16 with null reply_to value`() {
+        val fieldsJson = """{"16": {"reply_to": null}}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertNull(result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi parses reply with multiple field 16 properties`() {
+        // Future-proof: field 16 may have reactions, mentions, etc alongside reply_to
+        val fieldsJson = """{
+            "16": {
+                "reply_to": "message_hash_123",
+                "reactions": {"👍": ["user1"]},
+                "mentions": ["user2", "user3"]
+            }
+        }"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertEquals("message_hash_123", result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi sets replyPreview to null initially`() {
+        val fieldsJson = """{"16": {"reply_to": "some_message_id"}}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        // replyPreview is loaded asynchronously, so it should be null from mapper
+        assertNull(result.replyPreview)
+    }
+
+    @Test
+    fun `toMessageUi handles message with reply and image attachment`() {
+        val fieldsJson = """{
+            "6": "ffd8ffe0",
+            "16": {"reply_to": "original_msg_id"}
+        }"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasImageAttachment)
+        assertEquals("original_msg_id", result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi handles message with reply and file attachments`() {
+        val fieldsJson = """{
+            "5": [{"filename": "doc.pdf", "data": "0102", "size": 100}],
+            "16": {"reply_to": "original_msg_id"}
+        }"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasFileAttachments)
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals("original_msg_id", result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi handles malformed JSON in field 16 gracefully`() {
+        // This shouldn't happen in practice, but test edge case
+        val message = createMessage(TestMessageConfig(fieldsJson = "not valid json"))
+
+        val result = message.toMessageUi()
+
+        assertNull(result.replyToMessageId)
+    }
+
     /**
      * Configuration class for creating test messages.
      */
@@ -362,6 +535,7 @@ class MessageMapperTest {
         val fieldsJson: String? = null,
         val deliveryMethod: String? = null,
         val errorMessage: String? = null,
+        val replyToMessageId: String? = null,
     )
 
     private fun createMessage(config: TestMessageConfig = TestMessageConfig()): Message =
@@ -375,6 +549,7 @@ class MessageMapperTest {
             fieldsJson = config.fieldsJson,
             deliveryMethod = config.deliveryMethod,
             errorMessage = config.errorMessage,
+            replyToMessageId = config.replyToMessageId,
         )
 
     private fun createTestBitmap() = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).asImageBitmap()

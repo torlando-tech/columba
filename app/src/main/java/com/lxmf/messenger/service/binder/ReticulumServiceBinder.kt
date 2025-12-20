@@ -614,6 +614,7 @@ class ReticulumServiceBinder(
         imageData: ByteArray?,
         imageFormat: String?,
         fileAttachments: Map<*, *>?,
+        replyToMessageId: String?,
     ): String {
         return try {
             wrapperManager.withWrapper { wrapper ->
@@ -634,6 +635,7 @@ class ReticulumServiceBinder(
                         imageData,
                         imageFormat,
                         fileAttachmentsList,
+                        replyToMessageId,
                     )
                 // Use PythonResultConverter to properly convert Python dict to JSON
                 // (bytes values like message_hash need Base64 encoding)

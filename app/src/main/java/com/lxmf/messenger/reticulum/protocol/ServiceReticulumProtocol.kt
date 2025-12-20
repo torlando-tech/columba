@@ -1609,6 +1609,7 @@ class ServiceReticulumProtocol(
         imageData: ByteArray?,
         imageFormat: String?,
         fileAttachments: List<Pair<String, ByteArray>>?,
+        replyToMessageId: String?,
     ): Result<MessageReceipt> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
@@ -1635,6 +1636,7 @@ class ServiceReticulumProtocol(
                     imageData,
                     imageFormat,
                     fileAttachmentsMap,
+                    replyToMessageId,
                 )
             val result = JSONObject(resultJson)
 

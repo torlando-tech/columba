@@ -2669,7 +2669,7 @@ class ReticulumWrapper:
     def send_lxmf_message_with_method(self, dest_hash: bytes, content: str, source_identity_private_key: bytes,
                                        delivery_method: str = "direct", try_propagation_on_fail: bool = True,
                                        image_data: bytes = None, image_format: str = None,
-                                       file_attachments: list = None) -> Dict:
+                                       file_attachments: list = None, reply_to_message_id: str = None) -> Dict:
         """
         Send an LXMF message with explicit delivery method.
 
@@ -2682,6 +2682,7 @@ class ReticulumWrapper:
             image_data: Optional image data bytes
             image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
             file_attachments: Optional list of [filename, bytes] pairs for Field 5
+            reply_to_message_id: Optional message ID being replied to (stored in Field 16)
 
         Returns:
             Dict with 'success', 'message_hash', 'timestamp', 'delivery_method' or 'error'
@@ -2806,6 +2807,17 @@ class ReticulumWrapper:
                     total_size = sum(len(a[1]) for a in converted_attachments)
                     log_info("ReticulumWrapper", "send_lxmf_message_with_method",
                             f"📎 Attaching {len(converted_attachments)} file(s): {total_size} bytes total")
+
+            # Add Field 16 (app extensions) for reply_to and future features
+            # Field 16 is a dict that can contain: {"reply_to": "message_id", "reactions": {...}, etc.}
+            if reply_to_message_id:
+                if fields is None:
+                    fields = {}
+                # Build app extensions dict
+                app_extensions = {"reply_to": reply_to_message_id}
+                fields[16] = app_extensions
+                log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                        f"📎 Replying to message: {reply_to_message_id[:16]}...")
 
             # Create LXMF message with specified delivery method
             lxmf_message = LXMF.LXMessage(
@@ -3839,6 +3851,16 @@ class ReticulumWrapper:
                                         fields_serialized['5'] = serialized_attachments
                                         log_info("ReticulumWrapper", "poll_received_messages",
                                                 f"📎 Field 5: extracted {len(serialized_attachments)} file attachment(s)")
+
+                                elif key == 16 and isinstance(value, dict):
+                                    # Field 16 is app extensions dict: {"reply_to": "...", "reactions": {...}, etc.}
+                                    fields_serialized['16'] = value
+                                    if 'reply_to' in value:
+                                        log_debug("ReticulumWrapper", "poll_received_messages",
+                                                 f"Field 16: reply to message {value['reply_to'][:16]}...")
+                                    else:
+                                        log_debug("ReticulumWrapper", "poll_received_messages",
+                                                 f"Field 16: app extensions with keys {list(value.keys())}")
 
                                 elif isinstance(value, (list, tuple)) and len(value) >= 2:
                                     # Image/audio format: [format_string, bytes_data]

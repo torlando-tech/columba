@@ -27,6 +27,7 @@ import androidx.room.Index
         Index("timestamp"), // For ordering by timestamp
         Index("conversationHash", "identityHash", "timestamp"), // For queries with ordering
         Index("conversationHash", "identityHash", "isFromMe", "isRead"), // For unread count queries
+        Index("replyToMessageId"), // For efficient reply lookups
     ], // Indexes for faster queries
 )
 data class MessageEntity(
@@ -46,4 +47,6 @@ data class MessageEntity(
     val deliveryMethod: String? = null,
     // Error message if delivery failed (when status == "failed")
     val errorMessage: String? = null,
+    // ID of message this is a reply to (extracted from LXMF field 16 "reply_to")
+    val replyToMessageId: String? = null,
 )

@@ -1204,6 +1204,8 @@ class SettingsViewModel
             viewModelScope.launch {
                 settingsRepository.saveLocationPrecisionRadius(radiusMeters)
                 Log.d(TAG, "Location precision radius set to: ${radiusMeters}m")
+                // Send immediate update to all active sharing recipients with new precision
+                locationSharingManager.sendImmediateUpdate()
             }
         }
     }

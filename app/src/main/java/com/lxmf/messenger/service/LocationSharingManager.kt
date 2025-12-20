@@ -181,6 +181,34 @@ class LocationSharingManager
         }
 
         /**
+         * Send an immediate location update to all active sharing recipients.
+         *
+         * Call this when settings change (e.g., precision) to immediately notify
+         * recipients of the new settings rather than waiting for the next scheduled update.
+         */
+        @SuppressLint("MissingPermission")
+        fun sendImmediateUpdate() {
+            if (_activeSessions.value.isEmpty()) {
+                Log.d(TAG, "No active sessions, skipping immediate update")
+                return
+            }
+
+            // Use last known location if available, otherwise get current location
+            if (lastLocation != null) {
+                Log.d(TAG, "Sending immediate update with cached location")
+                sendLocationToRecipients(lastLocation!!)
+            } else {
+                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                    location?.let {
+                        Log.d(TAG, "Sending immediate update with fresh location")
+                        lastLocation = it
+                        sendLocationToRecipients(it)
+                    } ?: Log.w(TAG, "No location available for immediate update")
+                }
+            }
+        }
+
+        /**
          * Stop sharing with a specific contact.
          *
          * Sends a cease message to notify recipients before removing the session.

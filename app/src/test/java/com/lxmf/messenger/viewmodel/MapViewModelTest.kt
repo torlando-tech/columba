@@ -55,13 +55,16 @@ class MapViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        // Disable periodic refresh to prevent infinite loops in tests
+        MapViewModel.enablePeriodicRefresh = false
+
         contactRepository = mockk(relaxed = true)
         receivedLocationDao = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
         announceDao = mockk(relaxed = true)
 
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
-        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(emptyList())
+        every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(emptyList())
         every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(emptyList())
         every { announceDao.getAllAnnounces() } returns flowOf(emptyList())
         every { locationSharingManager.isSharing } returns MutableStateFlow(false)
@@ -71,6 +74,8 @@ class MapViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        // Re-enable periodic refresh for other tests
+        MapViewModel.enablePeriodicRefresh = true
         clearAllMocks()
     }
 
@@ -204,7 +209,7 @@ class MapViewModelTest {
             ),
         )
         every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
-        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(receivedLocations)
+        every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
 
         viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
@@ -238,7 +243,7 @@ class MapViewModelTest {
             ),
         )
         every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
-        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(receivedLocations)
+        every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
 
         viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
@@ -314,7 +319,7 @@ class MapViewModelTest {
             ),
         )
         every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
-        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(receivedLocations)
+        every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
 
         viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
         val newLocation = createMockLocation(40.7128, -74.0060) // New York
@@ -353,7 +358,7 @@ class MapViewModelTest {
             )
         }
         every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
-        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(receivedLocations)
+        every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
 
         viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 
@@ -384,7 +389,7 @@ class MapViewModelTest {
             )
         }
         every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
-        every { receivedLocationDao.getLatestLocationsPerSender(any()) } returns flowOf(receivedLocations)
+        every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
 
         viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
 

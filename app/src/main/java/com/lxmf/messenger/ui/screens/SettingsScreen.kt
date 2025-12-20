@@ -39,6 +39,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
 import com.lxmf.messenger.ui.screens.settings.cards.DataMigrationCard
 import com.lxmf.messenger.ui.screens.settings.cards.IdentityCard
+import com.lxmf.messenger.ui.screens.settings.cards.LocationSharingCard
 import com.lxmf.messenger.ui.screens.settings.cards.MessageDeliveryRetrievalCard
 import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
@@ -167,6 +168,18 @@ fun SettingsScreen(
                     onToggle = { viewModel.toggleAutoAnnounce(it) },
                     onIntervalChange = { viewModel.setAnnounceInterval(it) },
                     onManualAnnounce = { viewModel.triggerManualAnnounce() },
+                )
+
+                LocationSharingCard(
+                    enabled = state.locationSharingEnabled,
+                    onEnabledChange = { viewModel.setLocationSharingEnabled(it) },
+                    activeSessions = state.activeSharingSessions,
+                    onStopSharing = { viewModel.stopSharingWith(it) },
+                    onStopAllSharing = { viewModel.stopAllSharing() },
+                    defaultDuration = state.defaultSharingDuration,
+                    onDefaultDurationChange = { viewModel.setDefaultSharingDuration(it) },
+                    locationPrecision = state.locationPrecision,
+                    onLocationPrecisionChange = { viewModel.setLocationPrecision(it) },
                 )
 
                 MessageDeliveryRetrievalCard(

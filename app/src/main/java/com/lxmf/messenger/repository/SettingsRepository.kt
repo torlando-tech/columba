@@ -82,6 +82,11 @@ class SettingsRepository
 
             // Transport node preferences
             val TRANSPORT_NODE_ENABLED = booleanPreferencesKey("transport_node_enabled")
+
+            // Location sharing preferences
+            val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
+            val DEFAULT_SHARING_DURATION = stringPreferencesKey("default_sharing_duration")
+            val LOCATION_PRECISION = stringPreferencesKey("location_precision")
         }
 
         // Notification preferences
@@ -810,6 +815,77 @@ class SettingsRepository
         suspend fun saveTransportNodeEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] = enabled
+            }
+        }
+
+        // Location sharing preferences
+
+        /**
+         * Flow of the location sharing enabled setting.
+         * When disabled, no location sharing is allowed and all active sessions should be stopped.
+         * Defaults to true if not set.
+         */
+        val locationSharingEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LOCATION_SHARING_ENABLED] ?: true
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the location sharing enabled setting.
+         *
+         * @param enabled Whether location sharing is enabled
+         */
+        suspend fun saveLocationSharingEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LOCATION_SHARING_ENABLED] = enabled
+            }
+        }
+
+        /**
+         * Flow of the default sharing duration.
+         * Stores the SharingDuration enum name (e.g., "ONE_HOUR", "FOUR_HOURS").
+         * Defaults to "ONE_HOUR" if not set.
+         */
+        val defaultSharingDurationFlow: Flow<String> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.DEFAULT_SHARING_DURATION] ?: "ONE_HOUR"
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the default sharing duration.
+         *
+         * @param duration The SharingDuration enum name (e.g., "ONE_HOUR", "FOUR_HOURS")
+         */
+        suspend fun saveDefaultSharingDuration(duration: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.DEFAULT_SHARING_DURATION] = duration
+            }
+        }
+
+        /**
+         * Flow of the location precision setting.
+         * Values: "PRECISE" (GPS accuracy) or "APPROXIMATE" (reduced accuracy).
+         * Defaults to "PRECISE" if not set.
+         */
+        val locationPrecisionFlow: Flow<String> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LOCATION_PRECISION] ?: "PRECISE"
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the location precision setting.
+         *
+         * @param precision "PRECISE" or "APPROXIMATE"
+         */
+        suspend fun saveLocationPrecision(precision: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LOCATION_PRECISION] = precision
             }
         }
 

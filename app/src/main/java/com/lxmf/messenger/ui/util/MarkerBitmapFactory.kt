@@ -45,9 +45,19 @@ object MarkerBitmapFactory {
         val textPadding = (4 * density).toInt()
         val labelHeight = (18 * density).toInt()
 
-        // Total bitmap dimensions - wider to accommodate long names
+        // Measure text width to size bitmap appropriately
+        val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = 12f * density
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        val textWidth = namePaint.measureText(displayName)
+        val haloPadding = 6f * density // Extra space for halo stroke
+
+        // Total bitmap dimensions - width based on max of circle or text
         val totalHeight = circleSizePx + textPadding + labelHeight
-        val totalWidth = (circleSizePx * 2.5f).toInt()
+        val minWidth = circleSizePx // At least as wide as the circle
+        val textRequiredWidth = (textWidth + haloPadding * 2).toInt()
+        val totalWidth = maxOf(minWidth, textRequiredWidth)
         val bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
@@ -83,24 +93,18 @@ object MarkerBitmapFactory {
         // Draw display name below circle with halo effect for readability
         val nameY = circleSizePx.toFloat() + textPadding + labelHeight * 0.7f
 
+        // Configure namePaint for centered drawing (already has size and typeface from measurement)
+        namePaint.textAlign = Paint.Align.CENTER
+
         // White halo/outline
-        val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = 12f * density
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-            style = Paint.Style.STROKE
-            strokeWidth = 3f * density
-        }
-        canvas.drawText(displayName, centerX, nameY, haloPaint)
+        namePaint.color = Color.WHITE
+        namePaint.style = Paint.Style.STROKE
+        namePaint.strokeWidth = 3f * density
+        canvas.drawText(displayName, centerX, nameY, namePaint)
 
         // Dark text on top
-        val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#212121")
-            textSize = 12f * density
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-        }
+        namePaint.color = Color.parseColor("#212121")
+        namePaint.style = Paint.Style.FILL
         canvas.drawText(displayName, centerX, nameY, namePaint)
 
         return bitmap

@@ -392,7 +392,7 @@ private fun PrecisionRadiusOption(
 /**
  * Format time remaining until sharing session ends.
  */
-private fun formatTimeRemaining(endTime: Long?): String {
+internal fun formatTimeRemaining(endTime: Long?): String {
     if (endTime == null) return "Until stopped"
     val remaining = endTime - System.currentTimeMillis()
     if (remaining <= 0) return "Expiring..."
@@ -409,7 +409,7 @@ private fun formatTimeRemaining(endTime: Long?): String {
 /**
  * Get display text for a SharingDuration enum name.
  */
-private fun getDurationDisplayText(durationName: String): String {
+internal fun getDurationDisplayText(durationName: String): String {
     return try {
         SharingDuration.valueOf(durationName).displayText
     } catch (e: IllegalArgumentException) {
@@ -420,7 +420,7 @@ private fun getDurationDisplayText(durationName: String): String {
 /**
  * Get display text for a precision radius setting.
  */
-private fun getPrecisionRadiusDisplayText(radiusMeters: Int): String {
+internal fun getPrecisionRadiusDisplayText(radiusMeters: Int): String {
     return when (radiusMeters) {
         0 -> "Precise"
         1000 -> "Neighborhood (~1km)"

@@ -27,6 +27,14 @@ data class ReticulumConfig(
      * When false, only handles its own traffic without relaying for other peers.
      */
     val enableTransport: Boolean = true,
+    /**
+     * Maximum allowed size for inbound file attachments in bytes.
+     * Messages with file attachments exceeding this limit will have their attachments
+     * silently stripped (the message text will still be delivered).
+     * Set to 0 for unlimited.
+     * Default: 8 MB (8 * 1024 * 1024)
+     */
+    val maxInboundAttachmentSizeBytes: Int = 8 * 1024 * 1024,
 )
 
 /**

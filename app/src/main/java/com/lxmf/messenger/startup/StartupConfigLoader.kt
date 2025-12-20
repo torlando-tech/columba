@@ -30,6 +30,7 @@ class StartupConfigLoader @Inject constructor(
         val preferOwn: Boolean,
         val rpcKey: String?,
         val transport: Boolean,
+        val maxInboundAttachmentSizeBytes: Int,
     )
 
     /**
@@ -44,6 +45,10 @@ class StartupConfigLoader @Inject constructor(
         val preferOwnDeferred = async { settingsRepository.preferOwnInstanceFlow.first() }
         val rpcKeyDeferred = async { settingsRepository.rpcKeyFlow.first() }
         val transportDeferred = async { settingsRepository.getTransportNodeEnabled() }
+        val maxInboundSizeDeferred = async {
+            // Convert KB to bytes
+            settingsRepository.maxInboundAttachmentSizeKbFlow.first() * 1024
+        }
 
         StartupConfig(
             interfaces = interfacesDeferred.await(),
@@ -51,6 +56,7 @@ class StartupConfigLoader @Inject constructor(
             preferOwn = preferOwnDeferred.await(),
             rpcKey = rpcKeyDeferred.await(),
             transport = transportDeferred.await(),
+            maxInboundAttachmentSizeBytes = maxInboundSizeDeferred.await(),
         )
     }
 }

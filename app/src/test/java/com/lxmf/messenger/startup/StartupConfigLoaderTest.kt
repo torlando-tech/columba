@@ -83,6 +83,7 @@ class StartupConfigLoaderTest {
         coEvery { settingsRepository.preferOwnInstanceFlow } returns flowOf(true)
         coEvery { settingsRepository.rpcKeyFlow } returns flowOf("test-rpc-key")
         coEvery { settingsRepository.getTransportNodeEnabled() } returns false
+        coEvery { settingsRepository.maxInboundAttachmentSizeKbFlow } returns flowOf(8192)
 
         // Act
         val config = loader.loadConfig()
@@ -94,6 +95,7 @@ class StartupConfigLoaderTest {
         assertTrue(config.preferOwn)
         assertEquals("test-rpc-key", config.rpcKey)
         assertFalse(config.transport)
+        assertEquals(8 * 1024 * 1024, config.maxInboundAttachmentSizeBytes)
     }
 
     @Test
@@ -104,6 +106,7 @@ class StartupConfigLoaderTest {
         coEvery { settingsRepository.preferOwnInstanceFlow } returns flowOf(false)
         coEvery { settingsRepository.rpcKeyFlow } returns flowOf(null)
         coEvery { settingsRepository.getTransportNodeEnabled() } returns true
+        coEvery { settingsRepository.maxInboundAttachmentSizeKbFlow } returns flowOf(8192)
 
         // Act
         val config = loader.loadConfig()
@@ -134,6 +137,7 @@ class StartupConfigLoaderTest {
         coEvery { settingsRepository.preferOwnInstanceFlow } returns flowOf(false)
         coEvery { settingsRepository.rpcKeyFlow } returns flowOf(null)
         coEvery { settingsRepository.getTransportNodeEnabled() } returns false
+        coEvery { settingsRepository.maxInboundAttachmentSizeKbFlow } returns flowOf(8192)
 
         // Act
         val config = loader.loadConfig()
@@ -154,6 +158,7 @@ class StartupConfigLoaderTest {
         coEvery { settingsRepository.preferOwnInstanceFlow } returns flowOf(false)
         coEvery { settingsRepository.rpcKeyFlow } returns flowOf(null)
         coEvery { settingsRepository.getTransportNodeEnabled() } returns false
+        coEvery { settingsRepository.maxInboundAttachmentSizeKbFlow } returns flowOf(8192)
 
         // Act
         loader.loadConfig()
@@ -165,6 +170,7 @@ class StartupConfigLoaderTest {
         coVerify(exactly = 1) { settingsRepository.preferOwnInstanceFlow }
         coVerify(exactly = 1) { settingsRepository.rpcKeyFlow }
         coVerify(exactly = 1) { settingsRepository.getTransportNodeEnabled() }
+        coVerify(exactly = 1) { settingsRepository.maxInboundAttachmentSizeKbFlow }
     }
 
     @Test
@@ -175,6 +181,7 @@ class StartupConfigLoaderTest {
         coEvery { settingsRepository.preferOwnInstanceFlow } returns flowOf(false)
         coEvery { settingsRepository.rpcKeyFlow } returns flowOf(null)
         coEvery { settingsRepository.getTransportNodeEnabled() } returns false
+        coEvery { settingsRepository.maxInboundAttachmentSizeKbFlow } returns flowOf(8192)
 
         // Act
         val config = loader.loadConfig()
@@ -198,6 +205,7 @@ class StartupConfigLoaderTest {
         coEvery { settingsRepository.preferOwnInstanceFlow } returns flowOf(true)
         coEvery { settingsRepository.rpcKeyFlow } returns flowOf("key")
         coEvery { settingsRepository.getTransportNodeEnabled() } returns true
+        coEvery { settingsRepository.maxInboundAttachmentSizeKbFlow } returns flowOf(8192)
 
         // Act
         val config = loader.loadConfig()
@@ -208,6 +216,7 @@ class StartupConfigLoaderTest {
         assertTrue(config.preferOwn)
         assertEquals("key", config.rpcKey)
         assertTrue(config.transport)
+        assertEquals(8 * 1024 * 1024, config.maxInboundAttachmentSizeBytes)
     }
 
     @Test
@@ -218,6 +227,7 @@ class StartupConfigLoaderTest {
             preferOwn = true,
             rpcKey = "key",
             transport = false,
+            maxInboundAttachmentSizeBytes = 8 * 1024 * 1024,
         )
         val config2 = StartupConfigLoader.StartupConfig(
             interfaces = listOf(testInterface),
@@ -225,6 +235,7 @@ class StartupConfigLoaderTest {
             preferOwn = true,
             rpcKey = "key",
             transport = false,
+            maxInboundAttachmentSizeBytes = 8 * 1024 * 1024,
         )
         val config3 = StartupConfigLoader.StartupConfig(
             interfaces = emptyList(),
@@ -232,6 +243,7 @@ class StartupConfigLoaderTest {
             preferOwn = false,
             rpcKey = null,
             transport = true,
+            maxInboundAttachmentSizeBytes = 0,
         )
 
         assertEquals(config1, config2)

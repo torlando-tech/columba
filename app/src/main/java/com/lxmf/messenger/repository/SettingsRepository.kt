@@ -82,6 +82,11 @@ class SettingsRepository
 
             // Transport node preferences
             val TRANSPORT_NODE_ENABLED = booleanPreferencesKey("transport_node_enabled")
+
+            // File attachment size preferences
+            val MAX_OUTBOUND_ATTACHMENT_SIZE_KB = intPreferencesKey("max_outbound_attachment_size_kb")
+            val MAX_INBOUND_ATTACHMENT_SIZE_KB = intPreferencesKey("max_inbound_attachment_size_kb")
+            val LARGE_FILE_PERMISSION_THRESHOLD_KB = intPreferencesKey("large_file_permission_threshold_kb")
         }
 
         // Notification preferences
@@ -810,6 +815,124 @@ class SettingsRepository
         suspend fun saveTransportNodeEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] = enabled
+            }
+        }
+
+        // File attachment size preferences
+
+        companion object {
+            /** Default maximum outbound attachment size in KB (8 MB) */
+            const val DEFAULT_MAX_OUTBOUND_ATTACHMENT_SIZE_KB = 8 * 1024
+
+            /** Default maximum inbound attachment size in KB (8 MB) */
+            const val DEFAULT_MAX_INBOUND_ATTACHMENT_SIZE_KB = 8 * 1024
+
+            /** Default large file permission threshold in KB (100 MB) */
+            const val DEFAULT_LARGE_FILE_PERMISSION_THRESHOLD_KB = 100 * 1024
+        }
+
+        /**
+         * Flow of the maximum outbound file attachment size in KB.
+         * Files larger than this cannot be sent.
+         * Defaults to 8 MB if not set.
+         */
+        val maxOutboundAttachmentSizeKbFlow: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MAX_OUTBOUND_ATTACHMENT_SIZE_KB]
+                        ?: DEFAULT_MAX_OUTBOUND_ATTACHMENT_SIZE_KB
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the maximum outbound attachment size in KB (non-flow).
+         */
+        suspend fun getMaxOutboundAttachmentSizeKb(): Int {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.MAX_OUTBOUND_ATTACHMENT_SIZE_KB]
+                    ?: DEFAULT_MAX_OUTBOUND_ATTACHMENT_SIZE_KB
+            }.first()
+        }
+
+        /**
+         * Save the maximum outbound attachment size in KB.
+         *
+         * @param sizeKb Size in KB (512 to unlimited, 0 means unlimited)
+         */
+        suspend fun saveMaxOutboundAttachmentSizeKb(sizeKb: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.MAX_OUTBOUND_ATTACHMENT_SIZE_KB] =
+                    if (sizeKb <= 0) 0 else sizeKb.coerceAtLeast(512)
+            }
+        }
+
+        /**
+         * Flow of the maximum inbound file attachment size in KB.
+         * Files larger than this will be silently rejected (attachment stripped, message delivered).
+         * Defaults to 8 MB if not set.
+         */
+        val maxInboundAttachmentSizeKbFlow: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MAX_INBOUND_ATTACHMENT_SIZE_KB]
+                        ?: DEFAULT_MAX_INBOUND_ATTACHMENT_SIZE_KB
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the maximum inbound attachment size in KB (non-flow).
+         */
+        suspend fun getMaxInboundAttachmentSizeKb(): Int {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.MAX_INBOUND_ATTACHMENT_SIZE_KB]
+                    ?: DEFAULT_MAX_INBOUND_ATTACHMENT_SIZE_KB
+            }.first()
+        }
+
+        /**
+         * Save the maximum inbound attachment size in KB.
+         *
+         * @param sizeKb Size in KB (512 to unlimited, 0 means unlimited)
+         */
+        suspend fun saveMaxInboundAttachmentSizeKb(sizeKb: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.MAX_INBOUND_ATTACHMENT_SIZE_KB] =
+                    if (sizeKb <= 0) 0 else sizeKb.coerceAtLeast(512)
+            }
+        }
+
+        /**
+         * Flow of the large file permission threshold in KB.
+         * Files larger than this require recipient permission before transfer.
+         * Defaults to 100 MB if not set.
+         */
+        val largeFilePermissionThresholdKbFlow: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LARGE_FILE_PERMISSION_THRESHOLD_KB]
+                        ?: DEFAULT_LARGE_FILE_PERMISSION_THRESHOLD_KB
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the large file permission threshold in KB (non-flow).
+         */
+        suspend fun getLargeFilePermissionThresholdKb(): Int {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.LARGE_FILE_PERMISSION_THRESHOLD_KB]
+                    ?: DEFAULT_LARGE_FILE_PERMISSION_THRESHOLD_KB
+            }.first()
+        }
+
+        /**
+         * Save the large file permission threshold in KB.
+         *
+         * @param sizeKb Size in KB (must be at least 1 MB)
+         */
+        suspend fun saveLargeFilePermissionThresholdKb(sizeKb: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LARGE_FILE_PERMISSION_THRESHOLD_KB] =
+                    sizeKb.coerceAtLeast(1024) // At least 1 MB
             }
         }
 

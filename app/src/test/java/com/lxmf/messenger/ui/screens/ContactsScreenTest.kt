@@ -15,6 +15,7 @@ import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.test.TestFactories
 import com.lxmf.messenger.viewmodel.AddContactResult
+import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import com.lxmf.messenger.viewmodel.ContactGroups
 import com.lxmf.messenger.viewmodel.ContactsViewModel
 import io.mockk.coEvery
@@ -85,7 +86,7 @@ class ContactsScreenTest {
             )
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         composeTestRule.onNodeWithText("No contacts yet").assertIsDisplayed()
@@ -98,7 +99,7 @@ class ContactsScreenTest {
         val mockViewModel = createMockContactsViewModel()
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         composeTestRule.onNodeWithText("Contacts").assertIsDisplayed()
@@ -117,7 +118,7 @@ class ContactsScreenTest {
             )
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         composeTestRule.onNodeWithText("1 contact").assertIsDisplayed()
@@ -138,7 +139,7 @@ class ContactsScreenTest {
             )
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         composeTestRule.onNodeWithText("3 contacts").assertIsDisplayed()
@@ -149,7 +150,7 @@ class ContactsScreenTest {
         val mockViewModel = createMockContactsViewModel()
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         composeTestRule.onNodeWithContentDescription("Search").assertIsDisplayed()
@@ -161,7 +162,7 @@ class ContactsScreenTest {
     //     val mockViewModel = createMockContactsViewModel()
     //
     //     composeTestRule.setContent {
-    //         ContactsScreen(viewModel = mockViewModel)
+    //         ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
     //     }
     //
     //     composeTestRule.onNodeWithContentDescription("Add contact").assertIsDisplayed()
@@ -174,7 +175,7 @@ class ContactsScreenTest {
         val mockViewModel = createMockContactsViewModel()
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         // Initially search bar is hidden
@@ -192,7 +193,7 @@ class ContactsScreenTest {
         val mockViewModel = createMockContactsViewModel()
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         // Open search bar
@@ -211,7 +212,7 @@ class ContactsScreenTest {
         val mockViewModel = createMockContactsViewModel()
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         // Open search bar
@@ -229,7 +230,7 @@ class ContactsScreenTest {
         val mockViewModel = createMockContactsViewModel(searchQuery = "Test")
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         // Open search bar
@@ -261,7 +262,7 @@ class ContactsScreenTest {
             )
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         composeTestRule.onNodeWithText("MY RELAY").assertIsDisplayed()
@@ -284,7 +285,7 @@ class ContactsScreenTest {
             )
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         composeTestRule.onNodeWithText("(auto)").assertIsDisplayed()
@@ -306,7 +307,7 @@ class ContactsScreenTest {
             )
 
         composeTestRule.setContent {
-            ContactsScreen(viewModel = mockViewModel)
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
         composeTestRule.onNodeWithText("PINNED").assertIsDisplayed()
@@ -339,7 +340,7 @@ class ContactsScreenTest {
     //         )
     //
     //     composeTestRule.setContent {
-    //         ContactsScreen(viewModel = mockViewModel)
+    //         ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
     //     }
     //
     //     // When there are pinned contacts, "ALL CONTACTS" header is shown
@@ -366,7 +367,7 @@ class ContactsScreenTest {
     //     )
     //
     //     composeTestRule.setContent {
-    //         ContactsScreen(viewModel = mockViewModel)
+    //         ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
     //     }
     //
     //     composeTestRule.onNodeWithText("MY RELAY").assertIsDisplayed()
@@ -1122,7 +1123,7 @@ class ContactsScreenTest {
     //     val mockViewModel = createMockContactsViewModel()
     //
     //     composeTestRule.setContent {
-    //         ContactsScreen(viewModel = mockViewModel)
+    //         ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
     //     }
     //
     //     // Click add button
@@ -1152,6 +1153,7 @@ class ContactsScreenTest {
         composeTestRule.setContent {
             ContactsScreen(
                 viewModel = mockViewModel,
+                announceViewModel = createMockAnnounceStreamViewModel(),
                 onContactClick = { hash, name ->
                     clickedHash = hash
                     clickedName = name
@@ -1190,5 +1192,13 @@ class ContactsScreenTest {
         coEvery { mockViewModel.addContactFromInput(any(), any()) } returns AddContactResult.Success
 
         return mockViewModel
+    }
+
+    private fun createMockAnnounceStreamViewModel(): AnnounceStreamViewModel {
+        val mock = mockk<AnnounceStreamViewModel>(relaxed = true)
+        every { mock.isAnnouncing } returns MutableStateFlow(false)
+        every { mock.announceSuccess } returns MutableStateFlow(false)
+        every { mock.announceError } returns MutableStateFlow(null)
+        return mock
     }
 }

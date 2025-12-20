@@ -95,6 +95,13 @@ class MapViewModel
             private const val STALE_THRESHOLD_MS = 5 * 60 * 1000L // 5 minutes
             private const val GRACE_PERIOD_MS = 60 * 60 * 1000L // 1 hour
             private const val REFRESH_INTERVAL_MS = 30_000L // 30 seconds
+
+            /**
+             * Controls whether periodic refresh is enabled.
+             * Set to false in tests to prevent infinite coroutine loops.
+             * @suppress VisibleForTesting
+             */
+            internal var enablePeriodicRefresh = true
         }
 
         private val _state = MutableStateFlow(MapState())
@@ -196,10 +203,13 @@ class MapViewModel
 
             // Periodic refresh to update stale states (every 30 seconds)
             // This ensures markers transition from FRESH -> STALE as time passes
-            viewModelScope.launch {
-                while (isActive) {
-                    delay(REFRESH_INTERVAL_MS)
-                    _refreshTrigger.value = System.currentTimeMillis()
+            // Can be disabled for tests via enablePeriodicRefresh companion property
+            if (enablePeriodicRefresh) {
+                viewModelScope.launch {
+                    while (isActive) {
+                        delay(REFRESH_INTERVAL_MS)
+                        _refreshTrigger.value = System.currentTimeMillis()
+                    }
                 }
             }
         }

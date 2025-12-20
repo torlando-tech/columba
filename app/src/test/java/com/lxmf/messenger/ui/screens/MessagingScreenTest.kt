@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.paging.PagingData
 import com.lxmf.messenger.test.MessagingTestFixtures
 import com.lxmf.messenger.test.RegisterComponentActivityRule
+import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.viewmodel.ContactToggleResult
 import com.lxmf.messenger.viewmodel.MessagingViewModel
 import io.mockk.every
@@ -66,6 +67,9 @@ class MessagingScreenTest {
         every { mockViewModel.totalAttachmentSize } returns MutableStateFlow(0)
         every { mockViewModel.fileAttachmentError } returns MutableSharedFlow()
         every { mockViewModel.isProcessingFile } returns MutableStateFlow(false)
+        // Location sharing mocks
+        every { mockViewModel.contacts } returns MutableStateFlow(emptyList())
+        every { mockViewModel.locationSharingState } returns MutableStateFlow(LocationSharingState.NONE)
     }
 
     // ========== Empty State Tests ==========

@@ -2,26 +2,44 @@ package com.lxmf.messenger.ui.components
 
 import android.app.Application
 import android.location.Location
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import com.lxmf.messenger.test.RegisterComponentActivityRule
+import com.lxmf.messenger.viewmodel.ContactMarker
+import com.lxmf.messenger.viewmodel.MarkerState
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Unit tests for ContactLocationBottomSheet utility functions.
+ * Unit tests for ContactLocationBottomSheet.
  *
- * Tests the pure utility functions:
- * - bearingToDirection: bearing angle to cardinal direction
- * - formatDistanceAndDirection: distance and direction formatting
- * - formatUpdatedTime: relative time formatting
+ * Tests:
+ * - Pure utility functions (bearingToDirection, formatDistanceAndDirection, formatUpdatedTime)
+ * - UI display and interactions
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
+@OptIn(ExperimentalMaterial3Api::class)
 class ContactLocationBottomSheetTest {
+    private val registerActivityRule = RegisterComponentActivityRule()
+    private val composeRule = createComposeRule()
+
+    @get:Rule
+    val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
+
+    val composeTestRule get() = composeRule
 
     // ========== bearingToDirection Tests ==========
 
@@ -216,6 +234,147 @@ class ContactLocationBottomSheetTest {
         assertTrue("Result should contain days: $result", result.contains("d ago"))
     }
 
+    // ========== ContactLocationBottomSheet UI Tests ==========
+
+    @Test
+    fun `contactLocationBottomSheet displays contact name`() {
+        val marker = createTestMarker("Alice", MarkerState.FRESH)
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = {},
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Alice").assertIsDisplayed()
+    }
+
+    @Test
+    fun `contactLocationBottomSheet displays directions button`() {
+        val marker = createTestMarker("Bob", MarkerState.FRESH)
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = {},
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Directions").assertIsDisplayed()
+    }
+
+    @Test
+    fun `contactLocationBottomSheet displays message button`() {
+        val marker = createTestMarker("Carol", MarkerState.FRESH)
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = {},
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Message").assertIsDisplayed()
+    }
+
+    @Test
+    fun `contactLocationBottomSheet message button invokes callback`() {
+        var messageCalled = false
+        val marker = createTestMarker("Dave", MarkerState.FRESH)
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = { messageCalled = true },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Message").performClick()
+
+        assertTrue(messageCalled)
+    }
+
+    @Test
+    fun `contactLocationBottomSheet displays location unknown when no user location`() {
+        val marker = createTestMarker("Eve", MarkerState.FRESH)
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = {},
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Location unknown").assertIsDisplayed()
+    }
+
+    @Test
+    fun `contactLocationBottomSheet displays updated time`() {
+        val marker = createTestMarker("Frank", MarkerState.FRESH, timestamp = System.currentTimeMillis())
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = {},
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Updated just now").assertIsDisplayed()
+    }
+
+    @Test
+    fun `contactLocationBottomSheet stale marker shows stale badge`() {
+        val marker = createTestMarker("Grace", MarkerState.STALE)
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = {},
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Stale").assertIsDisplayed()
+    }
+
+    @Test
+    fun `contactLocationBottomSheet expired marker shows last known badge`() {
+        val marker = createTestMarker("Henry", MarkerState.EXPIRED_GRACE_PERIOD)
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = {},
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Last known").assertIsDisplayed()
+    }
+
     // ========== Helper Functions ==========
 
     private fun createMockLocation(lat: Double, lng: Double): Location {
@@ -223,5 +382,21 @@ class ContactLocationBottomSheetTest {
         every { location.latitude } returns lat
         every { location.longitude } returns lng
         return location
+    }
+
+    private fun createTestMarker(
+        name: String,
+        state: MarkerState,
+        timestamp: Long = System.currentTimeMillis(),
+    ): ContactMarker {
+        return ContactMarker(
+            destinationHash = "hash_$name",
+            displayName = name,
+            latitude = 37.7749,
+            longitude = -122.4194,
+            timestamp = timestamp,
+            state = state,
+            approximateRadius = 0,
+        )
     }
 }

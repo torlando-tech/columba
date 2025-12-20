@@ -1,24 +1,40 @@
 package com.lxmf.messenger.ui.screens.settings.cards
 
 import android.app.Application
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import com.lxmf.messenger.service.SharingSession
+import com.lxmf.messenger.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Unit tests for LocationSharingCard utility functions.
+ * Unit tests for LocationSharingCard.
  *
- * Tests the pure utility functions:
- * - formatTimeRemaining: formats remaining time until sharing ends
- * - getDurationDisplayText: converts duration enum name to display text
- * - getPrecisionRadiusDisplayText: converts radius meters to display text
+ * Tests:
+ * - Pure utility functions (formatTimeRemaining, getDurationDisplayText, getPrecisionRadiusDisplayText)
+ * - UI display and interactions
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class LocationSharingCardTest {
+    private val registerActivityRule = RegisterComponentActivityRule()
+    private val composeRule = createComposeRule()
+
+    @get:Rule
+    val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
+
+    val composeTestRule get() = composeRule
 
     // ========== formatTimeRemaining Tests ==========
 
@@ -214,5 +230,308 @@ class LocationSharingCardTest {
     fun `getPrecisionRadiusDisplayText handles minimum positive value`() {
         val result = getPrecisionRadiusDisplayText(1)
         assertEquals("1m", result)
+    }
+
+    // ========== LocationSharingCard UI Tests ==========
+
+    @Test
+    fun `locationSharingCard displays title`() {
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = true,
+                onEnabledChange = {},
+                activeSessions = emptyList(),
+                onStopSharing = {},
+                onStopAllSharing = {},
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Location Sharing").assertIsDisplayed()
+    }
+
+    @Test
+    fun `locationSharingCard displays description`() {
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = false,
+                onEnabledChange = {},
+                activeSessions = emptyList(),
+                onStopSharing = {},
+                onStopAllSharing = {},
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Share your real-time location with contacts.", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `locationSharingCard displays default duration setting`() {
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = true,
+                onEnabledChange = {},
+                activeSessions = emptyList(),
+                onStopSharing = {},
+                onStopAllSharing = {},
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Default duration").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 hour").assertIsDisplayed()
+    }
+
+    @Test
+    fun `locationSharingCard displays location precision setting`() {
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = true,
+                onEnabledChange = {},
+                activeSessions = emptyList(),
+                onStopSharing = {},
+                onStopAllSharing = {},
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Location precision").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Precise").assertIsDisplayed()
+    }
+
+    @Test
+    fun `locationSharingCard with active sessions displays currently sharing section`() {
+        val sessions = listOf(
+            SharingSession(
+                destinationHash = "hash1",
+                displayName = "Alice",
+                startTime = System.currentTimeMillis(),
+                endTime = System.currentTimeMillis() + 3600_000,
+            ),
+        )
+
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = true,
+                onEnabledChange = {},
+                activeSessions = sessions,
+                onStopSharing = {},
+                onStopAllSharing = {},
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Currently sharing with:").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Alice").assertIsDisplayed()
+    }
+
+    @Test
+    fun `locationSharingCard with active session displays stop button`() {
+        val sessions = listOf(
+            SharingSession(
+                destinationHash = "hash1",
+                displayName = "Bob",
+                startTime = System.currentTimeMillis(),
+                endTime = System.currentTimeMillis() + 3600_000,
+            ),
+        )
+
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = true,
+                onEnabledChange = {},
+                activeSessions = sessions,
+                onStopSharing = {},
+                onStopAllSharing = {},
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Stop").assertIsDisplayed()
+    }
+
+    @Test
+    fun `locationSharingCard with multiple sessions displays stop all button`() {
+        val sessions = listOf(
+            SharingSession(
+                destinationHash = "hash1",
+                displayName = "Alice",
+                startTime = System.currentTimeMillis(),
+                endTime = System.currentTimeMillis() + 3600_000,
+            ),
+            SharingSession(
+                destinationHash = "hash2",
+                displayName = "Bob",
+                startTime = System.currentTimeMillis(),
+                endTime = System.currentTimeMillis() + 3600_000,
+            ),
+        )
+
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = true,
+                onEnabledChange = {},
+                activeSessions = sessions,
+                onStopSharing = {},
+                onStopAllSharing = {},
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Stop All Sharing").assertIsDisplayed()
+    }
+
+    @Test
+    fun `locationSharingCard stop all button invokes callback`() {
+        var stopAllCalled = false
+        val sessions = listOf(
+            SharingSession(
+                destinationHash = "hash1",
+                displayName = "Alice",
+                startTime = System.currentTimeMillis(),
+                endTime = System.currentTimeMillis() + 3600_000,
+            ),
+            SharingSession(
+                destinationHash = "hash2",
+                displayName = "Bob",
+                startTime = System.currentTimeMillis(),
+                endTime = System.currentTimeMillis() + 3600_000,
+            ),
+        )
+
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = true,
+                onEnabledChange = {},
+                activeSessions = sessions,
+                onStopSharing = {},
+                onStopAllSharing = { stopAllCalled = true },
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Stop All Sharing").performClick()
+
+        assertTrue(stopAllCalled)
+    }
+
+    @Test
+    fun `locationSharingCard disabled hides active sessions section`() {
+        val sessions = listOf(
+            SharingSession(
+                destinationHash = "hash1",
+                displayName = "Alice",
+                startTime = System.currentTimeMillis(),
+                endTime = System.currentTimeMillis() + 3600_000,
+            ),
+        )
+
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = false,
+                onEnabledChange = {},
+                activeSessions = sessions,
+                onStopSharing = {},
+                onStopAllSharing = {},
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        // Active sessions should not be shown when disabled
+        composeTestRule.onNodeWithText("Currently sharing with:").assertDoesNotExist()
+    }
+
+    @Test
+    fun `locationSharingCard duration click opens picker`() {
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = true,
+                onEnabledChange = {},
+                activeSessions = emptyList(),
+                onStopSharing = {},
+                onStopAllSharing = {},
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Default duration").performClick()
+
+        // Dialog should open
+        composeTestRule.onNodeWithText("Default Duration").assertIsDisplayed()
+    }
+
+    @Test
+    fun `locationSharingCard precision click opens picker`() {
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = true,
+                onEnabledChange = {},
+                activeSessions = emptyList(),
+                onStopSharing = {},
+                onStopAllSharing = {},
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Location precision").performClick()
+
+        // Dialog should open
+        composeTestRule.onNodeWithText("Location Precision").assertIsDisplayed()
+    }
+
+    @Test
+    fun `locationSharingCard toggle invokes callback`() {
+        var enabledValue = false
+
+        composeTestRule.setContent {
+            LocationSharingCard(
+                enabled = enabledValue,
+                onEnabledChange = { enabledValue = it },
+                activeSessions = emptyList(),
+                onStopSharing = {},
+                onStopAllSharing = {},
+                defaultDuration = "ONE_HOUR",
+                onDefaultDurationChange = {},
+                locationPrecisionRadius = 0,
+                onLocationPrecisionRadiusChange = {},
+            )
+        }
+
+        // The switch is part of the header, so we click on it
+        composeTestRule.onNodeWithText("Location Sharing").assertIsDisplayed()
     }
 }

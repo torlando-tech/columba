@@ -515,13 +515,13 @@ fun MapScreen(
             )
         }
 
-        // Scale bar (bottom left, above navigation bar)
+        // Scale bar (bottom right, next to My Location button)
         ScaleBar(
             metersPerPixel = metersPerPixel,
             modifier = Modifier
-                .align(Alignment.BottomStart)
+                .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(start = 16.dp, bottom = 96.dp), // Above bottom navigation bar
+                .padding(end = 72.dp, bottom = 172.dp), // Left of My Location button
         )
 
         // FABs positioned above navigation bar

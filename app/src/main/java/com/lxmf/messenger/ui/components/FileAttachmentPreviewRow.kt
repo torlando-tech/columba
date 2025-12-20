@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,9 +39,13 @@ import com.lxmf.messenger.util.FileUtils
  * Also displays a total size indicator at the end of the row with visual feedback
  * when approaching or exceeding the maximum attachment size limit.
  *
+ * Shows a warning banner when files exceed the slow transfer threshold (1 MB),
+ * indicating potential slow transfer on mesh networks.
+ *
  * @param attachments List of pending file attachments to display
  * @param totalSizeBytes Combined size of all attachments in bytes
  * @param onRemove Callback invoked when a file's remove button is clicked, providing the index
+ * @param maxSizeBytes Maximum allowed total attachment size in bytes (0 means unlimited)
  * @param modifier Optional modifier for the component
  */
 @Suppress("FunctionNaming")
@@ -49,12 +54,20 @@ fun FileAttachmentPreviewRow(
     attachments: List<FileAttachment>,
     totalSizeBytes: Int,
     onRemove: (Int) -> Unit,
+    maxSizeBytes: Int = FileUtils.DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE,
     modifier: Modifier = Modifier,
 ) {
-    // Calculate size limit percentage for visual feedback
-    val sizePercentage = totalSizeBytes.toFloat() / FileUtils.MAX_TOTAL_ATTACHMENT_SIZE
+    // Calculate size limit percentage for visual feedback (only if limit is set)
+    val sizePercentage = if (maxSizeBytes > 0) {
+        totalSizeBytes.toFloat() / maxSizeBytes
+    } else {
+        0f // No limit, always show as 0%
+    }
     val isNearLimit = sizePercentage >= 0.8f
     val isAtLimit = sizePercentage >= 1.0f
+
+    // Show slow transfer warning for files over 1 MB
+    val showSlowTransferWarning = FileUtils.exceedsSlowTransferThreshold(totalSizeBytes)
 
     Surface(
         modifier = modifier,
@@ -68,6 +81,11 @@ fun FileAttachmentPreviewRow(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // Slow transfer warning banner
+            if (showSlowTransferWarning) {
+                SlowTransferWarningBanner()
+            }
+
             // Horizontal scrolling row of attachment chips
             Row(
                 modifier =
@@ -85,12 +103,68 @@ fun FileAttachmentPreviewRow(
                     )
                 }
 
-                // Total size indicator
-                TotalSizeIndicator(
-                    totalSizeBytes = totalSizeBytes,
-                    maxSizeBytes = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE,
-                    isNearLimit = isNearLimit,
-                    isAtLimit = isAtLimit,
+                // Total size indicator (only show if there's a limit)
+                if (maxSizeBytes > 0) {
+                    TotalSizeIndicator(
+                        totalSizeBytes = totalSizeBytes,
+                        maxSizeBytes = maxSizeBytes,
+                        isNearLimit = isNearLimit,
+                        isAtLimit = isAtLimit,
+                    )
+                } else {
+                    // Show just the current size when unlimited
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) {
+                        Text(
+                            text = FileUtils.formatFileSize(totalSizeBytes),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Warning banner displayed when file attachments exceed the slow transfer threshold (1 MB).
+ * Informs users that large files may transfer slowly on mesh networks.
+ */
+@Suppress("FunctionNaming")
+@Composable
+private fun SlowTransferWarningBanner(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Speed,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Large file transfer",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                Text(
+                    text = "Files over 1 MB may transfer slowly on mesh networks",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
                 )
             }
         }
@@ -203,67 +277,88 @@ private fun TotalSizeIndicator(
     }
 }
 
-// Preview
+// Previews
 @Suppress("UnusedPrivateMember", "FunctionNaming")
 @Preview(showBackground = true)
 @Composable
 private fun FileAttachmentPreviewRowPreview() {
     ColumbaTheme {
-        // 50 KB
-        val size50KB = 50 * 1024
-        // 10 KB
-        val size10KB = 10 * 1024
-        // 100 KB
+        val size500KB = 500 * 1024
         val size100KB = 100 * 1024
 
         val sampleAttachments =
             listOf(
                 FileAttachment(
                     filename = "document.pdf",
-                    data = ByteArray(size50KB),
+                    data = ByteArray(size500KB),
                     mimeType = "application/pdf",
-                    sizeBytes = size50KB,
+                    sizeBytes = size500KB,
                 ),
                 FileAttachment(
-                    filename = "very_long_filename_that_should_be_truncated.txt",
-                    data = ByteArray(size10KB),
-                    mimeType = "text/plain",
-                    sizeBytes = size10KB,
-                ),
-                FileAttachment(
-                    filename = "archive.zip",
+                    filename = "spreadsheet.xlsx",
                     data = ByteArray(size100KB),
-                    mimeType = "application/zip",
+                    mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     sizeBytes = size100KB,
                 ),
             )
 
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            // Normal state - 160 KB
+            // Normal state - 600 KB (no warning, under 1 MB)
             FileAttachmentPreviewRow(
                 attachments = sampleAttachments,
-                totalSizeBytes = 160 * 1024,
+                totalSizeBytes = 600 * 1024,
+                maxSizeBytes = 8 * 1024 * 1024, // 8 MB limit
                 onRemove = {},
             )
 
-            // Near limit state - 410 KB (~80%)
+            // Near limit state (80% of 8 MB = 6.4 MB)
             FileAttachmentPreviewRow(
                 attachments = sampleAttachments,
-                totalSizeBytes = 410 * 1024,
+                totalSizeBytes = (6.4 * 1024 * 1024).toInt(),
+                maxSizeBytes = 8 * 1024 * 1024,
                 onRemove = {},
             )
 
-            // At limit state - 520 KB (over limit)
+            // Over 1 MB - shows slow transfer warning
             FileAttachmentPreviewRow(
                 attachments = sampleAttachments,
-                totalSizeBytes = 520 * 1024,
+                totalSizeBytes = (1.5 * 1024 * 1024).toInt(),
+                maxSizeBytes = 8 * 1024 * 1024,
+                onRemove = {},
+            )
+        }
+    }
+}
+
+@Suppress("UnusedPrivateMember", "FunctionNaming")
+@Preview(showBackground = true)
+@Composable
+private fun FileAttachmentPreviewRowWarningPreview() {
+    ColumbaTheme {
+        val size2MB = 2 * 1024 * 1024
+
+        val largeAttachment =
+            FileAttachment(
+                filename = "large_video.mp4",
+                data = ByteArray(size2MB),
+                mimeType = "video/mp4",
+                sizeBytes = size2MB,
+            )
+
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            // Large file with warning banner
+            FileAttachmentPreviewRow(
+                attachments = listOf(largeAttachment),
+                totalSizeBytes = size2MB,
+                maxSizeBytes = 8 * 1024 * 1024,
                 onRemove = {},
             )
 
-            // Single file
+            // Unlimited mode (0 means no limit) - just shows size
             FileAttachmentPreviewRow(
-                attachments = listOf(sampleAttachments[0]),
-                totalSizeBytes = 50 * 1024,
+                attachments = listOf(largeAttachment),
+                totalSizeBytes = size2MB,
+                maxSizeBytes = 0, // Unlimited
                 onRemove = {},
             )
         }

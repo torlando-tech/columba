@@ -220,6 +220,11 @@ class InterfaceConfigManager
                 val transportNodeEnabled = settingsRepository.getTransportNodeEnabled()
                 Log.d(TAG, "Transport node enabled: $transportNodeEnabled")
 
+                // Load max inbound attachment size (security protection for incoming files)
+                val maxInboundAttachmentSizeKb = settingsRepository.maxInboundAttachmentSizeKbFlow.first()
+                val maxInboundAttachmentSizeBytes = maxInboundAttachmentSizeKb * 1024
+                Log.d(TAG, "Max inbound attachment size: $maxInboundAttachmentSizeKb KB ($maxInboundAttachmentSizeBytes bytes)")
+
                 val config =
                     ReticulumConfig(
                         storagePath = context.filesDir.absolutePath + "/reticulum",
@@ -231,6 +236,7 @@ class InterfaceConfigManager
                         preferOwnInstance = preferOwnInstance,
                         rpcKey = rpcKey,
                         enableTransport = transportNodeEnabled,
+                        maxInboundAttachmentSizeBytes = maxInboundAttachmentSizeBytes,
                     )
 
                 reticulumProtocol.initialize(config)

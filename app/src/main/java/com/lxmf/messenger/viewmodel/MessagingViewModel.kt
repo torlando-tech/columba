@@ -143,6 +143,16 @@ class MessagingViewModel
         private val _fileAttachmentError = MutableSharedFlow<String>()
         val fileAttachmentError: SharedFlow<String> = _fileAttachmentError.asSharedFlow()
 
+        // Maximum outbound attachment size in bytes from settings (0 means unlimited)
+        val maxOutboundAttachmentSizeBytes: StateFlow<Int> =
+            settingsRepository.maxOutboundAttachmentSizeKbFlow
+                .map { kb -> kb * 1024 }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = SettingsRepository.DEFAULT_MAX_OUTBOUND_ATTACHMENT_SIZE_KB * 1024,
+                )
+
         // Sync state from PropagationNodeManager
         val isSyncing: StateFlow<Boolean> = propagationNodeManager.isSyncing
 
@@ -517,23 +527,29 @@ class MessagingViewModel
          */
         fun addFileAttachment(attachment: FileAttachment) {
             viewModelScope.launch {
+                // Get configurable limit from settings (KB to bytes)
+                val maxSizeKb = settingsRepository.getMaxOutboundAttachmentSizeKb()
+                val maxSizeBytes = maxSizeKb * 1024
+
                 val currentFiles = _selectedFileAttachments.value
                 val currentTotal = currentFiles.sumOf { it.sizeBytes }
 
-                // Check if adding this file would exceed the limit
-                if (FileUtils.wouldExceedSizeLimit(currentTotal, attachment.sizeBytes)) {
+                // Check if adding this file would exceed the limit (0 means unlimited)
+                if (maxSizeBytes > 0 &&
+                    FileUtils.wouldExceedSizeLimit(currentTotal, attachment.sizeBytes, maxSizeBytes)
+                ) {
                     Log.w(TAG, "File attachment rejected: would exceed size limit")
                     _fileAttachmentError.emit(
-                        "File too large. Total attachments cannot exceed ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
+                        "File too large. Total attachments cannot exceed ${FileUtils.formatFileSize(maxSizeBytes)}",
                     )
                     return@launch
                 }
 
-                // Check single file size
-                if (attachment.sizeBytes > FileUtils.MAX_SINGLE_FILE_SIZE) {
+                // Check single file size (0 means unlimited)
+                if (maxSizeBytes > 0 && attachment.sizeBytes > maxSizeBytes) {
                     Log.w(TAG, "File attachment rejected: exceeds single file size limit")
                     _fileAttachmentError.emit(
-                        "File too large. Maximum size is ${FileUtils.formatFileSize(FileUtils.MAX_SINGLE_FILE_SIZE)}",
+                        "File too large. Maximum size is ${FileUtils.formatFileSize(maxSizeBytes)}",
                     )
                     return@launch
                 }

@@ -308,6 +308,24 @@ class PythonWrapperManager(
     }
 
     /**
+     * Set maximum allowed size for inbound file attachments.
+     * Messages with file attachments exceeding this limit will have their attachments
+     * silently stripped (the message text will still be delivered).
+     *
+     * @param sizeBytes Maximum size in bytes (0 = unlimited)
+     */
+    fun setMaxInboundAttachmentSize(sizeBytes: Int) {
+        withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("set_max_inbound_attachment_size", sizeBytes)
+                Log.d(TAG, "Max inbound attachment size set to $sizeBytes bytes")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set max inbound attachment size: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
      * Set native Kotlin stamp generator callback.
      *
      * This bypasses Python multiprocessing-based stamp generation which fails on Android

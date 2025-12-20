@@ -7,8 +7,10 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -56,6 +58,8 @@ class SettingsViewModelTest {
     private lateinit var interfaceConfigManager: InterfaceConfigManager
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
+    private lateinit var interfaceDetector: InterfaceDetector
+    private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -86,9 +90,14 @@ class SettingsViewModelTest {
         interfaceConfigManager = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
+        interfaceDetector = mockk(relaxed = true)
+        interfaceRepository = mockk(relaxed = true)
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
+
+        // Setup interface repository flow mock
+        every { interfaceRepository.enabledInterfaces } returns flowOf(emptyList())
 
         // Setup repository flow mocks
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
@@ -136,6 +145,8 @@ class SettingsViewModelTest {
             interfaceConfigManager = interfaceConfigManager,
             propagationNodeManager = propagationNodeManager,
             locationSharingManager = locationSharingManager,
+            interfaceDetector = interfaceDetector,
+            interfaceRepository = interfaceRepository,
         )
     }
 
@@ -2060,6 +2071,8 @@ class SettingsViewModelTest {
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
+                    interfaceDetector = interfaceDetector,
+                    interfaceRepository = interfaceRepository,
                 )
 
             // Wait for any potential async operations to settle
@@ -2099,6 +2112,8 @@ class SettingsViewModelTest {
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
+                    interfaceDetector = interfaceDetector,
+                    interfaceRepository = interfaceRepository,
                 )
 
             // The ViewModel should be created successfully with ServiceReticulumProtocol

@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.data.repository.CustomThemeRepository
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.CustomTheme
@@ -87,6 +88,9 @@ class SettingsRepository
             val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
             val DEFAULT_SHARING_DURATION = stringPreferencesKey("default_sharing_duration")
             val LOCATION_PRECISION_RADIUS = intPreferencesKey("location_precision_radius")
+
+            // Image compression preferences
+            val IMAGE_COMPRESSION_PRESET = stringPreferencesKey("image_compression_preset")
         }
 
         // Notification preferences
@@ -886,6 +890,49 @@ class SettingsRepository
         suspend fun saveLocationPrecisionRadius(radiusMeters: Int) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.LOCATION_PRECISION_RADIUS] = radiusMeters
+            }
+        }
+
+        // Image compression preferences
+
+        /**
+         * Flow of the image compression preset.
+         * Defaults to AUTO if not set.
+         */
+        val imageCompressionPresetFlow: Flow<ImageCompressionPreset> =
+            context.dataStore.data
+                .map { preferences ->
+                    val presetName = preferences[PreferencesKeys.IMAGE_COMPRESSION_PRESET]
+                    if (presetName != null) {
+                        ImageCompressionPreset.fromName(presetName)
+                    } else {
+                        ImageCompressionPreset.DEFAULT
+                    }
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the image compression preset (non-flow).
+         */
+        suspend fun getImageCompressionPreset(): ImageCompressionPreset {
+            return context.dataStore.data.map { preferences ->
+                val presetName = preferences[PreferencesKeys.IMAGE_COMPRESSION_PRESET]
+                if (presetName != null) {
+                    ImageCompressionPreset.fromName(presetName)
+                } else {
+                    ImageCompressionPreset.DEFAULT
+                }
+            }.first()
+        }
+
+        /**
+         * Save the image compression preset.
+         *
+         * @param preset The compression preset to save
+         */
+        suspend fun saveImageCompressionPreset(preset: ImageCompressionPreset) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.IMAGE_COMPRESSION_PRESET] = preset.name
             }
         }
 

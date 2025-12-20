@@ -53,6 +53,7 @@ import com.lxmf.messenger.ui.model.SharingDuration
  * @param onDismiss Callback when the bottom sheet is dismissed
  * @param onStartSharing Callback when sharing is initiated with selected contacts and duration
  * @param sheetState The state of the bottom sheet
+ * @param initialSelectedHashes Set of destination hashes to pre-select when opening the sheet
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -61,9 +62,10 @@ fun ShareLocationBottomSheet(
     onDismiss: () -> Unit,
     onStartSharing: (selectedContacts: List<EnrichedContact>, duration: SharingDuration) -> Unit,
     sheetState: SheetState,
+    initialSelectedHashes: Set<String> = emptySet(),
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var selectedContactHashes by remember { mutableStateOf(setOf<String>()) }
+    var selectedContactHashes by remember { mutableStateOf(initialSelectedHashes) }
     var selectedDuration by remember { mutableStateOf(SharingDuration.ONE_HOUR) }
 
     val filteredContacts = remember(contacts, searchQuery) {

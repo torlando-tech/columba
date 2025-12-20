@@ -68,17 +68,24 @@ fun ShareLocationBottomSheet(
 
     val filteredContacts = remember(contacts, searchQuery) {
         val uniqueContacts = contacts.distinctBy { it.destinationHash }
-        if (searchQuery.isBlank()) {
+        val filtered = if (searchQuery.isBlank()) {
             uniqueContacts
         } else {
             uniqueContacts.filter { contact ->
                 contact.displayName.contains(searchQuery, ignoreCase = true)
             }
         }
+        // Sort by recency: lastMessageTimestamp (desc), fallback to addedTimestamp (desc)
+        filtered.sortedWith(
+            compareByDescending<EnrichedContact> { it.lastMessageTimestamp ?: 0L }
+                .thenByDescending { it.addedTimestamp }
+        )
     }
 
     val selectedContacts = remember(contacts, selectedContactHashes) {
-        contacts.filter { it.destinationHash in selectedContactHashes }
+        contacts
+            .distinctBy { it.destinationHash }
+            .filter { it.destinationHash in selectedContactHashes }
     }
 
     ModalBottomSheet(

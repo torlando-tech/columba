@@ -87,6 +87,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.ui.components.ImageCompressionWarningDialog
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
@@ -125,8 +126,8 @@ fun MessagingScreen(
     // Observe loaded image IDs to trigger recomposition when images become available
     val loadedImageIds by viewModel.loadedImageIds.collectAsStateWithLifecycle()
 
-    // Lifecycle-aware coroutine scope for image processing
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    // Compression warning state
+    val compressionWarning by viewModel.compressionWarning.collectAsStateWithLifecycle()
 
     // Observe manual sync results and show Toast
     LaunchedEffect(Unit) {
@@ -154,29 +155,13 @@ fun MessagingScreen(
         }
     }
 
-    // Image picker launcher
+    // Image picker launcher - uses adaptive compression with warning dialog
     val imageLauncher =
         androidx.activity.compose.rememberLauncherForActivityResult(
             contract = androidx.activity.result.contract.ActivityResultContracts.GetContent(),
         ) { uri: android.net.Uri? ->
             uri?.let {
-                viewModel.setProcessingImage(true)
-                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                    try {
-                        val compressed = com.lxmf.messenger.util.ImageUtils.compressImage(context, it)
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            viewModel.setProcessingImage(false)
-                            if (compressed != null) {
-                                viewModel.selectImage(compressed.data, compressed.format)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            viewModel.setProcessingImage(false)
-                        }
-                        android.util.Log.e("MessagingScreen", "Error compressing image", e)
-                    }
-                }
+                viewModel.processImageWithCompression(context, it)
             }
         }
 
@@ -451,6 +436,15 @@ fun MessagingScreen(
                 )
             }
         }
+    }
+
+    // Compression warning dialog
+    compressionWarning?.let { warning ->
+        ImageCompressionWarningDialog(
+            warning = warning,
+            onDismiss = { viewModel.dismissCompressionWarning() },
+            onConfirm = { viewModel.confirmSendLargeImage() },
+        )
     }
 }
 

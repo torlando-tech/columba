@@ -13,6 +13,7 @@ import com.lxmf.messenger.reticulum.protocol.DeliveryStatusUpdate
 import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
+import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +56,7 @@ class MessagingViewModelTest {
     private lateinit var activeConversationManager: ActiveConversationManager
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
+    private lateinit var interfaceDetector: InterfaceDetector
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
     private val testPeerName = "Test Peer"
@@ -76,6 +78,7 @@ class MessagingViewModelTest {
         activeConversationManager = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
+        interfaceDetector = mockk(relaxed = true)
 
         // Mock default contact repository behavior
         every { contactRepository.hasContactFlow(any()) } returns flowOf(false)
@@ -127,6 +130,7 @@ class MessagingViewModelTest {
             activeConversationManager,
             settingsRepository,
             propagationNodeManager,
+            interfaceDetector,
         )
 
     @Test
@@ -410,6 +414,7 @@ class MessagingViewModelTest {
             every { failingPropagationNodeManager.isSyncing } returns MutableStateFlow(false)
             every { failingPropagationNodeManager.manualSyncResult } returns MutableSharedFlow()
 
+            val failingInterfaceDetector = mockk<InterfaceDetector>(relaxed = true)
             val viewModelWithoutIdentity =
                 MessagingViewModel(
                     failingProtocol,
@@ -419,6 +424,7 @@ class MessagingViewModelTest {
                     failingActiveConversationManager,
                     failingSettingsRepository,
                     failingPropagationNodeManager,
+                    failingInterfaceDetector,
                 )
 
             // Attempt to send message
@@ -859,6 +865,7 @@ class MessagingViewModelTest {
                 activeConversationManager,
                 settingsRepository,
                 propagationNodeManager,
+                interfaceDetector,
             )
             advanceUntilIdle()
 
@@ -918,6 +925,7 @@ class MessagingViewModelTest {
                 activeConversationManager,
                 settingsRepository,
                 propagationNodeManager,
+                interfaceDetector,
             )
             advanceUntilIdle()
 
@@ -973,6 +981,7 @@ class MessagingViewModelTest {
                 activeConversationManager,
                 settingsRepository,
                 propagationNodeManager,
+                interfaceDetector,
             )
             advanceUntilIdle()
 
@@ -1018,6 +1027,7 @@ class MessagingViewModelTest {
                 activeConversationManager,
                 settingsRepository,
                 propagationNodeManager,
+                interfaceDetector,
             )
             advanceUntilIdle()
 

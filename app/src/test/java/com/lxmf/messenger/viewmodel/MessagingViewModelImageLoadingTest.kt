@@ -11,6 +11,7 @@ import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
+import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.ui.model.ImageCache
 import io.mockk.Runs
@@ -71,6 +72,7 @@ class MessagingViewModelImageLoadingTest {
     private lateinit var activeConversationManager: ActiveConversationManager
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
+    private lateinit var interfaceDetector: InterfaceDetector
     private lateinit var viewModel: MessagingViewModel
 
     @Before
@@ -87,6 +89,7 @@ class MessagingViewModelImageLoadingTest {
         activeConversationManager = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
+        interfaceDetector = mockk(relaxed = true)
 
         // Setup default mock behaviors
         every { conversationRepository.getMessages(any()) } returns flowOf(emptyList())
@@ -110,6 +113,7 @@ class MessagingViewModelImageLoadingTest {
             activeConversationManager = activeConversationManager,
             settingsRepository = settingsRepository,
             propagationNodeManager = propagationNodeManager,
+            interfaceDetector = interfaceDetector,
         )
     }
 

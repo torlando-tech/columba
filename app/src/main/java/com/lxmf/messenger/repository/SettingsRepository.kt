@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.data.repository.CustomThemeRepository
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.CustomTheme
@@ -82,6 +83,9 @@ class SettingsRepository
 
             // Transport node preferences
             val TRANSPORT_NODE_ENABLED = booleanPreferencesKey("transport_node_enabled")
+
+            // Image compression preferences
+            val IMAGE_COMPRESSION_PRESET = stringPreferencesKey("image_compression_preset")
         }
 
         // Notification preferences
@@ -810,6 +814,49 @@ class SettingsRepository
         suspend fun saveTransportNodeEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] = enabled
+            }
+        }
+
+        // Image compression preferences
+
+        /**
+         * Flow of the image compression preset.
+         * Defaults to AUTO if not set.
+         */
+        val imageCompressionPresetFlow: Flow<ImageCompressionPreset> =
+            context.dataStore.data
+                .map { preferences ->
+                    val presetName = preferences[PreferencesKeys.IMAGE_COMPRESSION_PRESET]
+                    if (presetName != null) {
+                        ImageCompressionPreset.fromName(presetName)
+                    } else {
+                        ImageCompressionPreset.DEFAULT
+                    }
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the image compression preset (non-flow).
+         */
+        suspend fun getImageCompressionPreset(): ImageCompressionPreset {
+            return context.dataStore.data.map { preferences ->
+                val presetName = preferences[PreferencesKeys.IMAGE_COMPRESSION_PRESET]
+                if (presetName != null) {
+                    ImageCompressionPreset.fromName(presetName)
+                } else {
+                    ImageCompressionPreset.DEFAULT
+                }
+            }.first()
+        }
+
+        /**
+         * Save the image compression preset.
+         *
+         * @param preset The compression preset to save
+         */
+        suspend fun saveImageCompressionPreset(preset: ImageCompressionPreset) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.IMAGE_COMPRESSION_PRESET] = preset.name
             }
         }
 

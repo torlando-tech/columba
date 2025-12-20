@@ -274,6 +274,16 @@ class MessagingViewModel
             )
         }
 
+        /**
+         * Stop sharing location with a specific peer.
+         *
+         * @param peerHash The destination hash of the peer to stop sharing with
+         */
+        fun stopSharingWithPeer(peerHash: String) {
+            Log.d(TAG, "Stopping location sharing with $peerHash")
+            locationSharingManager.stopSharing(peerHash)
+        }
+
         init {
             // NOTE: Message collection has been moved to MessageCollector service
             // which runs at application level to ensure messages are collected

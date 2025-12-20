@@ -44,13 +44,18 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -154,6 +159,7 @@ fun MessagingScreen(
     val shareLocationSheetState = rememberModalBottomSheetState()
     var showLocationPermissionSheet by remember { mutableStateOf(false) }
     val locationPermissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showStopSharingDialog by remember { mutableStateOf(false) }
 
     // Location permission launcher
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -415,8 +421,15 @@ fun MessagingScreen(
                     // Location sharing button
                     IconButton(
                         onClick = {
-                            // Check for location permission before showing share sheet
-                            if (LocationPermissionManager.hasPermission(context)) {
+                            // Check if we're actively sharing with this peer
+                            val isSharingWithPeer =
+                                locationSharingState == LocationSharingState.SHARING_WITH_THEM ||
+                                    locationSharingState == LocationSharingState.MUTUAL
+
+                            if (isSharingWithPeer) {
+                                // Show confirmation to stop sharing
+                                showStopSharingDialog = true
+                            } else if (LocationPermissionManager.hasPermission(context)) {
                                 showShareLocationSheet = true
                             } else {
                                 showLocationPermissionSheet = true
@@ -653,6 +666,40 @@ fun MessagingScreen(
                 showShareLocationSheet = false
             },
             sheetState = shareLocationSheetState,
+        )
+    }
+
+    // Stop sharing confirmation dialog
+    if (showStopSharingDialog) {
+        AlertDialog(
+            onDismissRequest = { showStopSharingDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.LocationOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            title = { Text("Stop Sharing Location?") },
+            text = { Text("Stop sharing your location with $peerName?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.stopSharingWithPeer(destinationHash)
+                        showStopSharingDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text("Stop Sharing")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStopSharingDialog = false }) {
+                    Text("Cancel")
+                }
+            },
         )
     }
 }

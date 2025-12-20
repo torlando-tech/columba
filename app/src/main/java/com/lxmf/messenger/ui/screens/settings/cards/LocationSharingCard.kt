@@ -423,9 +423,9 @@ private fun getDurationDisplayText(durationName: String): String {
 private fun getPrecisionRadiusDisplayText(radiusMeters: Int): String {
     return when (radiusMeters) {
         0 -> "Precise"
-        100 -> "Neighborhood (~100m)"
-        1000 -> "City (~1km)"
-        10000 -> "Region (~10km)"
+        1000 -> "Neighborhood (~1km)"
+        10000 -> "City (~10km)"
+        100000 -> "Region (~100km)"
         else -> if (radiusMeters >= 1000) "${radiusMeters / 1000}km" else "${radiusMeters}m"
     }
 }

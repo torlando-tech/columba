@@ -67,10 +67,11 @@ fun ShareLocationBottomSheet(
     var selectedDuration by remember { mutableStateOf(SharingDuration.ONE_HOUR) }
 
     val filteredContacts = remember(contacts, searchQuery) {
+        val uniqueContacts = contacts.distinctBy { it.destinationHash }
         if (searchQuery.isBlank()) {
-            contacts
+            uniqueContacts
         } else {
-            contacts.filter { contact ->
+            uniqueContacts.filter { contact ->
                 contact.displayName.contains(searchQuery, ignoreCase = true)
             }
         }

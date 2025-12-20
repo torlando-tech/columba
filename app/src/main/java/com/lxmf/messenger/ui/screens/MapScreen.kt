@@ -390,6 +390,9 @@ fun MapScreen(
                         ),
                     )
                 )
+
+                // TODO: Add text labels for name/distance below markers
+                // SymbolLayer for text was causing rendering issues - needs investigation
             }
 
             Log.d("MapScreen", "Updated ${state.contactMarkers.size} contact markers on map")
@@ -503,24 +506,8 @@ fun MapScreen(
             )
         }
 
-        // Contact markers overlay (shows received locations)
-        if (state.contactMarkers.isNotEmpty()) {
-            ContactMarkersOverlay(
-                markers = state.contactMarkers,
-                onContactClick = { destinationHash ->
-                    val marker = state.contactMarkers.find { it.destinationHash == destinationHash }
-                    if (marker != null) {
-                        selectedMarker = marker
-                    }
-                },
-                modifier =
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .statusBarsPadding()
-                        .padding(top = 64.dp) // Below TopAppBar
-                        .padding(end = 16.dp),
-            )
-        }
+        // Contact markers are shown directly on the map as circles
+        // Tap a marker to open the contact detail bottom sheet
 
         // Show hint card if no location permission
         if (!state.hasLocationPermission) {
@@ -633,120 +620,6 @@ private fun EmptyMapStateCard(
     }
 }
 
-/**
- * Overlay showing contact markers as a list.
- *
- * Phase 2: Will be used when real location sharing is implemented.
- */
-@Suppress("unused")
-@Composable
-private fun ContactMarkersOverlay(
-    markers: List<ContactMarker>,
-    onContactClick: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        modifier = modifier,
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-            ),
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-        ) {
-            Text(
-                text = "Contacts (${markers.size})",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            markers.take(5).forEach { marker ->
-                ContactMarkerItem(
-                    marker = marker,
-                    onClick = { onContactClick(marker.destinationHash) },
-                )
-                if (marker != markers.last() && markers.indexOf(marker) < 4) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-            }
-
-            if (markers.size > 5) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "+${markers.size - 5} more",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-/**
- * Individual contact marker item in the overlay.
- *
- * Phase 2: Will be used when real location sharing is implemented.
- */
-@Suppress("unused")
-@Composable
-private fun ContactMarkerItem(
-    marker: ContactMarker,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .clickable(onClick = onClick)
-                .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Avatar placeholder
-        Surface(
-            modifier = Modifier.size(32.dp),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
-        ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                Text(
-                    text = marker.displayName.take(1).uppercase(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = marker.displayName,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                text = "Test location", // Phase 1: static test positions
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        Icon(
-            imageVector = Icons.Default.LocationOn,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
 
 /**
  * Start location updates using FusedLocationProviderClient.

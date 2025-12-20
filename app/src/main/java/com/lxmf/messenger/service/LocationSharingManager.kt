@@ -153,6 +153,14 @@ class LocationSharingManager
 
             Log.d(TAG, "Started sharing with ${newSessions.size} contacts, duration=$duration")
 
+            // Send last known location immediately (don't wait for first GPS update)
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                location?.let {
+                    Log.d(TAG, "Sending immediate location to new recipients")
+                    sendLocationToRecipients(it)
+                }
+            }
+
             // Start location updates if not already running
             if (locationUpdateJob == null || locationUpdateJob?.isActive != true) {
                 startLocationUpdates()
@@ -424,8 +432,16 @@ class LocationSharingManager
 
                 // Check for cease flag - sender has stopped sharing
                 if (json.optBoolean("cease", false)) {
-                    receivedLocationDao.deleteLocationsForSender(senderHash)
-                    Log.d(TAG, "Ceased sharing from $senderHash - deleted locations")
+                    val ceaseTimestamp = json.optLong("ts", 0)
+                    // Only delete if cease is newer than latest location (prevents race condition
+                    // where old cease messages arrive after new sharing session starts)
+                    val latestLocation = receivedLocationDao.getLatestLocationForSender(senderHash)
+                    if (latestLocation == null || ceaseTimestamp > latestLocation.receivedAt) {
+                        receivedLocationDao.deleteLocationsForSender(senderHash)
+                        Log.d(TAG, "Ceased sharing from $senderHash - deleted locations")
+                    } else {
+                        Log.d(TAG, "Ignoring stale cease from $senderHash (cease=$ceaseTimestamp, latest=${latestLocation.receivedAt})")
+                    }
                     return
                 }
 

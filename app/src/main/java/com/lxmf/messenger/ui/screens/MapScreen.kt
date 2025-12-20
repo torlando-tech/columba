@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -128,6 +130,7 @@ fun MapScreen(
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var mapStyleLoaded by remember { mutableStateOf(false) }
+    var metersPerPixel by remember { mutableStateOf(1.0) }
 
     // Location client
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -155,16 +158,22 @@ fun MapScreen(
         }
     }
 
-    // Center map on user location when it updates
+    // Track whether we've done the initial center on user location
+    var hasInitiallyCentered by remember { mutableStateOf(false) }
+
+    // Center map on user location only on first location fix, not on every update
     LaunchedEffect(state.userLocation) {
-        state.userLocation?.let { location ->
-            mapLibreMap?.let { map ->
-                val cameraPosition =
-                    CameraPosition.Builder()
-                        .target(LatLng(location.latitude, location.longitude))
-                        .zoom(15.0)
-                        .build()
-                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+        if (!hasInitiallyCentered && state.userLocation != null) {
+            state.userLocation?.let { location ->
+                mapLibreMap?.let { map ->
+                    val cameraPosition =
+                        CameraPosition.Builder()
+                            .target(LatLng(location.latitude, location.longitude))
+                            .zoom(15.0)
+                            .build()
+                    map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+                    hasInitiallyCentered = true
+                }
             }
         }
     }
@@ -287,6 +296,20 @@ fun MapScreen(
                                 .zoom(if (state.userLocation != null) 15.0 else 12.0)
                                 .build()
                         map.cameraPosition = initialPosition
+                        metersPerPixel = map.projection.getMetersPerPixelAtLatitude(initialLat)
+
+                        // Add camera move listener to update scale bar
+                        // Measure actual distance between two screen points for accuracy
+                        map.addOnCameraMoveListener {
+                            val centerX = map.width / 2f
+                            val centerY = map.height / 2f
+                            val point1 = android.graphics.PointF(centerX - 50f, centerY)
+                            val point2 = android.graphics.PointF(centerX + 50f, centerY)
+                            val latLng1 = map.projection.fromScreenLocation(point1)
+                            val latLng2 = map.projection.fromScreenLocation(point2)
+                            val distance = latLng1.distanceTo(latLng2) // meters
+                            metersPerPixel = distance / 100.0 // 100 pixels between points
+                        }
                     }
                 }
             },
@@ -491,6 +514,15 @@ fun MapScreen(
                     .padding(top = 56.dp), // Below TopAppBar
             )
         }
+
+        // Scale bar (bottom left, above navigation bar)
+        ScaleBar(
+            metersPerPixel = metersPerPixel,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .navigationBarsPadding()
+                .padding(start = 16.dp, bottom = 96.dp), // Above bottom navigation bar
+        )
 
         // FABs positioned above navigation bar
         Column(
@@ -707,5 +739,103 @@ private fun startLocationUpdates(
         )
     } catch (e: SecurityException) {
         Log.e("MapScreen", "Location permission not granted", e)
+    }
+}
+
+/**
+ * Scale bar showing distance measurement that updates with zoom level.
+ *
+ * @param metersPerPixel Meters per screen pixel from MapLibre projection
+ * @param modifier Modifier for positioning
+ */
+@Composable
+private fun ScaleBar(
+    metersPerPixel: Double,
+    modifier: Modifier = Modifier,
+) {
+    // Target bar width in dp
+    val minBarWidthDp = 80f
+    val maxBarWidthDp = 140f
+    // Calculate meters range for the target bar widths
+    val density = LocalDensity.current.density
+    val minBarWidthPx = minBarWidthDp * density
+    val maxBarWidthPx = maxBarWidthDp * density
+    val minMeters = metersPerPixel * minBarWidthPx
+    val maxMeters = metersPerPixel * maxBarWidthPx
+
+    // Nice distance values in meters (up to 10,000 km for very zoomed out views)
+    val niceDistances = listOf(
+        5, 10, 20, 50, 100, 200, 500,
+        1_000, 2_000, 5_000, 10_000, 20_000, 50_000,
+        100_000, 200_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000,
+    )
+
+    // Find the best nice distance that fits in our range
+    // Fall back to the largest distance if zoomed out extremely far
+    val selectedDistance = niceDistances.findLast { it >= minMeters && it <= maxMeters }
+        ?: niceDistances.firstOrNull { it >= minMeters }
+        ?: niceDistances.last()
+
+    // Calculate bar width in pixels
+    val barWidthPx = (selectedDistance / metersPerPixel).toFloat()
+
+    // Format the distance text
+    val distanceText = when {
+        selectedDistance >= 1_000_000 -> "${selectedDistance / 1_000_000} km"
+        selectedDistance >= 1_000 -> "${selectedDistance / 1_000} km"
+        else -> "$selectedDistance m"
+    }
+
+    // Google Maps style scale bar: |——————| with text
+    val barWidth = with(LocalDensity.current) { barWidthPx.toDp() }
+    val lineColor = Color.Black
+    val lineThickness = 2.dp
+    val endCapHeight = 8.dp
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.Start,
+    ) {
+        // Distance text with shadow for readability
+        Text(
+            text = distanceText,
+            style = MaterialTheme.typography.labelSmall,
+            color = lineColor,
+            modifier = Modifier
+                .background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(2.dp))
+                .padding(horizontal = 4.dp, vertical = 1.dp),
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        // Scale bar with end caps: |——————|
+        Box(
+            modifier = Modifier
+                .width(barWidth)
+                .height(endCapHeight),
+        ) {
+            // Left end cap
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .width(lineThickness)
+                    .fillMaxHeight()
+                    .background(lineColor),
+            )
+            // Horizontal line
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .height(lineThickness)
+                    .background(lineColor),
+            )
+            // Right end cap
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(lineThickness)
+                    .fillMaxHeight()
+                    .background(lineColor),
+            )
+        }
     }
 }

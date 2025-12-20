@@ -318,21 +318,39 @@ fun MapScreen(
 
         // Update contact markers on the map when they change
         LaunchedEffect(state.contactMarkers, mapStyleLoaded) {
-            Log.d("MapScreen", "LaunchedEffect triggered: markers=${state.contactMarkers.size}, styleLoaded=$mapStyleLoaded")
             if (!mapStyleLoaded) return@LaunchedEffect
             val map = mapLibreMap ?: return@LaunchedEffect
             val style = map.style ?: return@LaunchedEffect
 
             val sourceId = "contact-markers-source"
             val layerId = "contact-markers-layer"
+            val screenDensity = context.resources.displayMetrics.density
+
+            // Generate and register marker bitmaps for each contact
+            state.contactMarkers.forEach { marker ->
+                val imageId = "marker-${marker.destinationHash}"
+                if (style.getImage(imageId) == null) {
+                    val initial = marker.displayName.firstOrNull() ?: '?'
+                    val color = MarkerBitmapFactory.hashToColor(marker.destinationHash)
+                    val bitmap = MarkerBitmapFactory.createInitialMarker(
+                        initial = initial,
+                        displayName = marker.displayName,
+                        backgroundColor = color,
+                        density = screenDensity,
+                    )
+                    style.addImage(imageId, bitmap)
+                }
+            }
 
             // Create GeoJSON features from contact markers with state and approximateRadius properties
             val features = state.contactMarkers.map { marker ->
+                val imageId = "marker-${marker.destinationHash}"
                 Feature.fromGeometry(
                     Point.fromLngLat(marker.longitude, marker.latitude)
                 ).apply {
                     addStringProperty("name", marker.displayName)
                     addStringProperty("hash", marker.destinationHash)
+                    addStringProperty("imageId", imageId) // Pre-computed image ID
                     addStringProperty("state", marker.state.name) // FRESH, STALE, or EXPIRED_GRACE_PERIOD
                     addNumberProperty("approximateRadius", marker.approximateRadius) // meters, 0 = precise
                 }
@@ -342,8 +360,10 @@ fun MapScreen(
             // Update or create the source
             val existingSource = style.getSourceAs<GeoJsonSource>(sourceId)
             if (existingSource != null) {
+                Log.d("MapScreen", "Updating existing source with ${features.size} features")
                 existingSource.setGeoJson(featureCollection)
             } else {
+                Log.d("MapScreen", "Creating new source and layers with ${features.size} features")
                 // Add new source and layers with data-driven styling based on marker state
                 style.addSource(GeoJsonSource(sourceId, featureCollection))
 
@@ -392,79 +412,31 @@ fun MapScreen(
                     )
                 )
 
-                // CircleLayer for the filled circle
+                // SymbolLayer for custom marker icons (colored circle with initial + name)
+                // Name is baked into bitmap to avoid font loading issues with tile server
                 style.addLayer(
-                    CircleLayer(layerId, sourceId).withProperties(
-                        PropertyFactory.circleRadius(12f),
-                        // Data-driven color: Orange for fresh, Gray for stale/expired
-                        PropertyFactory.circleColor(
-                            Expression.match(
-                                Expression.get("state"),
-                                Expression.literal(MarkerState.FRESH.name),
-                                Expression.color(android.graphics.Color.parseColor("#FF5722")), // Orange
-                                Expression.literal(MarkerState.STALE.name),
-                                Expression.color(android.graphics.Color.parseColor("#9E9E9E")), // Gray
-                                Expression.literal(MarkerState.EXPIRED_GRACE_PERIOD.name),
-                                Expression.color(android.graphics.Color.parseColor("#9E9E9E")), // Gray
-                                Expression.color(android.graphics.Color.parseColor("#FF5722")), // Default: Orange
-                            )
-                        ),
-                        // Data-driven opacity: 100% for fresh, 60% for stale/expired
-                        PropertyFactory.circleOpacity(
+                    SymbolLayer(layerId, sourceId).withProperties(
+                        PropertyFactory.iconImage(Expression.get("imageId")),
+                        PropertyFactory.iconAnchor("top"), // Anchor at top (circle center)
+                        PropertyFactory.iconAllowOverlap(true),
+                        PropertyFactory.iconIgnorePlacement(true),
+                        PropertyFactory.iconSize(1f),
+                        // Opacity based on marker state
+                        PropertyFactory.iconOpacity(
                             Expression.match(
                                 Expression.get("state"),
                                 Expression.literal(MarkerState.FRESH.name),
                                 Expression.literal(1.0f),
                                 Expression.literal(MarkerState.STALE.name),
-                                Expression.literal(0.6f),
+                                Expression.literal(0.5f),
                                 Expression.literal(MarkerState.EXPIRED_GRACE_PERIOD.name),
-                                Expression.literal(0.6f),
-                                Expression.literal(1.0f), // Default
-                            )
-                        ),
-                        // Solid stroke only for fresh markers (stale uses dashed overlay)
-                        PropertyFactory.circleStrokeWidth(
-                            Expression.match(
-                                Expression.get("state"),
-                                Expression.literal(MarkerState.FRESH.name),
-                                Expression.literal(3f),
-                                Expression.literal(0f), // No solid stroke for stale markers
-                            )
-                        ),
-                        PropertyFactory.circleStrokeColor(
-                            Expression.color(android.graphics.Color.WHITE)
-                        ),
-                    )
-                )
-
-                // SymbolLayer for dashed outline on stale/expired markers
-                val dashedLayerId = "contact-markers-dashed-layer"
-                style.addLayer(
-                    SymbolLayer(dashedLayerId, sourceId).withProperties(
-                        PropertyFactory.iconImage("stale-dashed-circle"),
-                        PropertyFactory.iconAllowOverlap(true),
-                        PropertyFactory.iconIgnorePlacement(true),
-                        // Only show for stale/expired markers
-                        PropertyFactory.iconOpacity(
-                            Expression.match(
-                                Expression.get("state"),
-                                Expression.literal(MarkerState.FRESH.name),
-                                Expression.literal(0f), // Hidden for fresh
-                                Expression.literal(MarkerState.STALE.name),
-                                Expression.literal(0.7f),
-                                Expression.literal(MarkerState.EXPIRED_GRACE_PERIOD.name),
-                                Expression.literal(0.7f),
-                                Expression.literal(0f), // Default: hidden
+                                Expression.literal(0.4f),
+                                Expression.literal(1.0f) // Default
                             )
                         ),
                     )
                 )
-
-                // TODO: Add text labels for name/distance below markers
-                // SymbolLayer for text was causing rendering issues - needs investigation
             }
-
-            Log.d("MapScreen", "Updated ${state.contactMarkers.size} contact markers on map")
         }
 
         // Gradient scrim behind TopAppBar for readability

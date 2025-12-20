@@ -2,13 +2,109 @@ package com.lxmf.messenger.ui.util
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Paint
+import android.graphics.Typeface
 
 /**
  * Factory for creating marker bitmaps for the map.
  */
 object MarkerBitmapFactory {
+
+    /**
+     * Generate a consistent color from a hash string.
+     * Uses HSV color space to ensure good saturation and brightness.
+     *
+     * @param hash The hash string (e.g., destinationHash)
+     * @return An ARGB color int
+     */
+    fun hashToColor(hash: String): Int {
+        val hue = (hash.hashCode() and 0xFFFFFF) % 360
+        return Color.HSVToColor(floatArrayOf(hue.toFloat(), 0.7f, 0.8f))
+    }
+
+    /**
+     * Creates a circular marker with a colored background, initial letter, and display name.
+     *
+     * @param initial The initial letter to display in the circle
+     * @param displayName The full display name to show below the circle
+     * @param backgroundColor The background color (use hashToColor for consistency)
+     * @param sizeDp The diameter of the circle in dp
+     * @param density Screen density for dp to px conversion
+     * @return A bitmap with the marker (circle + name label)
+     */
+    fun createInitialMarker(
+        initial: Char,
+        displayName: String,
+        backgroundColor: Int,
+        sizeDp: Float = 40f,
+        density: Float,
+    ): Bitmap {
+        val circleSizePx = (sizeDp * density).toInt()
+        val textPadding = (4 * density).toInt()
+        val labelHeight = (18 * density).toInt()
+
+        // Total bitmap dimensions - wider to accommodate long names
+        val totalHeight = circleSizePx + textPadding + labelHeight
+        val totalWidth = (circleSizePx * 2.5f).toInt()
+        val bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val centerX = totalWidth / 2f
+        val circleY = circleSizePx / 2f
+        val radius = circleSizePx / 2f - (2f * density)
+
+        // Draw circle background
+        val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = backgroundColor
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(centerX, circleY, radius, circlePaint)
+
+        // Draw white border
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 3f * density
+        }
+        canvas.drawCircle(centerX, circleY, radius, borderPaint)
+
+        // Draw initial letter in circle
+        val initialPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = circleSizePx * 0.45f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        val initialY = circleY - (initialPaint.descent() + initialPaint.ascent()) / 2
+        canvas.drawText(initial.uppercase().toString(), centerX, initialY, initialPaint)
+
+        // Draw display name below circle with halo effect for readability
+        val nameY = circleSizePx.toFloat() + textPadding + labelHeight * 0.7f
+
+        // White halo/outline
+        val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 12f * density
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            style = Paint.Style.STROKE
+            strokeWidth = 3f * density
+        }
+        canvas.drawText(displayName, centerX, nameY, haloPaint)
+
+        // Dark text on top
+        val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#212121")
+            textSize = 12f * density
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        canvas.drawText(displayName, centerX, nameY, namePaint)
+
+        return bitmap
+    }
 
     /**
      * Creates a dashed circle ring bitmap for stale location markers.

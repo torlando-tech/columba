@@ -139,8 +139,10 @@ class MapViewModel
 
                     locations.mapNotNull { loc ->
                         // Calculate marker state - returns null if marker should be hidden
+                        // Use receivedAt for staleness (when we got the update) rather than
+                        // sender's timestamp to avoid issues with clock skew between devices
                         val markerState = calculateMarkerState(
-                            timestamp = loc.timestamp,
+                            timestamp = loc.receivedAt,
                             expiresAt = loc.expiresAt,
                             currentTime = currentTime,
                         ) ?: return@mapNotNull null

@@ -136,6 +136,7 @@ fun MessagingScreen(
     // File attachment state
     val selectedFileAttachments by viewModel.selectedFileAttachments.collectAsStateWithLifecycle()
     val totalAttachmentSize by viewModel.totalAttachmentSize.collectAsStateWithLifecycle()
+    val maxOutboundAttachmentSizeBytes by viewModel.maxOutboundAttachmentSizeBytes.collectAsStateWithLifecycle()
     val isProcessingFile by viewModel.isProcessingFile.collectAsStateWithLifecycle()
 
     // Observe loaded image IDs to trigger recomposition when images become available
@@ -521,6 +522,7 @@ fun MessagingScreen(
                     onClearImage = { viewModel.clearSelectedImage() },
                     selectedFileAttachments = selectedFileAttachments,
                     totalAttachmentSize = totalAttachmentSize,
+                    maxAttachmentSizeBytes = maxOutboundAttachmentSizeBytes,
                     isProcessingFile = isProcessingFile,
                     onFileAttachmentClick = { filePickerLauncher.launch(arrayOf("*/*")) },
                     onRemoveFileAttachment = { index -> viewModel.removeFileAttachment(index) },
@@ -819,6 +821,7 @@ fun MessageInputBar(
     onClearImage: () -> Unit = {},
     selectedFileAttachments: List<FileAttachment> = emptyList(),
     totalAttachmentSize: Int = 0,
+    maxAttachmentSizeBytes: Int = FileUtils.DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE,
     isProcessingFile: Boolean = false,
     onFileAttachmentClick: () -> Unit = {},
     onRemoveFileAttachment: (Int) -> Unit = {},
@@ -836,6 +839,7 @@ fun MessageInputBar(
                     attachments = selectedFileAttachments,
                     totalSizeBytes = totalAttachmentSize,
                     onRemove = onRemoveFileAttachment,
+                    maxSizeBytes = maxAttachmentSizeBytes,
                 )
             }
 

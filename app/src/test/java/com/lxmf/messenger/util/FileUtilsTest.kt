@@ -177,36 +177,48 @@ class FileUtilsTest {
 
     @Test
     fun `wouldExceedSizeLimit returns false when within limit`() {
-        assertFalse(FileUtils.wouldExceedSizeLimit(0, 100))
-        assertFalse(FileUtils.wouldExceedSizeLimit(256 * 1024, 256 * 1024))
-        assertFalse(FileUtils.wouldExceedSizeLimit(400 * 1024, 112 * 1024))
+        val maxSize = FileUtils.DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE
+        assertFalse(FileUtils.wouldExceedSizeLimit(0, 100, maxSize))
+        assertFalse(FileUtils.wouldExceedSizeLimit(256 * 1024, 256 * 1024, maxSize))
+        assertFalse(FileUtils.wouldExceedSizeLimit(400 * 1024, 112 * 1024, maxSize))
     }
 
     @Test
     fun `wouldExceedSizeLimit returns false at exactly the limit`() {
-        val maxSize = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE
-        assertFalse(FileUtils.wouldExceedSizeLimit(maxSize - 100, 100))
-        assertFalse(FileUtils.wouldExceedSizeLimit(0, maxSize))
+        val maxSize = FileUtils.DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE
+        assertFalse(FileUtils.wouldExceedSizeLimit(maxSize - 100, 100, maxSize))
+        assertFalse(FileUtils.wouldExceedSizeLimit(0, maxSize, maxSize))
     }
 
     @Test
     fun `wouldExceedSizeLimit returns true when exceeding limit`() {
-        val maxSize = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE
-        assertTrue(FileUtils.wouldExceedSizeLimit(maxSize, 1))
-        assertTrue(FileUtils.wouldExceedSizeLimit(maxSize - 100, 101))
-        assertTrue(FileUtils.wouldExceedSizeLimit(400 * 1024, 200 * 1024))
+        val maxSize = FileUtils.DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE
+        assertTrue(FileUtils.wouldExceedSizeLimit(maxSize, 1, maxSize))
+        assertTrue(FileUtils.wouldExceedSizeLimit(maxSize - 100, 101, maxSize))
+        assertTrue(FileUtils.wouldExceedSizeLimit(400 * 1024, 200 * 1024, 500 * 1024))
     }
 
     // ========== Constants Tests ==========
 
     @Test
-    fun `MAX_TOTAL_ATTACHMENT_SIZE is 512KB`() {
-        assertEquals(512 * 1024, FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)
+    fun `DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE is 8MB`() {
+        assertEquals(8 * 1024 * 1024, FileUtils.DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE)
     }
 
     @Test
-    fun `MAX_SINGLE_FILE_SIZE is 512KB`() {
-        assertEquals(512 * 1024, FileUtils.MAX_SINGLE_FILE_SIZE)
+    fun `DEFAULT_MAX_SINGLE_FILE_SIZE is 8MB`() {
+        assertEquals(8 * 1024 * 1024, FileUtils.DEFAULT_MAX_SINGLE_FILE_SIZE)
+    }
+
+    @Test
+    fun `SLOW_TRANSFER_WARNING_THRESHOLD is 1MB`() {
+        assertEquals(1024 * 1024, FileUtils.SLOW_TRANSFER_WARNING_THRESHOLD)
+    }
+
+    @Test
+    fun `wouldExceedSizeLimit with zero limit allows any size`() {
+        // 0 means unlimited
+        assertFalse(FileUtils.wouldExceedSizeLimit(100 * 1024 * 1024, 100 * 1024 * 1024, 0))
     }
 
     // ========== Additional getMimeTypeFromFilename Tests ==========

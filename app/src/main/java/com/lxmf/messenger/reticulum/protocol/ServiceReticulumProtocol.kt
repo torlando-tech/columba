@@ -824,6 +824,9 @@ class ServiceReticulumProtocol(
         // Transport node setting
         json.put("enable_transport", config.enableTransport)
 
+        // Maximum inbound file attachment size (for security)
+        json.put("max_inbound_attachment_size", config.maxInboundAttachmentSizeBytes)
+
         return json.toString()
     }
 

@@ -1622,8 +1622,13 @@ class MessagingViewModelTest {
     @Test
     fun `addFileAttachment rejects file exceeding total size limit`() =
         runTest {
+            // Set up a small limit for testing (100KB) to avoid large memory allocations
+            val testMaxSizeKb = 100 // 100 KB
+            coEvery { settingsRepository.getMaxOutboundAttachmentSizeKb() } returns testMaxSizeKb
+
             val viewModel = createTestViewModel()
             advanceUntilIdle()
+            val testMaxSize = testMaxSizeKb * 1024
 
             // Collect error events BEFORE any operations
             var errorMessage: String? = null
@@ -1634,9 +1639,9 @@ class MessagingViewModelTest {
             // First add a file that's close to the limit (but under single file limit)
             val attachment1 = FileAttachment(
                 filename = "large.pdf",
-                data = ByteArray(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 1000),
+                data = ByteArray(testMaxSize - 1000),
                 mimeType = "application/pdf",
-                sizeBytes = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 1000,
+                sizeBytes = testMaxSize - 1000,
             )
             viewModel.addFileAttachment(attachment1)
             advanceUntilIdle()
@@ -1664,20 +1669,25 @@ class MessagingViewModelTest {
     @Test
     fun `addFileAttachment rejects single file exceeding max single file size`() =
         runTest {
+            // Set up a small limit for testing (100KB) to avoid large memory allocations
+            val testMaxSizeKb = 100 // 100 KB
+            coEvery { settingsRepository.getMaxOutboundAttachmentSizeKb() } returns testMaxSizeKb
+
             val viewModel = createTestViewModel()
             advanceUntilIdle()
+            val testMaxSize = testMaxSizeKb * 1024
 
             var errorMessage: String? = null
             val job = launch(UnconfinedTestDispatcher(testScheduler)) {
                 viewModel.fileAttachmentError.collect { errorMessage = it }
             }
 
-            // Try to add a file larger than MAX_SINGLE_FILE_SIZE
+            // Try to add a file larger than the configured max size
             val largeAttachment = FileAttachment(
                 filename = "huge.bin",
-                data = ByteArray(FileUtils.MAX_SINGLE_FILE_SIZE + 1),
+                data = ByteArray(testMaxSize + 1),
                 mimeType = "application/octet-stream",
-                sizeBytes = FileUtils.MAX_SINGLE_FILE_SIZE + 1,
+                sizeBytes = testMaxSize + 1,
             )
             viewModel.addFileAttachment(largeAttachment)
             advanceUntilIdle()

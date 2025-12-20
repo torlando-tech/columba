@@ -141,6 +141,11 @@ class ReticulumWrapper:
         # Used to bypass Python multiprocessing issues on Android
         self.kotlin_stamp_generator_callback = None
 
+        # Inbound file attachment size limit (bytes)
+        # Files exceeding this limit will be silently stripped from incoming messages
+        # 0 = unlimited, default 8MB (matches Kotlin DEFAULT_MAX_INBOUND_ATTACHMENT_SIZE_KB * 1024)
+        self.max_inbound_attachment_size = 8 * 1024 * 1024  # 8 MB default
+
         # Set global instance so AndroidBLEDriver can access it
         _global_wrapper_instance = self
 
@@ -311,6 +316,26 @@ class ReticulumWrapper:
         except Exception as e:
             log_error("ReticulumWrapper", "set_stamp_generator_callback",
                      f"Failed to register stamp generator: {e}")
+
+    def set_max_inbound_attachment_size(self, size_bytes: int):
+        """
+        Set the maximum allowed size for inbound file attachments.
+
+        Files exceeding this limit will be silently stripped from incoming messages.
+        The message text will still be delivered, but attachments will be removed.
+        This protects against malicious senders filling up storage.
+
+        Args:
+            size_bytes: Maximum allowed size in bytes. 0 = unlimited.
+        """
+        self.max_inbound_attachment_size = size_bytes
+        if size_bytes > 0:
+            log_info("ReticulumWrapper", "set_max_inbound_attachment_size",
+                    f"📦 Max inbound attachment size set to {size_bytes} bytes "
+                    f"({size_bytes / (1024 * 1024):.1f} MB)")
+        else:
+            log_info("ReticulumWrapper", "set_max_inbound_attachment_size",
+                    "📦 Inbound attachment size limit disabled (unlimited)")
 
     def _clear_stale_ble_paths(self):
         """
@@ -836,6 +861,14 @@ class ReticulumWrapper:
             # When False, only handles its own traffic
             enable_transport = config.get('enable_transport', True)
             log_info("ReticulumWrapper", "initialize", f"Transport node enabled: {enable_transport}")
+
+            # Extract max_inbound_attachment_size (security protection for inbound files)
+            # Default: 8 MB, 0 = unlimited
+            max_inbound_size = config.get('max_inbound_attachment_size', 8 * 1024 * 1024)
+            self.max_inbound_attachment_size = max_inbound_size
+            log_info("ReticulumWrapper", "initialize",
+                    f"Max inbound attachment size: {max_inbound_size} bytes "
+                    f"({max_inbound_size / (1024 * 1024):.1f} MB)" if max_inbound_size > 0 else "unlimited")
 
             # Check for shared instance if user doesn't prefer their own
             use_shared_instance = False
@@ -1786,6 +1819,38 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Message from: {lxmf_message.source_hash.hex()[:16]}")
             log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Message to: {lxmf_message.destination_hash.hex()[:16]}")
             log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Content length: {len(lxmf_message.content)} bytes")
+
+            # Check inbound file attachment size limit (security protection)
+            # Field 5 = FILE_ATTACHMENTS, format: list of [filename, bytes] tuples
+            if hasattr(lxmf_message, 'fields') and lxmf_message.fields and 5 in lxmf_message.fields:
+                try:
+                    attachments = lxmf_message.fields[5]
+                    if isinstance(attachments, list):
+                        total_size = 0
+                        for attachment in attachments:
+                            if isinstance(attachment, (list, tuple)) and len(attachment) >= 2:
+                                file_data = attachment[1]
+                                if isinstance(file_data, bytes):
+                                    total_size += len(file_data)
+
+                        # Check against configured limit (0 means unlimited)
+                        if self.max_inbound_attachment_size > 0 and total_size > self.max_inbound_attachment_size:
+                            sender_hash = lxmf_message.source_hash.hex()[:16]
+                            log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                       f"⚠️ Rejected file attachments from {sender_hash}: "
+                                       f"{total_size} bytes exceeds limit of {self.max_inbound_attachment_size} bytes")
+                            # Silent rejection: strip attachments but continue processing message text
+                            del lxmf_message.fields[5]
+                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                    f"📎 Stripped oversized file attachments, message text will still be delivered")
+                        else:
+                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"📎 File attachments accepted: {total_size} bytes "
+                                     f"(limit: {self.max_inbound_attachment_size if self.max_inbound_attachment_size > 0 else 'unlimited'})")
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                               f"⚠️ Error checking file attachment size: {e}")
+                    # Continue processing - don't block message on validation error
 
             # Add to pending_inbound queue (maintains backward compatibility with polling)
             if not hasattr(self.router, 'pending_inbound'):

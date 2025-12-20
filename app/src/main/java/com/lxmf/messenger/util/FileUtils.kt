@@ -24,27 +24,58 @@ object FileUtils {
     private const val TAG = "FileUtils"
 
     /**
-     * Maximum total size for all file attachments combined.
-     * Same limit as images for mesh network efficiency.
+     * Default maximum total size for all file attachments combined (8 MB).
+     * This is a fallback value; the actual limit is configurable via settings.
      */
-    const val MAX_TOTAL_ATTACHMENT_SIZE = 512 * 1024 // 512KB
+    const val DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE = 8 * 1024 * 1024 // 8MB
 
     /**
-     * Maximum size for a single file attachment.
+     * Default maximum size for a single file attachment (8 MB).
+     * This is a fallback value; the actual limit is configurable via settings.
      */
-    const val MAX_SINGLE_FILE_SIZE = 512 * 1024 // 512KB
+    const val DEFAULT_MAX_SINGLE_FILE_SIZE = 8 * 1024 * 1024 // 8MB
+
+    /**
+     * Threshold above which a slow transfer warning is shown (1 MB).
+     * Files larger than this will display a warning about potential slow transfer
+     * on mesh networks (LoRa, packet radio, etc.).
+     */
+    const val SLOW_TRANSFER_WARNING_THRESHOLD = 1024 * 1024 // 1MB
+
+    /**
+     * Legacy constants for backwards compatibility.
+     * @deprecated Use DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE instead
+     */
+    @Deprecated(
+        "Use DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE instead",
+        ReplaceWith("DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE"),
+    )
+    const val MAX_TOTAL_ATTACHMENT_SIZE = DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE
+
+    /**
+     * Legacy constants for backwards compatibility.
+     * @deprecated Use DEFAULT_MAX_SINGLE_FILE_SIZE instead
+     */
+    @Deprecated(
+        "Use DEFAULT_MAX_SINGLE_FILE_SIZE instead",
+        ReplaceWith("DEFAULT_MAX_SINGLE_FILE_SIZE"),
+    )
+    const val MAX_SINGLE_FILE_SIZE = DEFAULT_MAX_SINGLE_FILE_SIZE
 
     /**
      * Read file data from a content URI.
      *
      * @param context Android context for ContentResolver access
      * @param uri The content URI of the file to read
+     * @param maxSingleFileSize Maximum allowed file size in bytes, or 0 for no limit.
+     *                          Defaults to DEFAULT_MAX_SINGLE_FILE_SIZE.
      * @return FileAttachment containing the file data and metadata, or null if the file
      *         couldn't be read or exceeds size limits
      */
     fun readFileFromUri(
         context: Context,
         uri: Uri,
+        maxSingleFileSize: Int = DEFAULT_MAX_SINGLE_FILE_SIZE,
     ): FileAttachment? {
         return try {
             val contentResolver = context.contentResolver
@@ -59,8 +90,9 @@ object FileUtils {
             contentResolver.openInputStream(uri)?.use { inputStream ->
                 val data = inputStream.readBytes()
 
-                if (data.size > MAX_SINGLE_FILE_SIZE) {
-                    Log.w(TAG, "File too large: ${data.size} bytes (max: $MAX_SINGLE_FILE_SIZE)")
+                // Only enforce size limit if maxSingleFileSize > 0
+                if (maxSingleFileSize > 0 && data.size > maxSingleFileSize) {
+                    Log.w(TAG, "File too large: ${data.size} bytes (max: $maxSingleFileSize)")
                     return null
                 }
 
@@ -211,12 +243,27 @@ object FileUtils {
      *
      * @param currentTotal Current total size of selected attachments in bytes
      * @param newFileSize Size of the new file to add in bytes
-     * @return true if adding the file would exceed the limit
+     * @param maxTotalSize Maximum allowed total size in bytes, or 0 for no limit.
+     *                     Defaults to DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE.
+     * @return true if adding the file would exceed the limit, false if within limit or no limit set
      */
     fun wouldExceedSizeLimit(
         currentTotal: Int,
         newFileSize: Int,
+        maxTotalSize: Int = DEFAULT_MAX_TOTAL_ATTACHMENT_SIZE,
     ): Boolean {
-        return (currentTotal + newFileSize) > MAX_TOTAL_ATTACHMENT_SIZE
+        // No limit if maxTotalSize is 0 or negative
+        if (maxTotalSize <= 0) return false
+        return (currentTotal + newFileSize) > maxTotalSize
+    }
+
+    /**
+     * Check if a file size exceeds the slow transfer warning threshold.
+     *
+     * @param sizeBytes Total file size in bytes
+     * @return true if the size exceeds the warning threshold (1 MB)
+     */
+    fun exceedsSlowTransferThreshold(sizeBytes: Int): Boolean {
+        return sizeBytes > SLOW_TRANSFER_WARNING_THRESHOLD
     }
 }

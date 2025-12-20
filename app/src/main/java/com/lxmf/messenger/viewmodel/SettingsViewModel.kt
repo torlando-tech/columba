@@ -66,6 +66,11 @@ data class SettingsState(
     val isSyncing: Boolean = false,
     // Transport node state
     val transportNodeEnabled: Boolean = true,
+    // Location sharing state
+    val locationSharingEnabled: Boolean = true,
+    val activeSharingSessions: List<com.lxmf.messenger.service.SharingSession> = emptyList(),
+    val defaultSharingDuration: String = "ONE_HOUR",
+    val locationPrecision: String = "PRECISE",
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -78,6 +83,7 @@ class SettingsViewModel
         private val reticulumProtocol: ReticulumProtocol,
         private val interfaceConfigManager: com.lxmf.messenger.service.InterfaceConfigManager,
         private val propagationNodeManager: PropagationNodeManager,
+        private val locationSharingManager: com.lxmf.messenger.service.LocationSharingManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -115,6 +121,7 @@ class SettingsViewModel
                 startSharedInstanceMonitor()
                 startSharedInstanceAvailabilityMonitor()
                 startRelayMonitor()
+                startLocationSharingMonitor()
             }
         }
 
@@ -1096,6 +1103,96 @@ class SettingsViewModel
                 if (!_state.value.isRestarting) {
                     restartService()
                 }
+            }
+        }
+
+        // Location sharing methods
+
+        /**
+         * Start monitoring location sharing state from the LocationSharingManager
+         * and settings repository.
+         */
+        private fun startLocationSharingMonitor() {
+            // Monitor active sharing sessions
+            viewModelScope.launch {
+                locationSharingManager.activeSessions.collect { sessions ->
+                    _state.value = _state.value.copy(activeSharingSessions = sessions)
+                }
+            }
+
+            // Monitor location sharing settings
+            viewModelScope.launch {
+                settingsRepository.locationSharingEnabledFlow.collect { enabled ->
+                    _state.value = _state.value.copy(locationSharingEnabled = enabled)
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.defaultSharingDurationFlow.collect { duration ->
+                    _state.value = _state.value.copy(defaultSharingDuration = duration)
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.locationPrecisionFlow.collect { precision ->
+                    _state.value = _state.value.copy(locationPrecision = precision)
+                }
+            }
+        }
+
+        /**
+         * Set the location sharing enabled setting.
+         * When disabled, stops all active sharing sessions.
+         */
+        fun setLocationSharingEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveLocationSharingEnabled(enabled)
+                Log.d(TAG, "Location sharing ${if (enabled) "enabled" else "disabled"}")
+
+                // When disabled, stop all active sharing sessions
+                if (!enabled) {
+                    stopAllSharing()
+                }
+            }
+        }
+
+        /**
+         * Stop sharing with a specific contact.
+         *
+         * @param destinationHash The contact to stop sharing with
+         */
+        fun stopSharingWith(destinationHash: String) {
+            locationSharingManager.stopSharing(destinationHash)
+            Log.d(TAG, "Stopped location sharing with $destinationHash")
+        }
+
+        /**
+         * Stop all active location sharing sessions.
+         */
+        fun stopAllSharing() {
+            locationSharingManager.stopSharing(null)
+            Log.d(TAG, "Stopped all location sharing sessions")
+        }
+
+        /**
+         * Set the default sharing duration.
+         *
+         * @param duration The SharingDuration enum name (e.g., "ONE_HOUR", "FOUR_HOURS")
+         */
+        fun setDefaultSharingDuration(duration: String) {
+            viewModelScope.launch {
+                settingsRepository.saveDefaultSharingDuration(duration)
+                Log.d(TAG, "Default sharing duration set to: $duration")
+            }
+        }
+
+        /**
+         * Set the location precision.
+         *
+         * @param precision "PRECISE" or "APPROXIMATE"
+         */
+        fun setLocationPrecision(precision: String) {
+            viewModelScope.launch {
+                settingsRepository.saveLocationPrecision(precision)
+                Log.d(TAG, "Location precision set to: $precision")
             }
         }
     }

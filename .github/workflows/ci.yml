@@ -50,7 +50,7 @@ jobs:
 
       - name: Upload lint reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: lint-reports
           path: |
@@ -84,7 +84,7 @@ jobs:
 
       - name: Upload audit report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: threading-audit-report
           path: dispatcher-audit-report.txt
@@ -167,7 +167,7 @@ jobs:
 
       - name: Upload unit test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: unit-test-results
           path: |
@@ -177,7 +177,7 @@ jobs:
 
       - name: Upload unit test reports
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: unit-test-reports
           path: |
@@ -205,7 +205,7 @@ jobs:
 
       - name: Upload coverage reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-reports
           path: |
@@ -318,7 +318,7 @@ jobs:
 
   #     - name: Upload instrumented test results
   #       if: always()
-  #       uses: actions/upload-artifact@v5
+  #       uses: actions/upload-artifact@v6
   #       with:
   #         name: instrumented-test-results
   #         path: |
@@ -328,7 +328,7 @@ jobs:
 
   #     - name: Upload instrumented test reports
   #       if: failure()
-  #       uses: actions/upload-artifact@v5
+  #       uses: actions/upload-artifact@v6
   #       with:
   #         name: instrumented-test-reports
   #         path: |
@@ -337,7 +337,7 @@ jobs:
 
   #     - name: Upload logcat output
   #       if: failure()
-  #       uses: actions/upload-artifact@v5
+  #       uses: actions/upload-artifact@v6
   #       with:
   #         name: logcat
   #         path: artifacts/logcat.log

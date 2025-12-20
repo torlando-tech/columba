@@ -142,7 +142,7 @@ jobs:
 
       - name: Upload APK as artifact
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: app-release-${{ steps.sha.outputs.sha }}
           path: columba.apk

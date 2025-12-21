@@ -12,17 +12,17 @@ import com.lxmf.messenger.data.model.ModemPreset
 import com.lxmf.messenger.data.model.RNodeRegionalPreset
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.slot
-import kotlinx.coroutines.flow.flowOf
 import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -263,18 +263,19 @@ class RNodeWizardViewModelTest {
             viewModel.goToStep(WizardStep.REGION_SELECTION)
             advanceUntilIdle()
 
-            val testPreset = RNodeRegionalPreset(
-                id = "test_preset",
-                countryCode = "US",
-                countryName = "United States",
-                cityOrRegion = "Test City",
-                frequency = 915_000_000,
-                bandwidth = 125_000,
-                spreadingFactor = 9,
-                codingRate = 5,
-                txPower = 17,
-                description = "Test preset",
-            )
+            val testPreset =
+                RNodeRegionalPreset(
+                    id = "test_preset",
+                    countryCode = "US",
+                    countryName = "United States",
+                    cityOrRegion = "Test City",
+                    frequency = 915_000_000,
+                    bandwidth = 125_000,
+                    spreadingFactor = 9,
+                    codingRate = 5,
+                    txPower = 17,
+                    description = "Test preset",
+                )
             viewModel.selectPreset(testPreset)
             advanceUntilIdle()
 
@@ -287,18 +288,19 @@ class RNodeWizardViewModelTest {
             viewModel.goToStep(WizardStep.REGION_SELECTION)
             advanceUntilIdle()
 
-            val testPreset = RNodeRegionalPreset(
-                id = "test_preset",
-                countryCode = "US",
-                countryName = "United States",
-                cityOrRegion = "Test City",
-                frequency = 915_000_000,
-                bandwidth = 125_000,
-                spreadingFactor = 9,
-                codingRate = 5,
-                txPower = 17,
-                description = "Test preset",
-            )
+            val testPreset =
+                RNodeRegionalPreset(
+                    id = "test_preset",
+                    countryCode = "US",
+                    countryName = "United States",
+                    cityOrRegion = "Test City",
+                    frequency = 915_000_000,
+                    bandwidth = 125_000,
+                    spreadingFactor = 9,
+                    codingRate = 5,
+                    txPower = 17,
+                    description = "Test preset",
+                )
             viewModel.selectPreset(testPreset)
             advanceUntilIdle()
 
@@ -315,18 +317,19 @@ class RNodeWizardViewModelTest {
             viewModel.goToStep(WizardStep.REGION_SELECTION)
             advanceUntilIdle()
 
-            val testPreset = RNodeRegionalPreset(
-                id = "test_preset",
-                countryCode = "US",
-                countryName = "United States",
-                cityOrRegion = "Test City",
-                frequency = 915_000_000,
-                bandwidth = 125_000,
-                spreadingFactor = 9,
-                codingRate = 5,
-                txPower = 17,
-                description = "Test preset",
-            )
+            val testPreset =
+                RNodeRegionalPreset(
+                    id = "test_preset",
+                    countryCode = "US",
+                    countryName = "United States",
+                    cityOrRegion = "Test City",
+                    frequency = 915_000_000,
+                    bandwidth = 125_000,
+                    spreadingFactor = 9,
+                    codingRate = 5,
+                    txPower = 17,
+                    description = "Test preset",
+                )
             viewModel.selectPreset(testPreset)
             advanceUntilIdle()
 
@@ -1358,26 +1361,28 @@ class RNodeWizardViewModelTest {
     fun `loadExistingConfig loads TCP RNode configuration correctly`() =
         runTest {
             val interfaceId = 1L
-            val entity = InterfaceEntity(
-                id = interfaceId,
-                name = "Test TCP RNode",
-                type = "RNode",
-                enabled = true,
-                configJson = """{"connection_mode":"tcp","tcp_host":"192.168.1.100","tcp_port":7633}""",
-            )
-            val rnodeConfig = InterfaceConfig.RNode(
-                name = "Test TCP RNode",
-                enabled = true,
-                connectionMode = "tcp",
-                tcpHost = "192.168.1.100",
-                tcpPort = 7633,
-                targetDeviceName = "",
-                frequency = 915000000,
-                bandwidth = 125000,
-                txPower = 17,
-                spreadingFactor = 8,
-                codingRate = 5,
-            )
+            val entity =
+                InterfaceEntity(
+                    id = interfaceId,
+                    name = "Test TCP RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode":"tcp","tcp_host":"192.168.1.100","tcp_port":7633}""",
+                )
+            val rnodeConfig =
+                InterfaceConfig.RNode(
+                    name = "Test TCP RNode",
+                    enabled = true,
+                    connectionMode = "tcp",
+                    tcpHost = "192.168.1.100",
+                    tcpPort = 7633,
+                    targetDeviceName = "",
+                    frequency = 915000000,
+                    bandwidth = 125000,
+                    txPower = 17,
+                    spreadingFactor = 8,
+                    codingRate = 5,
+                )
 
             coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
             coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
@@ -1400,26 +1405,28 @@ class RNodeWizardViewModelTest {
     fun `loadExistingConfig loads Classic Bluetooth RNode and sets edit mode`() =
         runTest {
             val interfaceId = 2L
-            val entity = InterfaceEntity(
-                id = interfaceId,
-                name = "Test Classic RNode",
-                type = "RNode",
-                enabled = true,
-                configJson = """{"connection_mode":"classic","target_device_name":"RNode Classic123"}""",
-            )
-            val rnodeConfig = InterfaceConfig.RNode(
-                name = "Test Classic RNode",
-                enabled = true,
-                connectionMode = "classic", // classic doesn't trigger RSSI polling
-                targetDeviceName = "RNode Classic123",
-                tcpHost = null,
-                tcpPort = 7633,
-                frequency = 915000000,
-                bandwidth = 125000,
-                txPower = 17,
-                spreadingFactor = 8,
-                codingRate = 5,
-            )
+            val entity =
+                InterfaceEntity(
+                    id = interfaceId,
+                    name = "Test Classic RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode":"classic","target_device_name":"RNode Classic123"}""",
+                )
+            val rnodeConfig =
+                InterfaceConfig.RNode(
+                    name = "Test Classic RNode",
+                    enabled = true,
+                    connectionMode = "classic", // classic doesn't trigger RSSI polling
+                    targetDeviceName = "RNode Classic123",
+                    tcpHost = null,
+                    tcpPort = 7633,
+                    frequency = 915000000,
+                    bandwidth = 125000,
+                    txPower = 17,
+                    spreadingFactor = 8,
+                    codingRate = 5,
+                )
 
             coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
             coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
@@ -1460,19 +1467,21 @@ class RNodeWizardViewModelTest {
     fun `loadExistingConfig handles non-RNode interface type`() =
         runTest {
             val interfaceId = 4L
-            val entity = InterfaceEntity(
-                id = interfaceId,
-                name = "TCP Client",
-                type = "TCPClient",
-                enabled = true,
-                configJson = """{"target_host":"10.0.0.1","target_port":4242}""",
-            )
-            val tcpConfig = InterfaceConfig.TCPClient(
-                name = "TCP Client",
-                enabled = true,
-                targetHost = "10.0.0.1",
-                targetPort = 4242,
-            )
+            val entity =
+                InterfaceEntity(
+                    id = interfaceId,
+                    name = "TCP Client",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson = """{"target_host":"10.0.0.1","target_port":4242}""",
+                )
+            val tcpConfig =
+                InterfaceConfig.TCPClient(
+                    name = "TCP Client",
+                    enabled = true,
+                    targetHost = "10.0.0.1",
+                    targetPort = 4242,
+                )
 
             coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
             coEvery { interfaceRepository.entityToConfig(entity) } returns tcpConfig
@@ -1492,27 +1501,29 @@ class RNodeWizardViewModelTest {
     fun `loadExistingConfig sets custom mode when no matching preset found`() =
         runTest {
             val interfaceId = 5L
-            val entity = InterfaceEntity(
-                id = interfaceId,
-                name = "Custom RNode",
-                type = "RNode",
-                enabled = true,
-                configJson = """{"connection_mode":"tcp","tcp_host":"10.0.0.1"}""",
-            )
+            val entity =
+                InterfaceEntity(
+                    id = interfaceId,
+                    name = "Custom RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode":"tcp","tcp_host":"10.0.0.1"}""",
+                )
             // Custom frequency that doesn't match any preset
-            val rnodeConfig = InterfaceConfig.RNode(
-                name = "Custom RNode",
-                enabled = true,
-                connectionMode = "tcp",
-                tcpHost = "10.0.0.1",
-                tcpPort = 7633,
-                targetDeviceName = "",
-                frequency = 433500000, // Custom frequency
-                bandwidth = 62500, // Custom bandwidth
-                txPower = 10,
-                spreadingFactor = 9,
-                codingRate = 6,
-            )
+            val rnodeConfig =
+                InterfaceConfig.RNode(
+                    name = "Custom RNode",
+                    enabled = true,
+                    connectionMode = "tcp",
+                    tcpHost = "10.0.0.1",
+                    tcpPort = 7633,
+                    targetDeviceName = "",
+                    frequency = 433500000, // Custom frequency
+                    bandwidth = 62500, // Custom bandwidth
+                    txPower = 10,
+                    spreadingFactor = 9,
+                    codingRate = 6,
+                )
 
             coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
             coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
@@ -1534,30 +1545,32 @@ class RNodeWizardViewModelTest {
     fun `loadExistingConfig populates all configuration fields`() =
         runTest {
             val interfaceId = 6L
-            val entity = InterfaceEntity(
-                id = interfaceId,
-                name = "Full Config RNode",
-                type = "RNode",
-                enabled = true,
-                configJson = """{"connection_mode":"tcp","tcp_host":"192.168.1.50"}""",
-            )
-            val rnodeConfig = InterfaceConfig.RNode(
-                name = "Full Config RNode",
-                enabled = true,
-                connectionMode = "tcp",
-                tcpHost = "192.168.1.50",
-                tcpPort = 8000,
-                targetDeviceName = "",
-                frequency = 869525000,
-                bandwidth = 250000,
-                txPower = 14,
-                spreadingFactor = 10,
-                codingRate = 5,
-                stAlock = 15.0,
-                ltAlock = 5.0,
-                mode = "gateway",
-                enableFramebuffer = false,
-            )
+            val entity =
+                InterfaceEntity(
+                    id = interfaceId,
+                    name = "Full Config RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode":"tcp","tcp_host":"192.168.1.50"}""",
+                )
+            val rnodeConfig =
+                InterfaceConfig.RNode(
+                    name = "Full Config RNode",
+                    enabled = true,
+                    connectionMode = "tcp",
+                    tcpHost = "192.168.1.50",
+                    tcpPort = 8000,
+                    targetDeviceName = "",
+                    frequency = 869525000,
+                    bandwidth = 250000,
+                    txPower = 14,
+                    spreadingFactor = 10,
+                    codingRate = 5,
+                    stAlock = 15.0,
+                    ltAlock = 5.0,
+                    mode = "gateway",
+                    enableFramebuffer = false,
+                )
 
             coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
             coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
@@ -1640,26 +1653,28 @@ class RNodeWizardViewModelTest {
     fun `saveConfiguration uses editingInterfaceId in edit mode`() =
         runTest {
             val interfaceId = 10L
-            val entity = InterfaceEntity(
-                id = interfaceId,
-                name = "Existing RNode",
-                type = "RNode",
-                enabled = true,
-                configJson = """{"connection_mode":"tcp","tcp_host":"10.0.0.1"}""",
-            )
-            val rnodeConfig = InterfaceConfig.RNode(
-                name = "Existing RNode",
-                enabled = true,
-                connectionMode = "tcp",
-                tcpHost = "10.0.0.1",
-                tcpPort = 7633,
-                targetDeviceName = "",
-                frequency = 915000000,
-                bandwidth = 125000,
-                txPower = 17,
-                spreadingFactor = 8,
-                codingRate = 5,
-            )
+            val entity =
+                InterfaceEntity(
+                    id = interfaceId,
+                    name = "Existing RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode":"tcp","tcp_host":"10.0.0.1"}""",
+                )
+            val rnodeConfig =
+                InterfaceConfig.RNode(
+                    name = "Existing RNode",
+                    enabled = true,
+                    connectionMode = "tcp",
+                    tcpHost = "10.0.0.1",
+                    tcpPort = 7633,
+                    targetDeviceName = "",
+                    frequency = 915000000,
+                    bandwidth = 125000,
+                    txPower = 17,
+                    spreadingFactor = 8,
+                    codingRate = 5,
+                )
 
             coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
             coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
@@ -1765,13 +1780,14 @@ class RNodeWizardViewModelTest {
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
-            val bleDevice = DiscoveredRNode(
-                name = "RNode BLE",
-                address = "11:22:33:44:55:66",
-                type = BluetoothType.BLE,
-                rssi = -60,
-                isPaired = true,
-            )
+            val bleDevice =
+                DiscoveredRNode(
+                    name = "RNode BLE",
+                    address = "11:22:33:44:55:66",
+                    type = BluetoothType.BLE,
+                    rssi = -60,
+                    isPaired = true,
+                )
 
             viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
             viewModel.selectDevice(bleDevice)
@@ -1794,13 +1810,14 @@ class RNodeWizardViewModelTest {
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
-            val classicDevice = DiscoveredRNode(
-                name = "RNode Classic",
-                address = "AA:BB:CC:DD:EE:FF",
-                type = BluetoothType.CLASSIC,
-                rssi = -55,
-                isPaired = true,
-            )
+            val classicDevice =
+                DiscoveredRNode(
+                    name = "RNode Classic",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.CLASSIC,
+                    rssi = -55,
+                    isPaired = true,
+                )
 
             viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
             viewModel.selectDevice(classicDevice)
@@ -1822,13 +1839,14 @@ class RNodeWizardViewModelTest {
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
-            val unknownDevice = DiscoveredRNode(
-                name = "RNode Unknown",
-                address = "FF:EE:DD:CC:BB:AA",
-                type = BluetoothType.UNKNOWN,
-                rssi = -65,
-                isPaired = true,
-            )
+            val unknownDevice =
+                DiscoveredRNode(
+                    name = "RNode Unknown",
+                    address = "FF:EE:DD:CC:BB:AA",
+                    type = BluetoothType.UNKNOWN,
+                    rssi = -65,
+                    isPaired = true,
+                )
 
             viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
             viewModel.selectDevice(unknownDevice)
@@ -1912,26 +1930,28 @@ class RNodeWizardViewModelTest {
     fun `saveConfiguration calls updateInterface in edit mode`() =
         runTest {
             val interfaceId = 42L
-            val entity = InterfaceEntity(
-                id = interfaceId,
-                name = "Existing RNode",
-                type = "RNode",
-                enabled = true,
-                configJson = """{"connection_mode":"tcp","tcp_host":"10.0.0.1"}""",
-            )
-            val existingConfig = InterfaceConfig.RNode(
-                name = "Existing RNode",
-                enabled = true,
-                connectionMode = "tcp",
-                tcpHost = "10.0.0.1",
-                tcpPort = 7633,
-                targetDeviceName = "",
-                frequency = 915000000,
-                bandwidth = 125000,
-                txPower = 17,
-                spreadingFactor = 8,
-                codingRate = 5,
-            )
+            val entity =
+                InterfaceEntity(
+                    id = interfaceId,
+                    name = "Existing RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode":"tcp","tcp_host":"10.0.0.1"}""",
+                )
+            val existingConfig =
+                InterfaceConfig.RNode(
+                    name = "Existing RNode",
+                    enabled = true,
+                    connectionMode = "tcp",
+                    tcpHost = "10.0.0.1",
+                    tcpPort = 7633,
+                    targetDeviceName = "",
+                    frequency = 915000000,
+                    bandwidth = 125000,
+                    txPower = 17,
+                    spreadingFactor = 8,
+                    codingRate = 5,
+                )
 
             coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
             coEvery { interfaceRepository.entityToConfig(entity) } returns existingConfig
@@ -1977,19 +1997,20 @@ class RNodeWizardViewModelTest {
     fun `saveConfiguration fails with duplicate interface name`() =
         runTest {
             // Mock existing interface with conflicting name
-            val existingInterface = InterfaceConfig.RNode(
-                name = "My RNode",
-                enabled = true,
-                connectionMode = "tcp",
-                tcpHost = "192.168.1.50",
-                tcpPort = 7633,
-                targetDeviceName = "",
-                frequency = 915000000,
-                bandwidth = 125000,
-                txPower = 17,
-                spreadingFactor = 8,
-                codingRate = 5,
-            )
+            val existingInterface =
+                InterfaceConfig.RNode(
+                    name = "My RNode",
+                    enabled = true,
+                    connectionMode = "tcp",
+                    tcpHost = "192.168.1.50",
+                    tcpPort = 7633,
+                    targetDeviceName = "",
+                    frequency = 915000000,
+                    bandwidth = 125000,
+                    txPower = 17,
+                    spreadingFactor = 8,
+                    codingRate = 5,
+                )
             every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
 
             viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
@@ -2014,19 +2035,20 @@ class RNodeWizardViewModelTest {
     fun `saveConfiguration fails with case-insensitive duplicate name`() =
         runTest {
             // Mock existing interface with different case name
-            val existingInterface = InterfaceConfig.RNode(
-                name = "my rnode",
-                enabled = true,
-                connectionMode = "tcp",
-                tcpHost = "192.168.1.50",
-                tcpPort = 7633,
-                targetDeviceName = "",
-                frequency = 915000000,
-                bandwidth = 125000,
-                txPower = 17,
-                spreadingFactor = 8,
-                codingRate = 5,
-            )
+            val existingInterface =
+                InterfaceConfig.RNode(
+                    name = "my rnode",
+                    enabled = true,
+                    connectionMode = "tcp",
+                    tcpHost = "192.168.1.50",
+                    tcpPort = 7633,
+                    targetDeviceName = "",
+                    frequency = 915000000,
+                    bandwidth = 125000,
+                    txPower = 17,
+                    spreadingFactor = 8,
+                    codingRate = 5,
+                )
             every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
 
             viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
@@ -2070,19 +2092,20 @@ class RNodeWizardViewModelTest {
     @Test
     fun `saveConfiguration does not call repository when duplicate name detected`() =
         runTest {
-            val existingInterface = InterfaceConfig.RNode(
-                name = "Duplicate RNode",
-                enabled = true,
-                connectionMode = "tcp",
-                tcpHost = "192.168.1.50",
-                tcpPort = 7633,
-                targetDeviceName = "",
-                frequency = 915000000,
-                bandwidth = 125000,
-                txPower = 17,
-                spreadingFactor = 8,
-                codingRate = 5,
-            )
+            val existingInterface =
+                InterfaceConfig.RNode(
+                    name = "Duplicate RNode",
+                    enabled = true,
+                    connectionMode = "tcp",
+                    tcpHost = "192.168.1.50",
+                    tcpPort = 7633,
+                    targetDeviceName = "",
+                    frequency = 915000000,
+                    bandwidth = 125000,
+                    txPower = 17,
+                    spreadingFactor = 8,
+                    codingRate = 5,
+                )
             every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
 
             viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)

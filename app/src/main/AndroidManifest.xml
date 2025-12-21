@@ -29,12 +29,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
 
-    <!-- Location permissions for BLE scanning on Android 6-11 -->
+    <!-- Location permissions for BLE scanning (Android 6-11) and Map feature (all versions) -->
     <!-- Android 12+ requires both FINE and COARSE if requesting FINE -->
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"
-        android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!-- Declare BLE hardware feature (optional but recommended) -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />

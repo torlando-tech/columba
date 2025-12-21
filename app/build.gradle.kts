@@ -283,6 +283,12 @@ dependencies {
     // MessagePack - for LXMF stamp generation
     implementation("org.msgpack:msgpack-core:0.9.8")
 
+    // MapLibre - for offline-capable maps
+    implementation("org.maplibre.gl:android-sdk:11.5.2")
+
+    // Google Play Services Location - for FusedLocationProviderClient
+    implementation("com.google.android.gms:play-services-location:21.2.0")
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)

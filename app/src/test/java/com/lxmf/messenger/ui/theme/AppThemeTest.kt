@@ -4,7 +4,6 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -15,7 +14,6 @@ import org.junit.Test
  * Tests PresetTheme enum and CustomTheme data class without using Compose.
  */
 class AppThemeTest {
-
     // ========== PresetTheme Tests ==========
 
     @Test
@@ -436,25 +434,27 @@ class AppThemeTest {
 
     @Test
     fun customTheme_getIdentifier_returnsCorrectFormat() {
-        val theme = CustomTheme(
-            id = 123L,
-            displayName = "My Theme",
-            description = "Custom theme",
-            lightColorScheme = lightColorScheme(),
-            darkColorScheme = darkColorScheme(),
-        )
+        val theme =
+            CustomTheme(
+                id = 123L,
+                displayName = "My Theme",
+                description = "Custom theme",
+                lightColorScheme = lightColorScheme(),
+                darkColorScheme = darkColorScheme(),
+            )
         assertEquals("custom:123", theme.getIdentifier())
     }
 
     @Test
     fun customTheme_getIdentifier_withDifferentId_returnsCorrectFormat() {
-        val theme = CustomTheme(
-            id = 456L,
-            displayName = "Another Theme",
-            description = "Another custom theme",
-            lightColorScheme = lightColorScheme(),
-            darkColorScheme = darkColorScheme(),
-        )
+        val theme =
+            CustomTheme(
+                id = 456L,
+                displayName = "Another Theme",
+                description = "Another custom theme",
+                lightColorScheme = lightColorScheme(),
+                darkColorScheme = darkColorScheme(),
+            )
         assertEquals("custom:456", theme.getIdentifier())
     }
 
@@ -462,13 +462,14 @@ class AppThemeTest {
     fun customTheme_getColorScheme_light_returnsLightScheme() {
         val lightScheme = lightColorScheme(primary = Color.Red)
         val darkScheme = darkColorScheme(primary = Color.Blue)
-        val theme = CustomTheme(
-            id = 1L,
-            displayName = "Test Theme",
-            description = "Test",
-            lightColorScheme = lightScheme,
-            darkColorScheme = darkScheme,
-        )
+        val theme =
+            CustomTheme(
+                id = 1L,
+                displayName = "Test Theme",
+                description = "Test",
+                lightColorScheme = lightScheme,
+                darkColorScheme = darkScheme,
+            )
 
         val result = theme.getColorScheme(isDarkTheme = false)
         assertEquals(lightScheme.primary, result.primary)
@@ -479,13 +480,14 @@ class AppThemeTest {
     fun customTheme_getColorScheme_dark_returnsDarkScheme() {
         val lightScheme = lightColorScheme(primary = Color.Red)
         val darkScheme = darkColorScheme(primary = Color.Blue)
-        val theme = CustomTheme(
-            id = 1L,
-            displayName = "Test Theme",
-            description = "Test",
-            lightColorScheme = lightScheme,
-            darkColorScheme = darkScheme,
-        )
+        val theme =
+            CustomTheme(
+                id = 1L,
+                displayName = "Test Theme",
+                description = "Test",
+                lightColorScheme = lightScheme,
+                darkColorScheme = darkScheme,
+            )
 
         val result = theme.getColorScheme(isDarkTheme = true)
         assertEquals(darkScheme.primary, result.primary)
@@ -494,18 +496,20 @@ class AppThemeTest {
 
     @Test
     fun customTheme_getPreviewColors_light_extractsFromLightScheme() {
-        val lightScheme = lightColorScheme(
-            primary = Color.Red,
-            secondary = Color.Green,
-            tertiary = Color.Blue,
-        )
-        val theme = CustomTheme(
-            id = 1L,
-            displayName = "Test Theme",
-            description = "Test",
-            lightColorScheme = lightScheme,
-            darkColorScheme = darkColorScheme(),
-        )
+        val lightScheme =
+            lightColorScheme(
+                primary = Color.Red,
+                secondary = Color.Green,
+                tertiary = Color.Blue,
+            )
+        val theme =
+            CustomTheme(
+                id = 1L,
+                displayName = "Test Theme",
+                description = "Test",
+                lightColorScheme = lightScheme,
+                darkColorScheme = darkColorScheme(),
+            )
 
         val (primary, secondary, tertiary) = theme.getPreviewColors(isDarkTheme = false)
         assertEquals(Color.Red, primary)
@@ -515,18 +519,20 @@ class AppThemeTest {
 
     @Test
     fun customTheme_getPreviewColors_dark_extractsFromDarkScheme() {
-        val darkScheme = darkColorScheme(
-            primary = Color.Yellow,
-            secondary = Color.Cyan,
-            tertiary = Color.Magenta,
-        )
-        val theme = CustomTheme(
-            id = 1L,
-            displayName = "Test Theme",
-            description = "Test",
-            lightColorScheme = lightColorScheme(),
-            darkColorScheme = darkScheme,
-        )
+        val darkScheme =
+            darkColorScheme(
+                primary = Color.Yellow,
+                secondary = Color.Cyan,
+                tertiary = Color.Magenta,
+            )
+        val theme =
+            CustomTheme(
+                id = 1L,
+                displayName = "Test Theme",
+                description = "Test",
+                lightColorScheme = lightColorScheme(),
+                darkColorScheme = darkScheme,
+            )
 
         val (primary, secondary, tertiary) = theme.getPreviewColors(isDarkTheme = true)
         assertEquals(Color.Yellow, primary)
@@ -536,53 +542,57 @@ class AppThemeTest {
 
     @Test
     fun customTheme_withBaseTheme_storesReference() {
-        val theme = CustomTheme(
-            id = 1L,
-            displayName = "Vibrant Copy",
-            description = "Based on Vibrant",
-            lightColorScheme = lightColorScheme(),
-            darkColorScheme = darkColorScheme(),
-            baseTheme = PresetTheme.VIBRANT,
-        )
+        val theme =
+            CustomTheme(
+                id = 1L,
+                displayName = "Vibrant Copy",
+                description = "Based on Vibrant",
+                lightColorScheme = lightColorScheme(),
+                darkColorScheme = darkColorScheme(),
+                baseTheme = PresetTheme.VIBRANT,
+            )
 
         assertEquals(PresetTheme.VIBRANT, theme.baseTheme)
     }
 
     @Test
     fun customTheme_withoutBaseTheme_isNull() {
-        val theme = CustomTheme(
-            id = 1L,
-            displayName = "Original Theme",
-            description = "Not based on preset",
-            lightColorScheme = lightColorScheme(),
-            darkColorScheme = darkColorScheme(),
-        )
+        val theme =
+            CustomTheme(
+                id = 1L,
+                displayName = "Original Theme",
+                description = "Not based on preset",
+                lightColorScheme = lightColorScheme(),
+                darkColorScheme = darkColorScheme(),
+            )
 
         assertEquals(null, theme.baseTheme)
     }
 
     @Test
     fun customTheme_displayName_isStored() {
-        val theme = CustomTheme(
-            id = 1L,
-            displayName = "My Custom Theme",
-            description = "Test",
-            lightColorScheme = lightColorScheme(),
-            darkColorScheme = darkColorScheme(),
-        )
+        val theme =
+            CustomTheme(
+                id = 1L,
+                displayName = "My Custom Theme",
+                description = "Test",
+                lightColorScheme = lightColorScheme(),
+                darkColorScheme = darkColorScheme(),
+            )
 
         assertEquals("My Custom Theme", theme.displayName)
     }
 
     @Test
     fun customTheme_description_isStored() {
-        val theme = CustomTheme(
-            id = 1L,
-            displayName = "Test",
-            description = "A beautiful custom theme",
-            lightColorScheme = lightColorScheme(),
-            darkColorScheme = darkColorScheme(),
-        )
+        val theme =
+            CustomTheme(
+                id = 1L,
+                displayName = "Test",
+                description = "A beautiful custom theme",
+                lightColorScheme = lightColorScheme(),
+                darkColorScheme = darkColorScheme(),
+            )
 
         assertEquals("A beautiful custom theme", theme.description)
     }
@@ -594,40 +604,44 @@ class AppThemeTest {
         // Use same ColorScheme instances since data class equality compares all fields
         val light = lightColorScheme()
         val dark = darkColorScheme()
-        val theme1 = CustomTheme(
-            id = 1L,
-            displayName = "Theme",
-            description = "Desc",
-            lightColorScheme = light,
-            darkColorScheme = dark,
-        )
-        val theme2 = CustomTheme(
-            id = 1L,
-            displayName = "Theme",
-            description = "Desc",
-            lightColorScheme = light,
-            darkColorScheme = dark,
-        )
+        val theme1 =
+            CustomTheme(
+                id = 1L,
+                displayName = "Theme",
+                description = "Desc",
+                lightColorScheme = light,
+                darkColorScheme = dark,
+            )
+        val theme2 =
+            CustomTheme(
+                id = 1L,
+                displayName = "Theme",
+                description = "Desc",
+                lightColorScheme = light,
+                darkColorScheme = dark,
+            )
 
         assertEquals(theme1, theme2)
     }
 
     @Test
     fun customTheme_differentIds_areNotEqual() {
-        val theme1 = CustomTheme(
-            id = 1L,
-            displayName = "Theme",
-            description = "Desc",
-            lightColorScheme = lightColorScheme(),
-            darkColorScheme = darkColorScheme(),
-        )
-        val theme2 = CustomTheme(
-            id = 2L,
-            displayName = "Theme",
-            description = "Desc",
-            lightColorScheme = lightColorScheme(),
-            darkColorScheme = darkColorScheme(),
-        )
+        val theme1 =
+            CustomTheme(
+                id = 1L,
+                displayName = "Theme",
+                description = "Desc",
+                lightColorScheme = lightColorScheme(),
+                darkColorScheme = darkColorScheme(),
+            )
+        val theme2 =
+            CustomTheme(
+                id = 2L,
+                displayName = "Theme",
+                description = "Desc",
+                lightColorScheme = lightColorScheme(),
+                darkColorScheme = darkColorScheme(),
+            )
 
         assertNotEquals(theme1, theme2)
     }

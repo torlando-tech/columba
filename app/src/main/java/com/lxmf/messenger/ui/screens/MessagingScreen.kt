@@ -44,11 +44,19 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOff
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -92,6 +100,10 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.FileAttachmentCard
+import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
+import com.lxmf.messenger.ui.components.QuickShareLocationBottomSheet
+import com.lxmf.messenger.ui.model.LocationSharingState
+import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
 import com.lxmf.messenger.ui.components.StarToggleButton
@@ -140,6 +152,25 @@ fun MessagingScreen(
 
     // Observe loaded image IDs to trigger recomposition when images become available
     val loadedImageIds by viewModel.loadedImageIds.collectAsStateWithLifecycle()
+
+    // Location sharing state
+    val locationSharingState by viewModel.locationSharingState.collectAsStateWithLifecycle()
+    var showShareLocationSheet by remember { mutableStateOf(false) }
+    val shareLocationSheetState = rememberModalBottomSheetState()
+    var showLocationPermissionSheet by remember { mutableStateOf(false) }
+    val locationPermissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showStopSharingDialog by remember { mutableStateOf(false) }
+
+    // Location permission launcher
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+    ) { permissions ->
+        val granted = permissions.values.all { it }
+        if (granted) {
+            // Permission granted, now show the share location sheet
+            showShareLocationSheet = true
+        }
+    }
 
     // Lifecycle-aware coroutine scope for image and file processing
     val scope = rememberCoroutineScope()
@@ -387,6 +418,39 @@ fun MessagingScreen(
                     }
                 },
                 actions = {
+                    // Location sharing button
+                    IconButton(
+                        onClick = {
+                            // Check if we're actively sharing with this peer
+                            val isSharingWithPeer =
+                                locationSharingState == LocationSharingState.SHARING_WITH_THEM ||
+                                    locationSharingState == LocationSharingState.MUTUAL
+
+                            if (isSharingWithPeer) {
+                                // Show confirmation to stop sharing
+                                showStopSharingDialog = true
+                            } else if (LocationPermissionManager.hasPermission(context)) {
+                                showShareLocationSheet = true
+                            } else {
+                                showLocationPermissionSheet = true
+                            }
+                        },
+                    ) {
+                        Icon(
+                            imageVector = if (locationSharingState != LocationSharingState.NONE) {
+                                Icons.Default.LocationOn
+                            } else {
+                                Icons.Outlined.LocationOn
+                            },
+                            contentDescription = "Share location",
+                            tint = if (locationSharingState != LocationSharingState.NONE) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+
                     // Star toggle button for contact status
                     StarToggleButton(
                         isStarred = isContactSaved,
@@ -573,6 +637,68 @@ fun MessagingScreen(
             onDismiss = {
                 showFileOptionsSheet = false
                 selectedFileInfo = null
+            },
+        )
+    }
+
+    // Location permission bottom sheet
+    if (showLocationPermissionSheet) {
+        LocationPermissionBottomSheet(
+            onDismiss = { showLocationPermissionSheet = false },
+            onRequestPermissions = {
+                showLocationPermissionSheet = false
+                locationPermissionLauncher.launch(
+                    LocationPermissionManager.getRequiredPermissions().toTypedArray(),
+                )
+            },
+            sheetState = locationPermissionSheetState,
+            primaryActionLabel = "Allow Location",
+        )
+    }
+
+    // Share location bottom sheet
+    if (showShareLocationSheet) {
+        QuickShareLocationBottomSheet(
+            contactName = peerName,
+            onDismiss = { showShareLocationSheet = false },
+            onStartSharing = { duration ->
+                viewModel.startSharingWithPeer(destinationHash, peerName, duration)
+                showShareLocationSheet = false
+            },
+            sheetState = shareLocationSheetState,
+        )
+    }
+
+    // Stop sharing confirmation dialog
+    if (showStopSharingDialog) {
+        AlertDialog(
+            onDismissRequest = { showStopSharingDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.LocationOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            title = { Text("Stop Sharing Location?") },
+            text = { Text("Stop sharing your location with $peerName?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.stopSharingWithPeer(destinationHash)
+                        showStopSharingDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text("Stop Sharing")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStopSharingDialog = false }) {
+                    Text("Cancel")
+                }
             },
         )
     }

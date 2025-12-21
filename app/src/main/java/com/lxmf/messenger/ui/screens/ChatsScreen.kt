@@ -284,92 +284,92 @@ fun ConversationCard(
             ) {
                 // Identicon (reuse from AnnounceStreamScreen)
                 Box(modifier = Modifier.align(Alignment.CenterVertically)) {
-                Identicon(
-                    hash = conversation.peerPublicKey ?: conversation.peerHash.hexStringToByteArray(),
-                    size = 56.dp,
-                )
-                // Unread badge (top-right)
-                if (conversation.unreadCount > 0) {
-                    Badge(
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .offset(x = 4.dp, y = (-4).dp),
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    ) {
-                        Text(
-                            text = if (conversation.unreadCount > 99) "99+" else conversation.unreadCount.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-                }
-                // Saved contact badge (bottom-right)
-                if (isSaved) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .align(Alignment.BottomEnd)
-                                .offset(x = 4.dp, y = 4.dp)
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.tertiaryContainer),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "Saved contact",
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    Identicon(
+                        hash = conversation.peerPublicKey ?: conversation.peerHash.hexStringToByteArray(),
+                        size = 56.dp,
+                    )
+                    // Unread badge (top-right)
+                    if (conversation.unreadCount > 0) {
+                        Badge(
                             modifier =
                                 Modifier
-                                    .size(16.dp)
-                                    .align(Alignment.Center),
-                        )
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 4.dp, y = (-4).dp),
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ) {
+                            Text(
+                                text = if (conversation.unreadCount > 99) "99+" else conversation.unreadCount.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                    // Saved contact badge (bottom-right)
+                    if (isSaved) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = 4.dp, y = 4.dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.tertiaryContainer),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = "Saved contact",
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier =
+                                    Modifier
+                                        .size(16.dp)
+                                        .align(Alignment.Center),
+                            )
+                        }
                     }
                 }
-            }
 
-            // Conversation info
-            Column(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .align(Alignment.CenterVertically),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                // Peer name
+                // Conversation info
+                Column(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .align(Alignment.CenterVertically),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    // Peer name
+                    Text(
+                        text = conversation.peerName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = if (conversation.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+
+                    // Last message preview
+                    Text(
+                        text = conversation.lastMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color =
+                            if (conversation.unreadCount > 0) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                // Timestamp
                 Text(
-                    text = conversation.peerName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (conversation.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-
-                // Last message preview
-                Text(
-                    text = conversation.lastMessage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color =
-                        if (conversation.unreadCount > 0) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    text = formatTimestamp(conversation.lastMessageTimestamp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.Top),
                 )
             }
-
-            // Timestamp
-            Text(
-                text = formatTimestamp(conversation.lastMessageTimestamp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.Top),
-            )
-        }
 
             // Star button overlay
             StarToggleButton(

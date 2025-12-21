@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
@@ -67,6 +68,7 @@ import com.lxmf.messenger.ui.screens.ContactsScreen
 import com.lxmf.messenger.ui.screens.IdentityManagerScreen
 import com.lxmf.messenger.ui.screens.IdentityScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
+import com.lxmf.messenger.ui.screens.MapScreen
 import com.lxmf.messenger.ui.screens.MessageDetailScreen
 import com.lxmf.messenger.ui.screens.MessagingScreen
 import com.lxmf.messenger.ui.screens.MigrationScreen
@@ -186,6 +188,8 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
 
     object Contacts : Screen("contacts", "Contacts", Icons.Default.People)
 
+    object Map : Screen("map", "Map", Icons.Default.Map)
+
     object Identity : Screen("identity", "Network Status", Icons.Default.Info)
 
     object Settings : Screen("settings", "Settings", Icons.Default.Settings)
@@ -285,7 +289,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                 }
                 is PendingNavigation.AddContact -> {
                     // Navigate to contacts tab and trigger add contact dialog
-                    selectedTab = 2 // Contacts tab
+                    selectedTab = 1 // Contacts tab
                     navController.navigate(Screen.Contacts.route) {
                         popUpTo(navController.graph.startDestinationId) {
                             saveState = true
@@ -377,8 +381,8 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
         selectedTab =
             when (currentRoute) {
                 Screen.Chats.route -> 0
-                Screen.Announces.route -> 1
-                Screen.Contacts.route -> 2
+                Screen.Contacts.route -> 1
+                Screen.Map.route -> 2
                 Screen.Settings.route -> 3
                 else -> selectedTab // Keep current selection for nested screens
             }
@@ -409,8 +413,8 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
     val screens =
         listOf(
             Screen.Chats,
-            Screen.Announces,
             Screen.Contacts,
+            Screen.Map,
             Screen.Settings,
         )
 
@@ -532,6 +536,17 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                                 val encodedHash = Uri.encode(destinationHash)
                                 val encodedName = Uri.encode(peerName)
                                 navController.navigate("messaging/$encodedHash/$encodedName")
+                            },
+                        )
+                    }
+
+                    composable(Screen.Map.route) {
+                        MapScreen(
+                            onNavigateToConversation = { destinationHash ->
+                                // Navigate to messaging screen with the contact
+                                val encodedHash = Uri.encode(destinationHash)
+                                // Use a placeholder name - the messaging screen will fetch the actual name
+                                navController.navigate("messaging/$encodedHash/Contact")
                             },
                         )
                     }

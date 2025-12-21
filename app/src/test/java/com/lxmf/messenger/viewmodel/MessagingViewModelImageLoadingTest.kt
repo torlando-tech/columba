@@ -9,8 +9,10 @@ import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
+import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.ui.model.ImageCache
 import io.mockk.Runs
@@ -39,8 +41,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import com.lxmf.messenger.reticulum.model.Identity
-import com.lxmf.messenger.data.repository.Message as DataMessage
 
 /**
  * Robolectric tests for MessagingViewModel.loadImageAsync().
@@ -71,6 +71,7 @@ class MessagingViewModelImageLoadingTest {
     private lateinit var activeConversationManager: ActiveConversationManager
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
+    private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var viewModel: MessagingViewModel
 
     @Before
@@ -87,6 +88,10 @@ class MessagingViewModelImageLoadingTest {
         activeConversationManager = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
+        locationSharingManager = mockk(relaxed = true)
+
+        // Mock locationSharingManager flows
+        every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
 
         // Setup default mock behaviors
         every { conversationRepository.getMessages(any()) } returns flowOf(emptyList())
@@ -102,15 +107,17 @@ class MessagingViewModelImageLoadingTest {
         every { reticulumProtocol.setConversationActive(any()) } just Runs
         every { reticulumProtocol.observeDeliveryStatus() } returns flowOf()
 
-        viewModel = MessagingViewModel(
-            reticulumProtocol = reticulumProtocol,
-            conversationRepository = conversationRepository,
-            announceRepository = announceRepository,
-            contactRepository = contactRepository,
-            activeConversationManager = activeConversationManager,
-            settingsRepository = settingsRepository,
-            propagationNodeManager = propagationNodeManager,
-        )
+        viewModel =
+            MessagingViewModel(
+                reticulumProtocol = reticulumProtocol,
+                conversationRepository = conversationRepository,
+                announceRepository = announceRepository,
+                contactRepository = contactRepository,
+                activeConversationManager = activeConversationManager,
+                settingsRepository = settingsRepository,
+                propagationNodeManager = propagationNodeManager,
+                locationSharingManager = locationSharingManager,
+            )
     }
 
     @After
@@ -260,9 +267,10 @@ class MessagingViewModelImageLoadingTest {
 
             // Create a minimal valid PNG image (1x1 red pixel)
             // PNG signature + IHDR + IDAT + IEND chunks
-            val minimalPngHex = "89504e470d0a1a0a0000000d494844520000000100000001" +
-                "08020000009058470000000c4944415408d763f8cfc000" +
-                "0300030001206d6e7d0000000049454e44ae426082"
+            val minimalPngHex =
+                "89504e470d0a1a0a0000000d494844520000000100000001" +
+                    "08020000009058470000000c4944415408d763f8cfc000" +
+                    "0300030001206d6e7d0000000049454e44ae426082"
 
             // Pre-populate cache with decoded image to simulate successful decode
             val testBitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
@@ -387,8 +395,10 @@ class MessagingViewModelImageLoadingTest {
             advanceUntilIdle()
 
             // State should not have changed (skipped due to loadedImageIds check)
-            assertEquals(beforeCall.contains(messageId) || ImageCache.contains(messageId),
-                beforeCall.contains(messageId) || ImageCache.contains(messageId))
+            assertEquals(
+                beforeCall.contains(messageId) || ImageCache.contains(messageId),
+                beforeCall.contains(messageId) || ImageCache.contains(messageId),
+            )
         }
 
     @Test

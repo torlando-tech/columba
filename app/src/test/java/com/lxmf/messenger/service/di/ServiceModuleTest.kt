@@ -86,14 +86,15 @@ class ServiceModuleTest {
     fun `createBinder creates binder with maintenanceManager from managers`() {
         val managers = ServiceModule.createManagers(context, testScope)
 
-        val binder = ServiceModule.createBinder(
-            context = context,
-            managers = managers,
-            scope = testScope,
-            onInitialized = {},
-            onShutdown = {},
-            onForceExit = {},
-        )
+        val binder =
+            ServiceModule.createBinder(
+                context = context,
+                managers = managers,
+                scope = testScope,
+                onInitialized = {},
+                onShutdown = {},
+                onForceExit = {},
+            )
 
         // Binder should be created without throwing
         assertNotNull("Binder should be created", binder)
@@ -104,14 +105,15 @@ class ServiceModuleTest {
         val managers = ServiceModule.createManagers(context, testScope)
 
         // Should not throw when creating binder with all managers
-        val binder = ServiceModule.createBinder(
-            context = context,
-            managers = managers,
-            scope = testScope,
-            onInitialized = {},
-            onShutdown = {},
-            onForceExit = {},
-        )
+        val binder =
+            ServiceModule.createBinder(
+                context = context,
+                managers = managers,
+                scope = testScope,
+                onInitialized = {},
+                onShutdown = {},
+                onForceExit = {},
+            )
 
         assertNotNull(binder)
     }

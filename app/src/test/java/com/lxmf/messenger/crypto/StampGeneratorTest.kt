@@ -16,7 +16,6 @@ import org.junit.Test
  * byte-for-byte compatibility.
  */
 class StampGeneratorTest {
-
     private lateinit var stampGenerator: StampGenerator
 
     @Before
@@ -129,10 +128,11 @@ class StampGeneratorTest {
         val expandRounds = 2
 
         // Expected first 64 bytes from Python test
-        val expectedFirst64 = hexToBytes(
-            "6b4e93e1358f5b1865f30c2e4c4d3e3e5585bc73c4f3bac53c5418f882791463" +
-            "8980973daa9d75be40e2e50adc12987364ee078e492fa424c3980cc51579b83b"
-        )
+        val expectedFirst64 =
+            hexToBytes(
+                "6b4e93e1358f5b1865f30c2e4c4d3e3e5585bc73c4f3bac53c5418f882791463" +
+                    "8980973daa9d75be40e2e50adc12987364ee078e492fa424c3980cc51579b83b",
+            )
 
         val workblock = stampGenerator.generateWorkblock(material, expandRounds)
 
@@ -212,34 +212,36 @@ class StampGeneratorTest {
     // ==================== Stamp Generation Tests ====================
 
     @Test
-    fun `generateStamp produces valid stamp`() = runTest {
-        // Use small workblock for fast test
-        val material = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-        val workblock = stampGenerator.generateWorkblock(material, 2)
-        val stampCost = 8 // Relatively easy to find
+    fun `generateStamp produces valid stamp`() =
+        runTest {
+            // Use small workblock for fast test
+            val material = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+            val workblock = stampGenerator.generateWorkblock(material, 2)
+            val stampCost = 8 // Relatively easy to find
 
-        val result = stampGenerator.generateStamp(workblock, stampCost)
+            val result = stampGenerator.generateStamp(workblock, stampCost)
 
-        assertNotNull(result.stamp)
-        assertTrue(stampGenerator.isStampValid(result.stamp!!, stampCost, workblock))
-        assertTrue(result.value >= stampCost)
-        assertTrue(result.rounds > 0)
-    }
+            assertNotNull(result.stamp)
+            assertTrue(stampGenerator.isStampValid(result.stamp!!, stampCost, workblock))
+            assertTrue(result.value >= stampCost)
+            assertTrue(result.rounds > 0)
+        }
 
     @Test
-    fun `generateStampWithWorkblock produces valid stamp`() = runTest {
-        val messageId = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-        val stampCost = 8
-        val expandRounds = 2 // Small for fast test
+    fun `generateStampWithWorkblock produces valid stamp`() =
+        runTest {
+            val messageId = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+            val stampCost = 8
+            val expandRounds = 2 // Small for fast test
 
-        val result = stampGenerator.generateStampWithWorkblock(messageId, stampCost, expandRounds)
+            val result = stampGenerator.generateStampWithWorkblock(messageId, stampCost, expandRounds)
 
-        assertNotNull(result.stamp)
+            assertNotNull(result.stamp)
 
-        // Verify the stamp is valid against regenerated workblock
-        val workblock = stampGenerator.generateWorkblock(messageId, expandRounds)
-        assertTrue(stampGenerator.isStampValid(result.stamp!!, stampCost, workblock))
-    }
+            // Verify the stamp is valid against regenerated workblock
+            val workblock = stampGenerator.generateWorkblock(messageId, expandRounds)
+            assertTrue(stampGenerator.isStampValid(result.stamp!!, stampCost, workblock))
+        }
 
     // ==================== StampResult Tests ====================
 
@@ -345,18 +347,19 @@ class StampGeneratorTest {
     }
 
     @Test
-    fun `generateStamp with very low cost finds stamp quickly`() = runTest {
-        val material = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-        val workblock = stampGenerator.generateWorkblock(material, 1) // Minimal workblock
-        val stampCost = 1 // Very easy
+    fun `generateStamp with very low cost finds stamp quickly`() =
+        runTest {
+            val material = hexToBytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+            val workblock = stampGenerator.generateWorkblock(material, 1) // Minimal workblock
+            val stampCost = 1 // Very easy
 
-        val result = stampGenerator.generateStamp(workblock, stampCost)
+            val result = stampGenerator.generateStamp(workblock, stampCost)
 
-        assertNotNull(result.stamp)
-        assertTrue(result.value >= stampCost)
-        // Should find in very few rounds with cost 1
-        assertTrue(result.rounds < 100)
-    }
+            assertNotNull(result.stamp)
+            assertTrue(result.value >= stampCost)
+            // Should find in very few rounds with cost 1
+            assertTrue(result.rounds < 100)
+        }
 
     @Test
     fun `sha256 empty input`() {
@@ -367,12 +370,13 @@ class StampGeneratorTest {
 
     @Test
     fun `hkdfExpand with empty IKM`() {
-        val result = stampGenerator.hkdfExpand(
-            ikm = ByteArray(0),
-            salt = ByteArray(16),
-            info = ByteArray(0),
-            length = 32
-        )
+        val result =
+            stampGenerator.hkdfExpand(
+                ikm = ByteArray(0),
+                salt = ByteArray(16),
+                info = ByteArray(0),
+                length = 32,
+            )
         assertEquals(32, result.size)
     }
 
@@ -396,8 +400,11 @@ class StampGeneratorTest {
         val len = hex.length
         val data = ByteArray(len / 2)
         for (i in 0 until len step 2) {
-            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) +
-                Character.digit(hex[i + 1], 16)).toByte()
+            data[i / 2] =
+                (
+                    (Character.digit(hex[i], 16) shl 4) +
+                        Character.digit(hex[i + 1], 16)
+                ).toByte()
         }
         return data
     }

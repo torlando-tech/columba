@@ -23,10 +23,15 @@ data class Announce(
     val lastSeenTimestamp: Long,
     val nodeType: String,
     val receivingInterface: String? = null,
+    val receivingInterfaceType: String? = null,
     val aspect: String? = null, // Destination aspect (e.g., "lxmf.delivery", "call.audio")
     val isFavorite: Boolean = false,
     val favoritedTimestamp: Long? = null,
+    val stampCost: Int? = null, // Stamp cost for message delivery
+    val stampCostFlexibility: Int? = null, // Flexibility range for propagation nodes
+    val peeringCost: Int? = null, // Peering cost for propagation nodes
 ) {
+    @Suppress("CyclomaticComplexMethod")
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -46,8 +51,12 @@ data class Announce(
         if (lastSeenTimestamp != other.lastSeenTimestamp) return false
         if (nodeType != other.nodeType) return false
         if (receivingInterface != other.receivingInterface) return false
+        if (receivingInterfaceType != other.receivingInterfaceType) return false
         if (isFavorite != other.isFavorite) return false
         if (favoritedTimestamp != other.favoritedTimestamp) return false
+        if (stampCost != other.stampCost) return false
+        if (stampCostFlexibility != other.stampCostFlexibility) return false
+        if (peeringCost != other.peeringCost) return false
 
         return true
     }
@@ -61,8 +70,12 @@ data class Announce(
         result = 31 * result + lastSeenTimestamp.hashCode()
         result = 31 * result + nodeType.hashCode()
         result = 31 * result + (receivingInterface?.hashCode() ?: 0)
+        result = 31 * result + (receivingInterfaceType?.hashCode() ?: 0)
         result = 31 * result + isFavorite.hashCode()
         result = 31 * result + (favoritedTimestamp?.hashCode() ?: 0)
+        result = 31 * result + (stampCost?.hashCode() ?: 0)
+        result = 31 * result + (stampCostFlexibility?.hashCode() ?: 0)
+        result = 31 * result + (peeringCost?.hashCode() ?: 0)
         return result
     }
 }
@@ -105,6 +118,20 @@ class AnnounceRepository
          */
         fun getAnnouncesByTypes(nodeTypes: List<String>): Flow<List<Announce>> {
             return announceDao.getAnnouncesByTypes(nodeTypes).map { entities ->
+                entities.map { it.toAnnounce() }
+            }
+        }
+
+        /**
+         * Get top propagation nodes sorted by hop count (ascending).
+         * Optimized query with LIMIT in SQL - only fetches the requested number of rows.
+         * Used for relay selection UI.
+         *
+         * @param limit Maximum number of nodes to return (default 10)
+         * @return Flow of propagation node announces sorted by nearest first
+         */
+        fun getTopPropagationNodes(limit: Int = 10): Flow<List<Announce>> {
+            return announceDao.getTopPropagationNodes(limit).map { entities ->
                 entities.map { it.toAnnounce() }
             }
         }
@@ -171,6 +198,7 @@ class AnnounceRepository
          * @param nodeType Type of node ("NODE", "PEER", or "PROPAGATION_NODE")
          * @param receivingInterface Name of the interface through which the announce was received
          */
+        @Suppress("LongParameterList")
         suspend fun saveAnnounce(
             destinationHash: String,
             peerName: String,
@@ -180,7 +208,11 @@ class AnnounceRepository
             timestamp: Long,
             nodeType: String,
             receivingInterface: String? = null,
+            receivingInterfaceType: String? = null,
             aspect: String? = null,
+            stampCost: Int? = null,
+            stampCostFlexibility: Int? = null,
+            peeringCost: Int? = null,
         ) {
             // Preserve favorite status if announce already exists
             val existing = announceDao.getAnnounce(destinationHash)
@@ -195,9 +227,13 @@ class AnnounceRepository
                     lastSeenTimestamp = timestamp,
                     nodeType = nodeType,
                     receivingInterface = receivingInterface,
+                    receivingInterfaceType = receivingInterfaceType,
                     aspect = aspect,
                     isFavorite = existing?.isFavorite ?: false,
                     favoritedTimestamp = existing?.favoritedTimestamp,
+                    stampCost = stampCost,
+                    stampCostFlexibility = stampCostFlexibility,
+                    peeringCost = peeringCost,
                 )
             announceDao.upsertAnnounce(entity)
         }
@@ -303,6 +339,15 @@ class AnnounceRepository
             announceDao.deleteAllAnnounces()
         }
 
+        /**
+         * Get count of announces grouped by nodeType.
+         * Used for debugging relay selection issues.
+         * Returns list of (nodeType, count) pairs.
+         */
+        suspend fun getNodeTypeCounts(): List<Pair<String, Int>> {
+            return announceDao.getNodeTypeCounts().map { it.nodeType to it.count }
+        }
+
         private fun AnnounceEntity.toAnnounce() =
             Announce(
                 destinationHash = destinationHash,
@@ -313,8 +358,12 @@ class AnnounceRepository
                 lastSeenTimestamp = lastSeenTimestamp,
                 nodeType = nodeType,
                 receivingInterface = receivingInterface,
+                receivingInterfaceType = receivingInterfaceType,
                 aspect = aspect,
                 isFavorite = isFavorite,
                 favoritedTimestamp = favoritedTimestamp,
+                stampCost = stampCost,
+                stampCostFlexibility = stampCostFlexibility,
+                peeringCost = peeringCost,
             )
     }

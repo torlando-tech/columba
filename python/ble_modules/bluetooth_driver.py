@@ -49,6 +49,7 @@ class BLEDriverInterface(ABC):
     on_data_received: Optional[Callable[[str, bytes], None]] = None  # address, data
     on_mtu_negotiated: Optional[Callable[[str, int], None]] = None  # address, mtu
     on_error: Optional[Callable[[str, str, Optional[Exception]], None]] = None  # severity, message, exception
+    on_address_changed: Optional[Callable[[str, str, str], None]] = None  # old_address, new_address, identity_hash
 
     # --- Lifecycle & Configuration ---
 

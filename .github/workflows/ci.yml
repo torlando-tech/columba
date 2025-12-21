@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
 
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
@@ -32,6 +34,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -41,18 +45,12 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run ktlint
-        run: ./gradlew ktlintCheck --continue
-
-      - name: Run detekt
-        run: ./gradlew detekt --continue
-
-      - name: Run CPD (duplicate code detection)
-        run: ./gradlew cpdCheck --continue
+      - name: Run all lint checks
+        run: ./gradlew ktlintCheck detekt cpdCheck --continue
 
       - name: Upload lint reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: lint-reports
           path: |
@@ -69,6 +67,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
 
       - name: Make audit script executable
         run: chmod +x audit-dispatchers.sh
@@ -84,7 +84,7 @@ jobs:
 
       - name: Upload audit report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: threading-audit-report
           path: dispatcher-audit-report.txt
@@ -112,6 +112,7 @@ jobs:
 
   unit-tests:
     name: Unit Tests
+    needs: [lint, validate-wrapper]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -120,6 +121,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: recursive
+          fetch-depth: 1
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -127,12 +129,20 @@ jobs:
           cache-read-only: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install Python build dependencies
-        run: pip install build
+        run: pip install build pytest pytest-cov
+
+      - name: Run Python unit tests with coverage
+        run: |
+          cd python && python -m pytest -v \
+            --cov=. \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-python.xml
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -144,12 +154,20 @@ jobs:
           rm -rf app/build/generated/aidl_source_output_dir
           rm -rf */build/generated/aidl_source_output_dir
 
-      - name: Run unit tests
-        run: ./gradlew test --stacktrace --max-workers=2
+      - name: Clean JaCoCo execution data
+        run: |
+          # Clean stale JaCoCo execution data to avoid "exceeds max age" errors in Codecov
+          rm -rf build/jacoco
+          rm -rf */build/jacoco
+          rm -rf build/reports/jacoco
+          rm -rf */build/reports/jacoco
+
+      - name: Run unit tests and generate coverage report
+        run: ./gradlew testDebugUnitTest jacocoTestReport --stacktrace --max-workers=2 --no-build-cache
 
       - name: Upload unit test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: unit-test-results
           path: |
@@ -159,31 +177,40 @@ jobs:
 
       - name: Upload unit test reports
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: unit-test-reports
           path: |
             **/build/reports/tests/
 
-      - name: Generate code coverage report
-        run: ./gradlew jacocoTestReport --stacktrace
-
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
           verbose: true
 
+      - name: Upload Python coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./python/coverage-python.xml
+          flags: python
+          name: codecov-python
+          fail_ci_if_error: false
+          verbose: true
+
       - name: Upload coverage reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-reports
           path: |
             **/build/reports/jacoco/
+            python/coverage-python.xml
           retention-days: 7
 
   # instrumented-tests:
@@ -203,7 +230,7 @@ jobs:
   #         cache-read-only: false
 
   #     - name: Set up Python
-  #       uses: actions/setup-python@v5
+  #       uses: actions/setup-python@v6
   #       with:
   #         python-version: '3.11'
 
@@ -291,7 +318,7 @@ jobs:
 
   #     - name: Upload instrumented test results
   #       if: always()
-  #       uses: actions/upload-artifact@v5
+  #       uses: actions/upload-artifact@v6
   #       with:
   #         name: instrumented-test-results
   #         path: |
@@ -301,7 +328,7 @@ jobs:
 
   #     - name: Upload instrumented test reports
   #       if: failure()
-  #       uses: actions/upload-artifact@v5
+  #       uses: actions/upload-artifact@v6
   #       with:
   #         name: instrumented-test-reports
   #         path: |
@@ -310,7 +337,7 @@ jobs:
 
   #     - name: Upload logcat output
   #       if: failure()
-  #       uses: actions/upload-artifact@v5
+  #       uses: actions/upload-artifact@v6
   #       with:
   #         name: logcat
   #         path: artifacts/logcat.log

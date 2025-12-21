@@ -73,7 +73,12 @@ data class ContactEntity(
     val isPinned: Boolean = false, // Whether pinned to top of list
     // Resolution status
     val status: ContactStatus = ContactStatus.ACTIVE, // Identity resolution status
+    // Propagation node relay status
+    val isMyRelay: Boolean = false, // True if this contact is the user's selected propagation node relay
 ) {
+    // Suppressed: Data classes with ByteArray fields require custom equals/hashCode,
+    // and the complexity is inherent to comparing many fields with special ByteArray handling.
+    @Suppress("CyclomaticComplexMethod")
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -85,7 +90,9 @@ data class ContactEntity(
         if (publicKey != null) {
             if (other.publicKey == null) return false
             if (!publicKey.contentEquals(other.publicKey)) return false
-        } else if (other.publicKey != null) return false
+        } else if (other.publicKey != null) {
+            return false
+        }
         if (customNickname != other.customNickname) return false
         if (notes != other.notes) return false
         if (tags != other.tags) return false
@@ -94,6 +101,7 @@ data class ContactEntity(
         if (lastInteractionTimestamp != other.lastInteractionTimestamp) return false
         if (isPinned != other.isPinned) return false
         if (status != other.status) return false
+        if (isMyRelay != other.isMyRelay) return false
 
         return true
     }
@@ -110,6 +118,7 @@ data class ContactEntity(
         result = 31 * result + lastInteractionTimestamp.hashCode()
         result = 31 * result + isPinned.hashCode()
         result = 31 * result + status.hashCode()
+        result = 31 * result + isMyRelay.hashCode()
         return result
     }
 }

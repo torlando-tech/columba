@@ -132,6 +132,24 @@ interface AnnounceDao {
     fun getAnnouncesByTypes(nodeTypes: List<String>): Flow<List<AnnounceEntity>>
 
     /**
+     * Get top propagation nodes sorted by hop count (ascending), then by most recent.
+     * Optimized query with LIMIT in SQL to avoid fetching all rows.
+     * Used for relay selection UI.
+     *
+     * @param limit Maximum number of nodes to return (default 10)
+     * @return Flow of propagation node announces sorted by nearest first, then most recent
+     */
+    @Query(
+        """
+        SELECT * FROM announces
+        WHERE nodeType = 'PROPAGATION_NODE'
+        ORDER BY hops ASC, lastSeenTimestamp DESC
+        LIMIT :limit
+    """,
+    )
+    fun getTopPropagationNodes(limit: Int = 10): Flow<List<AnnounceEntity>>
+
+    /**
      * Count announces that are reachable via RNS path table.
      * Filters to only count PEER and NODE types (excludes PROPAGATION_NODE).
      *
@@ -189,4 +207,22 @@ interface AnnounceDao {
         nodeTypes: List<String>,
         query: String,
     ): PagingSource<Int, AnnounceEntity>
+
+    // Debug methods for troubleshooting
+
+    /**
+     * Get count of announces grouped by nodeType.
+     * Used for debugging relay selection issues.
+     * Returns Map with keys like "PEER", "NODE", "PROPAGATION_NODE"
+     */
+    @Query("SELECT nodeType, COUNT(*) as count FROM announces GROUP BY nodeType")
+    suspend fun getNodeTypeCounts(): List<NodeTypeCount>
 }
+
+/**
+ * Data class for nodeType count results.
+ */
+data class NodeTypeCount(
+    val nodeType: String,
+    val count: Int,
+)

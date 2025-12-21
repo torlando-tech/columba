@@ -11,7 +11,7 @@ Built with a native Android interface and Material Design 3, Columba brings mesh
 ## What You Can Do
 
 - **Message without infrastructure** - Send messages even when the internet is down or unavailable
-- **Connect multiple ways** - Use Bluetooth LE to connect to those around you anywhere, Wifi for those at home, or use TCP to connect to any Reticulum server around the world 
+- **Connect multiple ways** - Use Bluetooth LE to connect to those around you anywhere, Wifi for those at home, LoRa radio via [RNode](https://github.com/markqvist/RNode_Firmware) for those at a distance, or use TCP to connect to any Reticulum server around the world 
 - **Stay private** - End-to-end encryption with no accounts, no tracking, and no central servers
 - **Build your network** - Help relay messages for others and expand the mesh
 - **Keep your identity** - Generate your messaging identity right on your device
@@ -23,6 +23,8 @@ Built with a native Android interface and Material Design 3, Columba brings mesh
 ## Getting Started
 
 Download the latest release from [Releases](https://github.com/torlando-tech/columba/releases) and install on your Android device.
+
+<a href="https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/torlando-tech/columba"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" height="60" alt="Get it on Obtainium"></a>
 
 ## About Reticulum
 

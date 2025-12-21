@@ -7,6 +7,26 @@ data class ReticulumConfig(
     val displayName: String? = null,
     val logLevel: LogLevel = LogLevel.INFO,
     val allowAnonymous: Boolean = false,
+    /**
+     * When false (default), Columba will attempt to connect to a shared RNS instance
+     * (e.g., from Sideband) if one is available on the device.
+     * When true, Columba will always create its own RNS instance.
+     */
+    val preferOwnInstance: Boolean = false,
+    /**
+     * RPC authentication key for shared instance communication.
+     * Required on Android when connecting to another app's shared instance (e.g., Sideband)
+     * because apps have separate config directories with different RPC keys.
+     * Export from Sideband: Connectivity → Share Instance Access
+     * Format: Hexadecimal string (e.g., "e5c032d3ec4e64a6aca9927ba8ab73336780f6d71790")
+     */
+    val rpcKey: String? = null,
+    /**
+     * When true (default), this device acts as a transport node and forwards
+     * traffic for the mesh network (caching path announces, relaying packets).
+     * When false, only handles its own traffic without relaying for other peers.
+     */
+    val enableTransport: Boolean = true,
 )
 
 /**
@@ -25,8 +45,8 @@ sealed class InterfaceConfig {
      * @param enabled Whether this interface should be initialized
      * @param groupId Custom network identifier (empty for default)
      * @param discoveryScope Discovery scope: "link", "admin", "site", "organisation", or "global"
-     * @param discoveryPort UDP port for peer discovery announcements (default: 48555)
-     * @param dataPort UDP port for data communication (default: 49555)
+     * @param discoveryPort UDP port for peer discovery announcements (null = RNS default 29716)
+     * @param dataPort UDP port for data communication (null = RNS default 42671)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
      */
     data class AutoInterface(
@@ -34,8 +54,8 @@ sealed class InterfaceConfig {
         override val enabled: Boolean = true,
         val groupId: String = "",
         val discoveryScope: String = "link",
-        val discoveryPort: Int = 48555,
-        val dataPort: Int = 49555,
+        val discoveryPort: Int? = null,
+        val dataPort: Int? = null,
         val mode: String = "full",
     ) : InterfaceConfig()
 
@@ -66,27 +86,40 @@ sealed class InterfaceConfig {
     /**
      * RNode - LoRa radio interface using RNode hardware.
      * Provides long-range, low-bandwidth communication.
+     * Supports Bluetooth (Classic SPP or BLE) or TCP/WiFi connections.
      *
      * @param name User-friendly name for this interface
      * @param enabled Whether this interface should be initialized
-     * @param port Serial port path (e.g., /dev/ttyUSB0) or BLE address
-     * @param frequency LoRa frequency in Hz
-     * @param bandwidth LoRa bandwidth in Hz
-     * @param txPower Transmission power in dBm
+     * @param targetDeviceName Bluetooth device name of the paired RNode (required for Bluetooth)
+     * @param connectionMode Connection mode: "classic" (SPP/RFCOMM), "ble" (GATT), or "tcp" (WiFi)
+     * @param tcpHost IP address or hostname for TCP/WiFi mode (required when connectionMode="tcp")
+     * @param tcpPort TCP port for WiFi mode (default: 7633, the RNode standard port)
+     * @param frequency LoRa frequency in Hz (137000000 - 3000000000)
+     * @param bandwidth LoRa bandwidth in Hz (7800 - 1625000)
+     * @param txPower Transmission power in dBm (0-22)
      * @param spreadingFactor LoRa spreading factor (5-12)
      * @param codingRate LoRa coding rate (5-8)
+     * @param stAlock Short-term airtime limit percentage (optional)
+     * @param ltAlock Long-term airtime limit percentage (optional)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
+     * @param enableFramebuffer Display Columba logo on RNode's OLED screen
      */
     data class RNode(
         override val name: String = "RNode LoRa",
         override val enabled: Boolean = true,
-        val port: String,
+        val targetDeviceName: String = "", // Required for Bluetooth, empty for TCP
+        val connectionMode: String = "classic", // "classic", "ble", or "tcp"
+        val tcpHost: String? = null, // IP/hostname for TCP mode
+        val tcpPort: Int = 7633, // RNode TCP port (default)
         val frequency: Long = 915000000, // 915 MHz (US)
         val bandwidth: Int = 125000, // 125 KHz
         val txPower: Int = 7, // 7 dBm
         val spreadingFactor: Int = 7,
         val codingRate: Int = 5,
+        val stAlock: Double? = null, // Short-term airtime limit %
+        val ltAlock: Double? = null, // Long-term airtime limit %
         val mode: String = "full",
+        val enableFramebuffer: Boolean = true, // Display logo on RNode OLED
     ) : InterfaceConfig()
 
     /**

@@ -1,0 +1,37 @@
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "70..100"
+  status:
+    patch:
+      default:
+        target: 70%
+
+flags:
+  unittests:
+    paths:
+      - "app/"
+      - "core/"
+    carryforward: true
+  python:
+    paths:
+      - "python/"
+    carryforward: true
+
+ignore:
+  - "external/**"
+  - "python/test_*.py"
+  # Service layer code requires instrumented tests, not unit tests
+  - "app/src/main/java/com/lxmf/messenger/service/**"
+  - "app/src/main/java/com/lxmf/messenger/reticulum/protocol/**"
+  # Compose UI files with @Preview functions (private preview functions can't be tested)
+  # These components have extensive Robolectric tests but @Preview functions inflate totals
+  - "app/src/main/java/com/lxmf/messenger/ui/components/FileAttachmentCard.kt"
+  - "app/src/main/java/com/lxmf/messenger/ui/components/FileAttachmentPreviewRow.kt"

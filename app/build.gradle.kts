@@ -38,7 +38,7 @@ fun getVersionFromTag(): Pair<Int, String> {
     } catch (e: Exception) {
         // Not on a tag or git command failed, use defaults
         println("Warning: Could not parse version from git tag, using defaults")
-        Pair(1, "1.0.0-dev")
+        Pair(301, "3.0.1-dev")
     }
 }
 
@@ -170,6 +170,12 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "2048m"
+                // Enable JaCoCo coverage for Robolectric tests
+                it.extensions.configure<JacocoTaskExtension> {
+                    isIncludeNoLocationClasses = true
+                    // Required for Java 9+ compatibility
+                    excludes = listOf("jdk.internal.*")
+                }
             }
         }
         execution = "ANDROIDX_TEST_ORCHESTRATOR"
@@ -231,6 +237,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.preview)
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("com.composables:icons-lucide-android:1.1.0")
     debugImplementation(libs.compose.tooling)
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
@@ -273,6 +280,15 @@ dependencies {
     implementation(libs.cameraX.lifecycle)
     implementation(libs.cameraX.view)
 
+    // MessagePack - for LXMF stamp generation
+    implementation("org.msgpack:msgpack-core:0.9.8")
+
+    // MapLibre - for offline-capable maps
+    implementation("org.maplibre.gl:android-sdk:11.5.2")
+
+    // Google Play Services Location - for FusedLocationProviderClient
+    implementation("com.google.android.gms:play-services-location:21.2.0")
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)
@@ -281,6 +297,9 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.arch.core.testing)
     testImplementation(libs.robolectric)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.test)
+    testImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation(libs.paging.testing)
     testImplementation("androidx.test:core:1.5.0")
     testImplementation("androidx.test.ext:junit:1.1.5")

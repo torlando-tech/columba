@@ -29,14 +29,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.viewmodel.InterfaceConfigState
@@ -258,7 +258,7 @@ fun AutoInterfaceFields(
         value = configState.discoveryPort,
         onValueChange = { onConfigUpdate(configState.copy(discoveryPort = it)) },
         label = { Text("Discovery Port") },
-        placeholder = { Text("48555") },
+        placeholder = { Text("29716 (default)") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         isError = configState.discoveryPortError != null,
@@ -269,7 +269,7 @@ fun AutoInterfaceFields(
         value = configState.dataPort,
         onValueChange = { onConfigUpdate(configState.copy(dataPort = it)) },
         label = { Text("Data Port") },
-        placeholder = { Text("49555") },
+        placeholder = { Text("42671 (default)") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         isError = configState.dataPortError != null,
@@ -309,7 +309,7 @@ fun TCPClientFields(
         singleLine = true,
         supportingText = {
             Text(
-                "Optional: Sets the virtual network name for this segment. " + 
+                "Optional: Sets the virtual network name for this segment. " +
                     "This allows multiple separate networks to exist on the same " +
                     "physical channel or medium.",
                 style = MaterialTheme.typography.bodySmall,

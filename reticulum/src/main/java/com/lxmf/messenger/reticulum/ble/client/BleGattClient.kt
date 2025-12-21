@@ -84,6 +84,7 @@ class BleGattClient(
         var connectionJob: Job? = null,
         var handshakeInProgress: Boolean = false, // Track if handshake is already started
         var keepaliveJob: Job? = null, // Keepalive job to prevent supervision timeout
+        var consecutiveKeepaliveFailures: Int = 0, // Track consecutive keepalive failures
     )
 
     // Active connections: address -> ConnectionData
@@ -685,11 +686,12 @@ class BleGattClient(
 
         // Enable notifications on TX characteristic
         val connData = connectionsMutex.withLock { connections[address] }
-        if (connData != null && connData.txCharacteristic != null) {
+        val txCharacteristic = connData?.txCharacteristic
+        if (connData != null && txCharacteristic != null) {
             // Allow BLE stack to settle after MTU negotiation before writing descriptor
             // Without this delay, we get ERROR_GATT_WRITE_REQUEST_BUSY (201)
             delay(BleConstants.POST_MTU_SETTLE_DELAY_MS)
-            enableNotifications(address, connData.gatt, connData.txCharacteristic!!)
+            enableNotifications(address, connData.gatt, txCharacteristic)
         }
     }
 
@@ -932,7 +934,7 @@ class BleGattClient(
         }
     }
 
-    private suspend fun handleCharacteristicChanged(
+    private fun handleCharacteristicChanged(
         address: String,
         characteristic: BluetoothGattCharacteristic,
         value: ByteArray,
@@ -1121,8 +1123,38 @@ class BleGattClient(
 
                                     if (result.isSuccess) {
                                         Log.v(TAG, "Keepalive sent to $address")
+                                        // Reset failure counter on success
+                                        connectionsMutex.withLock {
+                                            connections[address]?.consecutiveKeepaliveFailures = 0
+                                        }
                                     } else {
-                                        Log.w(TAG, "Keepalive failed for $address, connection may be dead")
+                                        val failures =
+                                            connectionsMutex.withLock {
+                                                val conn = connections[address]
+                                                if (conn != null) {
+                                                    conn.consecutiveKeepaliveFailures++
+                                                    conn.consecutiveKeepaliveFailures
+                                                } else {
+                                                    0
+                                                }
+                                            }
+                                        Log.w(
+                                            TAG,
+                                            "Keepalive failed for $address ($failures/${BleConstants.MAX_CONNECTION_FAILURES} failures)",
+                                        )
+
+                                        // Disconnect after too many consecutive failures
+                                        if (failures >= BleConstants.MAX_CONNECTION_FAILURES) {
+                                            Log.e(
+                                                TAG,
+                                                "Connection to $address is dead after $failures consecutive keepalive failures, disconnecting",
+                                            )
+                                            // Launch disconnect in separate coroutine to avoid blocking keepalive loop
+                                            scope.launch {
+                                                disconnect(address)
+                                            }
+                                            break
+                                        }
                                     }
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Keepalive error for $address", e)

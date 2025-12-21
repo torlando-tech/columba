@@ -65,11 +65,15 @@ data class ThemeEditorState(
     val themeId: Long? = null,
     val themeName: String = "",
     val themeDescription: String = "",
-    val primarySeedColor: Color = Color(0xFF6200EE), // Default purple
-    val secondarySeedColor: Color = Color(0xFF03DAC6), // Default teal
-    val tertiarySeedColor: Color = Color(0xFFB00020), // Default red
+    // Default purple
+    val primarySeedColor: Color = Color(0xFF6200EE),
+    // Default teal
+    val secondarySeedColor: Color = Color(0xFF03DAC6),
+    // Default red
+    val tertiarySeedColor: Color = Color(0xFFB00020),
     val selectedColorRole: ColorRole = ColorRole.PRIMARY,
-    val useHarmonizedColors: Boolean = true, // Auto-generate secondary/tertiary from primary
+    // Auto-generate secondary/tertiary from primary
+    val useHarmonizedColors: Boolean = true,
     // Backup of custom colors before harmonization (for toggle restoration)
     val lastCustomSecondaryColor: Color? = null,
     val lastCustomTertiaryColor: Color? = null,
@@ -131,7 +135,8 @@ class ThemeEditorViewModel
                                 // Initialize backups with loaded seed colors for toggle preservation
                                 lastCustomSecondaryColor = secondaryColor,
                                 lastCustomTertiaryColor = tertiaryColor,
-                                useHarmonizedColors = false, // Existing themes use custom colors
+                                // Existing themes use custom colors
+                                useHarmonizedColors = false,
                                 isLoading = false,
                             )
                     } else {
@@ -197,12 +202,14 @@ class ThemeEditorViewModel
                         ColorRole.SECONDARY ->
                             currentState.copy(
                                 secondarySeedColor = color,
-                                lastCustomSecondaryColor = color, // Update backup
+                                // Update backup
+                                lastCustomSecondaryColor = color,
                             )
                         ColorRole.TERTIARY ->
                             currentState.copy(
                                 tertiarySeedColor = color,
-                                lastCustomTertiaryColor = color, // Update backup
+                                // Update backup
+                                lastCustomTertiaryColor = color,
                             )
                     }
             }
@@ -300,7 +307,8 @@ class ThemeEditorViewModel
                             seedTertiary = tertiaryArgb,
                             lightColors = lightColors,
                             darkColors = darkColors,
-                            baseTheme = null, // Not derived from a preset theme
+                            // Not derived from a preset theme
+                            baseTheme = null,
                         )
                     } else {
                         customThemeRepository.saveTheme(

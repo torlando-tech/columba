@@ -8,9 +8,13 @@ import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.AutoAnnounceManager
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.service.MessageCollector
+import com.lxmf.messenger.service.PropagationNodeManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -61,7 +65,7 @@ object InterfaceDatabaseModule {
             "interface_database",
         )
             .addCallback(InterfaceDatabase.Callback(context, database, applicationScope))
-            .addMigrations(InterfaceDatabase.MIGRATION_1_2)
+            .addMigrations(InterfaceDatabase.MIGRATION_1_2, InterfaceDatabase.MIGRATION_2_3, InterfaceDatabase.MIGRATION_3_4)
             .build()
     }
 
@@ -76,6 +80,7 @@ object InterfaceDatabaseModule {
     /**
      * Provides the InterfaceConfigManager for applying configuration changes.
      */
+    @Suppress("LongParameterList") // Hilt DI requires all dependencies as parameters
     @Provides
     @Singleton
     fun provideInterfaceConfigManager(
@@ -86,6 +91,11 @@ object InterfaceDatabaseModule {
         conversationRepository: ConversationRepository,
         messageCollector: MessageCollector,
         database: ColumbaDatabase,
+        settingsRepository: SettingsRepository,
+        autoAnnounceManager: AutoAnnounceManager,
+        identityResolutionManager: IdentityResolutionManager,
+        propagationNodeManager: PropagationNodeManager,
+        @ApplicationScope applicationScope: CoroutineScope,
     ): InterfaceConfigManager {
         return InterfaceConfigManager(
             context = context,
@@ -95,6 +105,11 @@ object InterfaceDatabaseModule {
             conversationRepository = conversationRepository,
             messageCollector = messageCollector,
             database = database,
+            settingsRepository = settingsRepository,
+            autoAnnounceManager = autoAnnounceManager,
+            identityResolutionManager = identityResolutionManager,
+            propagationNodeManager = propagationNodeManager,
+            applicationScope = applicationScope,
         )
     }
 }

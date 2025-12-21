@@ -89,9 +89,9 @@ import com.lxmf.messenger.viewmodel.SettingsViewModel
 @Composable
 fun MyIdentityScreen(
     onNavigateBack: () -> Unit,
+    settingsViewModel: SettingsViewModel,
     onNavigateToIdentityManager: () -> Unit = {},
     debugViewModel: DebugViewModel = hiltViewModel(),
-    settingsViewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settingsState by settingsViewModel.state.collectAsState()
 

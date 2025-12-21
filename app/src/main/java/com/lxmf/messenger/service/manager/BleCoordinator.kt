@@ -17,6 +17,38 @@ class BleCoordinator(private val context: Context) {
         private const val TAG = "BleCoordinator"
     }
 
+    // Callback broadcaster for sending events to UI clients
+    private var callbackBroadcaster: CallbackBroadcaster? = null
+
+    // Connection change listener for event-driven updates
+    private val connectionChangeListener =
+        object : KotlinBLEBridge.ConnectionChangeListener {
+            override fun onConnectionsChanged(connectionDetailsJson: String) {
+                Log.d(TAG, "BLE connections changed, broadcasting to clients")
+                callbackBroadcaster?.broadcastBleConnectionChange(connectionDetailsJson)
+            }
+        }
+
+    /**
+     * Set the callback broadcaster for IPC event broadcasting.
+     * Should be called during service initialization.
+     */
+    fun setCallbackBroadcaster(broadcaster: CallbackBroadcaster) {
+        callbackBroadcaster = broadcaster
+        // Register our listener with the BLE bridge
+        getBridge().addConnectionChangeListener(connectionChangeListener)
+        Log.d(TAG, "Callback broadcaster set and connection listener registered")
+    }
+
+    /**
+     * Clean up resources when service is destroyed.
+     */
+    fun cleanup() {
+        getBridge().removeConnectionChangeListener(connectionChangeListener)
+        callbackBroadcaster = null
+        Log.d(TAG, "BleCoordinator cleanup complete")
+    }
+
     /**
      * Get the BLE bridge instance.
      */

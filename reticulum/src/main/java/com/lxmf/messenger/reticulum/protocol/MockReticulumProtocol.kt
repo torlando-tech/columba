@@ -238,6 +238,7 @@ class MockReticulumProtocol : ReticulumProtocol {
         sourceIdentity: Identity,
         imageData: ByteArray?,
         imageFormat: String?,
+        fileAttachments: List<Pair<String, ByteArray>>?,
     ): Result<MessageReceipt> {
         // Mock implementation
         return Result.success(
@@ -268,7 +269,73 @@ class MockReticulumProtocol : ReticulumProtocol {
         )
     }
 
+    override suspend fun getFailedInterfaces(): List<FailedInterface> {
+        return emptyList()
+    }
+
     override fun setConversationActive(active: Boolean) {
         // No-op for mock implementation
+    }
+
+    override suspend fun reconnectRNodeInterface() {
+        // No-op for mock implementation
+    }
+
+    override suspend fun setOutboundPropagationNode(destHash: ByteArray?): Result<Unit> {
+        // Mock implementation - always succeed
+        return Result.success(Unit)
+    }
+
+    override suspend fun getOutboundPropagationNode(): Result<String?> {
+        // Mock implementation - no propagation node set
+        return Result.success(null)
+    }
+
+    override suspend fun requestMessagesFromPropagationNode(
+        identityPrivateKey: ByteArray?,
+        maxMessages: Int,
+    ): Result<PropagationState> {
+        // Mock implementation - return idle state
+        return Result.success(PropagationState.IDLE)
+    }
+
+    override suspend fun getPropagationState(): Result<PropagationState> {
+        // Mock implementation - return idle state
+        return Result.success(PropagationState.IDLE)
+    }
+
+    override suspend fun sendLxmfMessageWithMethod(
+        destinationHash: ByteArray,
+        content: String,
+        sourceIdentity: Identity,
+        deliveryMethod: DeliveryMethod,
+        tryPropagationOnFail: Boolean,
+        imageData: ByteArray?,
+        imageFormat: String?,
+        fileAttachments: List<Pair<String, ByteArray>>?,
+    ): Result<MessageReceipt> {
+        // Mock implementation - same as sendLxmfMessage
+        return Result.success(
+            MessageReceipt(
+                messageHash = ByteArray(32) { it.toByte() },
+                timestamp = System.currentTimeMillis(),
+                destinationHash = destinationHash,
+            ),
+        )
+    }
+
+    override suspend fun sendLocationTelemetry(
+        destinationHash: ByteArray,
+        locationJson: String,
+        sourceIdentity: Identity,
+    ): Result<MessageReceipt> {
+        // Mock implementation - return success with fake receipt
+        return Result.success(
+            MessageReceipt(
+                messageHash = ByteArray(32) { it.toByte() },
+                timestamp = System.currentTimeMillis(),
+                destinationHash = destinationHash,
+            ),
+        )
     }
 }

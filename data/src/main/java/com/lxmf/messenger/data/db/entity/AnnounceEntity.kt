@@ -22,34 +22,41 @@ data class AnnounceEntity(
     val lastSeenTimestamp: Long,
     val nodeType: String,
     val receivingInterface: String?,
+    val receivingInterfaceType: String? = null,
     val aspect: String? = null,
     val isFavorite: Boolean = false,
     val favoritedTimestamp: Long? = null,
+    val stampCost: Int? = null,
+    val stampCostFlexibility: Int? = null,
+    val peeringCost: Int? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
-        if (javaClass != other?.javaClass) return false
+        if (other !is AnnounceEntity) return false
 
-        other as AnnounceEntity
+        return destinationHash == other.destinationHash &&
+            peerName == other.peerName &&
+            publicKey.contentEquals(other.publicKey) &&
+            appData.contentEqualsNullable(other.appData) &&
+            hops == other.hops &&
+            lastSeenTimestamp == other.lastSeenTimestamp &&
+            nodeType == other.nodeType &&
+            receivingInterface == other.receivingInterface &&
+            receivingInterfaceType == other.receivingInterfaceType &&
+            aspect == other.aspect &&
+            isFavorite == other.isFavorite &&
+            favoritedTimestamp == other.favoritedTimestamp &&
+            stampCost == other.stampCost &&
+            stampCostFlexibility == other.stampCostFlexibility &&
+            peeringCost == other.peeringCost
+    }
 
-        if (destinationHash != other.destinationHash) return false
-        if (peerName != other.peerName) return false
-        if (!publicKey.contentEquals(other.publicKey)) return false
-        if (appData != null) {
-            if (other.appData == null) return false
-            if (!appData.contentEquals(other.appData)) return false
-        } else if (other.appData != null) {
-            return false
+    private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean {
+        return when {
+            this == null && other == null -> true
+            this != null && other != null -> this.contentEquals(other)
+            else -> false
         }
-        if (hops != other.hops) return false
-        if (lastSeenTimestamp != other.lastSeenTimestamp) return false
-        if (nodeType != other.nodeType) return false
-        if (receivingInterface != other.receivingInterface) return false
-        if (aspect != other.aspect) return false
-        if (isFavorite != other.isFavorite) return false
-        if (favoritedTimestamp != other.favoritedTimestamp) return false
-
-        return true
     }
 
     override fun hashCode(): Int {
@@ -61,9 +68,13 @@ data class AnnounceEntity(
         result = 31 * result + lastSeenTimestamp.hashCode()
         result = 31 * result + nodeType.hashCode()
         result = 31 * result + (receivingInterface?.hashCode() ?: 0)
+        result = 31 * result + (receivingInterfaceType?.hashCode() ?: 0)
         result = 31 * result + (aspect?.hashCode() ?: 0)
         result = 31 * result + isFavorite.hashCode()
         result = 31 * result + (favoritedTimestamp?.hashCode() ?: 0)
+        result = 31 * result + (stampCost?.hashCode() ?: 0)
+        result = 31 * result + (stampCostFlexibility?.hashCode() ?: 0)
+        result = 31 * result + (peeringCost?.hashCode() ?: 0)
         return result
     }
 }

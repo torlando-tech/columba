@@ -1,14 +1,19 @@
 package com.lxmf.messenger.service.binder
 
+import android.content.Context
 import android.util.Log
 import com.lxmf.messenger.IInitializationCallback
 import com.lxmf.messenger.IReadinessCallback
 import com.lxmf.messenger.IReticulumService
 import com.lxmf.messenger.IReticulumServiceCallback
+import com.lxmf.messenger.crypto.StampGenerator
+import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
+import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
+import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.PollingManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
@@ -34,6 +39,7 @@ import org.json.JSONObject
  * - State is managed through ServiceState atomic operations
  */
 class ReticulumServiceBinder(
+    private val context: Context,
     private val state: ServiceState,
     private val wrapperManager: PythonWrapperManager,
     private val identityManager: IdentityManager,
@@ -42,6 +48,7 @@ class ReticulumServiceBinder(
     private val pollingManager: PollingManager,
     private val broadcaster: CallbackBroadcaster,
     private val lockManager: LockManager,
+    private val maintenanceManager: MaintenanceManager,
     private val notificationManager: ServiceNotificationManager,
     private val bleCoordinator: BleCoordinator,
     private val scope: CoroutineScope,
@@ -52,6 +59,9 @@ class ReticulumServiceBinder(
     companion object {
         private const val TAG = "ReticulumServiceBinder"
     }
+
+    // RNode bridge - created lazily when needed
+    private var rnodeBridge: KotlinRNodeBridge? = null
 
     // ===========================================
     // Lifecycle Methods
@@ -75,17 +85,8 @@ class ReticulumServiceBinder(
                 // Initialize wrapper
                 wrapperManager.initialize(
                     configJson = configJson,
-                    beforeInit = { wrapper ->
-                        // Setup BLE bridge BEFORE Python initialization
-                        // (AndroidBLEDriver needs kotlin_bridge during Reticulum startup)
-                        try {
-                            wrapper.callAttr("set_ble_bridge", bleCoordinator.getBridge())
-                            Log.d(TAG, "BLE bridge set before Python initialization")
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to set BLE bridge before init: ${e.message}", e)
-                        }
-                    },
-                    onSuccess = {
+                    beforeInit = { wrapper -> setupPreInitializationBridges(wrapper) },
+                    onSuccess = { isSharedInstance ->
                         // Execute directly - we're already in a coroutine from the outer scope.launch
                         // Wrap in try-catch to ensure callback is always called and locks are released on error
                         try {
@@ -95,17 +96,21 @@ class ReticulumServiceBinder(
                             // Acquire locks
                             lockManager.acquireAll()
 
-                            // Start polling
+                            // Start maintenance job to refresh locks before timeout
+                            maintenanceManager.start()
+
+                            // Start announce polling and drain any pending messages
                             pollingManager.startAnnouncesPolling()
-                            pollingManager.startMessagesPolling()
+                            pollingManager.drainPendingMessages()
 
                             // Announce LXMF destination
                             announceLxmfDestination()
 
-                            // Notify success
+                            // Notify success with shared instance status
                             callback.onInitializationComplete(
                                 JSONObject().apply {
                                     put("success", true)
+                                    put("is_shared_instance", isSharedInstance)
                                 }.toString(),
                             )
 
@@ -113,6 +118,10 @@ class ReticulumServiceBinder(
                             state.networkStatus.set("READY")
                             broadcaster.broadcastStatusChange("READY")
                             notificationManager.updateNotification("READY")
+
+                            // Broadcast initial state for event-driven updates
+                            broadcastDebugInfoUpdate()
+                            broadcastInterfaceStatusUpdate()
 
                             onInitialized()
                         } catch (e: Exception) {
@@ -148,11 +157,80 @@ class ReticulumServiceBinder(
         }
     }
 
+    private fun setupPreInitializationBridges(wrapper: com.chaquo.python.PyObject) {
+        // Setup BLE bridge BEFORE Python initialization
+        // (AndroidBLEDriver needs kotlin_bridge during Reticulum startup)
+        try {
+            wrapper.callAttr("set_ble_bridge", bleCoordinator.getBridge())
+            Log.d(TAG, "BLE bridge set before Python initialization")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set BLE bridge before init: ${e.message}", e)
+        }
+
+        // Setup RNode bridge BEFORE Python initialization
+        // (ColumbaRNodeInterface needs kotlin_rnode_bridge during initialization)
+        try {
+            rnodeBridge = KotlinRNodeBridge(context)
+
+            // Register error listener to surface RNode errors to UI
+            rnodeBridge?.addErrorListener(
+                object : RNodeErrorListener {
+                    override fun onRNodeError(
+                        errorCode: Int,
+                        errorMessage: String,
+                    ) {
+                        Log.w(TAG, "RNode error surfaced to service: ($errorCode) $errorMessage")
+                        // Broadcast error as status change so UI can display it
+                        broadcaster.broadcastStatusChange("RNODE_ERROR:$errorMessage")
+                    }
+                },
+            )
+
+            // Register online status listener to trigger UI refresh when RNode connects/disconnects
+            rnodeBridge?.addOnlineStatusListener(
+                object : com.lxmf.messenger.reticulum.rnode.RNodeOnlineStatusListener {
+                    override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                        Log.d(TAG, "████ RNODE ONLINE STATUS CHANGED ████ online=$isOnline")
+                        // Broadcast status change so UI can refresh interface list
+                        broadcaster.broadcastStatusChange(
+                            if (isOnline) "RNODE_ONLINE" else "RNODE_OFFLINE",
+                        )
+                        // Also broadcast interface status and debug info for event-driven updates
+                        scope.launch(Dispatchers.IO) {
+                            broadcastInterfaceStatusUpdate()
+                            broadcastDebugInfoUpdate()
+                        }
+                    }
+                },
+            )
+
+            wrapper.callAttr("set_rnode_bridge", rnodeBridge)
+            Log.d(TAG, "RNode bridge set before Python initialization")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set RNode bridge before init: ${e.message}", e)
+        }
+
+        // Setup delivery status callback BEFORE Python initialization
+        // This ensures messages sent during init get their status reported
+        try {
+            val deliveryCallback: (String) -> Unit = { statusJson ->
+                pollingManager.handleDeliveryStatusEvent(statusJson)
+            }
+            wrapper.callAttr("set_delivery_status_callback", deliveryCallback)
+            Log.d(TAG, "Delivery status callback set before Python initialization")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set delivery status callback before init: ${e.message}", e)
+        }
+    }
+
     override fun shutdown() {
         try {
             val stackTrace = Thread.currentThread().stackTrace.take(10).joinToString("\n  ")
             Log.i(TAG, "shutdown() called from:\n  $stackTrace")
             Log.d(TAG, "Shutting down Reticulum (async)")
+
+            // Stop maintenance job
+            maintenanceManager.stop()
 
             // Stop polling immediately
             pollingManager.stopAll()
@@ -266,7 +344,15 @@ class ReticulumServiceBinder(
         sourceIdentityPrivateKey: ByteArray,
         imageData: ByteArray?,
         imageFormat: String?,
-    ): String = messagingManager.sendLxmfMessage(destHash, content, sourceIdentityPrivateKey, imageData, imageFormat)
+        fileAttachments: Map<*, *>?,
+    ): String {
+        // Convert Map<String, ByteArray> to List of (filename, bytes) pairs for MessagingManager
+        val fileAttachmentsList =
+            fileAttachments?.map { (filename, bytes) ->
+                filename as String to bytes as ByteArray
+            }
+        return messagingManager.sendLxmfMessage(destHash, content, sourceIdentityPrivateKey, imageData, imageFormat, fileAttachmentsList)
+    }
 
     override fun sendPacket(
         destHash: ByteArray,
@@ -289,6 +375,10 @@ class ReticulumServiceBinder(
 
     override fun restorePeerIdentities(peerIdentitiesJson: String): String {
         return messagingManager.restorePeerIdentities(peerIdentitiesJson)
+    }
+
+    override fun restoreAnnounceIdentities(announcesJson: String): String {
+        return messagingManager.restoreAnnounceIdentities(announcesJson)
     }
 
     // ===========================================
@@ -401,6 +491,244 @@ class ReticulumServiceBinder(
             }.toString()
         }
 
+    override fun getRNodeRssi(): Int {
+        val bridge = rnodeBridge ?: return -100
+        // Trigger an RSSI read and return current value
+        bridge.requestRssiUpdate()
+        return bridge.getRssi()
+    }
+
+    override fun reconnectRNodeInterface() {
+        Log.d(TAG, "████ RECONNECT RNODE ████ reconnectRNodeInterface() called")
+        scope.launch(Dispatchers.IO) {
+            try {
+                wrapperManager.withWrapper { wrapper ->
+                    Log.d(TAG, "████ RECONNECT RNODE ████ calling Python initialize_rnode_interface()")
+                    val result = wrapper.callAttr("initialize_rnode_interface")
+
+                    @Suppress("UNCHECKED_CAST")
+                    val resultDict = result?.asMap() as? Map<com.chaquo.python.PyObject, com.chaquo.python.PyObject>
+                    val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false
+                    if (success) {
+                        val message = resultDict?.entries?.find { it.key.toString() == "message" }?.value?.toString()
+                        Log.d(TAG, "████ RECONNECT RNODE SUCCESS ████ ${message ?: "success"}")
+                    } else {
+                        val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"
+                        Log.w(TAG, "████ RECONNECT RNODE FAILED ████ $error")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "████ RECONNECT RNODE ERROR ████", e)
+            }
+        }
+    }
+
+    override fun isSharedInstanceAvailable(): Boolean {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("check_shared_instance_available")?.toBoolean() ?: false
+            } ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking shared instance availability", e)
+            false
+        }
+    }
+
+    override fun getFailedInterfaces(): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("get_failed_interfaces")?.toString() ?: "[]"
+            } ?: "[]"
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting failed interfaces", e)
+            "[]"
+        }
+    }
+
+    // ===========================================
+    // Propagation Node Support
+    // ===========================================
+
+    override fun setOutboundPropagationNode(destHash: ByteArray?): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("set_outbound_propagation_node", destHash)
+                result?.toString() ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting propagation node", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun getOutboundPropagationNode(): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("get_outbound_propagation_node")
+                result?.toString() ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting propagation node", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun requestMessagesFromPropagationNode(
+        identityPrivateKey: ByteArray?,
+        maxMessages: Int,
+    ): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                val result =
+                    wrapper.callAttr(
+                        "request_messages_from_propagation_node",
+                        identityPrivateKey,
+                        maxMessages,
+                    )
+                result?.toString() ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error requesting messages from propagation node", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun getPropagationState(): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("get_propagation_state")
+                result?.toString() ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting propagation state", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun sendLxmfMessageWithMethod(
+        destHash: ByteArray,
+        content: String,
+        sourceIdentityPrivateKey: ByteArray,
+        deliveryMethod: String,
+        tryPropagationOnFail: Boolean,
+        imageData: ByteArray?,
+        imageFormat: String?,
+        fileAttachments: Map<*, *>?,
+    ): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                // Convert Map<String, ByteArray> to List of (filename, bytes) pairs for Python
+                val fileAttachmentsList =
+                    fileAttachments?.map { (filename, bytes) ->
+                        listOf(filename as String, bytes as ByteArray)
+                    }
+
+                val result =
+                    wrapper.callAttr(
+                        "send_lxmf_message_with_method",
+                        destHash,
+                        content,
+                        sourceIdentityPrivateKey,
+                        deliveryMethod,
+                        tryPropagationOnFail,
+                        imageData,
+                        imageFormat,
+                        fileAttachmentsList,
+                    )
+                // Use PythonResultConverter to properly convert Python dict to JSON
+                // (bytes values like message_hash need Base64 encoding)
+                PythonResultConverter.convertSendMessageResult(result)
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending LXMF message with method", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun provideAlternativeRelay(relayHash: ByteArray?) {
+        try {
+            Log.d(
+                TAG,
+                "Providing alternative relay: ${relayHash?.joinToString("") { "%02x".format(it) }?.take(16) ?: "null"}",
+            )
+            wrapperManager.provideAlternativeRelay(relayHash)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error providing alternative relay", e)
+        }
+    }
+
+    // ===========================================
+    // Location Telemetry
+    // ===========================================
+
+    override fun sendLocationTelemetry(
+        destHash: ByteArray,
+        locationJson: String,
+        sourceIdentityPrivateKey: ByteArray,
+    ): String {
+        return try {
+            Log.d(TAG, "📍 Sending location telemetry to ${destHash.joinToString("") { "%02x".format(it) }.take(16)}")
+            wrapperManager.withWrapper { wrapper ->
+                val result =
+                    wrapper.callAttr(
+                        "send_location_telemetry",
+                        destHash,
+                        locationJson,
+                        sourceIdentityPrivateKey,
+                    )
+                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+            } ?: """{"success": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending location telemetry", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    // ===========================================
+    // Event Broadcasting Helpers
+    // ===========================================
+
+    /**
+     * Broadcast current debug info to all registered callbacks.
+     * Called when relevant state changes (initialization, lock changes, interface status).
+     */
+    private fun broadcastDebugInfoUpdate() {
+        try {
+            val debugInfoJson = getDebugInfo()
+            broadcaster.broadcastDebugInfoChange(debugInfoJson)
+            Log.d(TAG, "Debug info broadcast sent")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error broadcasting debug info", e)
+        }
+    }
+
+    /**
+     * Broadcast current interface status to all registered callbacks.
+     * Called when interface online/offline status changes.
+     */
+    private fun broadcastInterfaceStatusUpdate() {
+        try {
+            val result = wrapperManager.getDebugInfo()
+            val interfacesList = result?.getDictValue("interfaces")?.asList()
+
+            val statusMap = JSONObject()
+            interfacesList?.mapNotNull { ifaceObj ->
+                (ifaceObj as? com.chaquo.python.PyObject)?.let { iface ->
+                    val name = iface.getDictValue("name")?.toString()
+                    val online = iface.getDictValue("online")?.toBoolean() ?: false
+                    name?.let { Pair(it, online) }
+                }
+            }?.forEach { (name, online) ->
+                statusMap.put(name, online)
+            }
+
+            broadcaster.broadcastInterfaceStatusChange(statusMap.toString())
+            Log.d(TAG, "Interface status broadcast sent: $statusMap")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error broadcasting interface status", e)
+        }
+    }
+
     // ===========================================
     // Private Helpers
     // ===========================================
@@ -408,6 +736,35 @@ class ReticulumServiceBinder(
     private fun setupBridges() {
         // Note: BLE bridge is set in beforeInit callback (before Python initialization)
         // because AndroidBLEDriver needs it during Reticulum startup
+
+        // Wire up BLE coordinator to broadcast connection changes via IPC
+        bleCoordinator.setCallbackBroadcaster(broadcaster)
+        Log.d(TAG, "BLE coordinator callback broadcaster connected")
+
+        // Initialize RNode interface if configured
+        // (RNode bridge was set in beforeInit, but interface needs to be started after RNS init)
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("initialize_rnode_interface")
+
+                @Suppress("UNCHECKED_CAST")
+                val resultDict = result?.asMap() as? Map<com.chaquo.python.PyObject, com.chaquo.python.PyObject>
+                val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false
+                if (success) {
+                    val message = resultDict?.entries?.find { it.key.toString() == "message" }?.value?.toString()
+                    if (message != null) {
+                        Log.d(TAG, "RNode interface: $message")
+                    } else {
+                        Log.i(TAG, "RNode interface initialized successfully")
+                    }
+                } else {
+                    val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"
+                    Log.e(TAG, "Failed to initialize RNode interface: $error")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to initialize RNode interface: ${e.message}", e)
+        }
 
         // Setup Reticulum bridge for event-driven announces
         try {
@@ -433,14 +790,7 @@ class ReticulumServiceBinder(
             Log.w(TAG, "Failed to set ReticulumBridge: ${e.message}", e)
         }
 
-        // Setup delivery status callback
-        try {
-            wrapperManager.setDeliveryStatusCallback { statusJson ->
-                pollingManager.handleDeliveryStatusEvent(statusJson)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to set delivery status callback: ${e.message}", e)
-        }
+        // Note: Delivery status callback is set in beforeInit block to catch early messages
 
         // Setup message received callback
         try {
@@ -449,6 +799,35 @@ class ReticulumServiceBinder(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set message received callback: ${e.message}", e)
+        }
+
+        // Setup alternative relay callback for propagation failover
+        try {
+            wrapperManager.setAlternativeRelayCallback { requestJson ->
+                Log.d(TAG, "Alternative relay requested: $requestJson")
+                broadcaster.broadcastAlternativeRelayRequest(requestJson)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set alternative relay callback: ${e.message}", e)
+        }
+
+        // Setup location telemetry callback for map sharing
+        try {
+            wrapperManager.setLocationReceivedCallback { locationJson ->
+                Log.d(TAG, "📍 Location telemetry received: ${locationJson.take(100)}...")
+                broadcaster.broadcastLocationTelemetry(locationJson)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set location received callback: ${e.message}", e)
+        }
+
+        // Setup native stamp generator (bypasses Python multiprocessing issues)
+        try {
+            val stampGenerator = StampGenerator()
+            wrapperManager.setStampGeneratorCallback(stampGenerator)
+            Log.d(TAG, "Native Kotlin stamp generator registered")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set stamp generator callback: ${e.message}", e)
         }
     }
 

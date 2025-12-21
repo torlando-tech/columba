@@ -1,10 +1,7 @@
 package com.lxmf.messenger.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
+import android.widget.Toast
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,16 +15,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Chat
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -35,10 +28,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,14 +39,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -67,32 +54,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.ui.components.AudioBadge
-import com.lxmf.messenger.ui.components.Identicon
 import com.lxmf.messenger.ui.components.NodeTypeBadge
 import com.lxmf.messenger.ui.components.OtherBadge
 import com.lxmf.messenger.ui.components.PeerCard
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
-import com.lxmf.messenger.ui.components.SignalStrengthIndicator
-import com.lxmf.messenger.ui.components.formatHashString
-import com.lxmf.messenger.ui.theme.MeshConnected
-import com.lxmf.messenger.util.formatTimeSince
-import com.lxmf.messenger.ui.theme.MeshLimited
-import com.lxmf.messenger.ui.theme.MeshOffline
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import kotlinx.coroutines.launch
 
@@ -101,6 +76,7 @@ import kotlinx.coroutines.launch
 fun AnnounceStreamScreen(
     onPeerClick: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
     onStartChat: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
+    initialFilterType: String? = null,
     viewModel: AnnounceStreamViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.announces.collectAsLazyPagingItems()
@@ -109,6 +85,22 @@ fun AnnounceStreamScreen(
     var isSearching by remember { mutableStateOf(false) }
     val selectedNodeTypes by viewModel.selectedNodeTypes.collectAsState()
     val showAudioAnnounces by viewModel.showAudioAnnounces.collectAsState()
+
+    // Apply initial filter if provided (e.g., from relay settings "View All Relays...")
+    LaunchedEffect(initialFilterType) {
+        if (initialFilterType != null) {
+            val nodeType = runCatching { NodeType.valueOf(initialFilterType) }.getOrNull()
+            if (nodeType != null) {
+                viewModel.updateSelectedNodeTypes(setOf(nodeType))
+            }
+        }
+    }
+
+    // Announce button state
+    val isAnnouncing by viewModel.isAnnouncing.collectAsState()
+    val announceSuccess by viewModel.announceSuccess.collectAsState()
+    val announceError by viewModel.announceError.collectAsState()
+    val context = LocalContext.current
 
     // Context menu state
     var showContextMenu by remember { mutableStateOf(false) }
@@ -138,6 +130,18 @@ fun AnnounceStreamScreen(
         }
     }
 
+    // Show toast for announce success/error
+    LaunchedEffect(announceSuccess) {
+        if (announceSuccess) {
+            Toast.makeText(context, "Announce sent!", Toast.LENGTH_SHORT).show()
+        }
+    }
+    LaunchedEffect(announceError) {
+        announceError?.let { error ->
+            Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
+        }
+    }
+
     Scaffold(
         topBar = {
             SearchableTopAppBar(
@@ -149,6 +153,26 @@ fun AnnounceStreamScreen(
                 onSearchToggle = { isSearching = !isSearching },
                 searchPlaceholder = "Search by name or hash...",
                 additionalActions = {
+                    // Announce button
+                    IconButton(
+                        onClick = { viewModel.triggerAnnounce() },
+                        enabled = !isAnnouncing,
+                    ) {
+                        if (isAnnouncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Campaign,
+                                contentDescription = "Announce now",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    }
+                    // Filter button
                     IconButton(onClick = { showFilterDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.FilterList,
@@ -528,6 +552,84 @@ fun PeerContextMenu(
     }
 }
 
+/**
+ * Reusable announce stream content without the scaffold/app bar.
+ * Can be embedded in other screens like ContactsScreen Network tab.
+ */
+@Composable
+fun AnnounceStreamContent(
+    viewModel: AnnounceStreamViewModel = hiltViewModel(),
+    onPeerClick: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
+    onStartChat: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
+    modifier: Modifier = Modifier,
+) {
+    val pagingItems = viewModel.announces.collectAsLazyPagingItems()
+
+    // Context menu state
+    var showContextMenu by remember { mutableStateOf(false) }
+    var contextMenuAnnounce by remember { mutableStateOf<Announce?>(null) }
+
+    // Scroll state
+    val listState = rememberLazyListState()
+
+    if (pagingItems.itemCount == 0) {
+        EmptyAnnounceState(modifier = modifier.fillMaxSize())
+    } else {
+        LazyColumn(
+            state = listState,
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(
+                count = pagingItems.itemCount,
+                key = pagingItems.itemKey { announce -> announce.destinationHash },
+            ) { index ->
+                val announce = pagingItems[index]
+                if (announce != null) {
+                    Box {
+                        AnnounceCard(
+                            announce = announce,
+                            onClick = {
+                                onPeerClick(announce.destinationHash, announce.peerName)
+                            },
+                            onFavoriteClick = {
+                                viewModel.toggleContact(announce.destinationHash)
+                            },
+                            onLongPress = {
+                                contextMenuAnnounce = announce
+                                showContextMenu = true
+                            },
+                        )
+
+                        // Show context menu for this announce
+                        if (showContextMenu && contextMenuAnnounce == announce) {
+                            PeerContextMenu(
+                                expanded = true,
+                                onDismiss = { showContextMenu = false },
+                                announce = announce,
+                                onToggleFavorite = {
+                                    viewModel.toggleContact(announce.destinationHash)
+                                },
+                                onStartChat = {
+                                    onStartChat(announce.destinationHash, announce.peerName)
+                                },
+                                onViewDetails = {
+                                    onPeerClick(announce.destinationHash, announce.peerName)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Bottom spacing for navigation bar
+            item {
+                Spacer(modifier = Modifier.height(100.dp))
+            }
+        }
+    }
+}
 
 @Composable
 fun EmptyAnnounceState(modifier: Modifier = Modifier) {

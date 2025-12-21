@@ -10,10 +10,11 @@ import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import org.json.JSONArray
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,7 +32,6 @@ class BleStatusRepository
     ) {
         companion object {
             private const val TAG = "BleStatusRepository"
-            private const val POLL_INTERVAL_MS = 3000L // 3 seconds (kept as fallback)
         }
 
         private val bleBridge: KotlinBLEBridge by lazy {
@@ -40,23 +40,27 @@ class BleStatusRepository
 
         /**
          * Get a flow of BLE connection state that combines adapter state with connection data.
-         * Emits immediately when Bluetooth adapter state changes (< 100ms latency).
-         * Falls back to polling connection data every 3 seconds for connection updates.
+         * Uses event-driven updates from the service (< 100ms latency).
          *
          * @return Flow emitting BleConnectionsState
          */
-        fun getConnectedPeersFlow(): Flow<BleConnectionsState> =
-            combine(
+        fun getConnectedPeersFlow(): Flow<BleConnectionsState> {
+            // Get the event-driven flow from ServiceReticulumProtocol
+            val connectionEventsFlow =
+                if (reticulumProtocol is ServiceReticulumProtocol) {
+                    (reticulumProtocol as ServiceReticulumProtocol).bleConnectionsFlow
+                        .onStart { emit("[]") } // Initial empty state
+                        .map { json -> parseConnectionsJson(json) }
+                } else {
+                    // Fallback for non-service protocol (unlikely in practice)
+                    flow { emit(emptyList<BleConnectionInfo>()) }
+                }
+
+            return combine(
                 bleBridge.adapterState,
-                flow {
-                    // Poll connection data
-                    while (true) {
-                        emit(Unit)
-                        delay(POLL_INTERVAL_MS)
-                    }
-                },
-            ) { adapterState, _ ->
-                Log.d(TAG, "Adapter state: ${stateToString(adapterState)}")
+                connectionEventsFlow,
+            ) { adapterState, connections ->
+                Log.d(TAG, "Adapter state: ${stateToString(adapterState)}, connections: ${connections.size}")
 
                 when (adapterState) {
                     BluetoothAdapter.STATE_OFF, BluetoothAdapter.STATE_TURNING_OFF -> {
@@ -64,14 +68,8 @@ class BleStatusRepository
                         BleConnectionsState.BluetoothDisabled
                     }
                     BluetoothAdapter.STATE_ON -> {
-                        try {
-                            val connections = getConnectedPeers()
-                            Log.d(TAG, "Fetched ${connections.size} BLE connections")
-                            BleConnectionsState.Success(connections)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error fetching connected peers", e)
-                            BleConnectionsState.Error(e.message ?: "Unknown error")
-                        }
+                        Log.d(TAG, "Event-driven: received ${connections.size} BLE connections")
+                        BleConnectionsState.Success(connections)
                     }
                     BluetoothAdapter.STATE_TURNING_ON -> {
                         Log.d(TAG, "Bluetooth turning on - returning Loading state")
@@ -83,6 +81,59 @@ class BleStatusRepository
                     }
                 }
             }
+        }
+
+        /**
+         * Parse connection details JSON into BleConnectionInfo list.
+         */
+        private fun parseConnectionsJson(jsonString: String): List<BleConnectionInfo> {
+            return try {
+                val jsonArray = JSONArray(jsonString)
+                val connections = mutableListOf<BleConnectionInfo>()
+
+                for (i in 0 until jsonArray.length()) {
+                    val jsonObj = jsonArray.getJSONObject(i)
+                    // Handle both formats: service format (identityHash, address) and bridge format
+                    val identityHash = jsonObj.optString("identityHash", jsonObj.optString("identityHash", "unknown"))
+                    val address = jsonObj.optString("address", jsonObj.optString("currentMac", ""))
+                    val hasCentralConnection = jsonObj.optBoolean("hasCentralConnection", false)
+                    val hasPeripheralConnection = jsonObj.optBoolean("hasPeripheralConnection", false)
+                    val mtu = jsonObj.optInt("mtu", 20)
+                    val connectedAt = jsonObj.optLong("connectedAt", System.currentTimeMillis())
+
+                    val connectionType =
+                        when {
+                            hasCentralConnection && hasPeripheralConnection -> ConnectionType.BOTH
+                            hasCentralConnection -> ConnectionType.CENTRAL
+                            hasPeripheralConnection -> ConnectionType.PERIPHERAL
+                            else -> ConnectionType.CENTRAL
+                        }
+
+                    connections.add(
+                        BleConnectionInfo(
+                            identityHash = identityHash,
+                            peerName = jsonObj.optString("peerName", identityHash.take(8)),
+                            currentMac = address,
+                            connectionType = connectionType,
+                            rssi = jsonObj.optInt("rssi", -100),
+                            mtu = mtu,
+                            connectedAt = connectedAt,
+                            firstSeen = jsonObj.optLong("firstSeen", connectedAt),
+                            lastSeen = jsonObj.optLong("lastSeen", System.currentTimeMillis()),
+                            bytesReceived = 0,
+                            bytesSent = 0,
+                            packetsReceived = 0,
+                            packetsSent = 0,
+                            successRate = 1.0,
+                        ),
+                    )
+                }
+                connections
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing connections JSON", e)
+                emptyList()
+            }
+        }
 
         private fun stateToString(state: Int): String =
             when (state) {

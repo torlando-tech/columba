@@ -12,6 +12,12 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.MessageCollector
+import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.startup.ConfigApplyFlagManager
+import com.lxmf.messenger.startup.ServiceIdentityVerifier
+import com.lxmf.messenger.startup.StartupConfigLoader
+import com.lxmf.messenger.util.HexUtils.hexStringToByteArray
+import com.lxmf.messenger.util.HexUtils.toHexString
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +25,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /**
@@ -27,8 +34,22 @@ import javax.inject.Inject
  */
 @HiltAndroidApp
 class ColumbaApplication : Application() {
+    companion object {
+        /** Timeout for IPC calls to prevent ANR during initialization */
+        internal const val IPC_TIMEOUT_MS = 5000L
+    }
+
     @Inject
     lateinit var reticulumProtocol: ReticulumProtocol
+
+    @Inject
+    lateinit var startupConfigLoader: StartupConfigLoader
+
+    @Inject
+    lateinit var configApplyFlagManager: ConfigApplyFlagManager
+
+    @Inject
+    lateinit var serviceIdentityVerifier: ServiceIdentityVerifier
 
     @Inject
     lateinit var messageCollector: MessageCollector
@@ -50,6 +71,9 @@ class ColumbaApplication : Application() {
 
     @Inject
     lateinit var identityResolutionManager: IdentityResolutionManager
+
+    @Inject
+    lateinit var propagationNodeManager: PropagationNodeManager
 
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Main for lifecycle operations and UI coordination
@@ -106,32 +130,78 @@ class ColumbaApplication : Application() {
             }
         }
 
+        // Register existing companion device associations (Android 12+)
+        // This ensures RNodeCompanionService is bound when associated devices connect,
+        // even for associations created before this code was added
+        // Run on IO dispatcher to avoid blocking main thread with system service calls
+        applicationScope.launch(Dispatchers.IO) {
+            registerExistingCompanionDevices()
+        }
+
         // Initialize Python environment
         PythonBridge.initialize(this)
 
         // If using service-based protocol, bind to service and auto-initialize RNS
         if (reticulumProtocol is ServiceReticulumProtocol) {
+            // Set up the alternative relay handler for propagation failover
+            (reticulumProtocol as ServiceReticulumProtocol).alternativeRelayHandler = { excludeHashes ->
+                val relay = propagationNodeManager.getAlternativeRelay(excludeHashes)
+                if (relay != null) {
+                    android.util.Log.d("ColumbaApplication", "Providing alternative relay: ${relay.destinationHash.take(16)}")
+                    relay.destinationHash.hexStringToByteArray()
+                } else {
+                    android.util.Log.d("ColumbaApplication", "No alternative relay available")
+                    null
+                }
+            }
+
             applicationScope.launch {
                 try {
                     // Check if we're in the middle of applying config changes
-                    val isApplyingConfig =
-                        getSharedPreferences("columba_prefs", MODE_PRIVATE)
-                            .getBoolean("is_applying_config", false)
+                    val isApplyingConfig = configApplyFlagManager.isApplyingConfig()
 
                     if (isApplyingConfig) {
-                        android.util.Log.d("ColumbaApplication", "Skipping auto-init - config changes are being applied")
-                        // Just bind to service, but don't initialize
-                        // InterfaceConfigManager will handle initialization with the new config
+                        android.util.Log.d("ColumbaApp", "Config apply flag set - checking service...")
+                        // Bind to service to check status
                         (reticulumProtocol as ServiceReticulumProtocol).bindService()
-                        return@launch
+
+                        // Check if service is actually being configured, or if the flag is stale
+                        // from a crashed/failed previous config apply
+                        // Use timeout to prevent ANR if service is slow
+                        val status =
+                            withTimeoutOrNull(IPC_TIMEOUT_MS) {
+                                (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
+                            }
+                        android.util.Log.d("ColumbaApplication", "Service status with config flag set: $status")
+
+                        if (configApplyFlagManager.isStaleFlag(status)) {
+                            // Service is not running/ready - the flag is stale from a failed config apply
+                            // Clear it and proceed with normal initialization
+                            android.util.Log.w(
+                                "ColumbaApp",
+                                "Stale config flag (status: $status) - clearing",
+                            )
+                            configApplyFlagManager.clearFlag()
+                            // Fall through to normal initialization below
+                        } else {
+                            // Service is INITIALIZING or READY - InterfaceConfigManager is handling it
+                            android.util.Log.d("ColumbaApplication", "Config apply in progress - skipping auto-init")
+                            return@launch
+                        }
                     }
 
-                    // Bind to service first
-                    (reticulumProtocol as ServiceReticulumProtocol).bindService()
+                    // Bind to service first (skip if already bound above for config flag check)
+                    if (!isApplyingConfig) {
+                        (reticulumProtocol as ServiceReticulumProtocol).bindService()
+                    }
                     android.util.Log.d("ColumbaApplication", "Successfully bound to ReticulumService")
 
                     // Check if service is already initialized (handle service process surviving app restart)
-                    val currentStatus = (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
+                    // Use timeout to prevent ANR if service is slow
+                    val currentStatus =
+                        withTimeoutOrNull(IPC_TIMEOUT_MS) {
+                            (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
+                        }
                     android.util.Log.d("ColumbaApplication", "Service status after binding: $currentStatus")
 
                     if (currentStatus == "READY") {
@@ -139,34 +209,33 @@ class ColumbaApplication : Application() {
 
                         // Verify service identity matches database active identity
                         // This catches mismatches from interrupted identity switches or data imports
-                        val serviceIdentity = (reticulumProtocol as ServiceReticulumProtocol)
-                            .getLxmfIdentity().getOrNull()
-                        val serviceIdentityHash = serviceIdentity?.hash?.toHexString()
+                        val serviceIdentity =
+                            withTimeoutOrNull(IPC_TIMEOUT_MS) {
+                                (reticulumProtocol as ServiceReticulumProtocol)
+                                    .getLxmfIdentity().getOrNull()
+                            }
+                        val verificationResult = serviceIdentityVerifier.verify(serviceIdentity)
 
-                        val activeIdentity = identityRepository.getActiveIdentitySync()
-                        val dbIdentityHash = activeIdentity?.identityHash
-
-                        if (serviceIdentityHash != null && dbIdentityHash != null &&
-                            serviceIdentityHash != dbIdentityHash
-                        ) {
+                        if (!verificationResult.isMatch) {
                             android.util.Log.w(
                                 "ColumbaApplication",
-                                "Identity mismatch detected! Service: ${serviceIdentityHash.take(8)}..., " +
-                                    "DB: ${dbIdentityHash.take(8)}... - forcing reinitialization",
+                                "Identity mismatch detected! Service: ${verificationResult.serviceIdentityHash?.take(8)}..., " +
+                                    "DB: ${verificationResult.dbIdentityHash?.take(8)}... - forcing reinitialization",
                             )
                             // Fall through to initialization code below to fix the mismatch
                         } else {
                             android.util.Log.d(
                                 "ColumbaApplication",
-                                "Identity verified (${dbIdentityHash?.take(8) ?: "none"}...) - reconnecting",
+                                "Identity verified (${verificationResult.dbIdentityHash?.take(8) ?: "none"}...) - reconnecting",
                             )
                             // Identity matches - reconnect collectors and managers
                             messageCollector.startCollecting()
                             autoAnnounceManager.start()
                             identityResolutionManager.start(applicationScope)
+                            propagationNodeManager.start()
                             android.util.Log.d(
                                 "ColumbaApplication",
-                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager started",
+                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started",
                             )
                             return@launch
                         }
@@ -181,23 +250,38 @@ class ColumbaApplication : Application() {
                     // Service is SHUTDOWN or ERROR - need to initialize
                     android.util.Log.d("ColumbaApplication", "Service needs initialization (status: $currentStatus)")
 
-                    // Load interfaces from database
-                    android.util.Log.d("ColumbaApplication", "Loading interfaces from database...")
-                    val enabledInterfaces = interfaceRepository.enabledInterfaces.first()
+                    // Load all configuration from database in parallel for faster startup
+                    android.util.Log.d("ColumbaApplication", "Loading configuration from database (parallel)...")
+                    val startupConfig = startupConfigLoader.loadConfig()
+                    val enabledInterfaces = startupConfig.interfaces
+                    val activeIdentity = startupConfig.identity
+                    val preferOwnInstance = startupConfig.preferOwn
+                    val rpcKey = startupConfig.rpcKey
+                    val transportNodeEnabled = startupConfig.transport
                     android.util.Log.d("ColumbaApplication", "Loaded ${enabledInterfaces.size} enabled interface(s)")
+                    android.util.Log.d("ColumbaApplication", "Prefer own instance: $preferOwnInstance")
+                    android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")
 
-                    // Load active identity from database
-                    android.util.Log.d("ColumbaApplication", "Loading active identity from database...")
-                    val activeIdentity = identityRepository.getActiveIdentitySync()
-                    val identityPath = activeIdentity?.filePath
+                    // Ensure identity file exists (recover from keyData if missing)
+                    var identityPath: String? = null
                     val displayName = activeIdentity?.displayName
-                    if (identityPath != null) {
+                    if (activeIdentity != null) {
                         android.util.Log.d(
                             "ColumbaApplication",
                             "Active identity: ${activeIdentity.displayName} " +
                                 "(${activeIdentity.identityHash.take(8)}...)",
                         )
-                        android.util.Log.d("ColumbaApplication", "Identity file path: $identityPath")
+                        val fileResult = identityRepository.ensureIdentityFileExists(activeIdentity)
+                        if (fileResult.isSuccess) {
+                            identityPath = fileResult.getOrNull()
+                            android.util.Log.d("ColumbaApplication", "Identity file verified/recovered: $identityPath")
+                        } else {
+                            android.util.Log.e(
+                                "ColumbaApplication",
+                                "Could not ensure identity file exists: ${fileResult.exceptionOrNull()}",
+                            )
+                            // identityPath remains null - Python will create new default
+                        }
                         android.util.Log.d("ColumbaApplication", "Display name: $displayName")
                     } else {
                         android.util.Log.d("ColumbaApplication", "No active identity found, Python will create default")
@@ -213,6 +297,9 @@ class ColumbaApplication : Application() {
                             displayName = displayName,
                             logLevel = LogLevel.DEBUG,
                             allowAnonymous = false,
+                            preferOwnInstance = preferOwnInstance,
+                            rpcKey = rpcKey,
+                            enableTransport = transportNodeEnabled,
                         )
 
                     reticulumProtocol.initialize(config)
@@ -277,7 +364,8 @@ class ColumbaApplication : Application() {
                             }
 
                             // Restore peer identities from database to enable message sending
-                            applicationScope.launch {
+                            // Run on IO dispatcher to avoid blocking main thread during JSON serialization
+                            applicationScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                 try {
                                     val peerIdentities = conversationRepository.getAllPeerIdentities()
                                     if (peerIdentities.isNotEmpty()) {
@@ -299,9 +387,10 @@ class ColumbaApplication : Application() {
                             messageCollector.startCollecting()
                             autoAnnounceManager.start()
                             identityResolutionManager.start(applicationScope)
+                            propagationNodeManager.start()
                             android.util.Log.d(
                                 "ColumbaApplication",
-                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager started",
+                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started",
                             )
                         }
                         .onFailure { error ->
@@ -368,9 +457,53 @@ class ColumbaApplication : Application() {
     }
 
     /**
-     * Convert ByteArray to hex string.
+     * Register existing companion device associations for device presence monitoring.
+     * This ensures that RNodeCompanionService is bound when associated devices connect,
+     * even for associations that were created before startObservingDevicePresence() was added.
+     *
+     * Only runs on Android 12+ (API 31+) where CompanionDeviceManager is available.
      */
-    private fun ByteArray.toHexString(): String {
-        return joinToString("") { "%02x".format(it) }
+    private fun registerExistingCompanionDevices() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+            return
+        }
+
+        try {
+            val companionDeviceManager =
+                getSystemService(android.companion.CompanionDeviceManager::class.java)
+                    ?: return
+
+            val associations = companionDeviceManager.myAssociations
+            if (associations.isEmpty()) {
+                android.util.Log.d("ColumbaApplication", "No companion device associations found")
+                return
+            }
+
+            android.util.Log.d("ColumbaApplication", "████ COMPANION DEVICE REGISTRATION ████ Found ${associations.size} association(s)")
+
+            for (association in associations) {
+                try {
+                    val macAddress = association.deviceMacAddress?.toString()
+                    if (macAddress != null) {
+                        android.util.Log.d(
+                            "ColumbaApplication",
+                            "████ REGISTERING OBSERVER ████ MAC=$macAddress name=${association.displayName}",
+                        )
+                        companionDeviceManager.startObservingDevicePresence(macAddress)
+                        android.util.Log.d(
+                            "ColumbaApplication",
+                            "████ OBSERVER REGISTERED ████ MAC=$macAddress",
+                        )
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w(
+                        "ColumbaApplication",
+                        "Failed to register device presence for association ${association.id}: ${e.message}",
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("ColumbaApplication", "Failed to register companion devices: ${e.message}")
+        }
     }
 }

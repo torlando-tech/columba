@@ -2,6 +2,7 @@ package com.lxmf.messenger.service
 
 import android.util.Log
 import com.lxmf.messenger.data.db.entity.ContactStatus
+import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
@@ -119,12 +120,22 @@ class MessageCollector
 
                         // Save to database - this creates/updates the conversation and adds the message
                         try {
-                            // Look up public key from peer_identities if available
-                            // This must be done OUTSIDE the transaction to avoid nesting issues
-                            val publicKey = conversationRepository.getPeerPublicKey(sourceHash)
+                            // Prefer public key from message (directly from RNS identity cache)
+                            // Fall back to peer_identities lookup if not in message
+                            val messagePublicKey = receivedMessage.publicKey
+                            val publicKey =
+                                messagePublicKey
+                                    ?: conversationRepository.getPeerPublicKey(sourceHash)
+
+                            // Store public key to peer_identities if we got it from the message
+                            // This ensures future lookups will find it
+                            if (messagePublicKey != null) {
+                                conversationRepository.updatePeerPublicKey(sourceHash, messagePublicKey)
+                                Log.d(TAG, "Stored sender's public key for $sourceHash")
+                            }
 
                             conversationRepository.saveMessage(sourceHash, peerName, dataMessage, publicKey)
-                            Log.d(TAG, "Message saved to database for peer: $peerName ($sourceHash)")
+                            Log.d(TAG, "Message saved to database for peer: $peerName ($sourceHash) (hasPublicKey=${publicKey != null})")
 
                             // Check if sender is a saved peer (favorite)
                             val isFavorite =
@@ -189,11 +200,13 @@ class MessageCollector
                         }
 
                         // Extract name from app_data using smart parser
+                        // Prefers displayName from Python's LXMF.display_name_from_app_data()
                         val appData = announce.appData
                         val peerName =
                             com.lxmf.messenger.reticulum.util.AppDataParser.extractPeerName(
                                 appData,
                                 peerHash,
+                                announce.displayName,
                             )
 
                         // Cache and update peer name if successfully extracted
@@ -217,7 +230,11 @@ class MessageCollector
                                 timestamp = announce.timestamp,
                                 nodeType = announce.nodeType.name,
                                 receivingInterface = announce.receivingInterface,
+                                receivingInterfaceType = InterfaceType.fromInterfaceName(announce.receivingInterface).name,
                                 aspect = announce.aspect,
+                                stampCost = announce.stampCost,
+                                stampCostFlexibility = announce.stampCostFlexibility,
+                                peeringCost = announce.peeringCost,
                             )
                             Log.d(TAG, "Persisted announce to database: $peerName ($peerHash)")
 

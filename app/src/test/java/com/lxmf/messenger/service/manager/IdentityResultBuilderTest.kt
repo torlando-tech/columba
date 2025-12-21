@@ -12,13 +12,14 @@ import org.junit.Test
 class IdentityResultBuilderTest {
     @Test
     fun `buildIdentityResultJson includes all fields when present`() {
-        val result = buildIdentityResultJson(
-            identityHash = "abc123",
-            destinationHash = "def456",
-            filePath = "/path/to/identity",
-            keyDataBase64 = "dGVzdC1rZXktZGF0YQ==",
-            displayName = "Test User",
-        )
+        val result =
+            buildIdentityResultJson(
+                identityHash = "abc123",
+                destinationHash = "def456",
+                filePath = "/path/to/identity",
+                keyDataBase64 = "dGVzdC1rZXktZGF0YQ==",
+                displayName = "Test User",
+            )
 
         val json = JSONObject(result)
         assertEquals("abc123", json.getString("identity_hash"))
@@ -30,13 +31,14 @@ class IdentityResultBuilderTest {
 
     @Test
     fun `buildIdentityResultJson omits key_data when null`() {
-        val result = buildIdentityResultJson(
-            identityHash = "abc123",
-            destinationHash = "def456",
-            filePath = "/path/to/identity",
-            keyDataBase64 = null,
-            displayName = "Test User",
-        )
+        val result =
+            buildIdentityResultJson(
+                identityHash = "abc123",
+                destinationHash = "def456",
+                filePath = "/path/to/identity",
+                keyDataBase64 = null,
+                displayName = "Test User",
+            )
 
         val json = JSONObject(result)
         assertEquals("abc123", json.getString("identity_hash"))
@@ -46,13 +48,14 @@ class IdentityResultBuilderTest {
 
     @Test
     fun `buildIdentityResultJson handles null string fields`() {
-        val result = buildIdentityResultJson(
-            identityHash = null,
-            destinationHash = null,
-            filePath = null,
-            keyDataBase64 = null,
-            displayName = null,
-        )
+        val result =
+            buildIdentityResultJson(
+                identityHash = null,
+                destinationHash = null,
+                filePath = null,
+                keyDataBase64 = null,
+                displayName = null,
+            )
 
         val json = JSONObject(result)
         // JSONObject.put with null value results in JSONObject.NULL
@@ -65,13 +68,14 @@ class IdentityResultBuilderTest {
 
     @Test
     fun `buildIdentityResultJson with empty keyDataBase64 includes key_data`() {
-        val result = buildIdentityResultJson(
-            identityHash = "abc123",
-            destinationHash = "def456",
-            filePath = "/path/to/identity",
-            keyDataBase64 = "",
-            displayName = "Test User",
-        )
+        val result =
+            buildIdentityResultJson(
+                identityHash = "abc123",
+                destinationHash = "def456",
+                filePath = "/path/to/identity",
+                keyDataBase64 = "",
+                displayName = "Test User",
+            )
 
         val json = JSONObject(result)
         assertTrue(json.has("key_data"))

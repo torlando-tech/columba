@@ -21,7 +21,7 @@ subprojects {
     apply(plugin = "io.gitlab.arturbosch.detekt")
 
     configure<JacocoPluginExtension> {
-        toolVersion = "0.8.12"
+        toolVersion = "0.8.14"
     }
 
     configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
@@ -85,48 +85,68 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
     group = "verification"
     description = "Generate unified Jacoco coverage report for all modules"
 
-    dependsOn(subprojects.map { it.tasks.withType<Test>() })
+    // Only depend on debug unit tests to avoid Robolectric issues with release builds
+    dependsOn(subprojects.mapNotNull { it.tasks.findByName("testDebugUnitTest") })
 
-    val sourceDirs = files()
-    val classDirs = files()
-    val executionData = files()
+    // Use lazy configuration - fileTree is resolved at execution time, not registration time
+    val sourceDirectoriesList = mutableListOf<File>()
+    val classDirectoriesList = mutableListOf<File>()
+    val execDataPatterns = mutableListOf<String>()
 
     subprojects.forEach { subproject ->
-        subproject.plugins.withType<JavaPlugin> {
-            val sourceDir = subproject.file("src/main/java")
-            if (sourceDir.exists()) {
-                sourceDirs.from(sourceDir)
-            }
-
-            val kotlinSourceDir = subproject.file("src/main/kotlin")
-            if (kotlinSourceDir.exists()) {
-                sourceDirs.from(kotlinSourceDir)
-            }
-
-            val buildDir = subproject.layout.buildDirectory.get().asFile
-            val classDir = subproject.file("$buildDir/intermediates/javac/debug/classes")
-            if (classDir.exists()) {
-                classDirs.from(classDir)
-            }
-
-            val kotlinClassDir = subproject.file("$buildDir/tmp/kotlin-classes/debug")
-            if (kotlinClassDir.exists()) {
-                classDirs.from(kotlinClassDir)
-            }
-
-            // Collect all JaCoCo execution data files (all test variants)
-            val jacocoDir = subproject.file("$buildDir/jacoco")
-            if (jacocoDir.exists()) {
-                jacocoDir.listFiles()?.filter { it.extension == "exec" }?.forEach { execFile ->
-                    executionData.from(execFile)
-                }
-            }
+        // Add source directories (these exist at registration time)
+        val sourceDir = subproject.file("src/main/java")
+        if (sourceDir.exists()) {
+            sourceDirectoriesList.add(sourceDir)
         }
+        val kotlinSourceDir = subproject.file("src/main/kotlin")
+        if (kotlinSourceDir.exists()) {
+            sourceDirectoriesList.add(kotlinSourceDir)
+        }
+
+        // Add patterns for class directories and exec data (resolved at execution time)
+        val buildDir = subproject.layout.buildDirectory.get().asFile
+        // Use ASM-transformed classes which contain all classes including UI/Compose
+        classDirectoriesList.add(File("$buildDir/intermediates/classes/debug/transformDebugClassesWithAsm/dirs"))
+        // Android puts coverage data in outputs/unit_test_code_coverage/
+        execDataPatterns.add("$buildDir/outputs/unit_test_code_coverage/debugUnitTest")
     }
 
-    sourceDirectories.setFrom(sourceDirs)
-    classDirectories.setFrom(classDirs)
-    executionData.setFrom(executionData)
+    sourceDirectories.setFrom(sourceDirectoriesList)
+
+    // Use provider for lazy evaluation - resolved at execution time
+    classDirectories.setFrom(
+        provider {
+            classDirectoriesList.filter { it.exists() }.map { dir ->
+                fileTree(dir) {
+                    exclude(
+                        "**/R.class",
+                        "**/R\$*.class",
+                        "**/BuildConfig.*",
+                        "**/Manifest*.*",
+                        "**/*Test*.*",
+                        "**/Hilt_*.*",
+                        "**/*_Factory.*",
+                        "**/*_MembersInjector.*",
+                    )
+                }
+            }
+        },
+    )
+
+    // Use provider for lazy evaluation - resolved at execution time
+    executionData.setFrom(
+        provider {
+            execDataPatterns.mapNotNull { dirPath ->
+                val execDir = File(dirPath)
+                if (execDir.exists()) {
+                    fileTree(execDir) { include("*.exec") }
+                } else {
+                    null
+                }
+            }
+        },
+    )
 
     reports {
         xml.required.set(true)

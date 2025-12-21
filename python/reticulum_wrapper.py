@@ -98,11 +98,19 @@ class ReticulumWrapper:
         self.last_announce_poll_time = 0  # Track last poll time for announce_table polling
         self.seen_announce_hashes = set()  # Track which announces we've already processed from announce_table
         self.identities = {}  # Local cache of recalled identities (identity_hash_hex -> RNS.Identity)
+        self.active_propagation_node = None  # Currently active propagation node destination hash (bytes)
 
         # BLE interface support (Android-specific - driver-based architecture)
         self.ble_interface = None  # AndroidBLEInterface instance (if enabled)
         self.transport_identity_hash = None  # 16-byte Transport identity hash (for BLE Protocol v2.2)
         self.kotlin_ble_bridge = None  # KotlinBLEBridge instance (passed from Kotlin)
+
+        # RNode interface support (Bluetooth Classic or BLE to RNode LoRa hardware)
+        self.rnode_interface = None  # ColumbaRNodeInterface instance (if enabled)
+        self.kotlin_rnode_bridge = None  # KotlinRNodeBridge instance (passed from Kotlin)
+        self._pending_rnode_config = None  # Stored RNode config during initialization
+        self._rnode_init_lock = threading.Lock()  # Lock to prevent concurrent RNode initialization
+        self._rnode_initializing = False  # Flag to track if RNode initialization is in progress
 
         # Delivery status callback support (for event-driven message status updates)
         self.kotlin_delivery_status_callback = None  # Callback to Kotlin for delivery status events
@@ -110,8 +118,31 @@ class ReticulumWrapper:
         # Message received callback support (Phase 2.2 - event-driven message notifications)
         self.kotlin_message_received_callback = None  # Callback to Kotlin when LXMF message received
 
+        # Location telemetry callback support (Phase 3 - location sharing over LXMF)
+        self.kotlin_location_received_callback = None  # Callback to Kotlin when location telemetry received
+
         # General Reticulum bridge for protocol-level callbacks (announces, link events, etc.)
         self.kotlin_reticulum_bridge = None  # KotlinReticulumBridge instance (passed from Kotlin)
+
+        # Opportunistic message timeout tracking
+        # When opportunistic messages are sent but recipient is offline, they get stuck in SENT state
+        # forever waiting for a delivery receipt. This tracking dict + timer provides a timeout
+        # mechanism to trigger propagation fallback for undelivered opportunistic messages.
+        self._opportunistic_messages = {}  # {msg_hash_hex: {'message': lxmf_message, 'sent_time': timestamp}}
+        self._opportunistic_timeout_seconds = 30  # Timeout before falling back to propagation
+        self._opportunistic_check_interval = 10  # How often to check for timeouts (seconds)
+        self._opportunistic_timer = None  # Timer thread reference
+
+        # Propagation node fallback tracking
+        # When the selected relay is offline and propagation fails, we request alternative relays
+        # from Kotlin. Messages wait in pending dict until alternative is provided or all exhausted.
+        self.kotlin_request_alternative_relay_callback = None  # Callback to request alternative relay
+        self._pending_relay_fallback_messages = {}  # {msg_hash_hex: lxmf_message} - waiting for alternative
+        self._max_relay_retries = 3  # Maximum number of alternative relays to try
+
+        # Native stamp generator callback (Kotlin)
+        # Used to bypass Python multiprocessing issues on Android
+        self.kotlin_stamp_generator_callback = None
 
         # Set global instance so AndroidBLEDriver can access it
         _global_wrapper_instance = self
@@ -124,6 +155,9 @@ class ReticulumWrapper:
             "call.audio": AnnounceHandler("call.audio", self._announce_handler),
             "nomadnetwork.node": AnnounceHandler("nomadnetwork.node", self._announce_handler),
         }
+
+        # Shared instance state
+        self.is_shared_instance = False  # True if connected to external shared RNS instance
 
         # Don't initialize here - wait for explicit initialize() call
         log_info("ReticulumWrapper", "__init__", f"Created with storage path: {storage_path}")
@@ -138,6 +172,44 @@ class ReticulumWrapper:
         """
         self.kotlin_ble_bridge = bridge
         log_info("ReticulumWrapper", "set_ble_bridge", "KotlinBLEBridge instance set")
+
+    def set_rnode_bridge(self, bridge):
+        """
+        Set the KotlinRNodeBridge instance for RNode operations.
+        Should be called from Kotlin before initialize().
+
+        Args:
+            bridge: KotlinRNodeBridge instance from Kotlin
+        """
+        self.kotlin_rnode_bridge = bridge
+        log_info("ReticulumWrapper", "set_rnode_bridge", "KotlinRNodeBridge instance set")
+
+    def get_paired_rnodes(self) -> Dict:
+        """
+        Get list of paired Bluetooth devices that might be RNodes.
+
+        Uses the KotlinRNodeBridge to query paired devices.
+        Returns devices that appear to be RNodes based on naming patterns.
+
+        Returns:
+            Dict with:
+            - success: boolean
+            - devices: list of device name strings
+            - error: optional error message
+        """
+        try:
+            if self.kotlin_rnode_bridge is None:
+                return {'success': False, 'devices': [], 'error': 'KotlinRNodeBridge not set'}
+
+            devices = self.kotlin_rnode_bridge.getPairedRNodes()
+            device_list = list(devices) if devices else []
+
+            log_info("ReticulumWrapper", "get_paired_rnodes", f"Found {len(device_list)} paired RNode(s)")
+            return {'success': True, 'devices': device_list}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_paired_rnodes", f"ERROR getting paired RNodes: {e}")
+            return {'success': False, 'devices': [], 'error': str(e)}
 
     def set_reticulum_bridge(self, bridge):
         """
@@ -196,6 +268,78 @@ class ReticulumWrapper:
         log_info("ReticulumWrapper", "set_message_received_callback",
                 "✅ Message received callback registered (event-driven architecture enabled)")
 
+    def set_location_received_callback(self, callback):
+        """
+        Set callback to be invoked when location telemetry is received (Phase 3 - Location Sharing).
+        Location telemetry is sent via LXMF field 7 as JSON.
+
+        Callback signature: callback(location_json: str)
+
+        Location JSON format:
+        {
+            "source_hash": "abc123...",      # Hex string of sender identity hash
+            "type": "location_share",        # Always "location_share"
+            "lat": 37.7749,                  # Latitude (WGS84)
+            "lng": -122.4194,                # Longitude (WGS84)
+            "acc": 10.0,                     # Accuracy in meters
+            "ts": 1234567890000,             # Timestamp when captured (millis)
+            "expires": 1234570890000         # When sharing ends (millis), null for indefinite
+        }
+
+        Args:
+            callback: PyObject callable from Kotlin (passed via Chaquopy)
+        """
+        self.kotlin_location_received_callback = callback
+        log_info("ReticulumWrapper", "set_location_received_callback",
+                "✅ Location received callback registered (location sharing enabled)")
+
+    def set_kotlin_request_alternative_relay_callback(self, callback):
+        """
+        Set callback to request alternative relay when propagation fails.
+
+        When a message fails to deliver via the current propagation node (relay is offline),
+        this callback is invoked to request Kotlin to find an alternative relay.
+
+        Callback signature: callback(request_json: str)
+
+        Request JSON format:
+        {
+            "message_hash": "abc123...",     # Hex string of message hash needing retry
+            "exclude_relays": ["def456..."], # List of relay hashes to exclude (already tried)
+            "timestamp": 1234567890000       # Milliseconds since epoch
+        }
+
+        Args:
+            callback: PyObject callable from Kotlin (passed via Chaquopy)
+        """
+        self.kotlin_request_alternative_relay_callback = callback
+        log_info("ReticulumWrapper", "set_kotlin_request_alternative_relay_callback",
+                "✅ Alternative relay callback registered (relay fallback enabled)")
+
+    def set_stamp_generator_callback(self, callback):
+        """
+        Set native Kotlin callback for stamp generation.
+
+        This bypasses Python multiprocessing-based stamp generation which fails on Android
+        due to lack of sem_open support and aggressive process killing by Android.
+
+        Callback signature: callback(workblock: bytes, stamp_cost: int) -> (stamp: bytes, rounds: int)
+
+        Args:
+            callback: PyObject callable from Kotlin (passed via Chaquopy)
+        """
+        self.kotlin_stamp_generator_callback = callback
+
+        # Register with LXMF's LXStamper module
+        try:
+            from LXMF import LXStamper
+            LXStamper.set_external_generator(callback)
+            log_info("ReticulumWrapper", "set_stamp_generator_callback",
+                    "✅ Native stamp generator registered with LXMF")
+        except Exception as e:
+            log_error("ReticulumWrapper", "set_stamp_generator_callback",
+                     f"Failed to register stamp generator: {e}")
+
     def _clear_stale_ble_paths(self):
         """
         Clear stale BLE paths from Transport.path_table on startup.
@@ -247,50 +391,146 @@ class ReticulumWrapper:
         except Exception as e:
             log_warning("ReticulumWrapper", "_clear_stale_ble_paths", f"Error during stale path cleanup (non-fatal): {e}")
 
-    def _create_config_file(self, interfaces: List[Dict]):
+    def check_shared_instance_available(self, host: str = "127.0.0.1", port: int = 37428, timeout: float = 1.0) -> bool:
+        """
+        Check if a shared Reticulum instance is available via TCP.
+
+        RNS shared instances listen on 127.0.0.1:37428 by default for TCP clients.
+        This method attempts to connect to that port to detect if another app
+        (e.g., Sideband) is already running a shared Reticulum instance.
+
+        This method is callable from Kotlin via the service AIDL interface.
+
+        Args:
+            host: Host to check (default: localhost)
+            port: Port to check (default: 37428, RNS shared instance default)
+            timeout: Connection timeout in seconds
+
+        Returns:
+            True if a shared instance appears to be available, False otherwise
+        """
+        import socket
+
+        try:
+            log_info("ReticulumWrapper", "check_shared_instance_available",
+                     f"Checking for shared instance at {host}:{port}...")
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+
+            result = sock.connect_ex((host, port))
+            sock.close()
+
+            if result == 0:
+                log_info("ReticulumWrapper", "check_shared_instance_available",
+                         f"✓ Shared instance detected at {host}:{port}")
+                return True
+            else:
+                log_info("ReticulumWrapper", "check_shared_instance_available",
+                         f"No shared instance found at {host}:{port} (error code: {result})")
+                return False
+
+        except socket.timeout:
+            log_info("ReticulumWrapper", "check_shared_instance_available",
+                     f"Connection to {host}:{port} timed out - no shared instance")
+            return False
+        except Exception as e:
+            log_warning("ReticulumWrapper", "check_shared_instance_available",
+                        f"Error checking shared instance: {e}")
+            return False
+
+    def _create_config_file(self, interfaces: List[Dict], use_shared_instance: bool = False, rpc_key: str = None, enable_transport: bool = True):
         """
         Create an RNS config file with the specified interfaces.
 
         Args:
             interfaces: List of interface configuration dictionaries
+            use_shared_instance: If True, configure as client to shared instance (no local interfaces)
+            rpc_key: Optional RPC key (hex string) for shared instance authentication.
+                     Required on Android when connecting to another app's shared instance
+                     (e.g., Sideband) because apps have separate config directories.
+            enable_transport: If True (default), enables transport mode to forward traffic for the mesh.
+                              If False, only handles own traffic without relaying for other peers.
         """
         from datetime import datetime
 
         config_path = os.path.join(self.storage_path, "config")
         log_debug("ReticulumWrapper", "_create_config_file", f"Creating config file at: {config_path}")
         log_debug("ReticulumWrapper", "_create_config_file", f"Number of interfaces: {len(interfaces)}")
+        log_debug("ReticulumWrapper", "_create_config_file", f"Use shared instance: {use_shared_instance}")
 
         # Generate timestamp for config file
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Start with warning header and base Reticulum configuration
-        config_lines = [
-            "################################################################################",
-            "# DO NOT EDIT THIS FILE MANUALLY",
-            "# ",
-            "# This file is automatically generated from the app's Interface Management UI.",
-            "# Any manual changes will be overwritten when the app restarts.",
-            "# ",
-            "# To manage network interfaces:",
-            "#   1. Open Columba app",
-            "#   2. Go to Settings tab",
-            "#   3. Tap 'Network Interfaces'",
-            "#   4. Use the UI to add, edit, or configure interfaces",
-            "################################################################################",
-            "",
-            "# Reticulum Configuration for Columba",
-            f"# Generated: {timestamp}",
-            f"# Interfaces: {len(interfaces)}",
-            "",
-            "[reticulum]",
-            "  enable_transport = yes",  # Enable Transport to cache announces in path_table
-            "  share_instance = no",
-            "",
-            "[interfaces]"
-        ]
+        if use_shared_instance:
+            # Shared instance client mode - connect to existing RNS instance via TCP
+            # CRITICAL: On Android, we MUST use TCP because domain sockets don't work
+            # between different apps due to sandboxing. Without shared_instance_type = tcp,
+            # RNS defaults to domain sockets and won't find Sideband's shared instance.
+            transport_value = "yes" if enable_transport else "no"
+            config_lines = [
+                "################################################################################",
+                "# SHARED INSTANCE MODE",
+                "# ",
+                "# Columba is configured to connect to an external shared Reticulum instance",
+                "# (e.g., Sideband) running on this device. Interfaces are managed by that app.",
+                "################################################################################",
+                "",
+                "# Reticulum Configuration for Columba (Shared Instance Client)",
+                f"# Generated: {timestamp}",
+                "# Mode: Shared instance client",
+                "",
+                "[reticulum]",
+                f"  enable_transport = {transport_value}",
+                "  share_instance = yes",
+                "  shared_instance_type = tcp",
+                "  shared_instance_port = 37428",
+            ]
+            # Add RPC key if provided (required on Android for inter-app shared instance)
+            # Export from Sideband: Connectivity → Share Instance Access
+            if rpc_key:
+                config_lines.append(f"  rpc_key = {rpc_key}")
+                log_info("ReticulumWrapper", "_create_config_file", "Added RPC key to config")
+            else:
+                log_warning("ReticulumWrapper", "_create_config_file",
+                           "No RPC key provided - RPC calls to shared instance may fail")
+            config_lines.extend([
+                "",
+                "# No interfaces defined - using shared instance's interfaces",
+                "[interfaces]"
+            ])
+        else:
+            # Standalone mode - create our own RNS instance with specified interfaces
+            transport_value = "yes" if enable_transport else "no"
+            config_lines = [
+                "################################################################################",
+                "# DO NOT EDIT THIS FILE MANUALLY",
+                "# ",
+                "# This file is automatically generated from the app's Interface Management UI.",
+                "# Any manual changes will be overwritten when the app restarts.",
+                "# ",
+                "# To manage network interfaces:",
+                "#   1. Open Columba app",
+                "#   2. Go to Settings tab",
+                "#   3. Tap 'Network Interfaces'",
+                "#   4. Use the UI to add, edit, or configure interfaces",
+                "################################################################################",
+                "",
+                "# Reticulum Configuration for Columba",
+                f"# Generated: {timestamp}",
+                f"# Interfaces: {len(interfaces)}",
+                "",
+                "[reticulum]",
+                f"  enable_transport = {transport_value}",  # Enable/disable transport mode (mesh forwarding)
+                "  share_instance = no",
+                "",
+                "[interfaces]"
+            ]
 
-        # Add each interface
-        for iface in interfaces:
+        # Add each interface (only for standalone mode - shared instance uses external interfaces)
+        if use_shared_instance:
+            log_debug("ReticulumWrapper", "_create_config_file", "Skipping interface definitions - using shared instance")
+        for iface in ([] if use_shared_instance else interfaces):
             iface_type = iface.get("type")
             iface_name = iface.get("name", "Unnamed Interface")
             log_debug("ReticulumWrapper", "_create_config_file", f"Adding interface: {iface_name} ({iface_type})")
@@ -311,12 +551,13 @@ class ReticulumWrapper:
                 if discovery_scope != "link":
                     config_lines.append(f"    discovery_scope = {discovery_scope}")
 
-                discovery_port = iface.get("discovery_port", 48555)
-                if discovery_port != 48555:
+                # Only write ports if explicitly set (None = use RNS defaults)
+                discovery_port = iface.get("discovery_port")
+                if discovery_port is not None:
                     config_lines.append(f"    discovery_port = {discovery_port}")
 
-                data_port = iface.get("data_port", 49555)
-                if data_port != 49555:
+                data_port = iface.get("data_port")
+                if data_port is not None:
                     config_lines.append(f"    data_port = {data_port}")
 
                 mode = iface.get("mode", "full")
@@ -365,30 +606,71 @@ class ReticulumWrapper:
                     config_lines.append(f"    mode = {mode}")
 
             elif iface_type == "RNode":
-                config_lines.append("    type = RNodeInterface")
-                config_lines.append("    enabled = yes")
+                connection_mode = iface.get("connection_mode", "classic")
 
-                port = iface.get("port", "/dev/ttyUSB0")
-                config_lines.append(f"    port = {port}")
+                if connection_mode == "tcp":
+                    # TCP/WiFi RNode - uses Android RNodeInterface with tcp_host parameter
+                    # Port 7633 is hardcoded in RNS TCPConnection class
+                    tcp_host = iface.get("tcp_host", "")
 
-                frequency = iface.get("frequency", 915000000)
-                config_lines.append(f"    frequency = {frequency}")
+                    # Validate TCP host - skip this interface if empty
+                    if not tcp_host or not tcp_host.strip():
+                        log_error("ReticulumWrapper", "_create_config_file",
+                                f"Skipping RNode TCP interface '{iface_name}': tcp_host is empty")
+                        continue
 
-                bandwidth = iface.get("bandwidth", 125000)
-                config_lines.append(f"    bandwidth = {bandwidth}")
+                    config_lines.append("    type = RNodeInterface")
+                    config_lines.append("    enabled = yes")
+                    config_lines.append(f"    tcp_host = {tcp_host}")
 
-                tx_power = iface.get("tx_power", 7)
-                config_lines.append(f"    txpower = {tx_power}")
+                    # LoRa parameters
+                    frequency = iface.get("frequency", 915000000)
+                    bandwidth = iface.get("bandwidth", 125000)
+                    tx_power = iface.get("tx_power", 7)
+                    spreading_factor = iface.get("spreading_factor", 7)
+                    coding_rate = iface.get("coding_rate", 5)
 
-                spreading_factor = iface.get("spreading_factor", 7)
-                config_lines.append(f"    spreadingfactor = {spreading_factor}")
+                    config_lines.append(f"    frequency = {frequency}")
+                    config_lines.append(f"    bandwidth = {bandwidth}")
+                    config_lines.append(f"    txpower = {tx_power}")
+                    config_lines.append(f"    spreadingfactor = {spreading_factor}")
+                    config_lines.append(f"    codingrate = {coding_rate}")
 
-                coding_rate = iface.get("coding_rate", 5)
-                config_lines.append(f"    codingrate = {coding_rate}")
+                    # Optional airtime limits
+                    st_alock = iface.get("st_alock")
+                    lt_alock = iface.get("lt_alock")
+                    if st_alock is not None:
+                        config_lines.append(f"    airtime_limit_short = {st_alock}")
+                    if lt_alock is not None:
+                        config_lines.append(f"    airtime_limit_long = {lt_alock}")
 
-                mode = iface.get("mode", "full")
-                if mode != "full":
-                    config_lines.append(f"    mode = {mode}")
+                    mode = iface.get("mode", "full")
+                    if mode != "full":
+                        config_lines.append(f"    interface_mode = {mode}")
+
+                    log_info("ReticulumWrapper", "_create_config_file",
+                            f"RNode TCP config written: tcp_host={tcp_host}")
+                else:
+                    # Bluetooth RNode - handled specially via ColumbaRNodeInterface
+                    # Don't write to config file - standard RNodeInterface uses jnius which doesn't work with Chaquopy
+                    # Store the config for later use by ColumbaRNodeInterface
+                    self._pending_rnode_config = {
+                        "name": iface.get("name", "RNode LoRa"),
+                        "target_device_name": iface.get("target_device_name", iface.get("port", "")),
+                        "connection_mode": connection_mode,
+                        "frequency": iface.get("frequency", 915000000),
+                        "bandwidth": iface.get("bandwidth", 125000),
+                        "tx_power": iface.get("tx_power", 7),
+                        "spreading_factor": iface.get("spreading_factor", 7),
+                        "coding_rate": iface.get("coding_rate", 5),
+                        "st_alock": iface.get("st_alock"),
+                        "lt_alock": iface.get("lt_alock"),
+                        "mode": iface.get("mode", "full"),
+                        "enable_framebuffer": iface.get("enable_framebuffer", True),  # Display Columba logo on RNode
+                    }
+                    log_info("ReticulumWrapper", "_create_config_file",
+                            f"RNode Bluetooth config stored for ColumbaRNodeInterface: {self._pending_rnode_config['target_device_name']}")
+                    continue  # Skip writing to config file for Bluetooth
 
             elif iface_type == "AndroidBLE":
                 config_lines.append("    type = AndroidBLE")
@@ -482,24 +764,29 @@ class ReticulumWrapper:
                                 os.remove(pyc_path)
                                 log_debug("ReticulumWrapper", "initialize", f"Deleted {pyc_file}")
 
-                        # Deploy patches
-                        patch_files = ['Destination.py', '__init__.py']
+                        # Deploy patches - list of (resource_path, dest_subpath) tuples
+                        patch_files = [
+                            ('Destination.py', 'Destination.py'),
+                            ('__init__.py', '__init__.py'),
+                        ]
                         patches_applied = 0
 
-                        for patch_file in patch_files:
+                        for resource_subpath, dest_subpath in patch_files:
                             try:
-                                patch_resource_path = f"patches/RNS/{patch_file}"
+                                patch_resource_path = f"patches/RNS/{resource_subpath}"
                                 patch_data = pkgutil.get_data(__name__.split('.')[0], patch_resource_path)
 
                                 if patch_data:
-                                    patch_dest = os.path.join(rns_module_path, patch_file)
+                                    patch_dest = os.path.join(rns_module_path, dest_subpath)
+                                    # Ensure parent directory exists
+                                    os.makedirs(os.path.dirname(patch_dest), exist_ok=True)
                                     with open(patch_dest, 'wb') as dest:
                                         dest.write(patch_data)
 
-                                    log_info("ReticulumWrapper", "initialize", f"✓ Applied patch: {patch_file}")
+                                    log_info("ReticulumWrapper", "initialize", f"✓ Applied patch: {dest_subpath}")
                                     patches_applied += 1
                             except Exception as e:
-                                log_warning("ReticulumWrapper", "initialize", f"Failed to apply patch {patch_file}: {e}")
+                                log_warning("ReticulumWrapper", "initialize", f"Failed to apply patch {dest_subpath}: {e}")
 
                         if patches_applied > 0:
                             log_info("ReticulumWrapper", "initialize", f"Successfully applied {patches_applied} RNS patch(es)")
@@ -517,6 +804,18 @@ class ReticulumWrapper:
                     LXMF = _LXMF
                     RETICULUM_AVAILABLE = True
                     log_info("ReticulumWrapper", "initialize", "✓ RNS and LXMF imported successfully")
+
+                    # Configure TCPClientInterface for asynchronous startup
+                    # This prevents blocking when TCP targets are unreachable
+                    # The interface's initial_connect() already handles success/failure
+                    # and spawns reconnect threads - we just move it off the main thread
+                    try:
+                        from RNS.Interfaces.TCPInterface import TCPClientInterface
+                        TCPClientInterface.SYNCHRONOUS_START = False
+                        log_info("ReticulumWrapper", "initialize", "✓ TCPClientInterface configured for async startup")
+                    except (ImportError, AttributeError) as tcp_err:
+                        log_warning("ReticulumWrapper", "initialize", f"Could not configure async TCP startup: {tcp_err}")
+
                 except ImportError as e:
                     RETICULUM_AVAILABLE = False
                     log_error("ReticulumWrapper", "initialize", f"Failed to import RNS/LXMF: {e}")
@@ -547,13 +846,47 @@ class ReticulumWrapper:
             display_name = config.get('display_name', 'Anonymous Peer')
             log_info("ReticulumWrapper", "initialize", f"Display name from config: {display_name}")
 
+            # Extract prefer_own_instance setting (defaults to False)
+            prefer_own_instance = config.get('prefer_own_instance', False)
+            log_info("ReticulumWrapper", "initialize", f"Prefer own instance: {prefer_own_instance}")
+
+            # Extract rpc_key for shared instance authentication (optional)
+            # On Android, apps have separate config directories, so RPC key must be shared
+            # Export from Sideband: Connectivity → Share Instance Access
+            rpc_key = config.get('rpc_key', None)
+            if rpc_key:
+                log_info("ReticulumWrapper", "initialize", "RPC key provided for shared instance auth")
+            else:
+                log_debug("ReticulumWrapper", "initialize", "No RPC key provided")
+
+            # Extract enable_transport setting (defaults to True)
+            # When True, this device forwards traffic for the mesh network
+            # When False, only handles its own traffic
+            enable_transport = config.get('enable_transport', True)
+            log_info("ReticulumWrapper", "initialize", f"Transport node enabled: {enable_transport}")
+
+            # Check for shared instance if user doesn't prefer their own
+            use_shared_instance = False
+            if not prefer_own_instance:
+                log_info("ReticulumWrapper", "initialize", "Checking for shared Reticulum instance...")
+                if self.check_shared_instance_available():
+                    use_shared_instance = True
+                    log_info("ReticulumWrapper", "initialize", "✓ Will connect to shared instance")
+                else:
+                    log_info("ReticulumWrapper", "initialize", "No shared instance found - will create own instance")
+            else:
+                log_info("ReticulumWrapper", "initialize", "User prefers own instance - skipping shared instance check")
+
+            # Store shared instance status
+            self.is_shared_instance = use_shared_instance
+
             # Create config file from interface configurations
             log_info("ReticulumWrapper", "initialize", "Creating RNS config file from interface configurations")
             enabled_interfaces = config.get('enabledInterfaces', [])
             # Respect user's choice - if they want 0 interfaces, allow it
             # RNS will run without interfaces (no network connectivity)
 
-            if not self._create_config_file(enabled_interfaces):
+            if not self._create_config_file(enabled_interfaces, use_shared_instance=use_shared_instance, rpc_key=rpc_key, enable_transport=enable_transport):
                 return {"success": False, "error": "Failed to create config file"}
 
             # Set log level
@@ -567,10 +900,9 @@ class ReticulumWrapper:
                 "VERBOSE": RNS.LOG_VERBOSE,
                 "EXTREME": RNS.LOG_EXTREME
             }
-            # DIAGNOSTIC: Temporarily force EXTREME log level to debug packet processing
-            log_level = RNS.LOG_EXTREME
-            log_info("ReticulumWrapper", "initialize", "🔍 DIAGNOSTIC MODE: RNS.loglevel forced to EXTREME for packet debugging")
-            log_debug("ReticulumWrapper", "initialize", f"Setting RNS.loglevel to {log_level}")
+            log_level_str = config.get("logLevel", "DEBUG").upper()
+            log_level = log_level_map.get(log_level_str, RNS.LOG_DEBUG)
+            log_debug("ReticulumWrapper", "initialize", f"Setting RNS.loglevel to {log_level_str} ({log_level})")
             RNS.loglevel = log_level
 
             # Add ble-reticulum to path for imports
@@ -668,55 +1000,46 @@ class ReticulumWrapper:
                 log_error("ReticulumWrapper", "initialize", f"Traceback: {traceback.format_exc()}")
                 # Non-fatal - continue, but interface won't be discovered
 
-            # DIAGNOSTIC: Test socket.if_nametoindex availability
+            # Fix for runtimes where socket.if_nametoindex() doesn't work reliably
+            # Windows lacks the function entirely, Android/Chaquopy stubs it but it may fail on real interfaces
             try:
-                import socket as _diag_socket
-                log_info("ReticulumWrapper", "initialize", "=== DIAGNOSTIC: Testing socket.if_nametoindex ===")
-                log_info("ReticulumWrapper", "initialize", f"Has attribute: {hasattr(_diag_socket, 'if_nametoindex')}")
-                if hasattr(_diag_socket, 'if_nametoindex'):
-                    log_info("ReticulumWrapper", "initialize", f"Function: {_diag_socket.if_nametoindex}")
-                    try:
-                        result = _diag_socket.if_nametoindex('lo')
-                        log_info("ReticulumWrapper", "initialize", f"SUCCESS: if_nametoindex('lo') = {result}")
-                    except OSError as e:
-                        log_info("ReticulumWrapper", "initialize", f"OSError raised: {e}")
-                    except Exception as e:
-                        log_info("ReticulumWrapper", "initialize", f"Exception ({type(e).__name__}): {e}")
-                else:
-                    log_info("ReticulumWrapper", "initialize", "if_nametoindex NOT available")
-            except Exception as e:
-                log_warning("ReticulumWrapper", "initialize", f"Diagnostic failed: {e}")
+                from RNS.Interfaces import AutoInterface
+                import RNS.vendor.platformutils as platformutils
 
-            # TEMPORARILY DISABLED FOR TESTING - Remove this comment to re-enable
-            # # Android fix: Patch AutoInterface to avoid socket leaks
-            # # Chaquopy 16.0.0 stubs socket.if_nametoindex to raise OSError (not implemented)
-            # # This causes OSError on Android, leading to unclosed sockets in AutoInterface.peer_announce()
-            # # The fix uses the netinfo fallback (same as Windows) instead of socket.if_nametoindex()
-            # try:
-            #     from RNS.Interfaces import AutoInterface
-            #     import RNS.vendor.platformutils as platformutils
-            #
-            #     # Store original method reference
-            #     _original_interface_name_to_index = AutoInterface.AutoInterface.interface_name_to_index
-            #
-            #     def _patched_interface_name_to_index(self, ifname):
-            #         """
-            #         Patched version that uses netinfo fallback on Android.
-            #         Same approach as Windows platform, avoiding socket.if_nametoindex() on Android.
-            #         """
-            #         if platformutils.is_windows() or platformutils.is_android():
-            #             return self.netinfo.interface_names_to_indexes()[ifname]
-            #         # Fall back to original implementation for other platforms
-            #         return _original_interface_name_to_index(self, ifname)
-            #
-            #     # Apply the monkey-patch
-            #     AutoInterface.AutoInterface.interface_name_to_index = _patched_interface_name_to_index
-            #     log_info("ReticulumWrapper", "initialize", "✓ Applied Android AutoInterface socket leak fix")
-            #
-            # except Exception as e:
-            #     log_warning("ReticulumWrapper", "initialize",
-            #               f"Could not patch AutoInterface (non-fatal): {type(e).__name__}: {e}")
-            #     # Continue anyway - worst case we get socket warnings but functionality works
+                _use_fallback = False
+                _reason = None
+
+                if platformutils.is_windows():
+                    _use_fallback = True
+                    _reason = "Windows"
+                elif platformutils.is_android():
+                    # Chaquopy may stub socket.if_nametoindex but it can fail on real network interfaces
+                    # Always use netinfo fallback on Android for reliability
+                    _use_fallback = True
+                    _reason = "Android/Chaquopy"
+                else:
+                    # Test if socket.if_nametoindex works on this platform
+                    import socket as _test_socket
+                    try:
+                        _test_socket.if_nametoindex("lo")
+                    except (OSError, AttributeError):
+                        _use_fallback = True
+                        _reason = "socket.if_nametoindex unavailable"
+
+                if _use_fallback:
+                    _original_interface_name_to_index = AutoInterface.AutoInterface.interface_name_to_index
+
+                    def _patched_interface_name_to_index(self, ifname):
+                        """Use netinfo fallback when socket.if_nametoindex() is unavailable."""
+                        return self.netinfo.interface_names_to_indexes()[ifname]
+
+                    AutoInterface.AutoInterface.interface_name_to_index = _patched_interface_name_to_index
+                    log_info("ReticulumWrapper", "initialize",
+                             f"✓ Using netinfo fallback for interface_name_to_index ({_reason})")
+
+            except Exception as e:
+                log_warning("ReticulumWrapper", "initialize",
+                          f"Could not check/patch interface_name_to_index (non-fatal): {type(e).__name__}: {e}")
 
             # Initialize Reticulum - it will load config from the config file we created
             log_info("ReticulumWrapper", "initialize", "Creating RNS.Reticulum instance")
@@ -725,29 +1048,75 @@ class ReticulumWrapper:
             # Track which interfaces failed to initialize
             self.failed_interfaces = []
 
+            # Proactively check if AutoInterface ports are available
+            # This prevents RNS from calling sys.exit(255) on port conflicts
+            has_autointerface = any(
+                iface.get('type') == 'AutoInterface'
+                for iface in enabled_interfaces
+            )
+            log_debug("ReticulumWrapper", "initialize", f"has_autointerface = {has_autointerface}")
+
+            # Pre-check if AutoInterface ports are available
+            # AutoInterface uses IPv6 multicast (discovery) and IPv6 link-local (data)
+            if has_autointerface:
+                log_info("ReticulumWrapper", "initialize", "Pre-checking AutoInterface port availability...")
+                try:
+                    import socket
+
+                    # AutoInterface uses:
+                    # - Port 29716 for discovery (IPv6 multicast)
+                    # - Port 42671 for data (IPv6 link-local)
+                    # Check both by trying to bind an IPv6 UDP socket
+
+                    ports_to_check = [29716, 42671]
+                    port_conflict = False
+
+                    for test_port in ports_to_check:
+                        log_debug("ReticulumWrapper", "initialize", f"Testing IPv6 UDP bind to port {test_port}...")
+                        try:
+                            # Use IPv6 socket since AutoInterface uses IPv6
+                            # Don't use SO_REUSEADDR - we want to detect conflicts
+                            sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+                            # Bind to all IPv6 interfaces
+                            sock.bind(('::', test_port))
+                            sock.close()
+                            log_debug("ReticulumWrapper", "initialize", f"Port {test_port} is available")
+                        except OSError as port_error:
+                            if port_error.errno == 98:  # Address already in use
+                                log_warning("ReticulumWrapper", "initialize",
+                                            f"⚠️ Port {test_port} is already in use - another Reticulum app may be running")
+                                port_conflict = True
+                                self.failed_interfaces.append({
+                                    "name": "AutoInterface",
+                                    "error": f"Port {test_port} already in use (another Reticulum app may be running)",
+                                    "recoverable": True
+                                })
+                                break
+                            else:
+                                log_debug("ReticulumWrapper", "initialize", f"Port check failed with error: {port_error}")
+
+                    if port_conflict:
+                        log_info("ReticulumWrapper", "initialize", "Disabling AutoInterface to prevent crash...")
+                        self._remove_autointerface_from_config()
+                        has_autointerface = False
+                        log_info("ReticulumWrapper", "initialize", "AutoInterface removed from config")
+
+                except Exception as check_error:
+                    log_debug("ReticulumWrapper", "initialize", f"Port pre-check failed: {check_error}")
+                    # Non-critical, continue
+
+            # Now initialize RNS
+            log_info("ReticulumWrapper", "initialize", "Calling RNS.Reticulum()...")
             try:
                 self.reticulum = RNS.Reticulum(configdir=self.storage_path)
                 log_info("ReticulumWrapper", "initialize", "RNS.Reticulum created successfully")
+            except SystemExit as e:
+                # This shouldn't happen now that we pre-check, but keep as safety net
+                log_warning("ReticulumWrapper", "initialize", f"RNS called sys.exit({e.code}) - likely interface failure")
+                raise
             except OSError as e:
-                if "Address already in use" in str(e) or "Errno 98" in str(e):
-                    log_warning("ReticulumWrapper", "initialize", "⚠️ AutoInterface bind failed (address in use)")
-                    log_warning("ReticulumWrapper", "initialize", "This usually means another Reticulum app (e.g., Sideband) is running")
-                    log_info("ReticulumWrapper", "initialize", "Retrying initialization without AutoInterface...")
-
-                    # Track that AutoInterface failed
-                    self.failed_interfaces.append({
-                        "name": "AutoInterface",
-                        "error": "Address already in use - another Reticulum app may be running"
-                    })
-
-                    # Remove AutoInterface from config and retry
-                    self._remove_autointerface_from_config()
-                    self.reticulum = RNS.Reticulum(configdir=self.storage_path)
-                    log_info("ReticulumWrapper", "initialize", "✅ RNS.Reticulum created successfully (without AutoInterface)")
-                else:
-                    # Different error - re-raise
-                    log_error("ReticulumWrapper", "initialize", f"Failed to create RNS.Reticulum: {e}")
-                    raise
+                log_error("ReticulumWrapper", "initialize", f"OSError during RNS init: {e}")
+                raise
 
             # Clear stale BLE paths (bug workaround)
             log_info("ReticulumWrapper", "initialize", "Clearing stale BLE paths from previous session")
@@ -821,17 +1190,13 @@ class ReticulumWrapper:
                         raise Exception(f"Failed to load identity from {identity_path}: {e}")
 
             if not default_identity:
-                # SAFETY CHECK: If a specific identity file path was provided but doesn't exist,
-                # do NOT silently create a new identity - this indicates a data inconsistency
-                # that Kotlin should handle (e.g., recover from keyData backup)
+                # If a specific identity file path was provided but doesn't exist, fail clearly
+                # (Kotlin should have recovered the file from keyData before calling initialize)
                 if identity_file_path:
-                    log_error("ReticulumWrapper", "initialize", f"CRITICAL: Specified identity file not found: {identity_path}")
-                    log_error("ReticulumWrapper", "initialize", "Refusing to create new identity - Kotlin must recover file first")
                     raise Exception(f"identity_file_missing:{identity_path}")
 
-                # Create a new identity only for first install (no specific path provided)
-                # This happens on first install when no identity exists yet
-                log_info("ReticulumWrapper", "initialize", f"Identity not found at {identity_path}, creating new identity")
+                # Create a new identity only if no specific path was requested
+                log_info("ReticulumWrapper", "initialize", f"No identity found, creating new identity at {identity_path}")
                 default_identity = RNS.Identity()
                 try:
                     # Ensure the directory exists
@@ -860,6 +1225,8 @@ class ReticulumWrapper:
             )
             # Store display name for use in announces
             self.display_name = display_name
+            # Store default identity for use in propagation node requests
+            self.default_identity = default_identity
             log_info("ReticulumWrapper", "initialize", f"Local LXMF destination: {self.local_lxmf_destination.hexhash}")
             log_debug("ReticulumWrapper", "initialize", f"(Identity hash: {default_identity.hash.hex()}, Dest hash: {self.local_lxmf_destination.hexhash})")
 
@@ -877,10 +1244,15 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "initialize", "Set last_announce_poll_time to current time")
 
             self.initialized = True
+
+            # Start opportunistic message timeout checker
+            self._start_opportunistic_timer()
+
             log_separator("ReticulumWrapper", "initialize")
             log_info("ReticulumWrapper", "initialize", "Reticulum initialized successfully")
+            log_info("ReticulumWrapper", "initialize", f"Shared instance mode: {self.is_shared_instance}")
             log_separator("ReticulumWrapper", "initialize")
-            return {"success": True}
+            return {"success": True, "is_shared_instance": self.is_shared_instance}
 
         except Exception as e:
             log_separator("ReticulumWrapper", "initialize")
@@ -1021,12 +1393,59 @@ class ReticulumWrapper:
                 log_debug("ReticulumWrapper", "_announce_handler",
                          f"Could not extract interface: {e}")
 
+            # Extract display name using LXMF's canonical implementation
+            # Use the correct function based on aspect:
+            # - lxmf.delivery: display_name_from_app_data() for peer names
+            # - lxmf.propagation: pn_name_from_app_data() for propagation node names
+            display_name = None
+            if LXMF is not None and app_data:
+                try:
+                    if aspect == "lxmf.propagation":
+                        display_name = LXMF.pn_name_from_app_data(app_data)
+                        log_debug("ReticulumWrapper", "_announce_handler",
+                                  f"LXMF.pn_name_from_app_data returned: {display_name}")
+                    else:
+                        display_name = LXMF.display_name_from_app_data(app_data)
+                        log_debug("ReticulumWrapper", "_announce_handler",
+                                  f"LXMF.display_name_from_app_data returned: {display_name}")
+                except Exception as e:
+                    log_debug("ReticulumWrapper", "_announce_handler",
+                              f"LXMF name extraction failed: {e}")
+
+            # Extract stamp cost using LXMF's canonical functions
+            stamp_cost = None
+            stamp_cost_flexibility = None
+            peering_cost = None
+            if LXMF is not None and app_data:
+                try:
+                    if aspect == "lxmf.propagation":
+                        stamp_cost = LXMF.pn_stamp_cost_from_app_data(app_data)
+                        # Also extract flexibility and peering cost for propagation nodes
+                        if LXMF.pn_announce_data_is_valid(app_data):
+                            from RNS.vendor import umsgpack
+                            data = umsgpack.unpackb(app_data)
+                            stamp_cost_flexibility = int(data[5][1])
+                            peering_cost = int(data[5][2])
+                        log_debug("ReticulumWrapper", "_announce_handler",
+                                  f"PN stamp cost: {stamp_cost}, flex: {stamp_cost_flexibility}, peer: {peering_cost}")
+                    else:
+                        stamp_cost = LXMF.stamp_cost_from_app_data(app_data)
+                        log_debug("ReticulumWrapper", "_announce_handler",
+                                  f"Peer stamp cost: {stamp_cost}")
+                except Exception as e:
+                    log_debug("ReticulumWrapper", "_announce_handler",
+                              f"Stamp cost extraction failed: {e}")
+
             # Create announce event dict (Transport already stores identity/app_data)
             announce_event = {
                 'destination_hash': destination_hash,
                 'identity_hash': destination_hash,  # For single destinations
                 'public_key': announced_identity.get_public_key() if announced_identity else b'',
                 'app_data': app_data if app_data else b'',
+                'display_name': display_name,  # Pre-parsed by LXMF (may be None)
+                'stamp_cost': stamp_cost,  # Pre-parsed by LXMF (may be None)
+                'stamp_cost_flexibility': stamp_cost_flexibility,  # For propagation nodes
+                'peering_cost': peering_cost,  # For propagation nodes
                 'aspect': aspect,  # Include aspect (e.g., "lxmf.delivery", "call.audio")
                 'hops': hops,
                 'timestamp': int(time.time() * 1000),  # milliseconds
@@ -1396,6 +1815,64 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Message to: {lxmf_message.destination_hash.hex()[:16]}")
             log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Content length: {len(lxmf_message.content)} bytes")
 
+            # ✅ PHASE 3: Check for location telemetry (field 7) FIRST
+            # Location-only messages should NOT be added to the regular message queue
+            LOCATION_FIELD = 7
+            is_location_only = False
+
+            if self.kotlin_location_received_callback and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
+                if LOCATION_FIELD in lxmf_message.fields:
+                    # Check if this is a location-only message (no text content or empty content)
+                    content = lxmf_message.content
+                    has_text_content = content and len(content.strip()) > 0 if isinstance(content, (str, bytes)) else False
+                    if isinstance(content, bytes):
+                        has_text_content = len(content.strip()) > 0
+
+                    if not has_text_content:
+                        is_location_only = True
+                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                f"📍 Location-only message detected (field {LOCATION_FIELD}), skipping message queue")
+
+                    # Process location telemetry
+                    try:
+                        location_data = lxmf_message.fields[LOCATION_FIELD]
+                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                f"📍 Location telemetry received in field {LOCATION_FIELD}")
+
+                        # Location data format: JSON string as bytes
+                        if isinstance(location_data, bytes):
+                            location_json = location_data.decode('utf-8')
+                        elif isinstance(location_data, str):
+                            location_json = location_data
+                        else:
+                            log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                       f"Unexpected location data type: {type(location_data)}")
+                            location_json = None
+
+                        if location_json:
+                            # Parse and augment with source hash
+                            import json
+                            location_event = json.loads(location_json)
+                            location_event['source_hash'] = lxmf_message.source_hash.hex()
+
+                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"Location: lat={location_event.get('lat')}, lng={location_event.get('lng')}")
+
+                            self.kotlin_location_received_callback(json.dumps(location_event))
+                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                    "✅ Location callback invoked successfully")
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "_on_lxmf_delivery",
+                                 f"⚠️ Error processing location telemetry: {e}")
+                        import traceback
+                        traceback.print_exc()
+
+            # Skip regular message processing for location-only messages
+            if is_location_only:
+                log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                         "Skipping regular message processing for location-only message")
+                return
+
             # Add to pending_inbound queue (maintains backward compatibility with polling)
             if not hasattr(self.router, 'pending_inbound'):
                 log_warning("ReticulumWrapper", "_on_lxmf_delivery", "Warning: Router has no pending_inbound, creating one")
@@ -1583,7 +2060,7 @@ class ReticulumWrapper:
             traceback.print_exc()
             return []
 
-    def send_lxmf_message(self, dest_hash: bytes, content: str, source_identity_private_key: bytes, image_data: bytes = None, image_format: str = None) -> Dict:
+    def send_lxmf_message(self, dest_hash: bytes, content: str, source_identity_private_key: bytes, image_data: bytes = None, image_format: str = None, file_attachments: list = None) -> Dict:
         """
         Send an LXMF message to a destination.
 
@@ -1593,6 +2070,7 @@ class ReticulumWrapper:
             source_identity_private_key: Private key of sender identity
             image_data: Optional image data bytes
             image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
+            file_attachments: Optional list of [filename, bytes] tuples for file attachments (Field 5)
 
         Returns:
             Dict with 'success', 'message_hash', 'timestamp' or 'error'
@@ -1673,9 +2151,29 @@ class ReticulumWrapper:
                 log_info("ReticulumWrapper", "send_lxmf_message", f"✅ Retrieved identity from local cache")
 
             if not recipient_identity:
-                error_msg = f"Cannot send message: Recipient identity {dest_hash.hex()[:16]} not known. Please wait for announce or request path."
-                log_error("ReticulumWrapper", "send_lxmf_message", f"❌ {error_msg}")
-                return {"success": False, "error": error_msg}
+                # Request path from network (triggers announces from peers who know destination)
+                log_info("ReticulumWrapper", "send_lxmf_message",
+                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
+                try:
+                    RNS.Transport.request_path(dest_hash)
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "send_lxmf_message", f"Error requesting path: {e}")
+
+                # Wait up to 5 seconds for path response
+                for attempt in range(10):
+                    time.sleep(0.5)
+                    recipient_identity = RNS.Identity.recall(dest_hash)
+                    if not recipient_identity:
+                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                    if recipient_identity:
+                        log_info("ReticulumWrapper", "send_lxmf_message",
+                                 f"✅ Identity resolved after path request (attempt {attempt + 1})")
+                        break
+
+                if not recipient_identity:
+                    error_msg = f"Cannot send message: Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."
+                    log_error("ReticulumWrapper", "send_lxmf_message", f"❌ {error_msg}")
+                    return {"success": False, "error": error_msg}
 
             # Create outgoing LXMF destination object from the recalled identity
             # The router.handle_outbound() REQUIRES a destination object, not just a hash!
@@ -1692,18 +2190,49 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "send_lxmf_message", f"Destination object hash: {recipient_lxmf_destination.hash.hex()}")
             log_debug("ReticulumWrapper", "send_lxmf_message", f"Are they equal? {dest_hash == recipient_lxmf_destination.hash}")
 
-            # Prepare fields dictionary if image is provided
+            # Prepare fields dictionary for attachments
             fields = None
+
+            # LXMF field 6 = IMAGE, format: [format_string, bytes_data]
             if image_data and image_format:
                 # Convert jarray to bytes if needed
                 if hasattr(image_data, '__iter__') and not isinstance(image_data, (bytes, bytearray)):
                     image_data = bytes(image_data)
 
-                # LXMF field 6 = IMAGE, format: [format_string, bytes_data]
                 fields = {
                     6: [image_format, image_data]
                 }
                 log_info("ReticulumWrapper", "send_lxmf_message", f"📎 Attaching image: {len(image_data)} bytes, format={image_format}")
+
+            # LXMF field 5 = FILE_ATTACHMENTS, format: list of [filename, bytes_data]
+            if file_attachments:
+                if fields is None:
+                    fields = {}
+
+                # Convert each attachment to proper format
+                field_5_data = []
+                for attachment in file_attachments:
+                    # Handle different input formats
+                    if isinstance(attachment, (list, tuple)) and len(attachment) >= 2:
+                        filename = attachment[0]
+                        data = attachment[1]
+                    elif isinstance(attachment, dict):
+                        filename = attachment.get('filename', 'unknown')
+                        data = attachment.get('data', b'')
+                    else:
+                        log_warning("ReticulumWrapper", "send_lxmf_message", f"Skipping invalid attachment format: {type(attachment)}")
+                        continue
+
+                    # Convert jarray to bytes if needed
+                    if hasattr(data, '__iter__') and not isinstance(data, (bytes, bytearray)):
+                        data = bytes(data)
+
+                    field_5_data.append([filename, data])
+                    log_debug("ReticulumWrapper", "send_lxmf_message", f"📎 File attachment: {filename} ({len(data)} bytes)")
+
+                if field_5_data:
+                    fields[5] = field_5_data
+                    log_info("ReticulumWrapper", "send_lxmf_message", f"📎 Attaching {len(field_5_data)} file(s)")
 
             # Create LXMF message using destination OBJECTS
             log_debug("ReticulumWrapper", "send_lxmf_message", f"Creating LXMessage with destination objects...")
@@ -1855,23 +2384,547 @@ class ReticulumWrapper:
             log_separator("ReticulumWrapper", "send_lxmf_message", "=", 80)
             return {"success": False, "error": str(e)}
 
-    def _on_message_delivered(self, lxmf_message):
+    # ==================== LOCATION TELEMETRY ====================
+
+    def send_location_telemetry(self, dest_hash: bytes, location_json: str, source_identity_private_key: bytes) -> Dict:
         """
-        Callback invoked by LXMF when a sent message is successfully delivered.
-        This is called when the recipient sends back a cryptographic proof of delivery.
+        Send location telemetry to a destination via LXMF field 7.
 
         Args:
-            lxmf_message: The LXMF.LXMessage that was delivered
+            dest_hash: Identity hash bytes (16 bytes) of the recipient
+            location_json: JSON string with location data (lat, lng, acc, ts, expires)
+            source_identity_private_key: Private key of sender identity
+
+        Returns:
+            Dict with 'success', 'message_hash', 'timestamp' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Convert jarray to bytes if needed
+            if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+                dest_hash = bytes(dest_hash)
+            if hasattr(source_identity_private_key, '__iter__') and not isinstance(source_identity_private_key, (bytes, bytearray)):
+                source_identity_private_key = bytes(source_identity_private_key)
+
+            log_info("ReticulumWrapper", "send_location_telemetry",
+                     f"📍 Sending location telemetry to {dest_hash.hex()[:16]}...")
+
+            # Reconstruct source identity from private key
+            source_identity = RNS.Identity()
+            try:
+                source_identity.load_private_key(source_identity_private_key)
+            except Exception as e:
+                log_error("ReticulumWrapper", "send_location_telemetry", f"❌ ERROR loading private key: {e}")
+                raise
+
+            # Get our local LXMF destination
+            if not self.local_lxmf_destination:
+                raise ValueError("Local LXMF destination not created")
+
+            # Recall recipient identity
+            recipient_identity = RNS.Identity.recall(dest_hash)
+            if not recipient_identity:
+                recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+
+            # Try local cache
+            dest_hash_hex = dest_hash.hex()
+            if not recipient_identity and dest_hash_hex in self.identities:
+                recipient_identity = self.identities[dest_hash_hex]
+
+            if not recipient_identity:
+                error_msg = f"Recipient identity {dest_hash.hex()[:16]} not known"
+                log_error("ReticulumWrapper", "send_location_telemetry", f"❌ {error_msg}")
+                return {"success": False, "error": error_msg}
+
+            # Create outgoing LXMF destination
+            recipient_lxmf_destination = RNS.Destination(
+                recipient_identity,
+                RNS.Destination.OUT,
+                RNS.Destination.SINGLE,
+                "lxmf",
+                "delivery"
+            )
+
+            # Parse and validate location JSON
+            try:
+                location_data = json.loads(location_json)
+                log_debug("ReticulumWrapper", "send_location_telemetry",
+                          f"Location data: lat={location_data.get('lat')}, lng={location_data.get('lng')}")
+            except json.JSONDecodeError as e:
+                return {"success": False, "error": f"Invalid location JSON: {e}"}
+
+            # LXMF field 7 = LOCATION TELEMETRY
+            LOCATION_FIELD = 7
+            fields = {
+                LOCATION_FIELD: location_json  # Send as JSON string
+            }
+
+            # Create LXMF message with location telemetry (empty content body)
+            lxmf_message = LXMF.LXMessage(
+                destination=recipient_lxmf_destination,
+                source=self.local_lxmf_destination,
+                content="".encode('utf-8'),  # Empty content - location is in field 7
+                title="",
+                fields=fields
+            )
+
+            # Register delivery callbacks
+            try:
+                lxmf_message.register_delivery_callback(self._on_message_delivered)
+                lxmf_message.register_failed_callback(self._on_message_failed)
+            except Exception as e:
+                log_warning("ReticulumWrapper", "send_location_telemetry",
+                            f"Could not register delivery callbacks: {e}")
+
+            # Send via router
+            self.router.handle_outbound(lxmf_message)
+
+            log_info("ReticulumWrapper", "send_location_telemetry",
+                     f"✅ Location telemetry sent to {dest_hash.hex()[:16]}")
+
+            return {
+                "success": True,
+                "message_hash": lxmf_message.hash.hex() if lxmf_message.hash else "",
+                "timestamp": int(time.time() * 1000),
+                "destination_hash": recipient_lxmf_destination.hash.hex() if recipient_lxmf_destination.hash else ""
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "send_location_telemetry", f"❌ ERROR sending location telemetry: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    # ==================== PROPAGATION NODE SUPPORT ====================
+
+    def set_outbound_propagation_node(self, dest_hash: bytes) -> Dict:
+        """
+        Set the propagation node to use for PROPAGATED delivery.
+
+        Args:
+            dest_hash: 16-byte destination hash of the propagation node, or None to clear
+
+        Returns:
+            Dict with 'success' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Convert jarray to bytes if needed
+            if dest_hash is not None:
+                if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+                    dest_hash = bytes(dest_hash)
+
+            if dest_hash is None:
+                self.router.set_outbound_propagation_node(None)
+                self.active_propagation_node = None
+                log_info("ReticulumWrapper", "set_outbound_propagation_node", "Cleared propagation node")
+            else:
+                self.router.set_outbound_propagation_node(dest_hash)
+                self.active_propagation_node = dest_hash
+                log_info("ReticulumWrapper", "set_outbound_propagation_node",
+                        f"Set propagation node to {dest_hash.hex()[:16]}...")
+
+            return {"success": True}
+        except Exception as e:
+            log_error("ReticulumWrapper", "set_outbound_propagation_node", f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    def get_outbound_propagation_node(self) -> Dict:
+        """
+        Get the currently configured propagation node.
+
+        Returns:
+            Dict with 'success', 'propagation_node' (hex string or None) or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            node = self.router.get_outbound_propagation_node()
+            return {
+                "success": True,
+                "propagation_node": node.hex() if node else None
+            }
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_outbound_propagation_node", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def request_messages_from_propagation_node(self, identity_private_key: bytes = None, max_messages: int = 256) -> Dict:
+        """
+        Request/sync messages from the configured propagation node.
+
+        This is the key method for RECEIVING messages that were sent via propagation.
+        When messages are sent to a propagation node, the recipient must explicitly
+        request them. Call this method periodically (e.g., every 30 seconds) to
+        retrieve waiting messages.
+
+        Args:
+            identity_private_key: Optional private key bytes to use for requesting messages.
+                                  If None, uses the default identity.
+            max_messages: Maximum number of messages to retrieve (default 256)
+
+        Returns:
+            Dict with 'success' or 'error', and 'state' indicating the transfer state
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Check if propagation node is configured
+            if not self.active_propagation_node:
+                return {
+                    "success": False,
+                    "error": "No propagation node configured",
+                    "errorCode": "NO_PROPAGATION_NODE"
+                }
+
+            # Get or create identity for requesting messages
+            if identity_private_key is not None:
+                # Convert jarray to bytes if needed
+                if hasattr(identity_private_key, '__iter__') and not isinstance(identity_private_key, (bytes, bytearray)):
+                    identity_private_key = bytes(identity_private_key)
+
+                # Load identity from private key
+                identity = RNS.Identity.from_bytes(identity_private_key)
+                log_info("ReticulumWrapper", "request_messages_from_propagation_node",
+                        f"Using provided identity: {identity.hash.hex()[:16]}...")
+            else:
+                # Use default identity
+                identity = self.default_identity
+                log_info("ReticulumWrapper", "request_messages_from_propagation_node",
+                        f"Using default identity: {identity.hash.hex()[:16]}...")
+
+            log_info("ReticulumWrapper", "request_messages_from_propagation_node",
+                    f"📡 Requesting up to {max_messages} messages from propagation node {self.active_propagation_node.hex()[:16]}...")
+
+            # Request messages from the propagation node
+            self.router.request_messages_from_propagation_node(identity, max_messages=max_messages)
+
+            return {
+                "success": True,
+                "state": self.router.propagation_transfer_state
+            }
+        except Exception as e:
+            log_error("ReticulumWrapper", "request_messages_from_propagation_node", f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    def get_propagation_state(self) -> Dict:
+        """
+        Get the current propagation sync state and progress.
+
+        State values:
+            0 (PR_IDLE): Inactive
+            1 (PR_PATH_REQUESTED): Path discovery in progress
+            2 (PR_LINK_ESTABLISHING): Connection pending
+            3 (PR_LINK_ESTABLISHED): Connected and ready
+            4 (PR_REQUEST_SENT): Message list requested
+            5 (PR_RECEIVING): Messages downloading
+            7 (PR_COMPLETE): Transfer finished
+
+        Returns:
+            Dict with 'success', 'state', 'progress', 'messages_received' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            state = self.router.propagation_transfer_state
+            progress = self.router.propagation_transfer_progress
+
+            # propagation_transfer_last_result contains the number of messages received
+            # in the last completed transfer
+            last_result = getattr(self.router, 'propagation_transfer_last_result', None) or 0
+
+            # Map state to human-readable string
+            state_names = {
+                0: "idle",
+                1: "path_requested",
+                2: "link_establishing",
+                3: "link_established",
+                4: "request_sent",
+                5: "receiving",
+                7: "complete"
+            }
+            state_name = state_names.get(state, f"unknown_{state}")
+
+            return {
+                "success": True,
+                "state": state,
+                "state_name": state_name,
+                "progress": progress,
+                "messages_received": last_result
+            }
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_propagation_state", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def send_lxmf_message_with_method(self, dest_hash: bytes, content: str, source_identity_private_key: bytes,
+                                       delivery_method: str = "direct", try_propagation_on_fail: bool = True,
+                                       image_data: bytes = None, image_format: str = None,
+                                       file_attachments: list = None) -> Dict:
+        """
+        Send an LXMF message with explicit delivery method.
+
+        Args:
+            dest_hash: Identity hash bytes (16 bytes)
+            content: Message content string
+            source_identity_private_key: Private key of sender identity
+            delivery_method: "opportunistic", "direct", or "propagated"
+            try_propagation_on_fail: If True and direct fails, retry via propagation
+            image_data: Optional image data bytes
+            image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
+            file_attachments: Optional list of [filename, bytes] pairs for Field 5
+
+        Returns:
+            Dict with 'success', 'message_hash', 'timestamp', 'delivery_method' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Convert jarray to bytes if needed
+            if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+                dest_hash = bytes(dest_hash)
+            if hasattr(source_identity_private_key, '__iter__') and not isinstance(source_identity_private_key, (bytes, bytearray)):
+                source_identity_private_key = bytes(source_identity_private_key)
+
+            log_separator("ReticulumWrapper", "send_lxmf_message_with_method", "=", 80)
+            log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                    f"Sending message with method={delivery_method}, try_propagation_on_fail={try_propagation_on_fail}")
+
+            # Map delivery method string to LXMF constant
+            method_map = {
+                "opportunistic": LXMF.LXMessage.OPPORTUNISTIC,
+                "direct": LXMF.LXMessage.DIRECT,
+                "propagated": LXMF.LXMessage.PROPAGATED,
+            }
+
+            lxmf_method = method_map.get(delivery_method.lower(), LXMF.LXMessage.DIRECT)
+
+            # Check size for OPPORTUNISTIC - max 295 bytes content
+            content_bytes = content.encode('utf-8')
+            if lxmf_method == LXMF.LXMessage.OPPORTUNISTIC:
+                if len(content_bytes) > 295:
+                    log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                               f"Content too large for OPPORTUNISTIC ({len(content_bytes)} bytes > 295), falling back to DIRECT")
+                    lxmf_method = LXMF.LXMessage.DIRECT
+                if image_data or file_attachments:
+                    log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                               "OPPORTUNISTIC doesn't support attachments, falling back to DIRECT")
+                    lxmf_method = LXMF.LXMessage.DIRECT
+
+            # Check if PROPAGATED requires a propagation node
+            if lxmf_method == LXMF.LXMessage.PROPAGATED and not self.active_propagation_node:
+                return {"success": False, "error": "PROPAGATED delivery requires a propagation node to be set"}
+
+            # Reconstruct source identity
+            source_identity = RNS.Identity()
+            source_identity.load_private_key(source_identity_private_key)
+
+            # Recall recipient identity
+            recipient_identity = RNS.Identity.recall(dest_hash)
+            if not recipient_identity:
+                recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+            if not recipient_identity and dest_hash.hex() in self.identities:
+                recipient_identity = self.identities[dest_hash.hex()]
+
+            if not recipient_identity:
+                # Request path from network (triggers announces from peers who know destination)
+                log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
+                try:
+                    RNS.Transport.request_path(dest_hash)
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "send_lxmf_message_with_method", f"Error requesting path: {e}")
+
+                # Wait up to 5 seconds for path response
+                for attempt in range(10):
+                    time.sleep(0.5)
+                    recipient_identity = RNS.Identity.recall(dest_hash)
+                    if not recipient_identity:
+                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                    if recipient_identity:
+                        log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                                 f"✅ Identity resolved after path request (attempt {attempt + 1})")
+                        break
+
+                if not recipient_identity:
+                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."}
+
+            # Create destination
+            recipient_lxmf_destination = RNS.Destination(
+                recipient_identity,
+                RNS.Destination.OUT,
+                RNS.Destination.SINGLE,
+                "lxmf",
+                "delivery"
+            )
+
+            # Prepare fields if image or file attachments provided
+            fields = None
+            if image_data and image_format:
+                if hasattr(image_data, '__iter__') and not isinstance(image_data, (bytes, bytearray)):
+                    image_data = bytes(image_data)
+                fields = {6: [image_format, image_data]}
+                log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                        f"📎 Attaching image: {len(image_data)} bytes, format={image_format}")
+
+            # Add file attachments to Field 5 if provided
+            if file_attachments:
+                if fields is None:
+                    fields = {}
+                # Convert Java ArrayList to Python list if needed
+                if hasattr(file_attachments, 'toArray'):
+                    file_attachments = list(file_attachments.toArray())
+                elif hasattr(file_attachments, '__iter__') and not isinstance(file_attachments, (list, tuple)):
+                    file_attachments = list(file_attachments)
+                # Convert each attachment: [filename, bytes]
+                converted_attachments = []
+                for attachment in file_attachments:
+                    # Convert Java List to Python list if needed
+                    if hasattr(attachment, 'toArray'):
+                        attachment = list(attachment.toArray())
+                    elif hasattr(attachment, '__iter__') and not isinstance(attachment, (list, tuple)):
+                        attachment = list(attachment)
+                    if len(attachment) >= 2:
+                        filename = str(attachment[0])
+                        data = attachment[1]
+                        # Convert jarray to bytes if needed
+                        if hasattr(data, '__iter__') and not isinstance(data, (bytes, bytearray)):
+                            data = bytes(data)
+                        converted_attachments.append([filename, data])
+                if converted_attachments:
+                    fields[5] = converted_attachments
+                    total_size = sum(len(a[1]) for a in converted_attachments)
+                    log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                            f"📎 Attaching {len(converted_attachments)} file(s): {total_size} bytes total")
+
+            # Create LXMF message with specified delivery method
+            lxmf_message = LXMF.LXMessage(
+                destination=recipient_lxmf_destination,
+                source=self.local_lxmf_destination,
+                content=content_bytes,
+                title="",
+                fields=fields,
+                desired_method=lxmf_method
+            )
+
+            # Store retry flag on message for use in _on_message_failed
+            if try_propagation_on_fail and self.active_propagation_node and lxmf_method != LXMF.LXMessage.PROPAGATED:
+                lxmf_message.try_propagation_on_fail = True
+            else:
+                lxmf_message.try_propagation_on_fail = False
+
+            log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                    f"LXMessage created with desired_method={lxmf_method}")
+
+            # Register callbacks
+            lxmf_message.register_delivery_callback(self._on_message_delivered)
+            lxmf_message.register_failed_callback(self._on_message_failed)
+
+            # Send via router
+            self.router.handle_outbound(lxmf_message)
+
+            msg_hash = lxmf_message.hash if lxmf_message.hash else b''
+            log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                    f"✅ Message {msg_hash.hex()[:16] if msg_hash else 'unknown'}... handed to router")
+
+            # Check if message transitioned to SENT state (0x04) immediately
+            # This happens for PROPAGATED messages when the relay accepts them
+            try:
+                if hasattr(lxmf_message, 'state') and lxmf_message.state == LXMF.LXMessage.SENT:
+                    log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                            f"✅ Message state: SENT (0x04) - transmitted to network")
+                    self._on_message_sent(lxmf_message)
+                else:
+                    current_state = lxmf_message.state if hasattr(lxmf_message, 'state') else 'unknown'
+                    log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                             f"Message state after send: {current_state}")
+            except Exception as e:
+                log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                           f"Could not check message state: {e}")
+
+            # Track opportunistic messages for timeout fallback
+            # If an opportunistic message doesn't get delivered within the timeout period,
+            # we'll trigger the failure callback to initiate propagation fallback
+            if lxmf_method == LXMF.LXMessage.OPPORTUNISTIC and lxmf_message.try_propagation_on_fail and msg_hash:
+                self._opportunistic_messages[msg_hash.hex()] = {
+                    'message': lxmf_message,
+                    'sent_time': time.time()
+                }
+                log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                         f"Tracking opportunistic message {msg_hash.hex()[:16]}... for timeout fallback")
+                # Ensure timer is running
+                self._start_opportunistic_timer()
+
+            # Map method back to string for return
+            method_names = {
+                LXMF.LXMessage.OPPORTUNISTIC: "opportunistic",
+                LXMF.LXMessage.DIRECT: "direct",
+                LXMF.LXMessage.PROPAGATED: "propagated",
+            }
+
+            return {
+                "success": True,
+                "message_hash": msg_hash,
+                "timestamp": int(time.time() * 1000),
+                "delivery_method": method_names.get(lxmf_method, "unknown"),
+                "destination_hash": recipient_lxmf_destination.hash
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "send_lxmf_message_with_method", f"❌ ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    def _on_message_delivered(self, lxmf_message):
+        """
+        Callback invoked by LXMF when a sent message acknowledgment is received.
+
+        For DIRECT messages: Called when recipient sends back proof of delivery.
+        For PROPAGATED messages: Called when relay accepts the message (NOT end recipient).
+
+        LXMF sets different states before calling this callback:
+        - DELIVERED (0x08): Direct delivery confirmed by recipient
+        - SENT (0x04): Propagated to relay, awaiting recipient sync
+
+        Args:
+            lxmf_message: The LXMF.LXMessage that was acknowledged
         """
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
-            log_info("ReticulumWrapper", "_on_message_delivered",
-                    f"✅ Message {msg_hash[:16]}... DELIVERED!")
+
+            # Determine status based on LXMF message state
+            # LXMF sets state=DELIVERED for direct, state=SENT for propagated
+            if lxmf_message.state == LXMF.LXMessage.DELIVERED:
+                status = 'delivered'
+                log_info("ReticulumWrapper", "_on_message_delivered",
+                        f"✅ Message {msg_hash[:16]}... DELIVERED (confirmed by recipient)")
+            else:
+                # state == SENT means propagated (relay accepted, recipient unknown)
+                status = 'propagated'
+                log_info("ReticulumWrapper", "_on_message_delivered",
+                        f"📤 Message {msg_hash[:16]}... PROPAGATED (stored on relay)")
+
+            # Remove from opportunistic tracking (if it was being tracked)
+            if msg_hash in self._opportunistic_messages:
+                del self._opportunistic_messages[msg_hash]
+                log_debug("ReticulumWrapper", "_on_message_delivered",
+                         f"Removed {msg_hash[:16]}... from opportunistic tracking ({status})")
 
             # Create status event for Kotlin
             status_event = {
                 'message_hash': msg_hash,
-                'status': 'delivered',
+                'status': status,
                 'timestamp': int(time.time() * 1000)
             }
 
@@ -1900,38 +2953,252 @@ class ReticulumWrapper:
         Callback invoked by LXMF when a sent message delivery fails.
         This is called when delivery times out or is otherwise unsuccessful.
 
+        Handles three cases:
+        1. First failure with try_propagation_on_fail=True: Retry via current propagation node
+        2. Propagation retry failed, retries < max: Request alternative relay from Kotlin
+        3. Max retries exceeded or no alternatives: Fail message permanently
+
         Args:
             lxmf_message: The LXMF.LXMessage that failed
         """
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
-            log_error("ReticulumWrapper", "_on_message_failed",
-                     f"❌ Message {msg_hash[:16]}... FAILED!")
 
-            # Create status event for Kotlin
-            status_event = {
-                'message_hash': msg_hash,
-                'status': 'failed',
-                'timestamp': int(time.time() * 1000)
-            }
+            # Remove from opportunistic tracking (if it was being tracked)
+            if msg_hash in self._opportunistic_messages:
+                del self._opportunistic_messages[msg_hash]
+                log_debug("ReticulumWrapper", "_on_message_failed",
+                         f"Removed {msg_hash[:16]}... from opportunistic tracking (failed)")
 
-            # Invoke Kotlin callback if registered (same pattern as BLE bridge)
-            if self.kotlin_delivery_status_callback:
+            # Initialize tracking attributes if not present
+            if not hasattr(lxmf_message, 'propagation_retry_attempted'):
+                lxmf_message.propagation_retry_attempted = False
+            if not hasattr(lxmf_message, 'tried_relays'):
+                lxmf_message.tried_relays = []
+
+            # Case 1: First failure - try propagation if enabled (Sideband pattern)
+            if (hasattr(lxmf_message, 'try_propagation_on_fail') and
+                lxmf_message.try_propagation_on_fail and
+                self.active_propagation_node and
+                not lxmf_message.propagation_retry_attempted):
+
+                log_info("ReticulumWrapper", "_on_message_failed",
+                        f"📡 Message {msg_hash[:16]}... direct delivery failed, retrying via propagation node")
+
+                # Mark that we've attempted propagation and track the relay
+                lxmf_message.propagation_retry_attempted = True
+                lxmf_message.tried_relays.append(self.active_propagation_node)
+
+                # Clear retry flag to prevent infinite loop
+                lxmf_message.try_propagation_on_fail = False
+                # Reset delivery attempts
+                lxmf_message.delivery_attempts = 0
+                # Clear packed state so message can be re-packed
+                lxmf_message.packed = None
+                # Clear propagation-specific state for fresh stamp generation
+                lxmf_message.propagation_packed = None
+                lxmf_message.propagation_stamp = None
+                # Request deferred stamp generation - propagation nodes require valid stamps
+                lxmf_message.defer_propagation_stamp = True
+                # Switch to PROPAGATED delivery
+                lxmf_message.desired_method = LXMF.LXMessage.PROPAGATED
+
+                # Re-submit to router (will go through pending_deferred_stamps for stamp generation)
+                self.router.handle_outbound(lxmf_message)
+
+                # Notify Kotlin of retry (status = "retrying_propagated")
+                if self.kotlin_delivery_status_callback:
+                    try:
+                        import json
+                        status_event = {
+                            'message_hash': msg_hash,
+                            'status': 'retrying_propagated',
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        self.kotlin_delivery_status_callback(json.dumps(status_event))
+                        log_debug("ReticulumWrapper", "_on_message_failed",
+                                 "Kotlin callback invoked with retrying_propagated status")
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "_on_message_failed",
+                                 f"Error invoking Kotlin callback: {e}")
+                return  # Don't report as failed - we're retrying
+
+            # Case 2: Propagation retry failed - try alternative relay if available
+            if (lxmf_message.propagation_retry_attempted and
+                len(lxmf_message.tried_relays) < self._max_relay_retries and
+                self.kotlin_request_alternative_relay_callback):
+
+                log_info("ReticulumWrapper", "_on_message_failed",
+                        f"📡 Message {msg_hash[:16]}... propagation failed, requesting alternative relay "
+                        f"(tried {len(lxmf_message.tried_relays)}/{self._max_relay_retries})")
+
+                # Store message for later retry when alternative is provided
+                self._pending_relay_fallback_messages[msg_hash] = lxmf_message
+
+                # Request alternative from Kotlin (exclude already tried relays)
+                import json
+                request = {
+                    'message_hash': msg_hash,
+                    'exclude_relays': [r.hex() if isinstance(r, bytes) else str(r) for r in lxmf_message.tried_relays],
+                    'timestamp': int(time.time() * 1000)
+                }
                 try:
-                    import json
-                    self.kotlin_delivery_status_callback(json.dumps(status_event))
+                    self.kotlin_request_alternative_relay_callback(json.dumps(request))
                     log_debug("ReticulumWrapper", "_on_message_failed",
-                             "Kotlin callback invoked successfully")
+                             f"Requested alternative relay for {msg_hash[:16]}...")
                 except Exception as e:
                     log_error("ReticulumWrapper", "_on_message_failed",
-                             f"Error invoking Kotlin callback: {e}")
+                             f"Error requesting alternative relay: {e}")
+                    # Fall through to permanent failure
+                    del self._pending_relay_fallback_messages[msg_hash]
+
+                # Notify Kotlin of status
+                if self.kotlin_delivery_status_callback:
+                    try:
+                        status_event = {
+                            'message_hash': msg_hash,
+                            'status': 'retrying_alternative_relay',
+                            'tried_count': len(lxmf_message.tried_relays),
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        self.kotlin_delivery_status_callback(json.dumps(status_event))
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "_on_message_failed",
+                                 f"Error notifying status: {e}")
+                return  # Don't report as failed yet - waiting for alternative
+
+            # Case 3: Max retries exceeded or no callback - fail permanently
+            if len(lxmf_message.tried_relays) >= self._max_relay_retries:
+                reason = 'max_relay_retries_exceeded'
             else:
-                log_warning("ReticulumWrapper", "_on_message_failed",
-                           "No Kotlin callback registered - failure status not reported")
+                reason = 'delivery_failed'
+            self._fail_message_permanently(lxmf_message, reason)
 
         except Exception as e:
             log_error("ReticulumWrapper", "_on_message_failed",
                      f"Error in failed callback: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _fail_message_permanently(self, lxmf_message, reason: str):
+        """
+        Mark a message as permanently failed and notify Kotlin.
+
+        Args:
+            lxmf_message: The LXMF.LXMessage that failed
+            reason: Reason for failure (e.g., 'max_relay_retries_exceeded', 'no_relays_available')
+        """
+        msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
+
+        log_error("ReticulumWrapper", "_fail_message_permanently",
+                 f"❌ Message {msg_hash[:16]}... FAILED permanently: {reason}")
+
+        # Remove from pending if present
+        if msg_hash in self._pending_relay_fallback_messages:
+            del self._pending_relay_fallback_messages[msg_hash]
+
+        # Notify Kotlin with failure reason
+        if self.kotlin_delivery_status_callback:
+            try:
+                import json
+                status_event = {
+                    'message_hash': msg_hash,
+                    'status': 'failed',
+                    'reason': reason,
+                    'timestamp': int(time.time() * 1000)
+                }
+                self.kotlin_delivery_status_callback(json.dumps(status_event))
+                log_debug("ReticulumWrapper", "_fail_message_permanently",
+                         "Kotlin callback invoked successfully")
+            except Exception as e:
+                log_error("ReticulumWrapper", "_fail_message_permanently",
+                         f"Error invoking Kotlin callback: {e}")
+        else:
+            log_warning("ReticulumWrapper", "_fail_message_permanently",
+                       "No Kotlin callback registered - failure status not reported")
+
+    def on_alternative_relay_received(self, relay_hash):
+        """
+        Called from Kotlin when an alternative relay is provided.
+
+        When propagation to the current relay fails, Kotlin is asked to find an alternative.
+        This method is called with the result - either a new relay hash or None if none available.
+
+        Args:
+            relay_hash: 16-byte destination hash of alternative relay (bytes or jarray),
+                       or None if no alternatives available
+        """
+        try:
+            if not self._pending_relay_fallback_messages:
+                log_warning("ReticulumWrapper", "on_alternative_relay_received",
+                           "No pending messages for relay fallback")
+                return
+
+            if relay_hash is None:
+                # No alternatives available - fail all pending messages
+                log_warning("ReticulumWrapper", "on_alternative_relay_received",
+                           f"No alternative relays available, failing {len(self._pending_relay_fallback_messages)} messages")
+                for msg_hash, message in list(self._pending_relay_fallback_messages.items()):
+                    self._fail_message_permanently(message, 'no_relays_available')
+                self._pending_relay_fallback_messages.clear()
+                return
+
+            # Convert jarray from Java if needed
+            if hasattr(relay_hash, '__iter__') and not isinstance(relay_hash, (bytes, bytearray)):
+                relay_hash = bytes(relay_hash)
+
+            relay_hex = relay_hash.hex() if isinstance(relay_hash, bytes) else str(relay_hash)
+            log_info("ReticulumWrapper", "on_alternative_relay_received",
+                    f"📡 Received alternative relay: {relay_hex[:16]}..., retrying {len(self._pending_relay_fallback_messages)} messages")
+
+            # Update active propagation node (directly set to bypass init checks in fallback)
+            self.active_propagation_node = relay_hash
+            # Also update router if available
+            if self.initialized and self.router:
+                try:
+                    self.router.set_outbound_propagation_node(relay_hash)
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "on_alternative_relay_received",
+                               f"Could not update router propagation node: {e}")
+
+            # Retry all pending messages with new relay
+            for msg_hash, message in list(self._pending_relay_fallback_messages.items()):
+                # Track this relay attempt
+                if not hasattr(message, 'tried_relays'):
+                    message.tried_relays = []
+                message.tried_relays.append(relay_hash)
+
+                # Reset for fresh retry
+                message.delivery_attempts = 0
+                message.packed = None
+                message.propagation_packed = None
+                message.propagation_stamp = None
+                message.defer_propagation_stamp = True
+                message.desired_method = LXMF.LXMessage.PROPAGATED
+
+                # Re-submit to router
+                self.router.handle_outbound(message)
+
+                # Notify Kotlin
+                if self.kotlin_delivery_status_callback:
+                    try:
+                        import json
+                        status = {
+                            'message_hash': msg_hash,
+                            'status': 'retrying_propagated',
+                            'relay_hash': relay_hex,
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        self.kotlin_delivery_status_callback(json.dumps(status))
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "on_alternative_relay_received",
+                                 f"Error notifying status: {e}")
+
+            self._pending_relay_fallback_messages.clear()
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "on_alternative_relay_received",
+                     f"Error handling alternative relay: {e}")
             import traceback
             traceback.print_exc()
 
@@ -1978,6 +3245,63 @@ class ReticulumWrapper:
                      f"Error in sent callback: {e}")
             import traceback
             traceback.print_exc()
+
+    def _start_opportunistic_timer(self):
+        """
+        Start the timer thread that checks for opportunistic message timeouts.
+        This is called when the first opportunistic message is tracked, or during initialize().
+        The timer thread is a daemon thread and will exit cleanly when the app shuts down.
+        """
+        if self._opportunistic_timer is None or not self._opportunistic_timer.is_alive():
+            self._opportunistic_timer = threading.Thread(
+                target=self._opportunistic_timeout_loop,
+                daemon=True
+            )
+            self._opportunistic_timer.start()
+            log_info("ReticulumWrapper", "_start_opportunistic_timer",
+                    "Started opportunistic message timeout checker")
+
+    def _opportunistic_timeout_loop(self):
+        """
+        Background loop that periodically checks for timed-out opportunistic messages.
+        Runs every _opportunistic_check_interval seconds while self.initialized is True.
+        """
+        log_debug("ReticulumWrapper", "_opportunistic_timeout_loop", "Timeout loop started")
+        while self.initialized:
+            time.sleep(self._opportunistic_check_interval)
+            if self._opportunistic_messages:  # Only check if there are messages to track
+                self._check_opportunistic_timeouts()
+        log_debug("ReticulumWrapper", "_opportunistic_timeout_loop", "Timeout loop exiting (not initialized)")
+
+    def _check_opportunistic_timeouts(self):
+        """
+        Check for opportunistic messages that have timed out waiting for delivery.
+        For any that have exceeded the timeout threshold, trigger the failure callback
+        to initiate propagation fallback.
+
+        This is the key fix for the issue where opportunistic messages to offline
+        recipients get stuck in SENT state forever.
+        """
+        now = time.time()
+        timed_out = []
+
+        # Collect timed-out messages (iterate over copy to avoid modification during iteration)
+        for msg_hash, tracking in list(self._opportunistic_messages.items()):
+            elapsed = now - tracking['sent_time']
+            if elapsed >= self._opportunistic_timeout_seconds:
+                timed_out.append((msg_hash, tracking['message']))
+
+        # Process timed-out messages
+        for msg_hash, lxmf_message in timed_out:
+            log_info("ReticulumWrapper", "_check_opportunistic_timeouts",
+                    f"⏱️ Opportunistic message {msg_hash[:16]}... timed out after "
+                    f"{self._opportunistic_timeout_seconds}s, triggering propagation fallback")
+            # Remove from tracking dict (will also be removed in _on_message_failed, but do it here
+            # to prevent any race condition where the message could be processed twice)
+            if msg_hash in self._opportunistic_messages:
+                del self._opportunistic_messages[msg_hash]
+            # Trigger the failure callback which handles propagation fallback
+            self._on_message_failed(lxmf_message)
 
     def get_transport_identity_hash(self) -> bytes:
         """
@@ -2239,6 +3563,185 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "restore_all_peer_identities", f"Error restoring peer identities: {e}")
             return {"success_count": 0, "errors": [str(e)]}
 
+    def bulk_restore_announce_identities(self, announce_data) -> Dict:
+        """
+        Bulk restore announce identities by directly populating Identity.known_destinations.
+        For announces, we have destination_hash directly - no computation needed.
+        This is much faster than creating full RNS Identity/Destination objects.
+
+        Args:
+            announce_data: JSON string or List of dicts with 'destination_hash' and 'public_key' keys
+
+        Returns:
+            Dict with 'success_count' and 'errors' list
+        """
+        try:
+            if not RETICULUM_AVAILABLE:
+                return {"success_count": 0, "errors": ["Reticulum not available"]}
+
+            # Parse JSON string if needed
+            if isinstance(announce_data, str):
+                import json
+                announce_data = json.loads(announce_data)
+
+            log_debug("ReticulumWrapper", "bulk_restore_announce_identities",
+                     f"Bulk restoring {len(announce_data)} announce identities")
+
+            import time
+            import base64
+
+            success_count = 0
+            errors = []
+            expected_key_size = RNS.Identity.KEYSIZE // 8  # Convert bits to bytes (512 bits = 64 bytes)
+
+            for i, announce in enumerate(announce_data):
+                try:
+                    dest_hash_str = announce.get('destination_hash')
+                    public_key_str = announce.get('public_key')
+
+                    if not dest_hash_str:
+                        errors.append(f"Announce {i}: missing destination_hash")
+                        continue
+                    if not public_key_str:
+                        errors.append(f"Announce {i}: missing public_key")
+                        continue
+
+                    # Convert hex string to bytes
+                    dest_hash = bytes.fromhex(dest_hash_str)
+
+                    # Decode base64 string to bytes
+                    public_key = base64.b64decode(public_key_str)
+
+                    # Validate public key size
+                    if len(public_key) != expected_key_size:
+                        errors.append(f"Announce {i}: Invalid public key size {len(public_key)}, expected {expected_key_size}")
+                        continue
+
+                    # Directly populate Identity.known_destinations
+                    # Format: [timestamp, packet_hash, public_key, app_data]
+                    RNS.Identity.known_destinations[dest_hash] = [
+                        time.time(),  # timestamp
+                        None,         # packet_hash (not needed for recall)
+                        public_key,   # public key bytes
+                        None          # app_data
+                    ]
+
+                    # Also store in local identities cache for wrapper lookups
+                    # Create a lightweight identity object for local cache
+                    identity = RNS.Identity(create_keys=False)
+                    identity.load_public_key(public_key)
+                    self.identities[dest_hash_str] = identity
+
+                    success_count += 1
+
+                except Exception as e:
+                    errors.append(f"Error processing announce {i}: {e}")
+
+            log_info("ReticulumWrapper", "bulk_restore_announce_identities",
+                    f"Bulk restored {success_count} announce identities, {len(errors)} errors")
+            return {"success_count": success_count, "errors": errors}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "bulk_restore_announce_identities",
+                     f"Error bulk restoring announce identities: {e}")
+            return {"success_count": 0, "errors": [str(e)]}
+
+    def bulk_restore_peer_identities(self, peer_data) -> Dict:
+        """
+        Bulk restore peer identities using lightweight hash computation.
+        For peer identities, we must compute destination_hash from identity_hash.
+        This is faster than creating full RNS Identity/Destination objects.
+
+        Args:
+            peer_data: JSON string or List of dicts with 'identity_hash' and 'public_key' keys
+
+        Returns:
+            Dict with 'success_count' and 'errors' list
+        """
+        try:
+            if not RETICULUM_AVAILABLE:
+                return {"success_count": 0, "errors": ["Reticulum not available"]}
+
+            # Parse JSON string if needed
+            if isinstance(peer_data, str):
+                import json
+                peer_data = json.loads(peer_data)
+
+            log_debug("ReticulumWrapper", "bulk_restore_peer_identities",
+                     f"Bulk restoring {len(peer_data)} peer identities")
+
+            import time
+            import base64
+
+            success_count = 0
+            errors = []
+            expected_key_size = RNS.Identity.KEYSIZE // 8  # Convert bits to bytes
+
+            # Precompute the LXMF name_hash (constant for all LXMF delivery destinations)
+            # This is: hash("lxmf.delivery")[:NAME_HASH_LENGTH//8]
+            lxmf_name = "lxmf.delivery"
+            lxmf_name_hash = RNS.Identity.full_hash(lxmf_name.encode("utf-8"))[:(RNS.Identity.NAME_HASH_LENGTH // 8)]
+
+            for i, peer in enumerate(peer_data):
+                try:
+                    identity_hash_str = peer.get('identity_hash')
+                    public_key_str = peer.get('public_key')
+
+                    if not identity_hash_str:
+                        errors.append(f"Peer {i}: missing identity_hash")
+                        continue
+                    if not public_key_str:
+                        errors.append(f"Peer {i}: missing public_key")
+                        continue
+
+                    # Decode base64 string to bytes
+                    public_key = base64.b64decode(public_key_str)
+
+                    # Validate public key size
+                    if len(public_key) != expected_key_size:
+                        errors.append(f"Peer {i}: Invalid public key size {len(public_key)}, expected {expected_key_size}")
+                        continue
+
+                    # Compute the identity hash from the public key (this is the authoritative hash)
+                    # Identity hash = truncated_hash(public_key)
+                    actual_identity_hash = RNS.Identity.truncated_hash(public_key)
+
+                    # Compute the LXMF delivery destination hash
+                    # dest_hash = full_hash(name_hash + identity_hash)[:TRUNCATED_HASHLENGTH//8]
+                    addr_hash_material = lxmf_name_hash + actual_identity_hash
+                    dest_hash = RNS.Identity.full_hash(addr_hash_material)[:RNS.Reticulum.TRUNCATED_HASHLENGTH // 8]
+
+                    # Directly populate Identity.known_destinations
+                    # Format: [timestamp, packet_hash, public_key, app_data]
+                    RNS.Identity.known_destinations[dest_hash] = [
+                        time.time(),  # timestamp
+                        None,         # packet_hash (not needed for recall)
+                        public_key,   # public key bytes
+                        None          # app_data
+                    ]
+
+                    # Also store in local identities cache for wrapper lookups
+                    identity = RNS.Identity(create_keys=False)
+                    identity.load_public_key(public_key)
+
+                    # Store by multiple keys for lookup flexibility
+                    self.identities[actual_identity_hash.hex()] = identity
+                    self.identities[dest_hash.hex()] = identity
+
+                    success_count += 1
+
+                except Exception as e:
+                    errors.append(f"Error processing peer {i}: {e}")
+
+            log_info("ReticulumWrapper", "bulk_restore_peer_identities",
+                    f"Bulk restored {success_count} peer identities, {len(errors)} errors")
+            return {"success_count": success_count, "errors": errors}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "bulk_restore_peer_identities",
+                     f"Error bulk restoring peer identities: {e}")
+            return {"success_count": 0, "errors": [str(e)]}
+
     def get_lxmf_destination(self) -> Dict:
         """
         Get the local LXMF delivery destination hash.
@@ -2256,35 +3759,24 @@ class ReticulumWrapper:
 
     def poll_received_messages(self) -> List[Dict]:
         """
-        Poll for received LXMF messages.
-        Accesses LXMRouter's internal message queue - bypasses broken delivery callbacks.
+        Fetch and clear pending LXMF messages from the queue.
+
+        Called by:
+        - Startup drain: catches messages that arrived before callback registration
+        - Event-driven fetch: retrieves message when callback notification fires
 
         Returns:
             List of received message dicts
         """
-        log_info("ReticulumWrapper", "poll_received_messages", f"poll_received_messages() called - RETICULUM_AVAILABLE={RETICULUM_AVAILABLE}, initialized={self.initialized}, router={self.router is not None}")
         if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
-            log_debug("ReticulumWrapper", "poll_received_messages", f"poll_received_messages() returning early - conditions not met")
             return []
 
         try:
             new_messages = []
 
-            # Debug: Check what attributes the router has
-            router_attrs = [attr for attr in dir(self.router) if not attr.startswith('_')]
-            log_debug("ReticulumWrapper", "poll_received_messages", f"Router has these public attributes: {router_attrs[:10]}...")
-
-            # Check if pending_inbound exists
-            has_pending = hasattr(self.router, 'pending_inbound')
-            log_debug("ReticulumWrapper", "poll_received_messages", f"Router has 'pending_inbound' attribute: {has_pending}")
-
-            if has_pending:
-                pending_count = len(self.router.pending_inbound) if self.router.pending_inbound else 0
-                log_debug("ReticulumWrapper", "poll_received_messages", f"pending_inbound has {pending_count} messages")
-
             # Check pending inbound messages
             if hasattr(self.router, 'pending_inbound') and self.router.pending_inbound:
-                log_info("ReticulumWrapper", "poll_received_messages", f"✅ Checking pending_inbound, has {len(self.router.pending_inbound)} messages")
+                log_info("ReticulumWrapper", "poll_received_messages", f"📬 Found {len(self.router.pending_inbound)} pending message(s)")
 
                 for lxmf_message in list(self.router.pending_inbound):
                     try:
@@ -2303,15 +3795,52 @@ class ReticulumWrapper:
                             'timestamp': int(lxmf_message.timestamp * 1000) if lxmf_message.timestamp else int(time.time() * 1000)
                         }
 
+                        # Try to get sender's public key from RNS identity cache
+                        try:
+                            source_identity = RNS.Identity.recall(lxmf_message.source_hash)
+                            if source_identity is not None:
+                                public_key = source_identity.get_public_key()
+                                if public_key:
+                                    message_event['public_key'] = public_key
+                                    log_debug("ReticulumWrapper", "poll_received_messages",
+                                             f"✅ Found public key for sender {lxmf_message.source_hash.hex()[:16]}")
+                            else:
+                                log_debug("ReticulumWrapper", "poll_received_messages",
+                                         f"⚠️ No identity found for sender {lxmf_message.source_hash.hex()[:16]}")
+                        except Exception as e:
+                            log_debug("ReticulumWrapper", "poll_received_messages",
+                                     f"⚠️ Error getting public key: {e}")
+
                         # Extract LXMF fields (attachments, images, etc.)
                         if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
                             fields_serialized = {}
                             for key, value in lxmf_message.fields.items():
                                 # Handle different LXMF field formats
+                                # Field 5 (FILE_ATTACHMENTS): list of [filename, bytes] tuples
                                 # Field 6 (IMAGE): ['format', bytes] e.g. ['jpg', b'\xff\xd8...']
                                 # Field 7 (AUDIO): ['format', bytes]
-                                # Field 5 (FILE_ATTACHMENTS): list of [filename, bytes]
-                                if isinstance(value, (list, tuple)) and len(value) >= 2:
+
+                                if key == 5 and isinstance(value, list):
+                                    # Field 5 is a list of [filename, bytes] tuples
+                                    serialized_attachments = []
+                                    for attachment in value:
+                                        if isinstance(attachment, (list, tuple)) and len(attachment) >= 2:
+                                            filename = attachment[0]
+                                            file_data = attachment[1]
+                                            if isinstance(file_data, bytes):
+                                                serialized_attachments.append({
+                                                    'filename': str(filename),
+                                                    'data': file_data.hex(),
+                                                    'size': len(file_data)
+                                                })
+                                                log_debug("ReticulumWrapper", "poll_received_messages",
+                                                         f"Field 5: file '{filename}' ({len(file_data)} bytes)")
+                                    if serialized_attachments:
+                                        fields_serialized['5'] = serialized_attachments
+                                        log_info("ReticulumWrapper", "poll_received_messages",
+                                                f"📎 Field 5: extracted {len(serialized_attachments)} file attachment(s)")
+
+                                elif isinstance(value, (list, tuple)) and len(value) >= 2:
                                     # Image/audio format: [format_string, bytes_data]
                                     if isinstance(value[1], bytes):
                                         fields_serialized[str(key)] = value[1].hex()
@@ -2328,36 +3857,6 @@ class ReticulumWrapper:
 
                         new_messages.append(message_event)
                         log_debug("ReticulumWrapper", "poll_received_messages", f"📨 Found new message from {lxmf_message.source_hash.hex()[:16]}")
-
-                        # === PATH TABLE DIAGNOSTIC AFTER MESSAGE RECEIPT ===
-                        try:
-                            import RNS.Transport as Transport
-                            source_hash = lxmf_message.source_hash
-                            source_hex = source_hash.hex()[:16]
-
-                            log_separator("ReticulumWrapper", "poll_received_messages", "=", 60)
-                            log_info("ReticulumWrapper", "poll_received_messages", f"🔍 PATH TABLE CHECK AFTER RECEIVING MESSAGE FROM {source_hex}")
-
-                            # Check if sender is in path_table
-                            if hasattr(Transport, 'path_table'):
-                                if source_hash in Transport.path_table:
-                                    log_info("ReticulumWrapper", "poll_received_messages", f"✅ Sender {source_hex} IS in path_table!")
-                                    path_info = Transport.path_table[source_hash]
-                                    log_debug("ReticulumWrapper", "poll_received_messages", f"Path info: {path_info}")
-                                else:
-                                    log_warning("ReticulumWrapper", "poll_received_messages", f"⚠️  Sender {source_hex} NOT in path_table!")
-
-                                # Log all current paths
-                                path_count = len(Transport.path_table)
-                                log_debug("ReticulumWrapper", "poll_received_messages", f"Current path_table has {path_count} entries")
-                                if path_count > 0:
-                                    all_paths = [h.hex()[:16] for h in Transport.path_table.keys()]
-                                    log_debug("ReticulumWrapper", "poll_received_messages", f"All paths: {all_paths}")
-
-                            log_separator("ReticulumWrapper", "poll_received_messages", "=", 60)
-                        except Exception as e:
-                            log_warning("ReticulumWrapper", "poll_received_messages", f"Error checking path_table after receipt: {e}")
-                        # === END PATH TABLE DIAGNOSTIC ===
 
                     except Exception as e:
                         log_error("ReticulumWrapper", "poll_received_messages", f"Error processing message: {e}")
@@ -2436,7 +3935,8 @@ class ReticulumWrapper:
                 info['interfaces'] = interfaces
 
                 # Transport information
-                info['transport_enabled'] = True
+                # Check actual transport enabled status from RNS
+                info['transport_enabled'] = RNS.Reticulum.transport_enabled()
                 info['transport_identity'] = RNS.Transport.identity != None
 
             except Exception as e:
@@ -2449,6 +3949,16 @@ class ReticulumWrapper:
             info['transport_enabled'] = False
 
         return info
+
+    def get_failed_interfaces(self) -> str:
+        """
+        Get list of interfaces that failed to initialize.
+
+        Returns:
+            JSON string containing list of failed interfaces with error details.
+            Each entry has: name, error, and optionally recoverable flag.
+        """
+        return json.dumps(self.failed_interfaces if hasattr(self, 'failed_interfaces') else [])
 
     def get_path_table(self) -> List[str]:
         """
@@ -2675,6 +4185,136 @@ class ReticulumWrapper:
             import traceback
             traceback.print_exc()
             return {'success': False, 'error': str(e)}
+
+    def initialize_rnode_interface(self) -> Dict:
+        """
+        Initialize the RNode interface with Kotlin bridge architecture.
+
+        Unlike BLE interface which is loaded by RNS from config, RNode interface
+        is created directly here using ColumbaRNodeInterface. This is because
+        the standard RNodeInterface uses jnius which is incompatible with Chaquopy.
+
+        The RNode config was stored in _pending_rnode_config during config creation.
+
+        Returns:
+            Dict with 'success' boolean and optional 'error' string
+        """
+        # Prevent concurrent initialization (race condition fix)
+        # Acquire lock before checking/setting initialization flag to prevent race condition
+        # (Double-check locking without proper memory barriers is broken in Python)
+        with self._rnode_init_lock:
+            if self._rnode_initializing:
+                log_info("ReticulumWrapper", "initialize_rnode_interface",
+                        "RNode initialization already in progress, skipping duplicate call")
+                return {'success': True, 'message': 'Initialization already in progress'}
+            self._rnode_initializing = True
+
+        try:
+            if not self.initialized:
+                return {'success': False, 'error': 'Reticulum not initialized'}
+
+            # Check if we already have an RNode interface that just needs reconnecting
+            if self.rnode_interface is not None:
+                if not self.rnode_interface.online:
+                    log_info("ReticulumWrapper", "initialize_rnode_interface",
+                            "Reconnecting existing offline RNode interface...")
+                    if self.rnode_interface.start():
+                        log_info("ReticulumWrapper", "initialize_rnode_interface",
+                                f"✅ RNode interface reconnected, online={self.rnode_interface.online}")
+                        return {'success': True, 'message': 'RNode interface reconnected'}
+                    else:
+                        return {'success': False, 'error': 'Failed to reconnect RNode interface'}
+                else:
+                    log_info("ReticulumWrapper", "initialize_rnode_interface",
+                            "RNode interface already online, skipping")
+                    return {'success': True, 'message': 'RNode interface already online'}
+
+            # Check if we have pending RNode config (for initial creation)
+            if not hasattr(self, '_pending_rnode_config') or self._pending_rnode_config is None:
+                log_info("ReticulumWrapper", "initialize_rnode_interface", "No RNode config pending, skipping")
+                return {'success': True, 'message': 'No RNode interface configured'}
+
+            # Check if Kotlin bridge is available
+            if self.kotlin_rnode_bridge is None:
+                return {'success': False, 'error': 'KotlinRNodeBridge not set. Call set_rnode_bridge() first.'}
+
+            log_info("ReticulumWrapper", "initialize_rnode_interface",
+                    f"Creating ColumbaRNodeInterface for {self._pending_rnode_config['target_device_name']}")
+
+            # Import ColumbaRNodeInterface
+            from rnode_interface import ColumbaRNodeInterface
+
+            # Create the RNode interface
+            # Note: ColumbaRNodeInterface gets kotlin_rnode_bridge from owner (self) via _get_kotlin_bridge()
+            self.rnode_interface = ColumbaRNodeInterface(
+                owner=self,
+                name=self._pending_rnode_config['name'],
+                config=self._pending_rnode_config
+            )
+
+            # Set up error callback to surface RNode errors to Kotlin/UI
+            def on_rnode_error(error_code, error_message):
+                log_error("ReticulumWrapper", "RNodeError", f"RNode error ({error_code}): {error_message}")
+                if self.kotlin_rnode_bridge:
+                    try:
+                        self.kotlin_rnode_bridge.notifyError(error_code, error_message)
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "RNodeError", f"Failed to notify Kotlin: {e}")
+
+            self.rnode_interface.setOnErrorReceived(on_rnode_error)
+
+            # Set up online status callback to notify Kotlin when interface comes online
+            def on_online_status_change(is_online):
+                log_info("ReticulumWrapper", "RNodeStatus",
+                        f"████ RNODE ONLINE STATUS CHANGED ████ online={is_online}")
+                if self.kotlin_rnode_bridge:
+                    try:
+                        self.kotlin_rnode_bridge.notifyOnlineStatusChanged(is_online)
+                    except Exception as e:
+                        log_error("ReticulumWrapper", "RNodeStatus",
+                                f"Failed to notify Kotlin of online status: {e}")
+
+            if hasattr(self.rnode_interface, 'setOnOnlineStatusChanged'):
+                self.rnode_interface.setOnOnlineStatusChanged(on_online_status_change)
+                log_debug("ReticulumWrapper", "initialize_rnode_interface",
+                        "Set online status callback")
+
+            # Start the interface FIRST before registering with Transport
+            # This ensures we catch any fatal initialization errors before committing
+            log_info("ReticulumWrapper", "initialize_rnode_interface", "Starting ColumbaRNodeInterface...")
+            start_success = self.rnode_interface.start()
+
+            # Register with RNS Transport after starting
+            # The interface is registered even if start() returns False because:
+            # 1. The interface has auto-reconnect capability
+            # 2. start() failure may be transient (Bluetooth not ready, device not in range)
+            # 3. RNS Transport checks online status before sending
+            RNS.Transport.interfaces.append(self.rnode_interface)
+            log_info("ReticulumWrapper", "initialize_rnode_interface",
+                    f"Registered ColumbaRNodeInterface with RNS Transport (start_success={start_success})")
+
+            if start_success:
+                log_info("ReticulumWrapper", "initialize_rnode_interface",
+                        f"✅ ColumbaRNodeInterface started successfully, online={self.rnode_interface.online}")
+            else:
+                # Interface failed to start initially, but it has auto-reconnect capability
+                # Don't return failure - the interface is registered and will auto-reconnect
+                log_warning("ReticulumWrapper", "initialize_rnode_interface",
+                        "Initial RNode connection failed, but interface registered with auto-reconnect enabled")
+
+            # Clear the pending config
+            self._pending_rnode_config = None
+
+            return {'success': True}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "initialize_rnode_interface", f"ERROR initializing RNode interface: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'success': False, 'error': str(e)}
+
+        finally:
+            self._rnode_initializing = False
 
     # ========== Identity Management Methods ==========
 

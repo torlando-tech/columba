@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
@@ -43,10 +44,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.lifecycleScope
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -68,9 +67,11 @@ import com.lxmf.messenger.ui.screens.ChatsScreen
 import com.lxmf.messenger.ui.screens.ContactsScreen
 import com.lxmf.messenger.ui.screens.IdentityManagerScreen
 import com.lxmf.messenger.ui.screens.IdentityScreen
-import com.lxmf.messenger.ui.screens.MigrationScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
+import com.lxmf.messenger.ui.screens.MapScreen
+import com.lxmf.messenger.ui.screens.MessageDetailScreen
 import com.lxmf.messenger.ui.screens.MessagingScreen
+import com.lxmf.messenger.ui.screens.MigrationScreen
 import com.lxmf.messenger.ui.screens.MyIdentityScreen
 import com.lxmf.messenger.ui.screens.NotificationSettingsScreen
 import com.lxmf.messenger.ui.screens.QrScannerScreen
@@ -78,10 +79,12 @@ import com.lxmf.messenger.ui.screens.SettingsScreen
 import com.lxmf.messenger.ui.screens.ThemeEditorScreen
 import com.lxmf.messenger.ui.screens.ThemeManagementScreen
 import com.lxmf.messenger.ui.screens.WelcomeScreen
+import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
 import com.lxmf.messenger.viewmodel.ContactsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 /**
  * Main activity for the Columba LXMF Messenger application.
@@ -185,6 +188,8 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
 
     object Contacts : Screen("contacts", "Contacts", Icons.Default.People)
 
+    object Map : Screen("map", "Map", Icons.Default.Map)
+
     object Identity : Screen("identity", "Network Status", Icons.Default.Info)
 
     object Settings : Screen("settings", "Settings", Icons.Default.Settings)
@@ -284,7 +289,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                 }
                 is PendingNavigation.AddContact -> {
                     // Navigate to contacts tab and trigger add contact dialog
-                    selectedTab = 2 // Contacts tab
+                    selectedTab = 1 // Contacts tab
                     navController.navigate(Screen.Contacts.route) {
                         popUpTo(navController.graph.startDestinationId) {
                             saveState = true
@@ -376,27 +381,40 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
         selectedTab =
             when (currentRoute) {
                 Screen.Chats.route -> 0
-                Screen.Announces.route -> 1
-                Screen.Contacts.route -> 2
+                Screen.Contacts.route -> 1
+                Screen.Map.route -> 2
                 Screen.Settings.route -> 3
                 else -> selectedTab // Keep current selection for nested screens
             }
     }
 
-    // Check if we're on the messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, or welcome screen
-    val isOnWelcomeScreen = currentRoute == Screen.Welcome.route
-    val isOnMessagingScreen = currentRoute?.startsWith("messaging/") ?: false
-    val isOnAnnounceDetailScreen = currentRoute?.startsWith("announce_detail/") ?: false
-    val isOnInterfaceManagementScreen = currentRoute == "interface_management"
-    val isOnBleConnectionStatusScreen = currentRoute == "ble_connection_status"
-    val isOnThemeManagementScreen = currentRoute == "theme_management"
-    val isOnThemeEditorScreen = currentRoute == "theme_editor" || currentRoute?.startsWith("theme_editor/") == true
+    // Screens that should hide the bottom navigation bar
+    val hideBottomNavScreens =
+        listOf(
+            Screen.Welcome.route,
+            "interface_management",
+            "ble_connection_status",
+            "theme_management",
+            "tcp_client_wizard",
+        )
+    val hideBottomNavPrefixes =
+        listOf(
+            "messaging/",
+            "announce_detail/",
+            "message_detail/",
+            "theme_editor",
+            "rnode_wizard",
+        )
+    val shouldShowBottomNav =
+        currentRoute != null &&
+            currentRoute !in hideBottomNavScreens &&
+            hideBottomNavPrefixes.none { currentRoute.startsWith(it) }
 
     val screens =
         listOf(
             Screen.Chats,
-            Screen.Announces,
             Screen.Contacts,
+            Screen.Map,
             Screen.Settings,
         )
 
@@ -408,8 +426,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
             @Suppress("UnusedMaterial3ScaffoldPaddingParameter")
             Scaffold(
                 bottomBar = {
-                    // Only show NavigationBar when NOT on messaging screen, announce detail screen, interface management screen, BLE connection status screen, theme screens, or welcome screen
-                    if (!isOnWelcomeScreen && !isOnMessagingScreen && !isOnAnnounceDetailScreen && !isOnInterfaceManagementScreen && !isOnBleConnectionStatusScreen && !isOnThemeManagementScreen && !isOnThemeEditorScreen) {
+                    if (shouldShowBottomNav) {
                         NavigationBar {
                             screens.forEachIndexed { index, screen ->
                                 NavigationBarItem(
@@ -468,8 +485,20 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                         )
                     }
 
-                    composable(Screen.Announces.route) {
+                    composable(
+                        route = "${Screen.Announces.route}?filterType={filterType}",
+                        arguments =
+                            listOf(
+                                navArgument("filterType") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
+                                },
+                            ),
+                    ) { backStackEntry ->
+                        val filterType = backStackEntry.arguments?.getString("filterType")
                         AnnounceStreamScreen(
+                            initialFilterType = filterType,
                             onPeerClick = { destinationHash, _ ->
                                 val encodedHash = Uri.encode(destinationHash)
                                 navController.navigate("announce_detail/$encodedHash")
@@ -511,9 +540,21 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                         )
                     }
 
+                    composable(Screen.Map.route) {
+                        MapScreen(
+                            onNavigateToConversation = { destinationHash ->
+                                // Navigate to messaging screen with the contact
+                                val encodedHash = Uri.encode(destinationHash)
+                                // Use a placeholder name - the messaging screen will fetch the actual name
+                                navController.navigate("messaging/$encodedHash/Contact")
+                            },
+                        )
+                    }
+
                     composable(Screen.Identity.route) {
                         IdentityScreen(
                             onBackClick = { navController.popBackStack() },
+                            settingsViewModel = settingsViewModel,
                             onNavigateToBleStatus = {
                                 navController.navigate("ble_connection_status")
                             },
@@ -522,6 +563,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
 
                     composable(Screen.Settings.route) {
                         SettingsScreen(
+                            viewModel = settingsViewModel,
                             onNavigateToInterfaces = {
                                 navController.navigate("interface_management")
                             },
@@ -543,12 +585,71 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                             onNavigateToMigration = {
                                 navController.navigate("migration")
                             },
+                            onNavigateToAnnounces = { filterType ->
+                                selectedTab = 1 // Announces tab
+                                val route =
+                                    if (filterType != null) {
+                                        "${Screen.Announces.route}?filterType=$filterType"
+                                    } else {
+                                        Screen.Announces.route
+                                    }
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = false // Don't restore state so filter applies
+                                }
+                            },
                         )
                     }
 
                     composable("interface_management") {
                         InterfaceManagementScreen(
                             onNavigateBack = { navController.popBackStack() },
+                            onNavigateToRNodeWizard = { interfaceId ->
+                                if (interfaceId != null) {
+                                    navController.navigate("rnode_wizard?interfaceId=$interfaceId")
+                                } else {
+                                    navController.navigate("rnode_wizard")
+                                }
+                            },
+                            onNavigateToTcpClientWizard = {
+                                navController.navigate("tcp_client_wizard")
+                            },
+                        )
+                    }
+
+                    composable("tcp_client_wizard") {
+                        TcpClientWizardScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onComplete = {
+                                navController.navigate("interface_management") {
+                                    popUpTo("interface_management") { inclusive = true }
+                                }
+                            },
+                        )
+                    }
+
+                    composable(
+                        route = "rnode_wizard?interfaceId={interfaceId}",
+                        arguments =
+                            listOf(
+                                navArgument("interfaceId") {
+                                    type = NavType.LongType
+                                    defaultValue = -1L
+                                },
+                            ),
+                    ) { backStackEntry ->
+                        val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
+                        com.lxmf.messenger.ui.screens.rnode.RNodeWizardScreen(
+                            editingInterfaceId = if (interfaceId >= 0) interfaceId else null,
+                            onNavigateBack = { navController.popBackStack() },
+                            onComplete = {
+                                navController.navigate("interface_management") {
+                                    popUpTo("interface_management") { inclusive = true }
+                                }
+                            },
                         )
                     }
 
@@ -625,6 +726,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                     composable("my_identity") {
                         MyIdentityScreen(
                             onNavigateBack = { navController.popBackStack() },
+                            settingsViewModel = settingsViewModel,
                             onNavigateToIdentityManager = {
                                 navController.navigate("identity_manager")
                             },
@@ -634,6 +736,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                     composable("network_status") {
                         IdentityScreen(
                             onBackClick = { navController.popBackStack() },
+                            settingsViewModel = settingsViewModel,
                             onNavigateToBleStatus = {
                                 navController.navigate("ble_connection_status")
                             },
@@ -679,6 +782,25 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                                 val encodedHash = Uri.encode(destinationHash)
                                 navController.navigate("announce_detail/$encodedHash")
                             },
+                            onViewMessageDetails = { messageId ->
+                                val encodedId = Uri.encode(messageId)
+                                navController.navigate("message_detail/$encodedId")
+                            },
+                        )
+                    }
+
+                    composable(
+                        route = "message_detail/{messageId}",
+                        arguments =
+                            listOf(
+                                navArgument("messageId") { type = NavType.StringType },
+                            ),
+                    ) { backStackEntry ->
+                        val messageId = backStackEntry.arguments?.getString("messageId").orEmpty()
+
+                        MessageDetailScreen(
+                            messageId = messageId,
+                            onBackClick = { navController.popBackStack() },
                         )
                     }
 

@@ -3,18 +3,16 @@ package com.lxmf.messenger.service.manager
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class IdentityResultParserTest {
-
     @Test
     fun `parseIdentityResultJson with all fields present`() {
         val keyData = byteArrayOf(1, 2, 3, 4, 5)
         val keyDataBase64 = java.util.Base64.getEncoder().encodeToString(keyData)
 
-        val json = """
+        val json =
+            """
             {
                 "identity_hash": "abc123",
                 "destination_hash": "def456",
@@ -22,7 +20,7 @@ class IdentityResultParserTest {
                 "key_data": "$keyDataBase64",
                 "display_name": "Test User"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = parseIdentityResultJson(json)
 
@@ -35,11 +33,12 @@ class IdentityResultParserTest {
 
     @Test
     fun `parseIdentityResultJson with error field`() {
-        val json = """
+        val json =
+            """
             {
                 "error": "Identity creation failed"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = parseIdentityResultJson(json)
 
@@ -49,12 +48,13 @@ class IdentityResultParserTest {
 
     @Test
     fun `parseIdentityResultJson with missing optional fields`() {
-        val json = """
+        val json =
+            """
             {
                 "identity_hash": "abc123",
                 "destination_hash": "def456"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = parseIdentityResultJson(json)
 
@@ -69,12 +69,13 @@ class IdentityResultParserTest {
         val emptyKeyData = byteArrayOf()
         val keyDataBase64 = java.util.Base64.getEncoder().encodeToString(emptyKeyData)
 
-        val json = """
+        val json =
+            """
             {
                 "identity_hash": "abc123",
                 "key_data": "$keyDataBase64"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = parseIdentityResultJson(json)
 
@@ -85,12 +86,13 @@ class IdentityResultParserTest {
 
     @Test
     fun `parseIdentityResultJson with invalid base64 key_data omits key`() {
-        val json = """
+        val json =
+            """
             {
                 "identity_hash": "abc123",
                 "key_data": "not-valid-base64!!!"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = parseIdentityResultJson(json)
 

@@ -2,14 +2,12 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:MainActivity.kt$!isOnWelcomeScreen &amp;&amp; !isOnMessagingScreen &amp;&amp; !isOnAnnounceDetailScreen &amp;&amp; !isOnInterfaceManagementScreen &amp;&amp; !isOnBleConnectionStatusScreen &amp;&amp; !isOnThemeManagementScreen &amp;&amp; !isOnThemeEditorScreen</ID>
     <ID>CyclomaticComplexMethod:ColumbaApplication.kt$ColumbaApplication$override fun onCreate()</ID>
     <ID>CyclomaticComplexMethod:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
-    <ID>CyclomaticComplexMethod:InterfaceManagementViewModel.kt$InterfaceManagementViewModel$private fun validateConfig(): Boolean</ID>
+    <ID>CyclomaticComplexMethod:DebugViewModel.kt$DebugViewModel$private fun fetchDebugInfo()</ID>
     <ID>CyclomaticComplexMethod:InterfaceRepository.kt$InterfaceRepository$fun entityToConfig(entity: InterfaceEntity): InterfaceConfig</ID>
     <ID>CyclomaticComplexMethod:MessageCollector.kt$MessageCollector$fun startCollecting()</ID>
     <ID>CyclomaticComplexMethod:NodeTypeDetector.kt$NodeTypeDetector$fun detectNodeType( appData: ByteArray?, aspect: String? = null, ): NodeType</ID>
-    <ID>CyclomaticComplexMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun validateReticulumConfig(config: ReticulumConfig)</ID>
     <ID>FunctionOnlyReturningConstant:BleTestFixtures.kt$BleTestFixtures$fun createEmptyJson(): String</ID>
     <ID>FunctionOnlyReturningConstant:BleTestFixtures.kt$BleTestFixtures$fun createIncompleteJson(): String</ID>
     <ID>FunctionOnlyReturningConstant:BleTestFixtures.kt$BleTestFixtures$fun createMalformedJson(): String</ID>
@@ -17,23 +15,20 @@
     <ID>ImplicitDefaultLocale:ThemeColorGenerator.kt$ThemeColorGenerator$String.format("#%06X", argb and 0xFFFFFF)</ID>
     <ID>ImplicitDefaultLocale:ThemeColorGenerator.kt$ThemeColorGenerator$String.format("#%08X", argb)</ID>
     <ID>InstanceOfCheckForException:ServiceNotificationManager.kt$ServiceNotificationManager$e is android.app.ForegroundServiceStartNotAllowedException</ID>
-    <ID>LargeClass:PythonReticulumProtocol.kt$PythonReticulumProtocol : ReticulumProtocol</ID>
+    <ID>LargeClass:MessagingViewModel.kt$MessagingViewModel : ViewModel</ID>
+    <ID>LargeClass:ReticulumServiceBinder.kt$ReticulumServiceBinder : Stub</ID>
     <ID>LargeClass:ServiceReticulumProtocol.kt$ServiceReticulumProtocol : ReticulumProtocol</ID>
-    <ID>LargeClass:ThemeEditorViewModelTest.kt$ThemeEditorViewModelTest</ID>
     <ID>LongMethod:ColumbaApplication.kt$ColumbaApplication$override fun onCreate()</ID>
     <ID>LongMethod:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
     <ID>LongMethod:InterfaceRepository.kt$InterfaceRepository$fun entityToConfig(entity: InterfaceEntity): InterfaceConfig</ID>
     <ID>LongMethod:MessageCollector.kt$MessageCollector$fun startCollecting()</ID>
-    <ID>LongMethod:MessagingViewModel.kt$MessagingViewModel$fun sendMessage( destinationHash: String, content: String, )</ID>
-    <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$@Suppress("NestedBlockDepth") // Interface serialization requires nested when/try structure private fun buildConfigJson(config: ReticulumConfig): String</ID>
-    <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$override suspend fun initialize(config: ReticulumConfig): Result&lt;Unit&gt;</ID>
-    <ID>LongMethod:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun validateReticulumConfig(config: ReticulumConfig)</ID>
     <ID>LongParameterList:BleTestFixtures.kt$BleTestFixtures$( identityHash: String = "abcd1234efgh5678ijkl9012mnop3456", peerName: String = "RNS-TestPeer", currentMac: String = "AA:BB:CC:DD:EE:FF", connectionType: ConnectionType = ConnectionType.BOTH, rssi: Int = -70, mtu: Int = 512, connectedAt: Long = System.currentTimeMillis() - 60000, // 1 minute ago firstSeen: Long = System.currentTimeMillis() - 300000, // 5 minutes ago lastSeen: Long = System.currentTimeMillis(), bytesReceived: Long = 1024, bytesSent: Long = 2048, packetsReceived: Long = 10, packetsSent: Long = 20, successRate: Double = 1.0, )</ID>
-    <ID>LongParameterList:ReticulumServiceBinder.kt$ReticulumServiceBinder$( private val state: ServiceState, private val wrapperManager: PythonWrapperManager, private val identityManager: IdentityManager, private val routingManager: RoutingManager, private val messagingManager: MessagingManager, private val pollingManager: PollingManager, private val broadcaster: CallbackBroadcaster, private val lockManager: LockManager, private val notificationManager: ServiceNotificationManager, private val bleCoordinator: BleCoordinator, private val scope: CoroutineScope, private val onInitialized: () -&gt; Unit, private val onShutdown: () -&gt; Unit, private val onForceExit: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:MarkerBitmapFactory.kt$MarkerBitmapFactory$( sizeDp: Float = 28f, fillColor: Int, strokeColor: Int, fillOpacity: Float = 0.6f, strokeWidthDp: Float = 3f, dashLengthDp: Float = 4f, gapLengthDp: Float = 4f, density: Float, )</ID>
+    <ID>LongParameterList:ReticulumServiceBinder.kt$ReticulumServiceBinder$( private val context: Context, private val state: ServiceState, private val wrapperManager: PythonWrapperManager, private val identityManager: IdentityManager, private val routingManager: RoutingManager, private val messagingManager: MessagingManager, private val pollingManager: PollingManager, private val broadcaster: CallbackBroadcaster, private val lockManager: LockManager, private val maintenanceManager: MaintenanceManager, private val notificationManager: ServiceNotificationManager, private val bleCoordinator: BleCoordinator, private val scope: CoroutineScope, private val onInitialized: () -&gt; Unit, private val onShutdown: () -&gt; Unit, private val onForceExit: () -&gt; Unit, )</ID>
     <ID>LoopWithTooManyJumpStatements:ConfigFileParser.kt$ConfigFileParser$for</ID>
+    <ID>LoopWithTooManyJumpStatements:RNodeWizardViewModel.kt$RNodeWizardViewModel$while</ID>
     <ID>LoopWithTooManyJumpStatements:SettingsViewModel.kt$SettingsViewModel$while</ID>
     <ID>MaxLineLength:BleTestFixtures.kt$BleTestFixtures$"""{"identityHash":"${connection.identityHash}","peerName":"${connection.peerName}","currentMac":"${connection.currentMac}","hasCentralConnection":$hasCentral,"hasPeripheralConnection":$hasPeripheral,"mtu":${connection.mtu},"connectedAt":${connection.connectedAt},"firstSeen":${connection.firstSeen},"lastSeen":${connection.lastSeen},"rssi":${connection.rssi}}"""</ID>
-    <ID>MaxLineLength:MainActivity.kt$if</ID>
     <ID>MaxLineLength:SettingsViewModel.kt$SettingsViewModel$"Settings updated: displayName=${newState.displayName}, autoAnnounce=${newState.autoAnnounceEnabled}, interval=${newState.autoAnnounceIntervalMinutes}min, theme=${newState.selectedTheme}, customThemes=${newState.customThemes.size}"</ID>
     <ID>NestedBlockDepth:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
     <ID>NestedBlockDepth:SettingsViewModel.kt$SettingsViewModel$private suspend fun loadIdentityInfo(): Pair&lt;String?, String?&gt;</ID>
@@ -49,6 +44,7 @@
     <ID>SwallowedException:IdentityManagerViewModel.kt$IdentityManagerViewModel$e: Exception</ID>
     <ID>SwallowedException:IdentityQrCodeUtils.kt$IdentityQrCodeUtils$e: Exception</ID>
     <ID>SwallowedException:InterfaceConfigManager.kt$InterfaceConfigManager$e: Exception</ID>
+    <ID>SwallowedException:LocationSharingCard.kt$e: IllegalArgumentException</ID>
     <ID>SwallowedException:NodeTypeDetector.kt$NodeTypeDetector$e: Exception</ID>
     <ID>SwallowedException:NotificationHelper.kt$NotificationHelper$e: SecurityException</ID>
     <ID>SwallowedException:QrCodeComposables.kt$e: Exception</ID>
@@ -62,7 +58,6 @@
     <ID>ThrowsCount:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
     <ID>ThrowsCount:IdentityManagerViewModel.kt$IdentityManagerViewModel$fun createNewIdentity(displayName: String)</ID>
     <ID>ThrowsCount:IdentityManagerViewModel.kt$IdentityManagerViewModel$fun importIdentity( fileUri: Uri, displayName: String, )</ID>
-    <ID>ThrowsCount:PythonReticulumProtocol.kt$PythonReticulumProtocol$private fun validateReticulumConfig(config: ReticulumConfig)</ID>
     <ID>TooGenericExceptionThrown:AnnounceStreamViewModel.kt$AnnounceStreamViewModel$throw RuntimeException("Service error: ${status.message}")</ID>
     <ID>TooGenericExceptionThrown:DebugViewModel.kt$DebugViewModel$throw RuntimeException("Could not get LXMF destination")</ID>
     <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("Failed to read file")</ID>
@@ -71,16 +66,8 @@
     <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("No file_path in result")</ID>
     <ID>TooGenericExceptionThrown:IdentityManagerViewModel.kt$IdentityManagerViewModel$throw Exception("No identity_hash in result")</ID>
     <ID>TooGenericExceptionThrown:InterfaceConfigManager.kt$InterfaceConfigManager$throw Exception("Failed to initialize Reticulum: ${error.message}", error)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Failed to build config: ${e.message}", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Failed to create wrapper: ${e.message}", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Failed to load Python module: ${e.message}", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Invalid JSON structure generated", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Invalid configuration: ${e.message}", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException("Python initialize failed: ${e.message}", e)</ID>
-    <ID>TooGenericExceptionThrown:PythonReticulumProtocol.kt$PythonReticulumProtocol$throw RuntimeException(error)</ID>
     <ID>TooGenericExceptionThrown:ReticulumServiceErrorHandlingTest.kt$ReticulumServiceErrorHandlingTest$throw RuntimeException("Real error")</ID>
     <ID>TooGenericExceptionThrown:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$throw RuntimeException( "Missing identity fields in response. hash=$hashStr, publicKey=$publicKeyStr, privateKey=$privateKeyStr", )</ID>
-    <ID>TooGenericExceptionThrown:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$throw RuntimeException("Failed to restore peer identities: $error")</ID>
     <ID>TooGenericExceptionThrown:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$throw RuntimeException("Service entered ERROR state: $status")</ID>
     <ID>TooGenericExceptionThrown:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$throw RuntimeException("Timeout waiting for service to become READY (status: ${networkStatus.value})")</ID>
     <ID>TooGenericExceptionThrown:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$throw RuntimeException(error)</ID>
@@ -88,7 +75,8 @@
     <ID>TooGenericExceptionThrown:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$throw RuntimeException(result.optString("error", "Unknown error"))</ID>
     <ID>TooManyFunctions:InputValidator.kt$InputValidator</ID>
     <ID>TooManyFunctions:InterfaceManagementViewModel.kt$InterfaceManagementViewModel : ViewModel</ID>
-    <ID>TooManyFunctions:PythonReticulumProtocol.kt$PythonReticulumProtocol : ReticulumProtocol</ID>
+    <ID>TooManyFunctions:LocationSharingManager.kt$LocationSharingManager</ID>
+    <ID>TooManyFunctions:RNodeWizardViewModel.kt$RNodeWizardViewModel : ViewModel</ID>
     <ID>TooManyFunctions:ReticulumServiceBinder.kt$ReticulumServiceBinder : Stub</ID>
     <ID>TooManyFunctions:ServiceReticulumProtocol.kt$ServiceReticulumProtocol : ReticulumProtocol</ID>
     <ID>TooManyFunctions:SettingsRepository.kt$SettingsRepository</ID>
@@ -104,11 +92,8 @@
     <ID>UnusedPrivateMember:InterfaceDatabase.kt$InterfaceDatabase.Callback$private suspend fun populateDatabase(interfaceDao: InterfaceDao)</ID>
     <ID>UnusedPrivateMember:MessageCollector.kt$MessageCollector$private fun getPeerName(peerHash: String): String</ID>
     <ID>UnusedPrivateMember:MessagingViewModel.kt$MessagingViewModel$private fun DataMessage.toReticulumMessage()</ID>
-    <ID>UnusedPrivateMember:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$private fun ByteArray.toHexString(): String</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$private val settingsRepository: SettingsRepository</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val destHash = _publicKey.value ?: return null</ID>
-    <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val isReady = status is com.lxmf.messenger.reticulum.model.NetworkStatus.READY</ID>
-    <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val statusString = when (status) { is com.lxmf.messenger.reticulum.model.NetworkStatus.READY -&gt; "READY" is com.lxmf.messenger.reticulum.model.NetworkStatus.INITIALIZING -&gt; "INITIALIZING" is com.lxmf.messenger.reticulum.model.NetworkStatus.SHUTDOWN -&gt; "SHUTDOWN" is com.lxmf.messenger.reticulum.model.NetworkStatus.ERROR -&gt; "ERROR: ${status.message}" else -&gt; status.toString() }</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel.Companion$private const val DEFAULT_IDENTITY_FILE = "default_identity"</ID>
     <ID>UnusedPrivateProperty:IdentityScreen.kt$val context = LocalContext.current</ID>
     <ID>UnusedPrivateProperty:InterfaceConfigManager.kt$InterfaceConfigManager$val serviceConnection = (reticulumProtocol as ServiceReticulumProtocol)</ID>

@@ -9,6 +9,7 @@ import com.lxmf.messenger.data.model.EnrichedContact
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+@Suppress("TooManyFunctions") // DAOs naturally have many functions for CRUD + queries
 interface ContactDao {
     /**
      * Insert or replace a contact
@@ -28,8 +29,8 @@ interface ContactDao {
     fun getAllContacts(identityHash: String): Flow<List<ContactEntity>>
 
     /**
-     * Get enriched contacts with data from announces and conversations.
-     * Combines contact data with network status and conversation info.
+     * Get enriched contacts with data from announces, conversations, and location sharing.
+     * Combines contact data with network status, conversation info, and location sharing status.
      * Filters by identity hash to ensure data isolation between identities.
      */
     @Query(
@@ -51,10 +52,23 @@ interface ContactDao {
             c.addedTimestamp,
             c.addedVia,
             c.isPinned,
-            c.status
+            c.status,
+            c.isMyRelay,
+            a.nodeType,
+            CASE WHEN loc.senderHash IS NOT NULL THEN 1 ELSE 0 END as isReceivingLocationFrom,
+            loc.expiresAt as locationSharingExpiresAt
         FROM contacts c
         LEFT JOIN announces a ON c.destinationHash = a.destinationHash
         LEFT JOIN conversations conv ON c.destinationHash = conv.peerHash AND c.identityHash = conv.identityHash
+        LEFT JOIN (
+            SELECT rl.senderHash, rl.expiresAt
+            FROM received_locations rl
+            WHERE rl.timestamp = (
+                SELECT MAX(rl2.timestamp) FROM received_locations rl2
+                WHERE rl2.senderHash = rl.senderHash
+            )
+            AND (rl.expiresAt IS NULL OR rl.expiresAt > :currentTime)
+        ) loc ON c.destinationHash = loc.senderHash
         WHERE c.identityHash = :identityHash
         ORDER BY c.isPinned DESC, displayName ASC
     """,
@@ -62,6 +76,7 @@ interface ContactDao {
     fun getEnrichedContacts(
         identityHash: String,
         onlineThreshold: Long,
+        currentTime: Long = System.currentTimeMillis(),
     ): Flow<List<EnrichedContact>>
 
     /**
@@ -296,4 +311,62 @@ interface ContactDao {
         identityHash: String,
         statuses: List<String>,
     ): List<ContactEntity>
+
+    // ========== PROPAGATION NODE RELAY MANAGEMENT ==========
+
+    /**
+     * Set a contact as the user's relay (propagation node).
+     * Note: Application layer should call clearMyRelay first to ensure only one relay is set.
+     * Relay contacts appear in their own "My Relay" section, separate from pinned contacts.
+     */
+    @Query(
+        """
+        UPDATE contacts SET isMyRelay = 1
+        WHERE destinationHash = :destinationHash AND identityHash = :identityHash
+        """,
+    )
+    suspend fun setAsMyRelay(
+        destinationHash: String,
+        identityHash: String,
+    )
+
+    /**
+     * Clear all relay flags for an identity (ensures only one relay at a time).
+     */
+    @Query("UPDATE contacts SET isMyRelay = 0 WHERE identityHash = :identityHash AND isMyRelay = 1")
+    suspend fun clearMyRelay(identityHash: String)
+
+    /**
+     * Get the current relay contact for an identity
+     */
+    @Query("SELECT * FROM contacts WHERE identityHash = :identityHash AND isMyRelay = 1 LIMIT 1")
+    suspend fun getMyRelay(identityHash: String): ContactEntity?
+
+    /**
+     * Get the current relay contact as Flow for observing changes
+     */
+    @Query("SELECT * FROM contacts WHERE identityHash = :identityHash AND isMyRelay = 1 LIMIT 1")
+    fun getMyRelayFlow(identityHash: String): Flow<ContactEntity?>
+
+    /**
+     * Check if a specific contact is the user's relay
+     */
+    @Query(
+        """
+        SELECT isMyRelay FROM contacts
+        WHERE destinationHash = :destinationHash AND identityHash = :identityHash
+        """,
+    )
+    fun isMyRelayFlow(
+        destinationHash: String,
+        identityHash: String,
+    ): Flow<Boolean?>
+
+    /**
+     * Get any relay contact (not filtered by identity).
+     * Used during initialization before active identity is available.
+     * Returns the first contact with isMyRelay = true, regardless of identity.
+     */
+    @Query("SELECT * FROM contacts WHERE isMyRelay = 1 LIMIT 1")
+    suspend fun getAnyMyRelay(): ContactEntity?
 }

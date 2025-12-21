@@ -115,6 +115,7 @@ class LockManager(private val context: Context) {
 
     private fun acquireWakeLock() {
         if (wakeLock == null || wakeLock?.isHeld != true) {
+            val wasExpired = wakeLock != null && wakeLock?.isHeld != true
             wakeLock =
                 powerManager.newWakeLock(
                     PowerManager.PARTIAL_WAKE_LOCK,
@@ -124,7 +125,11 @@ class LockManager(private val context: Context) {
                     @Suppress("DEPRECATION")
                     acquire(WAKE_LOCK_TIMEOUT_MS)
                 }
-            Log.i(TAG, "WakeLock acquired (PARTIAL_WAKE_LOCK for Doze mode protection)")
+            if (wasExpired) {
+                Log.i(TAG, "WakeLock expired, re-acquired")
+            } else {
+                Log.i(TAG, "WakeLock acquired (PARTIAL_WAKE_LOCK for Doze mode protection)")
+            }
         }
     }
 

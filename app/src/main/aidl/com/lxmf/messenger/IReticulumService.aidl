@@ -169,9 +169,10 @@ interface IReticulumService {
      * @param sourceIdentityPrivateKey Source identity private key bytes
      * @param imageData Optional image data bytes (null if none)
      * @param imageFormat Optional image format string (e.g., "jpg", "png", null if none)
+     * @param fileAttachments Optional map of filename -> file bytes (null if none)
      * @return JSON string with result
      */
-    String sendLxmfMessage(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, in byte[] imageData, String imageFormat);
+    String sendLxmfMessage(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, in byte[] imageData, String imageFormat, in Map fileAttachments);
 
     /**
      * Get the LXMF router's identity.
@@ -200,10 +201,20 @@ interface IReticulumService {
 
     /**
      * Restore peer identities to enable message sending to previously known peers.
-     * @param peerIdentitiesJson JSON array containing objects with 'hash' and 'public_key' fields
+     * Uses bulk restore for performance optimization.
+     * @param peerIdentitiesJson JSON array containing objects with 'identity_hash' and 'public_key' fields
      * @return JSON string with result: {"success": true/false, "restored_count": N, "error": "..."}
      */
     String restorePeerIdentities(String peerIdentitiesJson);
+
+    /**
+     * Restore announce identities to enable message sending to announced peers.
+     * Uses bulk restore with direct dict population for maximum performance.
+     * For announces, we have destination_hash directly - no hash computation needed.
+     * @param announcesJson JSON array containing objects with 'destination_hash' and 'public_key' fields
+     * @return JSON string with result: {"success": true/false, "restored_count": N, "error": "..."}
+     */
+    String restoreAnnounceIdentities(String announcesJson);
 
     /**
      * Force service process to exit (for clean restart).
@@ -246,4 +257,102 @@ interface IReticulumService {
      * @return JSON string: {"found": true, "public_key": "hex..."} or {"found": false}
      */
     String recallIdentity(in byte[] destHash);
+
+    /**
+     * Get the current RSSI of the active RNode BLE connection.
+     * Triggers an RSSI read and returns the current value.
+     *
+     * @return RSSI in dBm, or -100 if not connected or not available
+     */
+    int getRNodeRssi();
+
+    /**
+     * Reconnect to the RNode interface.
+     * Called when CompanionDeviceManager detects the RNode has reappeared
+     * after going out of BLE range.
+     */
+    void reconnectRNodeInterface();
+
+    /**
+     * Check if a shared Reticulum instance is available.
+     * This queries the Python layer's port probe to detect if another app
+     * (e.g., Sideband) is running a shared RNS instance on localhost:37428.
+     *
+     * @return true if a shared instance is available and responding, false otherwise
+     */
+    boolean isSharedInstanceAvailable();
+
+    /**
+     * Get list of interfaces that failed to initialize.
+     * This is used to surface warnings to the user when an interface (like AutoInterface)
+     * couldn't start due to port conflicts with another Reticulum app.
+     *
+     * @return JSON string containing array of failed interface details:
+     *         [{"name": "AutoInterface", "error": "Port 29716 already in use", "recoverable": true}]
+     */
+    String getFailedInterfaces();
+
+    // ==================== PROPAGATION NODE SUPPORT ====================
+
+    /**
+     * Set the propagation node to use for PROPAGATED delivery.
+     * @param destHash 16-byte destination hash of the propagation node, or null to clear
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String setOutboundPropagationNode(in byte[] destHash);
+
+    /**
+     * Get the currently configured propagation node.
+     * @return JSON string with result: {"success": true, "propagation_node": "hex_hash" or null}
+     */
+    String getOutboundPropagationNode();
+
+    /**
+     * Request/sync messages from the configured propagation node.
+     * This is the key method for RECEIVING messages sent via propagation.
+     * Call periodically (e.g., every 30-60 seconds) to retrieve waiting messages.
+     *
+     * @param identityPrivateKey Optional identity private key bytes (uses default if null)
+     * @param maxMessages Maximum number of messages to retrieve
+     * @return JSON string with result: {"success": true, "state": 0, "state_name": "idle"}
+     */
+    String requestMessagesFromPropagationNode(in byte[] identityPrivateKey, int maxMessages);
+
+    /**
+     * Get the current propagation sync state and progress.
+     * @return JSON string with result: {"success": true, "state": 0, "state_name": "idle", "progress": 0.0, "messages_received": 0}
+     */
+    String getPropagationState();
+
+    /**
+     * Send an LXMF message with explicit delivery method.
+     * @param destHash Destination hash bytes
+     * @param content Message content string
+     * @param sourceIdentityPrivateKey Source identity private key bytes
+     * @param deliveryMethod Delivery method: "opportunistic", "direct", or "propagated"
+     * @param tryPropagationOnFail If true and direct fails, retry via propagation
+     * @param imageData Optional image data bytes (null if none)
+     * @param imageFormat Optional image format string (e.g., "jpg", "png", null if none)
+     * @param fileAttachments Optional map of filename -> file bytes (null if none)
+     * @return JSON string with result: {"success": true, "message_hash": "...", "delivery_method": "..."}
+     */
+    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat, in Map fileAttachments);
+
+    /**
+     * Provide an alternative relay for message retry.
+     * Called by app process in response to onAlternativeRelayRequested callback.
+     * @param relayHash 16-byte destination hash of alternative relay, or null if none available
+     */
+    void provideAlternativeRelay(in byte[] relayHash);
+
+    // ==================== LOCATION TELEMETRY ====================
+
+    /**
+     * Send location telemetry to a destination via LXMF field 7.
+     * @param destHash Destination hash bytes (16 bytes)
+     * @param locationJson JSON string with location data: {"type": "location_share", "lat": ..., "lng": ..., "acc": ..., "ts": ..., "expires": ...}
+     * @param sourceIdentityPrivateKey Source identity private key bytes
+     * @return JSON string with result: {"success": true, "message_hash": "...", "timestamp": ...}
+     */
+    String sendLocationTelemetry(in byte[] destHash, String locationJson, in byte[] sourceIdentityPrivateKey);
 }

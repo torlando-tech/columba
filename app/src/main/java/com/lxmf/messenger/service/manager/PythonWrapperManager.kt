@@ -4,12 +4,14 @@ import android.content.Context
 import android.util.Log
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
+import com.lxmf.messenger.crypto.StampGenerator
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -28,6 +30,7 @@ import kotlinx.coroutines.withTimeout
  * IMPORTANT: Python's signal module requires the main thread for handler registration.
  * All initialization calls go through Dispatchers.Main.immediate.
  */
+@Suppress("TooManyFunctions") // Manager class wrapping Python API methods
 class PythonWrapperManager(
     private val state: ServiceState,
     private val context: Context,
@@ -58,12 +61,13 @@ class PythonWrapperManager(
      * @param beforeInit Optional callback to run after wrapper is created but before Python initialize()
      *                   Used to set up bridges (BLE, Reticulum) that Python initialization depends on
      * @param onSuccess Suspend callback on successful initialization (allows calling suspend functions)
+     *                  Receives isSharedInstance boolean indicating if connected to a shared RNS instance
      * @param onError Called on error with error message
      */
     suspend fun initialize(
         configJson: String,
         beforeInit: ((PyObject) -> Unit)? = null,
-        onSuccess: suspend () -> Unit,
+        onSuccess: suspend (isSharedInstance: Boolean) -> Unit,
         onError: (String) -> Unit,
     ) {
         // Acquire lock to prevent concurrent initialization races
@@ -127,8 +131,10 @@ class PythonWrapperManager(
                 val success = result.getDictValue("success")?.toBoolean() ?: false
 
                 if (success) {
-                    Log.d(TAG, "Reticulum initialized successfully")
-                    onSuccess()
+                    // Parse is_shared_instance from Python result
+                    val isSharedInstance = result.getDictValue("is_shared_instance")?.toBoolean() ?: false
+                    Log.d(TAG, "Reticulum initialized successfully (shared instance: $isSharedInstance)")
+                    onSuccess(isSharedInstance)
                 } else {
                     val error = result.getDictValue("error")?.toString() ?: "Unknown error"
                     Log.e(TAG, "Reticulum initialization failed: $error")
@@ -287,6 +293,111 @@ class PythonWrapperManager(
     }
 
     /**
+     * Set alternative relay request callback.
+     * Called by Python when propagation to current relay fails and alternative is needed.
+     */
+    fun setAlternativeRelayCallback(callback: (String) -> Unit) {
+        withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("set_kotlin_request_alternative_relay_callback", callback)
+                Log.d(TAG, "Alternative relay callback registered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set alternative relay callback: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Set location telemetry received callback.
+     * Called by Python when location sharing data is received from a contact.
+     */
+    fun setLocationReceivedCallback(callback: (String) -> Unit) {
+        withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("set_location_received_callback", callback)
+                Log.d(TAG, "📍 Location received callback registered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set location received callback: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Set native Kotlin stamp generator callback.
+     *
+     * This bypasses Python multiprocessing-based stamp generation which fails on Android
+     * due to lack of sem_open support and aggressive process killing by Android.
+     *
+     * The callback is invoked by Python's LXStamper when stamp generation is needed.
+     *
+     * @param stampGenerator The Kotlin StampGenerator instance to use
+     */
+    // Holder for stamp generator instance - used by static callback method
+    private var stampGeneratorInstance: StampGenerator? = null
+
+    fun setStampGeneratorCallback(stampGenerator: StampGenerator) {
+        stampGeneratorInstance = stampGenerator
+        withWrapper { wrapper ->
+            try {
+                // Pass static method reference to avoid lambda type erasure issues with R8
+                wrapper.callAttr("set_stamp_generator_callback", ::generateStampForPython)
+                Log.d(TAG, "Native stamp generator callback registered with Python")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to set stamp generator callback: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Static-like method for Python to call for stamp generation.
+     * Returns PyObject (Python tuple) to avoid Chaquopy type conversion issues.
+     */
+    fun generateStampForPython(
+        workblock: ByteArray,
+        stampCost: Int,
+    ): PyObject {
+        Log.d(TAG, "Stamp generator callback invoked: cost=$stampCost, workblock=${workblock.size} bytes")
+
+        val generator = checkNotNull(stampGeneratorInstance) { "StampGenerator not initialized" }
+
+        // Python expects synchronous return from this callback
+        val result =
+            runBlocking(Dispatchers.Default) { // THREADING: allowed
+                generator.generateStamp(workblock, stampCost)
+            }
+
+        Log.d(TAG, "Stamp generated: value=${result.value}, rounds=${result.rounds}")
+
+        // Create Python list with proper bytes conversion
+        val py = Python.getInstance()
+        val builtins = py.getBuiltins()
+        val stamp = result.stamp ?: ByteArray(0)
+        // Convert Java ByteArray to Python bytes for buffer protocol compatibility
+        val pyBytes = builtins.callAttr("bytes", stamp)
+        val pyList = builtins.callAttr("list")
+        pyList.callAttr("append", pyBytes)
+        pyList.callAttr("append", result.rounds)
+        return pyList
+    }
+
+    /**
+     * Provide alternative relay to Python for message retry.
+     * Called after finding an alternative relay via PropagationNodeManager.
+     *
+     * @param relayHash 16-byte destination hash, or null if no alternatives available
+     */
+    fun provideAlternativeRelay(relayHash: ByteArray?) {
+        withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("on_alternative_relay_received", relayHash)
+                Log.d(TAG, "Alternative relay provided: ${relayHash?.let { it.toHexString().take(16) } ?: "null"}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to provide alternative relay: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
      * Get debug info from the wrapper.
      */
     fun getDebugInfo(): PyObject? =
@@ -335,4 +446,9 @@ class PythonWrapperManager(
             else -> error
         }
     }
+
+    /**
+     * Convert ByteArray to hex string for logging.
+     */
+    private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
 }

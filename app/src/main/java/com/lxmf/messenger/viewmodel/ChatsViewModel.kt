@@ -6,8 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.SyncResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -22,10 +25,17 @@ class ChatsViewModel
     constructor(
         private val conversationRepository: ConversationRepository,
         private val contactRepository: ContactRepository,
+        private val propagationNodeManager: PropagationNodeManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "ChatsViewModel"
         }
+
+        // Sync state from PropagationNodeManager
+        val isSyncing: StateFlow<Boolean> = propagationNodeManager.isSyncing
+
+        // Manual sync result events for Snackbar notifications
+        val manualSyncResult: SharedFlow<SyncResult> = propagationNodeManager.manualSyncResult
 
         // Cache for contact saved state flows to prevent flickering on recomposition
         private val contactSavedCache = ConcurrentHashMap<String, StateFlow<Boolean>>()
@@ -126,6 +136,20 @@ class ChatsViewModel
                         started = SharingStarted.WhileSubscribed(5000),
                         initialValue = false,
                     )
+            }
+        }
+
+        /**
+         * Trigger a manual sync with the propagation node.
+         */
+        fun syncFromPropagationNode() {
+            viewModelScope.launch {
+                try {
+                    propagationNodeManager.triggerSync()
+                    Log.d(TAG, "Manual sync triggered from ChatsScreen")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error triggering manual sync", e)
+                }
             }
         }
     }

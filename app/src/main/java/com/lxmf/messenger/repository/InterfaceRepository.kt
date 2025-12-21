@@ -158,18 +158,30 @@ class InterfaceRepository
 
                 when (entity.type) {
                     "AutoInterface" -> {
-                        val discoveryPort = json.optInt("discovery_port", 48555)
-                        val dataPort = json.optInt("data_port", 49555)
+                        // Ports are optional - null means use RNS defaults
+                        val discoveryPort =
+                            if (json.has("discovery_port")) {
+                                val port = json.getInt("discovery_port")
+                                if (port !in 1..65535) {
+                                    Log.e(TAG, "Invalid discovery port in database: $port")
+                                    error("Invalid discovery port: $port")
+                                }
+                                port
+                            } else {
+                                null
+                            }
 
-                        // Validate ports
-                        if (discoveryPort !in 1..65535) {
-                            Log.e(TAG, "Invalid discovery port in database: $discoveryPort")
-                            error("Invalid discovery port: $discoveryPort")
-                        }
-                        if (dataPort !in 1..65535) {
-                            Log.e(TAG, "Invalid data port in database: $dataPort")
-                            error("Invalid data port: $dataPort")
-                        }
+                        val dataPort =
+                            if (json.has("data_port")) {
+                                val port = json.getInt("data_port")
+                                if (port !in 1..65535) {
+                                    Log.e(TAG, "Invalid data port in database: $port")
+                                    error("Invalid data port: $port")
+                                }
+                                port
+                            } else {
+                                null
+                            }
 
                         InterfaceConfig.AutoInterface(
                             name = entity.name,
@@ -214,24 +226,55 @@ class InterfaceRepository
                     }
 
                     "RNode" -> {
-                        val port = json.optString("port", "")
+                        val targetDeviceName = json.optString("target_device_name", "")
+                        val connectionMode = json.optString("connection_mode", "classic")
+                        val tcpHost = json.optString("tcp_host", "").ifEmpty { null }
+                        val tcpPort = json.optInt("tcp_port", 7633)
 
-                        // Validate port path (basic check - should be non-empty)
-                        if (port.isBlank()) {
-                            Log.e(TAG, "Missing or empty RNode port path in database for '${entity.name}'")
-                            error("Missing or empty RNode port path")
+                        // Validate based on connection mode
+                        if (connectionMode == "tcp") {
+                            // TCP mode requires host
+                            if (tcpHost.isNullOrBlank()) {
+                                Log.e(TAG, "Empty RNode TCP host in database")
+                                error("Empty RNode TCP host")
+                            }
+                            // Validate TCP host format
+                            when (val result = InputValidator.validateHostname(tcpHost)) {
+                                is ValidationResult.Error -> {
+                                    Log.e(TAG, "Invalid RNode TCP host: $tcpHost - ${result.message}")
+                                    error("Invalid RNode TCP host: $tcpHost")
+                                }
+                                else -> {}
+                            }
+                            // Validate TCP port
+                            if (tcpPort !in 1..65535) {
+                                Log.e(TAG, "Invalid RNode TCP port: $tcpPort")
+                                error("Invalid RNode TCP port: $tcpPort")
+                            }
+                        } else {
+                            // Bluetooth modes require device name
+                            if (targetDeviceName.isBlank()) {
+                                Log.e(TAG, "Empty RNode target device name in database")
+                                error("Empty RNode target device name")
+                            }
                         }
 
                         InterfaceConfig.RNode(
                             name = entity.name,
                             enabled = entity.enabled,
-                            port = port,
+                            targetDeviceName = targetDeviceName,
+                            connectionMode = connectionMode,
+                            tcpHost = tcpHost,
+                            tcpPort = tcpPort,
                             frequency = json.optLong("frequency", 915000000),
                             bandwidth = json.optInt("bandwidth", 125000),
                             txPower = json.optInt("tx_power", 7),
                             spreadingFactor = json.optInt("spreading_factor", 7),
                             codingRate = json.optInt("coding_rate", 5),
+                            stAlock = if (json.has("st_alock")) json.getDouble("st_alock") else null,
+                            ltAlock = if (json.has("lt_alock")) json.getDouble("lt_alock") else null,
                             mode = json.optString("mode", "full"),
+                            enableFramebuffer = json.optBoolean("enable_framebuffer", true),
                         )
                     }
 

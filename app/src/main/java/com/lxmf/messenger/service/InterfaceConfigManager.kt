@@ -8,12 +8,15 @@ import android.util.Log
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
+import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.LogLevel
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -23,14 +26,16 @@ import javax.inject.Singleton
  * Manager for applying interface configuration changes to the running Reticulum instance.
  *
  * Handles the complete lifecycle of restarting Reticulum with new configuration:
- * 1. Load enabled interfaces from database
- * 2. Shutdown current Reticulum instance
- * 3. Regenerate config file
- * 4. Initialize Reticulum with new config
- * 5. Restore peer identities
- * 6. Restart message collector
+ * 1. Stop message collector and managers
+ * 2. Load enabled interfaces from database
+ * 3. Shutdown current Reticulum instance
+ * 4. Regenerate config file
+ * 5. Initialize Reticulum with new config
+ * 6. Restore peer identities
+ * 7. Restart message collector and managers (PropagationNodeManager, AutoAnnounceManager, etc.)
  */
 @Singleton
+@Suppress("LongParameterList") // Dependencies required for full restart lifecycle
 class InterfaceConfigManager
     @Inject
     constructor(
@@ -41,6 +46,11 @@ class InterfaceConfigManager
         private val conversationRepository: ConversationRepository,
         private val messageCollector: MessageCollector,
         private val database: ColumbaDatabase,
+        private val settingsRepository: SettingsRepository,
+        private val autoAnnounceManager: AutoAnnounceManager,
+        private val identityResolutionManager: IdentityResolutionManager,
+        private val propagationNodeManager: PropagationNodeManager,
+        @ApplicationScope private val applicationScope: CoroutineScope,
     ) {
         companion object {
             private const val TAG = "InterfaceConfigManager"
@@ -63,6 +73,13 @@ class InterfaceConfigManager
                 Log.d(TAG, "Step 1: Stopping message collector...")
                 messageCollector.stopCollecting()
                 Log.d(TAG, "✓ Message collector stopped")
+
+                // Step 1b: Stop managers to prepare for restart
+                Log.d(TAG, "Step 1b: Stopping managers...")
+                autoAnnounceManager.stop()
+                identityResolutionManager.stop()
+                propagationNodeManager.stop()
+                Log.d(TAG, "✓ Managers stopped")
 
                 // Step 2: Load interfaces BEFORE stopping service
                 Log.d(TAG, "Step 2: Loading interfaces from database...")
@@ -176,17 +193,32 @@ class InterfaceConfigManager
 
                 // Load active identity and ensure its file exists (recover from keyData if needed)
                 val activeIdentity = identityRepository.getActiveIdentitySync()
-                val identityPath = if (activeIdentity != null) {
-                    identityRepository.ensureIdentityFileExists(activeIdentity)
-                        .onFailure { error ->
-                            Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
-                        }
-                        .getOrNull()
-                } else {
-                    null
-                }
+                val identityPath =
+                    if (activeIdentity != null) {
+                        identityRepository.ensureIdentityFileExists(activeIdentity)
+                            .onFailure { error ->
+                                Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
+                            }
+                            .getOrNull()
+                    } else {
+                        null
+                    }
                 val displayName = activeIdentity?.displayName
                 Log.d(TAG, "Active identity: ${activeIdentity?.displayName ?: "none"}, verified path: $identityPath")
+
+                // Load shared instance preferences
+                val preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first()
+                Log.d(TAG, "Prefer own instance: $preferOwnInstance")
+
+                // Load RPC key for shared instance authentication
+                val rpcKey = settingsRepository.rpcKeyFlow.first()
+                if (rpcKey != null) {
+                    Log.d(TAG, "RPC key configured for shared instance auth")
+                }
+
+                // Load transport node setting
+                val transportNodeEnabled = settingsRepository.getTransportNodeEnabled()
+                Log.d(TAG, "Transport node enabled: $transportNodeEnabled")
 
                 val config =
                     ReticulumConfig(
@@ -196,6 +228,9 @@ class InterfaceConfigManager
                         displayName = displayName,
                         logLevel = LogLevel.DEBUG,
                         allowAnonymous = false,
+                        preferOwnInstance = preferOwnInstance,
+                        rpcKey = rpcKey,
+                        enableTransport = transportNodeEnabled,
                     )
 
                 reticulumProtocol.initialize(config)
@@ -220,8 +255,8 @@ class InterfaceConfigManager
                         throw Exception("Failed to initialize Reticulum: ${error.message}", error)
                     }
 
-                // Step 10: Restore peer identities
-                Log.d(TAG, "Step 10: Restoring peer identities...")
+                // Step 10: Restore peer identities (uses bulk restore with lightweight hash computation)
+                Log.d(TAG, "Step 10: Bulk restoring peer identities...")
                 try {
                     val peerIdentities = conversationRepository.getAllPeerIdentities()
                     Log.d(TAG, "Retrieved ${peerIdentities.size} peer identities from database")
@@ -229,44 +264,45 @@ class InterfaceConfigManager
                     if (peerIdentities.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
                         reticulumProtocol.restorePeerIdentities(peerIdentities)
                             .onSuccess { count ->
-                                Log.d(TAG, "✓ Restored $count peer identities")
+                                Log.d(TAG, "✓ Bulk restored $count peer identities")
                             }
                             .onFailure { error ->
-                                Log.w(TAG, "Failed to restore peer identities: ${error.message}", error)
+                                Log.w(TAG, "Failed to bulk restore peer identities: ${error.message}", error)
                                 // Not fatal - continue
                             }
                     } else {
                         Log.d(TAG, "No peer identities to restore")
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error restoring peer identities", e)
+                    Log.w(TAG, "Error bulk restoring peer identities", e)
                     // Not fatal - continue
                 }
 
-                // Step 10b: Restore announce peer identities
-                Log.d(TAG, "Step 10b: Restoring announce peer identities...")
+                // Step 10b: Restore announce identities (uses fast bulk restore with direct dict population)
+                Log.d(TAG, "Step 10b: Bulk restoring announce identities...")
                 try {
                     val announces = database.announceDao().getAllAnnouncesSync()
-                    Log.d(TAG, "Retrieved ${announces.size} announce peer identities from database")
+                    Log.d(TAG, "Retrieved ${announces.size} announce identities from database")
 
                     if (announces.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
-                        // Map announces to peer identity format (destinationHash, publicKey)
-                        val announcePeerIdentities = announces.map { announce ->
-                            announce.destinationHash to announce.publicKey
-                        }
-                        reticulumProtocol.restorePeerIdentities(announcePeerIdentities)
+                        // Map announces to (destinationHash, publicKey) - no hash computation needed
+                        val announceIdentities =
+                            announces.map { announce ->
+                                announce.destinationHash to announce.publicKey
+                            }
+                        reticulumProtocol.restoreAnnounceIdentities(announceIdentities)
                             .onSuccess { count ->
-                                Log.d(TAG, "✓ Restored $count announce peer identities")
+                                Log.d(TAG, "✓ Bulk restored $count announce identities")
                             }
                             .onFailure { error ->
-                                Log.w(TAG, "Failed to restore announce peer identities: ${error.message}", error)
+                                Log.w(TAG, "Failed to bulk restore announce identities: ${error.message}", error)
                                 // Not fatal - continue
                             }
                     } else {
-                        Log.d(TAG, "No announce peer identities to restore")
+                        Log.d(TAG, "No announce identities to restore")
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error restoring announce peer identities", e)
+                    Log.w(TAG, "Error bulk restoring announce identities", e)
                     // Not fatal - continue
                 }
 
@@ -274,6 +310,13 @@ class InterfaceConfigManager
                 Log.d(TAG, "Step 11: Starting message collector...")
                 messageCollector.startCollecting()
                 Log.d(TAG, "✓ Message collector started")
+
+                // Step 12: Restart managers (same as ColumbaApplication.onCreate)
+                Log.d(TAG, "Step 12: Restarting managers...")
+                autoAnnounceManager.start()
+                identityResolutionManager.start(applicationScope)
+                propagationNodeManager.start()
+                Log.d(TAG, "✓ AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started")
 
                 Log.i(TAG, "==== Configuration Changes Applied Successfully ====")
             }
@@ -288,6 +331,44 @@ class InterfaceConfigManager
                 status.toString().contains("RUNNING") || status.toString().contains("READY")
             } catch (e: Exception) {
                 false
+            }
+        }
+
+        /**
+         * Mark that there are pending interface changes that need to be applied.
+         * Used when interfaces are modified outside of InterfaceManagementViewModel
+         * (e.g., from RNode wizard).
+         */
+        fun setPendingChanges(hasPending: Boolean) {
+            context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("has_pending_interface_changes", hasPending)
+                .apply()
+        }
+
+        /**
+         * Check if there are pending interface changes and clear the flag.
+         * @return true if there were pending changes, false otherwise
+         */
+        fun checkAndClearPendingChanges(): Boolean {
+            val prefs = context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+            val hasPending = prefs.getBoolean("has_pending_interface_changes", false)
+            if (hasPending) {
+                prefs.edit().putBoolean("has_pending_interface_changes", false).apply()
+            }
+            return hasPending
+        }
+
+        /**
+         * Get the current RSSI of the active RNode BLE connection.
+         *
+         * @return RSSI in dBm, or -100 if not connected or not available
+         */
+        fun getRNodeRssi(): Int {
+            return if (reticulumProtocol is ServiceReticulumProtocol) {
+                reticulumProtocol.getRNodeRssi()
+            } else {
+                -100
             }
         }
     }

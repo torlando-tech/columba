@@ -116,10 +116,11 @@ class InputValidatorTest {
 
     @Test
     fun `validatePublicKey - valid 128-char hex passes`() {
-        val validKey = "0123456789abcdef0123456789abcdef" +
+        val validKey =
             "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef"
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef"
         val result = InputValidator.validatePublicKey(validKey)
         assertTrue(result is ValidationResult.Success)
         assertEquals(64, result.getOrNull()?.size)
@@ -144,11 +145,12 @@ class InputValidatorTest {
 
     @Test
     fun `validateIdentityString - valid format passes`() {
-        val validIdentity = "lxma://0123456789abcdef0123456789abcdef:" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef"
+        val validIdentity =
+            "lxma://0123456789abcdef0123456789abcdef:" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef"
         val result = InputValidator.validateIdentityString(validIdentity)
         assertTrue(result is ValidationResult.Success)
     }
@@ -329,6 +331,70 @@ class InputValidatorTest {
         assertTrue(result is ValidationResult.Error)
     }
 
+    // ========== INTERFACE NAME UNIQUENESS TESTS ==========
+
+    @Test
+    fun `validateInterfaceNameUniqueness - unique name passes`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
+        val result = InputValidator.validateInterfaceNameUniqueness("TCP Client 2", existingNames)
+        assertTrue(result is ValidationResult.Success)
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - duplicate name fails`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
+        val result = InputValidator.validateInterfaceNameUniqueness("RNode LoRa", existingNames)
+        assertTrue(result is ValidationResult.Error)
+        assertTrue((result as ValidationResult.Error).message.contains("already exists"))
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - case insensitive duplicate fails`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
+        val result = InputValidator.validateInterfaceNameUniqueness("rnode lora", existingNames)
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - excludeName allows editing same interface`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
+        // When editing "RNode LoRa", we should exclude it from the duplicate check
+        val result =
+            InputValidator.validateInterfaceNameUniqueness(
+                "RNode LoRa",
+                existingNames,
+                excludeName = "RNode LoRa",
+            )
+        assertTrue(result is ValidationResult.Success)
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - excludeName still catches other duplicates`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
+        // When editing "TCP Client 1" but trying to rename to "RNode LoRa"
+        val result =
+            InputValidator.validateInterfaceNameUniqueness(
+                "RNode LoRa",
+                existingNames,
+                excludeName = "TCP Client 1",
+            )
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - trims whitespace before comparison`() {
+        val existingNames = listOf("TCP Client 1", "RNode LoRa")
+        val result = InputValidator.validateInterfaceNameUniqueness("  RNode LoRa  ", existingNames)
+        assertTrue(result is ValidationResult.Error)
+    }
+
+    @Test
+    fun `validateInterfaceNameUniqueness - empty existing names passes`() {
+        val existingNames = emptyList<String>()
+        val result = InputValidator.validateInterfaceNameUniqueness("Any Name", existingNames)
+        assertTrue(result is ValidationResult.Success)
+    }
+
     // ========== DEVICE NAME VALIDATION TESTS ==========
 
     @Test
@@ -342,7 +408,7 @@ class InputValidatorTest {
         // Note: In practice, empty device names ARE allowed by skipping validation
         // when deviceName.isBlank(). This test verifies the validator itself rejects
         // empty strings, but the validator is only called for non-blank names.
-        // See InterfaceRepository.kt and PythonReticulumProtocol.kt for usage.
+        // See InterfaceRepository.kt for usage.
         val result = InputValidator.validateDeviceName("")
         assertTrue(result is ValidationResult.Error)
     }
@@ -506,11 +572,12 @@ class InputValidatorTest {
 
     @Test
     fun `parseIdentityInput - valid lxma URL returns FullIdentity`() {
-        val validLxma = "lxma://0123456789abcdef0123456789abcdef:" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef"
+        val validLxma =
+            "lxma://0123456789abcdef0123456789abcdef:" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef"
         val result = InputValidator.parseIdentityInput(validLxma)
         assertTrue(result is ValidationResult.Success)
         val identity = (result as ValidationResult.Success).value
@@ -553,11 +620,12 @@ class InputValidatorTest {
 
     @Test
     fun `parseIdentityInput - trims whitespace from lxma URL`() {
-        val validLxma = "  lxma://0123456789abcdef0123456789abcdef:" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef  "
+        val validLxma =
+            "  lxma://0123456789abcdef0123456789abcdef:" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef  "
         val result = InputValidator.parseIdentityInput(validLxma)
         assertTrue(result is ValidationResult.Success)
         val identity = (result as ValidationResult.Success).value
@@ -615,11 +683,12 @@ class InputValidatorTest {
 
     @Test
     fun `parseIdentityInput - lxma URL with invalid hash fails`() {
-        val invalidLxma = "lxma://tooshort:" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef" +
-            "0123456789abcdef0123456789abcdef"
+        val invalidLxma =
+            "lxma://tooshort:" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef" +
+                "0123456789abcdef0123456789abcdef"
         val result = InputValidator.parseIdentityInput(invalidLxma)
         assertTrue(result is ValidationResult.Error)
     }

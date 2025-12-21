@@ -55,7 +55,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.migration.ExportResult
-import com.lxmf.messenger.migration.ImportResult
 import com.lxmf.messenger.migration.MigrationPreview
 import com.lxmf.messenger.viewmodel.MigrationUiState
 import com.lxmf.messenger.viewmodel.MigrationViewModel
@@ -85,23 +84,25 @@ fun MigrationScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     // File picker for import
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-    ) { uri: Uri? ->
-        uri?.let {
-            viewModel.previewImport(it)
+    val importLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { uri: Uri? ->
+            uri?.let {
+                viewModel.previewImport(it)
+            }
         }
-    }
 
     // Handle state changes
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is MigrationUiState.ExportComplete -> {
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "application/octet-stream"
-                    putExtra(Intent.EXTRA_STREAM, state.fileUri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
+                val shareIntent =
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "application/octet-stream"
+                        putExtra(Intent.EXTRA_STREAM, state.fileUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
                 context.startActivity(Intent.createChooser(shareIntent, "Export Data"))
             }
             is MigrationUiState.ImportPreview -> {
@@ -137,12 +138,13 @@ fun MigrationScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .consumeWindowInsets(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .consumeWindowInsets(paddingValues)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // Export Section
@@ -199,9 +201,10 @@ private fun ExportSection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -234,9 +237,10 @@ private fun ExportSection(
             when (exportPreview) {
                 is ExportResult.Success -> {
                     Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                        ),
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                            ),
                     ) {
                         Column(
                             modifier = Modifier.padding(12.dp),
@@ -301,8 +305,9 @@ private fun ExportSection(
             Button(
                 onClick = onExport,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = uiState !is MigrationUiState.Exporting &&
-                    uiState !is MigrationUiState.Importing,
+                enabled =
+                    uiState !is MigrationUiState.Exporting &&
+                        uiState !is MigrationUiState.Importing,
             ) {
                 if (uiState is MigrationUiState.Exporting) {
                     CircularProgressIndicator(
@@ -326,9 +331,10 @@ private fun ImportSection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            ),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -382,9 +388,10 @@ private fun ImportSection(
                         }
                     }
                     Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        ),
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            ),
                     ) {
                         Row(
                             modifier = Modifier.padding(16.dp),
@@ -417,9 +424,10 @@ private fun ImportSection(
                 }
                 is MigrationUiState.Error -> {
                     Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                        ),
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                            ),
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
@@ -444,9 +452,10 @@ private fun ImportSection(
             OutlinedButton(
                 onClick = onSelectFile,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = uiState !is MigrationUiState.Exporting &&
-                    uiState !is MigrationUiState.Importing &&
-                    uiState !is MigrationUiState.RestartingService,
+                enabled =
+                    uiState !is MigrationUiState.Exporting &&
+                        uiState !is MigrationUiState.Importing &&
+                        uiState !is MigrationUiState.RestartingService,
             ) {
                 if (uiState is MigrationUiState.Importing ||
                     uiState is MigrationUiState.Loading
@@ -494,9 +503,10 @@ private fun ImportConfirmDialog(
                 )
 
                 Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        ),
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp),

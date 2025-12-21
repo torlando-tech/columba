@@ -155,4 +155,46 @@ class LockManagerTest {
         assertEquals(status1, status2)
         assertTrue(status1 != status3)
     }
+
+    @Test
+    fun `acquireAll re-acquires expired wake lock`() {
+        // First acquisition
+        lockManager.acquireAll()
+
+        // Simulate expired lock (isHeld returns false now)
+        every { wakeLock.isHeld } returns false
+
+        // Second acquisition should re-acquire
+        lockManager.acquireAll()
+
+        // acquire() should be called twice (once initially, once after expiry)
+        verify(exactly = 2) { wakeLock.acquire(any()) }
+    }
+
+    @Test
+    fun `initial wake lock acquisition sets wasExpired false`() {
+        // wakeLock is null initially, so wasExpired will be false
+        // This exercises the "WakeLock acquired" log path
+        lockManager.acquireAll()
+
+        // Verify wake lock was created and acquired
+        verify(exactly = 1) { powerManager.newWakeLock(any(), any()) }
+        verify(exactly = 1) { wakeLock.acquire(any()) }
+    }
+
+    @Test
+    fun `expired wake lock re-acquisition sets wasExpired true`() {
+        // First acquisition - wasExpired = false (wakeLock was null)
+        lockManager.acquireAll()
+
+        // Now wakeLock is not null but we'll make it not held (expired)
+        every { wakeLock.isHeld } returns false
+
+        // Second acquisition - wasExpired = true (wakeLock != null && !isHeld)
+        lockManager.acquireAll()
+
+        // Verify new wake lock was created twice
+        verify(exactly = 2) { powerManager.newWakeLock(any(), any()) }
+        verify(exactly = 2) { wakeLock.acquire(any()) }
+    }
 }

@@ -20,7 +20,7 @@ import javax.inject.Provider
  */
 @Database(
     entities = [InterfaceEntity::class],
-    version = 2,
+    version = 4,
     exportSchema = true,
 )
 abstract class InterfaceDatabase : RoomDatabase() {
@@ -74,6 +74,58 @@ abstract class InterfaceDatabase : RoomDatabase() {
                             ),
                         )
                     }
+                }
+            }
+
+        /**
+         * Migration from version 2 to version 3.
+         * Replaces Dublin testnet with Sideband public server and removes BetweenTheBorders testnet.
+         */
+        val MIGRATION_2_3 =
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    // Update Dublin testnet to Sideband server
+                    db.execSQL(
+                        """
+                        UPDATE interfaces
+                        SET name = 'Sideband Server',
+                            configJson = '{"target_host":"sideband.connect.reticulum.network","target_port":4965,"kiss_framing":false,"mode":"full"}'
+                        WHERE name = 'RNS Testnet Dublin' AND type = 'TCPClient'
+                    """,
+                    )
+
+                    // Remove BetweenTheBorders testnet
+                    db.execSQL(
+                        """
+                        DELETE FROM interfaces
+                        WHERE name = 'RNS Testnet BetweenTheBorders' AND type = 'TCPClient'
+                    """,
+                    )
+                }
+            }
+
+        /**
+         * Migration from version 3 to version 4.
+         * Removes legacy discovery_port (48555) and data_port (49555) from AutoInterface configs.
+         * These ports were from early development; removing them lets RNS use proper defaults.
+         */
+        val MIGRATION_3_4 =
+            object : Migration(3, 4) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    // Remove legacy port settings from AutoInterface entries
+                    // The ports were added during development and should be null to use RNS defaults
+                    // Uses string REPLACE since SQLite JSON functions require API 34+
+                    db.execSQL(
+                        """
+                        UPDATE interfaces
+                        SET configJson = REPLACE(REPLACE(configJson,
+                            ',"discovery_port":48555', ''),
+                            ',"data_port":49555', '')
+                        WHERE type = 'AutoInterface'
+                          AND configJson LIKE '%"discovery_port":48555%'
+                          AND configJson LIKE '%"data_port":49555%'
+                    """,
+                    )
                 }
             }
     }
@@ -143,7 +195,7 @@ abstract class InterfaceDatabase : RoomDatabase() {
                     "Auto Discovery",
                     "AutoInterface",
                     1, // true
-                    """{"group_id":"","discovery_scope":"link","discovery_port":48555,"data_port":49555,"mode":"full"}""",
+                    """{"group_id":"","discovery_scope":"link","mode":"full"}""",
                     0,
                 ),
             )
@@ -163,33 +215,18 @@ abstract class InterfaceDatabase : RoomDatabase() {
                 ),
             )
 
-            // Insert RNS Testnet Dublin Hub
+            // Insert Sideband Server
             db.execSQL(
                 """
                 INSERT INTO interfaces (name, type, enabled, configJson, displayOrder)
                 VALUES (?, ?, ?, ?, ?)
             """,
                 arrayOf(
-                    "RNS Testnet Dublin",
+                    "Sideband Server",
                     "TCPClient",
                     1, // true
-                    """{"target_host":"dublin.connect.reticulum.network","target_port":4965,"kiss_framing":false,"mode":"full"}""",
+                    """{"target_host":"sideband.connect.reticulum.network","target_port":4965,"kiss_framing":false,"mode":"full"}""",
                     2,
-                ),
-            )
-
-            // Insert RNS Testnet BetweenTheBorders Hub
-            db.execSQL(
-                """
-                INSERT INTO interfaces (name, type, enabled, configJson, displayOrder)
-                VALUES (?, ?, ?, ?, ?)
-            """,
-                arrayOf(
-                    "RNS Testnet BetweenTheBorders",
-                    "TCPClient",
-                    1, // true
-                    """{"target_host":"reticulum.betweentheborders.com","target_port":4242,"kiss_framing":false,"mode":"full"}""",
-                    3,
                 ),
             )
         }
@@ -268,8 +305,6 @@ abstract class InterfaceDatabase : RoomDatabase() {
                         {
                             "group_id": "",
                             "discovery_scope": "link",
-                            "discovery_port": 48555,
-                            "data_port": 49555,
                             "mode": "full"
                         }
                         """.trimIndent(),
@@ -292,15 +327,15 @@ abstract class InterfaceDatabase : RoomDatabase() {
                     displayOrder = 1,
                 )
 
-            val dublinHubInterface =
+            val sidebandServerInterface =
                 InterfaceEntity(
-                    name = "RNS Testnet Dublin",
+                    name = "Sideband Server",
                     type = "TCPClient",
                     enabled = true,
                     configJson =
                         """
                         {
-                            "target_host": "dublin.connect.reticulum.network",
+                            "target_host": "sideband.connect.reticulum.network",
                             "target_port": 4965,
                             "kiss_framing": false,
                             "mode": "full"
@@ -309,27 +344,9 @@ abstract class InterfaceDatabase : RoomDatabase() {
                     displayOrder = 2,
                 )
 
-            val betweenTheBordersInterface =
-                InterfaceEntity(
-                    name = "RNS Testnet BetweenTheBorders",
-                    type = "TCPClient",
-                    enabled = true,
-                    configJson =
-                        """
-                        {
-                            "target_host": "reticulum.betweentheborders.com",
-                            "target_port": 4242,
-                            "kiss_framing": false,
-                            "mode": "full"
-                        }
-                        """.trimIndent(),
-                    displayOrder = 3,
-                )
-
             interfaceDao.insertInterface(defaultAutoInterface)
             interfaceDao.insertInterface(defaultBleInterface)
-            interfaceDao.insertInterface(dublinHubInterface)
-            interfaceDao.insertInterface(betweenTheBordersInterface)
+            interfaceDao.insertInterface(sidebandServerInterface)
         }
 
         /**

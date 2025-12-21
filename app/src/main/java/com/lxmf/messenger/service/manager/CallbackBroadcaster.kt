@@ -15,6 +15,7 @@ import com.lxmf.messenger.IReticulumServiceCallback
  * IMPORTANT: RemoteCallbackList's beginBroadcast()/finishBroadcast() are not
  * re-entrant. The broadcastLock ensures only one broadcast happens at a time.
  */
+@Suppress("TooManyFunctions") // Facade class that exposes broadcast methods for each event type
 class CallbackBroadcaster {
     companion object {
         private const val TAG = "CallbackBroadcaster"
@@ -135,6 +136,46 @@ class CallbackBroadcaster {
      */
     fun broadcastLinkEvent(linkEventJson: String) {
         broadcast { it.onLinkEvent(linkEventJson) }
+    }
+
+    /**
+     * Broadcast alternative relay request to all registered callbacks.
+     * Used when Python needs an alternative relay for message retry.
+     */
+    fun broadcastAlternativeRelayRequest(requestJson: String) {
+        broadcast { it.onAlternativeRelayRequested(requestJson) }
+    }
+
+    /**
+     * Broadcast BLE connection state change to all registered callbacks.
+     * Called when BLE devices connect or disconnect.
+     */
+    fun broadcastBleConnectionChange(connectionDetailsJson: String) {
+        broadcast { it.onBleConnectionChanged(connectionDetailsJson) }
+    }
+
+    /**
+     * Broadcast debug info change to all registered callbacks.
+     * Called when lock state, interface status, or other debug info changes.
+     */
+    fun broadcastDebugInfoChange(debugInfoJson: String) {
+        broadcast { it.onDebugInfoChanged(debugInfoJson) }
+    }
+
+    /**
+     * Broadcast interface status change to all registered callbacks.
+     * Called when any interface goes online or offline.
+     */
+    fun broadcastInterfaceStatusChange(interfaceStatusJson: String) {
+        broadcast { it.onInterfaceStatusChanged(interfaceStatusJson) }
+    }
+
+    /**
+     * Broadcast location telemetry to all registered callbacks.
+     * Called when location sharing data is received from a contact.
+     */
+    fun broadcastLocationTelemetry(locationJson: String) {
+        broadcast { it.onLocationTelemetry(locationJson) }
     }
 
     /**

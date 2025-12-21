@@ -9,18 +9,23 @@ import com.lxmf.messenger.data.model.BleConnectionsState
 import com.lxmf.messenger.data.repository.BleStatusRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import javax.inject.Inject
 
 /**
@@ -45,6 +50,8 @@ data class InterfaceManagementState(
     val blePermissionsGranted: Boolean = false,
     // Info message for transient notifications (lighter than error/success)
     val infoMessage: String? = null,
+    // Interface online status from Python/RNS (interface name -> online status)
+    val interfaceOnlineStatus: Map<String, Boolean> = emptyMap(),
 )
 
 /**
@@ -58,8 +65,8 @@ data class InterfaceConfigState(
     // AutoInterface fields
     val groupId: String = "",
     val discoveryScope: String = "link",
-    val discoveryPort: String = "48555",
-    val dataPort: String = "49555",
+    val discoveryPort: String = "",
+    val dataPort: String = "",
     // TCPClient fields
     val targetHost: String = "",
     val targetPort: String = "4242",
@@ -69,6 +76,16 @@ data class InterfaceConfigState(
     // AndroidBLE fields
     val deviceName: String = "",
     val maxConnections: String = "7",
+    // RNode fields
+    val targetDeviceName: String = "",
+    val connectionMode: String = "classic", // "classic" or "ble"
+    val frequency: String = "915000000", // Hz
+    val bandwidth: String = "125000", // Hz
+    val txPower: String = "7", // dBm
+    val spreadingFactor: String = "7",
+    val codingRate: String = "5",
+    val stAlock: String = "", // Short-term airtime limit % (optional)
+    val ltAlock: String = "", // Long-term airtime limit % (optional)
     // Common fields
     val mode: String = "roaming",
     // Validation
@@ -79,6 +96,12 @@ data class InterfaceConfigState(
     val dataPortError: String? = null,
     val deviceNameError: String? = null,
     val maxConnectionsError: String? = null,
+    val targetDeviceNameError: String? = null,
+    val frequencyError: String? = null,
+    val bandwidthError: String? = null,
+    val txPowerError: String? = null,
+    val spreadingFactorError: String? = null,
+    val codingRateError: String? = null,
 )
 
 /**
@@ -91,9 +114,13 @@ class InterfaceManagementViewModel
         private val interfaceRepository: InterfaceRepository,
         private val configManager: InterfaceConfigManager,
         private val bleStatusRepository: BleStatusRepository,
+        private val reticulumProtocol: ReticulumProtocol,
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceMgmtVM"
+
+            // Made internal var to allow injecting test dispatcher
+            internal var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
         }
 
         private val _state = MutableStateFlow(InterfaceManagementState())
@@ -109,6 +136,90 @@ class InterfaceManagementViewModel
             Log.d(TAG, "ViewModel initialized")
             loadInterfaces()
             observeBluetoothState()
+            checkExternalPendingChanges()
+            observeInterfaceStatusChanges()
+        }
+
+        /**
+         * Check if there are pending changes set by external sources (e.g., RNode wizard).
+         */
+        private fun checkExternalPendingChanges() {
+            if (configManager.checkAndClearPendingChanges()) {
+                Log.d(TAG, "Found pending changes from external source")
+                _state.value = _state.value.copy(hasPendingChanges = true)
+            }
+        }
+
+        /**
+         * Observe interface status change events (event-driven, no polling).
+         * Uses the JSON-based interfaceStatusFlow for immediate updates when
+         * interfaces go online or offline.
+         */
+        private fun observeInterfaceStatusChanges() {
+            // Check if protocol is ServiceReticulumProtocol which has the event flow
+            val serviceProtocol = reticulumProtocol as? ServiceReticulumProtocol
+            if (serviceProtocol == null) {
+                Log.d(TAG, "Protocol is not ServiceReticulumProtocol, falling back to initial fetch")
+                viewModelScope.launch(ioDispatcher) {
+                    fetchInterfaceStatus()
+                }
+                return
+            }
+
+            viewModelScope.launch(ioDispatcher) {
+                serviceProtocol.interfaceStatusFlow
+                    .onStart {
+                        // Fetch initial status before first event arrives
+                        fetchInterfaceStatus()
+                    }
+                    .collect { statusJson ->
+                        Log.d(TAG, "████ INTERFACE STATUS EVENT ████ Received: $statusJson")
+                        try {
+                            parseAndUpdateInterfaceStatus(statusJson)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error parsing interface status from event", e)
+                        }
+                    }
+            }
+        }
+
+        /**
+         * Parse interface status JSON and update state.
+         */
+        private fun parseAndUpdateInterfaceStatus(statusJson: String) {
+            try {
+                val json = JSONObject(statusJson)
+                val statusMap = mutableMapOf<String, Boolean>()
+                json.keys().forEach { name ->
+                    statusMap[name] = json.optBoolean(name, false)
+                }
+                _state.value = _state.value.copy(interfaceOnlineStatus = statusMap)
+                Log.d(TAG, "Interface status updated from event: $statusMap")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing interface status JSON", e)
+            }
+        }
+
+        /**
+         * Fetch interface online status from Reticulum.
+         */
+        @Suppress("UNCHECKED_CAST")
+        private suspend fun fetchInterfaceStatus() {
+            try {
+                val debugInfo = reticulumProtocol.getDebugInfo()
+                val interfacesData = debugInfo["interfaces"] as? List<Map<String, Any>> ?: return
+
+                val statusMap = mutableMapOf<String, Boolean>()
+                for (ifaceMap in interfacesData) {
+                    val name = ifaceMap["name"] as? String ?: continue
+                    val online = ifaceMap["online"] as? Boolean ?: false
+                    statusMap[name] = online
+                }
+
+                _state.value = _state.value.copy(interfaceOnlineStatus = statusMap)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch interface status", e)
+            }
         }
 
         /**
@@ -422,6 +533,7 @@ class InterfaceManagementViewModel
         /**
          * Validate the current configuration using InputValidator.
          */
+        @Suppress("LongMethod", "CyclomaticComplexMethod")
         private fun validateConfig(): Boolean {
             val config = _configState.value
             var isValid = true
@@ -434,6 +546,29 @@ class InterfaceManagementViewModel
                 }
                 is ValidationResult.Success -> {
                     _configState.value = config.copy(nameError = null)
+                }
+            }
+
+            // VALIDATION: Check for duplicate interface names
+            // RNS config uses section names like [[Interface Name]], so duplicates cause parsing errors
+            if (isValid) { // Only check if name is otherwise valid
+                val existingNames = _state.value.interfaces.map { it.name }
+                val excludeName = _state.value.editingInterface?.name
+                when (
+                    val uniqueResult =
+                        InputValidator.validateInterfaceNameUniqueness(
+                            config.name,
+                            existingNames,
+                            excludeName,
+                        )
+                ) {
+                    is ValidationResult.Error -> {
+                        _configState.value = _configState.value.copy(nameError = uniqueResult.message)
+                        isValid = false
+                    }
+                    is ValidationResult.Success -> {
+                        // Name is unique, keep any previous success state
+                    }
                 }
             }
 
@@ -464,26 +599,34 @@ class InterfaceManagementViewModel
                 }
 
                 "AutoInterface" -> {
-                    // VALIDATION: Validate discovery port
-                    when (val portResult = InputValidator.validatePort(config.discoveryPort)) {
-                        is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(discoveryPortError = portResult.message)
-                            isValid = false
+                    // VALIDATION: Validate discovery port (empty = use RNS default)
+                    if (config.discoveryPort.isNotBlank()) {
+                        when (val portResult = InputValidator.validatePort(config.discoveryPort)) {
+                            is ValidationResult.Error -> {
+                                _configState.value = _configState.value.copy(discoveryPortError = portResult.message)
+                                isValid = false
+                            }
+                            is ValidationResult.Success -> {
+                                _configState.value = _configState.value.copy(discoveryPortError = null)
+                            }
                         }
-                        is ValidationResult.Success -> {
-                            _configState.value = _configState.value.copy(discoveryPortError = null)
-                        }
+                    } else {
+                        _configState.value = _configState.value.copy(discoveryPortError = null)
                     }
 
-                    // VALIDATION: Validate data port
-                    when (val portResult = InputValidator.validatePort(config.dataPort)) {
-                        is ValidationResult.Error -> {
-                            _configState.value = _configState.value.copy(dataPortError = portResult.message)
-                            isValid = false
+                    // VALIDATION: Validate data port (empty = use RNS default)
+                    if (config.dataPort.isNotBlank()) {
+                        when (val portResult = InputValidator.validatePort(config.dataPort)) {
+                            is ValidationResult.Error -> {
+                                _configState.value = _configState.value.copy(dataPortError = portResult.message)
+                                isValid = false
+                            }
+                            is ValidationResult.Success -> {
+                                _configState.value = _configState.value.copy(dataPortError = null)
+                            }
                         }
-                        is ValidationResult.Success -> {
-                            _configState.value = _configState.value.copy(dataPortError = null)
-                        }
+                    } else {
+                        _configState.value = _configState.value.copy(dataPortError = null)
                     }
                 }
 
@@ -530,8 +673,8 @@ class InterfaceManagementViewModel
                         enabled = config.enabled,
                         groupId = config.groupId,
                         discoveryScope = config.discoveryScope,
-                        discoveryPort = config.discoveryPort.toString(),
-                        dataPort = config.dataPort.toString(),
+                        discoveryPort = config.discoveryPort?.toString().orEmpty(),
+                        dataPort = config.dataPort?.toString().orEmpty(),
                         mode = config.mode,
                     )
 
@@ -557,6 +700,23 @@ class InterfaceManagementViewModel
                         mode = config.mode,
                     )
 
+                is InterfaceConfig.RNode ->
+                    InterfaceConfigState(
+                        name = config.name,
+                        type = "RNode",
+                        enabled = config.enabled,
+                        targetDeviceName = config.targetDeviceName,
+                        connectionMode = config.connectionMode,
+                        frequency = config.frequency.toString(),
+                        bandwidth = config.bandwidth.toString(),
+                        txPower = config.txPower.toString(),
+                        spreadingFactor = config.spreadingFactor.toString(),
+                        codingRate = config.codingRate.toString(),
+                        stAlock = config.stAlock?.toString() ?: "",
+                        ltAlock = config.ltAlock?.toString() ?: "",
+                        mode = config.mode,
+                    )
+
                 else -> InterfaceConfigState() // Default for unsupported types
             }
         }
@@ -572,8 +732,8 @@ class InterfaceManagementViewModel
                         enabled = state.enabled,
                         groupId = state.groupId.trim(),
                         discoveryScope = state.discoveryScope,
-                        discoveryPort = state.discoveryPort.toIntOrNull() ?: 48555,
-                        dataPort = state.dataPort.toIntOrNull() ?: 49555,
+                        discoveryPort = state.discoveryPort.takeIf { it.isNotBlank() }?.toIntOrNull(),
+                        dataPort = state.dataPort.takeIf { it.isNotBlank() }?.toIntOrNull(),
                         mode = state.mode,
                     )
 
@@ -595,6 +755,22 @@ class InterfaceManagementViewModel
                         enabled = state.enabled,
                         deviceName = state.deviceName.trim(),
                         maxConnections = state.maxConnections.toIntOrNull() ?: 7,
+                        mode = state.mode,
+                    )
+
+                "RNode" ->
+                    InterfaceConfig.RNode(
+                        name = state.name.trim(),
+                        enabled = state.enabled,
+                        targetDeviceName = state.targetDeviceName.trim(),
+                        connectionMode = state.connectionMode,
+                        frequency = state.frequency.toLongOrNull() ?: 915000000,
+                        bandwidth = state.bandwidth.toIntOrNull() ?: 125000,
+                        txPower = state.txPower.toIntOrNull() ?: 7,
+                        spreadingFactor = state.spreadingFactor.toIntOrNull() ?: 7,
+                        codingRate = state.codingRate.toIntOrNull() ?: 5,
+                        stAlock = state.stAlock.toDoubleOrNull(),
+                        ltAlock = state.ltAlock.toDoubleOrNull(),
                         mode = state.mode,
                     )
 
@@ -658,5 +834,20 @@ class InterfaceManagementViewModel
          */
         fun clearApplyError() {
             _state.value = _state.value.copy(applyChangesError = null)
+        }
+
+        /**
+         * Attempt to reconnect the RNode interface.
+         * Use this when automatic reconnection has failed.
+         */
+        fun reconnectRNodeInterface() {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    Log.i(TAG, "User triggered RNode reconnection")
+                    reticulumProtocol.reconnectRNodeInterface()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error reconnecting RNode interface", e)
+                }
+            }
         }
     }

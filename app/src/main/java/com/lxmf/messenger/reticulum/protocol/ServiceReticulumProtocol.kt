@@ -25,6 +25,7 @@ import com.lxmf.messenger.reticulum.model.PacketType
 import com.lxmf.messenger.reticulum.model.ReceivedPacket
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import com.lxmf.messenger.service.ReticulumService
+import com.lxmf.messenger.service.manager.parseIdentityResultJson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,14 +33,16 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
-import com.lxmf.messenger.service.manager.parseIdentityResultJson
 import org.json.JSONObject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -57,6 +60,7 @@ class ServiceReticulumProtocol(
 ) : ReticulumProtocol {
     companion object {
         private const val TAG = "ServiceReticulumProtocol"
+        private const val BIND_TIMEOUT_MS = 30_000L // 30s timeout for service binding
     }
 
     private var service: IReticulumService? = null
@@ -73,6 +77,11 @@ class ServiceReticulumProtocol(
     // Initialize to CONNECTING since we don't know service state until we query it
     private val _networkStatus = MutableStateFlow<NetworkStatus>(NetworkStatus.CONNECTING)
     override val networkStatus: StateFlow<NetworkStatus> = _networkStatus.asStateFlow()
+
+    // SharedFlow for interface status change events (triggers UI refresh)
+    // replay=0 means events are not replayed to late subscribers
+    private val _interfaceStatusChanged = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
+    val interfaceStatusChanged: SharedFlow<Unit> = _interfaceStatusChanged.asSharedFlow()
 
     // Phase 2, Task 2.3: Readiness tracking for explicit service binding notification
     // Thread-safe: Protected by bindLock to prevent race between callback and continuation storage
@@ -117,6 +126,49 @@ class ServiceReticulumProtocol(
             extraBufferCapacity = 100,
         )
 
+    // Event-driven flows (Phase: eliminate polling)
+    // BLE connection state changes
+    private val _bleConnectionsFlow =
+        MutableSharedFlow<String>(
+            replay = 1,
+            extraBufferCapacity = 1,
+        )
+    val bleConnectionsFlow: SharedFlow<String> = _bleConnectionsFlow.asSharedFlow()
+
+    // Debug info changes (lock state, interface status, etc.)
+    private val _debugInfoFlow =
+        MutableSharedFlow<String>(
+            replay = 1,
+            extraBufferCapacity = 1,
+        )
+    val debugInfoFlow: SharedFlow<String> = _debugInfoFlow.asSharedFlow()
+
+    // Interface online/offline status changes
+    private val _interfaceStatusFlow =
+        MutableSharedFlow<String>(
+            replay = 1,
+            extraBufferCapacity = 1,
+        )
+    val interfaceStatusFlow: SharedFlow<String> = _interfaceStatusFlow.asSharedFlow()
+
+    // Location telemetry from contacts sharing their location
+    private val _locationTelemetryFlow =
+        MutableSharedFlow<String>(
+            replay = 0,
+            extraBufferCapacity = 10,
+        )
+    val locationTelemetryFlow: SharedFlow<String> = _locationTelemetryFlow.asSharedFlow()
+
+    /**
+     * Handler for alternative relay requests from the service.
+     * Set by ColumbaApplication to provide PropagationNodeManager integration.
+     * Called when Python needs an alternative relay for message retry.
+     *
+     * @param excludeHashes List of relay hashes to exclude
+     * @param callback Function to call with the alternative relay hash (or null if none)
+     */
+    var alternativeRelayHandler: (suspend (excludeHashes: List<String>) -> ByteArray?)? = null
+
     init {
         // Load last known status as an optimistic hint while we query actual status
         // This reduces the visual flicker during app restart
@@ -140,6 +192,7 @@ class ServiceReticulumProtocol(
     // Service callback implementation
     private val serviceCallback =
         object : IReticulumServiceCallback.Stub() {
+            @Suppress("LongMethod")
             override fun onAnnounce(announceJson: String) {
                 try {
                     Log.i(TAG, "🔔 ServiceCallback.onAnnounce() CALLED - announce received from ReticulumService!")
@@ -157,6 +210,30 @@ class ServiceReticulumProtocol(
                     val receivingInterface =
                         if (json.has("interface") && !json.isNull("interface")) {
                             json.optString("interface").takeIf { it.isNotBlank() && it != "None" }
+                        } else {
+                            null
+                        }
+                    val displayName =
+                        if (json.has("display_name") && !json.isNull("display_name")) {
+                            json.optString("display_name").takeIf { it.isNotBlank() }
+                        } else {
+                            null
+                        }
+                    val stampCost =
+                        if (json.has("stamp_cost") && !json.isNull("stamp_cost")) {
+                            json.optInt("stamp_cost")
+                        } else {
+                            null
+                        }
+                    val stampCostFlexibility =
+                        if (json.has("stamp_cost_flexibility") && !json.isNull("stamp_cost_flexibility")) {
+                            json.optInt("stamp_cost_flexibility")
+                        } else {
+                            null
+                        }
+                    val peeringCost =
+                        if (json.has("peering_cost") && !json.isNull("peering_cost")) {
+                            json.optInt("peering_cost")
                         } else {
                             null
                         }
@@ -189,6 +266,10 @@ class ServiceReticulumProtocol(
                                 nodeType = nodeType,
                                 receivingInterface = receivingInterface,
                                 aspect = aspect,
+                                displayName = displayName,
+                                stampCost = stampCost,
+                                stampCostFlexibility = stampCostFlexibility,
+                                peeringCost = peeringCost,
                             )
 
                         Log.i(TAG, "   NodeType detected: $nodeType, Aspect: $aspect")
@@ -218,28 +299,9 @@ class ServiceReticulumProtocol(
 
             override fun onMessage(messageJson: String) {
                 try {
-                    val json = JSONObject(messageJson)
-
-                    val messageHash = json.optString("message_hash", "")
-                    val content = json.optString("content", "")
-                    val sourceHash = json.optString("source_hash").toByteArrayFromBase64() ?: byteArrayOf()
-                    val destHash = json.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
-                    val timestamp = json.optLong("timestamp", System.currentTimeMillis())
-                    // Extract LXMF fields (attachments, images, etc.) if present
-                    val fieldsJson = json.optJSONObject("fields")?.toString()
-
-                    val message =
-                        ReceivedMessage(
-                            messageHash = messageHash,
-                            content = content,
-                            sourceHash = sourceHash,
-                            destinationHash = destHash,
-                            timestamp = timestamp,
-                            fieldsJson = fieldsJson,
-                        )
-
+                    val message = parseMessageJson(messageJson)
                     messageFlow.tryEmit(message)
-                    Log.d(TAG, "Message received via service: ${messageHash.take(16)}")
+                    Log.d(TAG, "Message received via service: ${message.messageHash.take(16)} (publicKey=${message.publicKey != null})")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling message callback", e)
                 }
@@ -256,6 +318,13 @@ class ServiceReticulumProtocol(
             }
 
             override fun onStatusChanged(status: String) {
+                // Handle RNode online/offline status changes - emit event to trigger UI refresh
+                if (status == "RNODE_ONLINE" || status == "RNODE_OFFLINE") {
+                    Log.d(TAG, "████ RNODE STATUS EVENT ████ $status - triggering interface refresh")
+                    _interfaceStatusChanged.tryEmit(Unit)
+                    return // Don't update network status for interface-specific events
+                }
+
                 // Phase 2.1: Emit to StateFlow for reactive updates
                 val newStatus =
                     when {
@@ -298,6 +367,84 @@ class ServiceReticulumProtocol(
                     Log.d(TAG, "Delivery status emitted to flow: hash=${messageHash.take(16)}..., status=$status")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling delivery status callback", e)
+                }
+            }
+
+            override fun onAlternativeRelayRequested(requestJson: String) {
+                try {
+                    Log.d(TAG, "Alternative relay requested: $requestJson")
+                    val json = JSONObject(requestJson)
+
+                    // Parse exclude_relays list from request
+                    val excludeArray = json.optJSONArray("exclude_relays")
+                    val excludeHashes = mutableListOf<String>()
+                    if (excludeArray != null) {
+                        for (i in 0 until excludeArray.length()) {
+                            excludeHashes.add(excludeArray.getString(i))
+                        }
+                    }
+
+                    // Call the handler asynchronously
+                    protocolScope.launch {
+                        try {
+                            val handler = alternativeRelayHandler
+                            if (handler != null) {
+                                val alternativeRelay = handler(excludeHashes)
+                                // Provide the result back to the service
+                                service?.provideAlternativeRelay(alternativeRelay)
+                                Log.d(
+                                    TAG,
+                                    "Alternative relay provided: ${alternativeRelay?.toHexString()?.take(16) ?: "null"}",
+                                )
+                            } else {
+                                Log.w(TAG, "No alternative relay handler set, providing null")
+                                service?.provideAlternativeRelay(null)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error handling alternative relay request", e)
+                            service?.provideAlternativeRelay(null)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing alternative relay request", e)
+                }
+            }
+
+            override fun onBleConnectionChanged(connectionDetailsJson: String) {
+                try {
+                    Log.d(TAG, "BLE connection changed: ${connectionDetailsJson.take(100)}...")
+                    _bleConnectionsFlow.tryEmit(connectionDetailsJson)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling BLE connection callback", e)
+                }
+            }
+
+            override fun onDebugInfoChanged(debugInfoJson: String) {
+                try {
+                    Log.d(TAG, "Debug info changed")
+                    _debugInfoFlow.tryEmit(debugInfoJson)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling debug info callback", e)
+                }
+            }
+
+            override fun onInterfaceStatusChanged(interfaceStatusJson: String) {
+                try {
+                    Log.d(TAG, "Interface status changed: $interfaceStatusJson")
+                    _interfaceStatusFlow.tryEmit(interfaceStatusJson)
+                    // Also trigger the existing interface status changed flow for backwards compatibility
+                    _interfaceStatusChanged.tryEmit(Unit)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling interface status callback", e)
+                }
+            }
+
+            override fun onLocationTelemetry(locationJson: String) {
+                try {
+                    Log.d(TAG, "📍 Location telemetry received: ${locationJson.take(100)}...")
+                    _locationTelemetryFlow.tryEmit(locationJson)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling location telemetry callback", e)
                 }
             }
         }
@@ -404,65 +551,70 @@ class ServiceReticulumProtocol(
      * instead of arbitrary delays. Target: < 100ms from bind to ready.
      *
      * Thread-safe: Uses bindLock to synchronize with readinessCallback.
+     *
+     * @throws TimeoutCancellationException if service doesn't become ready within BIND_TIMEOUT_MS
      */
     suspend fun bindService() =
-        suspendCancellableCoroutine { continuation ->
-            try {
-                bindStartTime = System.currentTimeMillis()
-                Log.d(TAG, "Binding to ReticulumService...")
+        withTimeout(BIND_TIMEOUT_MS) {
+            suspendCancellableCoroutine { continuation ->
+                try {
+                    bindStartTime = System.currentTimeMillis()
+                    Log.d(TAG, "Binding to ReticulumService (timeout: ${BIND_TIMEOUT_MS}ms)...")
 
-                // Thread-safe: Check if callback already fired before storing continuation
-                synchronized(bindLock) {
-                    if (serviceReadyBeforeContinuationSet) {
-                        // Callback already fired - resume immediately
-                        serviceReadyBeforeContinuationSet = false
-                        Log.d(TAG, "Service was already ready - resuming immediately")
-                        continuation.resume(Unit)
-                        return@suspendCancellableCoroutine
+                    // Thread-safe: Check if callback already fired before storing continuation
+                    synchronized(bindLock) {
+                        if (serviceReadyBeforeContinuationSet) {
+                            // Callback already fired - resume immediately
+                            serviceReadyBeforeContinuationSet = false
+                            Log.d(TAG, "Service was already ready - resuming immediately")
+                            continuation.resume(Unit)
+                            return@suspendCancellableCoroutine
+                        }
+                        // Store continuation for readiness callback
+                        readinessContinuation = continuation
                     }
-                    // Store continuation for readiness callback
-                    readinessContinuation = continuation
-                }
 
-                // Start service first (use startForegroundService for Android O+)
-                val startIntent =
-                    Intent(context, ReticulumService::class.java).apply {
-                        action = ReticulumService.ACTION_START
+                    // Start service first (use startForegroundService for Android O+)
+                    val startIntent =
+                        Intent(context, ReticulumService::class.java).apply {
+                            action = ReticulumService.ACTION_START
+                        }
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        context.startForegroundService(startIntent)
+                    } else {
+                        context.startService(startIntent)
                     }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    context.startForegroundService(startIntent)
-                } else {
-                    context.startService(startIntent)
-                }
 
-                // Bind to service
-                val bindIntent = Intent(context, ReticulumService::class.java)
-                val bound =
-                    context.bindService(
-                        bindIntent,
-                        serviceConnection,
-                        Context.BIND_AUTO_CREATE,
-                    )
+                    // Bind to service
+                    val bindIntent = Intent(context, ReticulumService::class.java)
+                    val bound =
+                        context.bindService(
+                            bindIntent,
+                            serviceConnection,
+                            Context.BIND_AUTO_CREATE,
+                        )
 
-                if (!bound) {
+                    if (!bound) {
+                        synchronized(bindLock) {
+                            readinessContinuation = null
+                        }
+                        continuation.resumeWithException(RuntimeException("Failed to bind to service"))
+                    }
+                    // Note: Continuation will be resumed by readinessCallback.onServiceReady()
+                    // when the service is actually ready for IPC calls
+                } catch (e: Exception) {
                     synchronized(bindLock) {
                         readinessContinuation = null
                     }
-                    continuation.resumeWithException(RuntimeException("Failed to bind to service"))
+                    continuation.resumeWithException(e)
                 }
-                // Note: Continuation will be resumed by readinessCallback.onServiceReady()
-                // when the service is actually ready for IPC calls
-            } catch (e: Exception) {
-                synchronized(bindLock) {
-                    readinessContinuation = null
-                }
-                continuation.resumeWithException(e)
-            }
 
-            // Cleanup on cancellation
-            continuation.invokeOnCancellation {
-                synchronized(bindLock) {
-                    readinessContinuation = null
+                // Cleanup on cancellation (including timeout)
+                continuation.invokeOnCancellation {
+                    Log.d(TAG, "bindService continuation cancelled")
+                    synchronized(bindLock) {
+                        readinessContinuation = null
+                    }
                 }
             }
         }
@@ -562,7 +714,27 @@ class ServiceReticulumProtocol(
                 val callback =
                     object : IInitializationCallback.Stub() {
                         override fun onInitializationComplete(result: String) {
-                            Log.d(TAG, "Initialization successful")
+                            Log.d(TAG, "Initialization successful: $result")
+
+                            // Parse and save shared instance status
+                            try {
+                                val jsonResult = JSONObject(result)
+                                val isSharedInstance = jsonResult.optBoolean("is_shared_instance", false)
+                                Log.d(TAG, "Shared instance mode: $isSharedInstance")
+
+                                // Save to settings repository (launch in scope since we're in callback)
+                                protocolScope.launch {
+                                    try {
+                                        settingsRepository.saveIsSharedInstance(isSharedInstance)
+                                        Log.d(TAG, "Saved shared instance status to settings")
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Failed to save shared instance status", e)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to parse initialization result", e)
+                            }
+
                             continuation.resume(Unit)
                         }
 
@@ -582,7 +754,8 @@ class ServiceReticulumProtocol(
         }
     }
 
-    private fun buildConfigJson(config: ReticulumConfig): String {
+    @androidx.annotation.VisibleForTesting
+    internal fun buildConfigJson(config: ReticulumConfig): String {
         val json = JSONObject()
         json.put("storagePath", config.storagePath)
         json.put("logLevel", config.logLevel.name)
@@ -624,13 +797,19 @@ class ServiceReticulumProtocol(
                 is InterfaceConfig.RNode -> {
                     ifaceJson.put("type", "RNode")
                     ifaceJson.put("name", iface.name)
-                    ifaceJson.put("port", iface.port)
+                    ifaceJson.put("target_device_name", iface.targetDeviceName)
+                    ifaceJson.put("connection_mode", iface.connectionMode)
+                    iface.tcpHost?.let { ifaceJson.put("tcp_host", it) }
+                    ifaceJson.put("tcp_port", iface.tcpPort)
                     ifaceJson.put("frequency", iface.frequency)
                     ifaceJson.put("bandwidth", iface.bandwidth)
                     ifaceJson.put("tx_power", iface.txPower)
                     ifaceJson.put("spreading_factor", iface.spreadingFactor)
                     ifaceJson.put("coding_rate", iface.codingRate)
+                    iface.stAlock?.let { ifaceJson.put("st_alock", it) }
+                    iface.ltAlock?.let { ifaceJson.put("lt_alock", it) }
                     ifaceJson.put("mode", iface.mode)
+                    ifaceJson.put("enable_framebuffer", iface.enableFramebuffer)
                 }
                 is InterfaceConfig.UDP -> {
                     ifaceJson.put("type", "UDP")
@@ -652,6 +831,15 @@ class ServiceReticulumProtocol(
             interfacesArray.put(ifaceJson)
         }
         json.put("enabledInterfaces", interfacesArray)
+
+        // Shared instance preference
+        json.put("prefer_own_instance", config.preferOwnInstance)
+
+        // RPC key for shared instance authentication (optional)
+        config.rpcKey?.let { json.put("rpc_key", it) }
+
+        // Transport node setting
+        json.put("enable_transport", config.enableTransport)
 
         return json.toString()
     }
@@ -1055,13 +1243,17 @@ class ServiceReticulumProtocol(
         sourceIdentity: Identity,
         imageData: ByteArray?,
         imageFormat: String?,
+        fileAttachments: List<Pair<String, ByteArray>>?,
     ): Result<MessageReceipt> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
 
-            val resultJson = service.sendLxmfMessage(destinationHash, content, privateKey, imageData, imageFormat)
+            // Convert List<Pair<String, ByteArray>> to Map<String, ByteArray> for AIDL
+            val fileAttachmentsMap = fileAttachments?.associate { (filename, bytes) -> filename to bytes }
+
+            val resultJson = service.sendLxmfMessage(destinationHash, content, privateKey, imageData, imageFormat, fileAttachmentsMap)
             val result = JSONObject(resultJson)
 
             if (!result.optBoolean("success", false)) {
@@ -1138,7 +1330,60 @@ class ServiceReticulumProtocol(
             } else {
                 val error = result.optString("error", "Unknown error")
                 Log.e(TAG, "Failed to restore peer identities: $error")
-                throw RuntimeException("Failed to restore peer identities: $error")
+                error("Failed to restore peer identities: $error")
+            }
+        }
+    }
+
+    /**
+     * Restore announce identities from stored public keys to enable message sending to announced peers.
+     * Uses bulk restore with direct dict population for maximum performance.
+     */
+    fun restoreAnnounceIdentities(announces: List<Pair<String, ByteArray>>): Result<Int> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            Log.d(TAG, "restoreAnnounceIdentities: Processing ${announces.size} announce identities")
+
+            // Build JSON array of announce identities
+            val announcesArray = JSONArray()
+            for ((index, pair) in announces.withIndex()) {
+                val (destHashStr, publicKey) = pair
+
+                // Log details for first few announces
+                if (index < 3) {
+                    Log.d(TAG, "restoreAnnounceIdentities: [$index] destHash=$destHashStr, publicKeyLength=${publicKey.size}")
+                }
+
+                val base64Key = publicKey.toBase64()
+                if (base64Key == null) {
+                    Log.e(TAG, "restoreAnnounceIdentities: [$index] Failed to encode public key to base64 for hash $destHashStr")
+                    continue
+                }
+
+                val announceObj =
+                    JSONObject().apply {
+                        put("destination_hash", destHashStr)
+                        put("public_key", base64Key)
+                    }
+                announcesArray.put(announceObj)
+            }
+
+            Log.d(TAG, "restoreAnnounceIdentities: Built JSON array with ${announcesArray.length()} announces")
+
+            val resultJson = service.restoreAnnounceIdentities(announcesArray.toString())
+            Log.d(TAG, "restoreAnnounceIdentities: Got result from service: $resultJson")
+
+            val result = JSONObject(resultJson)
+
+            if (result.optBoolean("success", false)) {
+                val restoredCount = result.optInt("restored_count", 0)
+                Log.d(TAG, "Restored $restoredCount announce identities")
+                restoredCount
+            } else {
+                val error = result.optString("error", "Unknown error")
+                Log.e(TAG, "Failed to restore announce identities: $error")
+                error("Failed to restore announce identities: $error")
             }
         }
     }
@@ -1242,6 +1487,17 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun getFailedInterfaces(): List<FailedInterface> {
+        return try {
+            val service = this.service ?: return emptyList()
+            val resultJson = service.failedInterfaces
+            FailedInterface.parseFromJson(resultJson)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting failed interfaces", e)
+            emptyList()
+        }
+    }
+
     override fun setConversationActive(active: Boolean) {
         try {
             service?.setConversationActive(active)
@@ -1250,6 +1506,192 @@ class ServiceReticulumProtocol(
             Log.e(TAG, "Error setting conversation active state", e)
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error setting conversation active state", e)
+        }
+    }
+
+    override suspend fun reconnectRNodeInterface() {
+        try {
+            service?.reconnectRNodeInterface()
+            Log.i(TAG, "Triggered RNode interface reconnection")
+        } catch (e: RemoteException) {
+            Log.e(TAG, "Error triggering RNode reconnection", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error triggering RNode reconnection", e)
+        }
+    }
+
+    // ==================== PROPAGATION NODE SUPPORT ====================
+
+    override suspend fun setOutboundPropagationNode(destHash: ByteArray?): Result<Unit> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.setOutboundPropagationNode(destHash)
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            Log.d(TAG, "Propagation node ${if (destHash != null) "set to ${destHash.toHexString()}" else "cleared"}")
+        }
+    }
+
+    override suspend fun getOutboundPropagationNode(): Result<String?> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.getOutboundPropagationNode()
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            result.optString("propagation_node").takeIf { it.isNotEmpty() }
+        }
+    }
+
+    override suspend fun requestMessagesFromPropagationNode(
+        identityPrivateKey: ByteArray?,
+        maxMessages: Int,
+    ): Result<PropagationState> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.requestMessagesFromPropagationNode(identityPrivateKey, maxMessages)
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            val state = result.optInt("state", 0)
+            PropagationState(
+                state = state,
+                stateName = result.optString("state_name", "unknown"),
+                progress = result.optDouble("progress", 0.0).toFloat(),
+                messagesReceived = result.optInt("messages_received", 0),
+            )
+        }
+    }
+
+    override suspend fun getPropagationState(): Result<PropagationState> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.getPropagationState()
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            PropagationState(
+                state = result.optInt("state", 0),
+                stateName = result.optString("state_name", "unknown"),
+                progress = result.optDouble("progress", 0.0).toFloat(),
+                messagesReceived = result.optInt("messages_received", 0),
+            )
+        }
+    }
+
+    override suspend fun sendLxmfMessageWithMethod(
+        destinationHash: ByteArray,
+        content: String,
+        sourceIdentity: Identity,
+        deliveryMethod: DeliveryMethod,
+        tryPropagationOnFail: Boolean,
+        imageData: ByteArray?,
+        imageFormat: String?,
+        fileAttachments: List<Pair<String, ByteArray>>?,
+    ): Result<MessageReceipt> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
+
+            val methodString =
+                when (deliveryMethod) {
+                    DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
+                    DeliveryMethod.DIRECT -> "direct"
+                    DeliveryMethod.PROPAGATED -> "propagated"
+                }
+
+            // Convert List<Pair<String, ByteArray>> to Map<String, ByteArray> for AIDL
+            val fileAttachmentsMap = fileAttachments?.associate { (filename, bytes) -> filename to bytes }
+
+            val resultJson =
+                service.sendLxmfMessageWithMethod(
+                    destinationHash,
+                    content,
+                    privateKey,
+                    methodString,
+                    tryPropagationOnFail,
+                    imageData,
+                    imageFormat,
+                    fileAttachmentsMap,
+                )
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            val msgHash = result.optString("message_hash").toByteArrayFromBase64() ?: byteArrayOf()
+            val timestamp = result.optLong("timestamp", System.currentTimeMillis())
+            val destHash = result.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
+            val actualMethod = result.optString("delivery_method", methodString)
+
+            Log.d(TAG, "Message sent with method=$actualMethod")
+
+            MessageReceipt(
+                messageHash = msgHash,
+                timestamp = timestamp,
+                destinationHash = destHash,
+            )
+        }
+    }
+
+    override suspend fun sendLocationTelemetry(
+        destinationHash: ByteArray,
+        locationJson: String,
+        sourceIdentity: Identity,
+    ): Result<MessageReceipt> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
+
+            val resultJson =
+                service.sendLocationTelemetry(
+                    destinationHash,
+                    locationJson,
+                    privateKey,
+                )
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            val msgHash = result.optString("message_hash").toByteArrayFromBase64() ?: byteArrayOf()
+            val timestamp = result.optLong("timestamp", System.currentTimeMillis())
+            val destHash = result.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
+
+            Log.d(TAG, "📍 Location telemetry sent to ${destinationHash.joinToString("") { "%02x".format(it) }.take(16)}")
+
+            MessageReceipt(
+                messageHash = msgHash,
+                timestamp = timestamp,
+                destinationHash = destHash,
+            )
         }
     }
 
@@ -1263,6 +1705,39 @@ class ServiceReticulumProtocol(
         } catch (e: Exception) {
             Log.e(TAG, "Error getting BLE connection details", e)
             "[]"
+        }
+    }
+
+    /**
+     * Get the current RSSI of the active RNode BLE connection.
+     *
+     * @return RSSI in dBm, or -100 if not connected or not available
+     */
+    fun getRNodeRssi(): Int {
+        return try {
+            val service = this.service ?: return -100
+            service.rNodeRssi
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting RNode RSSI", e)
+            -100
+        }
+    }
+
+    /**
+     * Check if a shared Reticulum instance is currently available.
+     * This queries the Python layer's port probe to detect if another app
+     * (e.g., Sideband) is running a shared RNS instance on localhost:37428.
+     *
+     * @return true if a shared instance is available and responding, false otherwise
+     */
+    suspend fun isSharedInstanceAvailable(): Boolean {
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                service?.isSharedInstanceAvailable ?: false
+            } catch (e: Exception) {
+                Log.e(TAG, "Error querying shared instance availability", e)
+                false
+            }
         }
     }
 
@@ -1290,6 +1765,35 @@ class ServiceReticulumProtocol(
 
             Log.d(TAG, "Auto-announce successful")
         }
+    }
+
+    /**
+     * Parse a message JSON string into a ReceivedMessage.
+     * Extracted for testability.
+     */
+    internal fun parseMessageJson(messageJson: String): ReceivedMessage {
+        val json = JSONObject(messageJson)
+
+        val messageHash = json.optString("message_hash", "")
+        val content = json.optString("content", "")
+        val sourceHash = json.optString("source_hash").toByteArrayFromBase64() ?: byteArrayOf()
+        val destHash = json.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
+        val timestamp = json.optLong("timestamp", System.currentTimeMillis())
+        // Extract LXMF fields (attachments, images, etc.) if present
+        val fieldsJson = json.optJSONObject("fields")?.toString()
+        // Extract sender's public key if available
+        val publicKeyB64 = json.optString("public_key", null)
+        val publicKey = publicKeyB64?.takeIf { it.isNotEmpty() }?.toByteArrayFromBase64()
+
+        return ReceivedMessage(
+            messageHash = messageHash,
+            content = content,
+            sourceHash = sourceHash,
+            destinationHash = destHash,
+            timestamp = timestamp,
+            fieldsJson = fieldsJson,
+            publicKey = publicKey,
+        )
     }
 
     // Helper extension functions

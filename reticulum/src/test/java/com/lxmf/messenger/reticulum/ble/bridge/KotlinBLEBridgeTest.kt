@@ -10,10 +10,12 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Unit tests for KotlinBLEBridge.
@@ -549,5 +551,226 @@ class KotlinBLEBridgeTest {
             // The actual bug manifests in the callback chain which is tested via
             // integration tests and manual verification with real hardware.
             // See commit 897e2e6 for the fix that makes peripheral MTU work correctly.
+        }
+
+    // ========== Dual Connection Deduplication Tests ==========
+
+    /**
+     * This test documents the dual connection notification bug and verifies the fix.
+     *
+     * BUG (before fix):
+     * In handleIdentityReceived, when identity arrives after dual connection:
+     * 1. pendingConnections stores original state (e.g., isCentral=true, isPeripheral=false)
+     * 2. Second connection makes it dual (isCentral=true, isPeripheral=true)
+     * 3. Identity arrives → deduplication closes one connection (e.g., keeps peripheral)
+     * 4. notifyPythonConnected uses pendingConnection's ORIGINAL flags (isCentral=true)
+     * 5. Python gets wrong connection type - can't send on the closed central connection!
+     *
+     * FIX (after):
+     * After deduplication, use the CURRENT peer state for notification, not the stale
+     * pendingConnection state. This ensures Python knows about the correct remaining connection.
+     */
+    @Test
+    fun `pending connection notification uses current peer state after deduplication`() =
+        runTest {
+            // Given: A bridge with mock scanner
+            val bridge = createBridgeWithMockScanner()
+            val peerAddress = "AA:BB:CC:DD:EE:FF"
+
+            // Access PendingConnection class
+            val pendingConnectionClass =
+                Class.forName(
+                    "com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge\$PendingConnection",
+                )
+
+            // Create pending connection with ORIGINAL state (central only)
+            val pendingConstructor =
+                pendingConnectionClass.getDeclaredConstructor(
+                    String::class.java,
+                    Int::class.java,
+                    Boolean::class.java,
+                    Boolean::class.java,
+                    Long::class.java,
+                )
+            pendingConstructor.isAccessible = true
+            val pendingConnection =
+                pendingConstructor.newInstance(
+                    peerAddress,
+                    512,
+                    true, // isCentral - original state when first connection arrived
+                    false, // isPeripheral - only central was connected initially
+                    System.currentTimeMillis(),
+                )
+
+            // Access pendingConnections map and add our pending
+            val pendingConnectionsField =
+                KotlinBLEBridge::class.java.getDeclaredField("pendingConnections")
+            pendingConnectionsField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val pendingConnections =
+                pendingConnectionsField.get(bridge) as ConcurrentHashMap<String, Any>
+            pendingConnections[peerAddress] = pendingConnection
+
+            // Simulate: peer now has DUAL connection (second connection arrived)
+            addMockPeer(
+                bridge = bridge,
+                address = peerAddress,
+                identityHash = null, // Identity not yet received
+                isCentral = true,
+                isPeripheral = true, // DUAL - both connections established
+                mtu = 512,
+            )
+
+            // Verify: pendingConnection has STALE flags (central only)
+            val pendingIsCentralField = pendingConnectionClass.getDeclaredField("isCentral")
+            pendingIsCentralField.isAccessible = true
+            val pendingIsPeripheralField = pendingConnectionClass.getDeclaredField("isPeripheral")
+            pendingIsPeripheralField.isAccessible = true
+
+            assertTrue(
+                "Pending has stale isCentral=true",
+                pendingIsCentralField.getBoolean(pendingConnection),
+            )
+            assertFalse(
+                "Pending has stale isPeripheral=false",
+                pendingIsPeripheralField.getBoolean(pendingConnection),
+            )
+
+            // Get actual peer which has CURRENT state (dual)
+            val connectedPeersField = KotlinBLEBridge::class.java.getDeclaredField("connectedPeers")
+            connectedPeersField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val connectedPeers = connectedPeersField.get(bridge) as ConcurrentHashMap<String, Any>
+            val peer = connectedPeers[peerAddress]!!
+
+            val peerIsCentralField = peer::class.java.getDeclaredField("isCentral")
+            peerIsCentralField.isAccessible = true
+            val peerIsPeripheralField = peer::class.java.getDeclaredField("isPeripheral")
+            peerIsPeripheralField.isAccessible = true
+
+            assertTrue("Peer has current isCentral=true", peerIsCentralField.getBoolean(peer))
+            assertTrue("Peer has current isPeripheral=true", peerIsPeripheralField.getBoolean(peer))
+
+            // Simulate deduplication where peripheral is kept (peer identity < our identity)
+            peerIsCentralField.setBoolean(peer, false)
+            peerIsPeripheralField.setBoolean(peer, true)
+
+            // BUG: pending has isCentral=true but peer now has isCentral=false after dedup
+            // If notification uses pending flags, Python thinks central is active but it's closed!
+            assertNotEquals(
+                "Pending isCentral doesn't match peer after dedup",
+                pendingIsCentralField.getBoolean(pendingConnection),
+                peerIsCentralField.getBoolean(peer),
+            )
+            assertNotEquals(
+                "Pending isPeripheral doesn't match peer after dedup",
+                pendingIsPeripheralField.getBoolean(pendingConnection),
+                peerIsPeripheralField.getBoolean(peer),
+            )
+            // Fix: handleIdentityReceived uses peer's CURRENT flags for notifyPythonConnected
+        }
+
+    // ========== ConnectionChangeListener Tests ==========
+
+    @Test
+    fun `addConnectionChangeListener registers listener successfully`() =
+        runTest {
+            // Given
+            val bridge = createBridgeWithMockScanner()
+            val listener =
+                object : KotlinBLEBridge.ConnectionChangeListener {
+                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                        // No-op for this test
+                    }
+                }
+
+            // When
+            bridge.addConnectionChangeListener(listener)
+
+            // Then - verify via reflection that listener was added
+            val listenersField = KotlinBLEBridge::class.java.getDeclaredField("connectionChangeListeners")
+            listenersField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val listeners = listenersField.get(bridge) as MutableList<KotlinBLEBridge.ConnectionChangeListener>
+            assertEquals(1, listeners.size)
+        }
+
+    @Test
+    fun `removeConnectionChangeListener unregisters listener`() =
+        runTest {
+            // Given
+            val bridge = createBridgeWithMockScanner()
+            val listener =
+                object : KotlinBLEBridge.ConnectionChangeListener {
+                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                        // No-op
+                    }
+                }
+
+            // When
+            bridge.addConnectionChangeListener(listener)
+            bridge.removeConnectionChangeListener(listener)
+
+            // Then - verify listener was removed
+            val listenersField = KotlinBLEBridge::class.java.getDeclaredField("connectionChangeListeners")
+            listenersField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val listeners = listenersField.get(bridge) as MutableList<KotlinBLEBridge.ConnectionChangeListener>
+            assertEquals(0, listeners.size)
+        }
+
+    @Test
+    fun `notifyConnectionChange delivers JSON to all listeners`() =
+        runTest {
+            // Given
+            val bridge = createBridgeWithMockScanner()
+            val receivedJson = mutableListOf<String>()
+
+            val listener1 =
+                object : KotlinBLEBridge.ConnectionChangeListener {
+                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                        receivedJson.add("L1:$connectionDetailsJson")
+                    }
+                }
+            val listener2 =
+                object : KotlinBLEBridge.ConnectionChangeListener {
+                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                        receivedJson.add("L2:$connectionDetailsJson")
+                    }
+                }
+
+            bridge.addConnectionChangeListener(listener1)
+            bridge.addConnectionChangeListener(listener2)
+
+            // When - trigger notifyConnectionChange via reflection
+            val method = KotlinBLEBridge::class.java.getDeclaredMethod("notifyConnectionChange")
+            method.isAccessible = true
+            method.invoke(bridge)
+
+            // Then
+            assertEquals(2, receivedJson.size)
+            assertTrue(receivedJson[0].startsWith("L1:"))
+            assertTrue(receivedJson[1].startsWith("L2:"))
+        }
+
+    @Test
+    fun `buildConnectionDetailsJson returns valid JSON array`() =
+        runTest {
+            // Given
+            val bridge = createBridgeWithMockScanner()
+            coEvery { mockScanner.getDevicesSortedByPriority() } returns emptyList()
+            addMockPeer(bridge, "AA:BB:CC:DD:EE:FF", "test123hash")
+
+            // When - invoke buildConnectionDetailsJson via reflection
+            val method = KotlinBLEBridge::class.java.getDeclaredMethod("buildConnectionDetailsJson")
+            method.isAccessible = true
+            val json = method.invoke(bridge) as String
+
+            // Then
+            val jsonArray = org.json.JSONArray(json)
+            assertEquals(1, jsonArray.length())
+            val peer = jsonArray.getJSONObject(0)
+            assertEquals("test123hash", peer.getString("identityHash"))
+            assertEquals("AA:BB:CC:DD:EE:FF", peer.getString("address"))
         }
 }

@@ -59,6 +59,7 @@ class ReticulumService : Service() {
         // Create binder with callbacks
         binder =
             ServiceModule.createBinder(
+                context = this,
                 managers = managers,
                 scope = serviceScope,
                 onInitialized = {

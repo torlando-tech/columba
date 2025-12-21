@@ -41,4 +41,39 @@ interface IReticulumServiceCallback {
      * @param statusJson JSON string with delivery status data
      */
     void onDeliveryStatus(String statusJson);
+
+    /**
+     * Called when Python needs an alternative relay for message retry.
+     * The app should query PropagationNodeManager and call provideAlternativeRelay().
+     * @param requestJson JSON string with request data:
+     *        {"current_relay": "hex_hash", "exclude_relays": ["hex1", "hex2"]}
+     */
+    void onAlternativeRelayRequested(String requestJson);
+
+    /**
+     * Called when BLE connection state changes (connect/disconnect).
+     * @param connectionDetailsJson JSON string with connection details:
+     *        [{"address": "XX:XX:XX:XX:XX:XX", "name": "device_name", "rssi": -50}]
+     */
+    void onBleConnectionChanged(String connectionDetailsJson);
+
+    /**
+     * Called when debug info changes (lock state, interface status, etc.).
+     * @param debugInfoJson JSON string with debug info data
+     */
+    void onDebugInfoChanged(String debugInfoJson);
+
+    /**
+     * Called when interface online/offline status changes.
+     * @param interfaceStatusJson JSON string with interface status map:
+     *        {"InterfaceName1": true, "InterfaceName2": false}
+     */
+    void onInterfaceStatusChanged(String interfaceStatusJson);
+
+    /**
+     * Called when location telemetry is received from a contact.
+     * @param locationJson JSON string with location telemetry data:
+     *        {"sender_hash": "...", "lat": ..., "lng": ..., "acc": ..., "ts": ..., "expires": ...}
+     */
+    void onLocationTelemetry(String locationJson);
 }

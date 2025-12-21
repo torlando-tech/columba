@@ -12,6 +12,7 @@ import com.lxmf.messenger.data.db.dao.CustomThemeDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
+import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -817,7 +818,7 @@ object DatabaseModule {
                 // If not, apply the 17->18 migration first
                 val cursor = database.query("PRAGMA table_info(contacts)")
                 var hasStatusColumn = false
-                
+
                 try {
                     while (cursor.moveToNext()) {
                         val columnName = cursor.getString(cursor.getColumnIndexOrThrow("name"))
@@ -829,12 +830,12 @@ object DatabaseModule {
                 } finally {
                     cursor.close()
                 }
-                
+
                 // If contacts table is missing status column, apply 17->18 migration first
                 if (!hasStatusColumn) {
                     // Step 1: Rename old table
                     database.execSQL("ALTER TABLE contacts RENAME TO contacts_old")
-                    
+
                     // Step 2: Create new table with nullable publicKey and status column
                     database.execSQL(
                         """
@@ -855,7 +856,7 @@ object DatabaseModule {
                         )
                         """.trimIndent(),
                     )
-                    
+
                     // Step 3: Copy data from old table (existing contacts get 'ACTIVE' status)
                     database.execSQL(
                         """
@@ -864,14 +865,14 @@ object DatabaseModule {
                         FROM contacts_old
                         """.trimIndent(),
                     )
-                    
+
                     // Step 4: Drop old table
                     database.execSQL("DROP TABLE contacts_old")
-                    
+
                     // Step 5: Recreate index
                     database.execSQL("CREATE INDEX IF NOT EXISTS index_contacts_identityHash ON contacts(identityHash)")
                 }
-                
+
                 // Now safe to do the UPDATE operation
                 database.execSQL(
                     """
@@ -899,12 +900,12 @@ object DatabaseModule {
                 val cursor = database.query("PRAGMA table_info(contacts)")
                 var hasStatusColumn = false
                 var publicKeyIsNullable = false
-                
+
                 try {
                     while (cursor.moveToNext()) {
                         val columnName = cursor.getString(cursor.getColumnIndexOrThrow("name"))
                         val notNull = cursor.getInt(cursor.getColumnIndexOrThrow("notnull"))
-                        
+
                         if (columnName == "status") {
                             hasStatusColumn = true
                         }
@@ -915,12 +916,12 @@ object DatabaseModule {
                 } finally {
                     cursor.close()
                 }
-                
+
                 // If contacts table is missing status column or publicKey is NOT NULL, fix it
                 if (!hasStatusColumn || !publicKeyIsNullable) {
                     // Step 1: Rename old table
                     database.execSQL("ALTER TABLE contacts RENAME TO contacts_old")
-                    
+
                     // Step 2: Create new table with nullable publicKey and status column
                     database.execSQL(
                         """
@@ -941,7 +942,7 @@ object DatabaseModule {
                         )
                         """.trimIndent(),
                     )
-                    
+
                     // Step 3: Copy data from old table (existing contacts get 'ACTIVE' status)
                     database.execSQL(
                         """
@@ -950,21 +951,27 @@ object DatabaseModule {
                         FROM contacts_old
                         """.trimIndent(),
                     )
-                    
+
                     // Step 4: Drop old table
                     database.execSQL("DROP TABLE contacts_old")
-                    
+
                     // Step 5: Recreate index
                     database.execSQL("CREATE INDEX IF NOT EXISTS index_contacts_identityHash ON contacts(identityHash)")
                 }
-                
+
                 // MessageEntity indices
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_messages_timestamp ON messages(timestamp)")
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_messages_conversationHash_identityHash_timestamp ON messages(conversationHash, identityHash, timestamp)")
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_messages_conversationHash_identityHash_isFromMe_isRead ON messages(conversationHash, identityHash, isFromMe, isRead)")
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_messages_conversationHash_identityHash_timestamp ON messages(conversationHash, identityHash, timestamp)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_messages_conversationHash_identityHash_isFromMe_isRead ON messages(conversationHash, identityHash, isFromMe, isRead)",
+                )
 
                 // ConversationEntity indices
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_conversations_identityHash_lastMessageTimestamp ON conversations(identityHash, lastMessageTimestamp)")
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_conversations_identityHash_lastMessageTimestamp ON conversations(identityHash, lastMessageTimestamp)",
+                )
 
                 // AnnounceEntity indices
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_announces_lastSeenTimestamp ON announces(lastSeenTimestamp)")
@@ -987,6 +994,92 @@ object DatabaseModule {
             }
         }
 
+    // Migration from version 20 to 21: Add stamp cost fields to announces table
+    private val MIGRATION_20_21 =
+        object : Migration(20, 21) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add stamp cost columns to announces table (nullable with default null)
+                database.execSQL("ALTER TABLE announces ADD COLUMN stampCost INTEGER DEFAULT NULL")
+                database.execSQL("ALTER TABLE announces ADD COLUMN stampCostFlexibility INTEGER DEFAULT NULL")
+                database.execSQL("ALTER TABLE announces ADD COLUMN peeringCost INTEGER DEFAULT NULL")
+            }
+        }
+
+    // Migration from version 21 to 22: Add isMyRelay field to contacts table for propagation node support
+    private val MIGRATION_21_22 =
+        object : Migration(21, 22) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add isMyRelay column to contacts table (default false)
+                // Only one contact can be the user's relay at a time - enforced at application level
+                database.execSQL("ALTER TABLE contacts ADD COLUMN isMyRelay INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+    // Migration from version 22 to 23: Add message delivery tracking fields
+    // Stores delivery method (opportunistic/direct/propagated) and error message for failed deliveries
+    private val MIGRATION_22_23 =
+        object : Migration(22, 23) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add deliveryMethod column: "opportunistic", "direct", or "propagated"
+                database.execSQL("ALTER TABLE messages ADD COLUMN deliveryMethod TEXT DEFAULT NULL")
+                // Add errorMessage column for failed delivery details
+                database.execSQL("ALTER TABLE messages ADD COLUMN errorMessage TEXT DEFAULT NULL")
+            }
+        }
+
+    // Migration from version 23 to 24: Add receivingInterfaceType column for interface type icons
+    // Stores the type of interface (AUTO_INTERFACE, TCP_CLIENT, ANDROID_BLE, RNODE) for display
+    private val MIGRATION_23_24 =
+        object : Migration(23, 24) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add receivingInterfaceType column (nullable)
+                database.execSQL("ALTER TABLE announces ADD COLUMN receivingInterfaceType TEXT")
+
+                // Backfill existing rows based on receivingInterface pattern
+                database.execSQL(
+                    """
+                    UPDATE announces SET receivingInterfaceType =
+                        CASE
+                            WHEN receivingInterface LIKE 'AutoInterface%' THEN 'AUTO_INTERFACE'
+                            WHEN receivingInterface LIKE 'TCPClient%' OR receivingInterface LIKE 'TCPInterface%' THEN 'TCP_CLIENT'
+                            WHEN LOWER(receivingInterface) LIKE '%ble%' OR LOWER(receivingInterface) LIKE '%bluetooth%' THEN 'ANDROID_BLE'
+                            WHEN LOWER(receivingInterface) LIKE '%rnode%' THEN 'RNODE'
+                            ELSE NULL
+                        END
+                    WHERE receivingInterface IS NOT NULL AND receivingInterface != 'None'
+                    """.trimIndent(),
+                )
+            }
+        }
+
+    // Migration from version 24 to 25: Add received_locations table for location sharing
+    // Stores location telemetry received from contacts for map display
+    private val MIGRATION_24_25 =
+        object : Migration(24, 25) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Create received_locations table
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS received_locations (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        senderHash TEXT NOT NULL,
+                        latitude REAL NOT NULL,
+                        longitude REAL NOT NULL,
+                        accuracy REAL NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        expiresAt INTEGER,
+                        receivedAt INTEGER NOT NULL,
+                        approximateRadius INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent(),
+                )
+                // Create indices for efficient queries
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_received_locations_senderHash ON received_locations(senderHash)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_received_locations_senderHash_timestamp ON received_locations(senderHash, timestamp)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_received_locations_expiresAt ON received_locations(expiresAt)")
+            }
+        }
+
     @Provides
     @Singleton
     fun provideColumbaDatabase(
@@ -997,7 +1090,7 @@ object DatabaseModule {
             ColumbaDatabase::class.java,
             "columba_database",
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25)
             .build()
     }
 
@@ -1037,7 +1130,13 @@ object DatabaseModule {
     }
 
     @Provides
+    fun provideReceivedLocationDao(database: ColumbaDatabase): ReceivedLocationDao {
+        return database.receivedLocationDao()
+    }
+
+    @Provides
     @Singleton
+    @Suppress("InjectDispatcher") // This IS the DI provider for the IO dispatcher
     fun provideIODispatcher(): CoroutineDispatcher {
         return Dispatchers.IO
     }

@@ -218,8 +218,8 @@ object ConfigFileParser {
             enabled = true,
             groupId = params["group_id"].orEmpty(),
             discoveryScope = params["discovery_scope"] ?: "link",
-            discoveryPort = params["discovery_port"]?.toIntOrNull() ?: 48555,
-            dataPort = params["data_port"]?.toIntOrNull() ?: 49555,
+            discoveryPort = params["discovery_port"]?.toIntOrNull(),
+            dataPort = params["data_port"]?.toIntOrNull(),
             mode = params["mode"] ?: "full",
         )
     }
@@ -244,17 +244,21 @@ object ConfigFileParser {
         name: String,
         params: Map<String, String>,
     ): InterfaceConfig.RNode? {
-        val port = params["port"] ?: return null
+        // Support both target_device_name (new) and port (legacy)
+        val targetDeviceName = params["target_device_name"] ?: params["port"] ?: return null
 
         return InterfaceConfig.RNode(
             name = name,
             enabled = true,
-            port = port,
+            targetDeviceName = targetDeviceName,
+            connectionMode = params["connection_mode"] ?: "classic",
             frequency = params["frequency"]?.toLongOrNull() ?: 915000000,
             bandwidth = params["bandwidth"]?.toIntOrNull() ?: 125000,
             txPower = params["txpower"]?.toIntOrNull() ?: 7,
             spreadingFactor = params["spreadingfactor"]?.toIntOrNull() ?: 7,
             codingRate = params["codingrate"]?.toIntOrNull() ?: 5,
+            stAlock = params["st_alock"]?.toDoubleOrNull(),
+            ltAlock = params["lt_alock"]?.toDoubleOrNull(),
             mode = params["mode"] ?: "full",
         )
     }

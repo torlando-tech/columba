@@ -27,7 +27,6 @@ object ReticulumModule {
         // Use Service-based implementation for real Reticulum backend
         // This runs Python/RNS in a separate service process with proper threading
         // To use mock for testing, change to: return MockReticulumProtocol()
-        // To use direct Python (with threading limitation), use: return PythonReticulumProtocol(context)
         return ServiceReticulumProtocol(context, settingsRepository)
     }
 }

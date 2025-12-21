@@ -95,7 +95,6 @@ class ServiceStateTest {
         assertFalse(state.isConversationActive.get())
         assertNull(state.wrapper)
         assertNull(state.pollingJob)
-        assertNull(state.messagePollingJob)
         assertNull(state.shutdownJob)
 
         // Verify generation is preserved (important for race condition safety)

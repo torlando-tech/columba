@@ -18,6 +18,8 @@ import com.lxmf.messenger.ui.theme.CustomTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -60,6 +62,31 @@ class SettingsRepository
 
             // Theme preference
             val THEME_PREFERENCE = stringPreferencesKey("app_theme")
+
+            // Shared instance preferences
+            val PREFER_OWN_INSTANCE = booleanPreferencesKey("prefer_own_instance")
+            val IS_SHARED_INSTANCE = booleanPreferencesKey("is_shared_instance")
+            val RPC_KEY = stringPreferencesKey("rpc_key")
+
+            // Message delivery preferences
+            val DEFAULT_DELIVERY_METHOD = stringPreferencesKey("default_delivery_method")
+            val TRY_PROPAGATION_ON_FAIL = booleanPreferencesKey("try_propagation_on_fail")
+            val MANUAL_PROPAGATION_NODE = stringPreferencesKey("manual_propagation_node")
+            val LAST_PROPAGATION_NODE = stringPreferencesKey("last_propagation_node")
+            val AUTO_SELECT_PROPAGATION_NODE = booleanPreferencesKey("auto_select_propagation_node")
+
+            // Message retrieval preferences
+            val AUTO_RETRIEVE_ENABLED = booleanPreferencesKey("auto_retrieve_enabled")
+            val RETRIEVAL_INTERVAL_SECONDS = intPreferencesKey("retrieval_interval_seconds")
+            val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
+
+            // Transport node preferences
+            val TRANSPORT_NODE_ENABLED = booleanPreferencesKey("transport_node_enabled")
+
+            // Location sharing preferences
+            val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
+            val DEFAULT_SHARING_DURATION = stringPreferencesKey("default_sharing_duration")
+            val LOCATION_PRECISION_RADIUS = intPreferencesKey("location_precision_radius")
         }
 
         // Notification preferences
@@ -73,6 +100,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATIONS_ENABLED] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the master notifications enabled state.
@@ -94,6 +122,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_RECEIVED_MESSAGE] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the received message notification preference.
@@ -115,6 +144,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_RECEIVED_MESSAGE_FAVORITE] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the received message from favorite notification preference.
@@ -136,6 +166,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_HEARD_ANNOUNCE] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the heard announce notification preference.
@@ -157,6 +188,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_BLE_CONNECTED] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the BLE connected notification preference.
@@ -178,6 +210,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_BLE_DISCONNECTED] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the BLE disconnected notification preference.
@@ -199,6 +232,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.HAS_REQUESTED_NOTIFICATION_PERMISSION] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Mark that we've requested notification permission from the user.
@@ -221,6 +255,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.HAS_COMPLETED_ONBOARDING] ?: false
                 }
+                .distinctUntilChanged()
 
         /**
          * Mark that the user has completed onboarding.
@@ -243,6 +278,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.AUTO_ANNOUNCE_ENABLED] ?: true
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the auto-announce enabled state.
@@ -264,6 +300,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.AUTO_ANNOUNCE_INTERVAL_MINUTES] ?: 5
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the auto-announce interval in minutes.
@@ -285,6 +322,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.LAST_AUTO_ANNOUNCE_TIME]
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the last auto-announce timestamp.
@@ -308,6 +346,7 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.LAST_SERVICE_STATUS] ?: "UNKNOWN"
                 }
+                .distinctUntilChanged()
 
         /**
          * Save the last known service status for persistence across app restarts.
@@ -404,6 +443,449 @@ class SettingsRepository
         suspend fun saveThemePreferenceByIdentifier(identifier: String) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.THEME_PREFERENCE] = identifier
+            }
+        }
+
+        // Shared instance preference
+
+        /**
+         * Flow of the prefer own instance setting.
+         * When true, Columba will create its own RNS instance even if a shared one is available.
+         * Defaults to false (prefer shared instance if available).
+         */
+        val preferOwnInstanceFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.PREFER_OWN_INSTANCE] ?: false
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the prefer own instance setting.
+         *
+         * @param preferOwn Whether to prefer Columba's own instance over a shared one
+         */
+        suspend fun savePreferOwnInstance(preferOwn: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.PREFER_OWN_INSTANCE] = preferOwn
+            }
+        }
+
+        /**
+         * Flow of whether Columba is currently connected to a shared RNS instance.
+         * Set by the service when it initializes/connects.
+         * Defaults to false.
+         */
+        val isSharedInstanceFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.IS_SHARED_INSTANCE] ?: false
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the current shared instance status.
+         * Called by the service when the RNS instance type is determined.
+         *
+         * @param isShared Whether currently connected to a shared instance
+         */
+        suspend fun saveIsSharedInstance(isShared: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.IS_SHARED_INSTANCE] = isShared
+            }
+        }
+
+        /**
+         * Flow of RPC authentication key for shared instance communication.
+         * Required on Android when connecting to another app's shared instance (e.g., Sideband)
+         * because apps have separate config directories with different RPC keys.
+         * Export from Sideband: Connectivity → Share Instance Access
+         */
+        val rpcKeyFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.RPC_KEY]
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the RPC key for shared instance authentication.
+         *
+         * @param rpcKey Hexadecimal RPC key string, or null to clear
+         */
+        suspend fun saveRpcKey(rpcKey: String?) {
+            context.dataStore.edit { preferences ->
+                if (rpcKey != null) {
+                    preferences[PreferencesKeys.RPC_KEY] = rpcKey
+                } else {
+                    preferences.remove(PreferencesKeys.RPC_KEY)
+                }
+            }
+        }
+
+        // Message delivery preferences
+
+        /**
+         * Flow of the default delivery method.
+         * Defaults to "direct" if not set.
+         * Values: "direct", "propagated"
+         */
+        val defaultDeliveryMethodFlow: Flow<String> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.DEFAULT_DELIVERY_METHOD] ?: "direct"
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the default delivery method (non-flow for use in sending).
+         */
+        suspend fun getDefaultDeliveryMethod(): String {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.DEFAULT_DELIVERY_METHOD] ?: "direct"
+            }.first()
+        }
+
+        /**
+         * Save the default delivery method.
+         *
+         * @param method "direct" or "propagated"
+         */
+        suspend fun saveDefaultDeliveryMethod(method: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.DEFAULT_DELIVERY_METHOD] = method
+            }
+        }
+
+        /**
+         * Flow of the try propagation on fail setting.
+         * Defaults to true if not set.
+         */
+        val tryPropagationOnFailFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TRY_PROPAGATION_ON_FAIL] ?: true
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get try propagation on fail setting (non-flow for use in sending).
+         */
+        suspend fun getTryPropagationOnFail(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TRY_PROPAGATION_ON_FAIL] ?: true
+            }.first()
+        }
+
+        /**
+         * Save the try propagation on fail setting.
+         *
+         * @param enabled Whether to retry via propagation when direct delivery fails
+         */
+        suspend fun saveTryPropagationOnFail(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.TRY_PROPAGATION_ON_FAIL] = enabled
+            }
+        }
+
+        /**
+         * Flow of the manually selected propagation node.
+         * Returns hex destination hash string or null if not set.
+         */
+        val manualPropagationNodeFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MANUAL_PROPAGATION_NODE]
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the manually selected propagation node (non-flow).
+         */
+        suspend fun getManualPropagationNode(): String? {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.MANUAL_PROPAGATION_NODE]
+            }.first()
+        }
+
+        /**
+         * Save the manually selected propagation node.
+         *
+         * @param nodeHash Hex destination hash of the propagation node, or null to clear
+         */
+        suspend fun saveManualPropagationNode(nodeHash: String?) {
+            context.dataStore.edit { preferences ->
+                if (nodeHash != null) {
+                    preferences[PreferencesKeys.MANUAL_PROPAGATION_NODE] = nodeHash
+                } else {
+                    preferences.remove(PreferencesKeys.MANUAL_PROPAGATION_NODE)
+                }
+            }
+        }
+
+        /**
+         * Flow of the last used propagation node (fallback for auto-selection).
+         * Returns hex destination hash string or null if not set.
+         */
+        val lastPropagationNodeFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LAST_PROPAGATION_NODE]
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the last used propagation node (non-flow).
+         */
+        suspend fun getLastPropagationNode(): String? {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.LAST_PROPAGATION_NODE]
+            }.first()
+        }
+
+        /**
+         * Save the last used propagation node.
+         *
+         * @param nodeHash Hex destination hash of the propagation node
+         */
+        suspend fun saveLastPropagationNode(nodeHash: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LAST_PROPAGATION_NODE] = nodeHash
+            }
+        }
+
+        /**
+         * Flow of the auto-select propagation node setting.
+         * Defaults to true if not set.
+         */
+        val autoSelectPropagationNodeFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTO_SELECT_PROPAGATION_NODE] ?: true
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the auto-select propagation node setting (non-flow).
+         */
+        suspend fun getAutoSelectPropagationNode(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.AUTO_SELECT_PROPAGATION_NODE] ?: true
+            }.first()
+        }
+
+        /**
+         * Save the auto-select propagation node setting.
+         *
+         * @param enabled Whether to automatically select the nearest propagation node
+         */
+        suspend fun saveAutoSelectPropagationNode(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.AUTO_SELECT_PROPAGATION_NODE] = enabled
+            }
+        }
+
+        // Message retrieval preferences
+
+        /**
+         * Flow of the auto-retrieve enabled setting.
+         * When enabled, periodically syncs with the propagation node.
+         * Defaults to true if not set.
+         */
+        val autoRetrieveEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTO_RETRIEVE_ENABLED] ?: true
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the auto-retrieve enabled setting (non-flow).
+         */
+        suspend fun getAutoRetrieveEnabled(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.AUTO_RETRIEVE_ENABLED] ?: true
+            }.first()
+        }
+
+        /**
+         * Save the auto-retrieve enabled setting.
+         *
+         * @param enabled Whether to automatically retrieve messages from the propagation node
+         */
+        suspend fun saveAutoRetrieveEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.AUTO_RETRIEVE_ENABLED] = enabled
+            }
+        }
+
+        /**
+         * Flow of the retrieval interval in seconds.
+         * Defaults to 30 seconds if not set.
+         * Uses distinctUntilChanged to only emit when the interval actually changes,
+         * not when other DataStore values change (which would restart sync unnecessarily).
+         */
+        val retrievalIntervalSecondsFlow: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 30
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the retrieval interval in seconds (non-flow).
+         */
+        suspend fun getRetrievalIntervalSeconds(): Int {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 30
+            }.first()
+        }
+
+        /**
+         * Save the retrieval interval in seconds.
+         *
+         * @param seconds The interval in seconds (30, 60, 120, or 300)
+         */
+        suspend fun saveRetrievalIntervalSeconds(seconds: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] = seconds
+            }
+        }
+
+        /**
+         * Flow of the last sync timestamp (epoch milliseconds).
+         * Returns null if no sync has occurred yet.
+         */
+        val lastSyncTimestampFlow: Flow<Long?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP]
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the last sync timestamp (non-flow).
+         */
+        suspend fun getLastSyncTimestamp(): Long? {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP]
+            }.first()
+        }
+
+        /**
+         * Save the last sync timestamp.
+         *
+         * @param timestamp The timestamp in epoch milliseconds
+         */
+        suspend fun saveLastSyncTimestamp(timestamp: Long) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP] = timestamp
+            }
+        }
+
+        // Transport node preferences
+
+        /**
+         * Flow of the transport node enabled setting.
+         * When enabled (default), this device forwards traffic for the mesh network.
+         * When disabled, only handles its own traffic.
+         * Defaults to true if not set.
+         */
+        val transportNodeEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: true
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the transport node enabled setting (non-flow).
+         */
+        suspend fun getTransportNodeEnabled(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: true
+            }.first()
+        }
+
+        /**
+         * Save the transport node enabled setting.
+         *
+         * @param enabled Whether transport node is enabled
+         */
+        suspend fun saveTransportNodeEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] = enabled
+            }
+        }
+
+        // Location sharing preferences
+
+        /**
+         * Flow of the location sharing enabled setting.
+         * When disabled, no location sharing is allowed and all active sessions should be stopped.
+         * Defaults to true if not set.
+         */
+        val locationSharingEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LOCATION_SHARING_ENABLED] ?: true
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the location sharing enabled setting.
+         *
+         * @param enabled Whether location sharing is enabled
+         */
+        suspend fun saveLocationSharingEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LOCATION_SHARING_ENABLED] = enabled
+            }
+        }
+
+        /**
+         * Flow of the default sharing duration.
+         * Stores the SharingDuration enum name (e.g., "ONE_HOUR", "FOUR_HOURS").
+         * Defaults to "ONE_HOUR" if not set.
+         */
+        val defaultSharingDurationFlow: Flow<String> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.DEFAULT_SHARING_DURATION] ?: "ONE_HOUR"
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the default sharing duration.
+         *
+         * @param duration The SharingDuration enum name (e.g., "ONE_HOUR", "FOUR_HOURS")
+         */
+        suspend fun saveDefaultSharingDuration(duration: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.DEFAULT_SHARING_DURATION] = duration
+            }
+        }
+
+        /**
+         * Flow of the location precision radius in meters.
+         * 0 = Precise (no coarsening), >0 = coarsening radius in meters.
+         * Defaults to 0 (precise) if not set.
+         */
+        val locationPrecisionRadiusFlow: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LOCATION_PRECISION_RADIUS] ?: 0
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the location precision radius.
+         *
+         * @param radiusMeters 0 for precise, or coarsening radius in meters (100, 1000, 10000, etc.)
+         */
+        suspend fun saveLocationPrecisionRadius(radiusMeters: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LOCATION_PRECISION_RADIUS] = radiusMeters
             }
         }
 

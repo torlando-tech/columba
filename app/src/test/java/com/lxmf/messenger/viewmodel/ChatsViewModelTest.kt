@@ -5,13 +5,14 @@ import app.cash.turbine.test
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -69,17 +70,24 @@ class ChatsViewModelTest {
             unreadCount = 5,
         )
 
+    private lateinit var propagationNodeManager: PropagationNodeManager
+
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
         conversationRepository = mockk()
         contactRepository = mockk()
+        propagationNodeManager = mockk(relaxed = true)
 
         // Default: no conversations
         every { conversationRepository.getConversations() } returns flowOf(emptyList())
 
-        viewModel = ChatsViewModel(conversationRepository, contactRepository)
+        // Default: not syncing
+        every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
+        every { propagationNodeManager.manualSyncResult } returns MutableSharedFlow()
+
+        viewModel = ChatsViewModel(conversationRepository, contactRepository, propagationNodeManager)
     }
 
     @After
@@ -105,7 +113,7 @@ class ChatsViewModelTest {
             every { repository.getConversations() } returns flowOf(testConversations)
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk())
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
 
             // WhileSubscribed requires active collector - test() provides one
             newViewModel.conversations.test {
@@ -133,7 +141,7 @@ class ChatsViewModelTest {
             every { repository.getConversations() } returns flowOf(sortedConversations)
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk())
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
 
             newViewModel.conversations.test {
                 // Skip initial value, wait for actual data from repository
@@ -195,7 +203,7 @@ class ChatsViewModelTest {
             every { repository.getConversations() } returns conversationsFlow
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk())
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
             advanceUntilIdle()
 
             newViewModel.conversations.test {
@@ -233,7 +241,7 @@ class ChatsViewModelTest {
             every { repository.getConversations() } returns flowOf(conversations)
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk())
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
 
             newViewModel.conversations.test {
                 // Skip initial value, wait for actual data from repository
@@ -261,7 +269,7 @@ class ChatsViewModelTest {
             every { repository.getConversations() } returns flowOf(conversations)
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk())
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
 
             newViewModel.conversations.test {
                 // Skip initial value, wait for actual data from repository
@@ -281,10 +289,10 @@ class ChatsViewModelTest {
             // WhileSubscribed starts only when there's an active subscriber
             viewModel.conversations.test {
                 advanceUntilIdle()
-                
+
                 // Verify that getConversations is called when we subscribe
                 verify { conversationRepository.getConversations() }
-                
+
                 // Verify we receive initial empty state
                 assertEquals(emptyList<Conversation>(), awaitItem())
             }

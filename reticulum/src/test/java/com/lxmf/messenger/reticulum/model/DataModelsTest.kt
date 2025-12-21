@@ -1,6 +1,9 @@
 package com.lxmf.messenger.reticulum.model
 
+import com.lxmf.messenger.reticulum.protocol.ReceivedMessage
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
@@ -285,7 +288,7 @@ class DataModelsTest {
                     listOf(
                         InterfaceConfig.TCPClient(targetHost = "192.168.1.1", targetPort = 4242),
                         InterfaceConfig.UDP(listenPort = 4243),
-                        InterfaceConfig.RNode(port = "/dev/ttyUSB0"),
+                        InterfaceConfig.RNode(targetDeviceName = "RNode 1234"),
                         InterfaceConfig.AutoInterface(),
                     ),
                 logLevel = LogLevel.DEBUG,
@@ -347,5 +350,154 @@ class DataModelsTest {
         assertTrue(announce is PacketType)
         assertTrue(linkRequest is PacketType)
         assertTrue(proof is PacketType)
+    }
+
+    @Test
+    fun `ReticulumConfig enableTransport defaults to true`() {
+        val config =
+            ReticulumConfig(
+                storagePath = "/tmp/reticulum",
+                enabledInterfaces = emptyList(),
+            )
+
+        assertTrue(
+            "enableTransport should default to true",
+            config.enableTransport,
+        )
+    }
+
+    @Test
+    fun `ReticulumConfig enableTransport can be set to false`() {
+        val config =
+            ReticulumConfig(
+                storagePath = "/tmp/reticulum",
+                enabledInterfaces = emptyList(),
+                enableTransport = false,
+            )
+
+        assertFalse(
+            "enableTransport should be false when explicitly set",
+            config.enableTransport,
+        )
+    }
+
+    @Test
+    fun `ReticulumConfig enableTransport can be set to true explicitly`() {
+        val config =
+            ReticulumConfig(
+                storagePath = "/tmp/reticulum",
+                enabledInterfaces = emptyList(),
+                enableTransport = true,
+            )
+
+        assertTrue(
+            "enableTransport should be true when explicitly set",
+            config.enableTransport,
+        )
+    }
+
+    @Test
+    fun `ReticulumConfig with all options including enableTransport`() {
+        val config =
+            ReticulumConfig(
+                storagePath = "/tmp/reticulum",
+                enabledInterfaces =
+                    listOf(
+                        InterfaceConfig.AutoInterface(),
+                    ),
+                identityFilePath = "/path/to/identity",
+                displayName = "TestNode",
+                logLevel = LogLevel.DEBUG,
+                allowAnonymous = false,
+                preferOwnInstance = true,
+                rpcKey = "abc123",
+                enableTransport = false,
+            )
+
+        assertEquals("/tmp/reticulum", config.storagePath)
+        assertEquals(1, config.enabledInterfaces.size)
+        assertEquals("/path/to/identity", config.identityFilePath)
+        assertEquals("TestNode", config.displayName)
+        assertEquals(LogLevel.DEBUG, config.logLevel)
+        assertFalse(config.allowAnonymous)
+        assertTrue(config.preferOwnInstance)
+        assertEquals("abc123", config.rpcKey)
+        assertFalse(config.enableTransport)
+    }
+
+    @Test
+    fun `ReticulumConfig equality with enableTransport`() {
+        val config1 =
+            ReticulumConfig(
+                storagePath = "/tmp",
+                enabledInterfaces = emptyList(),
+                enableTransport = true,
+            )
+
+        val config2 =
+            ReticulumConfig(
+                storagePath = "/tmp",
+                enabledInterfaces = emptyList(),
+                enableTransport = true,
+            )
+
+        val config3 =
+            ReticulumConfig(
+                storagePath = "/tmp",
+                enabledInterfaces = emptyList(),
+                enableTransport = false,
+            )
+
+        assertEquals(config1, config2)
+        assertNotEquals(config1, config3)
+    }
+
+    // ========== ReceivedMessage Tests ==========
+
+    @Test
+    fun `ReceivedMessage with publicKey stores value correctly`() {
+        val publicKey = ByteArray(32) { it.toByte() }
+        val message =
+            ReceivedMessage(
+                messageHash = "abc123",
+                content = "Hello",
+                sourceHash = ByteArray(16) { it.toByte() },
+                destinationHash = ByteArray(16) { (it + 1).toByte() },
+                timestamp = 1234567890L,
+                fieldsJson = null,
+                publicKey = publicKey,
+            )
+
+        assertNotNull(message.publicKey)
+        assertArrayEquals(publicKey, message.publicKey)
+    }
+
+    @Test
+    fun `ReceivedMessage without publicKey has null value`() {
+        val message =
+            ReceivedMessage(
+                messageHash = "abc123",
+                content = "Hello",
+                sourceHash = ByteArray(16) { it.toByte() },
+                destinationHash = ByteArray(16) { (it + 1).toByte() },
+                timestamp = 1234567890L,
+            )
+
+        assertEquals(null, message.publicKey)
+    }
+
+    @Test
+    fun `ReceivedMessage publicKey defaults to null`() {
+        val message =
+            ReceivedMessage(
+                messageHash = "abc123",
+                content = "Hello",
+                sourceHash = ByteArray(16),
+                destinationHash = ByteArray(16),
+                timestamp = 0L,
+                fieldsJson = """{"6": "image_data"}""",
+            )
+
+        assertEquals(null, message.publicKey)
     }
 }

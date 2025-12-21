@@ -33,6 +33,15 @@ data class EnrichedContact(
     val isPinned: Boolean,
     // Identity resolution status
     val status: ContactStatus = ContactStatus.ACTIVE,
+    // Propagation node relay status
+    val isMyRelay: Boolean = false,
+    // Node type (from announces table) - "PEER", "NODE", "PROPAGATION_NODE"
+    val nodeType: String? = null,
+    // Location sharing status (from received_locations table)
+    // True if this contact is currently sharing their location with us
+    val isReceivingLocationFrom: Boolean = false,
+    // When their location share expires (null = indefinite)
+    val locationSharingExpiresAt: Long? = null,
 ) {
     /**
      * Parse tags from JSON string to list
@@ -62,7 +71,9 @@ data class EnrichedContact(
         if (publicKey != null) {
             if (other.publicKey == null) return false
             if (!publicKey.contentEquals(other.publicKey)) return false
-        } else if (other.publicKey != null) return false
+        } else if (other.publicKey != null) {
+            return false
+        }
         if (displayName != other.displayName) return false
         if (customNickname != other.customNickname) return false
         if (announceName != other.announceName) return false
@@ -78,6 +89,10 @@ data class EnrichedContact(
         if (addedVia != other.addedVia) return false
         if (isPinned != other.isPinned) return false
         if (status != other.status) return false
+        if (isMyRelay != other.isMyRelay) return false
+        if (nodeType != other.nodeType) return false
+        if (isReceivingLocationFrom != other.isReceivingLocationFrom) return false
+        if (locationSharingExpiresAt != other.locationSharingExpiresAt) return false
 
         return true
     }
@@ -100,6 +115,10 @@ data class EnrichedContact(
         result = 31 * result + addedVia.hashCode()
         result = 31 * result + isPinned.hashCode()
         result = 31 * result + status.hashCode()
+        result = 31 * result + isMyRelay.hashCode()
+        result = 31 * result + (nodeType?.hashCode() ?: 0)
+        result = 31 * result + isReceivingLocationFrom.hashCode()
+        result = 31 * result + (locationSharingExpiresAt?.hashCode() ?: 0)
         return result
     }
 }

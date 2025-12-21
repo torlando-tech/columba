@@ -415,6 +415,7 @@ class BLEInterface(Interface):
         self.driver.on_device_disconnected = self._device_disconnected_callback
         self.driver.on_error = self._error_callback
         self.driver.on_duplicate_identity_detected = self._check_duplicate_identity
+        self.driver.on_address_changed = self._address_changed_callback
 
         # Redirect Python logging to RNS logging for proper formatting
         self._setup_logging_redirect()
@@ -1077,6 +1078,49 @@ class BLEInterface(Interface):
                     if frag_key in self.reassemblers:
                         del self.reassemblers[frag_key]
 
+    def _address_changed_callback(self, old_address: str, new_address: str, identity_hash: str):
+        """
+        Driver callback: Handle address change during dual connection deduplication.
+
+        When Kotlin deduplicates a dual connection (same identity connected as both
+        central and peripheral), it closes one direction and notifies Python via
+        this callback so Python can update its address mappings without detaching
+        the peer interface.
+
+        Args:
+            old_address: The address that was closed/removed
+            new_address: The address that remains active
+            identity_hash: The 32-char hex identity hash for this peer
+        """
+        RNS.log(
+            f"{self} Address changed for {identity_hash[:8]}: {old_address} -> {new_address}",
+            RNS.LOG_INFO
+        )
+
+        # Update identity_to_address mapping to point to remaining address
+        if identity_hash in self.identity_to_address:
+            self.identity_to_address[identity_hash] = new_address
+            RNS.log(f"{self} Updated identity_to_address[{identity_hash[:8]}] = {new_address}", RNS.LOG_DEBUG)
+
+        # Update address_to_identity mapping - add new address
+        peer_identity = self.address_to_identity.get(old_address)
+        if peer_identity:
+            self.address_to_identity[new_address] = peer_identity
+            RNS.log(f"{self} Added address_to_identity[{new_address}] for identity {identity_hash[:8]}", RNS.LOG_DEBUG)
+            # Keep old mapping for fallback resolution during transition
+
+        # Update fragmenter/reassembler keys - move from old to new address
+        if peer_identity:
+            old_key = self._get_fragmenter_key(peer_identity, old_address)
+            new_key = self._get_fragmenter_key(peer_identity, new_address)
+            with self.frag_lock:
+                if old_key in self.fragmenters:
+                    self.fragmenters[new_key] = self.fragmenters.pop(old_key)
+                    RNS.log(f"{self} Moved fragmenter from {old_key} to {new_key}", RNS.LOG_DEBUG)
+                if old_key in self.reassemblers:
+                    self.reassemblers[new_key] = self.reassemblers.pop(old_key)
+                    RNS.log(f"{self} Moved reassembler from {old_key} to {new_key}", RNS.LOG_DEBUG)
+
     def _cleanup_stale_interface(self, identity_hash: str, old_address: str):
         """
         Clean up stale interface after MAC rotation.
@@ -1348,7 +1392,11 @@ class BLEInterface(Interface):
                             RNS.log(f"{self} [v2.2] MAC rotation: {identity_hash[:8]} moved from {existing_address[-8:]} to {address[-8:]}, cleaning up stale interface",
                                     RNS.LOG_INFO)
                             self._cleanup_stale_interface(identity_hash, existing_address)
-                            # Fall through to connect to new MAC
+                            # Bypass MAC sorting - we must reconnect after MAC rotation
+                            # regardless of which device has the higher MAC address
+                            score = self._score_peer(peer)
+                            scored_peers.append((score, peer))
+                            continue  # Skip remaining checks, peer already added
                     elif existing_address == address:
                         # Same address, interface exists - skip
                         RNS.log(f"{self} [v2.2] skipping {peer.name} - interface exists for identity {identity_hash[:8]}",

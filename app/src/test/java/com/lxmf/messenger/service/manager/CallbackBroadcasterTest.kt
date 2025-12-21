@@ -94,4 +94,42 @@ class CallbackBroadcasterTest {
         // This should not throw even if callback throws
         broadcaster.setServiceBound(true)
     }
+
+    // ========== Event-Driven Broadcast Tests ==========
+
+    @Test
+    fun `broadcastBleConnectionChange does not throw when no callbacks registered`() {
+        // Should not throw even with no callbacks
+        broadcaster.broadcastBleConnectionChange("""[{"address": "AA:BB:CC:DD:EE:FF"}]""")
+    }
+
+    @Test
+    fun `broadcastDebugInfoChange does not throw when no callbacks registered`() {
+        // Should not throw even with no callbacks
+        broadcaster.broadcastDebugInfoChange("""{"initialized": true}""")
+    }
+
+    @Test
+    fun `broadcastInterfaceStatusChange does not throw when no callbacks registered`() {
+        // Should not throw even with no callbacks
+        broadcaster.broadcastInterfaceStatusChange("""{"Interface1": true}""")
+    }
+
+    @Test
+    fun `broadcastBleConnectionChange handles empty JSON`() {
+        // Should not throw with empty JSON
+        broadcaster.broadcastBleConnectionChange("[]")
+    }
+
+    @Test
+    fun `broadcastDebugInfoChange handles empty JSON`() {
+        // Should not throw with empty JSON
+        broadcaster.broadcastDebugInfoChange("{}")
+    }
+
+    @Test
+    fun `broadcastInterfaceStatusChange handles empty JSON`() {
+        // Should not throw with empty JSON
+        broadcaster.broadcastInterfaceStatusChange("{}")
+    }
 }

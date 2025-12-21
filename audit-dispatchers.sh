@@ -69,14 +69,17 @@ DATA_SRC="data/src/main/java"
 section "1. Checking for runBlocking in Production Code"
 
 # Check for runBlocking (should be 0 in production code after Phase 1)
-# Exclude comments by filtering out lines with // before runBlocking
+# Allow exceptions marked with "// THREADING: allowed" inline comment
+# Ignore import statements and pure comment lines
 RUNBLOCKING_MATCHES=$(find $APP_SRC $RETICULUM_SRC $DATA_SRC -name "*.kt" 2>/dev/null | \
     grep -v -E "(test|Test|build)" | \
     xargs grep -n "runBlocking" 2>/dev/null | \
-    grep -v "//" || true)
+    grep -v "^[^:]*:.*import " | \
+    grep -v "^[^:]*:[0-9]*:[[:space:]]*//" | \
+    grep -v "THREADING: allowed" || true)
 
 if [ -z "$RUNBLOCKING_MATCHES" ]; then
-    success "No runBlocking found in production code"
+    success "No runBlocking found in production code (or all instances are allowed)"
 else
     while IFS= read -r line; do
         violation "runBlocking found: $line"

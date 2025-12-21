@@ -6,14 +6,15 @@ import org.json.JSONObject
  * Extension function to convert InterfaceConfig to a JSON string.
  * Used by InterfaceRepository and InterfaceDatabase for serialization.
  */
+@Suppress("CyclomaticComplexMethod")
 fun InterfaceConfig.toJsonString(): String {
     return when (this) {
         is InterfaceConfig.AutoInterface ->
             JSONObject().apply {
                 put("group_id", groupId)
                 put("discovery_scope", discoveryScope)
-                put("discovery_port", discoveryPort)
-                put("data_port", dataPort)
+                discoveryPort?.let { put("discovery_port", it) }
+                dataPort?.let { put("data_port", it) }
                 put("mode", mode)
             }.toString()
 
@@ -29,13 +30,19 @@ fun InterfaceConfig.toJsonString(): String {
 
         is InterfaceConfig.RNode ->
             JSONObject().apply {
-                put("port", port)
+                put("target_device_name", targetDeviceName)
+                put("connection_mode", connectionMode)
+                tcpHost?.let { put("tcp_host", it) }
+                put("tcp_port", tcpPort)
                 put("frequency", frequency)
                 put("bandwidth", bandwidth)
                 put("tx_power", txPower)
                 put("spreading_factor", spreadingFactor)
                 put("coding_rate", codingRate)
+                stAlock?.let { put("st_alock", it) }
+                ltAlock?.let { put("lt_alock", it) }
                 put("mode", mode)
+                put("enable_framebuffer", enableFramebuffer)
             }.toString()
 
         is InterfaceConfig.UDP ->

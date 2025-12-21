@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -23,12 +24,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Chat
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MarkEmailUnread
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
@@ -36,6 +35,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,27 +43,21 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,10 +65,11 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.repository.Conversation
+import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.Identicon
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
+import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.viewmodel.ChatsViewModel
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -88,18 +83,30 @@ fun ChatsScreen(
 ) {
     val conversations by viewModel.conversations.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
 
     // Delete dialog state (context menu state is now per-card)
     var selectedConversation by remember { mutableStateOf<Conversation?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    // Snackbar state
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    // Context for Toast notifications
+    val context = LocalContext.current
+
+    // Observe manual sync results and show Toast
+    LaunchedEffect(Unit) {
+        viewModel.manualSyncResult.collect { result ->
+            val message =
+                when (result) {
+                    is SyncResult.Success -> "Sync complete"
+                    is SyncResult.Error -> "Sync failed: ${result.message}"
+                    is SyncResult.NoRelay -> "No relay configured"
+                }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             SearchableTopAppBar(
                 title = "Chats",
@@ -109,6 +116,24 @@ fun ChatsScreen(
                 onSearchQueryChange = { viewModel.searchQuery.value = it },
                 onSearchToggle = { isSearching = !isSearching },
                 searchPlaceholder = "Search conversations...",
+                additionalActions = {
+                    IconButton(
+                        onClick = { viewModel.syncFromPropagationNode() },
+                        enabled = !isSyncing,
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Sync messages",
+                            )
+                        }
+                    }
+                },
             )
         },
     ) { paddingValues ->
@@ -145,6 +170,23 @@ fun ChatsScreen(
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 showMenu = true
                             },
+                            onStarClick = {
+                                if (isSaved) {
+                                    viewModel.removeFromContacts(conversation.peerHash)
+                                    Toast.makeText(
+                                        context,
+                                        "Removed ${conversation.peerName} from Contacts",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                } else {
+                                    viewModel.saveToContacts(conversation)
+                                    Toast.makeText(
+                                        context,
+                                        "Saved ${conversation.peerName} to Contacts",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            },
                         )
 
                         // Context menu anchored to this card
@@ -155,32 +197,17 @@ fun ChatsScreen(
                             onSaveToContacts = {
                                 viewModel.saveToContacts(conversation)
                                 showMenu = false
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        message = "Saved ${conversation.peerName} to Contacts",
-                                        duration = SnackbarDuration.Short,
-                                    )
-                                }
+                                Toast.makeText(context, "Saved ${conversation.peerName} to Contacts", Toast.LENGTH_SHORT).show()
                             },
                             onRemoveFromContacts = {
                                 viewModel.removeFromContacts(conversation.peerHash)
                                 showMenu = false
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        message = "Removed ${conversation.peerName} from Contacts",
-                                        duration = SnackbarDuration.Short,
-                                    )
-                                }
+                                Toast.makeText(context, "Removed ${conversation.peerName} from Contacts", Toast.LENGTH_SHORT).show()
                             },
                             onMarkAsUnread = {
                                 viewModel.markAsUnread(conversation.peerHash)
                                 showMenu = false
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        message = "Marked as unread",
-                                        duration = SnackbarDuration.Short,
-                                    )
-                                }
+                                Toast.makeText(context, "Marked as unread", Toast.LENGTH_SHORT).show()
                             },
                             onDeleteConversation = {
                                 showMenu = false
@@ -212,12 +239,7 @@ fun ChatsScreen(
                     viewModel.deleteConversation(conversationToDelete.peerHash)
                     showDeleteDialog = false
                     selectedConversation = null
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "Deleted conversation with $deletedName",
-                            duration = SnackbarDuration.Short,
-                        )
-                    }
+                    Toast.makeText(context, "Deleted conversation with $deletedName", Toast.LENGTH_SHORT).show()
                 },
                 onDismiss = {
                     showDeleteDialog = false
@@ -234,6 +256,7 @@ fun ConversationCard(
     isSaved: Boolean = false,
     onClick: () -> Unit = {},
     onLongPress: () -> Unit = {},
+    onStarClick: () -> Unit = {},
 ) {
     Card(
         modifier =
@@ -250,99 +273,112 @@ fun ConversationCard(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
             ),
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            // Identicon (reuse from AnnounceStreamScreen)
-            Box(modifier = Modifier.align(Alignment.CenterVertically)) {
-                Identicon(
-                    hash = conversation.peerPublicKey ?: conversation.peerHash.hexStringToByteArray(),
-                    size = 56.dp,
-                )
-                // Unread badge (top-right)
-                if (conversation.unreadCount > 0) {
-                    Badge(
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .offset(x = 4.dp, y = (-4).dp),
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    ) {
-                        Text(
-                            text = if (conversation.unreadCount > 99) "99+" else conversation.unreadCount.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-                }
-                // Saved contact badge (bottom-right)
-                if (isSaved) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .align(Alignment.BottomEnd)
-                                .offset(x = 4.dp, y = 4.dp)
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.tertiaryContainer),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "Saved contact",
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier =
-                                Modifier
-                                    .size(16.dp)
-                                    .align(Alignment.Center),
-                        )
-                    }
-                }
-            }
-
-            // Conversation info
-            Column(
+        Box {
+            Row(
                 modifier =
                     Modifier
-                        .weight(1f)
-                        .align(Alignment.CenterVertically),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .padding(end = 32.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Peer name
-                Text(
-                    text = conversation.peerName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (conversation.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // Identicon (reuse from AnnounceStreamScreen)
+                Box(modifier = Modifier.align(Alignment.CenterVertically)) {
+                    Identicon(
+                        hash = conversation.peerPublicKey ?: conversation.peerHash.hexStringToByteArray(),
+                        size = 56.dp,
+                    )
+                    // Unread badge (top-right)
+                    if (conversation.unreadCount > 0) {
+                        Badge(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 4.dp, y = (-4).dp),
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ) {
+                            Text(
+                                text = if (conversation.unreadCount > 99) "99+" else conversation.unreadCount.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                    // Saved contact badge (bottom-right)
+                    if (isSaved) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = 4.dp, y = 4.dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.tertiaryContainer),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = "Saved contact",
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier =
+                                    Modifier
+                                        .size(16.dp)
+                                        .align(Alignment.Center),
+                            )
+                        }
+                    }
+                }
 
-                // Last message preview
+                // Conversation info
+                Column(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .align(Alignment.CenterVertically),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    // Peer name
+                    Text(
+                        text = conversation.peerName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = if (conversation.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+
+                    // Last message preview
+                    Text(
+                        text = conversation.lastMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color =
+                            if (conversation.unreadCount > 0) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                // Timestamp
                 Text(
-                    text = conversation.lastMessage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color =
-                        if (conversation.unreadCount > 0) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    text = formatTimestamp(conversation.lastMessageTimestamp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.Top),
                 )
             }
 
-            // Timestamp
-            Text(
-                text = formatTimestamp(conversation.lastMessageTimestamp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.Top),
+            // Star button overlay
+            StarToggleButton(
+                isStarred = isSaved,
+                onClick = onStarClick,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp),
             )
         }
     }

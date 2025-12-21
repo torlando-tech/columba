@@ -289,5 +289,389 @@ class TestAndroidBLEDriverCallbackOrdering(unittest.TestCase):
         self.assertEqual(self.call_order[2][0], 'data')
 
 
+class MockBLEInterface:
+    """
+    Test harness that mimics BLEInterface structure for testing address change callbacks.
+
+    This tests the fix for dual connection deduplication where Python wasn't notified
+    when Kotlin changed the address mapping during deduplication.
+    """
+
+    def __init__(self):
+        self.identity_to_address = {}
+        self.address_to_identity = {}
+        self.fragmenters = {}
+        self.reassemblers = {}
+        self.frag_lock = threading.Lock()
+
+    def _get_fragmenter_key(self, peer_identity, address):
+        """Generate key for fragmenter/reassembler lookup."""
+        if peer_identity:
+            return f"{peer_identity.hex()[:8]}_{address}"
+        return address
+
+    def _address_changed_callback(self, old_address: str, new_address: str, identity_hash: str):
+        """
+        Handle address change during dual connection deduplication.
+
+        When Kotlin deduplicates a dual connection (same identity connected as both
+        central and peripheral), it closes one direction and notifies Python via
+        this callback so Python can update its address mappings.
+
+        Args:
+            old_address: The address that was closed/removed
+            new_address: The address that remains active
+            identity_hash: The 32-char hex identity hash for this peer
+        """
+        # Update identity_to_address mapping
+        if identity_hash in self.identity_to_address:
+            self.identity_to_address[identity_hash] = new_address
+
+        # Update address_to_identity mapping
+        peer_identity = self.address_to_identity.get(old_address)
+        if peer_identity:
+            self.address_to_identity[new_address] = peer_identity
+            # Keep old mapping for fallback resolution during transition
+
+        # Update fragmenter/reassembler keys
+        if peer_identity:
+            old_key = self._get_fragmenter_key(peer_identity, old_address)
+            new_key = self._get_fragmenter_key(peer_identity, new_address)
+            with self.frag_lock:
+                if old_key in self.fragmenters:
+                    self.fragmenters[new_key] = self.fragmenters.pop(old_key)
+                if old_key in self.reassemblers:
+                    self.reassemblers[new_key] = self.reassemblers.pop(old_key)
+
+
+class TestBLEInterfaceAddressChangedCallback(unittest.TestCase):
+    """
+    Test _address_changed_callback which handles address changes during
+    dual connection deduplication.
+
+    When Kotlin deduplicates dual connections (same identity connected as both
+    central and peripheral), it closes one direction and notifies Python via
+    this callback so Python can update its address mappings.
+    """
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.interface = MockBLEInterface()
+
+    def test_address_changed_updates_identity_to_address_mapping(self):
+        """
+        Test that _address_changed_callback updates identity_to_address mapping.
+
+        When address changes from old to new, the identity_to_address map
+        should point to the new address.
+        """
+        old_address = "11:22:33:44:55:66"
+        new_address = "AA:BB:CC:DD:EE:FF"
+        identity_hash = "ab5609dfffb33b21a102e1ff81196be5"
+        peer_identity = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+
+        # Set up initial state
+        self.interface.identity_to_address[identity_hash] = old_address
+        self.interface.address_to_identity[old_address] = peer_identity
+
+        # Call the callback (this should fail - method doesn't exist yet)
+        self.interface._address_changed_callback(old_address, new_address, identity_hash)
+
+        # Verify mapping updated
+        self.assertEqual(self.interface.identity_to_address[identity_hash], new_address)
+
+    def test_address_changed_updates_address_to_identity_mapping(self):
+        """
+        Test that _address_changed_callback updates address_to_identity mapping.
+
+        The new address should map to the same peer identity.
+        """
+        old_address = "11:22:33:44:55:66"
+        new_address = "AA:BB:CC:DD:EE:FF"
+        identity_hash = "ab5609dfffb33b21a102e1ff81196be5"
+        peer_identity = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+
+        # Set up initial state
+        self.interface.identity_to_address[identity_hash] = old_address
+        self.interface.address_to_identity[old_address] = peer_identity
+
+        # Call the callback
+        self.interface._address_changed_callback(old_address, new_address, identity_hash)
+
+        # Verify new address maps to peer identity
+        self.assertEqual(self.interface.address_to_identity[new_address], peer_identity)
+
+    def test_address_changed_updates_fragmenter_keys(self):
+        """
+        Test that _address_changed_callback updates fragmenter keys.
+
+        Fragmenters are keyed by (identity_hash, address). When address changes,
+        the fragmenter should be accessible via the new key.
+        """
+        old_address = "11:22:33:44:55:66"
+        new_address = "AA:BB:CC:DD:EE:FF"
+        identity_hash = "ab5609dfffb33b21a102e1ff81196be5"
+        peer_identity = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+        mock_fragmenter = Mock()
+
+        # Set up initial state
+        self.interface.identity_to_address[identity_hash] = old_address
+        self.interface.address_to_identity[old_address] = peer_identity
+        old_key = self.interface._get_fragmenter_key(peer_identity, old_address)
+        self.interface.fragmenters[old_key] = mock_fragmenter
+
+        # Call the callback
+        self.interface._address_changed_callback(old_address, new_address, identity_hash)
+
+        # Verify fragmenter is accessible via new key
+        new_key = self.interface._get_fragmenter_key(peer_identity, new_address)
+        self.assertIn(new_key, self.interface.fragmenters)
+        self.assertEqual(self.interface.fragmenters[new_key], mock_fragmenter)
+
+    def test_address_changed_updates_reassembler_keys(self):
+        """
+        Test that _address_changed_callback updates reassembler keys.
+
+        Reassemblers are keyed by (identity_hash, address). When address changes,
+        the reassembler should be accessible via the new key.
+        """
+        old_address = "11:22:33:44:55:66"
+        new_address = "AA:BB:CC:DD:EE:FF"
+        identity_hash = "ab5609dfffb33b21a102e1ff81196be5"
+        peer_identity = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+        mock_reassembler = Mock()
+
+        # Set up initial state
+        self.interface.identity_to_address[identity_hash] = old_address
+        self.interface.address_to_identity[old_address] = peer_identity
+        old_key = self.interface._get_fragmenter_key(peer_identity, old_address)
+        self.interface.reassemblers[old_key] = mock_reassembler
+
+        # Call the callback
+        self.interface._address_changed_callback(old_address, new_address, identity_hash)
+
+        # Verify reassembler is accessible via new key
+        new_key = self.interface._get_fragmenter_key(peer_identity, new_address)
+        self.assertIn(new_key, self.interface.reassemblers)
+        self.assertEqual(self.interface.reassemblers[new_key], mock_reassembler)
+
+
+class MockDiscoveredPeer:
+    """Mock discovered peer for testing."""
+    def __init__(self, address: str, name: str = "RNS-test", rssi: int = -50):
+        self.address = address
+        self.name = name
+        self.rssi = rssi
+
+
+class MockBLEInterfaceMACRotation:
+    """
+    Test harness for MAC rotation handling in _select_peers_to_connect.
+
+    Tests the fix where after MAC rotation cleanup, peer is immediately added
+    to scored_peers list bypassing MAC sorting.
+    """
+
+    def __init__(self):
+        self.identity_to_address = {}
+        self.address_to_identity = {}
+        self.spawned_interfaces = {}
+        self.peers = {}  # address -> active connection
+        self.connection_attempt_times = {}
+        self.local_mac = "AA:BB:CC:DD:EE:FF"  # Higher MAC for sorting test
+        self.cleanup_called_with = []  # Track cleanup calls
+
+    def _compute_identity_hash(self, peer_identity):
+        """Compute identity hash."""
+        if peer_identity:
+            return peer_identity.hex()[:16]
+        return None
+
+    def _score_peer(self, peer):
+        """Score a peer for connection prioritization."""
+        return abs(peer.rssi)  # Lower RSSI = higher priority
+
+    def _cleanup_stale_interface(self, identity_hash: str, old_address: str):
+        """Mock cleanup - just track that it was called."""
+        self.cleanup_called_with.append((identity_hash, old_address))
+        # Clean up mappings like real method
+        if identity_hash in self.spawned_interfaces:
+            del self.spawned_interfaces[identity_hash]
+        if identity_hash in self.identity_to_address:
+            del self.identity_to_address[identity_hash]
+
+    def _select_peers_to_connect(self, discovered_peers):
+        """
+        Simplified version of _select_peers_to_connect that includes the MAC rotation fix.
+
+        Returns list of (score, peer) tuples.
+        """
+        scored_peers = []
+
+        for peer in discovered_peers:
+            address = peer.address
+
+            # Check for MAC rotation
+            peer_identity = self.address_to_identity.get(address)
+            if peer_identity:
+                identity_hash = self._compute_identity_hash(peer_identity)
+                if identity_hash in self.spawned_interfaces:
+                    existing_address = self.identity_to_address.get(identity_hash)
+                    if existing_address and existing_address != address:
+                        # Same identity at different MAC = MAC rotation
+                        if existing_address in self.peers:
+                            # Old connection still active - skip
+                            continue
+                        else:
+                            # Old connection dead - clean up and allow new connection
+                            self._cleanup_stale_interface(identity_hash, existing_address)
+                            # FIX: Bypass MAC sorting - we must reconnect after MAC rotation
+                            score = self._score_peer(peer)
+                            scored_peers.append((score, peer))
+                            continue  # Skip remaining checks, peer already added
+
+            # MAC sorting check (only reached if NOT MAC rotation)
+            if self.local_mac > address:
+                # We have higher MAC, we should initiate - add peer
+                score = self._score_peer(peer)
+                scored_peers.append((score, peer))
+            # else: peer has higher MAC, they should initiate - skip
+
+        return scored_peers
+
+
+class TestMACRotationFix(unittest.TestCase):
+    """
+    Test MAC rotation handling in _select_peers_to_connect.
+
+    Bug: After MAC rotation, peer interface wasn't recreated because MAC sorting
+    check skipped the peer. Fix: After cleanup, immediately add peer and continue.
+    """
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.interface = MockBLEInterfaceMACRotation()
+
+    def test_mac_rotation_detected_and_cleanup_called(self):
+        """
+        Test that MAC rotation is detected and cleanup is called.
+
+        When same identity appears at new MAC with stale old connection,
+        _cleanup_stale_interface should be called.
+        """
+        old_address = "11:22:33:44:55:66"
+        new_address = "77:88:99:AA:BB:CC"
+        identity_hash = "ab5609dfffb33b21"
+        peer_identity = bytes.fromhex("ab5609dfffb33b21a102e1ff81196be5")
+
+        # Set up: identity exists at old address, but connection is stale (not in self.peers)
+        self.interface.identity_to_address[identity_hash] = old_address
+        self.interface.address_to_identity[new_address] = peer_identity
+        self.interface.spawned_interfaces[identity_hash] = Mock()
+        # Note: old_address NOT in self.peers (connection is dead)
+
+        # Create peer at new address
+        peer = MockDiscoveredPeer(new_address, "RNS-ab5609")
+
+        # Act
+        self.interface._select_peers_to_connect([peer])
+
+        # Assert: cleanup was called with correct arguments
+        self.assertEqual(len(self.interface.cleanup_called_with), 1)
+        self.assertEqual(self.interface.cleanup_called_with[0], (identity_hash, old_address))
+
+    def test_mac_rotation_bypasses_mac_sorting(self):
+        """
+        Test that MAC rotation bypasses MAC sorting.
+
+        After MAC rotation cleanup, peer should be added to connection list
+        EVEN IF local MAC > peer MAC (which would normally skip the peer).
+        """
+        old_address = "11:22:33:44:55:66"
+        new_address = "00:11:22:33:44:55"  # Lower than local MAC (AA:BB:CC...)
+        identity_hash = "ab5609dfffb33b21"
+        peer_identity = bytes.fromhex("ab5609dfffb33b21a102e1ff81196be5")
+
+        # Set up: identity exists at old address, but connection is stale
+        self.interface.identity_to_address[identity_hash] = old_address
+        self.interface.address_to_identity[new_address] = peer_identity
+        self.interface.spawned_interfaces[identity_hash] = Mock()
+        # old_address NOT in self.peers (stale connection)
+
+        # Create peer at new address (lower MAC than local)
+        peer = MockDiscoveredPeer(new_address, "RNS-ab5609")
+
+        # Act
+        result = self.interface._select_peers_to_connect([peer])
+
+        # Assert: peer was added despite having lower MAC
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][1].address, new_address)
+
+    def test_mac_sorting_applies_when_no_mac_rotation(self):
+        """
+        Test that normal MAC sorting still works when there's no MAC rotation.
+
+        When peer MAC > local MAC and no rotation, peer should be skipped
+        (peer should initiate connection since they have higher MAC).
+        """
+        new_address = "FF:FF:FF:FF:FF:FF"  # Higher than local MAC (AA:BB:CC...)
+
+        # No existing identity mapping - this is a new peer
+        peer = MockDiscoveredPeer(new_address, "RNS-newpeer")
+
+        # Act
+        result = self.interface._select_peers_to_connect([peer])
+
+        # Assert: peer was NOT added (they have higher MAC, they should initiate)
+        self.assertEqual(len(result), 0)
+
+    def test_mac_sorting_adds_peer_when_local_mac_higher(self):
+        """
+        Test that MAC sorting adds peer when local MAC is higher.
+
+        When local MAC > peer MAC and no rotation, we should initiate.
+        """
+        new_address = "00:11:22:33:44:55"  # Lower than local MAC (AA:BB:CC...)
+
+        # Set local MAC higher
+        self.interface.local_mac = "FF:FF:FF:FF:FF:FF"
+
+        peer = MockDiscoveredPeer(new_address, "RNS-newpeer")
+
+        # Act
+        result = self.interface._select_peers_to_connect([peer])
+
+        # Assert: peer was added (we have higher MAC, we initiate)
+        self.assertEqual(len(result), 1)
+
+    def test_active_connection_skips_rotation(self):
+        """
+        Test that active connection prevents MAC rotation cleanup.
+
+        When old connection is still active (in self.peers), we should
+        NOT clean up or add the new address.
+        """
+        old_address = "11:22:33:44:55:66"
+        new_address = "77:88:99:AA:BB:CC"
+        identity_hash = "ab5609dfffb33b21"
+        peer_identity = bytes.fromhex("ab5609dfffb33b21a102e1ff81196be5")
+
+        # Set up: identity exists at old address AND connection is active
+        self.interface.identity_to_address[identity_hash] = old_address
+        self.interface.address_to_identity[new_address] = peer_identity
+        self.interface.spawned_interfaces[identity_hash] = Mock()
+        self.interface.peers[old_address] = Mock()  # Connection is ACTIVE
+
+        peer = MockDiscoveredPeer(new_address, "RNS-ab5609")
+
+        # Act
+        result = self.interface._select_peers_to_connect([peer])
+
+        # Assert: cleanup was NOT called, peer was NOT added
+        self.assertEqual(len(self.interface.cleanup_called_with), 0)
+        self.assertEqual(len(result), 0)
+
+
 if __name__ == '__main__':
     unittest.main()

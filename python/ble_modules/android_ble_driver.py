@@ -375,6 +375,7 @@ class AndroidBLEDriver(BLEDriverInterface):
         self.kotlin_bridge.setOnDataReceived(lambda address, data: self._handle_data_received(address, data))
         self.kotlin_bridge.setOnIdentityReceived(lambda address, identity_hash: self._handle_identity_received(address, identity_hash))
         self.kotlin_bridge.setOnMtuNegotiated(lambda address, mtu: self._handle_mtu_negotiated(address, mtu))
+        self.kotlin_bridge.setOnAddressChanged(lambda old_addr, new_addr, identity_hash: self._handle_address_changed(old_addr, new_addr, identity_hash))
 
         RNS.log("AndroidBLEDriver: Kotlin callbacks configured", RNS.LOG_DEBUG)
 
@@ -473,6 +474,30 @@ class AndroidBLEDriver(BLEDriverInterface):
 
         except Exception as e:
             RNS.log(f"AndroidBLEDriver: Error handling disconnected: {e}", RNS.LOG_ERROR)
+
+    def _handle_address_changed(self, old_address: str, new_address: str, identity_hash: str):
+        """Handle address change event from Kotlin during dual connection deduplication.
+
+        When Kotlin deduplicates a dual connection (same identity connected as both
+        central and peripheral), it closes one direction and notifies Python via
+        this callback so Python can update its address mappings.
+
+        Args:
+            old_address: The address that was closed/removed
+            new_address: The address that remains active
+            identity_hash: The 32-char hex identity hash for this peer
+        """
+        try:
+            RNS.log(
+                f"AndroidBLEDriver: Address changed for {identity_hash[:8]}: {old_address} -> {new_address}",
+                RNS.LOG_INFO
+            )
+
+            if self.on_address_changed:
+                self.on_address_changed(old_address, new_address, identity_hash)
+
+        except Exception as e:
+            RNS.log(f"AndroidBLEDriver: Error handling address changed: {e}", RNS.LOG_ERROR)
 
     def _handle_data_received(self, address: str, data: bytes):
         """Handle data received event from Kotlin (already defragmented).

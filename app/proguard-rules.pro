@@ -78,6 +78,12 @@
 -keep class com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge { *; }
 -keepclassmembers class com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge { *; }
 
+# ===== RNode Bridge =====
+# KotlinRNodeBridge is called from Python via Chaquopy for RNode LoRa interface
+# Python expects specific method names (connect, disconnect, send, etc.)
+-keep class com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge { *; }
+-keepclassmembers class com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge { *; }
+
 # ===== MessagePack Serialization =====
 # MessagePack uses reflection to load buffer implementations
 # Without these rules, LXMF message deserialization crashes

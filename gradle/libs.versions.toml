@@ -10,7 +10,7 @@ navigation = "2.8.4"
 chaquopy = "16.0.0"
 msgpack = "0.9.8"
 dataStore = "1.1.1"
-paging = "3.3.5"
+paging = "3.3.6"
 zxing = "3.5.3"
 cameraX = "1.4.1"
 ktlint = "12.1.1"
@@ -76,11 +76,11 @@ cameraX-view = { module = "androidx.camera:camera-view", version.ref = "cameraX"
 # Testing
 junit = { module = "junit:junit", version = "4.13.2" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version = "5.11.4" }
-mockk = { module = "io.mockk:mockk", version = "1.14.6" }
-mockk-android = { module = "io.mockk:mockk-android", version = "1.14.6" }
+mockk = { module = "io.mockk:mockk", version = "1.14.7" }
+mockk-android = { module = "io.mockk:mockk-android", version = "1.14.7" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.1" }
 arch-core-testing = { module = "androidx.arch.core:core-testing", version = "2.2.0" }
-robolectric = { module = "org.robolectric:robolectric", version = "4.13" }
+robolectric = { module = "org.robolectric:robolectric", version = "4.16" }
 junit-android = { module = "androidx.test.ext:junit", version = "1.2.1" }
 espresso = { module = "androidx.test.espresso:espresso-core", version = "3.6.1" }
 test-orchestrator = { module = "androidx.test:orchestrator", version = "1.4.2" }

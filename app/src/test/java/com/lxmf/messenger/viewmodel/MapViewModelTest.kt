@@ -12,6 +12,7 @@ import com.lxmf.messenger.test.TestFactories
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -537,6 +538,271 @@ class MapViewModelTest {
         )
 
         assertEquals(MarkerState.STALE, state)
+    }
+
+    // ===== startSharing Tests =====
+
+    @Test
+    fun `startSharing calls locationSharingManager with correct parameters`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        val selectedContacts = listOf(
+            TestFactories.createEnrichedContact(
+                destinationHash = "hash1",
+                displayName = "Alice",
+            ),
+            TestFactories.createEnrichedContact(
+                destinationHash = "hash2",
+                displayName = "Bob",
+            ),
+        )
+        val duration = com.lxmf.messenger.ui.model.SharingDuration.ONE_HOUR
+
+        viewModel.startSharing(selectedContacts, duration)
+
+        verify {
+            locationSharingManager.startSharing(
+                listOf("hash1", "hash2"),
+                mapOf("hash1" to "Alice", "hash2" to "Bob"),
+                duration,
+            )
+        }
+    }
+
+    @Test
+    fun `startSharing with empty list calls locationSharingManager with empty list`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.startSharing(emptyList(), com.lxmf.messenger.ui.model.SharingDuration.FIFTEEN_MINUTES)
+
+        verify {
+            locationSharingManager.startSharing(emptyList(), emptyMap(), any())
+        }
+    }
+
+    @Test
+    fun `startSharing with single contact`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        val selectedContacts = listOf(
+            TestFactories.createEnrichedContact(
+                destinationHash = "single_hash",
+                displayName = "Single Contact",
+            ),
+        )
+
+        viewModel.startSharing(selectedContacts, com.lxmf.messenger.ui.model.SharingDuration.INDEFINITE)
+
+        verify {
+            locationSharingManager.startSharing(
+                listOf("single_hash"),
+                mapOf("single_hash" to "Single Contact"),
+                com.lxmf.messenger.ui.model.SharingDuration.INDEFINITE,
+            )
+        }
+    }
+
+    // ===== stopSharing Tests =====
+
+    @Test
+    fun `stopSharing without parameter stops all sharing`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.stopSharing()
+
+        verify {
+            locationSharingManager.stopSharing(null)
+        }
+    }
+
+    @Test
+    fun `stopSharing with destinationHash stops specific session`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.stopSharing("specific_hash")
+
+        verify {
+            locationSharingManager.stopSharing("specific_hash")
+        }
+    }
+
+    @Test
+    fun `stopSharing called multiple times calls manager each time`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.stopSharing("hash1")
+        viewModel.stopSharing("hash2")
+        viewModel.stopSharing()
+
+        verify(exactly = 1) { locationSharingManager.stopSharing("hash1") }
+        verify(exactly = 1) { locationSharingManager.stopSharing("hash2") }
+        verify(exactly = 1) { locationSharingManager.stopSharing(null) }
+    }
+
+    // ===== sharing state updates Tests =====
+
+    @Test
+    fun `isSharing state updates from locationSharingManager`() = runTest {
+        val isSharingFlow = MutableStateFlow(false)
+        every { locationSharingManager.isSharing } returns isSharingFlow
+
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.state.test {
+            val initial = awaitItem()
+            assertFalse(initial.isSharing)
+
+            isSharingFlow.value = true
+
+            val updated = awaitItem()
+            assertTrue(updated.isSharing)
+        }
+    }
+
+    @Test
+    fun `activeSessions state updates from locationSharingManager`() = runTest {
+        val sessionsFlow = MutableStateFlow<List<com.lxmf.messenger.service.SharingSession>>(emptyList())
+        every { locationSharingManager.activeSessions } returns sessionsFlow
+
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.state.test {
+            val initial = awaitItem()
+            assertTrue(initial.activeSessions.isEmpty())
+
+            val newSessions = listOf(
+                com.lxmf.messenger.service.SharingSession(
+                    destinationHash = "hash1",
+                    displayName = "Alice",
+                    startTime = System.currentTimeMillis(),
+                    endTime = System.currentTimeMillis() + 3600_000L,
+                ),
+            )
+            sessionsFlow.value = newSessions
+
+            val updated = awaitItem()
+            assertEquals(1, updated.activeSessions.size)
+            assertEquals("hash1", updated.activeSessions[0].destinationHash)
+        }
+    }
+
+    // ===== Display name fallback Tests =====
+
+    @Test
+    fun `markers use announce peerName when not in contacts`() = runTest {
+        val announces = listOf(
+            com.lxmf.messenger.data.db.entity.AnnounceEntity(
+                destinationHash = "hash1",
+                peerName = "Announce Name",
+                publicKey = ByteArray(64),
+                appData = null,
+                hops = 1,
+                lastSeenTimestamp = System.currentTimeMillis(),
+                nodeType = "peer",
+                receivingInterface = null,
+                aspect = "lxmf.delivery",
+            ),
+        )
+        val receivedLocations = listOf(
+            ReceivedLocationEntity(
+                id = "loc1",
+                senderHash = "hash1",
+                latitude = 37.7749,
+                longitude = -122.4194,
+                accuracy = 10f,
+                timestamp = System.currentTimeMillis(),
+                expiresAt = null,
+                receivedAt = System.currentTimeMillis(),
+            ),
+        )
+        // Empty contacts - no match
+        every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
+        every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
+        every { announceDao.getAllAnnounces() } returns flowOf(announces)
+
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.state.test {
+            val state = awaitItem()
+            assertEquals(1, state.contactMarkers.size)
+            assertEquals("Announce Name", state.contactMarkers[0].displayName)
+        }
+    }
+
+    @Test
+    fun `markers fall back to truncated hash when no name found`() = runTest {
+        val receivedLocations = listOf(
+            ReceivedLocationEntity(
+                id = "loc1",
+                senderHash = "abcdefgh12345678",
+                latitude = 37.7749,
+                longitude = -122.4194,
+                accuracy = 10f,
+                timestamp = System.currentTimeMillis(),
+                expiresAt = null,
+                receivedAt = System.currentTimeMillis(),
+            ),
+        )
+        // No contacts or announces
+        every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
+        every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
+        every { announceDao.getAllAnnounces() } returns flowOf(emptyList())
+
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.state.test {
+            val state = awaitItem()
+            assertEquals(1, state.contactMarkers.size)
+            // Falls back to first 8 characters of hash
+            assertEquals("abcdefgh", state.contactMarkers[0].displayName)
+        }
+    }
+
+    @Test
+    fun `markers prefer contacts over announces for display name`() = runTest {
+        val contacts = listOf(
+            TestFactories.createEnrichedContact(
+                destinationHash = "hash1",
+                displayName = "Contact Name",
+            ),
+        )
+        val announces = listOf(
+            com.lxmf.messenger.data.db.entity.AnnounceEntity(
+                destinationHash = "hash1",
+                peerName = "Announce Name",
+                publicKey = ByteArray(64),
+                appData = null,
+                hops = 1,
+                lastSeenTimestamp = System.currentTimeMillis(),
+                nodeType = "peer",
+                receivingInterface = null,
+                aspect = "lxmf.delivery",
+            ),
+        )
+        val receivedLocations = listOf(
+            ReceivedLocationEntity(
+                id = "loc1",
+                senderHash = "hash1",
+                latitude = 37.7749,
+                longitude = -122.4194,
+                accuracy = 10f,
+                timestamp = System.currentTimeMillis(),
+                expiresAt = null,
+                receivedAt = System.currentTimeMillis(),
+            ),
+        )
+        every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+        every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
+        every { announceDao.getAllAnnounces() } returns flowOf(announces)
+
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.state.test {
+            val state = awaitItem()
+            assertEquals(1, state.contactMarkers.size)
+            // Contact name takes priority
+            assertEquals("Contact Name", state.contactMarkers[0].displayName)
+        }
     }
 
     // Helper function to create mock Location

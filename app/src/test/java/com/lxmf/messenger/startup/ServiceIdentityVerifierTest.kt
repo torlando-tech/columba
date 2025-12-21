@@ -37,15 +37,16 @@ class ServiceIdentityVerifierTest {
     private val differentHashHex = "fedcba9876543210fedcba9876543210"
     private val differentHashBytes = differentHashHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
-    private val testDbIdentity = LocalIdentityEntity(
-        identityHash = testHashHex,
-        displayName = "Test User",
-        destinationHash = "dest_hash",
-        filePath = "/data/identity",
-        createdTimestamp = System.currentTimeMillis(),
-        lastUsedTimestamp = System.currentTimeMillis(),
-        isActive = true,
-    )
+    private val testDbIdentity =
+        LocalIdentityEntity(
+            identityHash = testHashHex,
+            displayName = "Test User",
+            destinationHash = "dest_hash",
+            filePath = "/data/identity",
+            createdTimestamp = System.currentTimeMillis(),
+            lastUsedTimestamp = System.currentTimeMillis(),
+            isActive = true,
+        )
 
     @Before
     fun setup() {
@@ -63,149 +64,163 @@ class ServiceIdentityVerifierTest {
     // ========== Matching Identity Tests ==========
 
     @Test
-    fun `verify returns isMatch true when identities match`() = runTest {
-        // Arrange
-        val serviceIdentity = Identity(
-            hash = testHashBytes,
-            publicKey = ByteArray(64),
-            privateKey = null,
-        )
-        coEvery { identityRepository.getActiveIdentitySync() } returns testDbIdentity
+    fun `verify returns isMatch true when identities match`() =
+        runTest {
+            // Arrange
+            val serviceIdentity =
+                Identity(
+                    hash = testHashBytes,
+                    publicKey = ByteArray(64),
+                    privateKey = null,
+                )
+            coEvery { identityRepository.getActiveIdentitySync() } returns testDbIdentity
 
-        // Act
-        val result = verifier.verify(serviceIdentity)
+            // Act
+            val result = verifier.verify(serviceIdentity)
 
-        // Assert
-        assertTrue(result.isMatch)
-        assertEquals(testHashHex, result.serviceIdentityHash)
-        assertEquals(testHashHex, result.dbIdentityHash)
-    }
+            // Assert
+            assertTrue(result.isMatch)
+            assertEquals(testHashHex, result.serviceIdentityHash)
+            assertEquals(testHashHex, result.dbIdentityHash)
+        }
 
     // ========== Mismatched Identity Tests ==========
 
     @Test
-    fun `verify returns isMatch false when identities do not match`() = runTest {
-        // Arrange
-        val serviceIdentity = Identity(
-            hash = differentHashBytes,
-            publicKey = ByteArray(64),
-            privateKey = null,
-        )
-        coEvery { identityRepository.getActiveIdentitySync() } returns testDbIdentity
+    fun `verify returns isMatch false when identities do not match`() =
+        runTest {
+            // Arrange
+            val serviceIdentity =
+                Identity(
+                    hash = differentHashBytes,
+                    publicKey = ByteArray(64),
+                    privateKey = null,
+                )
+            coEvery { identityRepository.getActiveIdentitySync() } returns testDbIdentity
 
-        // Act
-        val result = verifier.verify(serviceIdentity)
+            // Act
+            val result = verifier.verify(serviceIdentity)
 
-        // Assert
-        assertFalse(result.isMatch)
-        assertEquals(differentHashHex, result.serviceIdentityHash)
-        assertEquals(testHashHex, result.dbIdentityHash)
-    }
+            // Assert
+            assertFalse(result.isMatch)
+            assertEquals(differentHashHex, result.serviceIdentityHash)
+            assertEquals(testHashHex, result.dbIdentityHash)
+        }
 
     // ========== Null Identity Tests ==========
 
     @Test
-    fun `verify returns isMatch true when service identity is null`() = runTest {
-        // Arrange
-        coEvery { identityRepository.getActiveIdentitySync() } returns testDbIdentity
+    fun `verify returns isMatch true when service identity is null`() =
+        runTest {
+            // Arrange
+            coEvery { identityRepository.getActiveIdentitySync() } returns testDbIdentity
 
-        // Act
-        val result = verifier.verify(null)
+            // Act
+            val result = verifier.verify(null)
 
-        // Assert
-        assertTrue(result.isMatch)
-        assertNull(result.serviceIdentityHash)
-        assertEquals(testHashHex, result.dbIdentityHash)
-    }
-
-    @Test
-    fun `verify returns isMatch true when db identity is null`() = runTest {
-        // Arrange
-        val serviceIdentity = Identity(
-            hash = testHashBytes,
-            publicKey = ByteArray(64),
-            privateKey = null,
-        )
-        coEvery { identityRepository.getActiveIdentitySync() } returns null
-
-        // Act
-        val result = verifier.verify(serviceIdentity)
-
-        // Assert
-        assertTrue(result.isMatch)
-        assertEquals(testHashHex, result.serviceIdentityHash)
-        assertNull(result.dbIdentityHash)
-    }
+            // Assert
+            assertTrue(result.isMatch)
+            assertNull(result.serviceIdentityHash)
+            assertEquals(testHashHex, result.dbIdentityHash)
+        }
 
     @Test
-    fun `verify returns isMatch true when both identities are null`() = runTest {
-        // Arrange
-        coEvery { identityRepository.getActiveIdentitySync() } returns null
+    fun `verify returns isMatch true when db identity is null`() =
+        runTest {
+            // Arrange
+            val serviceIdentity =
+                Identity(
+                    hash = testHashBytes,
+                    publicKey = ByteArray(64),
+                    privateKey = null,
+                )
+            coEvery { identityRepository.getActiveIdentitySync() } returns null
 
-        // Act
-        val result = verifier.verify(null)
+            // Act
+            val result = verifier.verify(serviceIdentity)
 
-        // Assert
-        assertTrue(result.isMatch)
-        assertNull(result.serviceIdentityHash)
-        assertNull(result.dbIdentityHash)
-    }
+            // Assert
+            assertTrue(result.isMatch)
+            assertEquals(testHashHex, result.serviceIdentityHash)
+            assertNull(result.dbIdentityHash)
+        }
+
+    @Test
+    fun `verify returns isMatch true when both identities are null`() =
+        runTest {
+            // Arrange
+            coEvery { identityRepository.getActiveIdentitySync() } returns null
+
+            // Act
+            val result = verifier.verify(null)
+
+            // Assert
+            assertTrue(result.isMatch)
+            assertNull(result.serviceIdentityHash)
+            assertNull(result.dbIdentityHash)
+        }
 
     // ========== Hash Conversion Tests ==========
 
     @Test
-    fun `verify converts service identity hash to lowercase hex`() = runTest {
-        // Arrange - use bytes that would produce uppercase letters
-        val hashWithUppercase = byteArrayOf(0xAB.toByte(), 0xCD.toByte(), 0xEF.toByte())
-        val serviceIdentity = Identity(
-            hash = hashWithUppercase,
-            publicKey = ByteArray(64),
-            privateKey = null,
-        )
-        coEvery { identityRepository.getActiveIdentitySync() } returns null
+    fun `verify converts service identity hash to lowercase hex`() =
+        runTest {
+            // Arrange - use bytes that would produce uppercase letters
+            val hashWithUppercase = byteArrayOf(0xAB.toByte(), 0xCD.toByte(), 0xEF.toByte())
+            val serviceIdentity =
+                Identity(
+                    hash = hashWithUppercase,
+                    publicKey = ByteArray(64),
+                    privateKey = null,
+                )
+            coEvery { identityRepository.getActiveIdentitySync() } returns null
 
-        // Act
-        val result = verifier.verify(serviceIdentity)
+            // Act
+            val result = verifier.verify(serviceIdentity)
 
-        // Assert
-        assertEquals("abcdef", result.serviceIdentityHash)
-    }
+            // Assert
+            assertEquals("abcdef", result.serviceIdentityHash)
+        }
 
     // ========== Result Properties Tests ==========
 
     @Test
-    fun `VerificationResult contains correct hashes on match`() = runTest {
-        // Arrange
-        val serviceIdentity = Identity(
-            hash = testHashBytes,
-            publicKey = ByteArray(64),
-            privateKey = null,
-        )
-        coEvery { identityRepository.getActiveIdentitySync() } returns testDbIdentity
+    fun `VerificationResult contains correct hashes on match`() =
+        runTest {
+            // Arrange
+            val serviceIdentity =
+                Identity(
+                    hash = testHashBytes,
+                    publicKey = ByteArray(64),
+                    privateKey = null,
+                )
+            coEvery { identityRepository.getActiveIdentitySync() } returns testDbIdentity
 
-        // Act
-        val result = verifier.verify(serviceIdentity)
+            // Act
+            val result = verifier.verify(serviceIdentity)
 
-        // Assert
-        assertEquals(testHashHex, result.serviceIdentityHash)
-        assertEquals(testHashHex, result.dbIdentityHash)
-    }
+            // Assert
+            assertEquals(testHashHex, result.serviceIdentityHash)
+            assertEquals(testHashHex, result.dbIdentityHash)
+        }
 
     @Test
-    fun `VerificationResult contains correct hashes on mismatch`() = runTest {
-        // Arrange
-        val serviceIdentity = Identity(
-            hash = differentHashBytes,
-            publicKey = ByteArray(64),
-            privateKey = null,
-        )
-        coEvery { identityRepository.getActiveIdentitySync() } returns testDbIdentity
+    fun `VerificationResult contains correct hashes on mismatch`() =
+        runTest {
+            // Arrange
+            val serviceIdentity =
+                Identity(
+                    hash = differentHashBytes,
+                    publicKey = ByteArray(64),
+                    privateKey = null,
+                )
+            coEvery { identityRepository.getActiveIdentitySync() } returns testDbIdentity
 
-        // Act
-        val result = verifier.verify(serviceIdentity)
+            // Act
+            val result = verifier.verify(serviceIdentity)
 
-        // Assert
-        assertEquals(differentHashHex, result.serviceIdentityHash)
-        assertEquals(testHashHex, result.dbIdentityHash)
-    }
+            // Assert
+            assertEquals(differentHashHex, result.serviceIdentityHash)
+            assertEquals(testHashHex, result.dbIdentityHash)
+        }
 }

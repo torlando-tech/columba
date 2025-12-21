@@ -151,6 +151,14 @@ class ServiceReticulumProtocol(
         )
     val interfaceStatusFlow: SharedFlow<String> = _interfaceStatusFlow.asSharedFlow()
 
+    // Location telemetry from contacts sharing their location
+    private val _locationTelemetryFlow =
+        MutableSharedFlow<String>(
+            replay = 0,
+            extraBufferCapacity = 10,
+        )
+    val locationTelemetryFlow: SharedFlow<String> = _locationTelemetryFlow.asSharedFlow()
+
     /**
      * Handler for alternative relay requests from the service.
      * Set by ColumbaApplication to provide PropagationNodeManager integration.
@@ -428,6 +436,15 @@ class ServiceReticulumProtocol(
                     _interfaceStatusChanged.tryEmit(Unit)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling interface status callback", e)
+                }
+            }
+
+            override fun onLocationTelemetry(locationJson: String) {
+                try {
+                    Log.d(TAG, "📍 Location telemetry received: ${locationJson.take(100)}...")
+                    _locationTelemetryFlow.tryEmit(locationJson)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling location telemetry callback", e)
                 }
             }
         }
@@ -1632,6 +1649,43 @@ class ServiceReticulumProtocol(
             val actualMethod = result.optString("delivery_method", methodString)
 
             Log.d(TAG, "Message sent with method=$actualMethod")
+
+            MessageReceipt(
+                messageHash = msgHash,
+                timestamp = timestamp,
+                destinationHash = destHash,
+            )
+        }
+    }
+
+    override suspend fun sendLocationTelemetry(
+        destinationHash: ByteArray,
+        locationJson: String,
+        sourceIdentity: Identity,
+    ): Result<MessageReceipt> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
+
+            val resultJson =
+                service.sendLocationTelemetry(
+                    destinationHash,
+                    locationJson,
+                    privateKey,
+                )
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            val msgHash = result.optString("message_hash").toByteArrayFromBase64() ?: byteArrayOf()
+            val timestamp = result.optLong("timestamp", System.currentTimeMillis())
+            val destHash = result.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
+
+            Log.d(TAG, "📍 Location telemetry sent to ${destinationHash.joinToString("") { "%02x".format(it) }.take(16)}")
 
             MessageReceipt(
                 messageHash = msgHash,

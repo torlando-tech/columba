@@ -5,9 +5,7 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
-import com.lxmf.messenger.data.model.BleConnectionInfo
 import com.lxmf.messenger.data.model.BleConnectionsState
-import com.lxmf.messenger.data.model.ConnectionType
 import com.lxmf.messenger.data.repository.BleStatusRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig

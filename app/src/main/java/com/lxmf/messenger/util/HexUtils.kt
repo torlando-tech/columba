@@ -11,8 +11,7 @@ object HexUtils {
      *
      * @return Lowercase hex string representation
      */
-    fun ByteArray.toHexString(): String =
-        joinToString("") { "%02x".format(it) }
+    fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
 
     /**
      * Convert a hex string to a ByteArray.

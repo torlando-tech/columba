@@ -1,5 +1,6 @@
 package com.lxmf.messenger.viewmodel
 
+import android.app.Application
 import app.cash.turbine.test
 import com.lxmf.messenger.data.model.BleConnectionsState
 import com.lxmf.messenger.data.model.ConnectionType
@@ -25,7 +26,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import android.app.Application
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.time.Duration.Companion.seconds

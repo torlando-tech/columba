@@ -10,11 +10,11 @@ import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
-import kotlinx.coroutines.flow.first
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -173,10 +173,11 @@ class TcpClientWizardViewModel
                     // Check for duplicate interface names before saving
                     val existingNames = interfaceRepository.allInterfaces.first().map { it.name }
                     when (
-                        val uniqueResult = InputValidator.validateInterfaceNameUniqueness(
-                            interfaceName,
-                            existingNames,
-                        )
+                        val uniqueResult =
+                            InputValidator.validateInterfaceNameUniqueness(
+                                interfaceName,
+                                existingNames,
+                            )
                     ) {
                         is ValidationResult.Error -> {
                             _state.update {

@@ -308,6 +308,21 @@ class PythonWrapperManager(
     }
 
     /**
+     * Set location telemetry received callback.
+     * Called by Python when location sharing data is received from a contact.
+     */
+    fun setLocationReceivedCallback(callback: (String) -> Unit) {
+        withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("set_location_received_callback", callback)
+                Log.d(TAG, "📍 Location received callback registered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set location received callback: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
      * Set native Kotlin stamp generator callback.
      *
      * This bypasses Python multiprocessing-based stamp generation which fails on Android
@@ -337,15 +352,19 @@ class PythonWrapperManager(
      * Static-like method for Python to call for stamp generation.
      * Returns PyObject (Python tuple) to avoid Chaquopy type conversion issues.
      */
-    fun generateStampForPython(workblock: ByteArray, stampCost: Int): PyObject {
+    fun generateStampForPython(
+        workblock: ByteArray,
+        stampCost: Int,
+    ): PyObject {
         Log.d(TAG, "Stamp generator callback invoked: cost=$stampCost, workblock=${workblock.size} bytes")
 
         val generator = checkNotNull(stampGeneratorInstance) { "StampGenerator not initialized" }
 
         // Python expects synchronous return from this callback
-        val result = runBlocking(Dispatchers.Default) { // THREADING: allowed
-            generator.generateStamp(workblock, stampCost)
-        }
+        val result =
+            runBlocking(Dispatchers.Default) { // THREADING: allowed
+                generator.generateStamp(workblock, stampCost)
+            }
 
         Log.d(TAG, "Stamp generated: value=${result.value}, rounds=${result.rounds}")
 

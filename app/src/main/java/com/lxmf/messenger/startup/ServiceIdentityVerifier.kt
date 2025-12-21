@@ -15,46 +15,49 @@ import javax.inject.Singleton
  * - Service process surviving an app restart with different identity
  */
 @Singleton
-class ServiceIdentityVerifier @Inject constructor(
-    private val identityRepository: IdentityRepository,
-) {
-    /**
-     * Result of identity verification.
-     *
-     * @property isMatch true if identities match or can't be verified
-     * @property serviceIdentityHash The identity hash from the service (null if unavailable)
-     * @property dbIdentityHash The active identity hash from the database (null if unavailable)
-     */
-    data class VerificationResult(
-        val isMatch: Boolean,
-        val serviceIdentityHash: String?,
-        val dbIdentityHash: String?,
-    )
-
-    /**
-     * Verify that the service identity matches the database active identity.
-     *
-     * If either identity is unavailable (null), the verification returns true
-     * (assumes match) since we can't verify. This allows the app to proceed
-     * rather than blocking on edge cases.
-     *
-     * @param serviceIdentity The identity from the Reticulum service
-     * @return VerificationResult indicating whether identities match
-     */
-    suspend fun verify(serviceIdentity: Identity?): VerificationResult {
-        val serviceHash = serviceIdentity?.hash?.toHexString()
-        val dbIdentity = identityRepository.getActiveIdentitySync()
-        val dbHash = dbIdentity?.identityHash
-
-        val isMatch = when {
-            serviceHash == null || dbHash == null -> true // Can't verify, assume OK
-            else -> serviceHash == dbHash
-        }
-
-        return VerificationResult(
-            isMatch = isMatch,
-            serviceIdentityHash = serviceHash,
-            dbIdentityHash = dbHash,
+class ServiceIdentityVerifier
+    @Inject
+    constructor(
+        private val identityRepository: IdentityRepository,
+    ) {
+        /**
+         * Result of identity verification.
+         *
+         * @property isMatch true if identities match or can't be verified
+         * @property serviceIdentityHash The identity hash from the service (null if unavailable)
+         * @property dbIdentityHash The active identity hash from the database (null if unavailable)
+         */
+        data class VerificationResult(
+            val isMatch: Boolean,
+            val serviceIdentityHash: String?,
+            val dbIdentityHash: String?,
         )
+
+        /**
+         * Verify that the service identity matches the database active identity.
+         *
+         * If either identity is unavailable (null), the verification returns true
+         * (assumes match) since we can't verify. This allows the app to proceed
+         * rather than blocking on edge cases.
+         *
+         * @param serviceIdentity The identity from the Reticulum service
+         * @return VerificationResult indicating whether identities match
+         */
+        suspend fun verify(serviceIdentity: Identity?): VerificationResult {
+            val serviceHash = serviceIdentity?.hash?.toHexString()
+            val dbIdentity = identityRepository.getActiveIdentitySync()
+            val dbHash = dbIdentity?.identityHash
+
+            val isMatch =
+                when {
+                    serviceHash == null || dbHash == null -> true // Can't verify, assume OK
+                    else -> serviceHash == dbHash
+                }
+
+            return VerificationResult(
+                isMatch = isMatch,
+                serviceIdentityHash = serviceHash,
+                dbIdentityHash = dbHash,
+            )
+        }
     }
-}

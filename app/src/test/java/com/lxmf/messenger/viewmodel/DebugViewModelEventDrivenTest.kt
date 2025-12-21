@@ -79,20 +79,22 @@ class DebugViewModelEventDrivenTest {
         coEvery { mockIdentityRepo.activeIdentity } returns flowOf(null)
 
         // Setup LXMF identity and destination for loadIdentityData
-        val mockIdentity = Identity(
-            hash = ByteArray(16) { it.toByte() },
-            publicKey = ByteArray(32) { it.toByte() },
-            privateKey = ByteArray(32) { it.toByte() },
-        )
-        val mockDestination = Destination(
-            hash = ByteArray(16) { it.toByte() },
-            hexHash = "000102030405060708090a0b0c0d0e0f",
-            identity = mockIdentity,
-            direction = Direction.IN,
-            type = DestinationType.SINGLE,
-            appName = "lxmf",
-            aspects = listOf("delivery"),
-        )
+        val mockIdentity =
+            Identity(
+                hash = ByteArray(16) { it.toByte() },
+                publicKey = ByteArray(32) { it.toByte() },
+                privateKey = ByteArray(32) { it.toByte() },
+            )
+        val mockDestination =
+            Destination(
+                hash = ByteArray(16) { it.toByte() },
+                hexHash = "000102030405060708090a0b0c0d0e0f",
+                identity = mockIdentity,
+                direction = Direction.IN,
+                type = DestinationType.SINGLE,
+                appName = "lxmf",
+                aspects = listOf("delivery"),
+            )
         every { mockProtocol.getLxmfIdentity() } returns Result.success(mockIdentity)
         every { mockProtocol.getLxmfDestination() } returns Result.success(mockDestination)
         // Also mock createIdentity in case the code falls back to it

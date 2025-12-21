@@ -168,9 +168,10 @@ class ColumbaApplication : Application() {
                         // Check if service is actually being configured, or if the flag is stale
                         // from a crashed/failed previous config apply
                         // Use timeout to prevent ANR if service is slow
-                        val status = withTimeoutOrNull(IPC_TIMEOUT_MS) {
-                            (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
-                        }
+                        val status =
+                            withTimeoutOrNull(IPC_TIMEOUT_MS) {
+                                (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
+                            }
                         android.util.Log.d("ColumbaApplication", "Service status with config flag set: $status")
 
                         if (configApplyFlagManager.isStaleFlag(status)) {
@@ -197,9 +198,10 @@ class ColumbaApplication : Application() {
 
                     // Check if service is already initialized (handle service process surviving app restart)
                     // Use timeout to prevent ANR if service is slow
-                    val currentStatus = withTimeoutOrNull(IPC_TIMEOUT_MS) {
-                        (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
-                    }
+                    val currentStatus =
+                        withTimeoutOrNull(IPC_TIMEOUT_MS) {
+                            (reticulumProtocol as ServiceReticulumProtocol).getStatus().getOrNull()
+                        }
                     android.util.Log.d("ColumbaApplication", "Service status after binding: $currentStatus")
 
                     if (currentStatus == "READY") {
@@ -207,10 +209,11 @@ class ColumbaApplication : Application() {
 
                         // Verify service identity matches database active identity
                         // This catches mismatches from interrupted identity switches or data imports
-                        val serviceIdentity = withTimeoutOrNull(IPC_TIMEOUT_MS) {
-                            (reticulumProtocol as ServiceReticulumProtocol)
-                                .getLxmfIdentity().getOrNull()
-                        }
+                        val serviceIdentity =
+                            withTimeoutOrNull(IPC_TIMEOUT_MS) {
+                                (reticulumProtocol as ServiceReticulumProtocol)
+                                    .getLxmfIdentity().getOrNull()
+                            }
                         val verificationResult = serviceIdentityVerifier.verify(serviceIdentity)
 
                         if (!verificationResult.isMatch) {

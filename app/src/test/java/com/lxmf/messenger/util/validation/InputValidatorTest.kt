@@ -359,11 +359,12 @@ class InputValidatorTest {
     fun `validateInterfaceNameUniqueness - excludeName allows editing same interface`() {
         val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
         // When editing "RNode LoRa", we should exclude it from the duplicate check
-        val result = InputValidator.validateInterfaceNameUniqueness(
-            "RNode LoRa",
-            existingNames,
-            excludeName = "RNode LoRa",
-        )
+        val result =
+            InputValidator.validateInterfaceNameUniqueness(
+                "RNode LoRa",
+                existingNames,
+                excludeName = "RNode LoRa",
+            )
         assertTrue(result is ValidationResult.Success)
     }
 
@@ -371,11 +372,12 @@ class InputValidatorTest {
     fun `validateInterfaceNameUniqueness - excludeName still catches other duplicates`() {
         val existingNames = listOf("TCP Client 1", "RNode LoRa", "AutoInterface")
         // When editing "TCP Client 1" but trying to rename to "RNode LoRa"
-        val result = InputValidator.validateInterfaceNameUniqueness(
-            "RNode LoRa",
-            existingNames,
-            excludeName = "TCP Client 1",
-        )
+        val result =
+            InputValidator.validateInterfaceNameUniqueness(
+                "RNode LoRa",
+                existingNames,
+                excludeName = "TCP Client 1",
+            )
         assertTrue(result is ValidationResult.Error)
     }
 

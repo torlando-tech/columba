@@ -1,5 +1,6 @@
 package com.lxmf.messenger.service
 
+import android.app.Application
 import com.lxmf.messenger.data.model.ConnectionType
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
@@ -11,7 +12,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
-import android.app.Application
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 

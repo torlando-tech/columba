@@ -32,13 +32,14 @@ class MaintenanceManager(
      */
     fun start() {
         maintenanceJob?.cancel()
-        maintenanceJob = scope.launch {
-            Log.d(TAG, "Maintenance job started")
-            while (isActive) {
-                delay(REFRESH_INTERVAL_MS)
-                refreshLocks()
+        maintenanceJob =
+            scope.launch {
+                Log.d(TAG, "Maintenance job started")
+                while (isActive) {
+                    delay(REFRESH_INTERVAL_MS)
+                    refreshLocks()
+                }
             }
-        }
     }
 
     /**

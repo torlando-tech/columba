@@ -3,11 +3,11 @@ package com.lxmf.messenger.reticulum.protocol
 import android.content.Context
 import android.content.ServiceConnection
 import com.lxmf.messenger.IReticulumService
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.reticulum.model.LogLevel
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
-import com.lxmf.messenger.repository.SettingsRepository
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -21,7 +21,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
-import java.util.Base64
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -31,6 +30,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.Base64
 
 /**
  * Unit tests for ServiceReticulumProtocol.
@@ -171,58 +171,62 @@ class ServiceReticulumProtocolTest {
     }
 
     @Test
-    fun `createIdentity - returns error when service not bound`() = runTest {
-        // When
-        val result = protocol.createIdentity()
+    fun `createIdentity - returns error when service not bound`() =
+        runTest {
+            // When
+            val result = protocol.createIdentity()
 
-        // Then
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
-    }
-
-    @Test
-    fun `loadIdentity - returns error when service not bound`() = runTest {
-        // When
-        val result = protocol.loadIdentity("/test/path")
-
-        // Then
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
-    }
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+        }
 
     @Test
-    fun `shutdown - returns error when service not bound`() = runTest {
-        // When
-        val result = protocol.shutdown()
+    fun `loadIdentity - returns error when service not bound`() =
+        runTest {
+            // When
+            val result = protocol.loadIdentity("/test/path")
 
-        // Then
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
-    }
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+        }
+
+    @Test
+    fun `shutdown - returns error when service not bound`() =
+        runTest {
+            // When
+            val result = protocol.shutdown()
+
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+        }
 
     // ===========================================
     // Bind Failure Tests
     // ===========================================
 
     @Test
-    fun `bindService - handles bind failure when context returns false`() = runTest {
-        // Given
-        every {
-            context.bindService(
-                any<android.content.Intent>(),
-                any<ServiceConnection>(),
-                any<Int>(),
-            )
-        } returns false
+    fun `bindService - handles bind failure when context returns false`() =
+        runTest {
+            // Given
+            every {
+                context.bindService(
+                    any<android.content.Intent>(),
+                    any<ServiceConnection>(),
+                    any<Int>(),
+                )
+            } returns false
 
-        // When/Then
-        try {
-            protocol.bindService()
-            assert(false) { "Should have thrown exception" }
-        } catch (e: RuntimeException) {
-            assertTrue(e.message!!.contains("Failed to bind"))
+            // When/Then
+            try {
+                protocol.bindService()
+                assert(false) { "Should have thrown exception" }
+            } catch (e: RuntimeException) {
+                assertTrue(e.message!!.contains("Failed to bind"))
+            }
         }
-    }
 
     // ===========================================
     // NetworkStatus Sealed Class Tests
@@ -282,10 +286,11 @@ class ServiceReticulumProtocolTest {
 
     @Test
     fun `ReticulumConfig - creates with required parameters`() {
-        val config = ReticulumConfig(
-            storagePath = "/test/path",
-            enabledInterfaces = emptyList(),
-        )
+        val config =
+            ReticulumConfig(
+                storagePath = "/test/path",
+                enabledInterfaces = emptyList(),
+            )
 
         assertEquals("/test/path", config.storagePath)
         assertTrue(config.enabledInterfaces.isEmpty())
@@ -296,20 +301,22 @@ class ServiceReticulumProtocolTest {
 
     @Test
     fun `ReticulumConfig - creates with all parameters`() {
-        val interfaces = listOf(
-            InterfaceConfig.AutoInterface(name = "Auto"),
-        )
+        val interfaces =
+            listOf(
+                InterfaceConfig.AutoInterface(name = "Auto"),
+            )
 
-        val config = ReticulumConfig(
-            storagePath = "/test/path",
-            enabledInterfaces = interfaces,
-            identityFilePath = "/identity.dat",
-            displayName = "Test Node",
-            logLevel = LogLevel.DEBUG,
-            allowAnonymous = true,
-            preferOwnInstance = true,
-            rpcKey = "abc123",
-        )
+        val config =
+            ReticulumConfig(
+                storagePath = "/test/path",
+                enabledInterfaces = interfaces,
+                identityFilePath = "/identity.dat",
+                displayName = "Test Node",
+                logLevel = LogLevel.DEBUG,
+                allowAnonymous = true,
+                preferOwnInstance = true,
+                rpcKey = "abc123",
+            )
 
         assertEquals("/test/path", config.storagePath)
         assertEquals(1, config.enabledInterfaces.size)
@@ -323,32 +330,35 @@ class ServiceReticulumProtocolTest {
 
     @Test
     fun `ReticulumConfig - enableTransport defaults to true`() {
-        val config = ReticulumConfig(
-            storagePath = "/test/path",
-            enabledInterfaces = emptyList(),
-        )
+        val config =
+            ReticulumConfig(
+                storagePath = "/test/path",
+                enabledInterfaces = emptyList(),
+            )
 
         assertTrue("enableTransport should default to true", config.enableTransport)
     }
 
     @Test
     fun `ReticulumConfig - enableTransport can be set to false`() {
-        val config = ReticulumConfig(
-            storagePath = "/test/path",
-            enabledInterfaces = emptyList(),
-            enableTransport = false,
-        )
+        val config =
+            ReticulumConfig(
+                storagePath = "/test/path",
+                enabledInterfaces = emptyList(),
+                enableTransport = false,
+            )
 
         assertFalse("enableTransport should be false when explicitly set", config.enableTransport)
     }
 
     @Test
     fun `ReticulumConfig - enableTransport can be set to true explicitly`() {
-        val config = ReticulumConfig(
-            storagePath = "/test/path",
-            enabledInterfaces = emptyList(),
-            enableTransport = true,
-        )
+        val config =
+            ReticulumConfig(
+                storagePath = "/test/path",
+                enabledInterfaces = emptyList(),
+                enableTransport = true,
+            )
 
         assertTrue("enableTransport should be true when explicitly set", config.enableTransport)
     }
@@ -370,10 +380,11 @@ class ServiceReticulumProtocolTest {
 
     @Test
     fun `TCPClient - creates with required parameters`() {
-        val config = InterfaceConfig.TCPClient(
-            targetHost = "192.168.1.1",
-            targetPort = 4242,
-        )
+        val config =
+            InterfaceConfig.TCPClient(
+                targetHost = "192.168.1.1",
+                targetPort = 4242,
+            )
 
         assertEquals("TCP Connection", config.name)
         assertTrue(config.enabled)
@@ -384,9 +395,10 @@ class ServiceReticulumProtocolTest {
 
     @Test
     fun `RNode - creates with required parameters`() {
-        val config = InterfaceConfig.RNode(
-            targetDeviceName = "RNode",
-        )
+        val config =
+            InterfaceConfig.RNode(
+                targetDeviceName = "RNode",
+            )
 
         assertEquals("RNode LoRa", config.name)
         assertTrue(config.enabled)
@@ -448,15 +460,16 @@ class ServiceReticulumProtocolTest {
     // ===========================================
 
     @Test
-    fun `verify protocol can be created and cleaned up`() = runTest {
-        // Given - protocol already created in setup
+    fun `verify protocol can be created and cleaned up`() =
+        runTest {
+            // Given - protocol already created in setup
 
-        // When/Then - verify we can create and cleanup the protocol without error
-        protocol.cleanup()
+            // When/Then - verify we can create and cleanup the protocol without error
+            protocol.cleanup()
 
-        // Verify context methods were configured correctly
-        assertTrue(::protocol.isInitialized)
-    }
+            // Verify context methods were configured correctly
+            assertTrue(::protocol.isInitialized)
+        }
 
     @Test
     fun `verify static AIDL mock returns mockService`() {
@@ -474,10 +487,11 @@ class ServiceReticulumProtocolTest {
     @Test
     fun `buildConfigJson - includes enable_transport true by default`() {
         // Given
-        val config = ReticulumConfig(
-            storagePath = "/test/path",
-            enabledInterfaces = emptyList(),
-        )
+        val config =
+            ReticulumConfig(
+                storagePath = "/test/path",
+                enabledInterfaces = emptyList(),
+            )
 
         // When
         val json = protocol.buildConfigJson(config)
@@ -490,11 +504,12 @@ class ServiceReticulumProtocolTest {
     @Test
     fun `buildConfigJson - includes enable_transport false when set`() {
         // Given
-        val config = ReticulumConfig(
-            storagePath = "/test/path",
-            enabledInterfaces = emptyList(),
-            enableTransport = false,
-        )
+        val config =
+            ReticulumConfig(
+                storagePath = "/test/path",
+                enabledInterfaces = emptyList(),
+                enableTransport = false,
+            )
 
         // When
         val json = protocol.buildConfigJson(config)
@@ -507,11 +522,12 @@ class ServiceReticulumProtocolTest {
     @Test
     fun `buildConfigJson - includes enable_transport true when explicitly set`() {
         // Given
-        val config = ReticulumConfig(
-            storagePath = "/test/path",
-            enabledInterfaces = emptyList(),
-            enableTransport = true,
-        )
+        val config =
+            ReticulumConfig(
+                storagePath = "/test/path",
+                enabledInterfaces = emptyList(),
+                enableTransport = true,
+            )
 
         // When
         val json = protocol.buildConfigJson(config)
@@ -524,14 +540,15 @@ class ServiceReticulumProtocolTest {
     @Test
     fun `buildConfigJson - includes all required fields`() {
         // Given
-        val config = ReticulumConfig(
-            storagePath = "/test/storage",
-            enabledInterfaces = emptyList(),
-            logLevel = LogLevel.DEBUG,
-            allowAnonymous = true,
-            preferOwnInstance = true,
-            enableTransport = false,
-        )
+        val config =
+            ReticulumConfig(
+                storagePath = "/test/storage",
+                enabledInterfaces = emptyList(),
+                logLevel = LogLevel.DEBUG,
+                allowAnonymous = true,
+                preferOwnInstance = true,
+                enableTransport = false,
+            )
 
         // When
         val json = protocol.buildConfigJson(config)
@@ -548,22 +565,24 @@ class ServiceReticulumProtocolTest {
     @Test
     fun `buildConfigJson - includes RNode TCP host and port when set`() {
         // Given
-        val rnodeConfig = InterfaceConfig.RNode(
-            name = "Test TCP RNode",
-            enabled = true,
-            connectionMode = "tcp",
-            tcpHost = "192.168.1.100",
-            tcpPort = 7633,
-            frequency = 915000000,
-            bandwidth = 125000,
-            txPower = 17,
-            spreadingFactor = 8,
-            codingRate = 5,
-        )
-        val config = ReticulumConfig(
-            storagePath = "/test/path",
-            enabledInterfaces = listOf(rnodeConfig),
-        )
+        val rnodeConfig =
+            InterfaceConfig.RNode(
+                name = "Test TCP RNode",
+                enabled = true,
+                connectionMode = "tcp",
+                tcpHost = "192.168.1.100",
+                tcpPort = 7633,
+                frequency = 915000000,
+                bandwidth = 125000,
+                txPower = 17,
+                spreadingFactor = 8,
+                codingRate = 5,
+            )
+        val config =
+            ReticulumConfig(
+                storagePath = "/test/path",
+                enabledInterfaces = listOf(rnodeConfig),
+            )
 
         // When
         val json = protocol.buildConfigJson(config)
@@ -601,10 +620,11 @@ class ServiceReticulumProtocolTest {
         injectMockService(protocol, mockService)
 
         // When
-        val peerIdentities = listOf(
-            Pair("abc123", byteArrayOf(1, 2, 3)),
-            Pair("def456", byteArrayOf(4, 5, 6)),
-        )
+        val peerIdentities =
+            listOf(
+                Pair("abc123", byteArrayOf(1, 2, 3)),
+                Pair("def456", byteArrayOf(4, 5, 6)),
+            )
         val result = protocol.restorePeerIdentities(peerIdentities)
 
         // Then
@@ -661,10 +681,11 @@ class ServiceReticulumProtocolTest {
         injectMockService(protocol, mockService)
 
         // When
-        val announces = listOf(
-            Pair("destHash1", byteArrayOf(1, 2, 3)),
-            Pair("destHash2", byteArrayOf(4, 5, 6)),
-        )
+        val announces =
+            listOf(
+                Pair("destHash1", byteArrayOf(1, 2, 3)),
+                Pair("destHash2", byteArrayOf(4, 5, 6)),
+            )
         val result = protocol.restoreAnnounceIdentities(announces)
 
         // Then
@@ -701,7 +722,10 @@ class ServiceReticulumProtocolTest {
     }
 
     // Helper to inject mock service via reflection
-    private fun injectMockService(protocol: ServiceReticulumProtocol, mockService: IReticulumService) {
+    private fun injectMockService(
+        protocol: ServiceReticulumProtocol,
+        mockService: IReticulumService,
+    ) {
         val serviceField = ServiceReticulumProtocol::class.java.getDeclaredField("service")
         serviceField.isAccessible = true
         serviceField.set(protocol, mockService)
@@ -710,23 +734,25 @@ class ServiceReticulumProtocolTest {
     @Test
     fun `buildConfigJson - RNode omits tcp_host when null`() {
         // Given - Bluetooth RNode without tcp_host
-        val rnodeConfig = InterfaceConfig.RNode(
-            name = "Test BLE RNode",
-            enabled = true,
-            targetDeviceName = "RNode A1B2",
-            connectionMode = "ble",
-            tcpHost = null,
-            tcpPort = 7633,
-            frequency = 915000000,
-            bandwidth = 125000,
-            txPower = 17,
-            spreadingFactor = 8,
-            codingRate = 5,
-        )
-        val config = ReticulumConfig(
-            storagePath = "/test/path",
-            enabledInterfaces = listOf(rnodeConfig),
-        )
+        val rnodeConfig =
+            InterfaceConfig.RNode(
+                name = "Test BLE RNode",
+                enabled = true,
+                targetDeviceName = "RNode A1B2",
+                connectionMode = "ble",
+                tcpHost = null,
+                tcpPort = 7633,
+                frequency = 915000000,
+                bandwidth = 125000,
+                txPower = 17,
+                spreadingFactor = 8,
+                codingRate = 5,
+            )
+        val config =
+            ReticulumConfig(
+                storagePath = "/test/path",
+                enabledInterfaces = listOf(rnodeConfig),
+            )
 
         // When
         val json = protocol.buildConfigJson(config)
@@ -747,28 +773,31 @@ class ServiceReticulumProtocolTest {
     // ===========================================
 
     @Test
-    fun `bleConnectionsFlow - initially has no emissions`() = runTest {
-        // The flow has replay = 1, so first collector should wait for emission
-        // We just verify it exists and doesn't throw
-        val flow = protocol.bleConnectionsFlow
-        assertTrue("bleConnectionsFlow should exist", flow != null)
-    }
+    fun `bleConnectionsFlow - initially has no emissions`() =
+        runTest {
+            // The flow has replay = 1, so first collector should wait for emission
+            // We just verify it exists and doesn't throw
+            val flow = protocol.bleConnectionsFlow
+            assertTrue("bleConnectionsFlow should exist", flow != null)
+        }
 
     @Test
-    fun `debugInfoFlow - initially has no emissions`() = runTest {
-        // The flow has replay = 1, so first collector should wait for emission
-        // We just verify it exists and doesn't throw
-        val flow = protocol.debugInfoFlow
-        assertTrue("debugInfoFlow should exist", flow != null)
-    }
+    fun `debugInfoFlow - initially has no emissions`() =
+        runTest {
+            // The flow has replay = 1, so first collector should wait for emission
+            // We just verify it exists and doesn't throw
+            val flow = protocol.debugInfoFlow
+            assertTrue("debugInfoFlow should exist", flow != null)
+        }
 
     @Test
-    fun `interfaceStatusFlow - initially has no emissions`() = runTest {
-        // The flow has replay = 1, so first collector should wait for emission
-        // We just verify it exists and doesn't throw
-        val flow = protocol.interfaceStatusFlow
-        assertTrue("interfaceStatusFlow should exist", flow != null)
-    }
+    fun `interfaceStatusFlow - initially has no emissions`() =
+        runTest {
+            // The flow has replay = 1, so first collector should wait for emission
+            // We just verify it exists and doesn't throw
+            val flow = protocol.interfaceStatusFlow
+            assertTrue("interfaceStatusFlow should exist", flow != null)
+        }
 
     @Test
     fun `event flows are SharedFlows with replay`() {
@@ -790,7 +819,8 @@ class ServiceReticulumProtocolTest {
         val destHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { (it + 1).toByte() })
         val publicKeyB64 = Base64.getEncoder().encodeToString(ByteArray(32) { (it * 2).toByte() })
 
-        val messageJson = """
+        val messageJson =
+            """
             {
                 "message_hash": "abc123",
                 "content": "Hello with public key",
@@ -799,7 +829,7 @@ class ServiceReticulumProtocolTest {
                 "timestamp": 1234567890,
                 "public_key": "$publicKeyB64"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         // When
         val result = protocol.parseMessageJson(messageJson)
@@ -818,7 +848,8 @@ class ServiceReticulumProtocolTest {
         val sourceHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { it.toByte() })
         val destHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { (it + 1).toByte() })
 
-        val messageJson = """
+        val messageJson =
+            """
             {
                 "message_hash": "def456",
                 "content": "Hello without public key",
@@ -826,7 +857,7 @@ class ServiceReticulumProtocolTest {
                 "destination_hash": "$destHashB64",
                 "timestamp": 1234567890
             }
-        """.trimIndent()
+            """.trimIndent()
 
         // When
         val result = protocol.parseMessageJson(messageJson)
@@ -843,7 +874,8 @@ class ServiceReticulumProtocolTest {
         val sourceHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { it.toByte() })
         val destHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { (it + 1).toByte() })
 
-        val messageJson = """
+        val messageJson =
+            """
             {
                 "message_hash": "ghi789",
                 "content": "Hello with empty public key",
@@ -852,7 +884,7 @@ class ServiceReticulumProtocolTest {
                 "timestamp": 1234567890,
                 "public_key": ""
             }
-        """.trimIndent()
+            """.trimIndent()
 
         // When
         val result = protocol.parseMessageJson(messageJson)
@@ -868,7 +900,8 @@ class ServiceReticulumProtocolTest {
         val sourceHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { it.toByte() })
         val destHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { (it + 1).toByte() })
 
-        val messageJson = """
+        val messageJson =
+            """
             {
                 "message_hash": "jkl012",
                 "content": "Message with fields",
@@ -877,7 +910,7 @@ class ServiceReticulumProtocolTest {
                 "timestamp": 1234567890,
                 "fields": {"image": "base64data", "filename": "test.jpg"}
             }
-        """.trimIndent()
+            """.trimIndent()
 
         // When
         val result = protocol.parseMessageJson(messageJson)
@@ -895,12 +928,13 @@ class ServiceReticulumProtocolTest {
         val sourceHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { it.toByte() })
         val destHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { (it + 1).toByte() })
 
-        val messageJson = """
+        val messageJson =
+            """
             {
                 "source_hash": "$sourceHashB64",
                 "destination_hash": "$destHashB64"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         // When
         val result = protocol.parseMessageJson(messageJson)
@@ -919,14 +953,15 @@ class ServiceReticulumProtocolTest {
         val destHashB64 = Base64.getEncoder().encodeToString(ByteArray(16) { (it + 1).toByte() })
         val beforeTime = System.currentTimeMillis()
 
-        val messageJson = """
+        val messageJson =
+            """
             {
                 "message_hash": "notime",
                 "content": "No timestamp",
                 "source_hash": "$sourceHashB64",
                 "destination_hash": "$destHashB64"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         // When
         val result = protocol.parseMessageJson(messageJson)

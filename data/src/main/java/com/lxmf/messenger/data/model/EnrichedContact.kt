@@ -37,6 +37,11 @@ data class EnrichedContact(
     val isMyRelay: Boolean = false,
     // Node type (from announces table) - "PEER", "NODE", "PROPAGATION_NODE"
     val nodeType: String? = null,
+    // Location sharing status (from received_locations table)
+    // True if this contact is currently sharing their location with us
+    val isReceivingLocationFrom: Boolean = false,
+    // When their location share expires (null = indefinite)
+    val locationSharingExpiresAt: Long? = null,
 ) {
     /**
      * Parse tags from JSON string to list
@@ -86,6 +91,8 @@ data class EnrichedContact(
         if (status != other.status) return false
         if (isMyRelay != other.isMyRelay) return false
         if (nodeType != other.nodeType) return false
+        if (isReceivingLocationFrom != other.isReceivingLocationFrom) return false
+        if (locationSharingExpiresAt != other.locationSharingExpiresAt) return false
 
         return true
     }
@@ -110,6 +117,8 @@ data class EnrichedContact(
         result = 31 * result + status.hashCode()
         result = 31 * result + isMyRelay.hashCode()
         result = 31 * result + (nodeType?.hashCode() ?: 0)
+        result = 31 * result + isReceivingLocationFrom.hashCode()
+        result = 31 * result + (locationSharingExpiresAt?.hashCode() ?: 0)
         return result
     }
 }

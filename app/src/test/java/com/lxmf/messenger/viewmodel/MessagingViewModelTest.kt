@@ -1,7 +1,6 @@
 package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
-import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
@@ -13,6 +12,7 @@ import com.lxmf.messenger.reticulum.protocol.DeliveryStatusUpdate
 import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
+import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +23,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -63,6 +62,7 @@ class MessagingViewModelTest {
     private lateinit var activeConversationManager: ActiveConversationManager
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
+    private lateinit var locationSharingManager: LocationSharingManager
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
     private val testPeerName = "Test Peer"
@@ -84,9 +84,14 @@ class MessagingViewModelTest {
         activeConversationManager = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
+        locationSharingManager = mockk(relaxed = true)
+
+        // Mock locationSharingManager flows
+        every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
 
         // Mock default contact repository behavior
         every { contactRepository.hasContactFlow(any()) } returns flowOf(false)
+        every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
         coEvery { contactRepository.hasContact(any()) } returns false
         coEvery { contactRepository.addContactFromConversation(any(), any()) } returns Result.success(Unit)
         coEvery { contactRepository.deleteContact(any()) } just Runs
@@ -135,6 +140,7 @@ class MessagingViewModelTest {
             activeConversationManager,
             settingsRepository,
             propagationNodeManager,
+            locationSharingManager,
         )
 
     @Test
@@ -416,12 +422,15 @@ class MessagingViewModelTest {
 
             val failingContactRepository: ContactRepository = mockk()
             every { failingContactRepository.hasContactFlow(any()) } returns flowOf(false)
+            every { failingContactRepository.getEnrichedContacts() } returns flowOf(emptyList())
 
             val failingActiveConversationManager: ActiveConversationManager = mockk(relaxed = true)
             val failingSettingsRepository: SettingsRepository = mockk(relaxed = true)
             val failingPropagationNodeManager: PropagationNodeManager = mockk(relaxed = true)
+            val failingLocationSharingManager: LocationSharingManager = mockk(relaxed = true)
             every { failingPropagationNodeManager.isSyncing } returns MutableStateFlow(false)
             every { failingPropagationNodeManager.manualSyncResult } returns MutableSharedFlow()
+            every { failingLocationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
 
             val viewModelWithoutIdentity =
                 MessagingViewModel(
@@ -432,6 +441,7 @@ class MessagingViewModelTest {
                     failingActiveConversationManager,
                     failingSettingsRepository,
                     failingPropagationNodeManager,
+                    failingLocationSharingManager,
                 )
 
             // Attempt to send message
@@ -872,6 +882,7 @@ class MessagingViewModelTest {
                 activeConversationManager,
                 settingsRepository,
                 propagationNodeManager,
+                locationSharingManager,
             )
             advanceUntilIdle()
 
@@ -931,6 +942,7 @@ class MessagingViewModelTest {
                 activeConversationManager,
                 settingsRepository,
                 propagationNodeManager,
+                locationSharingManager,
             )
             advanceUntilIdle()
 
@@ -986,6 +998,7 @@ class MessagingViewModelTest {
                 activeConversationManager,
                 settingsRepository,
                 propagationNodeManager,
+                locationSharingManager,
             )
             advanceUntilIdle()
 
@@ -1031,6 +1044,7 @@ class MessagingViewModelTest {
                 activeConversationManager,
                 settingsRepository,
                 propagationNodeManager,
+                locationSharingManager,
             )
             advanceUntilIdle()
 

@@ -9,6 +9,7 @@ import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -55,6 +56,7 @@ class SettingsViewModelTest {
     private lateinit var reticulumProtocol: ReticulumProtocol
     private lateinit var interfaceConfigManager: InterfaceConfigManager
     private lateinit var propagationNodeManager: PropagationNodeManager
+    private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -84,6 +86,10 @@ class SettingsViewModelTest {
         reticulumProtocol = mockk(relaxed = true)
         interfaceConfigManager = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
+        locationSharingManager = mockk(relaxed = true)
+
+        // Mock locationSharingManager flows
+        every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
 
         // Setup repository flow mocks
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
@@ -130,6 +136,7 @@ class SettingsViewModelTest {
             reticulumProtocol = reticulumProtocol,
             interfaceConfigManager = interfaceConfigManager,
             propagationNodeManager = propagationNodeManager,
+            locationSharingManager = locationSharingManager,
         )
     }
 
@@ -1423,6 +1430,7 @@ class SettingsViewModelTest {
                     reticulumProtocol = serviceProtocol,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
+                    locationSharingManager = locationSharingManager,
                 )
 
             viewModel.state.test {
@@ -1464,6 +1472,7 @@ class SettingsViewModelTest {
                     reticulumProtocol = serviceProtocol,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
+                    locationSharingManager = locationSharingManager,
                 )
 
             viewModel.state.test {
@@ -1955,6 +1964,7 @@ class SettingsViewModelTest {
                     reticulumProtocol = serviceProtocol,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
+                    locationSharingManager = locationSharingManager,
                 )
 
             // Wait for any potential async operations to settle
@@ -1993,6 +2003,7 @@ class SettingsViewModelTest {
                     reticulumProtocol = serviceProtocol,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
+                    locationSharingManager = locationSharingManager,
                 )
 
             // The ViewModel should be created successfully with ServiceReticulumProtocol
@@ -2001,6 +2012,73 @@ class SettingsViewModelTest {
                 assertFalse(state.isRestarting)
                 cancelAndConsumeRemainingEvents()
             }
+        }
+
+    // endregion
+
+    // region Location Sharing Tests
+
+    @Test
+    fun `setLocationSharingEnabled true saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setLocationSharingEnabled(true)
+
+            coVerify { settingsRepository.saveLocationSharingEnabled(true) }
+        }
+
+    @Test
+    fun `setLocationSharingEnabled false saves to repository and stops all sharing`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setLocationSharingEnabled(false)
+
+            coVerify { settingsRepository.saveLocationSharingEnabled(false) }
+            coVerify { locationSharingManager.stopSharing(null) }
+        }
+
+    @Test
+    fun `stopSharingWith calls locationSharingManager stopSharing`() =
+        runTest {
+            viewModel = createViewModel()
+            val testHash = "testDestinationHash123"
+
+            viewModel.stopSharingWith(testHash)
+
+            coVerify { locationSharingManager.stopSharing(testHash) }
+        }
+
+    @Test
+    fun `stopAllSharing calls locationSharingManager stopSharing with null`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.stopAllSharing()
+
+            coVerify { locationSharingManager.stopSharing(null) }
+        }
+
+    @Test
+    fun `setDefaultSharingDuration saves to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setDefaultSharingDuration("FOUR_HOURS")
+
+            coVerify { settingsRepository.saveDefaultSharingDuration("FOUR_HOURS") }
+        }
+
+    @Test
+    fun `setLocationPrecisionRadius saves to repository and sends update`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setLocationPrecisionRadius(1000)
+
+            coVerify { settingsRepository.saveLocationPrecisionRadius(1000) }
+            coVerify { locationSharingManager.sendImmediateUpdate() }
         }
 
     // endregion

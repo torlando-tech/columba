@@ -388,11 +388,12 @@ object InputValidator {
         excludeName: String? = null,
     ): ValidationResult<String> {
         val trimmed = name.trim()
-        val namesToCheck = if (excludeName != null) {
-            existingNames.filter { it != excludeName }
-        } else {
-            existingNames
-        }
+        val namesToCheck =
+            if (excludeName != null) {
+                existingNames.filter { it != excludeName }
+            } else {
+                existingNames
+            }
 
         return if (namesToCheck.any { it.equals(trimmed, ignoreCase = true) }) {
             ValidationResult.Error("An interface with this name already exists")

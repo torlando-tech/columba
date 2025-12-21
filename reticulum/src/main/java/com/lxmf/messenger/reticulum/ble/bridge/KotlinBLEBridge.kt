@@ -314,14 +314,15 @@ class KotlinBLEBridge(
         return try {
             val jsonArray = org.json.JSONArray()
             connectedPeers.values.forEach { peer ->
-                val jsonObj = org.json.JSONObject().apply {
-                    put("identityHash", peer.identityHash ?: "unknown")
-                    put("address", peer.address)
-                    put("hasCentralConnection", peer.isCentral)
-                    put("hasPeripheralConnection", peer.isPeripheral)
-                    put("mtu", peer.mtu)
-                    put("connectedAt", peer.connectedAt)
-                }
+                val jsonObj =
+                    org.json.JSONObject().apply {
+                        put("identityHash", peer.identityHash ?: "unknown")
+                        put("address", peer.address)
+                        put("hasCentralConnection", peer.isCentral)
+                        put("hasPeripheralConnection", peer.isPeripheral)
+                        put("mtu", peer.mtu)
+                        put("connectedAt", peer.connectedAt)
+                    }
                 jsonArray.put(jsonObj)
             }
             jsonArray.toString()

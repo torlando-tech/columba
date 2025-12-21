@@ -66,6 +66,11 @@ data class SettingsState(
     val isSyncing: Boolean = false,
     // Transport node state
     val transportNodeEnabled: Boolean = true,
+    // Location sharing state
+    val locationSharingEnabled: Boolean = true,
+    val activeSharingSessions: List<com.lxmf.messenger.service.SharingSession> = emptyList(),
+    val defaultSharingDuration: String = "ONE_HOUR",
+    val locationPrecisionRadius: Int = 0,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -78,6 +83,7 @@ class SettingsViewModel
         private val reticulumProtocol: ReticulumProtocol,
         private val interfaceConfigManager: com.lxmf.messenger.service.InterfaceConfigManager,
         private val propagationNodeManager: PropagationNodeManager,
+        private val locationSharingManager: com.lxmf.messenger.service.LocationSharingManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -111,10 +117,13 @@ class SettingsViewModel
 
         init {
             loadSettings()
+            // Always load location sharing settings (not dependent on monitors)
+            loadLocationSharingSettings()
             if (enableMonitors) {
                 startSharedInstanceMonitor()
                 startSharedInstanceAvailabilityMonitor()
                 startRelayMonitor()
+                startLocationSharingMonitor()
             }
         }
 
@@ -231,6 +240,11 @@ class SettingsViewModel
                             transportNodeEnabled = transportNodeEnabled,
                             // Message delivery state
                             defaultDeliveryMethod = defaultDeliveryMethod,
+                            // Preserve location sharing state from loadLocationSharingSettings()
+                            locationSharingEnabled = _state.value.locationSharingEnabled,
+                            activeSharingSessions = _state.value.activeSharingSessions,
+                            defaultSharingDuration = _state.value.defaultSharingDuration,
+                            locationPrecisionRadius = _state.value.locationPrecisionRadius,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value
@@ -1096,6 +1110,102 @@ class SettingsViewModel
                 if (!_state.value.isRestarting) {
                     restartService()
                 }
+            }
+        }
+
+        // Location sharing methods
+
+        /**
+         * Load location sharing settings from the repository.
+         * Called unconditionally to ensure settings persist across navigation.
+         */
+        private fun loadLocationSharingSettings() {
+            viewModelScope.launch {
+                settingsRepository.locationSharingEnabledFlow.collect { enabled ->
+                    _state.value = _state.value.copy(locationSharingEnabled = enabled)
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.defaultSharingDurationFlow.collect { duration ->
+                    _state.value = _state.value.copy(defaultSharingDuration = duration)
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.locationPrecisionRadiusFlow.collect { radiusMeters ->
+                    _state.value = _state.value.copy(locationPrecisionRadius = radiusMeters)
+                }
+            }
+        }
+
+        /**
+         * Start monitoring active location sharing sessions from the LocationSharingManager.
+         * Only called when monitors are enabled.
+         */
+        private fun startLocationSharingMonitor() {
+            viewModelScope.launch {
+                locationSharingManager.activeSessions.collect { sessions ->
+                    _state.value = _state.value.copy(activeSharingSessions = sessions)
+                }
+            }
+        }
+
+        /**
+         * Set the location sharing enabled setting.
+         * When disabled, stops all active sharing sessions.
+         */
+        fun setLocationSharingEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveLocationSharingEnabled(enabled)
+                Log.d(TAG, "Location sharing ${if (enabled) "enabled" else "disabled"}")
+
+                // When disabled, stop all active sharing sessions
+                if (!enabled) {
+                    stopAllSharing()
+                }
+            }
+        }
+
+        /**
+         * Stop sharing with a specific contact.
+         *
+         * @param destinationHash The contact to stop sharing with
+         */
+        fun stopSharingWith(destinationHash: String) {
+            locationSharingManager.stopSharing(destinationHash)
+            Log.d(TAG, "Stopped location sharing with $destinationHash")
+        }
+
+        /**
+         * Stop all active location sharing sessions.
+         */
+        fun stopAllSharing() {
+            locationSharingManager.stopSharing(null)
+            Log.d(TAG, "Stopped all location sharing sessions")
+        }
+
+        /**
+         * Set the default sharing duration.
+         *
+         * @param duration The SharingDuration enum name (e.g., "ONE_HOUR", "FOUR_HOURS")
+         */
+        fun setDefaultSharingDuration(duration: String) {
+            viewModelScope.launch {
+                settingsRepository.saveDefaultSharingDuration(duration)
+                Log.d(TAG, "Default sharing duration set to: $duration")
+            }
+        }
+
+        /**
+         * Set the location precision radius.
+         *
+         * @param radiusMeters 0 for precise, or coarsening radius in meters (100, 1000, 10000, etc.)
+         */
+        fun setLocationPrecisionRadius(radiusMeters: Int) {
+            viewModelScope.launch {
+                settingsRepository.saveLocationPrecisionRadius(radiusMeters)
+                Log.d(TAG, "Location precision radius set to: ${radiusMeters}m")
+                // Send immediate update to all active sharing recipients with new precision
+                locationSharingManager.sendImmediateUpdate()
             }
         }
     }

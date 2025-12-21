@@ -478,9 +478,10 @@ class PropagationNodeManager
             val propagationNodes = announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")).first()
 
             // Filter out excluded relays
-            val availableNodes = propagationNodes.filter { node ->
-                node.destinationHash !in excludeHashes
-            }
+            val availableNodes =
+                propagationNodes.filter { node ->
+                    node.destinationHash !in excludeHashes
+                }
 
             // Find the nearest available relay by hop count
             val nearest = availableNodes.minByOrNull { it.hops }

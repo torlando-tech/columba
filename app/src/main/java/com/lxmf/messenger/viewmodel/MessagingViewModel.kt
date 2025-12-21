@@ -9,14 +9,18 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
+import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.model.ImageCache
+import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.MessageUi
+import com.lxmf.messenger.ui.model.SharingDuration
 import com.lxmf.messenger.ui.model.decodeAndCacheImage
 import com.lxmf.messenger.ui.model.loadFileAttachmentData
 import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
@@ -37,6 +41,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -64,6 +69,7 @@ class MessagingViewModel
         private val activeConversationManager: com.lxmf.messenger.service.ActiveConversationManager,
         private val settingsRepository: SettingsRepository,
         private val propagationNodeManager: PropagationNodeManager,
+        private val locationSharingManager: LocationSharingManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -170,6 +176,42 @@ class MessagingViewModel
                     initialValue = false,
                 )
 
+        // Contacts list for ShareLocationBottomSheet
+        val contacts: StateFlow<List<EnrichedContact>> =
+            contactRepository
+                .getEnrichedContacts()
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.Lazily,
+                    initialValue = emptyList(),
+                )
+
+        // Location sharing state with current peer - for TopAppBar icon state
+        val locationSharingState: StateFlow<LocationSharingState> =
+            combine(
+                locationSharingManager.activeSessions,
+                _currentConversation,
+                contactRepository.getEnrichedContacts(),
+            ) { sessions, currentHash, allContacts ->
+                if (currentHash == null) return@combine LocationSharingState.NONE
+
+                val sharingWithThem = sessions.any { it.destinationHash == currentHash }
+                val theyShareWithUs = allContacts
+                    .find { it.destinationHash == currentHash }
+                    ?.isReceivingLocationFrom == true
+
+                when {
+                    sharingWithThem && theyShareWithUs -> LocationSharingState.MUTUAL
+                    sharingWithThem -> LocationSharingState.SHARING_WITH_THEM
+                    theyShareWithUs -> LocationSharingState.THEY_SHARE_WITH_ME
+                    else -> LocationSharingState.NONE
+                }
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000L),
+                initialValue = LocationSharingState.NONE,
+            )
+
         // Contact toggle result events for toast notifications
         private val _contactToggleResult = MutableSharedFlow<ContactToggleResult>()
         val contactToggleResult: SharedFlow<ContactToggleResult> = _contactToggleResult.asSharedFlow()
@@ -209,6 +251,37 @@ class MessagingViewModel
                     )
                 }
             }
+        }
+
+        /**
+         * Start sharing location with a single peer.
+         * Used from the conversation screen where the target is already known.
+         *
+         * @param peerHash The destination hash of the peer to share with
+         * @param peerName The display name of the peer
+         * @param duration How long to share location
+         */
+        fun startSharingWithPeer(
+            peerHash: String,
+            peerName: String,
+            duration: SharingDuration,
+        ) {
+            Log.d(TAG, "Starting location sharing with $peerName for $duration")
+            locationSharingManager.startSharing(
+                contactHashes = listOf(peerHash),
+                displayNames = mapOf(peerHash to peerName),
+                duration = duration,
+            )
+        }
+
+        /**
+         * Stop sharing location with a specific peer.
+         *
+         * @param peerHash The destination hash of the peer to stop sharing with
+         */
+        fun stopSharingWithPeer(peerHash: String) {
+            Log.d(TAG, "Stopping location sharing with $peerHash")
+            locationSharingManager.stopSharing(peerHash)
         }
 
         init {

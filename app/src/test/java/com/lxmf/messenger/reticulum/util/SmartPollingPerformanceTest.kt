@@ -1,14 +1,13 @@
 package com.lxmf.messenger.reticulum.util
 
+import android.app.Application
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import android.app.Application
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.system.measureTimeMillis

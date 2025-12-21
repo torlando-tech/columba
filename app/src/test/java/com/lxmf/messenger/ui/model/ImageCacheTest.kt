@@ -19,7 +19,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class ImageCacheTest {
-
     @Before
     fun setup() {
         // Clear cache before each test to ensure isolation

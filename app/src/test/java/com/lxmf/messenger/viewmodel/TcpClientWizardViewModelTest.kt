@@ -808,12 +808,13 @@ class TcpClientWizardViewModelTest {
     fun `saveConfiguration fails with duplicate interface name`() =
         runTest {
             // Mock existing interfaces with a name that will conflict
-            val existingInterface = InterfaceConfig.TCPClient(
-                name = "Test Server",
-                enabled = true,
-                targetHost = "existing.example.com",
-                targetPort = 4242,
-            )
+            val existingInterface =
+                InterfaceConfig.TCPClient(
+                    name = "Test Server",
+                    enabled = true,
+                    targetHost = "existing.example.com",
+                    targetPort = 4242,
+                )
             every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
 
             viewModel.state.test {
@@ -839,12 +840,13 @@ class TcpClientWizardViewModelTest {
     fun `saveConfiguration fails with case-insensitive duplicate name`() =
         runTest {
             // Mock existing interface with different case
-            val existingInterface = InterfaceConfig.TCPClient(
-                name = "test server",
-                enabled = true,
-                targetHost = "existing.example.com",
-                targetPort = 4242,
-            )
+            val existingInterface =
+                InterfaceConfig.TCPClient(
+                    name = "test server",
+                    enabled = true,
+                    targetHost = "existing.example.com",
+                    targetPort = 4242,
+                )
             every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
 
             viewModel.state.test {
@@ -890,12 +892,13 @@ class TcpClientWizardViewModelTest {
     @Test
     fun `saveConfiguration does not call repository when duplicate name detected`() =
         runTest {
-            val existingInterface = InterfaceConfig.TCPClient(
-                name = "Test Server",
-                enabled = true,
-                targetHost = "existing.example.com",
-                targetPort = 4242,
-            )
+            val existingInterface =
+                InterfaceConfig.TCPClient(
+                    name = "Test Server",
+                    enabled = true,
+                    targetHost = "existing.example.com",
+                    targetPort = 4242,
+                )
             every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
 
             viewModel.selectServer(testServer)

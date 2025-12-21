@@ -43,18 +43,7 @@ fun Identicon(
     }
 
     // Generate colors from hash - use remember to avoid recalculating on every recomposition
-    // Create a stable key from first 6 bytes of hash
-    val colorKey = remember(hash) {
-        // Create a stable key from first 6 bytes
-        (hash[0].toInt() and 0xFF) shl 40 or
-            ((hash[1].toInt() and 0xFF) shl 32) or
-            ((hash[2].toInt() and 0xFF) shl 24) or
-            ((hash[3].toInt() and 0xFF) shl 16) or
-            ((hash[4].toInt() and 0xFF) shl 8) or
-            (hash[5].toInt() and 0xFF)
-    }
-
-    val primaryColor = remember(colorKey) {
+    val primaryColor = remember(hash) {
         Color(
             red = (hash[0].toInt() and 0xFF) / 255f,
             green = (hash[1].toInt() and 0xFF) / 255f,
@@ -62,7 +51,7 @@ fun Identicon(
         )
     }
 
-    val secondaryColor = remember(colorKey) {
+    val secondaryColor = remember(hash) {
         Color(
             red = (hash[3].toInt() and 0xFF) / 255f,
             green = (hash[4].toInt() and 0xFF) / 255f,

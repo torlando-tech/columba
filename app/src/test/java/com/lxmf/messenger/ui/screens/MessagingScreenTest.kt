@@ -13,6 +13,7 @@ import androidx.paging.PagingData
 import com.lxmf.messenger.test.MessagingTestFixtures
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.ui.model.LocationSharingState
+import com.lxmf.messenger.ui.model.ReplyPreviewUi
 import com.lxmf.messenger.viewmodel.ContactToggleResult
 import com.lxmf.messenger.viewmodel.MessagingViewModel
 import io.mockk.every
@@ -886,5 +887,292 @@ class MessagingScreenTest {
             )
         }
         composeTestRule.waitForIdle()
+    }
+
+    // ========== Reply Functionality Tests ==========
+
+    @Test
+    fun replyInputBar_displayed_whenPendingReplyIsSet() {
+        // Given - a pending reply is set
+        val replyPreview = ReplyPreviewUi(
+            messageId = "reply-msg-123",
+            senderName = "Alice",
+            contentPreview = "Original message content",
+        )
+        every { mockViewModel.pendingReplyTo } returns MutableStateFlow(replyPreview)
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - ReplyInputBar should be displayed
+        composeTestRule.onNodeWithText("Replying to Alice").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Original message content").assertIsDisplayed()
+    }
+
+    @Test
+    fun replyInputBar_notDisplayed_whenNoPendingReply() {
+        // Given - no pending reply (default state from setup)
+        every { mockViewModel.pendingReplyTo } returns MutableStateFlow(null)
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - ReplyInputBar should not be displayed
+        composeTestRule.onNodeWithText("Replying to", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun replyInputBar_cancelButton_callsClearReplyTo() {
+        // Given - a pending reply is set
+        val replyPreview = ReplyPreviewUi(
+            messageId = "reply-msg-123",
+            senderName = "Bob",
+            contentPreview = "Some content",
+        )
+        every { mockViewModel.pendingReplyTo } returns MutableStateFlow(replyPreview)
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // When - tap cancel button
+        composeTestRule.onNodeWithContentDescription("Cancel reply").performClick()
+
+        // Then - clearReplyTo should be called
+        verify { mockViewModel.clearReplyTo() }
+    }
+
+    @Test
+    fun replyInputBar_withImageReply_displaysPhotoIndicator() {
+        // Given - a pending reply to an image message
+        val replyPreview = ReplyPreviewUi(
+            messageId = "img-reply-123",
+            senderName = "Charlie",
+            contentPreview = "",
+            hasImage = true,
+        )
+        every { mockViewModel.pendingReplyTo } returns MutableStateFlow(replyPreview)
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should show Photo indicator
+        composeTestRule.onNodeWithText("Photo").assertIsDisplayed()
+    }
+
+    @Test
+    fun replyInputBar_withFileReply_displaysFilename() {
+        // Given - a pending reply to a file message
+        val replyPreview = ReplyPreviewUi(
+            messageId = "file-reply-123",
+            senderName = "David",
+            contentPreview = "",
+            hasFileAttachment = true,
+            firstFileName = "document.pdf",
+        )
+        every { mockViewModel.pendingReplyTo } returns MutableStateFlow(replyPreview)
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should show filename
+        composeTestRule.onNodeWithText("document.pdf").assertIsDisplayed()
+    }
+
+    @Test
+    fun inputBar_withPendingReply_sendButtonEnabled() {
+        // Given - pending reply with text entered
+        val replyPreview = ReplyPreviewUi(
+            messageId = "reply-msg",
+            senderName = "Eve",
+            contentPreview = "Original",
+        )
+        every { mockViewModel.pendingReplyTo } returns MutableStateFlow(replyPreview)
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // When - enter text
+        composeTestRule.onNodeWithText("Type a message...").performTextInput("Reply message")
+
+        // Then - send button should be enabled
+        composeTestRule.onNodeWithContentDescription("Send message").assertIsEnabled()
+    }
+
+    @Test
+    fun messageWithReply_displaysReplyPreviewBubble() {
+        // Given - a message that is a reply to another message
+        val replyPreview = ReplyPreviewUi(
+            messageId = "original-msg",
+            senderName = "Frank",
+            contentPreview = "This is the original message",
+        )
+        val messageWithReply = MessagingTestFixtures.createMessageWithReply(
+            content = "This is my reply",
+            replyPreview = replyPreview,
+        )
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(messageWithReply)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - reply preview should be displayed
+        composeTestRule.onNodeWithText("Frank").assertIsDisplayed()
+        composeTestRule.onNodeWithText("This is the original message").assertIsDisplayed()
+        composeTestRule.onNodeWithText("This is my reply").assertIsDisplayed()
+    }
+
+    @Test
+    fun messageWithReply_loadsReplyPreviewAsync_whenNotCached() {
+        // Given - a message with replyToMessageId but no cached preview
+        val messageWithReplyId = MessagingTestFixtures.createMessageWithReplyId(
+            id = "msg-with-reply",
+            replyToMessageId = "original-msg-id",
+        )
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(messageWithReplyId)))
+        every { mockViewModel.replyPreviewCache } returns MutableStateFlow(emptyMap())
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should trigger async loading of reply preview
+        verify { mockViewModel.loadReplyPreviewAsync("msg-with-reply", "original-msg-id") }
+    }
+
+    @Test
+    fun messageWithReply_doesNotReload_whenCached() {
+        // Given - a message with replyToMessageId and cached preview
+        val messageId = "cached-reply-msg"
+        val replyToId = "original-msg"
+        val messageWithReplyId = MessagingTestFixtures.createMessageWithReplyId(
+            id = messageId,
+            replyToMessageId = replyToId,
+        )
+        val cachedPreview = ReplyPreviewUi(
+            messageId = replyToId,
+            senderName = "Grace",
+            contentPreview = "Cached content",
+        )
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(messageWithReplyId)))
+        every { mockViewModel.replyPreviewCache } returns MutableStateFlow(mapOf(messageId to cachedPreview))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should NOT trigger async loading (already cached)
+        verify(exactly = 0) { mockViewModel.loadReplyPreviewAsync(any(), any()) }
+
+        // And should display cached preview
+        composeTestRule.onNodeWithText("Grace").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Cached content").assertIsDisplayed()
+    }
+
+    @Test
+    fun replyPreviewCache_update_triggersRecomposition() {
+        // Given - message with reply that initially has no cache
+        val messageId = "recompose-test-msg"
+        val replyToId = "original-for-recompose"
+        val messageWithReplyId = MessagingTestFixtures.createMessageWithReplyId(
+            id = messageId,
+            replyToMessageId = replyToId,
+        )
+        val cacheFlow = MutableStateFlow<Map<String, ReplyPreviewUi>>(emptyMap())
+
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(messageWithReplyId)))
+        every { mockViewModel.replyPreviewCache } returns cacheFlow
+
+        // When - render initially
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Initial load should be triggered
+        verify { mockViewModel.loadReplyPreviewAsync(messageId, replyToId) }
+
+        // Then - update cache (simulating async load completion)
+        val loadedPreview = ReplyPreviewUi(
+            messageId = replyToId,
+            senderName = "Henry",
+            contentPreview = "Loaded content",
+        )
+        cacheFlow.value = mapOf(messageId to loadedPreview)
+        composeTestRule.waitForIdle()
+
+        // Should display loaded preview
+        composeTestRule.onNodeWithText("Henry").assertIsDisplayed()
     }
 }

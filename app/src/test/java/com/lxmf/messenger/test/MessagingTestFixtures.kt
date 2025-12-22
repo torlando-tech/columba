@@ -2,6 +2,7 @@ package com.lxmf.messenger.test
 
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.ui.model.MessageUi
+import com.lxmf.messenger.ui.model.ReplyPreviewUi
 
 /**
  * Test fixtures for MessagingScreen UI tests.
@@ -271,4 +272,56 @@ object MessagingTestFixtures {
             0x82.toByte(), // CRC
         )
     }
+
+    // ========== Reply Fixtures ==========
+
+    /**
+     * Creates a message that is a reply to another message.
+     * The reply preview is already loaded and attached.
+     */
+    fun createMessageWithReply(
+        id: String = "msg_reply_001",
+        destinationHash: String = Constants.TEST_DESTINATION_HASH,
+        content: String = "This is a reply message",
+        timestamp: Long = System.currentTimeMillis(),
+        isFromMe: Boolean = true,
+        replyPreview: ReplyPreviewUi,
+    ) = MessageUi(
+        id = id,
+        destinationHash = destinationHash,
+        content = content,
+        timestamp = timestamp,
+        isFromMe = isFromMe,
+        status = if (isFromMe) "sent" else "delivered",
+        decodedImage = null,
+        deliveryMethod = if (isFromMe) "direct" else null,
+        errorMessage = null,
+        replyToMessageId = replyPreview.messageId,
+        replyPreview = replyPreview,
+    )
+
+    /**
+     * Creates a message with a replyToMessageId but no cached preview.
+     * This is used to test async loading of reply previews.
+     */
+    fun createMessageWithReplyId(
+        id: String = "msg_with_reply_id_001",
+        destinationHash: String = Constants.TEST_DESTINATION_HASH,
+        content: String = "Message with reply ID",
+        timestamp: Long = System.currentTimeMillis(),
+        isFromMe: Boolean = false,
+        replyToMessageId: String,
+    ) = MessageUi(
+        id = id,
+        destinationHash = destinationHash,
+        content = content,
+        timestamp = timestamp,
+        isFromMe = isFromMe,
+        status = if (isFromMe) "sent" else "delivered",
+        decodedImage = null,
+        deliveryMethod = if (isFromMe) "direct" else null,
+        errorMessage = null,
+        replyToMessageId = replyToMessageId,
+        replyPreview = null, // Not yet loaded
+    )
 }

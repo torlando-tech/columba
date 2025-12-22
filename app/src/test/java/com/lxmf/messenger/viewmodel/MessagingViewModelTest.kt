@@ -42,6 +42,7 @@ import java.io.ByteArrayOutputStream
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
 import com.lxmf.messenger.data.repository.Message as DataMessage
+import com.lxmf.messenger.data.repository.ReplyPreview
 
 /**
  * Unit tests for MessagingViewModel.
@@ -119,6 +120,9 @@ class MessagingViewModelTest {
 
         // Default: no announce info
         every { announceRepository.getAnnounceFlow(any()) } returns flowOf(null)
+
+        // Default: no reply preview
+        coEvery { conversationRepository.getReplyPreview(any(), any()) } returns null
     }
 
     @After
@@ -2326,6 +2330,452 @@ class MessagingViewModelTest {
             // Cleanup
             unmockkStatic(androidx.core.content.FileProvider::class)
             tempDir.deleteRecursively()
+        }
+
+    // ========== REPLY FUNCTIONALITY TESTS ==========
+
+    @Test
+    fun `setReplyTo sets pending reply when message found`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Mock reply preview exists
+            val replyPreview = ReplyPreview(
+                messageId = "reply-msg-123",
+                senderName = "Alice",
+                contentPreview = "Hello there!",
+                hasImage = false,
+                hasFileAttachment = false,
+                firstFileName = null,
+            )
+            coEvery { conversationRepository.getReplyPreview("reply-msg-123", any()) } returns replyPreview
+
+            // Load conversation first
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Set reply to message
+            viewModel.setReplyTo("reply-msg-123")
+            advanceUntilIdle()
+
+            // Assert: pendingReplyTo is set
+            val pending = viewModel.pendingReplyTo.value
+            assertNotNull(pending)
+            assertEquals("reply-msg-123", pending!!.messageId)
+            assertEquals("Alice", pending.senderName)
+            assertEquals("Hello there!", pending.contentPreview)
+        }
+
+    @Test
+    fun `setReplyTo does not set pending reply when message not found`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Mock reply preview not found
+            coEvery { conversationRepository.getReplyPreview("unknown-msg", any()) } returns null
+
+            // Load conversation first
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Try to set reply to non-existent message
+            viewModel.setReplyTo("unknown-msg")
+            advanceUntilIdle()
+
+            // Assert: pendingReplyTo is NOT set
+            assertNull(viewModel.pendingReplyTo.value)
+        }
+
+    @Test
+    fun `clearReplyTo clears pending reply`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Set a pending reply first
+            val replyPreview = ReplyPreview(
+                messageId = "reply-msg-123",
+                senderName = "Alice",
+                contentPreview = "Hello there!",
+                hasImage = false,
+                hasFileAttachment = false,
+                firstFileName = null,
+            )
+            coEvery { conversationRepository.getReplyPreview("reply-msg-123", any()) } returns replyPreview
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            viewModel.setReplyTo("reply-msg-123")
+            advanceUntilIdle()
+
+            // Verify it's set
+            assertNotNull(viewModel.pendingReplyTo.value)
+
+            // Act: Clear the reply
+            viewModel.clearReplyTo()
+            advanceUntilIdle()
+
+            // Assert: pendingReplyTo is cleared
+            assertNull(viewModel.pendingReplyTo.value)
+        }
+
+    @Test
+    fun `pendingReplyTo initial state is null`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Assert: Initial state is null
+            assertNull(viewModel.pendingReplyTo.value)
+        }
+
+    @Test
+    fun `loadReplyPreviewAsync caches reply preview`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Mock reply preview exists
+            val replyPreview = ReplyPreview(
+                messageId = "original-msg-456",
+                senderName = "Bob",
+                contentPreview = "Original message content",
+                hasImage = true,
+                hasFileAttachment = false,
+                firstFileName = null,
+            )
+            coEvery { conversationRepository.getReplyPreview("original-msg-456", any()) } returns replyPreview
+
+            // Load conversation first
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Load reply preview for a message
+            viewModel.loadReplyPreviewAsync("current-msg-789", "original-msg-456")
+            advanceUntilIdle()
+
+            // Assert: Reply preview is cached
+            val cache = viewModel.replyPreviewCache.value
+            assertTrue(cache.containsKey("current-msg-789"))
+            val cachedPreview = cache["current-msg-789"]
+            assertNotNull(cachedPreview)
+            assertEquals("original-msg-456", cachedPreview!!.messageId)
+            assertEquals("Bob", cachedPreview.senderName)
+            assertTrue(cachedPreview.hasImage)
+        }
+
+    @Test
+    fun `loadReplyPreviewAsync does not reload if already cached`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Mock reply preview exists
+            val replyPreview = ReplyPreview(
+                messageId = "original-msg",
+                senderName = "Alice",
+                contentPreview = "Hello",
+                hasImage = false,
+                hasFileAttachment = false,
+                firstFileName = null,
+            )
+            coEvery { conversationRepository.getReplyPreview("original-msg", any()) } returns replyPreview
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Load once
+            viewModel.loadReplyPreviewAsync("msg-1", "original-msg")
+            advanceUntilIdle()
+
+            // Verify it was loaded
+            coVerify(exactly = 1) { conversationRepository.getReplyPreview("original-msg", any()) }
+
+            // Try to load again
+            viewModel.loadReplyPreviewAsync("msg-1", "original-msg")
+            advanceUntilIdle()
+
+            // Assert: Repository was NOT called again (cached)
+            coVerify(exactly = 1) { conversationRepository.getReplyPreview("original-msg", any()) }
+        }
+
+    @Test
+    fun `loadReplyPreviewAsync handles deleted message gracefully`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Reply target message not found
+            coEvery { conversationRepository.getReplyPreview("deleted-msg", any()) } returns null
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Load reply preview for deleted message
+            viewModel.loadReplyPreviewAsync("current-msg", "deleted-msg")
+            advanceUntilIdle()
+
+            // Assert: Cache contains a placeholder for deleted message
+            val cache = viewModel.replyPreviewCache.value
+            assertTrue(cache.containsKey("current-msg"))
+            val cachedPreview = cache["current-msg"]
+            assertNotNull(cachedPreview)
+            assertEquals("deleted-msg", cachedPreview!!.messageId)
+            assertEquals("Deleted message", cachedPreview.contentPreview)
+        }
+
+    @Test
+    fun `replyPreviewCache initial state is empty`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Assert: Initial state is empty map
+            assertTrue(viewModel.replyPreviewCache.value.isEmpty())
+        }
+
+    @Test
+    fun `sendMessage with pending reply includes replyToMessageId`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Mock successful send
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val testReceipt = MessageReceipt(
+                messageHash = ByteArray(32) { it.toByte() },
+                timestamp = 3000L,
+                destinationHash = destHashBytes,
+            )
+            coEvery {
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(testReceipt)
+
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+
+            // Setup: Set a pending reply
+            val replyPreview = ReplyPreview(
+                messageId = "reply-to-this-msg",
+                senderName = "Alice",
+                contentPreview = "Original message",
+                hasImage = false,
+                hasFileAttachment = false,
+                firstFileName = null,
+            )
+            coEvery { conversationRepository.getReplyPreview("reply-to-this-msg", any()) } returns replyPreview
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            viewModel.setReplyTo("reply-to-this-msg")
+            advanceUntilIdle()
+
+            // Verify reply is set
+            assertNotNull(viewModel.pendingReplyTo.value)
+
+            // Act: Send message
+            viewModel.sendMessage(testPeerHash, "This is my reply")
+            advanceUntilIdle()
+
+            // Assert: Message saved with replyToMessageId
+            coVerify {
+                conversationRepository.saveMessage(
+                    peerHash = testPeerHash,
+                    peerName = testPeerName,
+                    message = match { it.replyToMessageId == "reply-to-this-msg" },
+                    peerPublicKey = null,
+                )
+            }
+        }
+
+    @Test
+    fun `sendMessage clears pending reply after successful send`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Mock successful send
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val testReceipt = MessageReceipt(
+                messageHash = ByteArray(32) { it.toByte() },
+                timestamp = 3000L,
+                destinationHash = destHashBytes,
+            )
+            coEvery {
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(testReceipt)
+
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+
+            // Setup: Set a pending reply
+            val replyPreview = ReplyPreview(
+                messageId = "reply-to-this-msg",
+                senderName = "Alice",
+                contentPreview = "Original message",
+                hasImage = false,
+                hasFileAttachment = false,
+                firstFileName = null,
+            )
+            coEvery { conversationRepository.getReplyPreview("reply-to-this-msg", any()) } returns replyPreview
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            viewModel.setReplyTo("reply-to-this-msg")
+            advanceUntilIdle()
+
+            // Verify reply is set before send
+            assertNotNull(viewModel.pendingReplyTo.value)
+
+            // Act: Send message
+            viewModel.sendMessage(testPeerHash, "This is my reply")
+            advanceUntilIdle()
+
+            // Assert: Pending reply was cleared after successful send
+            assertNull(viewModel.pendingReplyTo.value)
+        }
+
+    @Test
+    fun `sendMessage without pending reply does not include replyToMessageId`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Mock successful send
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val testReceipt = MessageReceipt(
+                messageHash = ByteArray(32) { it.toByte() },
+                timestamp = 3000L,
+                destinationHash = destHashBytes,
+            )
+            coEvery {
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(testReceipt)
+
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // No pending reply set
+
+            // Act: Send message
+            viewModel.sendMessage(testPeerHash, "Regular message")
+            advanceUntilIdle()
+
+            // Assert: Message saved without replyToMessageId
+            coVerify {
+                conversationRepository.saveMessage(
+                    peerHash = testPeerHash,
+                    peerName = testPeerName,
+                    message = match { it.replyToMessageId == null },
+                    peerPublicKey = null,
+                )
+            }
+        }
+
+    @Test
+    fun `setReplyTo handles exception gracefully`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Repository throws exception
+            coEvery { conversationRepository.getReplyPreview(any(), any()) } throws RuntimeException("DB error")
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Try to set reply (should not crash)
+            viewModel.setReplyTo("some-msg")
+            advanceUntilIdle()
+
+            // Assert: No crash, pendingReplyTo remains null
+            assertNull(viewModel.pendingReplyTo.value)
+        }
+
+    @Test
+    fun `loadReplyPreviewAsync handles exception gracefully`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Repository throws exception
+            coEvery { conversationRepository.getReplyPreview(any(), any()) } throws RuntimeException("DB error")
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Try to load reply preview (should not crash)
+            viewModel.loadReplyPreviewAsync("current-msg", "reply-to-msg")
+            advanceUntilIdle()
+
+            // Assert: No crash, cache remains empty
+            assertTrue(viewModel.replyPreviewCache.value.isEmpty())
+        }
+
+    @Test
+    fun `setReplyTo with image attachment sets hasImage correctly`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Reply preview has image
+            val replyPreview = ReplyPreview(
+                messageId = "img-msg",
+                senderName = "Alice",
+                contentPreview = "Check out this photo",
+                hasImage = true,
+                hasFileAttachment = false,
+                firstFileName = null,
+            )
+            coEvery { conversationRepository.getReplyPreview("img-msg", any()) } returns replyPreview
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act
+            viewModel.setReplyTo("img-msg")
+            advanceUntilIdle()
+
+            // Assert
+            val pending = viewModel.pendingReplyTo.value
+            assertNotNull(pending)
+            assertTrue(pending!!.hasImage)
+        }
+
+    @Test
+    fun `setReplyTo with file attachment sets hasFileAttachment correctly`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Setup: Reply preview has file attachment
+            val replyPreview = ReplyPreview(
+                messageId = "file-msg",
+                senderName = "Bob",
+                contentPreview = "Here is the document",
+                hasImage = false,
+                hasFileAttachment = true,
+                firstFileName = "report.pdf",
+            )
+            coEvery { conversationRepository.getReplyPreview("file-msg", any()) } returns replyPreview
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act
+            viewModel.setReplyTo("file-msg")
+            advanceUntilIdle()
+
+            // Assert
+            val pending = viewModel.pendingReplyTo.value
+            assertNotNull(pending)
+            assertTrue(pending!!.hasFileAttachment)
+            assertEquals("report.pdf", pending.firstFileName)
         }
 
 }

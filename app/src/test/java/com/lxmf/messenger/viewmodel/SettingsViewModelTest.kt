@@ -2382,8 +2382,9 @@ class SettingsViewModelTest {
                         RelayInfo(
                             destinationHash = "abc123",
                             displayName = "Test Relay",
-                            nickname = null,
-                            isManual = false,
+                            hops = 1,
+                            isAutoSelected = false,
+                            lastSeenTimestamp = System.currentTimeMillis(),
                         ),
                     )
                 availableRelaysStateFlow.value = AvailableRelaysState.Loaded(testRelays)

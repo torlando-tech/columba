@@ -2,6 +2,7 @@ package com.lxmf.messenger.ui.components
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -269,5 +270,173 @@ class ReplyComponentsTest {
         }
 
         composeTestRule.onNodeWithText("report.xlsx").assertIsDisplayed()
+    }
+
+    // ========== SwipeableMessageBubble TESTS ==========
+
+    @Test
+    fun `SwipeableMessageBubble displays content`() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SwipeableMessageBubble(
+                    isFromMe = false,
+                    onReply = {},
+                ) {
+                    Text("Test message content")
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithText("Test message content").assertIsDisplayed()
+    }
+
+    @Test
+    fun `SwipeableMessageBubble displays for sent message`() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SwipeableMessageBubble(
+                    isFromMe = true,
+                    onReply = {},
+                ) {
+                    Text("Sent message")
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithText("Sent message").assertIsDisplayed()
+    }
+
+    @Test
+    fun `SwipeableMessageBubble displays for received message`() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SwipeableMessageBubble(
+                    isFromMe = false,
+                    onReply = {},
+                ) {
+                    Text("Received message")
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithText("Received message").assertIsDisplayed()
+    }
+
+    // ========== ReplyPreviewBubble Edge Cases ==========
+
+    @Test
+    fun `ReplyPreviewBubble displays for isFromMe true`() {
+        val replyPreview = ReplyPreviewUi(
+            messageId = "msg-789",
+            senderName = "You",
+            contentPreview = "Your original message",
+        )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReplyPreviewBubble(
+                    replyPreview = replyPreview,
+                    isFromMe = true,
+                    onClick = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("You").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Your original message").assertIsDisplayed()
+    }
+
+    @Test
+    fun `ReplyPreviewBubble displays both image and content`() {
+        val replyPreview = ReplyPreviewUi(
+            messageId = "msg-123",
+            senderName = "Lisa",
+            contentPreview = "Check out this photo!",
+            hasImage = true,
+        )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReplyPreviewBubble(
+                    replyPreview = replyPreview,
+                    isFromMe = false,
+                    onClick = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Image").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Check out this photo!").assertIsDisplayed()
+    }
+
+    @Test
+    fun `ReplyPreviewBubble displays both file and content`() {
+        val replyPreview = ReplyPreviewUi(
+            messageId = "msg-123",
+            senderName = "Mike",
+            contentPreview = "Here's the document",
+            hasFileAttachment = true,
+            firstFileName = "invoice.pdf",
+        )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReplyPreviewBubble(
+                    replyPreview = replyPreview,
+                    isFromMe = false,
+                    onClick = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("File").assertIsDisplayed()
+        composeTestRule.onNodeWithText("invoice.pdf").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Here's the document").assertIsDisplayed()
+    }
+
+    @Test
+    fun `ReplyInputBar displays content preview when no attachments`() {
+        val replyPreview = ReplyPreviewUi(
+            messageId = "msg-456",
+            senderName = "Nancy",
+            contentPreview = "Just a text message",
+            hasImage = false,
+            hasFileAttachment = false,
+        )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReplyInputBar(
+                    replyPreview = replyPreview,
+                    onCancelReply = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Replying to Nancy").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Just a text message").assertIsDisplayed()
+    }
+
+    @Test
+    fun `ReplyInputBar hides file icon when no filename`() {
+        val replyPreview = ReplyPreviewUi(
+            messageId = "msg-456",
+            senderName = "Oscar",
+            contentPreview = "Some text",
+            hasFileAttachment = true,
+            firstFileName = null, // No filename
+        )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReplyInputBar(
+                    replyPreview = replyPreview,
+                    onCancelReply = {},
+                )
+            }
+        }
+
+        // Should show content preview instead when no filename
+        composeTestRule.onNodeWithText("Some text").assertIsDisplayed()
     }
 }

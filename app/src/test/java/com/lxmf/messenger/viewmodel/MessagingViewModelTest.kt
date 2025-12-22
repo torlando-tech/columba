@@ -2524,7 +2524,7 @@ class MessagingViewModelTest {
             val cachedPreview = cache["current-msg"]
             assertNotNull(cachedPreview)
             assertEquals("deleted-msg", cachedPreview!!.messageId)
-            assertEquals("Deleted message", cachedPreview.contentPreview)
+            assertEquals("Message deleted", cachedPreview.contentPreview)
         }
 
     @Test

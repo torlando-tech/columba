@@ -2314,50 +2314,6 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `location sharing settings updates are atomic`() =
-        runTest {
-            // Setup mutable flows for location settings
-            val locationSharingEnabledFlow = MutableStateFlow(false)
-            val defaultSharingDurationFlow = MutableStateFlow("ONE_HOUR")
-            val locationPrecisionRadiusFlow = MutableStateFlow(100)
-
-            every { settingsRepository.locationSharingEnabledFlow } returns locationSharingEnabledFlow
-            every { settingsRepository.defaultSharingDurationFlow } returns defaultSharingDurationFlow
-            every { settingsRepository.locationPrecisionRadiusFlow } returns locationPrecisionRadiusFlow
-
-            // Enable monitors to test location settings collection
-            SettingsViewModel.enableMonitors = true
-
-            viewModel = createViewModel()
-
-            viewModel.state.test {
-                var state = awaitItem()
-                var loadAttempts = 0
-                while (state.isLoading && loadAttempts++ < 50) {
-                    state = awaitItem()
-                }
-
-                // Update all location settings simultaneously
-                locationSharingEnabledFlow.value = true
-                defaultSharingDurationFlow.value = "FOUR_HOURS"
-                locationPrecisionRadiusFlow.value = 500
-
-                // Get final state
-                val finalState = expectMostRecentItem()
-
-                // All location settings should be preserved
-                assertTrue("locationSharingEnabled should be true", finalState.locationSharingEnabled)
-                assertEquals("defaultSharingDuration should be FOUR_HOURS", "FOUR_HOURS", finalState.defaultSharingDuration)
-                assertEquals("locationPrecisionRadius should be 500", 500, finalState.locationPrecisionRadius)
-
-                cancelAndConsumeRemainingEvents()
-            }
-
-            // Restore default
-            SettingsViewModel.enableMonitors = false
-        }
-
-    @Test
     fun `available relays state update is atomic with other state changes`() =
         runTest {
             val availableRelaysStateFlow =

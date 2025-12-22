@@ -2121,4 +2121,286 @@ class SettingsViewModelTest {
         }
 
     // endregion
+
+    // region Concurrent State Update Tests (Race Condition Fix)
+
+    /**
+     * Tests that verify the atomic state update fix for race conditions.
+     *
+     * The bug: When sync completes, both isSyncing and lastSyncTimestamp update
+     * nearly simultaneously. Before the fix, two separate coroutines collected
+     * these values and used non-atomic updates:
+     *   _state.value = _state.value.copy(isSyncing = syncing)
+     *   _state.value = _state.value.copy(lastSyncTimestamp = timestamp)
+     *
+     * If both coroutines read the old state before either writes, the second
+     * write would overwrite the first's changes, causing the timestamp to
+     * briefly appear then disappear.
+     *
+     * The fix: Use atomic _state.update { it.copy(...) } instead.
+     */
+
+    @Test
+    fun `concurrent isSyncing and lastSyncTimestamp updates preserve both values`() =
+        runTest {
+            // Setup mutable flows that we can update simultaneously
+            val isSyncingFlow = MutableStateFlow(false)
+            val lastSyncTimestampFlow = MutableStateFlow<Long?>(null)
+
+            every { propagationNodeManager.isSyncing } returns isSyncingFlow
+            every { propagationNodeManager.lastSyncTimestamp } returns lastSyncTimestampFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Verify initial state
+                assertFalse("isSyncing should initially be false", state.isSyncing)
+                assertNull("lastSyncTimestamp should initially be null", state.lastSyncTimestamp)
+
+                // Simulate what happens when sync completes:
+                // Both values update nearly simultaneously
+                val testTimestamp = System.currentTimeMillis()
+                isSyncingFlow.value = true
+                lastSyncTimestampFlow.value = testTimestamp
+
+                // Collect state updates - order doesn't matter, we want final state
+                state = awaitItem()
+                // May need another await if updates come separately
+                if (!state.isSyncing || state.lastSyncTimestamp == null) {
+                    state = awaitItem()
+                }
+
+                // Both values should be present in the final state
+                assertTrue("isSyncing should be true", state.isSyncing)
+                assertEquals(
+                    "lastSyncTimestamp should be preserved",
+                    testTimestamp,
+                    state.lastSyncTimestamp,
+                )
+
+                // Now simulate sync completing (isSyncing -> false)
+                isSyncingFlow.value = false
+                state = awaitItem()
+
+                // The timestamp should NOT be lost when isSyncing changes
+                assertFalse("isSyncing should be false after sync", state.isSyncing)
+                assertEquals(
+                    "lastSyncTimestamp should still be preserved after isSyncing changes",
+                    testTimestamp,
+                    state.lastSyncTimestamp,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `rapid state updates from multiple flows preserve all values`() =
+        runTest {
+            // Setup mutable flows
+            val isSyncingFlow = MutableStateFlow(false)
+            val lastSyncTimestampFlow = MutableStateFlow<Long?>(null)
+
+            every { propagationNodeManager.isSyncing } returns isSyncingFlow
+            every { propagationNodeManager.lastSyncTimestamp } returns lastSyncTimestampFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Simulate rapid updates from multiple flows
+                val timestamp1 = 1000L
+                val timestamp2 = 2000L
+
+                // Update all at once
+                isSyncingFlow.value = true
+                lastSyncTimestampFlow.value = timestamp1
+                autoRetrieveEnabledFlow.value = false
+                retrievalIntervalSecondsFlow.value = 60
+
+                // Get the most recent state after all updates
+                val finalState = expectMostRecentItem()
+
+                // All values should be preserved
+                assertTrue("isSyncing should be preserved", finalState.isSyncing)
+                assertEquals("lastSyncTimestamp should be preserved", timestamp1, finalState.lastSyncTimestamp)
+                assertFalse("autoRetrieveEnabled should be preserved", finalState.autoRetrieveEnabled)
+                assertEquals("retrievalIntervalSeconds should be preserved", 60, finalState.retrievalIntervalSeconds)
+
+                // Now update timestamp again while isSyncing goes false
+                lastSyncTimestampFlow.value = timestamp2
+                isSyncingFlow.value = false
+
+                val newestState = expectMostRecentItem()
+
+                // New timestamp should be preserved even when isSyncing changes
+                assertFalse("isSyncing should be false", newestState.isSyncing)
+                assertEquals(
+                    "New timestamp should be preserved",
+                    timestamp2,
+                    newestState.lastSyncTimestamp,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `lastSyncTimestamp is not lost when isSyncing transitions from true to false`() =
+        runTest {
+            // This is the exact scenario that caused the visual bug:
+            // 1. Sync completes, timestamp is set
+            // 2. isSyncing goes false
+            // 3. The timestamp should NOT disappear
+
+            val isSyncingFlow = MutableStateFlow(false)
+            val lastSyncTimestampFlow = MutableStateFlow<Long?>(null)
+
+            every { propagationNodeManager.isSyncing } returns isSyncingFlow
+            every { propagationNodeManager.lastSyncTimestamp } returns lastSyncTimestampFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Initial state: no sync, no timestamp
+                assertFalse(state.isSyncing)
+                assertNull(state.lastSyncTimestamp)
+
+                // Step 1: Sync starts
+                isSyncingFlow.value = true
+                state = awaitItem()
+                assertTrue("Sync should be in progress", state.isSyncing)
+                assertNull("No timestamp yet during sync", state.lastSyncTimestamp)
+
+                // Step 2: Sync succeeds - timestamp is set
+                val syncTimestamp = System.currentTimeMillis()
+                lastSyncTimestampFlow.value = syncTimestamp
+                state = awaitItem()
+                assertTrue("Sync still in progress", state.isSyncing)
+                assertEquals("Timestamp should be set", syncTimestamp, state.lastSyncTimestamp)
+
+                // Step 3: Sync completes - isSyncing goes false
+                // THIS IS WHERE THE BUG OCCURRED: timestamp would be lost
+                isSyncingFlow.value = false
+                state = awaitItem()
+
+                // Verify the fix: timestamp should still be present
+                assertFalse("Sync should be complete", state.isSyncing)
+                assertEquals(
+                    "Timestamp should NOT be lost when isSyncing changes to false",
+                    syncTimestamp,
+                    state.lastSyncTimestamp,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `location sharing settings updates are atomic`() =
+        runTest {
+            // Setup mutable flows for location settings
+            val locationSharingEnabledFlow = MutableStateFlow(false)
+            val defaultSharingDurationFlow = MutableStateFlow("ONE_HOUR")
+            val locationPrecisionRadiusFlow = MutableStateFlow(100)
+
+            every { settingsRepository.locationSharingEnabledFlow } returns locationSharingEnabledFlow
+            every { settingsRepository.defaultSharingDurationFlow } returns defaultSharingDurationFlow
+            every { settingsRepository.locationPrecisionRadiusFlow } returns locationPrecisionRadiusFlow
+
+            // Enable monitors to test location settings collection
+            SettingsViewModel.enableMonitors = true
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Update all location settings simultaneously
+                locationSharingEnabledFlow.value = true
+                defaultSharingDurationFlow.value = "FOUR_HOURS"
+                locationPrecisionRadiusFlow.value = 500
+
+                // Get final state
+                val finalState = expectMostRecentItem()
+
+                // All location settings should be preserved
+                assertTrue("locationSharingEnabled should be true", finalState.locationSharingEnabled)
+                assertEquals("defaultSharingDuration should be FOUR_HOURS", "FOUR_HOURS", finalState.defaultSharingDuration)
+                assertEquals("locationPrecisionRadius should be 500", 500, finalState.locationPrecisionRadius)
+
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Restore default
+            SettingsViewModel.enableMonitors = false
+        }
+
+    @Test
+    fun `available relays state update is atomic with other state changes`() =
+        runTest {
+            val availableRelaysStateFlow =
+                MutableStateFlow<AvailableRelaysState>(AvailableRelaysState.Loading)
+            val isSyncingFlow = MutableStateFlow(false)
+
+            every { propagationNodeManager.availableRelaysState } returns availableRelaysStateFlow
+            every { propagationNodeManager.isSyncing } returns isSyncingFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Update relays and syncing simultaneously
+                val testRelays =
+                    listOf(
+                        RelayInfo(
+                            destinationHash = "abc123",
+                            displayName = "Test Relay",
+                            nickname = null,
+                            isManual = false,
+                        ),
+                    )
+                availableRelaysStateFlow.value = AvailableRelaysState.Loaded(testRelays)
+                isSyncingFlow.value = true
+
+                // Get final state
+                val finalState = expectMostRecentItem()
+
+                // Both updates should be preserved
+                assertEquals("Should have 1 relay", 1, finalState.availableRelays.size)
+                assertEquals("Relay name should match", "Test Relay", finalState.availableRelays[0].displayName)
+                assertTrue("isSyncing should be true", finalState.isSyncing)
+                assertFalse("availableRelaysLoading should be false", finalState.availableRelaysLoading)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    // endregion
 }

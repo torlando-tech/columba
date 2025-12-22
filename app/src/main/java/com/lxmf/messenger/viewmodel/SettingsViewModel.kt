@@ -7,8 +7,8 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.AvailableRelaysState
+import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -1019,16 +1020,16 @@ class SettingsViewModel
                     when (state) {
                         is AvailableRelaysState.Loading -> {
                             Log.d(TAG, "SettingsViewModel: available relays loading")
-                            _state.value = _state.value.copy(
-                                availableRelaysLoading = true,
-                            )
+                            _state.update { it.copy(availableRelaysLoading = true) }
                         }
                         is AvailableRelaysState.Loaded -> {
                             Log.d(TAG, "SettingsViewModel received ${state.relays.size} available relays")
-                            _state.value = _state.value.copy(
-                                availableRelays = state.relays,
-                                availableRelaysLoading = false,
-                            )
+                            _state.update {
+                                it.copy(
+                                    availableRelays = state.relays,
+                                    availableRelaysLoading = false,
+                                )
+                            }
                         }
                     }
                 }
@@ -1037,26 +1038,26 @@ class SettingsViewModel
             // Monitor sync state from PropagationNodeManager
             viewModelScope.launch {
                 propagationNodeManager.isSyncing.collect { syncing ->
-                    _state.value = _state.value.copy(isSyncing = syncing)
+                    _state.update { it.copy(isSyncing = syncing) }
                 }
             }
 
             // Monitor last sync timestamp from PropagationNodeManager
             viewModelScope.launch {
                 propagationNodeManager.lastSyncTimestamp.collect { timestamp ->
-                    _state.value = _state.value.copy(lastSyncTimestamp = timestamp)
+                    _state.update { it.copy(lastSyncTimestamp = timestamp) }
                 }
             }
 
             // Monitor retrieval settings from repository
             viewModelScope.launch {
                 settingsRepository.autoRetrieveEnabledFlow.collect { enabled ->
-                    _state.value = _state.value.copy(autoRetrieveEnabled = enabled)
+                    _state.update { it.copy(autoRetrieveEnabled = enabled) }
                 }
             }
             viewModelScope.launch {
                 settingsRepository.retrievalIntervalSecondsFlow.collect { seconds ->
-                    _state.value = _state.value.copy(retrievalIntervalSeconds = seconds)
+                    _state.update { it.copy(retrievalIntervalSeconds = seconds) }
                 }
             }
         }
@@ -1122,17 +1123,17 @@ class SettingsViewModel
         private fun loadLocationSharingSettings() {
             viewModelScope.launch {
                 settingsRepository.locationSharingEnabledFlow.collect { enabled ->
-                    _state.value = _state.value.copy(locationSharingEnabled = enabled)
+                    _state.update { it.copy(locationSharingEnabled = enabled) }
                 }
             }
             viewModelScope.launch {
                 settingsRepository.defaultSharingDurationFlow.collect { duration ->
-                    _state.value = _state.value.copy(defaultSharingDuration = duration)
+                    _state.update { it.copy(defaultSharingDuration = duration) }
                 }
             }
             viewModelScope.launch {
                 settingsRepository.locationPrecisionRadiusFlow.collect { radiusMeters ->
-                    _state.value = _state.value.copy(locationPrecisionRadius = radiusMeters)
+                    _state.update { it.copy(locationPrecisionRadius = radiusMeters) }
                 }
             }
         }
@@ -1144,7 +1145,7 @@ class SettingsViewModel
         private fun startLocationSharingMonitor() {
             viewModelScope.launch {
                 locationSharingManager.activeSessions.collect { sessions ->
-                    _state.value = _state.value.copy(activeSharingSessions = sessions)
+                    _state.update { it.copy(activeSharingSessions = sessions) }
                 }
             }
         }

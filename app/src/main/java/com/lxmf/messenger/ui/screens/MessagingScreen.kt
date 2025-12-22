@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Circle
@@ -72,6 +73,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -106,7 +108,11 @@ import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
+import com.lxmf.messenger.ui.components.ReplyInputBar
+import com.lxmf.messenger.ui.components.ReplyPreviewBubble
 import com.lxmf.messenger.ui.components.StarToggleButton
+import com.lxmf.messenger.ui.components.SwipeableMessageBubble
+import com.lxmf.messenger.ui.model.ReplyPreviewUi
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
 import com.lxmf.messenger.util.FileAttachment
@@ -171,6 +177,15 @@ fun MessagingScreen(
             showShareLocationSheet = true
         }
     }
+
+    // Reply state
+    val pendingReplyTo by viewModel.pendingReplyTo.collectAsStateWithLifecycle()
+
+    // Reply preview cache - maps message ID to its loaded reply preview
+    val replyPreviewCache by viewModel.replyPreviewCache.collectAsStateWithLifecycle()
+
+    // Track message positions for jump-to-original functionality
+    val messagePositions = remember { mutableStateMapOf<String, Int>() }
 
     // Lifecycle-aware coroutine scope for image and file processing
     val scope = rememberCoroutineScope()
@@ -522,6 +537,9 @@ fun MessagingScreen(
                             ) { index ->
                                 val message = pagingItems[index]
                                 if (message != null) {
+                                    // Track message position for jump-to-original
+                                    messagePositions[message.id] = index
+
                                     // Async image loading: check if this message has an uncached image
                                     // Using loadedImageIds in the key triggers recomposition when
                                     // the image is decoded and cached
@@ -530,10 +548,25 @@ fun MessagingScreen(
                                             message.decodedImage == null &&
                                             !loadedImageIds.contains(message.id)
 
-                                    // Trigger async loading if needed
+                                    // Trigger async image loading if needed
                                     LaunchedEffect(message.id, needsImageLoading) {
                                         if (needsImageLoading && message.fieldsJson != null) {
                                             viewModel.loadImageAsync(message.id, message.fieldsJson)
+                                        }
+                                    }
+
+                                    // Async reply preview loading: check if this message has a reply
+                                    // that needs loading
+                                    val needsReplyPreviewLoading =
+                                        message.replyToMessageId != null &&
+                                            !replyPreviewCache.containsKey(message.id)
+
+                                    // Trigger async loading if needed
+                                    LaunchedEffect(message.id, needsReplyPreviewLoading) {
+                                        if (needsReplyPreviewLoading) {
+                                            message.replyToMessageId?.let { replyToId ->
+                                                viewModel.loadReplyPreviewAsync(message.id, replyToId)
+                                            }
                                         }
                                     }
 
@@ -545,29 +578,53 @@ fun MessagingScreen(
                                             message.decodedImage
                                         }
 
-                                    // Create updated message with cached image
-                                    val displayMessage =
-                                        if (cachedImage != null && message.decodedImage == null) {
-                                            message.copy(decodedImage = cachedImage)
-                                        } else {
-                                            message
-                                        }
+                                    // Get cached reply preview if it was loaded after initial render
+                                    val cachedReplyPreview = replyPreviewCache[message.id]
 
-                                    MessageBubble(
-                                        message = displayMessage,
-                                        isFromMe = displayMessage.isFromMe,
-                                        clipboardManager = clipboardManager,
-                                        onViewDetails = onViewMessageDetails,
-                                        onRetry = { viewModel.retryFailedMessage(message.id) },
-                                        onFileAttachmentTap = { messageId, fileIndex, filename ->
-                                            selectedFileInfo = Triple(messageId, fileIndex, filename)
-                                            showFileOptionsSheet = true
-                                        },
+                                    // Create updated message with cached image and reply preview
+                                    val displayMessage = message.copy(
+                                        decodedImage = cachedImage ?: message.decodedImage,
+                                        replyPreview = cachedReplyPreview ?: message.replyPreview,
                                     )
+
+                                    // Wrap in SwipeableMessageBubble for swipe-to-reply
+                                    SwipeableMessageBubble(
+                                        isFromMe = displayMessage.isFromMe,
+                                        onReply = { viewModel.setReplyTo(message.id) },
+                                    ) {
+                                        MessageBubble(
+                                            message = displayMessage,
+                                            isFromMe = displayMessage.isFromMe,
+                                            clipboardManager = clipboardManager,
+                                            onViewDetails = onViewMessageDetails,
+                                            onRetry = { viewModel.retryFailedMessage(message.id) },
+                                            onFileAttachmentTap = { messageId, fileIndex, filename ->
+                                                selectedFileInfo = Triple(messageId, fileIndex, filename)
+                                                showFileOptionsSheet = true
+                                            },
+                                            onReply = { viewModel.setReplyTo(message.id) },
+                                            onReplyPreviewClick = { replyToId ->
+                                                // Jump to original message
+                                                messagePositions[replyToId]?.let { position ->
+                                                    scope.launch {
+                                                        listState.animateScrollToItem(position)
+                                                    }
+                                                }
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+                }
+
+                // Reply input bar (shown when replying to a message)
+                pendingReplyTo?.let { replyPreview ->
+                    ReplyInputBar(
+                        replyPreview = replyPreview,
+                        onCancelReply = { viewModel.clearReplyTo() },
+                    )
                 }
 
                 // Message Input Bar - at bottom of Column
@@ -713,6 +770,8 @@ fun MessageBubble(
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
+    onReply: () -> Unit = {},
+    onReplyPreviewClick: (replyToMessageId: String) -> Unit = {},
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var showMenu by remember { mutableStateOf(false) }
@@ -760,6 +819,16 @@ fun MessageBubble(
                             vertical = 10.dp,
                         ),
                 ) {
+                    // Display reply preview if this message is a reply
+                    message.replyPreview?.let { replyPreview ->
+                        ReplyPreviewBubble(
+                            replyPreview = replyPreview,
+                            isFromMe = isFromMe,
+                            onClick = { onReplyPreviewClick(replyPreview.messageId) },
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                     // Display image attachment if present (LXMF field 6 = IMAGE)
                     imageBitmap?.let { bitmap ->
                         Image(
@@ -871,6 +940,10 @@ fun MessageBubble(
                     } else {
                         null
                     },
+                onReply = {
+                    onReply()
+                    showMenu = false
+                },
             )
         }
     }
@@ -885,6 +958,7 @@ fun MessageContextMenu(
     isFailed: Boolean = false,
     onViewDetails: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
+    onReply: (() -> Unit)? = null,
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -904,6 +978,20 @@ fun MessageContextMenu(
                 },
                 text = { Text("Retry") },
                 onClick = onRetry,
+            )
+        }
+
+        // Reply option
+        if (onReply != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Reply,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text("Reply") },
+                onClick = onReply,
             )
         }
 

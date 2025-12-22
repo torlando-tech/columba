@@ -313,6 +313,7 @@ class MockReticulumProtocol : ReticulumProtocol {
         imageData: ByteArray?,
         imageFormat: String?,
         fileAttachments: List<Pair<String, ByteArray>>?,
+        replyToMessageId: String?,
     ): Result<MessageReceipt> {
         // Mock implementation - same as sendLxmfMessage
         return Result.success(

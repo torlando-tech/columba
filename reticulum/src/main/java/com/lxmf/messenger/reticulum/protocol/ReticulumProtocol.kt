@@ -217,6 +217,7 @@ interface ReticulumProtocol {
         imageData: ByteArray? = null,
         imageFormat: String? = null,
         fileAttachments: List<Pair<String, ByteArray>>? = null,
+        replyToMessageId: String? = null,
     ): Result<MessageReceipt>
 
     /**

@@ -39,6 +39,20 @@ data class Message(
     val fieldsJson: String? = null,
     val deliveryMethod: String? = null,
     val errorMessage: String? = null,
+    val replyToMessageId: String? = null,
+)
+
+/**
+ * Lightweight data class for reply preview information.
+ * Contains only the fields needed to display a reply preview in the UI.
+ */
+data class ReplyPreview(
+    val messageId: String,
+    val senderName: String, // "You" or peer display name
+    val contentPreview: String, // Truncated to ~100 chars
+    val hasImage: Boolean,
+    val hasFileAttachment: Boolean,
+    val firstFileName: String?, // For file attachment preview
 )
 
 @Singleton
@@ -50,26 +64,6 @@ class ConversationRepository
         private val peerIdentityDao: PeerIdentityDao,
         private val localIdentityDao: LocalIdentityDao,
     ) {
-        companion object {
-            private const val MAX_MESSAGE_LENGTH = 10_000
-            private const val MAX_PEER_NAME_LENGTH = 100
-
-            /**
-             * Sanitizes text input for database storage.
-             * Removes control characters and enforces length limits.
-             */
-            private fun sanitizeText(
-                text: String,
-                maxLength: Int,
-            ): String {
-                return text
-                    .trim()
-                    .replace(Regex("[\\p{C}&&[^\n\r]]"), "") // Remove control chars except newlines
-                    .replace(Regex("[ \\t]+"), " ") // Normalize spaces/tabs, preserve newlines
-                    .take(maxLength)
-            }
-        }
-
         /**
          * Get all conversations for the active identity, sorted by most recent activity.
          * Automatically switches when identity changes.
@@ -265,6 +259,7 @@ class ConversationRepository
                         fieldsJson = message.fieldsJson, // LXMF fields (attachments, images, etc.)
                         deliveryMethod = message.deliveryMethod,
                         errorMessage = message.errorMessage,
+                        replyToMessageId = message.replyToMessageId, // Reply reference
                     )
                 messageDao.insertMessage(messageEntity)
             }
@@ -432,6 +427,7 @@ class ConversationRepository
                 fieldsJson = fieldsJson,
                 deliveryMethod = deliveryMethod,
                 errorMessage = errorMessage,
+                replyToMessageId = replyToMessageId,
             )
 
         /**
@@ -482,5 +478,85 @@ class ConversationRepository
                 "ConversationRepository",
                 "Updated message ID from $oldMessageId to $newMessageId",
             )
+        }
+
+        /**
+         * Get reply preview data for a message.
+         * Used when displaying a reply to another message.
+         *
+         * @param messageId The ID of the message being replied to
+         * @param peerName The display name of the peer (used when message is from them)
+         * @return ReplyPreview or null if message not found
+         */
+        suspend fun getReplyPreview(
+            messageId: String,
+            peerName: String,
+        ): ReplyPreview? {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return null
+            val previewEntity = messageDao.getReplyPreviewData(messageId, activeIdentity.identityHash)
+                ?: return null
+
+            // Parse fieldsJson to detect attachments
+            val hasImage = previewEntity.fieldsJson?.contains("\"6\"") == true
+            val hasFileAttachment = previewEntity.fieldsJson?.contains("\"5\"") == true
+
+            // Extract first filename if file attachment exists
+            val firstFileName = if (hasFileAttachment && previewEntity.fieldsJson != null) {
+                extractFirstFileName(previewEntity.fieldsJson)
+            } else {
+                null
+            }
+
+            // Truncate content for preview
+            val contentPreview = previewEntity.content.take(REPLY_PREVIEW_MAX_LENGTH).let {
+                if (previewEntity.content.length > REPLY_PREVIEW_MAX_LENGTH) "$it..." else it
+            }
+
+            return ReplyPreview(
+                messageId = previewEntity.id,
+                senderName = if (previewEntity.isFromMe) "You" else peerName,
+                contentPreview = contentPreview,
+                hasImage = hasImage,
+                hasFileAttachment = hasFileAttachment,
+                firstFileName = firstFileName,
+            )
+        }
+
+        /**
+         * Extract the first filename from LXMF file attachments field.
+         * Field 5 format: [[filename, size, mimetype, data], ...]
+         */
+        @Suppress("SwallowedException", "ReturnCount") // JSON parsing errors are expected
+        private fun extractFirstFileName(fieldsJson: String): String? {
+            return try {
+                val json = org.json.JSONObject(fieldsJson)
+                val field5 = json.optJSONArray("5") ?: return null
+                if (field5.length() == 0) return null
+                val firstAttachment = field5.optJSONArray(0) ?: return null
+                firstAttachment.optString(0).takeIf { it.isNotEmpty() }
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        companion object {
+            private const val MAX_MESSAGE_LENGTH = 10_000
+            private const val MAX_PEER_NAME_LENGTH = 100
+            private const val REPLY_PREVIEW_MAX_LENGTH = 100
+
+            /**
+             * Sanitizes text input for database storage.
+             * Removes control characters and enforces length limits.
+             */
+            private fun sanitizeText(
+                text: String,
+                maxLength: Int,
+            ): String {
+                return text
+                    .trim()
+                    .replace(Regex("[\\p{C}&&[^\n\r]]"), "") // Remove control chars except newlines
+                    .replace(Regex("[ \\t]+"), " ") // Normalize spaces/tabs, preserve newlines
+                    .take(maxLength)
+            }
         }
     }

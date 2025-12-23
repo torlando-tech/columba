@@ -43,10 +43,13 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -490,10 +493,18 @@ fun MessageDeliveryRetrievalCard(
                 }
             }
 
-            // Last sync timestamp
+            // Last sync timestamp with periodic refresh
             if (lastSyncTimestamp != null) {
+                // Trigger recomposition every 5 seconds to update relative time
+                var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        delay(5_000)
+                        currentTime = System.currentTimeMillis()
+                    }
+                }
                 Text(
-                    text = "Last sync: ${formatRelativeTime(lastSyncTimestamp)}",
+                    text = "Last sync: ${formatRelativeTime(lastSyncTimestamp, currentTime)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -619,9 +630,10 @@ private fun CurrentRelayInfo(
 
 /**
  * Format a timestamp as relative time (e.g., "2 minutes ago", "Just now").
+ * @param timestamp The timestamp to format
+ * @param now The current time (passed in to trigger recomposition on change)
  */
-private fun formatRelativeTime(timestamp: Long): String {
-    val now = System.currentTimeMillis()
+private fun formatRelativeTime(timestamp: Long, now: Long = System.currentTimeMillis()): String {
     val diff = now - timestamp
 
     return when {

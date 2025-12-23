@@ -120,6 +120,8 @@ class SettingsViewModel
             loadSettings()
             // Always load location sharing settings (not dependent on monitors)
             loadLocationSharingSettings()
+            // Always start sync state monitoring (no infinite loops, needed for UI)
+            startSyncStateMonitor()
             if (enableMonitors) {
                 startSharedInstanceMonitor()
                 startSharedInstanceAvailabilityMonitor()
@@ -1014,6 +1016,14 @@ class SettingsViewModel
                 }
             }
 
+        }
+
+        /**
+         * Start monitoring sync state and retrieval settings.
+         * This is separate from startRelayMonitor() because it has no infinite loops
+         * and should always run (even when enableMonitors is false for testing).
+         */
+        private fun startSyncStateMonitor() {
             // Monitor available relays for selection UI
             viewModelScope.launch {
                 propagationNodeManager.availableRelaysState.collect { state ->

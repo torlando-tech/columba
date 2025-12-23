@@ -170,6 +170,12 @@ class SettingsViewModel
                         settingsRepository.rpcKeyFlow,
                         settingsRepository.transportNodeEnabledFlow,
                         settingsRepository.defaultDeliveryMethodFlow,
+                        // Sync state flows - included here to avoid race conditions with separate collectors
+                        // Note: isSyncing is excluded because it changes rapidly (true→false in ms)
+                        // and would cause excessive recomposition. It's handled separately.
+                        propagationNodeManager.lastSyncTimestamp,
+                        settingsRepository.autoRetrieveEnabledFlow,
+                        settingsRepository.retrievalIntervalSecondsFlow,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as com.lxmf.messenger.data.db.entity.LocalIdentityEntity?
@@ -203,6 +209,17 @@ class SettingsViewModel
 
                         @Suppress("UNCHECKED_CAST")
                         val defaultDeliveryMethod = flows[10] as String
+
+                        // Sync state from flows (not preserved from _state.value to avoid races)
+                        // Note: isSyncing is handled separately to avoid rapid recomposition
+                        @Suppress("UNCHECKED_CAST")
+                        val lastSyncTimestamp = flows[11] as Long?
+
+                        @Suppress("UNCHECKED_CAST")
+                        val autoRetrieveEnabled = flows[12] as Boolean
+
+                        @Suppress("UNCHECKED_CAST")
+                        val retrievalIntervalSeconds = flows[13] as Int
 
                         val displayName = activeIdentity?.displayName ?: defaultName
 
@@ -243,6 +260,12 @@ class SettingsViewModel
                             transportNodeEnabled = transportNodeEnabled,
                             // Message delivery state
                             defaultDeliveryMethod = defaultDeliveryMethod,
+                            // Sync state from flows (included in combine to avoid race conditions)
+                            autoRetrieveEnabled = autoRetrieveEnabled,
+                            retrievalIntervalSeconds = retrievalIntervalSeconds,
+                            lastSyncTimestamp = lastSyncTimestamp,
+                            // isSyncing handled separately to avoid rapid recomposition
+                            isSyncing = _state.value.isSyncing,
                             // Preserve location sharing state from loadLocationSharingSettings()
                             locationSharingEnabled = _state.value.locationSharingEnabled,
                             activeSharingSessions = _state.value.activeSharingSessions,
@@ -1019,9 +1042,10 @@ class SettingsViewModel
         }
 
         /**
-         * Start monitoring sync state and retrieval settings.
-         * This is separate from startRelayMonitor() because it has no infinite loops
-         * and should always run (even when enableMonitors is false for testing).
+         * Start monitoring available relays and isSyncing state.
+         * Note: lastSyncTimestamp, autoRetrieveEnabled, and retrievalIntervalSeconds
+         * are included in the main loadSettings() combine to avoid race conditions.
+         * isSyncing is kept separate because it changes rapidly (true→false in ms).
          */
         private fun startSyncStateMonitor() {
             // Monitor available relays for selection UI
@@ -1045,29 +1069,11 @@ class SettingsViewModel
                 }
             }
 
-            // Monitor sync state from PropagationNodeManager
+            // Monitor isSyncing separately - it changes rapidly and shouldn't trigger
+            // full state recomposition via the main combine
             viewModelScope.launch {
                 propagationNodeManager.isSyncing.collect { syncing ->
                     _state.update { it.copy(isSyncing = syncing) }
-                }
-            }
-
-            // Monitor last sync timestamp from PropagationNodeManager
-            viewModelScope.launch {
-                propagationNodeManager.lastSyncTimestamp.collect { timestamp ->
-                    _state.update { it.copy(lastSyncTimestamp = timestamp) }
-                }
-            }
-
-            // Monitor retrieval settings from repository
-            viewModelScope.launch {
-                settingsRepository.autoRetrieveEnabledFlow.collect { enabled ->
-                    _state.update { it.copy(autoRetrieveEnabled = enabled) }
-                }
-            }
-            viewModelScope.launch {
-                settingsRepository.retrievalIntervalSecondsFlow.collect { seconds ->
-                    _state.update { it.copy(retrievalIntervalSeconds = seconds) }
                 }
             }
         }

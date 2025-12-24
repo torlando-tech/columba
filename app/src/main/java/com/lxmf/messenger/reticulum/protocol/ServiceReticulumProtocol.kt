@@ -10,12 +10,12 @@ import android.os.IBinder
 import android.os.RemoteException
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.lxmf.messenger.MainActivity
-import com.lxmf.messenger.R
 import com.lxmf.messenger.IInitializationCallback
 import com.lxmf.messenger.IReadinessCallback
 import com.lxmf.messenger.IReticulumService
 import com.lxmf.messenger.IReticulumServiceCallback
+import com.lxmf.messenger.MainActivity
+import com.lxmf.messenger.R
 import com.lxmf.messenger.reticulum.model.AnnounceEvent
 import com.lxmf.messenger.reticulum.model.Destination
 import com.lxmf.messenger.reticulum.model.DestinationType
@@ -532,19 +532,20 @@ class ServiceReticulumProtocol(
                             withTimeoutOrNull(3000) {
                                 service?.getStatus()
                             }
-                        val newNetworkStatus = when {
-                            actualStatus == "READY" -> NetworkStatus.READY
-                            actualStatus == "INITIALIZING" -> NetworkStatus.INITIALIZING
-                            actualStatus?.startsWith("ERROR:") == true ->
-                                NetworkStatus.ERROR(
-                                    actualStatus.substringAfter("ERROR:"),
-                                )
-                            actualStatus == null -> {
-                                Log.w(TAG, "Timeout querying service status (3s), assuming SHUTDOWN")
-                                NetworkStatus.SHUTDOWN
+                        val newNetworkStatus =
+                            when {
+                                actualStatus == "READY" -> NetworkStatus.READY
+                                actualStatus == "INITIALIZING" -> NetworkStatus.INITIALIZING
+                                actualStatus?.startsWith("ERROR:") == true ->
+                                    NetworkStatus.ERROR(
+                                        actualStatus.substringAfter("ERROR:"),
+                                    )
+                                actualStatus == null -> {
+                                    Log.w(TAG, "Timeout querying service status (3s), assuming SHUTDOWN")
+                                    NetworkStatus.SHUTDOWN
+                                }
+                                else -> NetworkStatus.SHUTDOWN
                             }
-                            else -> NetworkStatus.SHUTDOWN
-                        }
                         _networkStatus.value = newNetworkStatus
                         Log.d(
                             TAG,
@@ -739,32 +740,36 @@ class ServiceReticulumProtocol(
         try {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            val (statusText, detailText) = when {
-                status == "READY" -> "Connected - Mesh network active" to
-                    "Background service running. Keep battery optimization disabled for reliable message delivery."
-                status == "INITIALIZING" -> "Starting mesh network..." to "Connecting to mesh network..."
-                status == "CONNECTING" -> "Reconnecting..." to "Service was interrupted. Attempting to reconnect..."
-                status.startsWith("ERROR:") -> "Error - Tap to view" to status.substringAfter("ERROR:")
-                else -> "Disconnected" to "Service not running"
-            }
+            val (statusText, detailText) =
+                when {
+                    status == "READY" ->
+                        "Connected - Mesh network active" to
+                            "Background service running. Keep battery optimization disabled for reliable message delivery."
+                    status == "INITIALIZING" -> "Starting mesh network..." to "Connecting to mesh network..."
+                    status == "CONNECTING" -> "Reconnecting..." to "Service was interrupted. Attempting to reconnect..."
+                    status.startsWith("ERROR:") -> "Error - Tap to view" to status.substringAfter("ERROR:")
+                    else -> "Disconnected" to "Service not running"
+                }
 
-            val pendingIntent = PendingIntent.getActivity(
-                context,
-                0,
-                Intent(context, MainActivity::class.java),
-                PendingIntent.FLAG_IMMUTABLE,
-            )
+            val pendingIntent =
+                PendingIntent.getActivity(
+                    context,
+                    0,
+                    Intent(context, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE,
+                )
 
-            val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                .setContentTitle("Columba Mesh Network")
-                .setContentText(statusText)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(detailText))
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentIntent(pendingIntent)
-                .setOngoing(true)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setCategory(NotificationCompat.CATEGORY_SERVICE)
-                .build()
+            val notification =
+                NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setContentTitle("Columba Mesh Network")
+                    .setContentText(statusText)
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(detailText))
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentIntent(pendingIntent)
+                    .setOngoing(true)
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                    .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                    .build()
 
             notificationManager.notify(NOTIFICATION_ID, notification)
             Log.d(TAG, "Updated notification from app process: $status")
@@ -799,10 +804,11 @@ class ServiceReticulumProtocol(
         val multiplier = REBIND_BACKOFF_MULTIPLIER
         var backoffFactor = 1.0
         repeat(rebindAttempts) { backoffFactor *= multiplier }
-        val delay = minOf(
-            (REBIND_INITIAL_DELAY_MS * backoffFactor).toLong(),
-            REBIND_MAX_DELAY_MS
-        )
+        val delay =
+            minOf(
+                (REBIND_INITIAL_DELAY_MS * backoffFactor).toLong(),
+                REBIND_MAX_DELAY_MS,
+            )
 
         rebindAttempts++
         Log.i(TAG, "Scheduling rebind attempt $rebindAttempts/$REBIND_MAX_ATTEMPTS in ${delay}ms")
@@ -810,50 +816,53 @@ class ServiceReticulumProtocol(
         // Update status to show we're reconnecting
         _networkStatus.value = NetworkStatus.CONNECTING
 
-        rebindJob = protocolScope.launch {
-            try {
-                kotlinx.coroutines.delay(delay)
+        rebindJob =
+            protocolScope.launch {
+                try {
+                    kotlinx.coroutines.delay(delay)
 
-                // Double-check we still need to rebind
-                if (isIntentionalUnbind || isBound) {
-                    Log.d(TAG, "Rebind cancelled - intentional=$isIntentionalUnbind, bound=$isBound")
-                    return@launch
-                }
+                    // Double-check we still need to rebind
+                    if (isIntentionalUnbind || isBound) {
+                        Log.d(TAG, "Rebind cancelled - intentional=$isIntentionalUnbind, bound=$isBound")
+                        return@launch
+                    }
 
-                Log.i(TAG, "Attempting rebind to ReticulumService (attempt $rebindAttempts)")
+                    Log.i(TAG, "Attempting rebind to ReticulumService (attempt $rebindAttempts)")
 
-                // Start the service first (it may have been killed)
-                val startIntent = Intent(context, ReticulumService::class.java).apply {
-                    action = ReticulumService.ACTION_START
-                }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    context.startForegroundService(startIntent)
-                } else {
-                    context.startService(startIntent)
-                }
+                    // Start the service first (it may have been killed)
+                    val startIntent =
+                        Intent(context, ReticulumService::class.java).apply {
+                            action = ReticulumService.ACTION_START
+                        }
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        context.startForegroundService(startIntent)
+                    } else {
+                        context.startService(startIntent)
+                    }
 
-                // Bind to the service
-                val bindIntent = Intent(context, ReticulumService::class.java)
-                val bound = context.bindService(
-                    bindIntent,
-                    serviceConnection,
-                    Context.BIND_AUTO_CREATE
-                )
+                    // Bind to the service
+                    val bindIntent = Intent(context, ReticulumService::class.java)
+                    val bound =
+                        context.bindService(
+                            bindIntent,
+                            serviceConnection,
+                            Context.BIND_AUTO_CREATE,
+                        )
 
-                if (bound) {
-                    Log.i(TAG, "Rebind initiated successfully")
-                    // Note: onServiceConnected will be called and will reset rebindAttempts
-                } else {
-                    Log.e(TAG, "Failed to initiate rebind, scheduling retry")
-                    attemptRebind() // Try again with increased delay
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error during rebind attempt", e)
-                if (!isIntentionalUnbind) {
-                    attemptRebind() // Try again
+                    if (bound) {
+                        Log.i(TAG, "Rebind initiated successfully")
+                        // Note: onServiceConnected will be called and will reset rebindAttempts
+                    } else {
+                        Log.e(TAG, "Failed to initiate rebind, scheduling retry")
+                        attemptRebind() // Try again with increased delay
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error during rebind attempt", e)
+                    if (!isIntentionalUnbind) {
+                        attemptRebind() // Try again
+                    }
                 }
             }
-        }
     }
 
     /**

@@ -127,14 +127,17 @@ private fun ReactionEmojiButton(
  * Shows each reaction emoji with its count as a compact chip.
  * Positioned appropriately for sent/received messages using alignment.
  * Chips are styled with Material3 colors that adapt to the message type.
+ * Own reactions are highlighted with a distinct surfaceVariant color per Material Design 3.
  *
  * @param reactions List of reactions to display (emoji + count)
- * @param isFromMe Whether the parent message is from the current user (affects alignment and colors)
+ * @param isFromMe Whether the parent message is from the current user (affects alignment)
+ * @param myIdentityHash The current user's identity hash to identify own reactions
  */
 @Composable
 fun ReactionDisplayRow(
     reactions: List<ReactionUi>,
     isFromMe: Boolean,
+    myIdentityHash: String?,
     modifier: Modifier = Modifier,
 ) {
     if (reactions.isEmpty()) return
@@ -155,9 +158,13 @@ fun ReactionDisplayRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             reactions.forEach { reaction ->
+                // Check if the current user has reacted with this emoji
+                val isOwnReaction = myIdentityHash != null &&
+                    reaction.senderHashes.any { it.equals(myIdentityHash, ignoreCase = true) }
+
                 ReactionChip(
                     reaction = reaction,
-                    isFromMe = isFromMe,
+                    isOwnReaction = isOwnReaction,
                 )
             }
         }
@@ -168,25 +175,28 @@ fun ReactionDisplayRow(
  * Individual reaction chip displaying an emoji with its count.
  *
  * Styled as a compact pill-shaped surface with the emoji and count.
- * Colors adapt based on whether the parent message is sent or received.
+ * Colors adapt based on whether the current user has reacted with this emoji.
+ * Per Material Design 3: own reactions use surfaceVariant for visual distinction.
  *
  * @param reaction The reaction data (emoji and count)
- * @param isFromMe Whether the parent message is from the current user (affects colors)
+ * @param isOwnReaction Whether the current user has reacted with this emoji
  */
 @Composable
 private fun ReactionChip(
     reaction: ReactionUi,
-    isFromMe: Boolean,
+    isOwnReaction: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val backgroundColor = if (isFromMe) {
-        MaterialTheme.colorScheme.primaryContainer
+    // Material Design 3: Use surfaceVariant for own reactions (highlighted)
+    // and surfaceContainerHigh for others' reactions (neutral)
+    val backgroundColor = if (isOwnReaction) {
+        MaterialTheme.colorScheme.surfaceVariant
     } else {
         MaterialTheme.colorScheme.surfaceContainerHigh
     }
 
-    val countColor = if (isFromMe) {
-        MaterialTheme.colorScheme.onPrimaryContainer
+    val countColor = if (isOwnReaction) {
+        MaterialTheme.colorScheme.onSurfaceVariant
     } else {
         MaterialTheme.colorScheme.onSurface
     }

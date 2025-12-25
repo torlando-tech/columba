@@ -190,6 +190,7 @@ fun MessagingScreen(
     // Reaction picker state
     val showReactionPicker by viewModel.showReactionPicker.collectAsStateWithLifecycle()
     val pendingReactionMessageId by viewModel.pendingReactionMessageId.collectAsStateWithLifecycle()
+    val myIdentityHash by viewModel.myIdentityHash.collectAsStateWithLifecycle()
 
     // Track message positions for jump-to-original functionality
     val messagePositions = remember { mutableStateMapOf<String, Int>() }
@@ -603,6 +604,7 @@ fun MessagingScreen(
                                             message = displayMessage,
                                             isFromMe = displayMessage.isFromMe,
                                             clipboardManager = clipboardManager,
+                                            myIdentityHash = myIdentityHash,
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
@@ -787,6 +789,7 @@ fun MessageBubble(
     message: com.lxmf.messenger.ui.model.MessageUi,
     isFromMe: Boolean,
     clipboardManager: androidx.compose.ui.platform.ClipboardManager,
+    myIdentityHash: String? = null,
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
@@ -972,11 +975,14 @@ fun MessageBubble(
             )
         }
 
-        // Display reaction chips below message bubble
+        // Display reaction chips overlapping the bottom of message bubble
+        // Negative offset pulls reactions up to overlap the message (per Material Design 3)
         if (message.reactions.isNotEmpty()) {
             ReactionDisplayRow(
                 reactions = message.reactions,
                 isFromMe = isFromMe,
+                myIdentityHash = myIdentityHash,
+                modifier = Modifier.offset(y = (-8).dp),
             )
         }
     }

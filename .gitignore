@@ -90,3 +90,6 @@ release/.envrc
 
 .envrc
 .python-version
+
+# Auto Claude data directory
+.auto-claude/

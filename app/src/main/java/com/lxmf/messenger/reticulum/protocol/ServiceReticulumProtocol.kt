@@ -159,6 +159,14 @@ class ServiceReticulumProtocol(
         )
     val locationTelemetryFlow: SharedFlow<String> = _locationTelemetryFlow.asSharedFlow()
 
+    // Emoji reactions received for messages
+    private val _reactionReceivedFlow =
+        MutableSharedFlow<String>(
+            replay = 0,
+            extraBufferCapacity = 10,
+        )
+    val reactionReceivedFlow: SharedFlow<String> = _reactionReceivedFlow.asSharedFlow()
+
     /**
      * Handler for alternative relay requests from the service.
      * Set by ColumbaApplication to provide PropagationNodeManager integration.
@@ -445,6 +453,15 @@ class ServiceReticulumProtocol(
                     _locationTelemetryFlow.tryEmit(locationJson)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling location telemetry callback", e)
+                }
+            }
+
+            override fun onReactionReceived(reactionJson: String) {
+                try {
+                    Log.d(TAG, "😀 Reaction received: $reactionJson")
+                    _reactionReceivedFlow.tryEmit(reactionJson)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling reaction received callback", e)
                 }
             }
         }

@@ -178,6 +178,22 @@ class PollingManager(
     }
 
     /**
+     * Handle reaction received event from Python callback.
+     * Broadcasts reaction to update target message in the database.
+     *
+     * @param reactionJson JSON with reaction data:
+     *        {"reaction_to": "msg_id", "emoji": "👍", "sender": "sender_hash", "source_hash": "...", "timestamp": ...}
+     */
+    fun handleReactionReceivedEvent(reactionJson: String) {
+        try {
+            Log.d(TAG, "😀 Reaction received event: $reactionJson")
+            broadcaster.broadcastReactionReceived(reactionJson)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling reaction received event", e)
+        }
+    }
+
+    /**
      * Handle message received event from Python callback.
      * Fetches and processes messages from the pending queue.
      */

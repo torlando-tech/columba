@@ -852,6 +852,15 @@ class ReticulumServiceBinder(
             Log.w(TAG, "Failed to set location received callback: ${e.message}", e)
         }
 
+        // Setup reaction received callback for emoji reactions
+        try {
+            wrapperManager.setReactionReceivedCallback { reactionJson ->
+                pollingManager.handleReactionReceivedEvent(reactionJson)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set reaction received callback: ${e.message}", e)
+        }
+
         // Setup native stamp generator (bypasses Python multiprocessing issues)
         try {
             val stampGenerator = StampGenerator()

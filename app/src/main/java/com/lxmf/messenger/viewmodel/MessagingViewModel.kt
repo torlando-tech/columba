@@ -358,15 +358,23 @@ class MessagingViewModel
                         "Reaction $emoji added locally to message ${messageId.take(16)} from $senderHash",
                     )
 
-                    // TODO: Phase 5 - Send reaction via LXMF protocol
-                    // val result = reticulumProtocol.sendReaction(
-                    //     destHash = destHashBytes,
-                    //     targetMessageId = messageId,
-                    //     emoji = emoji,
-                    //     sourceIdentity = identity,
-                    // )
-                    // result.onSuccess { ... }
-                    // result.onFailure { ... rollback local update ... }
+                    // Send reaction via LXMF protocol
+                    val result = reticulumProtocol.sendReaction(
+                        destinationHash = destHashBytes,
+                        targetMessageId = messageId,
+                        emoji = emoji,
+                        sourceIdentity = identity,
+                    )
+
+                    result.onSuccess { receipt ->
+                        Log.d(TAG, "😀 Reaction $emoji sent successfully, hash: ${receipt.messageHash.take(8).joinToString("") { "%02x".format(it) }}")
+                    }
+
+                    result.onFailure { error ->
+                        Log.e(TAG, "Failed to send reaction: ${error.message}")
+                        // Note: We don't rollback local update - reaction still shows locally
+                        // This is optimistic UI pattern - worst case the recipient doesn't see it
+                    }
 
                     // Clear the reaction picker
                     clearReactionTarget()
@@ -468,6 +476,17 @@ class MessagingViewModel
                         }
                     }
                 }
+
+                // Collect incoming reactions and update target messages
+                viewModelScope.launch {
+                    reticulumProtocol.reactionReceivedFlow.collect { reactionJson ->
+                        try {
+                            handleIncomingReaction(reactionJson)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error handling incoming reaction", e)
+                        }
+                    }
+                }
             } else {
                 Log.d(TAG, "Delivery status collection skipped for ${reticulumProtocol.javaClass.simpleName}")
             }
@@ -548,6 +567,50 @@ class MessagingViewModel
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating message status", e)
+            }
+        }
+
+        /**
+         * Handle an incoming reaction from another user.
+         * Parses the reaction JSON and updates the target message's reactions in the database.
+         *
+         * Expected JSON format:
+         * {"reaction_to": "msg_id", "emoji": "👍", "sender": "sender_hash", "source_hash": "...", "timestamp": ...}
+         */
+        private suspend fun handleIncomingReaction(reactionJson: String) {
+            try {
+                val json = org.json.JSONObject(reactionJson)
+                val targetMessageId = json.optString("reaction_to")
+                val emoji = json.optString("emoji")
+                val senderHash = json.optString("sender")
+
+                if (targetMessageId.isEmpty() || emoji.isEmpty() || senderHash.isEmpty()) {
+                    Log.w(TAG, "Invalid reaction JSON, missing required fields: $reactionJson")
+                    return
+                }
+
+                Log.d(TAG, "😀 Incoming reaction: $emoji to message ${targetMessageId.take(16)}... from ${senderHash.take(16)}...")
+
+                // Find the target message
+                val targetMessage = conversationRepository.getMessageById(targetMessageId)
+                if (targetMessage == null) {
+                    Log.w(TAG, "Reaction received for unknown message: ${targetMessageId.take(16)}...")
+                    return
+                }
+
+                // Add the reaction to the message's fieldsJson
+                val updatedFieldsJson = addReactionToFieldsJson(
+                    targetMessage.fieldsJson,
+                    emoji,
+                    senderHash,
+                )
+
+                // Save the updated fieldsJson to database
+                conversationRepository.updateMessageReactions(targetMessageId, updatedFieldsJson)
+
+                Log.d(TAG, "😀 Reaction $emoji added to message ${targetMessageId.take(16)}... from ${senderHash.take(16)}...")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error handling incoming reaction: ${e.message}", e)
             }
         }
 

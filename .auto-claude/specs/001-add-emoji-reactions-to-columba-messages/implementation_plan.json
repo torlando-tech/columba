@@ -1,0 +1,539 @@
+{
+  "feature": "Add Signal-Style Emoji Reactions to Columba Messages",
+  "workflow_type": "feature",
+  "workflow_rationale": "This is a new feature addition that builds on existing LXMF Field 16 infrastructure. The reply feature provides a proven pattern to follow. Implementation spans UI, ViewModel, data layer, and Python networking code.",
+  "phases": [
+    {
+      "id": "phase-1-data-model",
+      "name": "Data Model & Parsing",
+      "type": "implementation",
+      "description": "Add ReactionUi data class and reaction parsing from Field 16",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Add ReactionUi data class to MessageUi.kt and add reactions field to MessageUi",
+          "service": "app",
+          "files_to_modify": ["app/src/main/java/com/lxmf/messenger/ui/model/MessageUi.kt"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/ui/model/MessageUi.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Add @Immutable annotation, include emoji: String, senderHashes: List<String>, count: Int. Add reactions: List<ReactionUi> = emptyList() to MessageUi."
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Add parseReactionsFromField16() function to MessageMapper.kt",
+          "service": "app",
+          "files_to_modify": ["app/src/main/java/com/lxmf/messenger/ui/model/MessageMapper.kt"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/ui/model/MessageMapper.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Follow parseReplyToFromField16() pattern. Parse field16.reactions JSON object into Map<String, List<String>>, convert to List<ReactionUi>. Handle null/missing gracefully."
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Update toMessageUi() to call parseReactionsFromField16() and populate reactions field",
+          "service": "app",
+          "files_to_modify": ["app/src/main/java/com/lxmf/messenger/ui/model/MessageMapper.kt"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/ui/model/MessageMapper.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Call parseReactionsFromField16(fieldsJson) and pass result to MessageUi constructor."
+        },
+        {
+          "id": "subtask-1-4",
+          "description": "Create ReactionMapperTest.kt with unit tests for parseReactionsFromField16()",
+          "service": "app",
+          "files_to_modify": [],
+          "files_to_create": ["app/src/test/java/com/lxmf/messenger/ui/model/ReactionMapperTest.kt"],
+          "patterns_from": ["app/src/test/java/com/lxmf/messenger/ui/model/MessageMapperTest.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:testDebugUnitTest --tests '*ReactionMapperTest*' --quiet 2>&1 | tail -10",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Test: valid reactions, empty reactions, null fieldsJson, malformed JSON, single emoji, multiple emojis, multiple senders."
+        }
+      ]
+    },
+    {
+      "id": "phase-2-ui-components",
+      "name": "UI Components",
+      "type": "implementation",
+      "description": "Create ReactionComponents.kt with emoji picker and reaction display overlay",
+      "depends_on": ["phase-1-data-model"],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Create ReactionPickerDialog composable - modal picker with 6 emoji options",
+          "service": "app",
+          "files_to_modify": [],
+          "files_to_create": ["app/src/main/java/com/lxmf/messenger/ui/components/ReactionComponents.kt"],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/ui/components/ReplyComponents.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Dialog with row of 6 emojis: 👍 ❤️ 😂 😮 😢 😡. Use Surface with RoundedCornerShape. Haptic feedback on selection. Call onReactionSelected(emoji) callback."
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Create ReactionDisplayRow composable - horizontal row of emoji chips below message",
+          "service": "app",
+          "files_to_modify": ["app/src/main/java/com/lxmf/messenger/ui/components/ReactionComponents.kt"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/ui/components/ReplyComponents.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Takes List<ReactionUi>, displays each emoji with count if >1. Use Surface chips with MaterialTheme colors. Support isFromMe for theming."
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Create ReactionComponentsTest.kt with Robolectric tests",
+          "service": "app",
+          "files_to_modify": [],
+          "files_to_create": ["app/src/test/java/com/lxmf/messenger/ui/components/ReactionComponentsTest.kt"],
+          "patterns_from": ["app/src/test/java/com/lxmf/messenger/ui/components/ReplyComponentsTest.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:testDebugUnitTest --tests '*ReactionComponentsTest*' --quiet 2>&1 | tail -10",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Test: picker displays all emojis, picker calls callback on selection, display row shows reactions, display row handles empty list, isFromMe theming works."
+        }
+      ]
+    },
+    {
+      "id": "phase-3-viewmodel",
+      "name": "ViewModel State Management",
+      "type": "implementation",
+      "description": "Add reaction state management and send reaction method to MessagingViewModel",
+      "depends_on": ["phase-1-data-model"],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Add reaction state to MessagingViewModel - pendingReactionMessageId and showReactionPicker",
+          "service": "app",
+          "files_to_modify": ["app/src/main/java/com/lxmf/messenger/viewmodel/MessagingViewModel.kt"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/viewmodel/MessagingViewModel.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Add _showReactionPicker: MutableStateFlow<String?> (message ID or null), expose as showReactionPicker. Add showReactionPickerFor(messageId) and hideReactionPicker() functions."
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Add sendReaction() method to MessagingViewModel",
+          "service": "app",
+          "files_to_modify": ["app/src/main/java/com/lxmf/messenger/viewmodel/MessagingViewModel.kt"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/viewmodel/MessagingViewModel.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "sendReaction(messageId: String, emoji: String) - updates local fieldsJson to add reaction, then calls ReticulumProtocol method to send. Follow sendMessage() pattern for async handling."
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Update buildFieldsJson() helper to support reactions parameter",
+          "service": "app",
+          "files_to_modify": ["app/src/main/java/com/lxmf/messenger/viewmodel/MessagingViewModel.kt"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/viewmodel/MessagingViewModel.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Add reactions: Map<String, List<String>>? parameter to buildFieldsJson(). Serialize to JSON as {\"16\": {\"reactions\": {...}}}."
+        }
+      ]
+    },
+    {
+      "id": "phase-4-python-backend",
+      "name": "Python LXMF Handling",
+      "type": "implementation",
+      "description": "Add reaction support to Python reticulum_wrapper.py for sending/receiving",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Add send_reaction method to ReticulumWrapper class in Python",
+          "service": "python",
+          "files_to_modify": ["python/reticulum_wrapper.py"],
+          "files_to_create": [],
+          "patterns_from": ["python/reticulum_wrapper.py"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba/python && python -c \"from reticulum_wrapper import ReticulumWrapper; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "send_reaction(dest_hash, target_message_id, emoji) - creates LXMF message with field 16 containing reactions dict. Follow send_lxmf_message_with_method pattern."
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Update message receive handling to parse incoming reactions from Field 16",
+          "service": "python",
+          "files_to_modify": ["python/reticulum_wrapper.py"],
+          "files_to_create": [],
+          "patterns_from": ["python/reticulum_wrapper.py"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba/python && python -c \"from reticulum_wrapper import ReticulumWrapper; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "In _on_message_received callback, check for field 16 reactions. If present, call kotlin callback with reaction data alongside message."
+        },
+        {
+          "id": "subtask-4-3",
+          "description": "Add Python tests for reaction send/receive",
+          "service": "python",
+          "files_to_modify": [],
+          "files_to_create": ["python/test_wrapper_reactions.py"],
+          "patterns_from": ["python/test_wrapper_messaging.py"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba/python && pytest test_wrapper_reactions.py -v 2>&1 | tail -10",
+            "expected": "passed"
+          },
+          "status": "pending",
+          "notes": "Test: send_reaction formats field 16 correctly, reaction parsing extracts emoji and sender."
+        }
+      ]
+    },
+    {
+      "id": "phase-5-aidl-ipc",
+      "name": "AIDL IPC Integration",
+      "type": "implementation",
+      "description": "Add sendReaction method to AIDL interface and binder implementation",
+      "depends_on": ["phase-3-viewmodel", "phase-4-python-backend"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Add sendReaction method signature to IReticulumService.aidl",
+          "service": "app",
+          "files_to_modify": ["app/src/main/aidl/com/lxmf/messenger/IReticulumService.aidl"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/aidl/com/lxmf/messenger/IReticulumService.aidl"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugAidl --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Add: String sendReaction(in byte[] destHash, String targetMessageId, String emoji, in byte[] sourceIdentityPrivateKey);"
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Implement sendReaction in ReticulumServiceBinder.kt",
+          "service": "app",
+          "files_to_modify": ["app/src/main/java/com/lxmf/messenger/service/binder/ReticulumServiceBinder.kt"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/service/binder/ReticulumServiceBinder.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Delegate to messagingManager or wrapperManager. Call Python send_reaction method. Return JSON result."
+        },
+        {
+          "id": "subtask-5-3",
+          "description": "Add sendReaction method to ReticulumProtocol interface and ServiceReticulumProtocol implementation",
+          "service": "app",
+          "files_to_modify": [
+            "reticulum/src/main/java/com/lxmf/messenger/reticulum/protocol/ReticulumProtocol.kt",
+            "app/src/main/java/com/lxmf/messenger/reticulum/protocol/ServiceReticulumProtocol.kt"
+          ],
+          "files_to_create": [],
+          "patterns_from": ["reticulum/src/main/java/com/lxmf/messenger/reticulum/protocol/ReticulumProtocol.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin :reticulum:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Add suspend fun sendReaction(destHash, targetMessageId, emoji, sourceIdentity): Result<ReactionReceipt>. Implement in ServiceReticulumProtocol by calling binder."
+        }
+      ]
+    },
+    {
+      "id": "phase-6-ui-integration",
+      "name": "UI Integration",
+      "type": "integration",
+      "description": "Integrate reaction picker and display into MessagingScreen",
+      "depends_on": ["phase-2-ui-components", "phase-3-viewmodel", "phase-5-aidl-ipc"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "Add reaction picker dialog to MessagingScreen, triggered by long-press",
+          "service": "app",
+          "files_to_modify": ["app/src/main/java/com/lxmf/messenger/ui/screens/MessagingScreen.kt"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/ui/screens/MessagingScreen.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Observe viewModel.showReactionPicker. When not null, show ReactionPickerDialog. On selection, call viewModel.sendReaction() and hide picker."
+        },
+        {
+          "id": "subtask-6-2",
+          "description": "Add 'React' option to MessageContextMenu",
+          "service": "app",
+          "files_to_modify": ["app/src/main/java/com/lxmf/messenger/ui/screens/MessagingScreen.kt"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/ui/screens/MessagingScreen.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Add DropdownMenuItem with emoji icon and 'React' text. On click, call viewModel.showReactionPickerFor(message.id) and dismiss menu."
+        },
+        {
+          "id": "subtask-6-3",
+          "description": "Add ReactionDisplayRow below each MessageBubble with reactions",
+          "service": "app",
+          "files_to_modify": ["app/src/main/java/com/lxmf/messenger/ui/screens/MessagingScreen.kt"],
+          "files_to_create": [],
+          "patterns_from": ["app/src/main/java/com/lxmf/messenger/ui/screens/MessagingScreen.kt"],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "In MessageBubble Column, after the message content, add: if (message.reactions.isNotEmpty()) ReactionDisplayRow(reactions = message.reactions, isFromMe = isFromMe)."
+        }
+      ]
+    },
+    {
+      "id": "phase-7-verification",
+      "name": "Verification & Quality",
+      "type": "cleanup",
+      "description": "Run all tests, linting, and verify end-to-end functionality",
+      "depends_on": ["phase-6-ui-integration"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-7-1",
+          "description": "Run detekt and ktlint, fix any issues",
+          "service": "app",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew detekt ktlintCheck --quiet 2>&1 | tail -10",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Run linters, fix any style issues. Do not suppress warnings unless absolutely necessary."
+        },
+        {
+          "id": "subtask-7-2",
+          "description": "Run all unit tests and ensure no regressions",
+          "service": "app",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:testDebugUnitTest --quiet 2>&1 | tail -10",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "All existing tests must pass. New reaction tests should achieve 80%+ coverage."
+        },
+        {
+          "id": "subtask-7-3",
+          "description": "Run Python tests",
+          "service": "python",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba/python && pytest -v 2>&1 | tail -10",
+            "expected": "passed"
+          },
+          "status": "pending",
+          "notes": "All Python tests including new reaction tests must pass."
+        },
+        {
+          "id": "subtask-7-4",
+          "description": "Build debug APK to verify compilation",
+          "service": "app",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:assembleDebug --quiet 2>&1 | tail -5",
+            "expected": "BUILD SUCCESSFUL"
+          },
+          "status": "pending",
+          "notes": "Full build verification before marking complete."
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 7,
+    "total_subtasks": 21,
+    "services_involved": ["app", "python"],
+    "parallelism": {
+      "max_parallel_phases": 3,
+      "parallel_groups": [
+        {
+          "phases": ["phase-1-data-model", "phase-4-python-backend"],
+          "reason": "No dependencies, different services, no file conflicts"
+        },
+        {
+          "phases": ["phase-2-ui-components", "phase-3-viewmodel"],
+          "reason": "Both depend on phase-1 only, different file sets"
+        }
+      ],
+      "recommended_workers": 2,
+      "speedup_estimate": "1.8x faster than sequential"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 001 --parallel 2"
+  },
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "within_implementation",
+    "test_types_required": ["unit", "integration"],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All existing tests pass (no regressions)",
+      "New code has 80%+ test coverage",
+      "detekt and ktlint pass",
+      "Debug APK builds successfully",
+      "Python tests pass"
+    ],
+    "verification_steps": [
+      {
+        "name": "Kotlin Unit Tests",
+        "command": "./gradlew :app:testDebugUnitTest",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Python Tests",
+        "command": "cd python && pytest -v",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Linting",
+        "command": "./gradlew detekt ktlintCheck",
+        "expected_outcome": "No issues",
+        "type": "lint",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Build Verification",
+        "command": "./gradlew :app:assembleDebug",
+        "expected_outcome": "BUILD SUCCESSFUL",
+        "type": "build",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "Medium risk feature addition requires comprehensive testing. Follows established patterns so risk is contained."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": ["./gradlew :app:testDebugUnitTest"],
+      "minimum_coverage": 80,
+      "test_files": [
+        "ReactionComponentsTest.kt",
+        "ReactionMapperTest.kt"
+      ]
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": ["cd python && pytest"],
+      "services_to_test": ["app", "python"]
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": true,
+      "pages": [
+        {
+          "component": "MessagingScreen",
+          "checks": ["Long-press shows picker", "Reactions display correctly"]
+        },
+        {
+          "component": "ReactionPickerDialog",
+          "checks": ["All 6 emoji options visible", "Selection works"]
+        },
+        {
+          "component": "ReactionDisplayRow",
+          "checks": ["Emoji overlay positioned correctly", "Count displays for multiple reactions"]
+        }
+      ]
+    },
+    "database_verification": {
+      "required": true,
+      "checks": ["Field 16 contains reactions dict in fieldsJson"]
+    }
+  },
+  "qa_signoff": null
+}

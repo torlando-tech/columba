@@ -74,6 +74,12 @@ data class MessageUi(
      * Loaded asynchronously from the database. Null if not a reply or not yet loaded.
      */
     val replyPreview: ReplyPreviewUi? = null,
+    /**
+     * List of emoji reactions on this message.
+     * Each reaction contains the emoji and list of sender hashes who reacted with it.
+     * Parsed from LXMF Field 16 {"reactions": {"👍": ["sender1", "sender2"], ...}}.
+     */
+    val reactions: List<ReactionUi> = emptyList(),
 )
 
 /**
@@ -117,4 +123,21 @@ data class ReplyPreviewUi(
     val hasImage: Boolean = false,
     val hasFileAttachment: Boolean = false,
     val firstFileName: String? = null,
+)
+
+/**
+ * UI representation of an emoji reaction on a message.
+ *
+ * Represents a single emoji type with all senders who reacted with it.
+ * Parsed from LXMF Field 16 reactions dictionary.
+ *
+ * @property emoji The emoji character (e.g., "👍", "❤️")
+ * @property senderHashes List of destination hashes of users who sent this reaction
+ * @property count Number of users who reacted with this emoji (derived from senderHashes.size)
+ */
+@Immutable
+data class ReactionUi(
+    val emoji: String,
+    val senderHashes: List<String>,
+    val count: Int = senderHashes.size,
 )

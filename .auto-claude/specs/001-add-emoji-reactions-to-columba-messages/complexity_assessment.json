@@ -1,0 +1,83 @@
+{
+  "complexity": "standard",
+  "workflow_type": "feature",
+  "confidence": 0.85,
+  "reasoning": "Adding emoji reactions follows the existing reply feature pattern using LXMF field 16 (app extensions dictionary). The codebase already has the architecture for extended fields, UI components for message interactions, and the code explicitly comments 'Future: appExtensions.put(\"reactions\", ...)'. This is a well-scoped feature extension within established patterns.",
+
+  "analysis": {
+    "scope": {
+      "estimated_files": 8,
+      "estimated_services": 1,
+      "is_cross_cutting": false,
+      "notes": "Changes contained to messaging flow: MessageEntity (possible), MessageUi, MessageMapper, MessagingViewModel, MessagingScreen, new ReactionComponents.kt, possibly ReticulumProtocol for sending reactions. Tests included."
+    },
+    "integrations": {
+      "external_services": [],
+      "new_dependencies": [],
+      "research_needed": false,
+      "notes": "No external APIs or new libraries needed. All functionality builds on existing LXMF extended fields infrastructure."
+    },
+    "infrastructure": {
+      "docker_changes": false,
+      "database_changes": false,
+      "config_changes": false,
+      "notes": "Reactions can be stored in the existing fieldsJson column using the same pattern as replies. No schema migration needed unless reaction aggregation requires a separate table (design decision)."
+    },
+    "knowledge": {
+      "patterns_exist": true,
+      "research_required": false,
+      "unfamiliar_tech": [],
+      "notes": "Reply feature (ReplyComponents.kt, field 16 parsing in MessageMapper, swipe gestures) provides a complete template. The buildFieldsJson() function even has a placeholder comment for reactions."
+    },
+    "risk": {
+      "level": "low",
+      "concerns": [
+        "Reaction sync between devices (if multi-device support exists)",
+        "Efficient storage/querying of reactions per message",
+        "UI complexity for emoji picker and reaction display"
+      ],
+      "notes": "Low risk as this extends proven patterns. Main design decision is whether reactions are sent as separate messages or stored locally only until sent with next message."
+    }
+  },
+
+  "recommended_phases": [
+    "discovery",
+    "requirements",
+    "context",
+    "spec_writing",
+    "planning",
+    "validation"
+  ],
+
+  "flags": {
+    "needs_research": false,
+    "needs_self_critique": false,
+    "needs_infrastructure_setup": false
+  },
+
+  "validation_recommendations": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "minimal_mode": false,
+    "test_types_required": ["unit", "integration"],
+    "security_scan_required": false,
+    "staging_deployment_required": false,
+    "reasoning": "New UI components and message handling logic require unit tests (emoji picker, reaction parsing) and integration tests (sending/receiving reactions, UI state management). No security concerns as reactions use existing message infrastructure."
+  },
+
+  "key_reference_files": [
+    "app/src/main/java/com/lxmf/messenger/ui/components/ReplyComponents.kt",
+    "app/src/main/java/com/lxmf/messenger/ui/model/MessageMapper.kt",
+    "app/src/main/java/com/lxmf/messenger/viewmodel/MessagingViewModel.kt",
+    "app/src/main/java/com/lxmf/messenger/ui/model/MessageUi.kt",
+    "data/src/main/java/com/lxmf/messenger/data/db/entity/MessageEntity.kt"
+  ],
+
+  "pattern_insights": {
+    "field_16_structure": "JSON object in fieldsJson with key '16' containing app extensions like {'reply_to': 'msg_id'}",
+    "proposed_reactions_format": "Extend field 16 to include {'reply_to': '...', 'reactions': {'😀': ['sender_hash'], '👍': ['hash1', 'hash2']}}",
+    "ui_pattern": "ReplyComponents.kt demonstrates swipe gestures, preview bubbles, and input bar - reactions need long-press trigger and emoji overlay"
+  },
+
+  "created_at": "2025-01-09T14:30:00Z"
+}

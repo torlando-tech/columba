@@ -1,0 +1,49 @@
+{
+  "project_root": "/home/tyler/repos/public/columba",
+  "project_type": "single",
+  "services": {
+    "app": {
+      "path": "app",
+      "tech_stack": ["kotlin", "jetpack-compose", "hilt", "room", "paging3"],
+      "port": null,
+      "dev_command": "./build-debug.sh && ./install-debug.sh",
+      "test_command": "./gradlew :app:testDebugUnitTest",
+      "lint_command": "./gradlew detekt ktlintCheck"
+    },
+    "data": {
+      "path": "data",
+      "tech_stack": ["kotlin", "room", "coroutines"],
+      "port": null,
+      "dev_command": null,
+      "test_command": "./gradlew :data:testDebugUnitTest"
+    },
+    "reticulum": {
+      "path": "reticulum",
+      "tech_stack": ["kotlin", "ble"],
+      "port": null,
+      "dev_command": null,
+      "test_command": "./gradlew :reticulum:testDebugUnitTest"
+    },
+    "python": {
+      "path": "python",
+      "tech_stack": ["python3.11", "reticulum", "lxmf", "chaquopy"],
+      "port": null,
+      "dev_command": null,
+      "test_command": "cd python && pytest"
+    }
+  },
+  "infrastructure": {
+    "docker": false,
+    "database": "sqlite-room",
+    "ci": "github-actions",
+    "ci_workflows": ["build-prerelease-apk.yml", "ci.yml", "release.yml"]
+  },
+  "conventions": {
+    "linter": "detekt",
+    "formatter": "ktlint",
+    "testing": "robolectric",
+    "coverage_target": 80,
+    "commit_style": "conventional",
+    "pre_commit_checks": ["detekt", "ktlint", "testDebugUnitTest"]
+  }
+}

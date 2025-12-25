@@ -1204,12 +1204,14 @@ private fun buildFieldsJson(
     imageFormat: String?,
     fileAttachments: List<FileAttachment> = emptyList(),
     replyToMessageId: String? = null,
+    reactions: Map<String, List<String>>? = null,
 ): String? {
     val hasImage = imageData != null && imageFormat != null
     val hasFiles = fileAttachments.isNotEmpty()
     val hasReply = replyToMessageId != null
+    val hasReactions = !reactions.isNullOrEmpty()
 
-    if (!hasImage && !hasFiles && !hasReply) return null
+    if (!hasImage && !hasFiles && !hasReply && !hasReactions) return null
 
     val json = org.json.JSONObject()
 
@@ -1232,12 +1234,29 @@ private fun buildFieldsJson(
         json.put("5", attachmentsArray)
     }
 
-    // Add app extensions field (Field 16) for replies and future features
-    if (hasReply) {
+    // Add app extensions field (Field 16) for replies, reactions, and future features
+    if (hasReply || hasReactions) {
         val appExtensions = org.json.JSONObject()
-        appExtensions.put("reply_to", replyToMessageId)
-        // Future: appExtensions.put("reactions", ...)
-        // Future: appExtensions.put("mentions", ...)
+
+        // Add reply_to if present
+        if (hasReply) {
+            appExtensions.put("reply_to", replyToMessageId)
+        }
+
+        // Add reactions if present
+        // Format: {"reactions": {"👍": ["sender_hash1", "sender_hash2"], "❤️": ["sender_hash3"]}}
+        if (hasReactions && reactions != null) {
+            val reactionsObj = org.json.JSONObject()
+            for ((emoji, senderHashes) in reactions) {
+                val sendersArray = org.json.JSONArray()
+                for (hash in senderHashes) {
+                    sendersArray.put(hash)
+                }
+                reactionsObj.put(emoji, sendersArray)
+            }
+            appExtensions.put("reactions", reactionsObj)
+        }
+
         json.put("16", appExtensions)
     }
 

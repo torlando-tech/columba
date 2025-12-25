@@ -114,6 +114,19 @@ interface MessageDao {
         errorMessage: String?,
     )
 
+    @Query(
+        """
+        UPDATE messages
+        SET fieldsJson = :fieldsJson
+        WHERE id = :messageId AND identityHash = :identityHash
+        """,
+    )
+    suspend fun updateMessageFieldsJson(
+        messageId: String,
+        identityHash: String,
+        fieldsJson: String?,
+    )
+
     // Paging3 method for infinite scroll
 
     /**

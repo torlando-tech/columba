@@ -300,6 +300,84 @@ class MessagingViewModel
         }
 
         /**
+         * Send a reaction to a message.
+         *
+         * Updates the local database with the reaction (optimistic update) and
+         * sends the reaction to the peer via LXMF protocol.
+         *
+         * @param messageId The ID of the message to react to
+         * @param emoji The emoji reaction to send
+         */
+        fun sendReaction(
+            messageId: String,
+            emoji: String,
+        ) {
+            viewModelScope.launch {
+                try {
+                    Log.d(TAG, "Sending reaction $emoji to message ${messageId.take(16)}...")
+
+                    // Get the message to find the conversation hash
+                    val message = conversationRepository.getMessageById(messageId)
+                    if (message == null) {
+                        Log.e(TAG, "Cannot send reaction: message not found")
+                        clearReactionTarget()
+                        return@launch
+                    }
+
+                    // Get source identity for sender hash
+                    val identity = loadIdentityIfNeeded()
+                    if (identity == null) {
+                        Log.e(TAG, "Cannot send reaction: failed to load identity")
+                        clearReactionTarget()
+                        return@launch
+                    }
+
+                    // Validate destination hash
+                    val destHashBytes = validateDestinationHash(message.conversationHash)
+                    if (destHashBytes == null) {
+                        Log.e(TAG, "Cannot send reaction: invalid destination hash")
+                        clearReactionTarget()
+                        return@launch
+                    }
+
+                    // Get the current user's hash as the sender
+                    val senderHash = identity.hash.joinToString("") { "%02x".format(it) }
+
+                    // Update local database with the reaction (optimistic update)
+                    val updatedFieldsJson = addReactionToFieldsJson(
+                        message.fieldsJson,
+                        emoji,
+                        senderHash,
+                    )
+
+                    // Save the updated fieldsJson to database
+                    conversationRepository.updateMessageReactions(messageId, updatedFieldsJson)
+
+                    Log.d(
+                        TAG,
+                        "Reaction $emoji added locally to message ${messageId.take(16)} from $senderHash",
+                    )
+
+                    // TODO: Phase 5 - Send reaction via LXMF protocol
+                    // val result = reticulumProtocol.sendReaction(
+                    //     destHash = destHashBytes,
+                    //     targetMessageId = messageId,
+                    //     emoji = emoji,
+                    //     sourceIdentity = identity,
+                    // )
+                    // result.onSuccess { ... }
+                    // result.onFailure { ... rollback local update ... }
+
+                    // Clear the reaction picker
+                    clearReactionTarget()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error sending reaction", e)
+                    clearReactionTarget()
+                }
+            }
+        }
+
+        /**
          * Toggle contact status for the current conversation.
          * If the peer is already a contact, removes them. Otherwise, adds them.
          * Emits result via [contactToggleResult] for UI feedback.
@@ -1195,6 +1273,70 @@ private fun parseImageFromFieldsJson(fieldsJson: String): ByteArray? {
         Log.w(HELPER_TAG, "Failed to parse image from fieldsJson: ${e.message}")
         null
     }
+}
+
+/**
+ * Add a reaction to the fieldsJson of a message.
+ *
+ * Updates or creates the Field 16 "reactions" dictionary, adding the sender hash
+ * to the specified emoji's list of senders. If the sender already reacted with
+ * this emoji, the reaction is not duplicated.
+ *
+ * @param fieldsJson The existing fieldsJson string (can be null)
+ * @param emoji The emoji reaction to add
+ * @param senderHash The hex hash of the sender adding the reaction
+ * @return The updated fieldsJson string with the reaction added
+ */
+private fun addReactionToFieldsJson(
+    fieldsJson: String?,
+    emoji: String,
+    senderHash: String,
+): String {
+    val json = if (fieldsJson.isNullOrEmpty()) {
+        org.json.JSONObject()
+    } else {
+        try {
+            org.json.JSONObject(fieldsJson)
+        } catch (e: Exception) {
+            Log.w(HELPER_TAG, "Failed to parse fieldsJson, creating new: ${e.message}")
+            org.json.JSONObject()
+        }
+    }
+
+    // Get or create Field 16 (app extensions)
+    val field16 = if (json.has("16")) {
+        json.getJSONObject("16")
+    } else {
+        org.json.JSONObject().also { json.put("16", it) }
+    }
+
+    // Get or create reactions dictionary
+    val reactions = if (field16.has("reactions")) {
+        field16.getJSONObject("reactions")
+    } else {
+        org.json.JSONObject().also { field16.put("reactions", it) }
+    }
+
+    // Get or create the sender list for this emoji
+    val senderList = if (reactions.has(emoji)) {
+        reactions.getJSONArray(emoji)
+    } else {
+        org.json.JSONArray().also { reactions.put(emoji, it) }
+    }
+
+    // Add sender if not already present (avoid duplicates)
+    var alreadyReacted = false
+    for (i in 0 until senderList.length()) {
+        if (senderList.optString(i) == senderHash) {
+            alreadyReacted = true
+            break
+        }
+    }
+    if (!alreadyReacted) {
+        senderList.put(senderHash)
+    }
+
+    return json.toString()
 }
 
 /**

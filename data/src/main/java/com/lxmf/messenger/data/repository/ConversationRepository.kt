@@ -452,6 +452,29 @@ class ConversationRepository
         }
 
         /**
+         * Update message reactions in fieldsJson.
+         * Used when adding/updating emoji reactions on a message.
+         *
+         * @param messageId The ID of the message to update
+         * @param updatedFieldsJson The new fieldsJson containing updated reactions
+         */
+        suspend fun updateMessageReactions(
+            messageId: String,
+            updatedFieldsJson: String,
+        ) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            messageDao.updateMessageFieldsJson(
+                messageId,
+                activeIdentity.identityHash,
+                updatedFieldsJson,
+            )
+            android.util.Log.d(
+                "ConversationRepository",
+                "Updated message $messageId reactions",
+            )
+        }
+
+        /**
          * Update a message's ID (for retry scenarios where the message hash changes).
          * Since Room doesn't allow updating primary keys, this deletes the old message
          * and inserts a new one with the updated ID.

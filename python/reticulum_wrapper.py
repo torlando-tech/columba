@@ -2898,6 +2898,132 @@ class ReticulumWrapper:
             traceback.print_exc()
             return {"success": False, "error": str(e)}
 
+    def send_reaction(self, dest_hash: bytes, target_message_id: str, emoji: str,
+                      source_identity_private_key: bytes) -> Dict:
+        """
+        Send an emoji reaction to a message via LXMF.
+
+        Reactions are sent as lightweight LXMF messages with Field 16 containing:
+        - reaction_to: The message ID being reacted to
+        - emoji: The emoji reaction
+        - sender: The sender's identity hash (for aggregation on receiver side)
+
+        Args:
+            dest_hash: Identity hash bytes (16 bytes) of the message recipient
+            target_message_id: The message ID being reacted to
+            emoji: The emoji reaction (e.g., "👍", "❤️", "😂")
+            source_identity_private_key: Private key of sender identity
+
+        Returns:
+            Dict with 'success', 'message_hash', 'timestamp' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Convert jarray to bytes if needed
+            if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+                dest_hash = bytes(dest_hash)
+            if hasattr(source_identity_private_key, '__iter__') and not isinstance(source_identity_private_key, (bytes, bytearray)):
+                source_identity_private_key = bytes(source_identity_private_key)
+
+            log_separator("ReticulumWrapper", "send_reaction", "=", 80)
+            log_info("ReticulumWrapper", "send_reaction",
+                    f"Sending reaction '{emoji}' to message {target_message_id[:16]}...")
+
+            # Reconstruct source identity from private key
+            source_identity = RNS.Identity()
+            source_identity.load_private_key(source_identity_private_key)
+            sender_hash_hex = source_identity.hash.hex()
+            log_debug("ReticulumWrapper", "send_reaction",
+                     f"Loaded source identity, hash={sender_hash_hex[:16]}")
+
+            # Recall recipient identity
+            recipient_identity = RNS.Identity.recall(dest_hash)
+            if not recipient_identity:
+                recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+            if not recipient_identity and dest_hash.hex() in self.identities:
+                recipient_identity = self.identities[dest_hash.hex()]
+
+            if not recipient_identity:
+                # Request path from network
+                log_info("ReticulumWrapper", "send_reaction",
+                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
+                try:
+                    RNS.Transport.request_path(dest_hash)
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "send_reaction", f"Error requesting path: {e}")
+
+                # Wait up to 5 seconds for path response
+                wait_start = time.time()
+                while time.time() - wait_start < 5:
+                    recipient_identity = RNS.Identity.recall(dest_hash)
+                    if not recipient_identity:
+                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                    if recipient_identity:
+                        break
+                    time.sleep(0.1)
+
+                if not recipient_identity:
+                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known"}
+
+            # Create destination
+            recipient_lxmf_destination = RNS.Destination(
+                recipient_identity,
+                RNS.Destination.OUT,
+                RNS.Destination.SINGLE,
+                "lxmf",
+                "delivery"
+            )
+
+            # Build Field 16 with reaction data
+            # Format: {"reaction_to": "msg_id", "emoji": "👍", "sender": "sender_hash_hex"}
+            app_extensions = {
+                "reaction_to": target_message_id,
+                "emoji": emoji,
+                "sender": sender_hash_hex
+            }
+            fields = {16: app_extensions}
+
+            log_debug("ReticulumWrapper", "send_reaction",
+                     f"Field 16: {app_extensions}")
+
+            # Reactions are small, use OPPORTUNISTIC for fast delivery
+            # Empty content since all data is in Field 16
+            lxmf_message = LXMF.LXMessage(
+                destination=recipient_lxmf_destination,
+                source=self.local_lxmf_destination,
+                content=b"",  # Empty content - reaction data is in fields
+                title="",
+                fields=fields,
+                desired_method=LXMF.LXMessage.OPPORTUNISTIC
+            )
+
+            # Register callbacks
+            lxmf_message.register_delivery_callback(self._on_message_delivered)
+            lxmf_message.register_failed_callback(self._on_message_failed)
+
+            # Send via router
+            self.router.handle_outbound(lxmf_message)
+
+            msg_hash = lxmf_message.hash if lxmf_message.hash else b''
+            log_info("ReticulumWrapper", "send_reaction",
+                    f"✅ Reaction {msg_hash.hex()[:16] if msg_hash else 'unknown'}... sent")
+
+            return {
+                "success": True,
+                "message_hash": msg_hash,
+                "timestamp": int(time.time() * 1000),
+                "target_message_id": target_message_id,
+                "emoji": emoji
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "send_reaction", f"❌ ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
     def _on_message_delivered(self, lxmf_message):
         """
         Callback invoked by LXMF when a sent message acknowledgment is received.

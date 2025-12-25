@@ -323,6 +323,21 @@ class PythonWrapperManager(
     }
 
     /**
+     * Set reaction received callback.
+     * Called by Python when an emoji reaction to a message is received.
+     */
+    fun setReactionReceivedCallback(callback: (String) -> Unit) {
+        withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("set_reaction_received_callback", callback)
+                Log.d(TAG, "😀 Reaction received callback registered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set reaction received callback: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
      * Set native Kotlin stamp generator callback.
      *
      * This bypasses Python multiprocessing-based stamp generation which fails on Android

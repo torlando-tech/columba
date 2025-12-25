@@ -1697,6 +1697,45 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun sendReaction(
+        destinationHash: ByteArray,
+        targetMessageId: String,
+        emoji: String,
+        sourceIdentity: Identity,
+    ): Result<MessageReceipt> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
+
+            val resultJson =
+                service.sendReaction(
+                    destinationHash,
+                    targetMessageId,
+                    emoji,
+                    privateKey,
+                )
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            val msgHash = result.optString("message_hash").toByteArrayFromBase64() ?: byteArrayOf()
+            val timestamp = result.optLong("timestamp", System.currentTimeMillis())
+            val destHash = result.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
+
+            Log.d(TAG, "😀 Reaction $emoji sent to ${destinationHash.joinToString("") { "%02x".format(it) }.take(16)}")
+
+            MessageReceipt(
+                messageHash = msgHash,
+                timestamp = timestamp,
+                destinationHash = destHash,
+            )
+        }
+    }
+
     /**
      * Get BLE connection details from the service.
      */

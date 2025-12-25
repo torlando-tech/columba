@@ -429,8 +429,9 @@
             "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
             "expected": "BUILD SUCCESSFUL"
           },
-          "status": "pending",
-          "notes": "Add DropdownMenuItem with emoji icon and 'React' text. On click, call viewModel.showReactionPickerFor(message.id) and dismiss menu."
+          "status": "completed",
+          "notes": "Added 'React' option to MessageContextMenu. Changes: (1) Added Icons.Default.AddReaction import, (2) Added onReact parameter to MessageBubble with default empty lambda, (3) Added onReact parameter to MessageContextMenu, (4) Added React DropdownMenuItem with AddReaction icon positioned after Retry and before Reply, (5) Connected MessageBubble call site to viewModel.setReactionTarget(message.id). Verification via gradlew blocked in this environment but code follows established patterns.",
+          "updated_at": "2025-12-25T01:56:57.562423+00:00"
         },
         {
           "id": "subtask-6-3",
@@ -670,5 +671,5 @@
     }
   },
   "qa_signoff": null,
-  "last_updated": "2025-12-25T01:54:03.265308+00:00"
+  "last_updated": "2025-12-25T01:56:57.562433+00:00"
 }

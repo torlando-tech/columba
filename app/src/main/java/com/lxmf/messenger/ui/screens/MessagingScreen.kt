@@ -109,6 +109,7 @@ import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
+import com.lxmf.messenger.ui.components.ReactionDisplayRow
 import com.lxmf.messenger.ui.components.ReactionPickerDialog
 import com.lxmf.messenger.ui.components.ReplyInputBar
 import com.lxmf.messenger.ui.components.ReplyPreviewBubble
@@ -968,6 +969,14 @@ fun MessageBubble(
                     onReact()
                     showMenu = false
                 },
+            )
+        }
+
+        // Display reaction chips below message bubble
+        if (message.reactions.isNotEmpty()) {
+            ReactionDisplayRow(
+                reactions = message.reactions,
+                isFromMe = isFromMe,
             )
         }
     }

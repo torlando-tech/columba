@@ -40,6 +40,9 @@ fun Message.toMessageUi(): MessageUi {
     // Get reply-to message ID: prefer DB column, fallback to parsing field 16
     val replyId = replyToMessageId ?: parseReplyToFromField16(fieldsJson)
 
+    // Parse emoji reactions from field 16
+    val reactionsList = parseReactionsFromField16(fieldsJson)
+
     return MessageUi(
         id = id,
         destinationHash = destinationHash,
@@ -57,6 +60,7 @@ fun Message.toMessageUi(): MessageUi {
         errorMessage = errorMessage,
         replyToMessageId = replyId,
         // Note: replyPreview is loaded asynchronously by the ViewModel
+        reactions = reactionsList,
     )
 }
 

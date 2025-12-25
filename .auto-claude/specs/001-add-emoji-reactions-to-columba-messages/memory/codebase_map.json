@@ -1,0 +1,10 @@
+{
+  "discovered_files": {
+    "app/src/main/java/com/lxmf/messenger/ui/model/MessageUi.kt": {
+      "description": "ReactionUi data class added with emoji, senderHashes, and count fields. MessageUi now has reactions: List<ReactionUi> field for displaying emoji reactions on messages.",
+      "category": "data_model",
+      "discovered_at": "2025-12-25T01:13:33.512773+00:00"
+    }
+  },
+  "last_updated": "2025-12-25T01:13:33.512823+00:00"
+}

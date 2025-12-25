@@ -231,6 +231,10 @@ class MessagingViewModel
         private val _showReactionPicker = MutableStateFlow(false)
         val showReactionPicker: StateFlow<Boolean> = _showReactionPicker.asStateFlow()
 
+        // Current user's identity hash - used to identify own reactions
+        private val _myIdentityHash = MutableStateFlow<String?>(null)
+        val myIdentityHash: StateFlow<String?> = _myIdentityHash.asStateFlow()
+
         /**
          * Set a message to reply to. Called when user swipes on a message or selects "Reply".
          * Loads the reply preview data from the database asynchronously.
@@ -487,6 +491,11 @@ class MessagingViewModel
                         }
                     }
                 }
+
+                // Pre-load identity hash for reaction ownership checks
+                viewModelScope.launch {
+                    loadIdentityIfNeeded()
+                }
             } else {
                 Log.d(TAG, "Delivery status collection skipped for ${reticulumProtocol.javaClass.simpleName}")
             }
@@ -507,7 +516,10 @@ class MessagingViewModel
                 if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
                     val identity = reticulumProtocol.getLxmfIdentity().getOrThrow()
                     sourceIdentity = identity
-                    Log.d(TAG, "Loaded LXMF identity for messaging: ${identity.hash.take(8).joinToString("") { "%02x".format(it) }}")
+                    // Cache the identity hash for reaction ownership checks
+                    val hashHex = identity.hash.joinToString("") { "%02x".format(it) }
+                    _myIdentityHash.value = hashHex
+                    Log.d(TAG, "Loaded LXMF identity for messaging: ${hashHex.take(16)}...")
                     identity
                 } else {
                     // Fallback for non-service protocols
@@ -517,7 +529,10 @@ class MessagingViewModel
                                 reticulumProtocol.saveIdentity(it, "default_identity")
                             }
                     sourceIdentity = identity
-                    Log.d(TAG, "Loaded fallback identity for messaging")
+                    // Cache the identity hash for reaction ownership checks
+                    val hashHex = identity.hash.joinToString("") { "%02x".format(it) }
+                    _myIdentityHash.value = hashHex
+                    Log.d(TAG, "Loaded fallback identity for messaging: ${hashHex.take(16)}...")
                     identity
                 }
             } catch (e: Exception) {

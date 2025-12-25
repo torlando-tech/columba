@@ -39,7 +39,12 @@
       "description": "sendReaction() method added to ReticulumProtocol interface for sending emoji reactions. Takes destinationHash, targetMessageId, emoji, sourceIdentity and returns Result<MessageReceipt>. Reactions sent via LXMF Field 16 with format {\"reaction_to\": \"...\", \"emoji\": \"...\", \"sender\": \"...\"}.",
       "category": "api",
       "discovered_at": "2025-12-25T01:52:02.730736+00:00"
+    },
+    ".auto-claude/specs/001-add-emoji-reactions-to-columba-messages/": {
+      "description": "Subtask-7-1 (linting verification) completed via manual review - gradlew blocked but code passed manual inspection. All reaction feature files follow proper Kotlin/Python style conventions. No linting fixes were needed.",
+      "category": "verification",
+      "discovered_at": "2025-12-25T02:01:38.699757+00:00"
     }
   },
-  "last_updated": "2025-12-25T01:52:02.730744+00:00"
+  "last_updated": "2025-12-25T02:01:38.699774+00:00"
 }

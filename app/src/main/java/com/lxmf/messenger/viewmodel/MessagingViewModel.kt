@@ -224,6 +224,13 @@ class MessagingViewModel
         private val _pendingReplyTo = MutableStateFlow<com.lxmf.messenger.ui.model.ReplyPreviewUi?>(null)
         val pendingReplyTo: StateFlow<com.lxmf.messenger.ui.model.ReplyPreviewUi?> = _pendingReplyTo.asStateFlow()
 
+        // Reaction state - tracks which message is selected for adding a reaction
+        private val _pendingReactionMessageId = MutableStateFlow<String?>(null)
+        val pendingReactionMessageId: StateFlow<String?> = _pendingReactionMessageId.asStateFlow()
+
+        private val _showReactionPicker = MutableStateFlow(false)
+        val showReactionPicker: StateFlow<Boolean> = _showReactionPicker.asStateFlow()
+
         /**
          * Set a message to reply to. Called when user swipes on a message or selects "Reply".
          * Loads the reply preview data from the database asynchronously.
@@ -259,6 +266,37 @@ class MessagingViewModel
         fun clearReplyTo() {
             _pendingReplyTo.value = null
             Log.d(TAG, "Cleared pending reply")
+        }
+
+        /**
+         * Set a message as the target for adding a reaction.
+         * Shows the reaction picker UI for the user to select an emoji.
+         *
+         * @param messageId The ID of the message to react to
+         */
+        fun setReactionTarget(messageId: String) {
+            _pendingReactionMessageId.value = messageId
+            _showReactionPicker.value = true
+            Log.d(TAG, "Set reaction target: ${messageId.take(16)}...")
+        }
+
+        /**
+         * Clear the pending reaction and hide the reaction picker.
+         * Called when user cancels or after reaction is sent.
+         */
+        fun clearReactionTarget() {
+            _pendingReactionMessageId.value = null
+            _showReactionPicker.value = false
+            Log.d(TAG, "Cleared reaction target")
+        }
+
+        /**
+         * Dismiss the reaction picker without clearing the target.
+         * Used when user taps outside the picker or presses back.
+         */
+        fun dismissReactionPicker() {
+            _showReactionPicker.value = false
+            Log.d(TAG, "Dismissed reaction picker")
         }
 
         /**

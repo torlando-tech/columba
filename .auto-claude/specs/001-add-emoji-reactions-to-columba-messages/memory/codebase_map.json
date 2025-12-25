@@ -34,7 +34,12 @@
       "description": "Comprehensive test suite for ReticulumWrapper reaction methods (1010 lines). Tests: send_reaction method, reaction receive via _on_lxmf_delivery callback, reaction receive via poll_received_messages, set_reaction_received_callback, Field 16 structure validation, and edge cases. Follows patterns from test_wrapper_messaging.py.",
       "category": "testing",
       "discovered_at": "2025-12-25T01:46:32.165796+00:00"
+    },
+    "reticulum/src/main/java/com/lxmf/messenger/reticulum/protocol/ReticulumProtocol.kt": {
+      "description": "sendReaction() method added to ReticulumProtocol interface for sending emoji reactions. Takes destinationHash, targetMessageId, emoji, sourceIdentity and returns Result<MessageReceipt>. Reactions sent via LXMF Field 16 with format {\"reaction_to\": \"...\", \"emoji\": \"...\", \"sender\": \"...\"}.",
+      "category": "api",
+      "discovered_at": "2025-12-25T01:52:02.730736+00:00"
     }
   },
-  "last_updated": "2025-12-25T01:46:32.165814+00:00"
+  "last_updated": "2025-12-25T01:52:02.730744+00:00"
 }

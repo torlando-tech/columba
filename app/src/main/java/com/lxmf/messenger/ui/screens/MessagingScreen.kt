@@ -108,6 +108,7 @@ import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
+import com.lxmf.messenger.ui.components.ReactionPickerDialog
 import com.lxmf.messenger.ui.components.ReplyInputBar
 import com.lxmf.messenger.ui.components.ReplyPreviewBubble
 import com.lxmf.messenger.ui.components.StarToggleButton
@@ -183,6 +184,10 @@ fun MessagingScreen(
 
     // Reply preview cache - maps message ID to its loaded reply preview
     val replyPreviewCache by viewModel.replyPreviewCache.collectAsStateWithLifecycle()
+
+    // Reaction picker state
+    val showReactionPicker by viewModel.showReactionPicker.collectAsStateWithLifecycle()
+    val pendingReactionMessageId by viewModel.pendingReactionMessageId.collectAsStateWithLifecycle()
 
     // Track message positions for jump-to-original functionality
     val messagePositions = remember { mutableStateMapOf<String, Int>() }
@@ -757,6 +762,18 @@ fun MessagingScreen(
                     Text("Cancel")
                 }
             },
+        )
+    }
+
+    // Reaction picker dialog - triggered by long-press on a message
+    if (showReactionPicker && pendingReactionMessageId != null) {
+        ReactionPickerDialog(
+            onReactionSelected = { emoji ->
+                pendingReactionMessageId?.let { messageId ->
+                    viewModel.sendReaction(messageId, emoji)
+                }
+            },
+            onDismiss = { viewModel.dismissReactionPicker() },
         )
     }
 }

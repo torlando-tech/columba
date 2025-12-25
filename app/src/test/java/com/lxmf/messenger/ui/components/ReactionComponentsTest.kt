@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.test.RegisterComponentActivityRule
@@ -163,6 +164,106 @@ class ReactionComponentsTest {
         REACTION_EMOJIS.forEach { emoji ->
             composeTestRule.onNodeWithText(emoji).assertIsDisplayed()
         }
+    }
+
+    @Test
+    fun `ReactionPickerDialog displays add more button`() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReactionPickerDialog(
+                    onReactionSelected = {},
+                    onDismiss = {},
+                )
+            }
+        }
+
+        // Verify the "+" button is displayed
+        composeTestRule.onNodeWithContentDescription("More emojis").assertIsDisplayed()
+    }
+
+    @Test
+    fun `ReactionPickerDialog shows full emoji picker when add button is tapped`() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReactionPickerDialog(
+                    onReactionSelected = {},
+                    onDismiss = {},
+                )
+            }
+        }
+
+        // Tap the "+" button
+        composeTestRule.onNodeWithContentDescription("More emojis").performClick()
+
+        // Verify the full emoji picker title is displayed
+        composeTestRule.onNodeWithText("Choose a reaction").assertIsDisplayed()
+    }
+
+    // ========== FullEmojiPickerDialog TESTS ==========
+
+    @Test
+    fun `FullEmojiPickerDialog displays title`() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                FullEmojiPickerDialog(
+                    onEmojiSelected = {},
+                    onDismiss = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Choose a reaction").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FullEmojiPickerDialog displays extended emojis`() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                FullEmojiPickerDialog(
+                    onEmojiSelected = {},
+                    onDismiss = {},
+                )
+            }
+        }
+
+        // Verify some of the extended emojis are displayed
+        composeTestRule.onNodeWithText("😀").assertIsDisplayed()
+        composeTestRule.onNodeWithText("🔥").assertIsDisplayed()
+        composeTestRule.onNodeWithText("💯").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FullEmojiPickerDialog calls onEmojiSelected when emoji is tapped`() {
+        var selectedEmoji: String? = null
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                FullEmojiPickerDialog(
+                    onEmojiSelected = { selectedEmoji = it },
+                    onDismiss = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("🔥").performClick()
+        assertEquals("🔥", selectedEmoji)
+    }
+
+    // ========== EXTENDED_EMOJIS Constant Tests ==========
+
+    @Test
+    fun `EXTENDED_EMOJIS contains more than 100 emojis`() {
+        assertTrue(EXTENDED_EMOJIS.size > 100)
+    }
+
+    @Test
+    fun `EXTENDED_EMOJIS contains fire emoji`() {
+        assertTrue(EXTENDED_EMOJIS.contains("🔥"))
+    }
+
+    @Test
+    fun `EXTENDED_EMOJIS contains hundred points emoji`() {
+        assertTrue(EXTENDED_EMOJIS.contains("💯"))
     }
 
     // ========== ReactionDisplayRow TESTS ==========

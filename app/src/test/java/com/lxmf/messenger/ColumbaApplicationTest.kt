@@ -293,39 +293,14 @@ class ColumbaApplicationTest {
         assertEquals(expected.toList(), result.toList())
     }
 
-    // ========== CompanionDeviceManager API Level Tests ==========
 
     @Test
-    fun `registerExistingCompanionDevices requires Android 13+ (API 33)`() {
-        // This test verifies the API level requirement for CompanionDeviceManager.myAssociations
-        // which was introduced in Android 13 (TIRAMISU, API 33)
-
-        // Android 12 (API 31) - Should skip
-        val api31ShouldSkip = android.os.Build.VERSION_CODES.S < android.os.Build.VERSION_CODES.TIRAMISU
-        assertEquals(true, api31ShouldSkip)
-
-        // Android 13 (API 33) - Should proceed
-        val api33ShouldProceed = android.os.Build.VERSION_CODES.TIRAMISU >= android.os.Build.VERSION_CODES.TIRAMISU
-        assertEquals(true, api33ShouldProceed)
-
-        // Android 14 (API 34) - Should proceed
-        val api34ShouldProceed = android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE >= android.os.Build.VERSION_CODES.TIRAMISU
-        assertEquals(true, api34ShouldProceed)
-    }
 
     @Test
-    fun `CompanionDeviceManager myAssociations requires TIRAMISU or higher`() {
-        // Verify that the minimum API level for myAssociations is TIRAMISU (33)
-        // This prevents NoSuchMethodError on Android 12 (API 31)
-
-        val minimumApiLevel = android.os.Build.VERSION_CODES.TIRAMISU
-        assertEquals(33, minimumApiLevel)
-
-        // Verify Android 12 is below the minimum
-        val android12ApiLevel = android.os.Build.VERSION_CODES.S
-        assertEquals(31, android12ApiLevel)
-        assertEquals(true, android12ApiLevel < minimumApiLevel)
-    }
 }
 
 
+
+    @Test
+    @org.robolectric.annotation.Config(sdk = [31])
+    @org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)

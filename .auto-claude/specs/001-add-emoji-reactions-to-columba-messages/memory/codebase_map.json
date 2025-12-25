@@ -4,7 +4,12 @@
       "description": "ReactionUi data class added with emoji, senderHashes, and count fields. MessageUi now has reactions: List<ReactionUi> field for displaying emoji reactions on messages.",
       "category": "data_model",
       "discovered_at": "2025-12-25T01:13:33.512773+00:00"
+    },
+    "app/src/test/java/com/lxmf/messenger/ui/model/ReactionMapperTest.kt": {
+      "description": "ReactionMapperTest created with 50+ unit tests for parseReactionsFromField16(). Tests cover: null/empty JSON, invalid JSON, missing field 16, reactions parsing with single/multiple senders, empty sender filtering, Unicode emoji (including ZWJ sequences), coexistence with reply_to field, and edge cases.",
+      "category": "tests",
+      "discovered_at": "2025-12-25T01:19:51.393313+00:00"
     }
   },
-  "last_updated": "2025-12-25T01:13:33.512823+00:00"
+  "last_updated": "2025-12-25T01:19:51.393339+00:00"
 }

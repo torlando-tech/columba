@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.lxmf.messenger.ui.model.ReactionUi
 
 /**
  * Standard emoji reactions available for selection.
@@ -115,6 +117,103 @@ private fun ReactionEmojiButton(
                 fontSize = 28.sp,
                 textAlign = TextAlign.Center,
             )
+        }
+    }
+}
+
+/**
+ * Horizontal row of reaction chips displayed below a message bubble.
+ *
+ * Shows each reaction emoji with its count as a compact chip.
+ * Positioned appropriately for sent/received messages using alignment.
+ * Chips are styled with Material3 colors that adapt to the message type.
+ *
+ * @param reactions List of reactions to display (emoji + count)
+ * @param isFromMe Whether the parent message is from the current user (affects alignment and colors)
+ */
+@Composable
+fun ReactionDisplayRow(
+    reactions: List<ReactionUi>,
+    isFromMe: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (reactions.isEmpty()) return
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        horizontalArrangement = if (isFromMe) {
+            Arrangement.End
+        } else {
+            Arrangement.Start
+        },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            reactions.forEach { reaction ->
+                ReactionChip(
+                    reaction = reaction,
+                    isFromMe = isFromMe,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Individual reaction chip displaying an emoji with its count.
+ *
+ * Styled as a compact pill-shaped surface with the emoji and count.
+ * Colors adapt based on whether the parent message is sent or received.
+ *
+ * @param reaction The reaction data (emoji and count)
+ * @param isFromMe Whether the parent message is from the current user (affects colors)
+ */
+@Composable
+private fun ReactionChip(
+    reaction: ReactionUi,
+    isFromMe: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val backgroundColor = if (isFromMe) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+
+    val countColor = if (isFromMe) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
+    Surface(
+        modifier = modifier.height(24.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = backgroundColor,
+        tonalElevation = 2.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = reaction.emoji,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+            )
+            if (reaction.count > 1) {
+                Text(
+                    text = reaction.count.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = countColor,
+                )
+            }
         }
     }
 }

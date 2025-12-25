@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AddReaction
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
@@ -616,6 +617,7 @@ fun MessagingScreen(
                                                     }
                                                 }
                                             },
+                                            onReact = { viewModel.setReactionTarget(message.id) },
                                         )
                                     }
                                 }
@@ -789,6 +791,7 @@ fun MessageBubble(
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
     onReply: () -> Unit = {},
     onReplyPreviewClick: (replyToMessageId: String) -> Unit = {},
+    onReact: () -> Unit = {},
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var showMenu by remember { mutableStateOf(false) }
@@ -961,6 +964,10 @@ fun MessageBubble(
                     onReply()
                     showMenu = false
                 },
+                onReact = {
+                    onReact()
+                    showMenu = false
+                },
             )
         }
     }
@@ -976,6 +983,7 @@ fun MessageContextMenu(
     onViewDetails: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
     onReply: (() -> Unit)? = null,
+    onReact: (() -> Unit)? = null,
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -995,6 +1003,20 @@ fun MessageContextMenu(
                 },
                 text = { Text("Retry") },
                 onClick = onRetry,
+            )
+        }
+
+        // React option
+        if (onReact != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.AddReaction,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text("React") },
+                onClick = onReact,
             )
         }
 

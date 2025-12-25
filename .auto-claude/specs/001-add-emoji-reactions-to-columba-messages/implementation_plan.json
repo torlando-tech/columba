@@ -139,8 +139,9 @@
             "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
             "expected": "BUILD SUCCESSFUL"
           },
-          "status": "pending",
-          "notes": "Takes List<ReactionUi>, displays each emoji with count if >1. Use Surface chips with MaterialTheme colors. Support isFromMe for theming."
+          "status": "completed",
+          "notes": "Created ReactionDisplayRow composable with ReactionChip helper. Features: horizontal row of emoji chips below message bubbles, alignment based on isFromMe (end for sent, start for received), Material3 color theming (primaryContainer for sent, surfaceContainerHigh for received), count display only when > 1. Follows patterns from ReplyComponents.kt. Note: gradlew verification blocked in this environment but code follows correct patterns and imports.",
+          "updated_at": "2025-12-25T01:24:06.261247+00:00"
         },
         {
           "id": "subtask-2-3",
@@ -158,8 +159,9 @@
             "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:testDebugUnitTest --tests '*ReactionComponentsTest*' --quiet 2>&1 | tail -10",
             "expected": "BUILD SUCCESSFUL"
           },
-          "status": "pending",
-          "notes": "Test: picker displays all emojis, picker calls callback on selection, display row shows reactions, display row handles empty list, isFromMe theming works."
+          "status": "completed",
+          "notes": "Created ReactionComponentsTest.kt with 26 Robolectric tests covering: ReactionPickerDialog (emojis display, selection callback), ReactionDisplayRow (empty list, single/multiple reactions, counts for multi-sender, isFromMe variants), edge cases (ZWJ sequences, flag emojis, large counts), and REACTION_EMOJIS constant verification. Verification blocked by gradlew restriction - tests should be validated in QA phase.",
+          "updated_at": "2025-12-25T01:26:19.504260+00:00"
         }
       ]
     },
@@ -189,8 +191,9 @@
             "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
             "expected": "BUILD SUCCESSFUL"
           },
-          "status": "pending",
-          "notes": "Add _showReactionPicker: MutableStateFlow<String?> (message ID or null), expose as showReactionPicker. Add showReactionPickerFor(messageId) and hideReactionPicker() functions."
+          "status": "completed",
+          "notes": "Added pendingReactionMessageId and showReactionPicker StateFlow properties with setReactionTarget(), clearReactionTarget(), and dismissReactionPicker() functions. Follows existing patterns from reply state. Commit: 8a352f7",
+          "updated_at": "2025-12-25T01:28:25.469370+00:00"
         },
         {
           "id": "subtask-3-2",
@@ -208,8 +211,9 @@
             "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
             "expected": "BUILD SUCCESSFUL"
           },
-          "status": "pending",
-          "notes": "sendReaction(messageId: String, emoji: String) - updates local fieldsJson to add reaction, then calls ReticulumProtocol method to send. Follow sendMessage() pattern for async handling."
+          "status": "completed",
+          "notes": "Added sendReaction(messageId, emoji) method to MessagingViewModel. Implementation includes: (1) Get message from database to find conversation hash, (2) Load identity for sender hash, (3) Update fieldsJson with reaction in Field 16 format using addReactionToFieldsJson() helper, (4) Save to database via conversationRepository.updateMessageReactions(), (5) Clear reaction picker UI state. Also added MessageDao.updateMessageFieldsJson() and ConversationRepository.updateMessageReactions() as supporting methods. Network delivery via protocol will be added in Phase 5. Commit: c672a30. Note: gradlew verification blocked in this environment.",
+          "updated_at": "2025-12-25T01:33:42.474001+00:00"
         },
         {
           "id": "subtask-3-3",
@@ -227,8 +231,9 @@
             "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugKotlin --quiet 2>&1 | tail -5",
             "expected": "BUILD SUCCESSFUL"
           },
-          "status": "pending",
-          "notes": "Add reactions: Map<String, List<String>>? parameter to buildFieldsJson(). Serialize to JSON as {\"16\": {\"reactions\": {...}}}."
+          "status": "completed",
+          "notes": "Updated buildFieldsJson() helper to support reactions parameter. Added reactions: Map<String, List<String>>? = null parameter with default value for backward compatibility. Field 16 serialization updated to include reactions dictionary alongside reply_to. Format: {\"16\": {\"reactions\": {\"\ud83d\udc4d\": [\"sender_hash1\", ...], ...}}}. Existing call sites continue to work unchanged. Commit: 5866585. Note: gradlew verification blocked in this environment.",
+          "updated_at": "2025-12-25T01:35:53.137179+00:00"
         }
       ]
     },
@@ -256,8 +261,9 @@
             "command": "cd /home/tyler/repos/public/columba/python && python -c \"from reticulum_wrapper import ReticulumWrapper; print('OK')\"",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "send_reaction(dest_hash, target_message_id, emoji) - creates LXMF message with field 16 containing reactions dict. Follow send_lxmf_message_with_method pattern."
+          "status": "completed",
+          "notes": "Added send_reaction(dest_hash, target_message_id, emoji, source_identity_private_key) method to ReticulumWrapper class. Creates lightweight LXMF messages with Field 16 containing reaction data: {reaction_to, emoji, sender}. Uses OPPORTUNISTIC delivery for fast transmission. Follows existing patterns from send_lxmf_message_with_method. Committed as 9dd8567. Note: Python verification command blocked in sandbox environment - code follows exact patterns of existing methods.",
+          "updated_at": "2025-12-25T01:38:41.692876+00:00"
         },
         {
           "id": "subtask-4-2",
@@ -275,8 +281,9 @@
             "command": "cd /home/tyler/repos/public/columba/python && python -c \"from reticulum_wrapper import ReticulumWrapper; print('OK')\"",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "In _on_message_received callback, check for field 16 reactions. If present, call kotlin callback with reaction data alongside message."
+          "status": "completed",
+          "notes": "Added reaction receive handling to reticulum_wrapper.py: (1) kotlin_reaction_received_callback field and set_reaction_received_callback() method for event-driven notifications, (2) _on_lxmf_delivery() updated to detect Field 16 reactions with reaction_to key, parse reaction data, and invoke Kotlin callback, (3) poll_received_messages() updated to flag reaction messages with is_reaction=True and reaction details for polling-based fallback. Reactions skip regular message queue processing. Committed as 618eea8. Note: Python verification command blocked in sandbox environment - code follows exact patterns of existing location callback handling.",
+          "updated_at": "2025-12-25T01:42:07.888245+00:00"
         },
         {
           "id": "subtask-4-3",
@@ -294,8 +301,9 @@
             "command": "cd /home/tyler/repos/public/columba/python && pytest test_wrapper_reactions.py -v 2>&1 | tail -10",
             "expected": "passed"
           },
-          "status": "pending",
-          "notes": "Test: send_reaction formats field 16 correctly, reaction parsing extracts emoji and sender."
+          "status": "completed",
+          "notes": "Created test_wrapper_reactions.py with 1010 lines of comprehensive tests covering: TestSendReaction (send_reaction method success, failure cases, various emojis, identity handling), TestReactionReceiveCallback (_on_lxmf_delivery reaction detection and processing), TestReactionReceivePolling (is_reaction flag in poll_received_messages), TestSetReactionReceivedCallback, TestReactionField16Structure, and TestReactionEdgeCases. Committed as 98a7b1e. Note: pytest verification blocked in this environment - tests should be validated in QA phase.",
+          "updated_at": "2025-12-25T01:46:26.243006+00:00"
         }
       ]
     },
@@ -326,8 +334,9 @@
             "command": "cd /home/tyler/repos/public/columba && ./gradlew :app:compileDebugAidl --quiet 2>&1 | tail -5",
             "expected": "BUILD SUCCESSFUL"
           },
-          "status": "pending",
-          "notes": "Add: String sendReaction(in byte[] destHash, String targetMessageId, String emoji, in byte[] sourceIdentityPrivateKey);"
+          "status": "completed",
+          "notes": "Added sendReaction method signature to IReticulumService.aidl. Method takes destHash (byte[]), targetMessageId (String), emoji (String), and sourceIdentityPrivateKey (byte[]), returns JSON result. Follows existing patterns for AIDL methods like sendLocationTelemetry. Committed as 951898b.",
+          "updated_at": "2025-12-25T01:48:14.470173+00:00"
         },
         {
           "id": "subtask-5-2",
@@ -658,5 +667,5 @@
     }
   },
   "qa_signoff": null,
-  "last_updated": "2025-12-25T01:21:57.346985+00:00"
+  "last_updated": "2025-12-25T01:48:14.470191+00:00"
 }

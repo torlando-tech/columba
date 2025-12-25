@@ -687,6 +687,35 @@ class ReticulumServiceBinder(
     }
 
     // ===========================================
+    // Emoji Reactions
+    // ===========================================
+
+    override fun sendReaction(
+        destHash: ByteArray,
+        targetMessageId: String,
+        emoji: String,
+        sourceIdentityPrivateKey: ByteArray,
+    ): String {
+        return try {
+            Log.d(TAG, "📬 Sending reaction $emoji to message ${targetMessageId.take(16)}...")
+            wrapperManager.withWrapper { wrapper ->
+                val result =
+                    wrapper.callAttr(
+                        "send_reaction",
+                        destHash,
+                        targetMessageId,
+                        emoji,
+                        sourceIdentityPrivateKey,
+                    )
+                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+            } ?: """{"success": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending reaction", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    // ===========================================
     // Event Broadcasting Helpers
     // ===========================================
 

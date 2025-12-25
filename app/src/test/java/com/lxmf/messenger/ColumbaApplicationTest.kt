@@ -292,15 +292,4 @@ class ColumbaApplicationTest {
 
         assertEquals(expected.toList(), result.toList())
     }
-
-
-    @Test
-
-    @Test
 }
-
-
-
-    @Test
-    @org.robolectric.annotation.Config(sdk = [31])
-    @org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)

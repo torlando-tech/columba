@@ -345,6 +345,7 @@ class ColumbaApplicationTest {
     }
 
     @Test
+    @Suppress("SwallowedException")
     @org.robolectric.annotation.Config(sdk = [33]) // Android 13 (TIRAMISU)
     fun `registerExistingCompanionDevices proceeds on Android 13+`() {
         // Arrange - create a mock application instance

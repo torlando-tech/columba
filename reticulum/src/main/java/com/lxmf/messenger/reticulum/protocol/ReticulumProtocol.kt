@@ -233,6 +233,25 @@ interface ReticulumProtocol {
         locationJson: String,
         sourceIdentity: Identity,
     ): Result<MessageReceipt>
+
+    /**
+     * Send an emoji reaction to a message via LXMF Field 16.
+     *
+     * The reaction is sent as a lightweight LXMF message with Field 16 containing
+     * the reaction data: {"reaction_to": "...", "emoji": "...", "sender": "..."}.
+     *
+     * @param destinationHash Destination hash bytes (16 bytes) - the recipient
+     * @param targetMessageId The message hash/ID being reacted to
+     * @param emoji The emoji reaction (e.g., "👍", "❤️", "😂", "😮", "😢", "😡")
+     * @param sourceIdentity Identity of the sender
+     * @return Result containing MessageReceipt or failure
+     */
+    suspend fun sendReaction(
+        destinationHash: ByteArray,
+        targetMessageId: String,
+        emoji: String,
+        sourceIdentity: Identity,
+    ): Result<MessageReceipt>
 }
 
 /**

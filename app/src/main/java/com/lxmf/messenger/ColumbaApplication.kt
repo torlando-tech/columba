@@ -463,7 +463,7 @@ class ColumbaApplication : Application() {
      *
      * Only runs on Android 13+ (API 33+) where CompanionDeviceManager.myAssociations is available.
      */
-    private fun registerExistingCompanionDevices() {
+    internal fun registerExistingCompanionDevices() {
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
             return
         }

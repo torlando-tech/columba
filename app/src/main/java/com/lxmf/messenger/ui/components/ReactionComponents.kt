@@ -5,17 +5,24 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -266,6 +273,153 @@ fun InlineReactionBar(
                 },
             )
         }
+    }
+}
+
+/**
+ * Signal-style message action bar that appears above a message on long-press.
+ *
+ * Combines emoji reactions with action buttons in a unified UI.
+ * This replaces the DropdownMenu approach to avoid touch event blocking issues.
+ * The action bar includes:
+ * - Row 1: Quick emoji reactions + "+" button for more emojis
+ * - Row 2: Action buttons (Reply, Copy, and optional Retry/Details)
+ *
+ * @param onReactionSelected Callback when an emoji is selected
+ * @param onShowFullPicker Callback to show the full emoji picker dialog
+ * @param onReply Callback when Reply is tapped
+ * @param onCopy Callback when Copy is tapped
+ * @param onViewDetails Optional callback for View Details (sent messages only)
+ * @param onRetry Optional callback for Retry (failed messages only)
+ */
+@Composable
+fun MessageActionBar(
+    onReactionSelected: (String) -> Unit,
+    onShowFullPicker: () -> Unit,
+    onReply: () -> Unit,
+    onCopy: () -> Unit,
+    onViewDetails: (() -> Unit)? = null,
+    onRetry: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
+    val hapticFeedback = LocalHapticFeedback.current
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Row 1: Emoji reactions
+            Row(
+                modifier = Modifier.padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                REACTION_EMOJIS.forEach { emoji ->
+                    ReactionEmojiButton(
+                        emoji = emoji,
+                        onClick = {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onReactionSelected(emoji)
+                        },
+                    )
+                }
+                // "+" button to open full emoji picker
+                AddMoreEmojiButton(
+                    onClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onShowFullPicker()
+                    },
+                )
+            }
+
+            // Row 2: Action buttons
+            Row(
+                modifier = Modifier.padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Retry button (only for failed messages)
+                if (onRetry != null) {
+                    ActionButton(
+                        icon = Icons.Default.Refresh,
+                        label = "Retry",
+                        onClick = {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onRetry()
+                        },
+                    )
+                }
+
+                // Reply button
+                ActionButton(
+                    icon = Icons.AutoMirrored.Filled.Reply,
+                    label = "Reply",
+                    onClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onReply()
+                    },
+                )
+
+                // Copy button
+                ActionButton(
+                    icon = Icons.Default.ContentCopy,
+                    label = "Copy",
+                    onClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onCopy()
+                    },
+                )
+
+                // Details button (only for sent messages)
+                if (onViewDetails != null) {
+                    ActionButton(
+                        icon = Icons.Default.Info,
+                        label = "Details",
+                        onClick = {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onViewDetails()
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Individual action button for the message action bar.
+ */
+@Composable
+private fun ActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

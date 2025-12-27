@@ -112,6 +112,8 @@ fun parseReactionsFromField16(fieldsJson: String?): List<ReactionUi> {
             val sendersArray = reactionsObj.optJSONArray(emoji) ?: continue
             val senderHashes = mutableListOf<String>()
             for (i in 0 until sendersArray.length()) {
+                // Skip null values in the array
+                if (sendersArray.isNull(i)) continue
                 val sender = sendersArray.optString(i, "")
                 if (sender.isNotEmpty()) {
                     senderHashes.add(sender)

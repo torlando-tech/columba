@@ -7,8 +7,8 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -48,15 +47,11 @@ data class SettingsState(
     val preferOwnInstance: Boolean = false,
     val isSharedInstanceBannerExpanded: Boolean = false,
     val rpcKey: String? = null,
-    // True if we were using shared but it went offline
-    val wasUsingSharedInstance: Boolean = false,
-    // True when shared instance becomes newly available (notification)
-    val sharedInstanceAvailable: Boolean = false,
-    // True if shared instance is currently reachable (from service query)
-    val sharedInstanceOnline: Boolean = false,
+    val wasUsingSharedInstance: Boolean = false, // True if we were using shared but it went offline
+    val sharedInstanceAvailable: Boolean = false, // True when shared instance becomes newly available (notification)
+    val sharedInstanceOnline: Boolean = false, // True if shared instance is currently reachable (from service query)
     // Message delivery state
-    // "direct" or "propagated"
-    val defaultDeliveryMethod: String = "direct",
+    val defaultDeliveryMethod: String = "direct", // "direct" or "propagated"
     val tryPropagationOnFail: Boolean = true,
     val autoSelectPropagationNode: Boolean = true,
     val currentRelayName: String? = null,
@@ -124,8 +119,6 @@ class SettingsViewModel
             loadSettings()
             // Always load location sharing settings (not dependent on monitors)
             loadLocationSharingSettings()
-            // Always start sync state monitoring (no infinite loops, needed for UI)
-            startSyncStateMonitor()
             if (enableMonitors) {
                 startSharedInstanceMonitor()
                 startSharedInstanceAvailabilityMonitor()
@@ -174,12 +167,6 @@ class SettingsViewModel
                         settingsRepository.rpcKeyFlow,
                         settingsRepository.transportNodeEnabledFlow,
                         settingsRepository.defaultDeliveryMethodFlow,
-                        // Sync state flows - included here to avoid race conditions with separate collectors
-                        // Note: isSyncing is excluded because it changes rapidly (true→false in ms)
-                        // and would cause excessive recomposition. It's handled separately.
-                        propagationNodeManager.lastSyncTimestamp,
-                        settingsRepository.autoRetrieveEnabledFlow,
-                        settingsRepository.retrievalIntervalSecondsFlow,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as com.lxmf.messenger.data.db.entity.LocalIdentityEntity?
@@ -213,17 +200,6 @@ class SettingsViewModel
 
                         @Suppress("UNCHECKED_CAST")
                         val defaultDeliveryMethod = flows[10] as String
-
-                        // Sync state from flows (not preserved from _state.value to avoid races)
-                        // Note: isSyncing is handled separately to avoid rapid recomposition
-                        @Suppress("UNCHECKED_CAST")
-                        val lastSyncTimestamp = flows[11] as Long?
-
-                        @Suppress("UNCHECKED_CAST")
-                        val autoRetrieveEnabled = flows[12] as Boolean
-
-                        @Suppress("UNCHECKED_CAST")
-                        val retrievalIntervalSeconds = flows[13] as Int
 
                         val displayName = activeIdentity?.displayName ?: defaultName
 
@@ -264,12 +240,6 @@ class SettingsViewModel
                             transportNodeEnabled = transportNodeEnabled,
                             // Message delivery state
                             defaultDeliveryMethod = defaultDeliveryMethod,
-                            // Sync state from flows (included in combine to avoid race conditions)
-                            autoRetrieveEnabled = autoRetrieveEnabled,
-                            retrievalIntervalSeconds = retrievalIntervalSeconds,
-                            lastSyncTimestamp = lastSyncTimestamp,
-                            // isSyncing handled separately to avoid rapid recomposition
-                            isSyncing = _state.value.isSyncing,
                             // Preserve location sharing state from loadLocationSharingSettings()
                             locationSharingEnabled = _state.value.locationSharingEnabled,
                             activeSharingSessions = _state.value.activeSharingSessions,
@@ -329,11 +299,7 @@ class SettingsViewModel
                             )
                         Log.d(
                             TAG,
-                            "Settings updated: displayName=${newState.displayName}, " +
-                                "autoAnnounce=${newState.autoAnnounceEnabled}, " +
-                                "interval=${newState.autoAnnounceIntervalMinutes}min, " +
-                                "theme=${newState.selectedTheme}, " +
-                                "customThemes=${newState.customThemes.size}",
+                            "Settings updated: displayName=${newState.displayName}, autoAnnounce=${newState.autoAnnounceEnabled}, interval=${newState.autoAnnounceIntervalMinutes}min, theme=${newState.selectedTheme}, customThemes=${newState.customThemes.size}",
                         )
                     }
                 } catch (e: Exception) {
@@ -1047,41 +1013,50 @@ class SettingsViewModel
                 }
             }
 
-        }
-
-        /**
-         * Start monitoring available relays and isSyncing state.
-         * Note: lastSyncTimestamp, autoRetrieveEnabled, and retrievalIntervalSeconds
-         * are included in the main loadSettings() combine to avoid race conditions.
-         * isSyncing is kept separate because it changes rapidly (true→false in ms).
-         */
-        private fun startSyncStateMonitor() {
             // Monitor available relays for selection UI
             viewModelScope.launch {
                 propagationNodeManager.availableRelaysState.collect { state ->
                     when (state) {
                         is AvailableRelaysState.Loading -> {
                             Log.d(TAG, "SettingsViewModel: available relays loading")
-                            _state.update { it.copy(availableRelaysLoading = true) }
+                            _state.value = _state.value.copy(
+                                availableRelaysLoading = true,
+                            )
                         }
                         is AvailableRelaysState.Loaded -> {
                             Log.d(TAG, "SettingsViewModel received ${state.relays.size} available relays")
-                            _state.update {
-                                it.copy(
-                                    availableRelays = state.relays,
-                                    availableRelaysLoading = false,
-                                )
-                            }
+                            _state.value = _state.value.copy(
+                                availableRelays = state.relays,
+                                availableRelaysLoading = false,
+                            )
                         }
                     }
                 }
             }
 
-            // Monitor isSyncing separately - it changes rapidly and shouldn't trigger
-            // full state recomposition via the main combine
+            // Monitor sync state from PropagationNodeManager
             viewModelScope.launch {
                 propagationNodeManager.isSyncing.collect { syncing ->
-                    _state.update { it.copy(isSyncing = syncing) }
+                    _state.value = _state.value.copy(isSyncing = syncing)
+                }
+            }
+
+            // Monitor last sync timestamp from PropagationNodeManager
+            viewModelScope.launch {
+                propagationNodeManager.lastSyncTimestamp.collect { timestamp ->
+                    _state.value = _state.value.copy(lastSyncTimestamp = timestamp)
+                }
+            }
+
+            // Monitor retrieval settings from repository
+            viewModelScope.launch {
+                settingsRepository.autoRetrieveEnabledFlow.collect { enabled ->
+                    _state.value = _state.value.copy(autoRetrieveEnabled = enabled)
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.retrievalIntervalSecondsFlow.collect { seconds ->
+                    _state.value = _state.value.copy(retrievalIntervalSeconds = seconds)
                 }
             }
         }
@@ -1147,17 +1122,17 @@ class SettingsViewModel
         private fun loadLocationSharingSettings() {
             viewModelScope.launch {
                 settingsRepository.locationSharingEnabledFlow.collect { enabled ->
-                    _state.update { it.copy(locationSharingEnabled = enabled) }
+                    _state.value = _state.value.copy(locationSharingEnabled = enabled)
                 }
             }
             viewModelScope.launch {
                 settingsRepository.defaultSharingDurationFlow.collect { duration ->
-                    _state.update { it.copy(defaultSharingDuration = duration) }
+                    _state.value = _state.value.copy(defaultSharingDuration = duration)
                 }
             }
             viewModelScope.launch {
                 settingsRepository.locationPrecisionRadiusFlow.collect { radiusMeters ->
-                    _state.update { it.copy(locationPrecisionRadius = radiusMeters) }
+                    _state.value = _state.value.copy(locationPrecisionRadius = radiusMeters)
                 }
             }
         }
@@ -1169,7 +1144,7 @@ class SettingsViewModel
         private fun startLocationSharingMonitor() {
             viewModelScope.launch {
                 locationSharingManager.activeSessions.collect { sessions ->
-                    _state.update { it.copy(activeSharingSessions = sessions) }
+                    _state.value = _state.value.copy(activeSharingSessions = sessions)
                 }
             }
         }

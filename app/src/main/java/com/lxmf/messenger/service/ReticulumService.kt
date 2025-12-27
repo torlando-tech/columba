@@ -56,6 +56,16 @@ class ReticulumService : Service() {
         // Create notification channel
         managers.notificationManager.createNotificationChannel()
 
+        // CRITICAL: Start foreground immediately in onCreate to prevent being killed
+        // before onStartCommand or onBind are called. This is the earliest safe point.
+        managers.notificationManager.startForeground(this)
+        Log.d(TAG, "Foreground service started in onCreate")
+
+        // CRITICAL: Acquire wake lock early to prevent CPU sleep during initialization
+        // Previously this was only acquired after Python init, leaving a vulnerable window
+        managers.lockManager.acquireAll()
+        Log.d(TAG, "Wake locks acquired in onCreate")
+
         // Create binder with callbacks
         binder =
             ServiceModule.createBinder(
@@ -80,17 +90,21 @@ class ReticulumService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        Log.d(TAG, "Service started")
+        Log.d(TAG, "Service started with action: ${intent?.action}")
 
-        // Guard against calls before onCreate completes
+        // CRITICAL: Always return START_STICKY to ensure Android restarts the service if killed.
+        // Previously returned START_NOT_STICKY when managers weren't initialized, which meant
+        // the service wouldn't restart after being killed during the initialization race window.
         if (!::managers.isInitialized || !::binder.isInitialized) {
-            Log.e(TAG, "onStartCommand called before onCreate completed - ignoring")
-            return START_NOT_STICKY
+            Log.w(TAG, "onStartCommand called before onCreate completed - will retry after init")
+            // Service will be properly initialized when onCreate completes
+            // The foreground notification is already started in onCreate
+            return START_STICKY
         }
 
         when (intent?.action) {
             ACTION_START -> {
-                // Start foreground service with notification
+                // Reinforce foreground service with notification (may already be started in onCreate)
                 managers.notificationManager.startForeground(this)
             }
             ACTION_STOP -> {
@@ -134,7 +148,16 @@ class ReticulumService : Service() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         Log.d(TAG, "Service unbound")
-        // Return true to allow rebinding
+
+        // CRITICAL: Reinforce foreground status when all clients disconnect.
+        // This ensures the service stays protected even when no clients are bound.
+        // The service should continue running in foreground to receive messages.
+        if (::managers.isInitialized) {
+            managers.notificationManager.startForeground(this)
+            Log.d(TAG, "Reinforced foreground status after unbind")
+        }
+
+        // Return true to allow rebinding without destroying the service
         return true
     }
 

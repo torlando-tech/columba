@@ -98,8 +98,9 @@ class ServiceNotificationManager(
      * active BLE mesh connections.
      *
      * @param service The service to start in foreground mode
+     * @return true if foreground started successfully, false if it failed
      */
-    fun startForeground(service: Service) {
+    fun startForeground(service: Service): Boolean {
         try {
             val notification = createNotification(state.networkStatus.get())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -113,6 +114,8 @@ class ServiceNotificationManager(
                 // Android 9 and below
                 service.startForeground(NOTIFICATION_ID, notification)
             }
+            Log.d(TAG, "Foreground service started successfully")
+            return true
         } catch (e: Exception) {
             // Handle ForegroundServiceStartNotAllowedException and other exceptions
             // This can happen when Android's time limits are exhausted
@@ -123,10 +126,12 @@ class ServiceNotificationManager(
                 e is android.app.ForegroundServiceStartNotAllowedException
             ) {
                 Log.e(TAG, "Foreground service time limit exhausted. Service will run in background with limited capabilities.")
+                // Update state to reflect the issue - service is now vulnerable to being killed
+                state.networkStatus.set("ERROR:Foreground service not allowed - battery optimization may kill the service")
             }
 
-            // Service continues to run but not as foreground
-            // Future enhancement: Could transition to WorkManager here
+            // Service continues to run but not as foreground - it's now killable
+            return false
         }
     }
 
@@ -145,6 +150,7 @@ class ServiceNotificationManager(
             when {
                 networkStatus == "READY" -> "Connected - Mesh network active"
                 networkStatus == "INITIALIZING" -> "Starting mesh network..."
+                networkStatus == "CONNECTING" -> "Reconnecting..."
                 networkStatus.startsWith("ERROR:") -> "Error - Tap to view"
                 else -> "Disconnected"
             }
@@ -154,6 +160,8 @@ class ServiceNotificationManager(
                 networkStatus == "READY" ->
                     "Background service running. Keep battery optimization disabled for reliable message delivery."
                 networkStatus == "INITIALIZING" -> "Connecting to mesh network..."
+                networkStatus == "CONNECTING" -> "Service was interrupted. Attempting to reconnect..."
+                networkStatus.startsWith("ERROR:") -> networkStatus.substringAfter("ERROR:")
                 else -> statusText
             }
 

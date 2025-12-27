@@ -1188,6 +1188,7 @@ class TestOnLXMFDelivery(unittest.TestCase):
         mock_message.destination_hash = b'dest456'
         mock_message.content = b'Test message content'
         mock_message.timestamp = 1234567890
+        mock_message.fields = {}  # Required for reaction detection
 
         wrapper._on_lxmf_delivery(mock_message)
 
@@ -1207,6 +1208,7 @@ class TestOnLXMFDelivery(unittest.TestCase):
         mock_message.source_hash = b'source123'
         mock_message.destination_hash = b'dest456'
         mock_message.content = b'Test message'
+        mock_message.fields = {}  # Required for reaction detection
 
         wrapper._on_lxmf_delivery(mock_message)
 
@@ -1226,6 +1228,7 @@ class TestOnLXMFDelivery(unittest.TestCase):
         mock_message.source_hash = b'source123'
         mock_message.destination_hash = b'dest456'
         mock_message.content = b'Test message'
+        mock_message.fields = {}  # Required for reaction detection
 
         # Add same message twice
         wrapper._on_lxmf_delivery(mock_message)

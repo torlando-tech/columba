@@ -81,6 +81,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -205,14 +206,6 @@ fun MessagingScreen(
 
     // Reaction mode state (for overlay display)
     val reactionModeState by viewModel.reactionModeState.collectAsStateWithLifecycle()
-
-    // Track if overlay is dismissing (to show original message during animation)
-    var isOverlayDismissing by remember { mutableStateOf(false) }
-
-    // Reset dismissing state when reaction mode changes
-    LaunchedEffect(reactionModeState?.messageId) {
-        isOverlayDismissing = false
-    }
 
     // Track message positions for jump-to-original functionality
     val messagePositions = remember { mutableStateMapOf<String, Int>() }
@@ -627,8 +620,9 @@ fun MessagingScreen(
                                         isFromMe = displayMessage.isFromMe,
                                         onReply = { viewModel.setReplyTo(message.id) },
                                         modifier = Modifier
-                                            // Hide original message when in overlay, show during dismiss animation
-                                            .alpha(if (reactionModeState?.messageId == message.id && !isOverlayDismissing) 0f else 1f),
+                                            // Hide message when it's being shown in reaction overlay
+                                            // isMessageHidden controls visibility separately from overlay lifecycle
+                                            .alpha(if (reactionModeState?.messageId == message.id && reactionModeState?.isMessageHidden == true) 0f else 1f),
                                     ) {
                                         MessageBubble(
                                             message = displayMessage,
@@ -699,64 +693,66 @@ fun MessagingScreen(
         }
 
         // Reaction mode overlay - appears above entire screen with dimmed background
+        // key() ensures each overlay is a unique composition - when instanceId changes,
+        // the old composition is disposed (cancelling its coroutines) and a new one starts
         reactionModeState?.let { state ->
-            var showFullEmojiPicker by remember { mutableStateOf(false) }
+            key(state.instanceId) {
+                var showFullEmojiPicker by remember { mutableStateOf(false) }
 
-            // Full emoji picker dialog (shown when "+" is tapped in inline bar)
-            if (showFullEmojiPicker) {
-                FullEmojiPickerDialog(
-                    onEmojiSelected = { emoji ->
+                // Full emoji picker dialog (shown when "+" is tapped in inline bar)
+                if (showFullEmojiPicker) {
+                    FullEmojiPickerDialog(
+                        onEmojiSelected = { emoji ->
+                            viewModel.sendReaction(state.messageId, emoji)
+                            showFullEmojiPicker = false
+                            // Direct exit, no animation needed for full picker
+                            viewModel.exitReactionMode()
+                        },
+                        onDismiss = { showFullEmojiPicker = false },
+                    )
+                }
+
+                ReactionModeOverlay(
+                    messageId = state.messageId,
+                    isFromMe = state.isFromMe,
+                    isFailed = state.isFailed,
+                    messageBitmap = state.messageBitmap,
+                    messageX = state.messageX,
+                    messageY = state.messageY,
+                    messageWidth = state.messageWidth,
+                    messageHeight = state.messageHeight,
+                    onReactionSelected = { emoji ->
                         viewModel.sendReaction(state.messageId, emoji)
-                        showFullEmojiPicker = false
-                        // Trigger reverse animation by dismissing overlay
+                    },
+                    onShowFullPicker = { showFullEmojiPicker = true },
+                    onReply = {
+                        viewModel.setReplyTo(state.messageId)
+                    },
+                    onCopy = {
+                        val message = pagingItems.itemSnapshotList
+                            .find { it?.id == state.messageId }
+                        message?.let {
+                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(it.content))
+                        }
+                    },
+                    onViewDetails = if (state.isFromMe) {
+                        { onViewMessageDetails(state.messageId) }
+                    } else null,
+                    onRetry = if (state.isFailed) {
+                        { viewModel.retryFailedMessage(state.messageId) }
+                    } else null,
+                    onDismissStarted = {
+                        // Show original message immediately when dismiss animation starts
+                        viewModel.showOriginalMessage()
+                    },
+                    onDismiss = {
+                        // Clean up after animation completes
+                        // key() handles race condition - if user long-pressed another message,
+                        // this composition was disposed and this callback never runs
                         viewModel.exitReactionMode()
                     },
-                    onDismiss = { showFullEmojiPicker = false },
                 )
             }
-
-            ReactionModeOverlay(
-                messageId = state.messageId,
-                isFromMe = state.isFromMe,
-                isFailed = state.isFailed,
-                messageBitmap = state.messageBitmap,
-                messageX = state.messageX,
-                messageY = state.messageY,
-                messageWidth = state.messageWidth,
-                messageHeight = state.messageHeight,
-                onReactionSelected = { emoji ->
-                    viewModel.sendReaction(state.messageId, emoji)
-                    // Don't call exitReactionMode here - overlay handles dismiss animation
-                },
-                onShowFullPicker = { showFullEmojiPicker = true },
-                onReply = {
-                    viewModel.setReplyTo(state.messageId)
-                    // Don't call exitReactionMode here - overlay handles dismiss animation
-                },
-                onCopy = {
-                    // Get message from paging items
-                    val message = pagingItems.itemSnapshotList
-                        .find { it?.id == state.messageId }
-                    message?.let {
-                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(it.content))
-                    }
-                    // Don't call exitReactionMode here - overlay handles dismiss animation
-                },
-                onViewDetails = if (state.isFromMe) {
-                    {
-                        onViewMessageDetails(state.messageId)
-                        // Don't call exitReactionMode here - overlay handles dismiss animation
-                    }
-                } else null,
-                onRetry = if (state.isFailed) {
-                    {
-                        viewModel.retryFailedMessage(state.messageId)
-                        // Don't call exitReactionMode here - overlay handles dismiss animation
-                    }
-                } else null,
-                onDismissStarted = { isOverlayDismissing = true }, // Show original message immediately
-                onDismiss = { viewModel.exitReactionMode() }, // Called after reverse animation
-            )
         }
     }
 

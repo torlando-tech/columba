@@ -246,6 +246,8 @@ class MessagingViewModel
             val messageY: Float = 0f,
             val messageWidth: Int = 0,
             val messageHeight: Int = 0,
+            val instanceId: Long = System.currentTimeMillis(), // Unique ID for each overlay instance
+            val isMessageHidden: Boolean = true, // Controls message visibility during overlay animation
         )
 
         private val _reactionModeState = MutableStateFlow<ReactionModeState?>(null)
@@ -297,6 +299,15 @@ class MessagingViewModel
         fun exitReactionMode() {
             _reactionModeState.value = null
             Log.d(TAG, "Exited reaction mode")
+        }
+
+        /**
+         * Show the original message immediately when dismiss animation starts.
+         * The overlay animation continues independently.
+         */
+        fun showOriginalMessage() {
+            _reactionModeState.value = _reactionModeState.value?.copy(isMessageHidden = false)
+            Log.d(TAG, "Showing original message during dismiss animation")
         }
 
         /**

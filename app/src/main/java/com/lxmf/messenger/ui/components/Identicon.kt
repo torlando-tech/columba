@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -41,20 +42,22 @@ fun Identicon(
         return
     }
 
-    // Generate colors from hash
-    val primaryColor =
+    // Generate colors from hash - use remember to avoid recalculating on every recomposition
+    val primaryColor = remember(hash) {
         Color(
             red = (hash[0].toInt() and 0xFF) / 255f,
             green = (hash[1].toInt() and 0xFF) / 255f,
             blue = (hash[2].toInt() and 0xFF) / 255f,
         )
+    }
 
-    val secondaryColor =
+    val secondaryColor = remember(hash) {
         Color(
             red = (hash[3].toInt() and 0xFF) / 255f,
             green = (hash[4].toInt() and 0xFF) / 255f,
             blue = (hash[5].toInt() and 0xFF) / 255f,
         )
+    }
 
     Box(
         modifier =

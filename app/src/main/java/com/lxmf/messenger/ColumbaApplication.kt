@@ -461,10 +461,10 @@ class ColumbaApplication : Application() {
      * This ensures that RNodeCompanionService is bound when associated devices connect,
      * even for associations that were created before startObservingDevicePresence() was added.
      *
-     * Only runs on Android 12+ (API 31+) where CompanionDeviceManager is available.
+     * Only runs on Android 13+ (API 33+) where CompanionDeviceManager.myAssociations is available.
      */
-    private fun registerExistingCompanionDevices() {
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+    internal fun registerExistingCompanionDevices() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
             return
         }
 

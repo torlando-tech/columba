@@ -1729,6 +1729,102 @@ class SettingsViewModelTest {
             coVerify { propagationNodeManager.triggerSync() }
         }
 
+    @Test
+    fun `state collects lastSyncTimestamp from propagationNodeManager`() =
+        runTest {
+            val lastSyncTimestampFlow = MutableStateFlow<Long?>(null)
+            every { propagationNodeManager.lastSyncTimestamp } returns lastSyncTimestampFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Initially null
+                assertNull(state.lastSyncTimestamp)
+
+                // Update flow with timestamp
+                val testTimestamp = System.currentTimeMillis()
+                lastSyncTimestampFlow.value = testTimestamp
+                state = awaitItem()
+
+                assertEquals(testTimestamp, state.lastSyncTimestamp)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `state collects isSyncing from propagationNodeManager`() =
+        runTest {
+            val isSyncingFlow = MutableStateFlow(false)
+            every { propagationNodeManager.isSyncing } returns isSyncingFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Initially false
+                assertFalse(state.isSyncing)
+
+                // Update flow to true
+                isSyncingFlow.value = true
+                state = awaitItem()
+                assertTrue(state.isSyncing)
+
+                // Update flow back to false
+                isSyncingFlow.value = false
+                state = awaitItem()
+                assertFalse(state.isSyncing)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `lastSyncTimestamp is preserved when other settings change`() =
+        runTest {
+            val lastSyncTimestampFlow = MutableStateFlow<Long?>(null)
+            every { propagationNodeManager.lastSyncTimestamp } returns lastSyncTimestampFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Set a timestamp
+                val testTimestamp = System.currentTimeMillis()
+                lastSyncTimestampFlow.value = testTimestamp
+                state = awaitItem()
+                assertEquals(testTimestamp, state.lastSyncTimestamp)
+
+                // Change another setting - lastSyncTimestamp should be preserved
+                autoAnnounceEnabledFlow.value = false
+                state = awaitItem()
+
+                assertEquals(
+                    "lastSyncTimestamp should be preserved when other settings change",
+                    testTimestamp,
+                    state.lastSyncTimestamp,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
     // endregion
 
     // Note: Relay State Preservation Tests were removed because they require enableMonitors=true,

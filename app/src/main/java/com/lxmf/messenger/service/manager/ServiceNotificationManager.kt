@@ -46,7 +46,7 @@ class ServiceNotificationManager(
                 NotificationChannel(
                     CHANNEL_ID,
                     CHANNEL_NAME,
-                    NotificationManager.IMPORTANCE_DEFAULT,
+                    NotificationManager.IMPORTANCE_LOW,
                 ).apply {
                     description = "Keeps Reticulum network running in background"
                     setShowBadge(false)

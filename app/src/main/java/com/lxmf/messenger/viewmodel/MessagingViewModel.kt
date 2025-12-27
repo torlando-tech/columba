@@ -1373,8 +1373,9 @@ private fun buildFieldsJson(
     val hasFiles = fileAttachments.isNotEmpty()
     val hasReply = replyToMessageId != null
     val hasReactions = !reactions.isNullOrEmpty()
+    val hasAnyField = hasImage || hasFiles || hasReply || hasReactions
 
-    if (!hasImage && !hasFiles && !hasReply && !hasReactions) return null
+    if (!hasAnyField) return null
 
     val json = org.json.JSONObject()
 

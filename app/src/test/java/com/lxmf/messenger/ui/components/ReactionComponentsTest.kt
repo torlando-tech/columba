@@ -286,12 +286,13 @@ class ReactionComponentsTest {
 
     @Test
     fun `ReactionDisplayRow displays single reaction emoji`() {
-        val reactions = listOf(
-            ReactionUi(
-                emoji = "👍",
-                senderHashes = listOf("sender1"),
-            ),
-        )
+        val reactions =
+            listOf(
+                ReactionUi(
+                    emoji = "👍",
+                    senderHashes = listOf("sender1"),
+                ),
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -307,20 +308,21 @@ class ReactionComponentsTest {
 
     @Test
     fun `ReactionDisplayRow displays multiple different reactions`() {
-        val reactions = listOf(
-            ReactionUi(
-                emoji = "👍",
-                senderHashes = listOf("sender1"),
-            ),
-            ReactionUi(
-                emoji = "❤️",
-                senderHashes = listOf("sender2"),
-            ),
-            ReactionUi(
-                emoji = "😂",
-                senderHashes = listOf("sender3"),
-            ),
-        )
+        val reactions =
+            listOf(
+                ReactionUi(
+                    emoji = "👍",
+                    senderHashes = listOf("sender1"),
+                ),
+                ReactionUi(
+                    emoji = "❤️",
+                    senderHashes = listOf("sender2"),
+                ),
+                ReactionUi(
+                    emoji = "😂",
+                    senderHashes = listOf("sender3"),
+                ),
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -338,13 +340,14 @@ class ReactionComponentsTest {
 
     @Test
     fun `ReactionDisplayRow displays count when reaction has multiple senders`() {
-        val reactions = listOf(
-            ReactionUi(
-                emoji = "👍",
-                senderHashes = listOf("sender1", "sender2", "sender3"),
-                count = 3,
-            ),
-        )
+        val reactions =
+            listOf(
+                ReactionUi(
+                    emoji = "👍",
+                    senderHashes = listOf("sender1", "sender2", "sender3"),
+                    count = 3,
+                ),
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -361,13 +364,14 @@ class ReactionComponentsTest {
 
     @Test
     fun `ReactionDisplayRow does not display count for single reaction`() {
-        val reactions = listOf(
-            ReactionUi(
-                emoji = "👍",
-                senderHashes = listOf("sender1"),
-                count = 1,
-            ),
-        )
+        val reactions =
+            listOf(
+                ReactionUi(
+                    emoji = "👍",
+                    senderHashes = listOf("sender1"),
+                    count = 1,
+                ),
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -385,12 +389,13 @@ class ReactionComponentsTest {
 
     @Test
     fun `ReactionDisplayRow displays reaction for sent message (isFromMe true)`() {
-        val reactions = listOf(
-            ReactionUi(
-                emoji = "❤️",
-                senderHashes = listOf("sender1"),
-            ),
-        )
+        val reactions =
+            listOf(
+                ReactionUi(
+                    emoji = "❤️",
+                    senderHashes = listOf("sender1"),
+                ),
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -406,12 +411,13 @@ class ReactionComponentsTest {
 
     @Test
     fun `ReactionDisplayRow displays reaction for received message (isFromMe false)`() {
-        val reactions = listOf(
-            ReactionUi(
-                emoji = "😮",
-                senderHashes = listOf("sender1"),
-            ),
-        )
+        val reactions =
+            listOf(
+                ReactionUi(
+                    emoji = "😮",
+                    senderHashes = listOf("sender1"),
+                ),
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -427,13 +433,14 @@ class ReactionComponentsTest {
 
     @Test
     fun `ReactionDisplayRow displays reaction with large count`() {
-        val reactions = listOf(
-            ReactionUi(
-                emoji = "😂",
-                senderHashes = List(99) { "sender$it" },
-                count = 99,
-            ),
-        )
+        val reactions =
+            listOf(
+                ReactionUi(
+                    emoji = "😂",
+                    senderHashes = List(99) { "sender$it" },
+                    count = 99,
+                ),
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -450,12 +457,13 @@ class ReactionComponentsTest {
 
     @Test
     fun `ReactionDisplayRow displays complex emoji with ZWJ sequence`() {
-        val reactions = listOf(
-            ReactionUi(
-                emoji = "👨‍👩‍👧‍👦", // Family emoji with ZWJ
-                senderHashes = listOf("sender1"),
-            ),
-        )
+        val reactions =
+            listOf(
+                ReactionUi(
+                    emoji = "👨‍👩‍👧‍👦", // Family emoji with ZWJ
+                    senderHashes = listOf("sender1"),
+                ),
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -471,12 +479,13 @@ class ReactionComponentsTest {
 
     @Test
     fun `ReactionDisplayRow displays flag emoji`() {
-        val reactions = listOf(
-            ReactionUi(
-                emoji = "🇺🇸", // US flag
-                senderHashes = listOf("sender1"),
-            ),
-        )
+        val reactions =
+            listOf(
+                ReactionUi(
+                    emoji = "🇺🇸", // US flag
+                    senderHashes = listOf("sender1"),
+                ),
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -492,14 +501,15 @@ class ReactionComponentsTest {
 
     @Test
     fun `ReactionDisplayRow displays all reactions when many are present`() {
-        val reactions = listOf(
-            ReactionUi(emoji = "👍", senderHashes = listOf("s1"), count = 1),
-            ReactionUi(emoji = "❤️", senderHashes = listOf("s2", "s3"), count = 2),
-            ReactionUi(emoji = "😂", senderHashes = listOf("s4"), count = 1),
-            ReactionUi(emoji = "😮", senderHashes = listOf("s5", "s6", "s7"), count = 3),
-            ReactionUi(emoji = "😢", senderHashes = listOf("s8"), count = 1),
-            ReactionUi(emoji = "😡", senderHashes = listOf("s9", "s10"), count = 2),
-        )
+        val reactions =
+            listOf(
+                ReactionUi(emoji = "👍", senderHashes = listOf("s1"), count = 1),
+                ReactionUi(emoji = "❤️", senderHashes = listOf("s2", "s3"), count = 2),
+                ReactionUi(emoji = "😂", senderHashes = listOf("s4"), count = 1),
+                ReactionUi(emoji = "😮", senderHashes = listOf("s5", "s6", "s7"), count = 3),
+                ReactionUi(emoji = "😢", senderHashes = listOf("s8"), count = 1),
+                ReactionUi(emoji = "😡", senderHashes = listOf("s9", "s10"), count = 2),
+            )
 
         composeTestRule.setContent {
             MaterialTheme {

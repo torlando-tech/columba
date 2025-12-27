@@ -7,8 +7,8 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.AvailableRelaysState
+import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -47,11 +47,15 @@ data class SettingsState(
     val preferOwnInstance: Boolean = false,
     val isSharedInstanceBannerExpanded: Boolean = false,
     val rpcKey: String? = null,
-    val wasUsingSharedInstance: Boolean = false, // True if we were using shared but it went offline
-    val sharedInstanceAvailable: Boolean = false, // True when shared instance becomes newly available (notification)
-    val sharedInstanceOnline: Boolean = false, // True if shared instance is currently reachable (from service query)
+    // True if we were using shared but it went offline
+    val wasUsingSharedInstance: Boolean = false,
+    // True when shared instance becomes newly available (notification)
+    val sharedInstanceAvailable: Boolean = false,
+    // True if shared instance is currently reachable (from service query)
+    val sharedInstanceOnline: Boolean = false,
     // Message delivery state
-    val defaultDeliveryMethod: String = "direct", // "direct" or "propagated"
+    // "direct" or "propagated"
+    val defaultDeliveryMethod: String = "direct",
     val tryPropagationOnFail: Boolean = true,
     val autoSelectPropagationNode: Boolean = true,
     val currentRelayName: String? = null,
@@ -299,7 +303,11 @@ class SettingsViewModel
                             )
                         Log.d(
                             TAG,
-                            "Settings updated: displayName=${newState.displayName}, autoAnnounce=${newState.autoAnnounceEnabled}, interval=${newState.autoAnnounceIntervalMinutes}min, theme=${newState.selectedTheme}, customThemes=${newState.customThemes.size}",
+                            "Settings updated: displayName=${newState.displayName}, " +
+                                "autoAnnounce=${newState.autoAnnounceEnabled}, " +
+                                "interval=${newState.autoAnnounceIntervalMinutes}min, " +
+                                "theme=${newState.selectedTheme}, " +
+                                "customThemes=${newState.customThemes.size}",
                         )
                     }
                 } catch (e: Exception) {
@@ -1019,16 +1027,18 @@ class SettingsViewModel
                     when (state) {
                         is AvailableRelaysState.Loading -> {
                             Log.d(TAG, "SettingsViewModel: available relays loading")
-                            _state.value = _state.value.copy(
-                                availableRelaysLoading = true,
-                            )
+                            _state.value =
+                                _state.value.copy(
+                                    availableRelaysLoading = true,
+                                )
                         }
                         is AvailableRelaysState.Loaded -> {
                             Log.d(TAG, "SettingsViewModel received ${state.relays.size} available relays")
-                            _state.value = _state.value.copy(
-                                availableRelays = state.relays,
-                                availableRelaysLoading = false,
-                            )
+                            _state.value =
+                                _state.value.copy(
+                                    availableRelays = state.relays,
+                                    availableRelaysLoading = false,
+                                )
                         }
                     }
                 }

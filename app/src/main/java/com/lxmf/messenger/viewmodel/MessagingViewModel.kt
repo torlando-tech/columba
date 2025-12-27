@@ -268,6 +268,7 @@ class MessagingViewModel
          * @param messageWidth Width of the message bubble
          * @param messageHeight Height of the message bubble
          */
+        @Suppress("LongParameterList") // All params needed for overlay animation state
         fun enterReactionMode(
             messageId: String,
             scrollIndex: Int,

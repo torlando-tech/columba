@@ -779,6 +779,7 @@ private fun ReactionChip(
  * @param onDismiss Callback when the overlay is dismissed
  * @param modifier Optional modifier for the overlay
  */
+@Suppress("UnusedParameter") // messageId and isFailed reserved for future use (e.g., logging, analytics)
 @Composable
 fun ReactionModeOverlay(
     messageId: String,
@@ -807,7 +808,6 @@ fun ReactionModeOverlay(
 
     // Calculate target position (center of screen vertically)
     val screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() }
-    val screenWidth = with(density) { configuration.screenWidthDp.dp.toPx() }
     val targetY = (screenHeight / 2) - (messageHeight / 2)
 
     // Signal-style positioning: align based on message side, not message position

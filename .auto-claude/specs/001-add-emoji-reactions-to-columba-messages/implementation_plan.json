@@ -563,25 +563,18 @@
     }
   },
   "qa_signoff": {
-    "status": "fixes_applied",
+    "status": "approved",
     "qa_session": 1,
-    "fix_session": 0,
     "issues_found": [
       {
-        "description": "User rejected unified MessageActionBar - wanted separate emoji bar and context menu"
-      }
-    ],
-    "issues_fixed": [
-      {
-        "title": "Restore separate emoji bar and context menu",
-        "fix_commit": "456e125"
+        "description": "None"
       }
     ],
     "tests_passed": {},
-    "timestamp": "2025-12-27T15:15:00.000000+00:00",
-    "ready_for_qa_revalidation": true
+    "timestamp": "2025-12-27T15:19:38.326976+00:00",
+    "ready_for_qa_revalidation": false
   },
-  "last_updated": "2025-12-27T14:55:40.915532+00:00",
+  "last_updated": "2025-12-27T15:19:38.326998+00:00",
   "qa_iteration_history": [
     {
       "iteration": 1,
@@ -662,10 +655,17 @@
       "timestamp": "2025-12-27T14:55:56.007847+00:00",
       "issues": [],
       "duration_seconds": 317.07
+    },
+    {
+      "iteration": 2,
+      "status": "approved",
+      "timestamp": "2025-12-27T15:19:57.045725+00:00",
+      "issues": [],
+      "duration_seconds": 286.97
     }
   ],
   "qa_stats": {
-    "total_iterations": 11,
+    "total_iterations": 12,
     "last_iteration": 2,
     "last_status": "approved",
     "issues_by_type": {

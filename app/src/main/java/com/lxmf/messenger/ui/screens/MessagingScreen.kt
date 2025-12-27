@@ -862,6 +862,7 @@ fun MessagingScreen(
 
 }
 
+@Suppress("UnusedParameter") // Params kept for API consistency; actions handled by overlay
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
@@ -875,7 +876,16 @@ fun MessageBubble(
     onReply: () -> Unit = {},
     onReplyPreviewClick: (replyToMessageId: String) -> Unit = {},
     onReact: (emoji: String) -> Unit = {},
-    onLongPress: (messageId: String, isFromMe: Boolean, isFailed: Boolean, bitmap: androidx.compose.ui.graphics.ImageBitmap, x: Float, y: Float, width: Int, height: Int) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    onLongPress: (
+        messageId: String,
+        isFromMe: Boolean,
+        isFailed: Boolean,
+        bitmap: androidx.compose.ui.graphics.ImageBitmap,
+        x: Float,
+        y: Float,
+        width: Int,
+        height: Int,
+    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val graphicsLayer = rememberGraphicsLayer()

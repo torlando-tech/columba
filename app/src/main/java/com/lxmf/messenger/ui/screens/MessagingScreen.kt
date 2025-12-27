@@ -53,6 +53,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -92,6 +94,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -100,7 +103,7 @@ import androidx.paging.compose.itemKey
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.FileAttachmentCard
 import com.lxmf.messenger.ui.components.FullEmojiPickerDialog
-import com.lxmf.messenger.ui.components.MessageActionBar
+import com.lxmf.messenger.ui.components.InlineReactionBar
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.QuickShareLocationBottomSheet
 import com.lxmf.messenger.ui.model.LocationSharingState
@@ -782,17 +785,18 @@ fun MessageBubble(
     onReact: (emoji: String) -> Unit = {},
 ) {
     val hapticFeedback = LocalHapticFeedback.current
-    // Single state for the unified action bar (replaces separate emoji bar + context menu)
-    var showActionBar by remember { mutableStateOf(false) }
+    // Separate states for emoji bar and context menu - both shown together on long-press
+    var showEmojiBar by remember { mutableStateOf(false) }
+    var showContextMenu by remember { mutableStateOf(false) }
     var showFullEmojiPicker by remember { mutableStateOf(false) }
 
-    // Full emoji picker dialog (shown when "+" is tapped in action bar)
+    // Full emoji picker dialog (shown when "+" is tapped in inline bar)
     if (showFullEmojiPicker) {
         FullEmojiPickerDialog(
             onEmojiSelected = { emoji ->
                 onReact(emoji)
                 showFullEmojiPicker = false
-                showActionBar = false
+                showEmojiBar = false
             },
             onDismiss = { showFullEmojiPicker = false },
         )
@@ -802,40 +806,17 @@ fun MessageBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
     ) {
-        // Signal-style: Show unified action bar ABOVE the message bubble on long-press
-        // Contains both emoji reactions and action buttons (Reply, Copy, etc.)
-        if (showActionBar) {
-            MessageActionBar(
+        // Signal-style: Show emoji bar ABOVE the message bubble on long-press
+        if (showEmojiBar) {
+            InlineReactionBar(
                 onReactionSelected = { emoji ->
                     onReact(emoji)
-                    showActionBar = false
+                    showEmojiBar = false
+                    showContextMenu = false
                 },
                 onShowFullPicker = {
                     showFullEmojiPicker = true
-                },
-                onReply = {
-                    onReply()
-                    showActionBar = false
-                },
-                onCopy = {
-                    clipboardManager.setText(AnnotatedString(message.content))
-                    showActionBar = false
-                },
-                onViewDetails = if (isFromMe) {
-                    {
-                        onViewDetails(message.id)
-                        showActionBar = false
-                    }
-                } else {
-                    null
-                },
-                onRetry = if (isFromMe && message.status == "failed") {
-                    {
-                        onRetry()
-                        showActionBar = false
-                    }
-                } else {
-                    null
+                    showContextMenu = false
                 },
                 modifier = Modifier.padding(bottom = 8.dp),
             )
@@ -862,15 +843,17 @@ fun MessageBubble(
                         .widthIn(max = 300.dp)
                         .combinedClickable(
                             onClick = {
-                                // Tap dismisses action bar if shown
-                                if (showActionBar) {
-                                    showActionBar = false
+                                // Tap dismisses emoji bar and context menu if shown
+                                if (showEmojiBar || showContextMenu) {
+                                    showEmojiBar = false
+                                    showContextMenu = false
                                 }
                             },
                             onLongClick = {
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                // Show unified action bar on long-press
-                                showActionBar = true
+                                // Show BOTH emoji bar (above) and context menu (below) on long-press
+                                showEmojiBar = true
+                                showContextMenu = true
                             },
                         ),
             ) {
@@ -979,8 +962,47 @@ fun MessageBubble(
                 }
             }
 
-            // Note: Context menu functionality is now integrated into MessageActionBar
-            // which shows above the message on long-press
+            // Context menu - positioned as a DropdownMenu near the message
+            // Works together with emoji bar (above) on long-press
+            MessageContextMenu(
+                expanded = showContextMenu,
+                onDismiss = {
+                    showContextMenu = false
+                    showEmojiBar = false
+                },
+                onCopy = {
+                    clipboardManager.setText(AnnotatedString(message.content))
+                    showContextMenu = false
+                    showEmojiBar = false
+                },
+                isFromMe = isFromMe,
+                isFailed = message.status == "failed",
+                onViewDetails =
+                    if (isFromMe) {
+                        {
+                            onViewDetails(message.id)
+                            showContextMenu = false
+                            showEmojiBar = false
+                        }
+                    } else {
+                        null
+                    },
+                onRetry =
+                    if (isFromMe && message.status == "failed") {
+                        {
+                            onRetry()
+                            showContextMenu = false
+                            showEmojiBar = false
+                        }
+                    } else {
+                        null
+                    },
+                onReply = {
+                    onReply()
+                    showContextMenu = false
+                    showEmojiBar = false
+                },
+            )
         }
 
         // Display reaction chips overlapping the bottom of message bubble
@@ -996,9 +1018,78 @@ fun MessageBubble(
     }
 }
 
-// Note: MessageContextMenu has been replaced by MessageActionBar in ReactionComponents.kt
-// The new component integrates emoji reactions with action buttons in a unified UI
-// that doesn't use DropdownMenu (which was causing touch event blocking issues)
+@Composable
+fun MessageContextMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onCopy: () -> Unit,
+    isFromMe: Boolean = false,
+    isFailed: Boolean = false,
+    onViewDetails: (() -> Unit)? = null,
+    onRetry: (() -> Unit)? = null,
+    onReply: (() -> Unit)? = null,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = 3.dp,
+        offset = DpOffset(x = 0.dp, y = 0.dp),
+    ) {
+        // Show "Retry" for failed messages
+        if (isFailed && onRetry != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text("Retry") },
+                onClick = onRetry,
+            )
+        }
+
+        // Reply option
+        if (onReply != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Reply,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text("Reply") },
+                onClick = onReply,
+            )
+        }
+
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = null,
+                )
+            },
+            text = { Text("Copy") },
+            onClick = onCopy,
+        )
+
+        // Show "View Details" only for sent messages
+        if (isFromMe && onViewDetails != null) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                    )
+                },
+                text = { Text("View Details") },
+                onClick = onViewDetails,
+            )
+        }
+    }
+}
 
 @Composable
 fun MessageInputBar(

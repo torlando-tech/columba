@@ -563,14 +563,31 @@
     }
   },
   "qa_signoff": {
-    "status": "approved",
+    "status": "fixes_applied",
     "qa_session": 1,
-    "issues_found": [],
+    "fix_session": 1,
+    "issues_found": [
+      {
+        "title": "Emoji bar not working",
+        "description": "DropdownMenu was blocking touch events on emoji buttons due to full-screen overlay"
+      },
+      {
+        "title": "Context menu overlapping emoji bar for bottom-edge messages",
+        "description": "When message is near bottom of screen, DropdownMenu repositioned above message, overlapping emoji bar"
+      }
+    ],
+    "issues_fixed": [
+      {
+        "title": "Emoji bar not working + Context menu overlap",
+        "fix_commit": "437660a",
+        "fix_description": "Replaced DropdownMenu with unified MessageActionBar component that shows both emoji reactions and action buttons in a single UI above the message"
+      }
+    ],
     "tests_passed": {},
-    "timestamp": "2025-12-27T14:39:38.391652+00:00",
-    "ready_for_qa_revalidation": false
+    "timestamp": "2025-12-27T14:50:00.000000+00:00",
+    "ready_for_qa_revalidation": true
   },
-  "last_updated": "2025-12-27T14:39:38.391678+00:00",
+  "last_updated": "2025-12-27T14:50:00.000000+00:00",
   "qa_iteration_history": [
     {
       "iteration": 1,

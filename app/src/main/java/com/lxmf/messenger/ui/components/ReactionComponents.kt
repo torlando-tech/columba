@@ -1,16 +1,33 @@
 package com.lxmf.messenger.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -27,12 +44,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -734,5 +753,265 @@ private fun ReactionChip(
                 )
             }
         }
+    }
+}
+
+/**
+ * Signal-style reaction mode overlay.
+ *
+ * Displays a full-screen dimmed scrim with elevated emoji bar and action buttons
+ * positioned to avoid overlap. The background is faded to 50% opacity while the
+ * selected message and UI elements remain at full brightness.
+ *
+ * @param messageId ID of the selected message
+ * @param isFromMe Whether the message is from the current user
+ * @param isFailed Whether the message failed to send
+ * @param onReactionSelected Callback when an emoji is selected
+ * @param onShowFullPicker Callback to show the full emoji picker
+ * @param onReply Callback for the reply action
+ * @param onCopy Callback for the copy action
+ * @param onViewDetails Optional callback for viewing message details (sent messages only)
+ * @param onRetry Optional callback for retrying failed messages
+ * @param onDismiss Callback when the overlay is dismissed
+ * @param modifier Optional modifier for the overlay
+ */
+@Composable
+fun ReactionModeOverlay(
+    messageId: String,
+    isFromMe: Boolean,
+    isFailed: Boolean,
+    messageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
+    messageX: Float = 0f,
+    messageY: Float = 0f,
+    messageWidth: Int = 0,
+    messageHeight: Int = 0,
+    onReactionSelected: (String) -> Unit,
+    onShowFullPicker: () -> Unit,
+    onReply: () -> Unit,
+    onCopy: () -> Unit,
+    onViewDetails: (() -> Unit)? = null,
+    onRetry: (() -> Unit)? = null,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var visible by remember { mutableStateOf(false) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+
+    // Calculate target position (center of screen vertically)
+    val screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() }
+    val screenWidth = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val targetY = (screenHeight / 2) - (messageHeight / 2)
+
+    // Signal-style positioning: align based on message side, not message position
+    // Left-aligned messages (received): UI elements at left margin
+    // Right-aligned messages (sent): UI elements at right margin
+
+    // Animated offset for message position
+    val animatedOffsetY = remember { Animatable(messageY) }
+
+    // Trigger animations on mount
+    LaunchedEffect(Unit) {
+        visible = true
+        // Animate message to center
+        animatedOffsetY.animateTo(
+            targetValue = targetY,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessLow,
+            ),
+        )
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(
+            animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        ),
+        exit = fadeOut(
+            animationSpec = tween(durationMillis = 150, easing = LinearOutSlowInEasing),
+        ),
+    ) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                ),
+        ) {
+            // Dimmed scrim background
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f)),
+            )
+
+            // Message snapshot with animation
+            messageBitmap?.let { bitmap ->
+                val messageWidthDp = with(density) { messageWidth.toDp() }
+                val messageHeightDp = with(density) { messageHeight.toDp() }
+
+                // Message snapshot
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = "Selected message",
+                    modifier = Modifier
+                        .size(width = messageWidthDp, height = messageHeightDp)
+                        .offset {
+                            IntOffset(messageX.toInt(), animatedOffsetY.value.toInt())
+                        }
+                        .clip(
+                            RoundedCornerShape(
+                                topStart = 20.dp,
+                                topEnd = 20.dp,
+                                bottomStart = if (isFromMe) 20.dp else 4.dp,
+                                bottomEnd = if (isFromMe) 4.dp else 20.dp,
+                            ),
+                        ),
+                )
+
+                // Emoji bar above message
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset {
+                            IntOffset(
+                                x = 0,
+                                y = (animatedOffsetY.value - with(density) { 76.dp.toPx() }).toInt(),
+                            )
+                        },
+                ) {
+                    InlineReactionBar(
+                        onReactionSelected = onReactionSelected,
+                        onShowFullPicker = onShowFullPicker,
+                        modifier = Modifier
+                            .align(if (isFromMe) Alignment.TopEnd else Alignment.TopStart)
+                            .padding(horizontal = 16.dp),
+                    )
+                }
+
+                // Action buttons below message
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset {
+                            IntOffset(
+                                x = 0,
+                                y = (animatedOffsetY.value + messageHeight + with(density) { 12.dp.toPx() }).toInt(),
+                            )
+                        },
+                ) {
+                    MessageActionButtons(
+                        onReply = onReply,
+                        onCopy = onCopy,
+                        onViewDetails = onViewDetails,
+                        onRetry = onRetry,
+                        modifier = Modifier
+                            .align(if (isFromMe) Alignment.TopEnd else Alignment.TopStart)
+                            .padding(horizontal = 16.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Action buttons for reaction mode overlay.
+ * Displays a horizontal row of action buttons (Retry, Reply, Copy, View Details).
+ *
+ * @param onReply Callback for reply action
+ * @param onCopy Callback for copy action
+ * @param onViewDetails Optional callback for view details (shown for sent messages)
+ * @param onRetry Optional callback for retry (shown for failed messages)
+ * @param modifier Optional modifier for the buttons container
+ */
+@Composable
+private fun MessageActionButtons(
+    onReply: () -> Unit,
+    onCopy: () -> Unit,
+    onViewDetails: (() -> Unit)?,
+    onRetry: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Retry button (failed messages only)
+            if (onRetry != null) {
+                ReactionModeActionButton(
+                    icon = Icons.Default.Refresh,
+                    label = "Retry",
+                    onClick = onRetry,
+                )
+            }
+
+            // Reply button (all messages)
+            ReactionModeActionButton(
+                icon = Icons.AutoMirrored.Filled.Reply,
+                label = "Reply",
+                onClick = onReply,
+            )
+
+            // Copy button (all messages)
+            ReactionModeActionButton(
+                icon = Icons.Default.ContentCopy,
+                label = "Copy",
+                onClick = onCopy,
+            )
+
+            // View Details button (sent messages only)
+            if (onViewDetails != null) {
+                ReactionModeActionButton(
+                    icon = Icons.Default.Info,
+                    label = "Details",
+                    onClick = onViewDetails,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Individual action button for the reaction mode overlay.
+ *
+ * @param icon The icon to display
+ * @param label The accessibility label
+ * @param onClick Callback when the button is clicked
+ * @param modifier Optional modifier
+ */
+@Composable
+private fun ReactionModeActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val hapticFeedback = LocalHapticFeedback.current
+
+    IconButton(
+        onClick = {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+            onClick()
+        },
+        modifier = modifier.size(48.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(24.dp),
+        )
     }
 }

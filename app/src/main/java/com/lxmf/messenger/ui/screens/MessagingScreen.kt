@@ -3,6 +3,7 @@ package com.lxmf.messenger.ui.screens
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -31,6 +32,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -81,9 +84,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -111,6 +117,7 @@ import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
 import com.lxmf.messenger.ui.components.ReactionDisplayRow
+import com.lxmf.messenger.ui.components.ReactionModeOverlay
 import com.lxmf.messenger.ui.components.ReplyInputBar
 import com.lxmf.messenger.ui.components.ReplyPreviewBubble
 import com.lxmf.messenger.ui.components.StarToggleButton
@@ -189,6 +196,9 @@ fun MessagingScreen(
 
     // Reaction picker state (myIdentityHash is still used for highlighting own reactions)
     val myIdentityHash by viewModel.myIdentityHash.collectAsStateWithLifecycle()
+
+    // Reaction mode state (for overlay display)
+    val reactionModeState by viewModel.reactionModeState.collectAsStateWithLifecycle()
 
     // Track message positions for jump-to-original functionality
     val messagePositions = remember { mutableStateMapOf<String, Int>() }
@@ -387,6 +397,24 @@ fun MessagingScreen(
         if (newestMessageId != null) {
             viewModel.markAsRead(destinationHash)
         }
+    }
+
+    // Animate scroll when entering reaction mode
+    LaunchedEffect(reactionModeState) {
+        reactionModeState?.let { state ->
+            // With reverseLayout, we need to scroll with proper offset
+            // Positive offset moves the item up in a reversed list
+            // Scroll to position the message in the upper portion of screen
+            listState.animateScrollToItem(
+                index = state.targetScrollIndex,
+                scrollOffset = 600, // Larger offset to move message to upper area
+            )
+        }
+    }
+
+    // Handle back button when reaction mode is active
+    BackHandler(enabled = reactionModeState != null) {
+        viewModel.exitReactionMode()
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -619,6 +647,9 @@ fun MessagingScreen(
                                                 }
                                             },
                                             onReact = { emoji -> viewModel.sendReaction(message.id, emoji) },
+                                            onLongPress = { msgId, fromMe, failed, bitmap, x, y, width, height ->
+                                                viewModel.enterReactionMode(msgId, index, fromMe, failed, bitmap, x, y, width, height)
+                                            },
                                         )
                                     }
                                 }
@@ -661,6 +692,65 @@ fun MessagingScreen(
                     },
                 )
             }
+        }
+
+        // Reaction mode overlay - appears above entire screen with dimmed background
+        reactionModeState?.let { state ->
+            var showFullEmojiPicker by remember { mutableStateOf(false) }
+
+            // Full emoji picker dialog (shown when "+" is tapped in inline bar)
+            if (showFullEmojiPicker) {
+                FullEmojiPickerDialog(
+                    onEmojiSelected = { emoji ->
+                        viewModel.sendReaction(state.messageId, emoji)
+                        viewModel.exitReactionMode()
+                        showFullEmojiPicker = false
+                    },
+                    onDismiss = { showFullEmojiPicker = false },
+                )
+            }
+
+            ReactionModeOverlay(
+                messageId = state.messageId,
+                isFromMe = state.isFromMe,
+                isFailed = state.isFailed,
+                messageBitmap = state.messageBitmap,
+                messageX = state.messageX,
+                messageY = state.messageY,
+                messageWidth = state.messageWidth,
+                messageHeight = state.messageHeight,
+                onReactionSelected = { emoji ->
+                    viewModel.sendReaction(state.messageId, emoji)
+                    viewModel.exitReactionMode()
+                },
+                onShowFullPicker = { showFullEmojiPicker = true },
+                onReply = {
+                    viewModel.setReplyTo(state.messageId)
+                    viewModel.exitReactionMode()
+                },
+                onCopy = {
+                    // Get message from paging items
+                    val message = pagingItems.itemSnapshotList
+                        .find { it?.id == state.messageId }
+                    message?.let {
+                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(it.content))
+                    }
+                    viewModel.exitReactionMode()
+                },
+                onViewDetails = if (state.isFromMe) {
+                    {
+                        onViewMessageDetails(state.messageId)
+                        viewModel.exitReactionMode()
+                    }
+                } else null,
+                onRetry = if (state.isFailed) {
+                    {
+                        viewModel.retryFailedMessage(state.messageId)
+                        viewModel.exitReactionMode()
+                    }
+                } else null,
+                onDismiss = { viewModel.exitReactionMode() },
+            )
         }
     }
 
@@ -783,45 +873,20 @@ fun MessageBubble(
     onReply: () -> Unit = {},
     onReplyPreviewClick: (replyToMessageId: String) -> Unit = {},
     onReact: (emoji: String) -> Unit = {},
+    onLongPress: (messageId: String, isFromMe: Boolean, isFailed: Boolean, bitmap: androidx.compose.ui.graphics.ImageBitmap, x: Float, y: Float, width: Int, height: Int) -> Unit = { _, _, _, _, _, _, _, _ -> },
 ) {
     val hapticFeedback = LocalHapticFeedback.current
-    // Separate states for emoji bar and context menu - both shown together on long-press
-    var showEmojiBar by remember { mutableStateOf(false) }
-    var showContextMenu by remember { mutableStateOf(false) }
-    var showFullEmojiPicker by remember { mutableStateOf(false) }
-
-    // Full emoji picker dialog (shown when "+" is tapped in inline bar)
-    if (showFullEmojiPicker) {
-        FullEmojiPickerDialog(
-            onEmojiSelected = { emoji ->
-                onReact(emoji)
-                showFullEmojiPicker = false
-                showEmojiBar = false
-            },
-            onDismiss = { showFullEmojiPicker = false },
-        )
-    }
+    val graphicsLayer = rememberGraphicsLayer()
+    val scope = rememberCoroutineScope()
+    var bubbleX by remember { mutableStateOf(0f) }
+    var bubbleY by remember { mutableStateOf(0f) }
+    var bubbleWidth by remember { mutableStateOf(0) }
+    var bubbleHeight by remember { mutableStateOf(0) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
     ) {
-        // Signal-style: Show emoji bar ABOVE the message bubble on long-press
-        if (showEmojiBar) {
-            InlineReactionBar(
-                onReactionSelected = { emoji ->
-                    onReact(emoji)
-                    showEmojiBar = false
-                    showContextMenu = false
-                },
-                onShowFullPicker = {
-                    showFullEmojiPicker = true
-                    showContextMenu = false
-                },
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
-
         Box {
             Surface(
                 shape =
@@ -841,19 +906,30 @@ fun MessageBubble(
                 modifier =
                     Modifier
                         .widthIn(max = 300.dp)
-                        .combinedClickable(
-                            onClick = {
-                                // Tap dismisses emoji bar and context menu if shown
-                                if (showEmojiBar || showContextMenu) {
-                                    showEmojiBar = false
-                                    showContextMenu = false
+                        .drawWithCache {
+                            val width = this.size.width.toInt()
+                            val height = this.size.height.toInt()
+                            onDrawWithContent {
+                                graphicsLayer.record(size = androidx.compose.ui.unit.IntSize(width, height)) {
+                                    this@onDrawWithContent.drawContent()
                                 }
-                            },
+                                drawContent()
+                            }
+                        }
+                        .onGloballyPositioned { coordinates ->
+                            bubbleX = coordinates.positionInRoot().x
+                            bubbleY = coordinates.positionInRoot().y
+                            bubbleWidth = coordinates.size.width
+                            bubbleHeight = coordinates.size.height
+                        }
+                        .combinedClickable(
+                            onClick = {},
                             onLongClick = {
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                // Show BOTH emoji bar (above) and context menu (below) on long-press
-                                showEmojiBar = true
-                                showContextMenu = true
+                                scope.launch {
+                                    val bitmap = graphicsLayer.toImageBitmap()
+                                    onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
+                                }
                             },
                         ),
             ) {
@@ -961,48 +1037,6 @@ fun MessageBubble(
                     }
                 }
             }
-
-            // Context menu - positioned as a DropdownMenu near the message
-            // Works together with emoji bar (above) on long-press
-            MessageContextMenu(
-                expanded = showContextMenu,
-                onDismiss = {
-                    showContextMenu = false
-                    showEmojiBar = false
-                },
-                onCopy = {
-                    clipboardManager.setText(AnnotatedString(message.content))
-                    showContextMenu = false
-                    showEmojiBar = false
-                },
-                isFromMe = isFromMe,
-                isFailed = message.status == "failed",
-                onViewDetails =
-                    if (isFromMe) {
-                        {
-                            onViewDetails(message.id)
-                            showContextMenu = false
-                            showEmojiBar = false
-                        }
-                    } else {
-                        null
-                    },
-                onRetry =
-                    if (isFromMe && message.status == "failed") {
-                        {
-                            onRetry()
-                            showContextMenu = false
-                            showEmojiBar = false
-                        }
-                    } else {
-                        null
-                    },
-                onReply = {
-                    onReply()
-                    showContextMenu = false
-                    showEmojiBar = false
-                },
-            )
         }
 
         // Display reaction chips overlapping the bottom of message bubble

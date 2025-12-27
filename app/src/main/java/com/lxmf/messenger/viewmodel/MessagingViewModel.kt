@@ -235,6 +235,70 @@ class MessagingViewModel
         private val _myIdentityHash = MutableStateFlow<String?>(null)
         val myIdentityHash: StateFlow<String?> = _myIdentityHash.asStateFlow()
 
+        // Reaction mode state - for overlay display with scroll positioning
+        data class ReactionModeState(
+            val messageId: String,
+            val targetScrollIndex: Int,
+            val isFromMe: Boolean,
+            val isFailed: Boolean = false,
+            val messageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
+            val messageX: Float = 0f,
+            val messageY: Float = 0f,
+            val messageWidth: Int = 0,
+            val messageHeight: Int = 0,
+        )
+
+        private val _reactionModeState = MutableStateFlow<ReactionModeState?>(null)
+        val reactionModeState: StateFlow<ReactionModeState?> = _reactionModeState.asStateFlow()
+
+        /**
+         * Enter reaction mode for a message. Shows overlay with emoji bar and action buttons.
+         * Triggers smooth scroll animation to position the message in view.
+         * Signal-style: captures a bitmap snapshot of the message to display in the overlay.
+         *
+         * @param messageId The ID of the message to react to
+         * @param scrollIndex The current scroll position index of the message
+         * @param isFromMe Whether the message was sent by the current user
+         * @param isFailed Whether the message delivery failed
+         * @param messageBitmap Bitmap snapshot of the message bubble
+         * @param messageX X position of the message on screen
+         * @param messageY Y position of the message on screen
+         * @param messageWidth Width of the message bubble
+         * @param messageHeight Height of the message bubble
+         */
+        fun enterReactionMode(
+            messageId: String,
+            scrollIndex: Int,
+            isFromMe: Boolean,
+            isFailed: Boolean = false,
+            messageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
+            messageX: Float = 0f,
+            messageY: Float = 0f,
+            messageWidth: Int = 0,
+            messageHeight: Int = 0,
+        ) {
+            _reactionModeState.value = ReactionModeState(
+                messageId,
+                scrollIndex,
+                isFromMe,
+                isFailed,
+                messageBitmap,
+                messageX,
+                messageY,
+                messageWidth,
+                messageHeight
+            )
+            Log.d(TAG, "Entered reaction mode for message: ${messageId.take(16)}... at ($messageX, $messageY)")
+        }
+
+        /**
+         * Exit reaction mode. Dismisses the overlay and clears the state.
+         */
+        fun exitReactionMode() {
+            _reactionModeState.value = null
+            Log.d(TAG, "Exited reaction mode")
+        }
+
         /**
          * Set a message to reply to. Called when user swipes on a message or selects "Reply".
          * Loads the reply preview data from the database asynchronously.

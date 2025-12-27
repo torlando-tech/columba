@@ -206,6 +206,14 @@ fun MessagingScreen(
     // Reaction mode state (for overlay display)
     val reactionModeState by viewModel.reactionModeState.collectAsStateWithLifecycle()
 
+    // Track if overlay is dismissing (to show original message during animation)
+    var isOverlayDismissing by remember { mutableStateOf(false) }
+
+    // Reset dismissing state when reaction mode changes
+    LaunchedEffect(reactionModeState?.messageId) {
+        isOverlayDismissing = false
+    }
+
     // Track message positions for jump-to-original functionality
     val messagePositions = remember { mutableStateMapOf<String, Int>() }
 
@@ -619,8 +627,8 @@ fun MessagingScreen(
                                         isFromMe = displayMessage.isFromMe,
                                         onReply = { viewModel.setReplyTo(message.id) },
                                         modifier = Modifier
-                                            // Hide original message when it's being shown in reaction overlay
-                                            .alpha(if (reactionModeState?.messageId == message.id) 0f else 1f),
+                                            // Hide original message when in overlay, show during dismiss animation
+                                            .alpha(if (reactionModeState?.messageId == message.id && !isOverlayDismissing) 0f else 1f),
                                     ) {
                                         MessageBubble(
                                             message = displayMessage,
@@ -699,8 +707,9 @@ fun MessagingScreen(
                 FullEmojiPickerDialog(
                     onEmojiSelected = { emoji ->
                         viewModel.sendReaction(state.messageId, emoji)
-                        viewModel.exitReactionMode()
                         showFullEmojiPicker = false
+                        // Trigger reverse animation by dismissing overlay
+                        viewModel.exitReactionMode()
                     },
                     onDismiss = { showFullEmojiPicker = false },
                 )
@@ -717,12 +726,12 @@ fun MessagingScreen(
                 messageHeight = state.messageHeight,
                 onReactionSelected = { emoji ->
                     viewModel.sendReaction(state.messageId, emoji)
-                    viewModel.exitReactionMode()
+                    // Don't call exitReactionMode here - overlay handles dismiss animation
                 },
                 onShowFullPicker = { showFullEmojiPicker = true },
                 onReply = {
                     viewModel.setReplyTo(state.messageId)
-                    viewModel.exitReactionMode()
+                    // Don't call exitReactionMode here - overlay handles dismiss animation
                 },
                 onCopy = {
                     // Get message from paging items
@@ -731,21 +740,22 @@ fun MessagingScreen(
                     message?.let {
                         clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(it.content))
                     }
-                    viewModel.exitReactionMode()
+                    // Don't call exitReactionMode here - overlay handles dismiss animation
                 },
                 onViewDetails = if (state.isFromMe) {
                     {
                         onViewMessageDetails(state.messageId)
-                        viewModel.exitReactionMode()
+                        // Don't call exitReactionMode here - overlay handles dismiss animation
                     }
                 } else null,
                 onRetry = if (state.isFailed) {
                     {
                         viewModel.retryFailedMessage(state.messageId)
-                        viewModel.exitReactionMode()
+                        // Don't call exitReactionMode here - overlay handles dismiss animation
                     }
                 } else null,
-                onDismiss = { viewModel.exitReactionMode() },
+                onDismissStarted = { isOverlayDismissing = true }, // Show original message immediately
+                onDismiss = { viewModel.exitReactionMode() }, // Called after reverse animation
             )
         }
     }

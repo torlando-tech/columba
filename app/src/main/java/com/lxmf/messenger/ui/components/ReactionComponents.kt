@@ -13,6 +13,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +64,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.lxmf.messenger.ui.model.ReactionUi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Standard emoji reactions available for selection.
@@ -791,10 +795,13 @@ fun ReactionModeOverlay(
     onCopy: () -> Unit,
     onViewDetails: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
-    onDismiss: () -> Unit,
+    onDismissStarted: () -> Unit = {}, // Called when dismiss animation starts
+    onDismiss: () -> Unit, // Called when dismiss animation completes
     modifier: Modifier = Modifier,
 ) {
     var visible by remember { mutableStateOf(false) }
+    var isDismissing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
 
@@ -823,6 +830,63 @@ fun ReactionModeOverlay(
         )
     }
 
+    // Function to handle dismiss with reverse animation
+    val handleDismiss: () -> Unit = {
+        if (!isDismissing) {
+            isDismissing = true
+            onDismissStarted() // Show original message immediately
+            scope.launch {
+                // Start fade out immediately, then animate message back
+                visible = false
+                // Animate message back to original position (runs during fade out)
+                animatedOffsetY.animateTo(
+                    targetValue = messageY,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow,
+                    ),
+                )
+                // Dismiss after animation completes
+                onDismiss()
+            }
+        }
+    }
+
+    // Wrap callbacks to trigger dismiss animation after action
+    val wrappedOnReactionSelected: (String) -> Unit = { emoji ->
+        onReactionSelected(emoji)
+        handleDismiss()
+    }
+
+    val wrappedOnShowFullPicker: () -> Unit = {
+        onShowFullPicker()
+        // Note: Don't dismiss here - full picker dialog handles its own dismiss
+    }
+
+    val wrappedOnReply: () -> Unit = {
+        onReply()
+        handleDismiss()
+    }
+
+    val wrappedOnCopy: () -> Unit = {
+        onCopy()
+        handleDismiss()
+    }
+
+    val wrappedOnViewDetails: (() -> Unit)? = onViewDetails?.let {
+        {
+            it()
+            handleDismiss()
+        }
+    }
+
+    val wrappedOnRetry: (() -> Unit)? = onRetry?.let {
+        {
+            it()
+            handleDismiss()
+        }
+    }
+
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(
@@ -838,7 +902,7 @@ fun ReactionModeOverlay(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onDismiss,
+                    onClick = handleDismiss,
                 ),
         ) {
             // Dimmed scrim background
@@ -853,7 +917,7 @@ fun ReactionModeOverlay(
                 val messageWidthDp = with(density) { messageWidth.toDp() }
                 val messageHeightDp = with(density) { messageHeight.toDp() }
 
-                // Message snapshot
+                // Message snapshot - keep at full opacity during animation
                 Image(
                     bitmap = bitmap,
                     contentDescription = "Selected message",
@@ -862,6 +926,7 @@ fun ReactionModeOverlay(
                         .offset {
                             IntOffset(messageX.toInt(), animatedOffsetY.value.toInt())
                         }
+                        .alpha(1f) // Don't fade out with AnimatedVisibility
                         .clip(
                             RoundedCornerShape(
                                 topStart = 20.dp,
@@ -884,8 +949,8 @@ fun ReactionModeOverlay(
                         },
                 ) {
                     InlineReactionBar(
-                        onReactionSelected = onReactionSelected,
-                        onShowFullPicker = onShowFullPicker,
+                        onReactionSelected = wrappedOnReactionSelected,
+                        onShowFullPicker = wrappedOnShowFullPicker,
                         modifier = Modifier
                             .align(if (isFromMe) Alignment.TopEnd else Alignment.TopStart)
                             .padding(horizontal = 16.dp),
@@ -904,10 +969,10 @@ fun ReactionModeOverlay(
                         },
                 ) {
                     MessageActionButtons(
-                        onReply = onReply,
-                        onCopy = onCopy,
-                        onViewDetails = onViewDetails,
-                        onRetry = onRetry,
+                        onReply = wrappedOnReply,
+                        onCopy = wrappedOnCopy,
+                        onViewDetails = wrappedOnViewDetails,
+                        onRetry = wrappedOnRetry,
                         modifier = Modifier
                             .align(if (isFromMe) Alignment.TopEnd else Alignment.TopStart)
                             .padding(horizontal = 16.dp),

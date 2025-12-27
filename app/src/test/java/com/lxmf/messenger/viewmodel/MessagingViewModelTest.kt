@@ -417,6 +417,7 @@ class MessagingViewModelTest {
             coEvery { failingProtocol.getLxmfIdentity() } returns Result.failure(Exception("No identity"))
             every { failingProtocol.setConversationActive(any()) } just Runs
             every { failingProtocol.observeDeliveryStatus() } returns flowOf()
+            every { failingProtocol.reactionReceivedFlow } returns MutableSharedFlow()
 
             val failingRepository: ConversationRepository = mockk()
             every { failingRepository.getMessages(any()) } returns flowOf(emptyList())

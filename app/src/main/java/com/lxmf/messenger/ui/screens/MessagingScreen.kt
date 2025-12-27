@@ -785,7 +785,9 @@ fun MessageBubble(
     onReact: (emoji: String) -> Unit = {},
 ) {
     val hapticFeedback = LocalHapticFeedback.current
-    var showMenu by remember { mutableStateOf(false) }
+    // Separate states for emoji bar and context menu to avoid DropdownMenu blocking touches
+    var showEmojiBar by remember { mutableStateOf(false) }
+    var showContextMenu by remember { mutableStateOf(false) }
     var showFullEmojiPicker by remember { mutableStateOf(false) }
 
     // Full emoji picker dialog (shown when "+" is tapped in inline bar)
@@ -794,7 +796,7 @@ fun MessageBubble(
             onEmojiSelected = { emoji ->
                 onReact(emoji)
                 showFullEmojiPicker = false
-                showMenu = false
+                showEmojiBar = false
             },
             onDismiss = { showFullEmojiPicker = false },
         )
@@ -805,11 +807,12 @@ fun MessageBubble(
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
     ) {
         // Signal-style: Show emoji bar ABOVE the message bubble on long-press
-        if (showMenu) {
+        // NOTE: This is shown when showEmojiBar is true, separately from context menu
+        if (showEmojiBar) {
             InlineReactionBar(
                 onReactionSelected = { emoji ->
                     onReact(emoji)
-                    showMenu = false
+                    showEmojiBar = false
                 },
                 onShowFullPicker = { showFullEmojiPicker = true },
                 modifier = Modifier.padding(bottom = 8.dp),
@@ -836,10 +839,16 @@ fun MessageBubble(
                     Modifier
                         .widthIn(max = 300.dp)
                         .combinedClickable(
-                            onClick = { },
+                            onClick = {
+                                // Tap dismisses emoji bar if shown
+                                if (showEmojiBar) {
+                                    showEmojiBar = false
+                                }
+                            },
                             onLongClick = {
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                showMenu = true
+                                // Show emoji bar (NOT context menu) on long-press
+                                showEmojiBar = true
                             },
                         ),
             ) {
@@ -948,14 +957,14 @@ fun MessageBubble(
                 }
             }
 
-            // Context menu - positioned BELOW the message (Signal-style)
-            // Note: React option removed - emoji bar is now shown inline above the message
+            // Context menu - positioned BELOW the message
+            // Uses separate state (showContextMenu) to avoid DropdownMenu blocking emoji bar touches
             MessageContextMenu(
-                expanded = showMenu,
-                onDismiss = { showMenu = false },
+                expanded = showContextMenu,
+                onDismiss = { showContextMenu = false },
                 onCopy = {
                     clipboardManager.setText(AnnotatedString(message.content))
-                    showMenu = false
+                    showContextMenu = false
                 },
                 isFromMe = isFromMe,
                 isFailed = message.status == "failed",
@@ -963,7 +972,7 @@ fun MessageBubble(
                     if (isFromMe) {
                         {
                             onViewDetails(message.id)
-                            showMenu = false
+                            showContextMenu = false
                         }
                     } else {
                         null
@@ -972,14 +981,14 @@ fun MessageBubble(
                     if (isFromMe && message.status == "failed") {
                         {
                             onRetry()
-                            showMenu = false
+                            showContextMenu = false
                         }
                     } else {
                         null
                     },
                 onReply = {
                     onReply()
-                    showMenu = false
+                    showContextMenu = false
                 },
             )
         }

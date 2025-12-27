@@ -6,12 +6,17 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -86,6 +91,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -873,6 +879,42 @@ fun MessageBubble(
     var bubbleWidth by remember { mutableStateOf(0) }
     var bubbleHeight by remember { mutableStateOf(0) }
 
+    // Signal-style press feedback: scale down to 0.95f after 100ms
+    val interactionSource = remember { MutableInteractionSource() }
+    var isPressed by remember { mutableStateOf(false) }
+    var shouldScale by remember { mutableStateOf(false) }
+
+    // Monitor press state
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collect { interaction ->
+            when (interaction) {
+                is PressInteraction.Press -> {
+                    isPressed = true
+                    // Delay before scaling (Signal uses 100ms)
+                    kotlinx.coroutines.delay(100)
+                    if (isPressed) {
+                        shouldScale = true
+                    }
+                }
+                is PressInteraction.Release,
+                is PressInteraction.Cancel -> {
+                    isPressed = false
+                    shouldScale = false
+                }
+            }
+        }
+    }
+
+    // Animate scale
+    val scale by animateFloatAsState(
+        targetValue = if (shouldScale) 0.95f else 1f,
+        animationSpec = tween(
+            durationMillis = 200,
+            easing = FastOutSlowInEasing,
+        ),
+        label = "bubble_scale"
+    )
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
@@ -912,6 +954,7 @@ fun MessageBubble(
                             bubbleWidth = coordinates.size.width
                             bubbleHeight = coordinates.size.height
                         }
+                        .scale(scale) // Apply scale animation after bitmap capture
                         .combinedClickable(
                             onClick = {},
                             onLongClick = {
@@ -921,6 +964,8 @@ fun MessageBubble(
                                     onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
                                 }
                             },
+                            indication = null, // Disable ripple - we use scale animation instead
+                            interactionSource = interactionSource,
                         ),
             ) {
                 // PERFORMANCE: Use pre-decoded image from MessageUi to avoid expensive

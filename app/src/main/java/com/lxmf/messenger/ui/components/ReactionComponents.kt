@@ -219,6 +219,57 @@ val EXTENDED_EMOJIS = listOf(
 )
 
 /**
+ * Inline emoji bar that appears above a message on long-press (Signal-style).
+ *
+ * Unlike the dialog version, this is positioned inline within the message layout,
+ * appearing directly above the message bubble. It shows immediately on long-press
+ * without requiring an extra tap in a context menu.
+ *
+ * @param onReactionSelected Callback when an emoji is selected, receives the emoji string
+ * @param onShowFullPicker Callback to show the full emoji picker dialog
+ */
+@Composable
+fun InlineReactionBar(
+    onReactionSelected: (String) -> Unit,
+    onShowFullPicker: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val hapticFeedback = LocalHapticFeedback.current
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            REACTION_EMOJIS.forEach { emoji ->
+                ReactionEmojiButton(
+                    emoji = emoji,
+                    onClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onReactionSelected(emoji)
+                    },
+                )
+            }
+            // "+" button to open full emoji picker
+            AddMoreEmojiButton(
+                onClick = {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onShowFullPicker()
+                },
+            )
+        }
+    }
+}
+
+/**
  * Modal dialog picker for selecting an emoji reaction.
  *
  * Displays a horizontal row of 6 emoji options (👍 ❤️ 😂 😮 😢 😡) plus a "+" button

@@ -39,7 +39,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.AddReaction
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
@@ -103,6 +102,8 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.FileAttachmentCard
+import com.lxmf.messenger.ui.components.FullEmojiPickerDialog
+import com.lxmf.messenger.ui.components.InlineReactionBar
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.QuickShareLocationBottomSheet
 import com.lxmf.messenger.ui.model.LocationSharingState
@@ -110,7 +111,6 @@ import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
 import com.lxmf.messenger.ui.components.ReactionDisplayRow
-import com.lxmf.messenger.ui.components.ReactionPickerDialog
 import com.lxmf.messenger.ui.components.ReplyInputBar
 import com.lxmf.messenger.ui.components.ReplyPreviewBubble
 import com.lxmf.messenger.ui.components.StarToggleButton
@@ -187,9 +187,7 @@ fun MessagingScreen(
     // Reply preview cache - maps message ID to its loaded reply preview
     val replyPreviewCache by viewModel.replyPreviewCache.collectAsStateWithLifecycle()
 
-    // Reaction picker state
-    val showReactionPicker by viewModel.showReactionPicker.collectAsStateWithLifecycle()
-    val pendingReactionMessageId by viewModel.pendingReactionMessageId.collectAsStateWithLifecycle()
+    // Reaction picker state (myIdentityHash is still used for highlighting own reactions)
     val myIdentityHash by viewModel.myIdentityHash.collectAsStateWithLifecycle()
 
     // Track message positions for jump-to-original functionality
@@ -620,7 +618,7 @@ fun MessagingScreen(
                                                     }
                                                 }
                                             },
-                                            onReact = { viewModel.setReactionTarget(message.id) },
+                                            onReact = { emoji -> viewModel.sendReaction(message.id, emoji) },
                                         )
                                     }
                                 }
@@ -770,17 +768,6 @@ fun MessagingScreen(
         )
     }
 
-    // Reaction picker dialog - triggered by long-press on a message
-    if (showReactionPicker && pendingReactionMessageId != null) {
-        ReactionPickerDialog(
-            onReactionSelected = { emoji ->
-                pendingReactionMessageId?.let { messageId ->
-                    viewModel.sendReaction(messageId, emoji)
-                }
-            },
-            onDismiss = { viewModel.dismissReactionPicker() },
-        )
-    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -795,15 +782,40 @@ fun MessageBubble(
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
     onReply: () -> Unit = {},
     onReplyPreviewClick: (replyToMessageId: String) -> Unit = {},
-    onReact: () -> Unit = {},
+    onReact: (emoji: String) -> Unit = {},
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var showMenu by remember { mutableStateOf(false) }
+    var showFullEmojiPicker by remember { mutableStateOf(false) }
+
+    // Full emoji picker dialog (shown when "+" is tapped in inline bar)
+    if (showFullEmojiPicker) {
+        FullEmojiPickerDialog(
+            onEmojiSelected = { emoji ->
+                onReact(emoji)
+                showFullEmojiPicker = false
+                showMenu = false
+            },
+            onDismiss = { showFullEmojiPicker = false },
+        )
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
     ) {
+        // Signal-style: Show emoji bar ABOVE the message bubble on long-press
+        if (showMenu) {
+            InlineReactionBar(
+                onReactionSelected = { emoji ->
+                    onReact(emoji)
+                    showMenu = false
+                },
+                onShowFullPicker = { showFullEmojiPicker = true },
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+
         Box {
             Surface(
                 shape =
@@ -936,7 +948,8 @@ fun MessageBubble(
                 }
             }
 
-            // Context menu
+            // Context menu - positioned BELOW the message (Signal-style)
+            // Note: React option removed - emoji bar is now shown inline above the message
             MessageContextMenu(
                 expanded = showMenu,
                 onDismiss = { showMenu = false },
@@ -968,10 +981,6 @@ fun MessageBubble(
                     onReply()
                     showMenu = false
                 },
-                onReact = {
-                    onReact()
-                    showMenu = false
-                },
             )
         }
 
@@ -998,7 +1007,6 @@ fun MessageContextMenu(
     onViewDetails: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
     onReply: (() -> Unit)? = null,
-    onReact: (() -> Unit)? = null,
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -1018,20 +1026,6 @@ fun MessageContextMenu(
                 },
                 text = { Text("Retry") },
                 onClick = onRetry,
-            )
-        }
-
-        // React option
-        if (onReact != null) {
-            DropdownMenuItem(
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.AddReaction,
-                        contentDescription = null,
-                    )
-                },
-                text = { Text("React") },
-                onClick = onReact,
             )
         }
 

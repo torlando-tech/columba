@@ -807,14 +807,18 @@ fun MessageBubble(
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
     ) {
         // Signal-style: Show emoji bar ABOVE the message bubble on long-press
-        // NOTE: This is shown when showEmojiBar is true, separately from context menu
+        // NOTE: This is shown when showEmojiBar is true, in coordination with context menu
         if (showEmojiBar) {
             InlineReactionBar(
                 onReactionSelected = { emoji ->
                     onReact(emoji)
                     showEmojiBar = false
+                    showContextMenu = false
                 },
-                onShowFullPicker = { showFullEmojiPicker = true },
+                onShowFullPicker = {
+                    showFullEmojiPicker = true
+                    showContextMenu = false
+                },
                 modifier = Modifier.padding(bottom = 8.dp),
             )
         }
@@ -840,15 +844,17 @@ fun MessageBubble(
                         .widthIn(max = 300.dp)
                         .combinedClickable(
                             onClick = {
-                                // Tap dismisses emoji bar if shown
-                                if (showEmojiBar) {
+                                // Tap dismisses emoji bar and context menu if shown
+                                if (showEmojiBar || showContextMenu) {
                                     showEmojiBar = false
+                                    showContextMenu = false
                                 }
                             },
                             onLongClick = {
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                // Show emoji bar (NOT context menu) on long-press
+                                // Show BOTH emoji bar (above) and context menu (below) on long-press
                                 showEmojiBar = true
+                                showContextMenu = true
                             },
                         ),
             ) {
@@ -958,13 +964,17 @@ fun MessageBubble(
             }
 
             // Context menu - positioned BELOW the message
-            // Uses separate state (showContextMenu) to avoid DropdownMenu blocking emoji bar touches
+            // Works together with emoji bar (above) on long-press
             MessageContextMenu(
                 expanded = showContextMenu,
-                onDismiss = { showContextMenu = false },
+                onDismiss = {
+                    showContextMenu = false
+                    showEmojiBar = false
+                },
                 onCopy = {
                     clipboardManager.setText(AnnotatedString(message.content))
                     showContextMenu = false
+                    showEmojiBar = false
                 },
                 isFromMe = isFromMe,
                 isFailed = message.status == "failed",
@@ -973,6 +983,7 @@ fun MessageBubble(
                         {
                             onViewDetails(message.id)
                             showContextMenu = false
+                            showEmojiBar = false
                         }
                     } else {
                         null
@@ -982,6 +993,7 @@ fun MessageBubble(
                         {
                             onRetry()
                             showContextMenu = false
+                            showEmojiBar = false
                         }
                     } else {
                         null
@@ -989,6 +1001,7 @@ fun MessageBubble(
                 onReply = {
                     onReply()
                     showContextMenu = false
+                    showEmojiBar = false
                 },
             )
         }

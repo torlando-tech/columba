@@ -200,9 +200,10 @@ class MessagingViewModel
                 if (currentHash == null) return@combine LocationSharingState.NONE
 
                 val sharingWithThem = sessions.any { it.destinationHash == currentHash }
-                val theyShareWithUs = allContacts
-                    .find { it.destinationHash == currentHash }
-                    ?.isReceivingLocationFrom == true
+                val theyShareWithUs =
+                    allContacts
+                        .find { it.destinationHash == currentHash }
+                        ?.isReceivingLocationFrom == true
 
                 when {
                     sharingWithThem && theyShareWithUs -> LocationSharingState.MUTUAL
@@ -246,8 +247,10 @@ class MessagingViewModel
             val messageY: Float = 0f,
             val messageWidth: Int = 0,
             val messageHeight: Int = 0,
-            val instanceId: Long = System.currentTimeMillis(), // Unique ID for each overlay instance
-            val isMessageHidden: Boolean = true, // Controls message visibility during overlay animation
+            // Unique ID for each overlay instance
+            val instanceId: Long = System.currentTimeMillis(),
+            // Controls message visibility during overlay animation
+            val isMessageHidden: Boolean = true,
         )
 
         private val _reactionModeState = MutableStateFlow<ReactionModeState?>(null)
@@ -280,17 +283,18 @@ class MessagingViewModel
             messageWidth: Int = 0,
             messageHeight: Int = 0,
         ) {
-            _reactionModeState.value = ReactionModeState(
-                messageId,
-                scrollIndex,
-                isFromMe,
-                isFailed,
-                messageBitmap,
-                messageX,
-                messageY,
-                messageWidth,
-                messageHeight
-            )
+            _reactionModeState.value =
+                ReactionModeState(
+                    messageId,
+                    scrollIndex,
+                    isFromMe,
+                    isFailed,
+                    messageBitmap,
+                    messageX,
+                    messageY,
+                    messageWidth,
+                    messageHeight,
+                )
             Log.d(TAG, "Entered reaction mode for message: ${messageId.take(16)}... at ($messageX, $messageY)")
         }
 
@@ -322,14 +326,15 @@ class MessagingViewModel
                 try {
                     val replyPreview = conversationRepository.getReplyPreview(messageId, currentPeerName)
                     if (replyPreview != null) {
-                        _pendingReplyTo.value = com.lxmf.messenger.ui.model.ReplyPreviewUi(
-                            messageId = replyPreview.messageId,
-                            senderName = replyPreview.senderName,
-                            contentPreview = replyPreview.contentPreview,
-                            hasImage = replyPreview.hasImage,
-                            hasFileAttachment = replyPreview.hasFileAttachment,
-                            firstFileName = replyPreview.firstFileName,
-                        )
+                        _pendingReplyTo.value =
+                            com.lxmf.messenger.ui.model.ReplyPreviewUi(
+                                messageId = replyPreview.messageId,
+                                senderName = replyPreview.senderName,
+                                contentPreview = replyPreview.contentPreview,
+                                hasImage = replyPreview.hasImage,
+                                hasFileAttachment = replyPreview.hasFileAttachment,
+                                firstFileName = replyPreview.firstFileName,
+                            )
                         Log.d(TAG, "Set pending reply to message ${messageId.take(16)}")
                     } else {
                         Log.w(TAG, "Could not find message $messageId for reply preview")
@@ -424,11 +429,12 @@ class MessagingViewModel
                     val senderHash = identity.hash.joinToString("") { "%02x".format(it) }
 
                     // Update local database with the reaction (optimistic update)
-                    val updatedFieldsJson = addReactionToFieldsJson(
-                        message.fieldsJson,
-                        emoji,
-                        senderHash,
-                    )
+                    val updatedFieldsJson =
+                        addReactionToFieldsJson(
+                            message.fieldsJson,
+                            emoji,
+                            senderHash,
+                        )
 
                     // Save the updated fieldsJson to database
                     conversationRepository.updateMessageReactions(messageId, updatedFieldsJson)
@@ -439,12 +445,13 @@ class MessagingViewModel
                     )
 
                     // Send reaction via LXMF protocol
-                    val result = reticulumProtocol.sendReaction(
-                        destinationHash = destHashBytes,
-                        targetMessageId = messageId,
-                        emoji = emoji,
-                        sourceIdentity = identity,
-                    )
+                    val result =
+                        reticulumProtocol.sendReaction(
+                            destinationHash = destHashBytes,
+                            targetMessageId = messageId,
+                            emoji = emoji,
+                            sourceIdentity = identity,
+                        )
 
                     result.onSuccess { receipt ->
                         Log.d(TAG, "😀 Reaction $emoji sent successfully, hash: ${receipt.messageHash.take(8).joinToString("") { "%02x".format(it) }}")
@@ -690,11 +697,12 @@ class MessagingViewModel
                 }
 
                 // Add the reaction to the message's fieldsJson
-                val updatedFieldsJson = addReactionToFieldsJson(
-                    targetMessage.fieldsJson,
-                    emoji,
-                    senderHash,
-                )
+                val updatedFieldsJson =
+                    addReactionToFieldsJson(
+                        targetMessage.fieldsJson,
+                        emoji,
+                        senderHash,
+                    )
 
                 // Save the updated fieldsJson to database
                 conversationRepository.updateMessageReactions(targetMessageId, updatedFieldsJson)
@@ -1065,11 +1073,12 @@ class MessagingViewModel
                     Log.d(TAG, "Created temp file for sharing: ${tempFile.absolutePath}")
 
                     // Get FileProvider URI
-                    val uri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        tempFile,
-                    )
+                    val uri =
+                        FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            tempFile,
+                        )
 
                     Pair(uri, metadata.mimeType)
                 } catch (e: Exception) {
@@ -1102,23 +1111,25 @@ class MessagingViewModel
                 try {
                     val replyPreview = conversationRepository.getReplyPreview(replyToMessageId, currentPeerName)
                     if (replyPreview != null) {
-                        val uiPreview = com.lxmf.messenger.ui.model.ReplyPreviewUi(
-                            messageId = replyPreview.messageId,
-                            senderName = replyPreview.senderName,
-                            contentPreview = replyPreview.contentPreview,
-                            hasImage = replyPreview.hasImage,
-                            hasFileAttachment = replyPreview.hasFileAttachment,
-                            firstFileName = replyPreview.firstFileName,
-                        )
+                        val uiPreview =
+                            com.lxmf.messenger.ui.model.ReplyPreviewUi(
+                                messageId = replyPreview.messageId,
+                                senderName = replyPreview.senderName,
+                                contentPreview = replyPreview.contentPreview,
+                                hasImage = replyPreview.hasImage,
+                                hasFileAttachment = replyPreview.hasFileAttachment,
+                                firstFileName = replyPreview.firstFileName,
+                            )
                         _replyPreviewCache.update { it + (messageId to uiPreview) }
                         Log.d(TAG, "Loaded reply preview for message ${messageId.take(16)}")
                     } else {
                         // Mark as loaded with a "deleted message" placeholder
-                        val deletedPreview = com.lxmf.messenger.ui.model.ReplyPreviewUi(
-                            messageId = replyToMessageId,
-                            senderName = "",
-                            contentPreview = "Message deleted",
-                        )
+                        val deletedPreview =
+                            com.lxmf.messenger.ui.model.ReplyPreviewUi(
+                                messageId = replyToMessageId,
+                                senderName = "",
+                                contentPreview = "Message deleted",
+                            )
                         _replyPreviewCache.update { it + (messageId to deletedPreview) }
                         Log.d(TAG, "Reply target message not found: ${replyToMessageId.take(16)}")
                     }
@@ -1248,7 +1259,8 @@ class MessagingViewModel
                             tryPropagationOnFail = tryPropOnFail,
                             imageData = imageData,
                             imageFormat = imageFormat,
-                            replyToMessageId = failedMessage.replyToMessageId, // Preserve reply on retry
+                            // Preserve reply on retry
+                            replyToMessageId = failedMessage.replyToMessageId,
                         )
 
                     result.onSuccess { receipt ->
@@ -1364,8 +1376,9 @@ private fun buildFieldsJson(
     val hasFiles = fileAttachments.isNotEmpty()
     val hasReply = replyToMessageId != null
     val hasReactions = !reactions.isNullOrEmpty()
+    val hasAnyContent = hasImage || hasFiles || hasReply || hasReactions
 
-    if (!hasImage && !hasFiles && !hasReply && !hasReactions) return null
+    if (!hasAnyContent) return null
 
     val json = org.json.JSONObject()
 
@@ -1465,37 +1478,41 @@ private fun addReactionToFieldsJson(
     emoji: String,
     senderHash: String,
 ): String {
-    val json = if (fieldsJson.isNullOrEmpty()) {
-        org.json.JSONObject()
-    } else {
-        try {
-            org.json.JSONObject(fieldsJson)
-        } catch (e: Exception) {
-            Log.w(HELPER_TAG, "Failed to parse fieldsJson, creating new: ${e.message}")
+    val json =
+        if (fieldsJson.isNullOrEmpty()) {
             org.json.JSONObject()
+        } else {
+            try {
+                org.json.JSONObject(fieldsJson)
+            } catch (e: Exception) {
+                Log.w(HELPER_TAG, "Failed to parse fieldsJson, creating new: ${e.message}")
+                org.json.JSONObject()
+            }
         }
-    }
 
     // Get or create Field 16 (app extensions)
-    val field16 = if (json.has("16")) {
-        json.getJSONObject("16")
-    } else {
-        org.json.JSONObject().also { json.put("16", it) }
-    }
+    val field16 =
+        if (json.has("16")) {
+            json.getJSONObject("16")
+        } else {
+            org.json.JSONObject().also { json.put("16", it) }
+        }
 
     // Get or create reactions dictionary
-    val reactions = if (field16.has("reactions")) {
-        field16.getJSONObject("reactions")
-    } else {
-        org.json.JSONObject().also { field16.put("reactions", it) }
-    }
+    val reactions =
+        if (field16.has("reactions")) {
+            field16.getJSONObject("reactions")
+        } else {
+            org.json.JSONObject().also { field16.put("reactions", it) }
+        }
 
     // Get or create the sender list for this emoji
-    val senderList = if (reactions.has(emoji)) {
-        reactions.getJSONArray(emoji)
-    } else {
-        org.json.JSONArray().also { reactions.put(emoji, it) }
-    }
+    val senderList =
+        if (reactions.has(emoji)) {
+            reactions.getJSONArray(emoji)
+        } else {
+            org.json.JSONArray().also { reactions.put(emoji, it) }
+        }
 
     // Add sender if not already present (avoid duplicates)
     var alreadyReacted = false

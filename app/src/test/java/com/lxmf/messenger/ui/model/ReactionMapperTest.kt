@@ -11,7 +11,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class ReactionMapperTest {
-
     // ========== parseReactionsFromField16() TESTS ==========
 
     @Test

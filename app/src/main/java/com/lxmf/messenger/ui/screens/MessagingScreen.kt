@@ -37,8 +37,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,8 +62,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,8 +71,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -100,6 +98,8 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -115,25 +115,23 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.FileAttachmentCard
-import com.lxmf.messenger.ui.components.FullEmojiPickerDialog
-import com.lxmf.messenger.ui.components.InlineReactionBar
-import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
-import com.lxmf.messenger.ui.components.QuickShareLocationBottomSheet
-import com.lxmf.messenger.ui.model.LocationSharingState
-import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
+import com.lxmf.messenger.ui.components.FullEmojiPickerDialog
+import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
+import com.lxmf.messenger.ui.components.QuickShareLocationBottomSheet
 import com.lxmf.messenger.ui.components.ReactionDisplayRow
 import com.lxmf.messenger.ui.components.ReactionModeOverlay
 import com.lxmf.messenger.ui.components.ReplyInputBar
 import com.lxmf.messenger.ui.components.ReplyPreviewBubble
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SwipeableMessageBubble
-import com.lxmf.messenger.ui.model.ReplyPreviewUi
+import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
+import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.viewmodel.ContactToggleResult
@@ -185,15 +183,16 @@ fun MessagingScreen(
     var showStopSharingDialog by remember { mutableStateOf(false) }
 
     // Location permission launcher
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions(),
-    ) { permissions ->
-        val granted = permissions.values.all { it }
-        if (granted) {
-            // Permission granted, now show the share location sheet
-            showShareLocationSheet = true
+    val locationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestMultiplePermissions(),
+        ) { permissions ->
+            val granted = permissions.values.all { it }
+            if (granted) {
+                // Permission granted, now show the share location sheet
+                showShareLocationSheet = true
+            }
         }
-    }
 
     // Reply state
     val pendingReplyTo by viewModel.pendingReplyTo.collectAsStateWithLifecycle()
@@ -306,12 +305,13 @@ fun MessagingScreen(
             uri?.let { destinationUri ->
                 pendingFileSave?.let { (messageId, fileIndex, _) ->
                     scope.launch(Dispatchers.IO) {
-                        val success = viewModel.saveReceivedFileAttachment(
-                            context,
-                            messageId,
-                            fileIndex,
-                            destinationUri,
-                        )
+                        val success =
+                            viewModel.saveReceivedFileAttachment(
+                                context,
+                                messageId,
+                                fileIndex,
+                                destinationUri,
+                            )
                         withContext(Dispatchers.Main) {
                             val message = if (success) "File saved" else "Failed to save file"
                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -480,17 +480,19 @@ fun MessagingScreen(
                         },
                     ) {
                         Icon(
-                            imageVector = if (locationSharingState != LocationSharingState.NONE) {
-                                Icons.Default.LocationOn
-                            } else {
-                                Icons.Outlined.LocationOn
-                            },
+                            imageVector =
+                                if (locationSharingState != LocationSharingState.NONE) {
+                                    Icons.Default.LocationOn
+                                } else {
+                                    Icons.Outlined.LocationOn
+                                },
                             contentDescription = "Share location",
-                            tint = if (locationSharingState != LocationSharingState.NONE) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
+                            tint =
+                                if (locationSharingState != LocationSharingState.NONE) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                         )
                     }
 
@@ -610,19 +612,23 @@ fun MessagingScreen(
                                     val cachedReplyPreview = replyPreviewCache[message.id]
 
                                     // Create updated message with cached image and reply preview
-                                    val displayMessage = message.copy(
-                                        decodedImage = cachedImage ?: message.decodedImage,
-                                        replyPreview = cachedReplyPreview ?: message.replyPreview,
-                                    )
+                                    val displayMessage =
+                                        message.copy(
+                                            decodedImage = cachedImage ?: message.decodedImage,
+                                            replyPreview = cachedReplyPreview ?: message.replyPreview,
+                                        )
 
                                     // Wrap in SwipeableMessageBubble for swipe-to-reply
                                     SwipeableMessageBubble(
                                         isFromMe = displayMessage.isFromMe,
                                         onReply = { viewModel.setReplyTo(message.id) },
-                                        modifier = Modifier
-                                            // Hide message when it's being shown in reaction overlay
-                                            // isMessageHidden controls visibility separately from overlay lifecycle
-                                            .alpha(if (reactionModeState?.messageId == message.id && reactionModeState?.isMessageHidden == true) 0f else 1f),
+                                        modifier =
+                                            Modifier
+                                                // Hide message when it's being shown in reaction overlay
+                                                // isMessageHidden controls visibility separately from overlay lifecycle
+                                                .alpha(
+                                                    if (reactionModeState?.messageId == message.id && reactionModeState?.isMessageHidden == true) 0f else 1f,
+                                                ),
                                     ) {
                                         MessageBubble(
                                             message = displayMessage,
@@ -729,18 +735,25 @@ fun MessagingScreen(
                         viewModel.setReplyTo(state.messageId)
                     },
                     onCopy = {
-                        val message = pagingItems.itemSnapshotList
-                            .find { it?.id == state.messageId }
+                        val message =
+                            pagingItems.itemSnapshotList
+                                .find { it?.id == state.messageId }
                         message?.let {
                             clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(it.content))
                         }
                     },
-                    onViewDetails = if (state.isFromMe) {
-                        { onViewMessageDetails(state.messageId) }
-                    } else null,
-                    onRetry = if (state.isFailed) {
-                        { viewModel.retryFailedMessage(state.messageId) }
-                    } else null,
+                    onViewDetails =
+                        if (state.isFromMe) {
+                            { onViewMessageDetails(state.messageId) }
+                        } else {
+                            null
+                        },
+                    onRetry =
+                        if (state.isFailed) {
+                            { viewModel.retryFailedMessage(state.messageId) }
+                        } else {
+                            null
+                        },
                     onDismissStarted = {
                         // Show original message immediately when dismiss animation starts
                         viewModel.showOriginalMessage()
@@ -767,10 +780,11 @@ fun MessagingScreen(
                     val result = viewModel.getFileAttachmentUri(context, messageId, fileIndex)
                     if (result != null) {
                         val (uri, mimeType) = result
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(uri, mimeType)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
+                        val intent =
+                            Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(uri, mimeType)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
                         @Suppress("SwallowedException") // User is notified via Toast
                         try {
                             context.startActivity(Intent.createChooser(intent, null))
@@ -845,9 +859,10 @@ fun MessagingScreen(
                         viewModel.stopSharingWithPeer(destinationHash)
                         showStopSharingDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                    ),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                        ),
                 ) {
                     Text("Stop Sharing")
                 }
@@ -859,7 +874,6 @@ fun MessagingScreen(
             },
         )
     }
-
 }
 
 @Suppress("UnusedParameter") // Params kept for API consistency; actions handled by overlay
@@ -913,7 +927,8 @@ fun MessageBubble(
                     }
                 }
                 is PressInteraction.Release,
-                is PressInteraction.Cancel -> {
+                is PressInteraction.Cancel,
+                -> {
                     isPressed = false
                     shouldScale = false
                 }
@@ -924,11 +939,12 @@ fun MessageBubble(
     // Animate scale
     val scale by animateFloatAsState(
         targetValue = if (shouldScale) 0.95f else 1f,
-        animationSpec = tween(
-            durationMillis = 200,
-            easing = FastOutSlowInEasing,
-        ),
-        label = "bubble_scale"
+        animationSpec =
+            tween(
+                durationMillis = 200,
+                easing = FastOutSlowInEasing,
+            ),
+        label = "bubble_scale",
     )
 
     Column(

@@ -5,6 +5,7 @@ import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.test.TestFactories
 import io.mockk.Runs
@@ -56,6 +57,7 @@ class PropagationNodeManagerTest {
     private lateinit var manager: PropagationNodeManager
     private lateinit var myRelayFlow: MutableStateFlow<ContactEntity?>
     private lateinit var autoSelectFlow: MutableStateFlow<Boolean>
+    private lateinit var networkStatusFlow: MutableStateFlow<NetworkStatus>
 
     private val testDestHash = TestFactories.TEST_DEST_HASH
     private val testDestHash2 = TestFactories.TEST_DEST_HASH_2
@@ -75,6 +77,10 @@ class PropagationNodeManagerTest {
         // Initialize mutable flows for reactive testing
         myRelayFlow = MutableStateFlow<ContactEntity?>(null)
         autoSelectFlow = MutableStateFlow(true)
+        networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
+
+        // Mock networkStatus flow
+        every { reticulumProtocol.networkStatus } returns networkStatusFlow
 
         // Default settings mocks
         coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
@@ -1165,6 +1171,98 @@ class PropagationNodeManagerTest {
         }
 
     // ========== syncWithPropagationNode Tests ==========
+
+    @Test
+    fun `syncWithPropagationNode - skips when network not ready`() =
+        runTest {
+            // Given: Network is in SHUTDOWN state
+            networkStatusFlow.value = NetworkStatus.SHUTDOWN
+
+            // Relay is configured
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            val mockSyncState =
+                com.lxmf.messenger.reticulum.protocol.PropagationState(
+                    state = 0,
+                    stateName = "IDLE",
+                    progress = 0.0f,
+                    messagesReceived = 0,
+                )
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.success(mockSyncState)
+
+            // When
+            manager.syncWithPropagationNode()
+            advanceUntilIdle()
+
+            // Then: Should not call requestMessagesFromPropagationNode because network is not ready
+            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+        }
+
+    @Test
+    fun `syncWithPropagationNode - skips when network is initializing`() =
+        runTest {
+            // Given: Network is INITIALIZING
+            networkStatusFlow.value = NetworkStatus.INITIALIZING
+
+            // Relay is configured
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // When
+            manager.syncWithPropagationNode()
+            advanceUntilIdle()
+
+            // Then: Should not call requestMessagesFromPropagationNode
+            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+        }
+
+    @Test
+    fun `syncWithPropagationNode - proceeds when network is ready`() =
+        runTest {
+            // Given: Network is READY
+            networkStatusFlow.value = NetworkStatus.READY
+
+            // Relay is configured
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            val mockSyncState =
+                com.lxmf.messenger.reticulum.protocol.PropagationState(
+                    state = 0,
+                    stateName = "IDLE",
+                    progress = 0.0f,
+                    messagesReceived = 0,
+                )
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.success(mockSyncState)
+
+            // When
+            manager.syncWithPropagationNode()
+            advanceUntilIdle()
+
+            // Then: Should call requestMessagesFromPropagationNode
+            coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+        }
 
     @Test
     fun `syncWithPropagationNode - skips when no relay configured`() =

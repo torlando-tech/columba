@@ -1412,6 +1412,11 @@ class KotlinBLEBridge(
                     }
                 }
 
+                // Clean up identity callback deduplication for this address
+                // This allows the identity callback to be processed on reconnection
+                // (fixes bug where static-MAC devices like Linux couldn't reconnect)
+                processedIdentityCallbacks.removeIf { it.startsWith("$address:") }
+
                 Log.i(TAG, "Peer disconnected: $address")
                 onDisconnected?.callAttr("__call__", address)
             } else {

@@ -40,6 +40,9 @@ fun Message.toMessageUi(): MessageUi {
     // Get reply-to message ID: prefer DB column, fallback to parsing field 16
     val replyId = replyToMessageId ?: parseReplyToFromField16(fieldsJson)
 
+    // Parse emoji reactions from field 16
+    val reactionsList = parseReactionsFromField16(fieldsJson)
+
     return MessageUi(
         id = id,
         destinationHash = destinationHash,
@@ -57,6 +60,7 @@ fun Message.toMessageUi(): MessageUi {
         errorMessage = errorMessage,
         replyToMessageId = replyId,
         // Note: replyPreview is loaded asynchronously by the ViewModel
+        reactions = reactionsList,
     )
 }
 
@@ -81,6 +85,47 @@ private fun parseReplyToFromField16(fieldsJson: String?): String? {
         replyTo.ifEmpty { null }
     } catch (e: Exception) {
         null
+    }
+}
+
+/**
+ * Parse emoji reactions from LXMF field 16 (app extensions).
+ *
+ * Field 16 reactions structure: {"reactions": {"👍": ["sender_hash1", "sender_hash2"], "❤️": ["sender_hash3"]}}
+ * Each emoji key maps to an array of sender destination hashes who reacted with that emoji.
+ *
+ * @param fieldsJson The message's fields JSON
+ * @return List of ReactionUi objects, or empty list if not present or parsing fails
+ */
+@Suppress("SwallowedException", "ReturnCount") // Invalid JSON is expected to fail silently here
+fun parseReactionsFromField16(fieldsJson: String?): List<ReactionUi> {
+    if (fieldsJson == null) return emptyList()
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field16 = fields.optJSONObject("16") ?: return emptyList()
+        val reactionsObj = field16.optJSONObject("reactions") ?: return emptyList()
+
+        val reactions = mutableListOf<ReactionUi>()
+        val keys = reactionsObj.keys()
+        while (keys.hasNext()) {
+            val emoji = keys.next()
+            val sendersArray = reactionsObj.optJSONArray(emoji) ?: continue
+            val senderHashes = mutableListOf<String>()
+            for (i in 0 until sendersArray.length()) {
+                // Skip null values in the array
+                if (sendersArray.isNull(i)) continue
+                val sender = sendersArray.optString(i, "")
+                if (sender.isNotEmpty()) {
+                    senderHashes.add(sender)
+                }
+            }
+            if (senderHashes.isNotEmpty()) {
+                reactions.add(ReactionUi(emoji = emoji, senderHashes = senderHashes))
+            }
+        }
+        reactions
+    } catch (e: Exception) {
+        emptyList()
     }
 }
 

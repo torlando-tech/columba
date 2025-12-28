@@ -339,4 +339,20 @@ class MockReticulumProtocol : ReticulumProtocol {
             ),
         )
     }
+
+    override suspend fun sendReaction(
+        destinationHash: ByteArray,
+        targetMessageId: String,
+        emoji: String,
+        sourceIdentity: Identity,
+    ): Result<MessageReceipt> {
+        // Mock implementation - return success with fake receipt
+        return Result.success(
+            MessageReceipt(
+                messageHash = ByteArray(32) { it.toByte() },
+                timestamp = System.currentTimeMillis(),
+                destinationHash = destinationHash,
+            ),
+        )
+    }
 }

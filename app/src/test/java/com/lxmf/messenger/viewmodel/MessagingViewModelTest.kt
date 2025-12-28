@@ -110,6 +110,9 @@ class MessagingViewModelTest {
         // Mock delivery status observer (returns empty flow by default)
         every { reticulumProtocol.observeDeliveryStatus() } returns flowOf()
 
+        // Mock reaction received flow (returns empty flow by default)
+        every { reticulumProtocol.reactionReceivedFlow } returns MutableSharedFlow()
+
         // Mock database methods needed by delivery status handler
         coEvery { conversationRepository.getMessageById(any()) } returns null
         coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
@@ -414,6 +417,7 @@ class MessagingViewModelTest {
             coEvery { failingProtocol.getLxmfIdentity() } returns Result.failure(Exception("No identity"))
             every { failingProtocol.setConversationActive(any()) } just Runs
             every { failingProtocol.observeDeliveryStatus() } returns flowOf()
+            every { failingProtocol.reactionReceivedFlow } returns MutableSharedFlow()
 
             val failingRepository: ConversationRepository = mockk()
             every { failingRepository.getMessages(any()) } returns flowOf(emptyList())
@@ -2776,6 +2780,682 @@ class MessagingViewModelTest {
             assertNotNull(pending)
             assertTrue(pending!!.hasFileAttachment)
             assertEquals("report.pdf", pending.firstFileName)
+        }
+
+    // ========== REACTION MODE STATE TESTS ==========
+
+    @Test
+    fun `reactionModeState initial state is null`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Assert: Initial state is null
+            assertNull(viewModel.reactionModeState.value)
+        }
+
+    @Test
+    fun `enterReactionMode sets state with isMessageHidden true by default`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act
+            viewModel.enterReactionMode(
+                messageId = "test-msg-123",
+                scrollIndex = 5,
+                isFromMe = true,
+                isFailed = false,
+            )
+            advanceUntilIdle()
+
+            // Assert
+            val state = viewModel.reactionModeState.value
+            assertNotNull(state)
+            assertEquals("test-msg-123", state!!.messageId)
+            assertEquals(5, state.targetScrollIndex)
+            assertTrue(state.isFromMe)
+            assertFalse(state.isFailed)
+            assertTrue(state.isMessageHidden) // Default is true
+        }
+
+    @Test
+    fun `enterReactionMode generates unique instanceId`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Enter reaction mode twice
+            viewModel.enterReactionMode(
+                messageId = "msg-1",
+                scrollIndex = 1,
+                isFromMe = true,
+            )
+            advanceUntilIdle()
+            val firstInstanceId = viewModel.reactionModeState.value?.instanceId
+
+            // Small delay to ensure different timestamp
+            Thread.sleep(5)
+
+            viewModel.enterReactionMode(
+                messageId = "msg-2",
+                scrollIndex = 2,
+                isFromMe = false,
+            )
+            advanceUntilIdle()
+            val secondInstanceId = viewModel.reactionModeState.value?.instanceId
+
+            // Assert: Instance IDs are different
+            assertNotNull(firstInstanceId)
+            assertNotNull(secondInstanceId)
+            assertTrue(
+                "Instance IDs should be unique: $firstInstanceId vs $secondInstanceId",
+                firstInstanceId != secondInstanceId,
+            )
+        }
+
+    @Test
+    fun `exitReactionMode clears state`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Enter reaction mode first
+            viewModel.enterReactionMode(
+                messageId = "test-msg-123",
+                scrollIndex = 5,
+                isFromMe = true,
+            )
+            advanceUntilIdle()
+            assertNotNull(viewModel.reactionModeState.value)
+
+            // Act
+            viewModel.exitReactionMode()
+            advanceUntilIdle()
+
+            // Assert
+            assertNull(viewModel.reactionModeState.value)
+        }
+
+    @Test
+    fun `showOriginalMessage sets isMessageHidden to false`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Enter reaction mode (isMessageHidden = true by default)
+            viewModel.enterReactionMode(
+                messageId = "test-msg-123",
+                scrollIndex = 5,
+                isFromMe = true,
+            )
+            advanceUntilIdle()
+            assertTrue(viewModel.reactionModeState.value?.isMessageHidden == true)
+
+            // Act
+            viewModel.showOriginalMessage()
+            advanceUntilIdle()
+
+            // Assert: isMessageHidden is now false, other state preserved
+            val state = viewModel.reactionModeState.value
+            assertNotNull(state)
+            assertFalse(state!!.isMessageHidden)
+            assertEquals("test-msg-123", state.messageId)
+            assertEquals(5, state.targetScrollIndex)
+        }
+
+    @Test
+    fun `showOriginalMessage does nothing when state is null`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            // Verify initial state is null
+            assertNull(viewModel.reactionModeState.value)
+
+            // Act: Should not crash
+            viewModel.showOriginalMessage()
+            advanceUntilIdle()
+
+            // Assert: State remains null
+            assertNull(viewModel.reactionModeState.value)
+        }
+
+    @Test
+    fun `showOriginalMessage preserves instanceId`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Enter reaction mode
+            viewModel.enterReactionMode(
+                messageId = "test-msg-123",
+                scrollIndex = 5,
+                isFromMe = true,
+            )
+            advanceUntilIdle()
+            val originalInstanceId = viewModel.reactionModeState.value?.instanceId
+            assertNotNull(originalInstanceId)
+
+            // Act
+            viewModel.showOriginalMessage()
+            advanceUntilIdle()
+
+            // Assert: instanceId is preserved
+            assertEquals(originalInstanceId, viewModel.reactionModeState.value?.instanceId)
+        }
+
+    @Test
+    fun `enterReactionMode with failed message sets isFailed correctly`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act
+            viewModel.enterReactionMode(
+                messageId = "failed-msg",
+                scrollIndex = 3,
+                isFromMe = true,
+                isFailed = true,
+            )
+            advanceUntilIdle()
+
+            // Assert
+            val state = viewModel.reactionModeState.value
+            assertNotNull(state)
+            assertTrue(state!!.isFailed)
+        }
+
+    // ========== SEND REACTION TESTS ==========
+
+    @Test
+    fun `sendReaction returns early when message not found`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Message not found
+            coEvery { conversationRepository.getMessageById("nonexistent-msg") } returns null
+
+            // Act
+            viewModel.sendReaction("nonexistent-msg", "👍")
+            advanceUntilIdle()
+
+            // Assert: Protocol send was never called
+            coVerify(exactly = 0) { reticulumProtocol.sendReaction(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `sendReaction sends reaction via protocol when message exists`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Mock existing message
+            val testMessage = MessageEntity(
+                id = "test-msg-id",
+                conversationHash = testPeerHash,
+                identityHash = "test_identity_hash",
+                content = "Hello",
+                timestamp = System.currentTimeMillis(),
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = null,
+                deliveryMethod = null,
+                errorMessage = null,
+                replyToMessageId = null,
+            )
+            coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
+
+            // Mock protocol send reaction
+            val mockReceipt = mockk<MessageReceipt>()
+            every { mockReceipt.messageHash } returns ByteArray(16) { it.toByte() }
+            coEvery {
+                reticulumProtocol.sendReaction(any(), any(), any(), any())
+            } returns Result.success(mockReceipt)
+
+            // Mock updateMessageReactions
+            coEvery { conversationRepository.updateMessageReactions(any(), any()) } just Runs
+
+            // Act
+            viewModel.sendReaction("test-msg-id", "👍")
+            advanceUntilIdle()
+
+            // Assert: Protocol was called with correct parameters
+            coVerify {
+                reticulumProtocol.sendReaction(
+                    destinationHash = any(),
+                    targetMessageId = "test-msg-id",
+                    emoji = "👍",
+                    sourceIdentity = testIdentity,
+                )
+            }
+        }
+
+    @Test
+    fun `sendReaction updates message fieldsJson in database`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Mock existing message without reactions
+            val testMessage = MessageEntity(
+                id = "test-msg-id",
+                conversationHash = testPeerHash,
+                identityHash = "test_identity_hash",
+                content = "Hello",
+                timestamp = System.currentTimeMillis(),
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = null,
+                deliveryMethod = null,
+                errorMessage = null,
+                replyToMessageId = null,
+            )
+            coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
+
+            // Mock protocol send reaction
+            val mockReceipt = mockk<MessageReceipt>()
+            every { mockReceipt.messageHash } returns ByteArray(16) { it.toByte() }
+            coEvery {
+                reticulumProtocol.sendReaction(any(), any(), any(), any())
+            } returns Result.success(mockReceipt)
+
+            // Capture the fieldsJson update
+            val capturedFieldsJson = slot<String>()
+            coEvery {
+                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedFieldsJson))
+            } just Runs
+
+            // Act
+            viewModel.sendReaction("test-msg-id", "👍")
+            advanceUntilIdle()
+
+            // Assert: Database was updated with reaction in fieldsJson
+            assertTrue(capturedFieldsJson.isCaptured)
+            val json = org.json.JSONObject(capturedFieldsJson.captured)
+            assertTrue(json.has("16"))
+            val field16 = json.getJSONObject("16")
+            assertTrue(field16.has("reactions"))
+            val reactions = field16.getJSONObject("reactions")
+            assertTrue(reactions.has("👍"))
+        }
+
+    @Test
+    fun `sendReaction clears reaction UI state after sending`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Mock existing message
+            val testMessage = MessageEntity(
+                id = "test-msg-id",
+                conversationHash = testPeerHash,
+                identityHash = "test_identity_hash",
+                content = "Hello",
+                timestamp = System.currentTimeMillis(),
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = null,
+                deliveryMethod = null,
+                errorMessage = null,
+                replyToMessageId = null,
+            )
+            coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
+
+            // Mock protocol send reaction
+            val mockReceipt = mockk<MessageReceipt>()
+            every { mockReceipt.messageHash } returns ByteArray(16) { it.toByte() }
+            coEvery {
+                reticulumProtocol.sendReaction(any(), any(), any(), any())
+            } returns Result.success(mockReceipt)
+            coEvery { conversationRepository.updateMessageReactions(any(), any()) } just Runs
+
+            // Set up reaction target first
+            viewModel.setReactionTarget("test-msg-id")
+            advanceUntilIdle()
+            assertEquals("test-msg-id", viewModel.pendingReactionMessageId.value)
+
+            // Act
+            viewModel.sendReaction("test-msg-id", "👍")
+            advanceUntilIdle()
+
+            // Assert: Reaction target was cleared
+            assertNull(viewModel.pendingReactionMessageId.value)
+        }
+
+    @Test
+    fun `sendReaction handles protocol send failure gracefully`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Mock existing message
+            val testMessage = MessageEntity(
+                id = "test-msg-id",
+                conversationHash = testPeerHash,
+                identityHash = "test_identity_hash",
+                content = "Hello",
+                timestamp = System.currentTimeMillis(),
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = null,
+                deliveryMethod = null,
+                errorMessage = null,
+                replyToMessageId = null,
+            )
+            coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
+
+            // Mock protocol failure
+            coEvery {
+                reticulumProtocol.sendReaction(any(), any(), any(), any())
+            } returns Result.failure(Exception("Network error"))
+            coEvery { conversationRepository.updateMessageReactions(any(), any()) } just Runs
+
+            // Set up reaction target
+            viewModel.setReactionTarget("test-msg-id")
+            advanceUntilIdle()
+
+            // Act - should not throw
+            viewModel.sendReaction("test-msg-id", "👍")
+            advanceUntilIdle()
+
+            // Assert: UI state was still cleared (optimistic update pattern)
+            assertNull(viewModel.pendingReactionMessageId.value)
+
+            // Assert: Local database was still updated (optimistic update)
+            coVerify { conversationRepository.updateMessageReactions("test-msg-id", any()) }
+        }
+
+    @Test
+    fun `sendReaction adds reaction to existing fieldsJson with reply_to`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Mock message that already has a reply_to in field 16
+            val existingFieldsJson = """{"16": {"reply_to": "original-msg-id"}}"""
+            val testMessage = MessageEntity(
+                id = "test-msg-id",
+                conversationHash = testPeerHash,
+                identityHash = "test_identity_hash",
+                content = "Hello",
+                timestamp = System.currentTimeMillis(),
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = existingFieldsJson,
+                deliveryMethod = null,
+                errorMessage = null,
+                replyToMessageId = "original-msg-id",
+            )
+            coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
+
+            // Mock protocol
+            val mockReceipt = mockk<MessageReceipt>()
+            every { mockReceipt.messageHash } returns ByteArray(16) { it.toByte() }
+            coEvery {
+                reticulumProtocol.sendReaction(any(), any(), any(), any())
+            } returns Result.success(mockReceipt)
+
+            // Capture the fieldsJson update
+            val capturedFieldsJson = slot<String>()
+            coEvery {
+                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedFieldsJson))
+            } just Runs
+
+            // Act
+            viewModel.sendReaction("test-msg-id", "❤️")
+            advanceUntilIdle()
+
+            // Assert: Both reply_to and reactions are preserved
+            assertTrue(capturedFieldsJson.isCaptured)
+            val json = org.json.JSONObject(capturedFieldsJson.captured)
+            val field16 = json.getJSONObject("16")
+            assertEquals("original-msg-id", field16.getString("reply_to"))
+            assertTrue(field16.has("reactions"))
+            val reactions = field16.getJSONObject("reactions")
+            assertTrue(reactions.has("❤️"))
+        }
+
+    @Test
+    fun `sendReaction adds sender to existing emoji reaction`() =
+        runTest {
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Mock message that already has a 👍 reaction from someone else
+            val existingFieldsJson = """{"16": {"reactions": {"👍": ["other-sender-hash"]}}}"""
+            val testMessage = MessageEntity(
+                id = "test-msg-id",
+                conversationHash = testPeerHash,
+                identityHash = "test_identity_hash",
+                content = "Hello",
+                timestamp = System.currentTimeMillis(),
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = existingFieldsJson,
+                deliveryMethod = null,
+                errorMessage = null,
+                replyToMessageId = null,
+            )
+            coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
+
+            // Mock protocol
+            val mockReceipt = mockk<MessageReceipt>()
+            every { mockReceipt.messageHash } returns ByteArray(16) { it.toByte() }
+            coEvery {
+                reticulumProtocol.sendReaction(any(), any(), any(), any())
+            } returns Result.success(mockReceipt)
+
+            // Capture the fieldsJson update
+            val capturedFieldsJson = slot<String>()
+            coEvery {
+                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedFieldsJson))
+            } just Runs
+
+            // Act
+            viewModel.sendReaction("test-msg-id", "👍")
+            advanceUntilIdle()
+
+            // Assert: Both senders are in the reaction list
+            assertTrue(capturedFieldsJson.isCaptured)
+            val json = org.json.JSONObject(capturedFieldsJson.captured)
+            val reactions = json.getJSONObject("16").getJSONObject("reactions")
+            val thumbsUp = reactions.getJSONArray("👍")
+            assertEquals(2, thumbsUp.length())
+            assertEquals("other-sender-hash", thumbsUp.getString(0))
+            // Our sender hash is derived from testIdentity
+        }
+
+    // ========== INCOMING REACTION TESTS ==========
+
+    @Test
+    fun `handleIncomingReaction updates message when found`() =
+        runTest {
+            // Setup: Create a flow to emit reactions
+            val reactionFlow = MutableSharedFlow<String>()
+            every { reticulumProtocol.reactionReceivedFlow } returns reactionFlow
+
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Mock target message
+            val targetMessage = MessageEntity(
+                id = "target-msg-id",
+                conversationHash = testPeerHash,
+                identityHash = "test_identity_hash",
+                content = "Hello",
+                timestamp = System.currentTimeMillis(),
+                isFromMe = true,
+                status = "delivered",
+                fieldsJson = null,
+                deliveryMethod = null,
+                errorMessage = null,
+                replyToMessageId = null,
+            )
+            coEvery { conversationRepository.getMessageById("target-msg-id") } returns targetMessage
+
+            // Capture the fieldsJson update
+            val capturedFieldsJson = slot<String>()
+            coEvery {
+                conversationRepository.updateMessageReactions("target-msg-id", capture(capturedFieldsJson))
+            } just Runs
+
+            // Act: Emit incoming reaction
+            val reactionJson = """{"reaction_to": "target-msg-id", "emoji": "😂", "sender": "remote-sender-hash"}"""
+            reactionFlow.emit(reactionJson)
+            advanceUntilIdle()
+
+            // Assert: Database was updated
+            assertTrue(capturedFieldsJson.isCaptured)
+            val json = org.json.JSONObject(capturedFieldsJson.captured)
+            val reactions = json.getJSONObject("16").getJSONObject("reactions")
+            assertTrue(reactions.has("😂"))
+            val senders = reactions.getJSONArray("😂")
+            assertEquals("remote-sender-hash", senders.getString(0))
+        }
+
+    @Test
+    fun `handleIncomingReaction ignores message when not found`() =
+        runTest {
+            // Setup: Create a flow to emit reactions
+            val reactionFlow = MutableSharedFlow<String>()
+            every { reticulumProtocol.reactionReceivedFlow } returns reactionFlow
+
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Message not found
+            coEvery { conversationRepository.getMessageById("nonexistent-msg") } returns null
+
+            // Act: Emit incoming reaction for unknown message
+            val reactionJson = """{"reaction_to": "nonexistent-msg", "emoji": "👍", "sender": "remote-sender"}"""
+            reactionFlow.emit(reactionJson)
+            advanceUntilIdle()
+
+            // Assert: No database update was attempted
+            coVerify(exactly = 0) { conversationRepository.updateMessageReactions(any(), any()) }
+        }
+
+    @Test
+    fun `handleIncomingReaction handles malformed JSON gracefully`() =
+        runTest {
+            // Setup: Create a flow to emit reactions
+            val reactionFlow = MutableSharedFlow<String>()
+            every { reticulumProtocol.reactionReceivedFlow } returns reactionFlow
+
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Act: Emit malformed JSON - should not crash
+            reactionFlow.emit("not valid json {{{")
+            advanceUntilIdle()
+
+            // Act: Emit JSON missing required fields - should not crash
+            reactionFlow.emit("""{"reaction_to": "msg-id"}""") // Missing emoji and sender
+            advanceUntilIdle()
+
+            // Assert: No database update was attempted for invalid reactions
+            coVerify(exactly = 0) { conversationRepository.updateMessageReactions(any(), any()) }
+        }
+
+    @Test
+    fun `handleIncomingReaction merges reactions with existing`() =
+        runTest {
+            // Setup: Create a flow to emit reactions
+            val reactionFlow = MutableSharedFlow<String>()
+            every { reticulumProtocol.reactionReceivedFlow } returns reactionFlow
+
+            val viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            // Setup: Mock target message that already has reactions
+            val existingFieldsJson = """{"16": {"reactions": {"👍": ["sender-1"]}}}"""
+            val targetMessage = MessageEntity(
+                id = "target-msg-id",
+                conversationHash = testPeerHash,
+                identityHash = "test_identity_hash",
+                content = "Hello",
+                timestamp = System.currentTimeMillis(),
+                isFromMe = true,
+                status = "delivered",
+                fieldsJson = existingFieldsJson,
+                deliveryMethod = null,
+                errorMessage = null,
+                replyToMessageId = null,
+            )
+            coEvery { conversationRepository.getMessageById("target-msg-id") } returns targetMessage
+
+            // Capture the fieldsJson update
+            val capturedFieldsJson = slot<String>()
+            coEvery {
+                conversationRepository.updateMessageReactions("target-msg-id", capture(capturedFieldsJson))
+            } just Runs
+
+            // Act: Emit incoming reaction with different emoji
+            val reactionJson = """{"reaction_to": "target-msg-id", "emoji": "❤️", "sender": "sender-2"}"""
+            reactionFlow.emit(reactionJson)
+            advanceUntilIdle()
+
+            // Assert: Both reactions exist
+            assertTrue(capturedFieldsJson.isCaptured)
+            val json = org.json.JSONObject(capturedFieldsJson.captured)
+            val reactions = json.getJSONObject("16").getJSONObject("reactions")
+            assertTrue(reactions.has("👍"))
+            assertTrue(reactions.has("❤️"))
+            assertEquals(1, reactions.getJSONArray("👍").length())
+            assertEquals(1, reactions.getJSONArray("❤️").length())
         }
 
 }

@@ -687,6 +687,35 @@ class ReticulumServiceBinder(
     }
 
     // ===========================================
+    // Emoji Reactions
+    // ===========================================
+
+    override fun sendReaction(
+        destHash: ByteArray,
+        targetMessageId: String,
+        emoji: String,
+        sourceIdentityPrivateKey: ByteArray,
+    ): String {
+        return try {
+            Log.d(TAG, "📬 Sending reaction $emoji to message ${targetMessageId.take(16)}...")
+            wrapperManager.withWrapper { wrapper ->
+                val result =
+                    wrapper.callAttr(
+                        "send_reaction",
+                        destHash,
+                        targetMessageId,
+                        emoji,
+                        sourceIdentityPrivateKey,
+                    )
+                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+            } ?: """{"success": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending reaction", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    // ===========================================
     // Event Broadcasting Helpers
     // ===========================================
 
@@ -821,6 +850,15 @@ class ReticulumServiceBinder(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set location received callback: ${e.message}", e)
+        }
+
+        // Setup reaction received callback for emoji reactions
+        try {
+            wrapperManager.setReactionReceivedCallback { reactionJson ->
+                pollingManager.handleReactionReceivedEvent(reactionJson)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set reaction received callback: ${e.message}", e)
         }
 
         // Setup native stamp generator (bypasses Python multiprocessing issues)

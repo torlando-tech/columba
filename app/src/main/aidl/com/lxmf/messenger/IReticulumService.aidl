@@ -356,4 +356,19 @@ interface IReticulumService {
      * @return JSON string with result: {"success": true, "message_hash": "...", "timestamp": ...}
      */
     String sendLocationTelemetry(in byte[] destHash, String locationJson, in byte[] sourceIdentityPrivateKey);
+
+    // ==================== EMOJI REACTIONS ====================
+
+    /**
+     * Send an emoji reaction to a message via LXMF Field 16.
+     * The reaction is sent as a new LXMF message with Field 16 containing
+     * the reaction data: {"reaction": {"target_id": "...", "emoji": "..."}}.
+     *
+     * @param destHash Destination hash bytes (16 bytes) - the recipient
+     * @param targetMessageId The message hash/ID being reacted to
+     * @param emoji The emoji reaction (e.g., "👍", "❤️", "😂", "😮", "😢", "😡")
+     * @param sourceIdentityPrivateKey Source identity private key bytes
+     * @return JSON string with result: {"success": true, "message_hash": "...", "timestamp": ...}
+     */
+    String sendReaction(in byte[] destHash, String targetMessageId, String emoji, in byte[] sourceIdentityPrivateKey);
 }

@@ -1,0 +1,80 @@
+{
+  "task_description": "Add Signal-style emoji reactions to Columba messages using existing LXMF Field 16 infrastructure",
+  "scoped_services": ["app", "python"],
+  "files_to_modify": {
+    "app": [
+      "app/src/main/java/com/lxmf/messenger/ui/model/MessageUi.kt",
+      "app/src/main/java/com/lxmf/messenger/ui/model/MessageMapper.kt",
+      "app/src/main/java/com/lxmf/messenger/ui/screens/MessagingScreen.kt",
+      "app/src/main/java/com/lxmf/messenger/viewmodel/MessagingViewModel.kt",
+      "app/src/main/aidl/com/lxmf/messenger/IReticulumService.aidl",
+      "app/src/main/java/com/lxmf/messenger/service/binder/ReticulumServiceBinder.kt"
+    ],
+    "python": [
+      "python/reticulum_wrapper.py"
+    ]
+  },
+  "files_to_create": {
+    "app": [
+      "app/src/main/java/com/lxmf/messenger/ui/components/ReactionComponents.kt",
+      "app/src/test/java/com/lxmf/messenger/ui/components/ReactionComponentsTest.kt",
+      "app/src/test/java/com/lxmf/messenger/ui/model/ReactionMapperTest.kt"
+    ]
+  },
+  "files_to_reference": [
+    "app/src/main/java/com/lxmf/messenger/ui/components/ReplyComponents.kt",
+    "app/src/test/java/com/lxmf/messenger/ui/components/ReplyComponentsTest.kt",
+    "app/src/main/java/com/lxmf/messenger/ui/model/MessageMapper.kt",
+    "app/src/test/java/com/lxmf/messenger/ui/model/MessageMapperTest.kt",
+    "python/reticulum_wrapper.py"
+  ],
+  "patterns": {
+    "field_16_parsing": {
+      "location": "MessageMapper.kt:parseReplyToFromField16()",
+      "pattern": "Use optJSONObject for null-safe access, return null on any parsing error, use @Suppress for expected exceptions"
+    },
+    "ui_component": {
+      "location": "ReplyComponents.kt",
+      "pattern": "Take @Immutable data class, support isFromMe for Material3 theming, use MaterialTheme.colorScheme, include modifier: Modifier = Modifier"
+    },
+    "state_management": {
+      "location": "MessagingViewModel.kt",
+      "pattern": "MutableStateFlow for private, expose as StateFlow via asStateFlow(), use viewModelScope.launch for async"
+    },
+    "testing": {
+      "location": "ReplyComponentsTest.kt",
+      "pattern": "Robolectric with @Config(sdk=[34]), RuleChain with RegisterComponentActivityRule, verify display and click interactions"
+    },
+    "long_press_gesture": {
+      "location": "MessagingScreen.kt:MessageBubble()",
+      "pattern": "Use combinedClickable with onLongClick, perform HapticFeedbackType.LongPress"
+    }
+  },
+  "existing_implementations": {
+    "reply_feature": {
+      "description": "Reply feature uses Field 16 with 'reply_to' key - exact pattern to follow for reactions",
+      "key_functions": [
+        "MessageMapper.parseReplyToFromField16()",
+        "MessagingViewModel.setReplyTo()",
+        "buildFieldsJson() - has comment 'Future: appExtensions.put(\"reactions\", ...)'"
+      ]
+    },
+    "field_16_python": {
+      "description": "Python Field 16 handling in reticulum_wrapper.py lines 2811-2820",
+      "structure": "fields[16] = {\"reply_to\": message_id}"
+    }
+  },
+  "data_structure": {
+    "field_16_reactions": {
+      "structure": "{\"16\": {\"reply_to\": \"optional_id\", \"reactions\": {\"👍\": [\"sender_hash1\"], \"❤️\": [\"sender_hash2\"]}}}",
+      "emoji_set": ["👍", "❤️", "😂", "😮", "😢", "😡"],
+      "persistence": "Store in existing fieldsJson column - no schema migration needed"
+    },
+    "reaction_ui_model": {
+      "class": "ReactionUi",
+      "fields": ["emoji: String", "senderHashes: List<String>", "count: Int"]
+    }
+  },
+  "created_at": "2025-12-24T18:05:48.025164",
+  "updated_at": "2025-12-24T18:15:00.000000"
+}

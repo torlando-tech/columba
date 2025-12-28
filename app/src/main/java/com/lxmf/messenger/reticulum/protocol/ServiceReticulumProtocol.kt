@@ -159,6 +159,14 @@ class ServiceReticulumProtocol(
         )
     val locationTelemetryFlow: SharedFlow<String> = _locationTelemetryFlow.asSharedFlow()
 
+    // Emoji reactions received for messages
+    private val _reactionReceivedFlow =
+        MutableSharedFlow<String>(
+            replay = 0,
+            extraBufferCapacity = 10,
+        )
+    val reactionReceivedFlow: SharedFlow<String> = _reactionReceivedFlow.asSharedFlow()
+
     /**
      * Handler for alternative relay requests from the service.
      * Set by ColumbaApplication to provide PropagationNodeManager integration.
@@ -445,6 +453,15 @@ class ServiceReticulumProtocol(
                     _locationTelemetryFlow.tryEmit(locationJson)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling location telemetry callback", e)
+                }
+            }
+
+            override fun onReactionReceived(reactionJson: String) {
+                try {
+                    Log.d(TAG, "😀 Reaction received: $reactionJson")
+                    _reactionReceivedFlow.tryEmit(reactionJson)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling reaction received callback", e)
                 }
             }
         }
@@ -1688,6 +1705,45 @@ class ServiceReticulumProtocol(
             val destHash = result.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
 
             Log.d(TAG, "📍 Location telemetry sent to ${destinationHash.joinToString("") { "%02x".format(it) }.take(16)}")
+
+            MessageReceipt(
+                messageHash = msgHash,
+                timestamp = timestamp,
+                destinationHash = destHash,
+            )
+        }
+    }
+
+    override suspend fun sendReaction(
+        destinationHash: ByteArray,
+        targetMessageId: String,
+        emoji: String,
+        sourceIdentity: Identity,
+    ): Result<MessageReceipt> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
+
+            val resultJson =
+                service.sendReaction(
+                    destinationHash,
+                    targetMessageId,
+                    emoji,
+                    privateKey,
+                )
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            val msgHash = result.optString("message_hash").toByteArrayFromBase64() ?: byteArrayOf()
+            val timestamp = result.optLong("timestamp", System.currentTimeMillis())
+            val destHash = result.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
+
+            Log.d(TAG, "😀 Reaction $emoji sent to ${destinationHash.joinToString("") { "%02x".format(it) }.take(16)}")
 
             MessageReceipt(
                 messageHash = msgHash,

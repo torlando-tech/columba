@@ -179,6 +179,14 @@ class CallbackBroadcaster {
     }
 
     /**
+     * Broadcast reaction received to all registered callbacks.
+     * Called when an emoji reaction to a message is received.
+     */
+    fun broadcastReactionReceived(reactionJson: String) {
+        broadcast { it.onReactionReceived(reactionJson) }
+    }
+
+    /**
      * Thread-safe broadcast helper.
      * Ensures only one broadcast happens at a time (RemoteCallbackList is not re-entrant).
      */

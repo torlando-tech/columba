@@ -106,6 +106,7 @@ class MessagingViewModelImageLoadingTest {
         coEvery { reticulumProtocol.getLxmfIdentity() } returns Result.success(testIdentity)
         every { reticulumProtocol.setConversationActive(any()) } just Runs
         every { reticulumProtocol.observeDeliveryStatus() } returns flowOf()
+        every { reticulumProtocol.reactionReceivedFlow } returns MutableSharedFlow()
 
         viewModel =
             MessagingViewModel(

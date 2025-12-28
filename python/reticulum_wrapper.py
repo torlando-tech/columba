@@ -121,6 +121,9 @@ class ReticulumWrapper:
         # Location telemetry callback support (Phase 3 - location sharing over LXMF)
         self.kotlin_location_received_callback = None  # Callback to Kotlin when location telemetry received
 
+        # Reaction received callback support (emoji reactions to messages)
+        self.kotlin_reaction_received_callback = None  # Callback to Kotlin when reaction received
+
         # General Reticulum bridge for protocol-level callbacks (announces, link events, etc.)
         self.kotlin_reticulum_bridge = None  # KotlinReticulumBridge instance (passed from Kotlin)
 
@@ -292,6 +295,33 @@ class ReticulumWrapper:
         self.kotlin_location_received_callback = callback
         log_info("ReticulumWrapper", "set_location_received_callback",
                 "✅ Location received callback registered (location sharing enabled)")
+
+    def set_reaction_received_callback(self, callback):
+        """
+        Set callback to be invoked when an emoji reaction is received.
+
+        Reactions are sent via LXMF Field 16 with the following keys:
+        - reaction_to: Message ID being reacted to
+        - emoji: The emoji reaction (e.g., "👍", "❤️", "😂")
+        - sender: Identity hash of the reaction sender
+
+        Callback signature: callback(reaction_json: str)
+
+        Reaction JSON format:
+        {
+            "reaction_to": "abc123...",          # Message ID being reacted to
+            "emoji": "👍",                        # The emoji reaction
+            "sender": "def456...",               # Sender identity hash (hex)
+            "source_hash": "ghi789...",          # Source destination hash (hex)
+            "timestamp": 1234567890000           # Milliseconds since epoch
+        }
+
+        Args:
+            callback: PyObject callable from Kotlin (passed via Chaquopy)
+        """
+        self.kotlin_reaction_received_callback = callback
+        log_info("ReticulumWrapper", "set_reaction_received_callback",
+                "✅ Reaction received callback registered (emoji reactions enabled)")
 
     def set_kotlin_request_alternative_relay_callback(self, callback):
         """
@@ -1867,10 +1897,56 @@ class ReticulumWrapper:
                         import traceback
                         traceback.print_exc()
 
-            # Skip regular message processing for location-only messages
-            if is_location_only:
+            # ✅ Check for emoji reaction (Field 16 with reaction_to key)
+            # Reactions are lightweight messages with empty content and reaction data in Field 16
+            APP_EXTENSIONS_FIELD = 16
+            is_reaction = False
+
+            if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
+                if APP_EXTENSIONS_FIELD in lxmf_message.fields:
+                    field_16 = lxmf_message.fields[APP_EXTENSIONS_FIELD]
+                    if isinstance(field_16, dict) and 'reaction_to' in field_16:
+                        # This is a reaction message
+                        is_reaction = True
+                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                f"😀 Reaction detected in field {APP_EXTENSIONS_FIELD}")
+
+                        # Process reaction
+                        try:
+                            import json
+                            import time
+
+                            reaction_event = {
+                                'reaction_to': field_16.get('reaction_to', ''),
+                                'emoji': field_16.get('emoji', ''),
+                                'sender': field_16.get('sender', ''),
+                                'source_hash': lxmf_message.source_hash.hex(),
+                                'timestamp': int(time.time() * 1000)
+                            }
+
+                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"Reaction: {reaction_event['emoji']} to message {reaction_event['reaction_to'][:16]}... from {reaction_event['sender'][:16]}...")
+
+                            # Invoke Kotlin callback if registered
+                            if self.kotlin_reaction_received_callback:
+                                self.kotlin_reaction_received_callback(json.dumps(reaction_event))
+                                log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                        "✅ Reaction callback invoked successfully")
+                            else:
+                                log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                         "No reaction callback registered - reaction will be processed via polling")
+
+                        except Exception as e:
+                            log_error("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"⚠️ Error processing reaction: {e}")
+                            import traceback
+                            traceback.print_exc()
+
+            # Skip regular message processing for location-only or reaction-only messages
+            if is_location_only or is_reaction:
+                skip_reason = "location-only" if is_location_only else "reaction-only"
                 log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                         "Skipping regular message processing for location-only message")
+                         f"Skipping regular message processing for {skip_reason} message")
                 return
 
             # Add to pending_inbound queue (maintains backward compatibility with polling)
@@ -2898,6 +2974,132 @@ class ReticulumWrapper:
             traceback.print_exc()
             return {"success": False, "error": str(e)}
 
+    def send_reaction(self, dest_hash: bytes, target_message_id: str, emoji: str,
+                      source_identity_private_key: bytes) -> Dict:
+        """
+        Send an emoji reaction to a message via LXMF.
+
+        Reactions are sent as lightweight LXMF messages with Field 16 containing:
+        - reaction_to: The message ID being reacted to
+        - emoji: The emoji reaction
+        - sender: The sender's identity hash (for aggregation on receiver side)
+
+        Args:
+            dest_hash: Identity hash bytes (16 bytes) of the message recipient
+            target_message_id: The message ID being reacted to
+            emoji: The emoji reaction (e.g., "👍", "❤️", "😂")
+            source_identity_private_key: Private key of sender identity
+
+        Returns:
+            Dict with 'success', 'message_hash', 'timestamp' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Convert jarray to bytes if needed
+            if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+                dest_hash = bytes(dest_hash)
+            if hasattr(source_identity_private_key, '__iter__') and not isinstance(source_identity_private_key, (bytes, bytearray)):
+                source_identity_private_key = bytes(source_identity_private_key)
+
+            log_separator("ReticulumWrapper", "send_reaction", "=", 80)
+            log_info("ReticulumWrapper", "send_reaction",
+                    f"Sending reaction '{emoji}' to message {target_message_id[:16]}...")
+
+            # Reconstruct source identity from private key
+            source_identity = RNS.Identity()
+            source_identity.load_private_key(source_identity_private_key)
+            sender_hash_hex = source_identity.hash.hex()
+            log_debug("ReticulumWrapper", "send_reaction",
+                     f"Loaded source identity, hash={sender_hash_hex[:16]}")
+
+            # Recall recipient identity
+            recipient_identity = RNS.Identity.recall(dest_hash)
+            if not recipient_identity:
+                recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+            if not recipient_identity and dest_hash.hex() in self.identities:
+                recipient_identity = self.identities[dest_hash.hex()]
+
+            if not recipient_identity:
+                # Request path from network
+                log_info("ReticulumWrapper", "send_reaction",
+                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
+                try:
+                    RNS.Transport.request_path(dest_hash)
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "send_reaction", f"Error requesting path: {e}")
+
+                # Wait up to 5 seconds for path response
+                wait_start = time.time()
+                while time.time() - wait_start < 5:
+                    recipient_identity = RNS.Identity.recall(dest_hash)
+                    if not recipient_identity:
+                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                    if recipient_identity:
+                        break
+                    time.sleep(0.1)
+
+                if not recipient_identity:
+                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known"}
+
+            # Create destination
+            recipient_lxmf_destination = RNS.Destination(
+                recipient_identity,
+                RNS.Destination.OUT,
+                RNS.Destination.SINGLE,
+                "lxmf",
+                "delivery"
+            )
+
+            # Build Field 16 with reaction data
+            # Format: {"reaction_to": "msg_id", "emoji": "👍", "sender": "sender_hash_hex"}
+            app_extensions = {
+                "reaction_to": target_message_id,
+                "emoji": emoji,
+                "sender": sender_hash_hex
+            }
+            fields = {16: app_extensions}
+
+            log_debug("ReticulumWrapper", "send_reaction",
+                     f"Field 16: {app_extensions}")
+
+            # Reactions are small, use OPPORTUNISTIC for fast delivery
+            # Empty content since all data is in Field 16
+            lxmf_message = LXMF.LXMessage(
+                destination=recipient_lxmf_destination,
+                source=self.local_lxmf_destination,
+                content=b"",  # Empty content - reaction data is in fields
+                title="",
+                fields=fields,
+                desired_method=LXMF.LXMessage.OPPORTUNISTIC
+            )
+
+            # Register callbacks
+            lxmf_message.register_delivery_callback(self._on_message_delivered)
+            lxmf_message.register_failed_callback(self._on_message_failed)
+
+            # Send via router
+            self.router.handle_outbound(lxmf_message)
+
+            msg_hash = lxmf_message.hash if lxmf_message.hash else b''
+            log_info("ReticulumWrapper", "send_reaction",
+                    f"✅ Reaction {msg_hash.hex()[:16] if msg_hash else 'unknown'}... sent")
+
+            return {
+                "success": True,
+                "message_hash": msg_hash,
+                "timestamp": int(time.time() * 1000),
+                "target_message_id": target_message_id,
+                "emoji": emoji
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "send_reaction", f"❌ ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
     def _on_message_delivered(self, lxmf_message):
         """
         Callback invoked by LXMF when a sent message acknowledgment is received.
@@ -3855,7 +4057,17 @@ class ReticulumWrapper:
                                 elif key == 16 and isinstance(value, dict):
                                     # Field 16 is app extensions dict: {"reply_to": "...", "reactions": {...}, etc.}
                                     fields_serialized['16'] = value
-                                    if 'reply_to' in value:
+
+                                    # Check for reaction message (has reaction_to key)
+                                    if 'reaction_to' in value:
+                                        # Mark message as a reaction for easy identification by Kotlin
+                                        message_event['is_reaction'] = True
+                                        message_event['reaction_to'] = value.get('reaction_to', '')
+                                        message_event['reaction_emoji'] = value.get('emoji', '')
+                                        message_event['reaction_sender'] = value.get('sender', '')
+                                        log_info("ReticulumWrapper", "poll_received_messages",
+                                                f"😀 Field 16: reaction '{value.get('emoji', '')}' to message {value['reaction_to'][:16]}...")
+                                    elif 'reply_to' in value:
                                         log_debug("ReticulumWrapper", "poll_received_messages",
                                                  f"Field 16: reply to message {value['reply_to'][:16]}...")
                                     else:

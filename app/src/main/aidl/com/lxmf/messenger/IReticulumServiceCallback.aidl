@@ -76,4 +76,11 @@ interface IReticulumServiceCallback {
      *        {"sender_hash": "...", "lat": ..., "lng": ..., "acc": ..., "ts": ..., "expires": ...}
      */
     void onLocationTelemetry(String locationJson);
+
+    /**
+     * Called when an emoji reaction to a message is received.
+     * @param reactionJson JSON string with reaction data:
+     *        {"reaction_to": "msg_id", "emoji": "👍", "sender": "sender_hash", "source_hash": "...", "timestamp": ...}
+     */
+    void onReactionReceived(String reactionJson);
 }

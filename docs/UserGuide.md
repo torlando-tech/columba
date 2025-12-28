@@ -20,7 +20,7 @@ Official project repository:
 
 ## What You Need Before You Start
 
-* An **Android phone** (Android 9 or newer recommended)
+* An **Android phone** (Android 12 or newer recommended)
 * About **100 MB of free storage**
 
 You **do not** need:
@@ -78,12 +78,12 @@ Leave defaults unless you know what you are doing:
 These defaults allow Columba to:
 
 * Find peers automatically
-* Switch between Internet, Wi-Fi, or bluetooth
+* Switch between Internet, Local Wi-Fi, or bluetooth
 
 ### Identity
 
 * Already created automatically
-* You should  set a display name
+* You should  set a display name using the wizard. if you skipped that step then you  can set your display name in the settings
 
 ## Step 4 – Sending Your First Message
 
@@ -102,14 +102,14 @@ These defaults allow Columba to:
 4. Type a message
 5. Press **Send**
 
-Im both cases if the recipient is reachable:
+In both cases if the recipient is reachable:
 
 * Message is delivered immediately
 
 If not:
 
 * Message is **stored securely**
-* Delivered automatically when a te recipient becomes available
+* Delivered automatically when the recipient becomes available
 
 ---
 

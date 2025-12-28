@@ -1621,7 +1621,6 @@ class ReticulumWrapper:
             self.destinations.clear()
             self.identities.clear()
             self.pending_announces.clear()
-            self.announce_app_data.clear()
             self.seen_announce_hashes.clear()
             self.seen_message_hashes.clear()
 

@@ -6,6 +6,7 @@ import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -572,6 +573,12 @@ class PropagationNodeManager
          * This requests any waiting messages from the configured propagation node.
          */
         suspend fun syncWithPropagationNode() {
+            // Don't sync if network is not ready (e.g., during shutdown)
+            if (reticulumProtocol.networkStatus.value !is NetworkStatus.READY) {
+                Log.d(TAG, "Network not ready, skipping sync")
+                return
+            }
+
             val relay = currentRelay.value
             if (relay == null) {
                 Log.d(TAG, "No relay configured, skipping sync")

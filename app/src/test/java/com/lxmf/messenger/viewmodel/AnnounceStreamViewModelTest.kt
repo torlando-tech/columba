@@ -726,4 +726,47 @@ class AnnounceStreamViewModelTest {
             assertFalse(viewModel.announceSuccess.value)
             assertNull(viewModel.announceError.value)
         }
+
+    // ========== Network Status Check Tests ==========
+
+    @Test
+    fun `updateReachableCount skips when network is SHUTDOWN`() =
+        runTest {
+            // Given: Network is SHUTDOWN
+            networkStatusFlow.value = NetworkStatus.SHUTDOWN
+
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            advanceUntilIdle()
+
+            // When: We wait for any periodic updates (none should happen due to updateIntervalMs = 0)
+            advanceTimeBy(1000)
+            advanceUntilIdle()
+
+            // Then: getPathTableHashes should NOT be called because network is not READY
+            coVerify(exactly = 0) { reticulumProtocol.getPathTableHashes() }
+        }
+
+    @Test
+    fun `updateReachableCount skips when network transitions to SHUTDOWN`() =
+        runTest {
+            // Given: Network starts as READY
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            advanceUntilIdle()
+
+            // Clear any initial calls
+            clearMocks(reticulumProtocol, answers = false, recordedCalls = true, verificationMarks = true)
+            every { reticulumProtocol.networkStatus } returns networkStatusFlow
+            every { reticulumProtocol.observeAnnounces() } returns announceFlow
+            coEvery { reticulumProtocol.getPathTableHashes() } returns emptyList()
+
+            // When: Network transitions to SHUTDOWN
+            networkStatusFlow.value = NetworkStatus.SHUTDOWN
+            advanceUntilIdle()
+
+            // Then: getPathTableHashes should NOT be called after shutdown
+            coVerify(exactly = 0) { reticulumProtocol.getPathTableHashes() }
+        }
+
 }

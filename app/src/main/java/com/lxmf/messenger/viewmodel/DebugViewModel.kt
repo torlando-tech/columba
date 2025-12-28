@@ -202,6 +202,11 @@ class DebugViewModel
                             is com.lxmf.messenger.reticulum.model.NetworkStatus.ERROR -> "ERROR: ${status.message}"
                             else -> status.toString()
                         }
+
+                    // Reset debug info when shutdown - prevents stale "initialized: true" in UI
+                    if (status is com.lxmf.messenger.reticulum.model.NetworkStatus.SHUTDOWN) {
+                        _debugInfo.value = DebugInfo()
+                    }
                 }
             }
         }

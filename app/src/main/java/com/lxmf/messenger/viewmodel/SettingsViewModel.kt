@@ -852,8 +852,9 @@ class SettingsViewModel
                     while (true) {
                         val currentState = _state.value
 
-                        // Only monitor when not restarting
-                        if (!currentState.isRestarting) {
+                        // Only monitor when not restarting and network is ready
+                        val networkReady = reticulumProtocol.networkStatus.value is NetworkStatus.READY
+                        if (!currentState.isRestarting && networkReady) {
                             // Query service for shared instance availability
                             val isOnline =
                                 if (reticulumProtocol is

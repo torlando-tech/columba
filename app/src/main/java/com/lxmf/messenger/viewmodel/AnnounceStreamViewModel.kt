@@ -148,6 +148,11 @@ class AnnounceStreamViewModel
          * This provides an accurate count of currently reachable nodes.
          */
         private suspend fun updateReachableCount() {
+            // Don't query if network is not ready (e.g., during shutdown)
+            if (reticulumProtocol.networkStatus.value !is NetworkStatus.READY) {
+                return
+            }
+
             try {
                 // Get path table hashes from RNS
                 val pathTableHashes = reticulumProtocol.getPathTableHashes()

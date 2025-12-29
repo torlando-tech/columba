@@ -584,4 +584,41 @@ class SettingsRepositoryTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    // ========== Location Sharing Flow Tests ==========
+
+    @Test
+    fun locationSharingEnabledFlow_defaultsToFalse() =
+        runTest {
+            // Issue #151: Location sharing should default to disabled for privacy
+            repository.locationSharingEnabledFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Default should be false (disabled) for privacy-conscious defaults
+                assertFalse(
+                    "Location sharing should default to disabled for privacy",
+                    initial,
+                )
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun locationSharingEnabledFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.locationSharingEnabledFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveLocationSharingEnabled(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveLocationSharingEnabled(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

@@ -10,3 +10,6 @@ rns @ git+https://github.com/torlando-tech/Reticulum@fix-phy-stats-rpc
 # Patch: adds set_external_generator() to bypass Python multiprocessing on Android
 lxmf @ git+https://github.com/torlando-tech/LXMF@feature/external-stamp-generator
 cryptography>=42.0.0
+
+# msgpack for Sideband-compatible telemetry format
+u-msgpack-python

@@ -5,6 +5,7 @@ Provides a simplified interface to Reticulum/LXMF that Kotlin can call via Chaqu
 
 from typing import Optional, Dict, List, Callable
 import json
+import struct
 import threading
 import time
 import os
@@ -14,6 +15,12 @@ import importlib
 import importlib.util
 import traceback
 from logging_utils import log_debug, log_info, log_warning, log_error, log_separator
+
+# umsgpack is available via RNS dependencies (bundled with Chaquopy on Android)
+try:
+    import umsgpack
+except ImportError:
+    umsgpack = None  # Will be available at runtime on Android
 
 # Note: RNS/LXMF imports are deferred until after patches are deployed
 # This ensures Python loads the patched code, not the original buggy code
@@ -50,6 +57,119 @@ def _global_exception_handler(exc_type, exc_value, exc_traceback):
 
 # Install global exception handler at module load time
 sys.excepthook = _global_exception_handler
+
+
+# ============================================================================
+# LXMF Field Constants (from LXMF specification)
+# ============================================================================
+FIELD_TELEMETRY = 0x02        # Standard telemetry field for Sideband interoperability
+FIELD_COLUMBA_META = 0x70     # Custom field for Columba-specific metadata (cease signals, etc.)
+LEGACY_LOCATION_FIELD = 7     # Legacy field ID for backwards compatibility
+
+# Sensor IDs (from Sideband sense.py)
+SID_TIME = 0x01
+SID_LOCATION = 0x02
+
+
+# ============================================================================
+# Telemetry Pack/Unpack Helpers (Sideband Telemeter format)
+# ============================================================================
+
+def pack_location_telemetry(lat: float, lon: float, accuracy: float, timestamp_ms: int,
+                            altitude: float = 0.0, speed: float = 0.0, bearing: float = 0.0) -> bytes:
+    """
+    Pack location data in Sideband Telemeter format for FIELD_TELEMETRY.
+
+    This format is compatible with Sideband's sense.py Location sensor.
+
+    Args:
+        lat: Latitude in decimal degrees (WGS84)
+        lon: Longitude in decimal degrees (WGS84)
+        accuracy: Horizontal accuracy in meters
+        timestamp_ms: Unix timestamp in milliseconds
+        altitude: Altitude in meters (default 0.0)
+        speed: Speed in km/h (default 0.0)
+        bearing: Bearing/heading in degrees (default 0.0)
+
+    Returns:
+        msgpack-packed bytes for FIELD_TELEMETRY
+    """
+    # Lazy import - umsgpack is available after RNS is loaded on Android
+    global umsgpack
+    if umsgpack is None:
+        import umsgpack as _umsgpack
+        umsgpack = _umsgpack
+
+    timestamp_s = int(timestamp_ms / 1000)
+
+    # Pack location data exactly as Sideband's Location.pack() does (sense.py:880-897)
+    location_packed = [
+        struct.pack("!i", int(round(lat, 6) * 1e6)),       # latitude in microdegrees
+        struct.pack("!i", int(round(lon, 6) * 1e6)),       # longitude in microdegrees
+        struct.pack("!i", int(round(altitude, 2) * 1e2)),  # altitude in centimeters
+        struct.pack("!I", int(round(speed, 2) * 1e2)),     # speed in cm/s (unsigned)
+        struct.pack("!i", int(round(bearing, 2) * 1e2)),   # bearing in centi-degrees
+        struct.pack("!H", int(round(accuracy, 2) * 1e2)),  # accuracy in centimeters (unsigned short)
+        timestamp_s,                                        # last_update timestamp
+    ]
+
+    telemetry = {
+        SID_TIME: timestamp_s,
+        SID_LOCATION: location_packed,
+    }
+
+    return umsgpack.packb(telemetry)
+
+
+def unpack_location_telemetry(packed_data: bytes) -> Optional[Dict]:
+    """
+    Unpack Sideband Telemeter format from FIELD_TELEMETRY to Columba JSON format.
+
+    Args:
+        packed_data: msgpack-packed bytes from FIELD_TELEMETRY
+
+    Returns:
+        Dict with location data in Columba format, or None if unpacking fails
+    """
+    # Lazy import - umsgpack is available after RNS is loaded on Android
+    global umsgpack
+    if umsgpack is None:
+        import umsgpack as _umsgpack
+        umsgpack = _umsgpack
+
+    try:
+        telemetry = umsgpack.unpackb(packed_data)
+
+        if SID_LOCATION not in telemetry:
+            return None
+
+        loc = telemetry[SID_LOCATION]
+        if len(loc) < 7:
+            return None
+
+        # Unpack exactly as Sideband's Location.unpack() does (sense.py:899-914)
+        lat = struct.unpack("!i", loc[0])[0] / 1e6
+        lon = struct.unpack("!i", loc[1])[0] / 1e6
+        altitude = struct.unpack("!i", loc[2])[0] / 1e2
+        speed = struct.unpack("!I", loc[3])[0] / 1e2
+        bearing = struct.unpack("!i", loc[4])[0] / 1e2
+        accuracy = struct.unpack("!H", loc[5])[0] / 1e2
+        last_update = loc[6]
+
+        return {
+            "type": "location_share",
+            "lat": lat,
+            "lng": lon,
+            "acc": accuracy,
+            "ts": last_update * 1000,  # Convert to milliseconds
+            "altitude": altitude,
+            "speed": speed,
+            "bearing": bearing,
+        }
+    except Exception as e:
+        log_warning("TelemetryHelper", "unpack_location_telemetry",
+                   f"Failed to unpack telemetry: {e}")
+        return None
 
 
 def get_hello_message() -> str:
@@ -1890,55 +2010,106 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Message to: {lxmf_message.destination_hash.hex()[:16]}")
             log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Content length: {len(lxmf_message.content)} bytes")
 
-            # ✅ PHASE 3: Check for location telemetry (field 7) FIRST
+            # ✅ PHASE 3: Check for location telemetry FIRST
             # Location-only messages should NOT be added to the regular message queue
-            LOCATION_FIELD = 7
+            # Priority: FIELD_TELEMETRY (0x02) > FIELD_COLUMBA_META (0x70) > Legacy field 7
             is_location_only = False
 
             if self.kotlin_location_received_callback and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
-                if LOCATION_FIELD in lxmf_message.fields:
-                    # Check if this is a location-only message (no text content or empty content)
-                    content = lxmf_message.content
-                    has_text_content = content and len(content.strip()) > 0 if isinstance(content, (str, bytes)) else False
-                    if isinstance(content, bytes):
-                        has_text_content = len(content.strip()) > 0
+                # Check if this is a location-only message (no text content or empty content)
+                content = lxmf_message.content
+                has_text_content = content and len(content.strip()) > 0 if isinstance(content, (str, bytes)) else False
+                if isinstance(content, bytes):
+                    has_text_content = len(content.strip()) > 0
 
-                    if not has_text_content:
-                        is_location_only = True
-                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                                f"📍 Location-only message detected (field {LOCATION_FIELD}), skipping message queue")
+                location_event = None
+                telemetry_source = None
 
-                    # Process location telemetry
+                # Priority 1: Check FIELD_TELEMETRY (0x02) - Sideband-compatible format
+                if FIELD_TELEMETRY in lxmf_message.fields:
+                    telemetry_source = "FIELD_TELEMETRY"
                     try:
-                        location_data = lxmf_message.fields[LOCATION_FIELD]
-                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                                f"📍 Location telemetry received in field {LOCATION_FIELD}")
+                        packed_data = lxmf_message.fields[FIELD_TELEMETRY]
+                        location_event = unpack_location_telemetry(packed_data)
+                        if location_event:
+                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                    f"📍 Sideband-compatible telemetry received in FIELD_TELEMETRY (0x02)")
+                    except Exception as e:
+                        log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                   f"Failed to unpack FIELD_TELEMETRY: {e}")
 
-                        # Location data format: JSON string as bytes
-                        if isinstance(location_data, bytes):
-                            location_json = location_data.decode('utf-8')
-                        elif isinstance(location_data, str):
-                            location_json = location_data
+                # Priority 2: Check FIELD_COLUMBA_META (0x70) for cease signals
+                if FIELD_COLUMBA_META in lxmf_message.fields:
+                    try:
+                        meta_data = lxmf_message.fields[FIELD_COLUMBA_META]
+                        if isinstance(meta_data, bytes):
+                            meta_data = meta_data.decode('utf-8')
+                        if isinstance(meta_data, str):
+                            meta = json.loads(meta_data)
+
+                            # Check for cease signal
+                            if meta.get('cease', False):
+                                log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                        f"📍 Cease signal received via FIELD_COLUMBA_META")
+                                location_event = {
+                                    "type": "location_share",
+                                    "cease": True,
+                                    "ts": int(time.time() * 1000),
+                                }
+                                telemetry_source = "FIELD_COLUMBA_META (cease)"
+
+                            # Merge Columba-specific metadata if we have a location event
+                            elif location_event:
+                                if 'expires' in meta:
+                                    location_event['expires'] = meta['expires']
+                                if 'approxRadius' in meta:
+                                    location_event['approxRadius'] = meta['approxRadius']
+                    except Exception as e:
+                        log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                   f"Failed to parse FIELD_COLUMBA_META: {e}")
+
+                # Priority 3: Fallback to legacy field 7 for backwards compatibility
+                if location_event is None and LEGACY_LOCATION_FIELD in lxmf_message.fields:
+                    telemetry_source = "Legacy field 7"
+                    try:
+                        legacy_data = lxmf_message.fields[LEGACY_LOCATION_FIELD]
+                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                f"📍 Legacy location telemetry received in field 7")
+
+                        # Legacy format: JSON string as bytes or string
+                        if isinstance(legacy_data, bytes):
+                            location_json = legacy_data.decode('utf-8')
+                        elif isinstance(legacy_data, str):
+                            location_json = legacy_data
                         else:
-                            log_warning("ReticulumWrapper", "_on_lxmf_delivery",
-                                       f"Unexpected location data type: {type(location_data)}")
                             location_json = None
 
                         if location_json:
-                            # Parse and augment with source hash
-                            import json
                             location_event = json.loads(location_json)
-                            location_event['source_hash'] = lxmf_message.source_hash.hex()
+                    except Exception as e:
+                        log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                   f"Failed to parse legacy field 7: {e}")
 
-                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                     f"Location: lat={location_event.get('lat')}, lng={location_event.get('lng')}")
+                # Process the location event if we have one
+                if location_event:
+                    if not has_text_content:
+                        is_location_only = True
+                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                f"📍 Location-only message detected ({telemetry_source}), skipping message queue")
 
-                            self.kotlin_location_received_callback(json.dumps(location_event))
-                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                                    "✅ Location callback invoked successfully")
+                    # Add source hash and invoke callback
+                    location_event['source_hash'] = lxmf_message.source_hash.hex()
+
+                    log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                             f"Location: lat={location_event.get('lat')}, lng={location_event.get('lng')}, cease={location_event.get('cease', False)}")
+
+                    try:
+                        self.kotlin_location_received_callback(json.dumps(location_event))
+                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                "✅ Location callback invoked successfully")
                     except Exception as e:
                         log_error("ReticulumWrapper", "_on_lxmf_delivery",
-                                 f"⚠️ Error processing location telemetry: {e}")
+                                 f"⚠️ Error invoking location callback: {e}")
                         import traceback
                         traceback.print_exc()
 
@@ -2509,11 +2680,14 @@ class ReticulumWrapper:
 
     def send_location_telemetry(self, dest_hash: bytes, location_json: str, source_identity_private_key: bytes) -> Dict:
         """
-        Send location telemetry to a destination via LXMF field 7.
+        Send location telemetry to a destination via LXMF FIELD_TELEMETRY (0x02).
+
+        Uses Sideband's msgpack-packed Telemeter format for interoperability.
+        Cease signals are sent via FIELD_COLUMBA_META (0x70) for Columba clients.
 
         Args:
             dest_hash: Identity hash bytes (16 bytes) of the recipient
-            location_json: JSON string with location data (lat, lng, acc, ts, expires)
+            location_json: JSON string with location data (lat, lng, acc, ts, expires, cease)
             source_identity_private_key: Private key of sender identity
 
         Returns:
@@ -2572,21 +2746,50 @@ class ReticulumWrapper:
             try:
                 location_data = json.loads(location_json)
                 log_debug("ReticulumWrapper", "send_location_telemetry",
-                          f"Location data: lat={location_data.get('lat')}, lng={location_data.get('lng')}")
+                          f"Location data: lat={location_data.get('lat')}, lng={location_data.get('lng')}, cease={location_data.get('cease', False)}")
             except json.JSONDecodeError as e:
                 return {"success": False, "error": f"Invalid location JSON: {e}"}
 
-            # LXMF field 7 = LOCATION TELEMETRY
-            LOCATION_FIELD = 7
-            fields = {
-                LOCATION_FIELD: location_json  # Send as JSON string
-            }
+            # Build LXMF fields based on message type
+            fields = {}
 
-            # Create LXMF message with location telemetry (empty content body)
+            is_cease = location_data.get('cease', False)
+
+            if is_cease:
+                # Cease message: only send Columba-specific metadata (Sideband doesn't understand cease)
+                # Sideband will just let the location become stale naturally
+                fields[FIELD_COLUMBA_META] = json.dumps({"cease": True})
+                log_debug("ReticulumWrapper", "send_location_telemetry", "Sending cease signal via FIELD_COLUMBA_META")
+            else:
+                # Normal location update: use Sideband-compatible Telemeter format
+                packed_telemetry = pack_location_telemetry(
+                    lat=location_data['lat'],
+                    lon=location_data['lng'],
+                    accuracy=location_data.get('acc', 0.0),
+                    timestamp_ms=location_data.get('ts', int(time.time() * 1000)),
+                    altitude=location_data.get('altitude', 0.0),
+                    speed=location_data.get('speed', 0.0),
+                    bearing=location_data.get('bearing', 0.0),
+                )
+                fields[FIELD_TELEMETRY] = packed_telemetry
+
+                # Also include Columba-specific metadata for enhanced Columba-to-Columba features
+                columba_meta = {}
+                if location_data.get('expires'):
+                    columba_meta['expires'] = location_data['expires']
+                if location_data.get('approxRadius', 0) > 0:
+                    columba_meta['approxRadius'] = location_data['approxRadius']
+                if columba_meta:
+                    fields[FIELD_COLUMBA_META] = json.dumps(columba_meta)
+
+                log_debug("ReticulumWrapper", "send_location_telemetry",
+                          f"Sending Sideband-compatible telemetry in FIELD_TELEMETRY (0x02)")
+
+            # Create LXMF message with location telemetry (empty content body for telemetry-only)
             lxmf_message = LXMF.LXMessage(
                 destination=recipient_lxmf_destination,
                 source=self.local_lxmf_destination,
-                content="".encode('utf-8'),  # Empty content - location is in field 7
+                content="".encode('utf-8'),  # Empty content - location is in FIELD_TELEMETRY
                 title="",
                 fields=fields
             )

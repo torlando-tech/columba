@@ -192,8 +192,11 @@ fun IdentityScreen(
                 onClearResult = { viewModel.clearTestResult() },
             )
 
-            // Reticulum Info Card
-            ReticulumInfoCard(debugInfo = debugInfo)
+            // Reticulum Info Card (auto-refreshes every second for live heartbeat)
+            ReticulumInfoCard(
+                debugInfo = debugInfo,
+                onRefresh = { viewModel.refreshDebugInfo() },
+            )
 
             // Bottom spacing for navigation bar (fixed height since M3 NavigationBar consumes the insets)
             Spacer(modifier = Modifier.height(100.dp))
@@ -302,7 +305,21 @@ fun StatusCard(
 }
 
 @Composable
-fun ReticulumInfoCard(debugInfo: DebugInfo) {
+fun ReticulumInfoCard(
+    debugInfo: DebugInfo,
+    onRefresh: (() -> Unit)? = null,
+) {
+    // Auto-refresh every second while visible (for live heartbeat updates)
+    // LaunchedEffect auto-cancels when composable leaves composition
+    if (onRefresh != null) {
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            while (true) {
+                kotlinx.coroutines.delay(1000)
+                onRefresh()
+            }
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -328,6 +345,50 @@ fun ReticulumInfoCard(debugInfo: DebugInfo) {
             InfoRow(label = "Multicast Lock", value = if (debugInfo.multicastLockHeld) "✓ Held" else "✗ Not held")
             InfoRow(label = "WiFi Lock", value = if (debugInfo.wifiLockHeld) "✓ Held" else "✗ Not held")
             InfoRow(label = "Wake Lock", value = if (debugInfo.wakeLockHeld) "✓ Held" else "✗ Not held")
+
+            Divider(modifier = Modifier.padding(vertical = 4.dp))
+
+            Text(
+                text = "Process Persistence",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            InfoRow(
+                label = "Heartbeat",
+                value = if (debugInfo.heartbeatAgeSeconds >= 0) {
+                    "${debugInfo.heartbeatAgeSeconds}s ago"
+                } else {
+                    "Not started"
+                },
+            )
+            InfoRow(
+                label = "Health Check",
+                value = if (debugInfo.healthCheckRunning) "✓ Running" else "✗ Stopped",
+            )
+            InfoRow(
+                label = "Network Monitor",
+                value = if (debugInfo.networkMonitorRunning) "✓ Running" else "✗ Stopped",
+            )
+            InfoRow(
+                label = "Lock Maintenance",
+                value = if (debugInfo.maintenanceRunning) "✓ Running" else "✗ Stopped",
+            )
+            InfoRow(
+                label = "Last Lock Refresh",
+                value = if (debugInfo.lastLockRefreshAgeSeconds >= 0) {
+                    "${debugInfo.lastLockRefreshAgeSeconds}s ago"
+                } else {
+                    "Not yet"
+                },
+            )
+            if (debugInfo.failedInterfaceCount > 0) {
+                InfoRow(
+                    label = "Failed Interfaces",
+                    value = "${debugInfo.failedInterfaceCount} (auto-retrying)",
+                )
+            }
         }
     }
 }

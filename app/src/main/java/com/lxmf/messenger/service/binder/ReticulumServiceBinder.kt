@@ -445,6 +445,20 @@ class ReticulumServiceBinder(
             debugInfo.put("wifi_lock_held", lockStatus.wifiHeld)
             debugInfo.put("wake_lock_held", lockStatus.wakeHeld)
 
+            // Add process persistence status
+            val heartbeat = wrapperManager.getHeartbeat()
+            val heartbeatAgeSeconds = if (heartbeat > 0) {
+                ((System.currentTimeMillis() / 1000.0) - heartbeat).toLong()
+            } else {
+                -1L
+            }
+            debugInfo.put("heartbeat_age_seconds", heartbeatAgeSeconds)
+            debugInfo.put("health_check_running", healthCheckManager.isRunning())
+            debugInfo.put("network_monitor_running", networkChangeManager.isMonitoring())
+            debugInfo.put("maintenance_running", maintenanceManager.isRunning())
+            debugInfo.put("last_lock_refresh_age_seconds", maintenanceManager.getLastRefreshAgeSeconds())
+            debugInfo.put("failed_interface_count", result.getDictValue("failed_interface_count")?.toInt() ?: 0)
+
             // Add interfaces
             val interfacesList = result.getDictValue("interfaces")?.asList()
             if (interfacesList != null) {

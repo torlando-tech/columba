@@ -27,6 +27,7 @@ class MaintenanceManager(
     }
 
     private var maintenanceJob: Job? = null
+    private var lastRefreshTimeMs: Long = 0L
 
     /**
      * Start the periodic maintenance job.
@@ -65,9 +66,22 @@ class MaintenanceManager(
     internal fun refreshLocks() {
         try {
             lockManager.acquireAll()
+            lastRefreshTimeMs = System.currentTimeMillis()
             Log.d(TAG, "Locks refreshed")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to refresh locks", e)
+        }
+    }
+
+    /**
+     * Get the time in seconds since the last lock refresh.
+     * Returns -1 if no refresh has occurred yet.
+     */
+    fun getLastRefreshAgeSeconds(): Long {
+        return if (lastRefreshTimeMs > 0) {
+            (System.currentTimeMillis() - lastRefreshTimeMs) / 1000
+        } else {
+            -1L
         }
     }
 }

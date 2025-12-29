@@ -65,7 +65,7 @@ abstract class InterfaceDatabase : RoomDatabase() {
                         INSERT INTO interfaces (name, type, enabled, configJson, displayOrder)
                         VALUES (?, ?, ?, ?, ?)
                     """,
-                            arrayOf(
+                            arrayOf<Any>(
                                 "RNS Testnet BetweenTheBorders",
                                 "TCPClient",
                                 1, // true
@@ -191,7 +191,7 @@ abstract class InterfaceDatabase : RoomDatabase() {
                 INSERT INTO interfaces (name, type, enabled, configJson, displayOrder)
                 VALUES (?, ?, ?, ?, ?)
             """,
-                arrayOf(
+                arrayOf<Any>(
                     "Auto Discovery",
                     "AutoInterface",
                     1, // true
@@ -206,7 +206,7 @@ abstract class InterfaceDatabase : RoomDatabase() {
                 INSERT INTO interfaces (name, type, enabled, configJson, displayOrder)
                 VALUES (?, ?, ?, ?, ?)
             """,
-                arrayOf(
+                arrayOf<Any>(
                     "Bluetooth LE",
                     "AndroidBLE",
                     1, // true
@@ -221,7 +221,7 @@ abstract class InterfaceDatabase : RoomDatabase() {
                 INSERT INTO interfaces (name, type, enabled, configJson, displayOrder)
                 VALUES (?, ?, ?, ?, ?)
             """,
-                arrayOf(
+                arrayOf<Any>(
                     "Sideband Server",
                     "TCPClient",
                     1, // true
@@ -244,7 +244,7 @@ abstract class InterfaceDatabase : RoomDatabase() {
                 INSERT INTO interfaces (name, type, enabled, configJson, displayOrder)
                 VALUES (?, ?, ?, ?, ?)
             """,
-                arrayOf(
+                arrayOf<Any>(
                     config.name,
                     config.typeName,
                     if (config.enabled) 1 else 0,

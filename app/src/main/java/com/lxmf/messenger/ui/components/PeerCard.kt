@@ -311,8 +311,8 @@ fun OtherBadge() {
 }
 
 /**
- * Format a destination hash string for display (first 16 characters).
+ * Format a destination hash string for display.
  */
 fun formatHashString(hashString: String): String {
-    return hashString.take(16)
+    return hashString
 }

@@ -969,7 +969,7 @@ fun ContactListItem(
 
                 // Destination hash
                 Text(
-                    text = "${contact.destinationHash.take(12)}...",
+                    text = contact.destinationHash,
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = textAlpha),
@@ -1443,7 +1443,7 @@ fun PendingContactBottomSheet(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = "${contact.destinationHash.take(12)}...",
+                        text = contact.destinationHash,
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1560,7 +1560,7 @@ fun EditNicknameDialog(
 
                 // Show destination hash for context
                 Text(
-                    text = "Contact: ${destinationHash.take(12)}...",
+                    text = "Contact: $destinationHash",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),

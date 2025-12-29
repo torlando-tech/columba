@@ -66,8 +66,8 @@ class PeerCardTest {
             )
         }
 
-        // Then - destination hash is abbreviated to first 16 chars
-        composeTestRule.onNodeWithText(announce.destinationHash.take(16)).assertIsDisplayed()
+        // Then - full destination hash is displayed
+        composeTestRule.onNodeWithText(announce.destinationHash).assertIsDisplayed()
     }
 
     // ========== Star Button Tests ==========

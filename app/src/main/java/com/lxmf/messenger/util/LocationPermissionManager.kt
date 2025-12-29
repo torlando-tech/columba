@@ -130,6 +130,11 @@ object LocationPermissionManager {
                     "Location data, like all data on Columba, is encrypted end to end, " +
                     "never stored on a central server, and is only readable by the contacts you send it to.",
             )
+            appendLine()
+            appendLine(
+                "Columba will not and can not share your location with anyone until you actively " +
+                    "send it to someone. Your location is always encrypted safely over Reticulum.",
+            )
         }
     }
 

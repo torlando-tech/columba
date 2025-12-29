@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.ShareLocation
@@ -36,6 +37,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
@@ -510,14 +512,19 @@ fun MapScreen(
             // My Location button
             SmallFloatingActionButton(
                 onClick = {
-                    state.userLocation?.let { location ->
-                        mapLibreMap?.let { map ->
-                            val cameraPosition =
-                                CameraPosition.Builder()
-                                    .target(LatLng(location.latitude, location.longitude))
-                                    .zoom(15.0)
-                                    .build()
-                            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+                    if (!state.hasLocationPermission) {
+                        // Show permission sheet if permission not granted
+                        showPermissionSheet = true
+                    } else {
+                        state.userLocation?.let { location ->
+                            mapLibreMap?.let { map ->
+                                val cameraPosition =
+                                    CameraPosition.Builder()
+                                        .target(LatLng(location.latitude, location.longitude))
+                                        .zoom(15.0)
+                                        .build()
+                                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+                            }
                         }
                     }
                 },
@@ -559,10 +566,11 @@ fun MapScreen(
         // Contact markers are shown directly on the map as circles
         // Tap a marker to open the contact detail bottom sheet
 
-        // Show hint card if no location permission
-        if (!state.hasLocationPermission) {
+        // Show hint card if no location permission and not dismissed
+        if (!state.hasLocationPermission && !state.isPermissionCardDismissed) {
             EmptyMapStateCard(
                 contactCount = state.contactMarkers.size,
+                onDismiss = { viewModel.dismissPermissionCard() },
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -630,10 +638,12 @@ fun MapScreen(
 
 /**
  * Card shown when location permission is not granted.
+ * Can be dismissed by the user via the close button.
  */
 @Composable
-private fun EmptyMapStateCard(
+internal fun EmptyMapStateCard(
     @Suppress("UNUSED_PARAMETER") contactCount: Int,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -643,29 +653,44 @@ private fun EmptyMapStateCard(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
             ),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(
-                imageVector = Icons.Default.LocationOn,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(48.dp),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Location permission required",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Enable location access to see your position on the map.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
+        Box {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .padding(end = 32.dp), // Leave space for dismiss button
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Location permission required",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Enable location access to see your position on the map.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Dismiss",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

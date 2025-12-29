@@ -175,6 +175,55 @@ class MapViewModelTest {
         assertNull(viewModel.state.value.errorMessage)
     }
 
+    // ===== dismissPermissionCard Tests =====
+
+    @Test
+    fun `initial state has permission card not dismissed`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.state.test {
+            val state = awaitItem()
+            assertFalse(state.isPermissionCardDismissed)
+        }
+    }
+
+    @Test
+    fun `dismissPermissionCard updates state to dismissed`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.state.test {
+            // Consume initial state
+            awaitItem()
+
+            viewModel.dismissPermissionCard()
+
+            val updatedState = awaitItem()
+            assertTrue(updatedState.isPermissionCardDismissed)
+        }
+    }
+
+    @Test
+    fun `dismissed state persists after permission granted`() = runTest {
+        viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+        viewModel.state.test {
+            awaitItem() // initial state
+
+            // Dismiss the card
+            viewModel.dismissPermissionCard()
+            val dismissedState = awaitItem()
+            assertTrue(dismissedState.isPermissionCardDismissed)
+
+            // Grant permission
+            viewModel.onPermissionResult(true)
+            val afterPermission = awaitItem()
+
+            // Dismissed state should persist even when permission is granted
+            assertTrue(afterPermission.isPermissionCardDismissed)
+            assertTrue(afterPermission.hasLocationPermission)
+        }
+    }
+
     @Test
     fun `contact markers come from received locations`() = runTest {
         val contacts = listOf(

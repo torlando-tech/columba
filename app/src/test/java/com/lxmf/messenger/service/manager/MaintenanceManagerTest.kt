@@ -19,8 +19,8 @@ import org.junit.Test
 /**
  * Unit tests for MaintenanceManager.
  *
- * Tests the periodic wake lock refresh mechanism that prevents the
- * 10-hour wake lock timeout from expiring during long-running sessions.
+ * Tests the periodic wake lock refresh mechanism that ensures locks are
+ * maintained aggressively (every 5 minutes) following Sideband's pattern.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MaintenanceManagerTest {
@@ -85,7 +85,7 @@ class MaintenanceManagerTest {
     }
 
     @Test
-    fun `maintenance job refreshes locks after 9 hours`() =
+    fun `maintenance job refreshes locks after interval`() =
         runTest {
             maintenanceManager.start()
             testScope.runCurrent()
@@ -93,7 +93,7 @@ class MaintenanceManagerTest {
             // Initially no refreshes (only initial acquisition before start)
             verify(exactly = 0) { lockManager.acquireAll() }
 
-            // Advance time by 9 hours
+            // Advance time by refresh interval (5 minutes)
             testScope.advanceTimeBy(MaintenanceManager.REFRESH_INTERVAL_MS)
             testScope.runCurrent()
 
@@ -107,7 +107,7 @@ class MaintenanceManagerTest {
             maintenanceManager.start()
             testScope.runCurrent()
 
-            // Advance time by 27 hours (3 refresh intervals)
+            // Advance time by 3 refresh intervals (15 minutes)
             testScope.advanceTimeBy(3 * MaintenanceManager.REFRESH_INTERVAL_MS)
             testScope.runCurrent()
 
@@ -121,8 +121,8 @@ class MaintenanceManagerTest {
             maintenanceManager.start()
             testScope.runCurrent()
 
-            // Advance time by 8 hours (less than 9 hour interval)
-            testScope.advanceTimeBy(8 * 60 * 60 * 1000L)
+            // Advance time by 4 minutes (less than 5 minute interval)
+            testScope.advanceTimeBy(4 * 60 * 1000L)
             testScope.runCurrent()
 
             // Should not have refreshed yet
@@ -135,7 +135,7 @@ class MaintenanceManagerTest {
             maintenanceManager.start()
             testScope.runCurrent()
 
-            // Advance 9 hours - first refresh
+            // Advance to first refresh
             testScope.advanceTimeBy(MaintenanceManager.REFRESH_INTERVAL_MS)
             testScope.runCurrent()
             verify(exactly = 1) { lockManager.acquireAll() }
@@ -143,7 +143,7 @@ class MaintenanceManagerTest {
             // Stop the job
             maintenanceManager.stop()
 
-            // Advance another 9 hours
+            // Advance another interval
             testScope.advanceTimeBy(MaintenanceManager.REFRESH_INTERVAL_MS)
             testScope.runCurrent()
 

@@ -51,7 +51,26 @@ class ReticulumService : Service() {
         Log.d(TAG, "Service created")
 
         // Initialize all managers via dependency injection
-        managers = ServiceModule.createManagers(this, serviceScope)
+        // Provide callbacks for health monitoring and network changes
+        managers = ServiceModule.createManagers(
+            context = this,
+            scope = serviceScope,
+            onStaleHeartbeat = {
+                Log.e(TAG, "Python heartbeat stale - triggering service restart")
+                triggerServiceRestart()
+            },
+            onNetworkChanged = {
+                // Trigger LXMF announce when network changes so peers can discover us
+                Log.d(TAG, "Network changed - triggering LXMF announce")
+                if (::binder.isInitialized) {
+                    try {
+                        binder.announceLxmfDestination()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to announce on network change", e)
+                    }
+                }
+            },
+        )
 
         // Create notification channel
         managers.notificationManager.createNotificationChannel()
@@ -144,11 +163,52 @@ class ReticulumService : Service() {
 
         // Clean up all resources (if initialized)
         if (::managers.isInitialized) {
+            managers.networkChangeManager.stop()
+            managers.healthCheckManager.stop()
             managers.pollingManager.stopAll()
             managers.lockManager.releaseAll()
             managers.broadcaster.kill()
         }
         serviceScope.cancel()
+
+        // Schedule explicit service restart (Sideband-inspired auto-restart)
+        // This ensures service comes back up even if Android delays START_STICKY restart
+        scheduleServiceRestart()
+    }
+
+    /**
+     * Trigger service restart via shutdown and restart.
+     * Called when Python heartbeat becomes stale (process may be hung).
+     */
+    private fun triggerServiceRestart() {
+        Log.w(TAG, "Triggering service restart due to stale heartbeat")
+
+        // Clean up current state
+        if (::binder.isInitialized) {
+            binder.shutdown()
+        }
+
+        // Force process restart to get a clean Python environment
+        scheduleServiceRestart()
+        System.exit(1) // Non-zero exit to indicate abnormal termination
+    }
+
+    /**
+     * Schedule explicit service restart.
+     * Inspired by Sideband's auto-restart pattern in PythonService.java.
+     */
+    private fun scheduleServiceRestart() {
+        try {
+            val restartIntent = Intent(applicationContext, ReticulumService::class.java).apply {
+                action = ACTION_START
+            }
+            // Start foreground service - Android will handle queueing if process is dying
+            startForegroundService(restartIntent)
+            Log.d(TAG, "Service restart scheduled")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule service restart", e)
+            // START_STICKY should still trigger restart eventually
+        }
     }
 
     /**

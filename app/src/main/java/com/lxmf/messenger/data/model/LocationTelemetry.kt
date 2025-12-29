@@ -5,7 +5,10 @@ import kotlinx.serialization.Serializable
 /**
  * Location telemetry data sent/received over LXMF.
  *
- * This is serialized to JSON and sent as LXMF field 7.
+ * Location updates are sent as LXMF FIELD_TELEMETRY (0x02) using Sideband's
+ * msgpack-packed Telemeter format for interoperability.
+ *
+ * Columba-specific signals (like cease) are sent via FIELD_COLUMBA_META (0x70).
  *
  * @property type Message type identifier (always "location_share")
  * @property lat Latitude in WGS84 decimal degrees
@@ -29,6 +32,11 @@ data class LocationTelemetry(
 ) {
     companion object {
         const val TYPE_LOCATION_SHARE = "location_share"
-        const val LXMF_FIELD_ID = 7
+        /** LXMF FIELD_TELEMETRY - Standard telemetry field for Sideband interoperability */
+        const val LXMF_FIELD_ID = 0x02
+        /** Custom field for Columba-specific metadata (cease signals, etc.) */
+        const val COLUMBA_META_FIELD_ID = 0x70
+        /** Legacy field ID for backwards compatibility with old Columba clients */
+        const val LEGACY_FIELD_ID = 7
     }
 }

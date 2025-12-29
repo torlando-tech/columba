@@ -64,6 +64,10 @@ enum class PresetTheme(
         displayName = "Monochrome",
         description = "Grayscale minimalism for professionals",
     ),
+    OLED_BLACK(
+        displayName = "OLED Black",
+        description = "True black (#000000) for OLED screens - maximum battery savings",
+    ),
     EXPRESSIVE(
         displayName = "Expressive",
         description = "Purple/lavender palette with sage/mint green accents",
@@ -77,6 +81,7 @@ enum class PresetTheme(
             FOREST -> if (isDarkTheme) forestDarkScheme else forestLightScheme
             SUNSET -> if (isDarkTheme) sunsetDarkScheme else sunsetLightScheme
             MONOCHROME -> if (isDarkTheme) monochromeDarkScheme else monochromeLightScheme
+            OLED_BLACK -> if (isDarkTheme) oledBlackDarkScheme else oledBlackLightScheme
             EXPRESSIVE -> if (isDarkTheme) expressiveDarkScheme else expressiveLightScheme
             DYNAMIC -> if (isDarkTheme) vibrantDarkScheme else vibrantLightScheme // Fallback, handled in Theme.kt
         }
@@ -113,6 +118,12 @@ enum class PresetTheme(
                     Triple(MonoGray80, MonoSlate80, MonoCharcoal80)
                 } else {
                     Triple(MonoGray40, MonoSlate40, MonoCharcoal40)
+                }
+            OLED_BLACK ->
+                if (isDarkTheme) {
+                    Triple(OledPrimary80, OledSecondary80, OledTertiary80)
+                } else {
+                    Triple(OledPrimary40, OledSecondary40, OledTertiary40)
                 }
             EXPRESSIVE ->
                 if (isDarkTheme) {
@@ -293,6 +304,54 @@ private val monochromeLightScheme =
         tertiary = MonoCharcoal40,
         onTertiary = Color.White,
         surfaceVariant = MonoSurface40,
+    )
+
+// OLED Black theme - True black for OLED screens
+private val oledBlackDarkScheme =
+    darkColorScheme(
+        primary = OledPrimary80,
+        onPrimary = OledOnPrimary80,
+        primaryContainer = OledContainer80,
+        onPrimaryContainer = OledOnContainer80,
+        secondary = OledSecondary80,
+        onSecondary = OledOnSecondary80,
+        tertiary = OledTertiary80,
+        onTertiary = OledOnTertiary80,
+        background = OledSurfaceDim80, // True black (#000000)
+        onBackground = OledOnSurface80,
+        surface = OledSurfaceDim80, // True black (#000000)
+        onSurface = OledOnSurface80,
+        surfaceVariant = OledSurface80,
+        onSurfaceVariant = OledOnSurface80,
+        surfaceTint = OledPrimary80,
+        surfaceDim = OledSurfaceDim80, // True black
+        surfaceBright = OledSurfaceBright80,
+        surfaceContainerLowest = OledSurfaceContainerLowest80, // True black
+        surfaceContainerLow = OledSurfaceContainerLow80,
+        surfaceContainer = OledSurfaceContainer80,
+        surfaceContainerHigh = OledSurfaceContainerHigh80,
+        surfaceContainerHighest = OledSurfaceContainerHighest80,
+    )
+
+private val oledBlackLightScheme =
+    lightColorScheme(
+        primary = OledPrimary40,
+        onPrimary = Color.White,
+        primaryContainer = OledContainer40,
+        onPrimaryContainer = OledOnContainer40,
+        secondary = OledSecondary40,
+        onSecondary = Color.White,
+        secondaryContainer = OledSecondaryContainer40,
+        onSecondaryContainer = OledOnSecondaryContainer40,
+        tertiary = OledTertiary40,
+        onTertiary = Color.White,
+        background = OledSurface40,
+        onBackground = OledOnContainer40,
+        surface = OledSurface40,
+        onSurface = OledOnContainer40,
+        surfaceVariant = OledContainer40,
+        onSurfaceVariant = OledOnContainer40,
+        outline = OledOutline40,
     )
 
 // Expressive theme

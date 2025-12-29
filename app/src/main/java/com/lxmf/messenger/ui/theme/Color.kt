@@ -201,3 +201,43 @@ val DynamicTertiary80 = Color(0xFFD4E8B4) // Light lime-green
 val DynamicPrimary40 = Color(0xFF00838F) // Teal-cyan
 val DynamicSecondary40 = Color(0xFF8E44AD) // Purple
 val DynamicTertiary40 = Color(0xFF689F38) // Green
+
+// ============================================
+// OLED Black Theme Colors (True Black)
+// ============================================
+
+// Dark theme colors - True black (#000000) for OLED pixel-off savings
+val OledPrimary80 = Color(0xFF9DCFFF) // Light blue - High contrast on black
+val OledSecondary80 = Color(0xFFBCC7DC) // Light blue-gray
+val OledTertiary80 = Color(0xFFD9B9FF) // Light lavender
+
+// Light theme colors - Regular light theme (OLED benefits only in dark mode)
+val OledPrimary40 = Color(0xFF005DB4) // Deep blue
+val OledSecondary40 = Color(0xFF535E72) // Medium blue-gray
+val OledTertiary40 = Color(0xFF6B5778) // Medium purple
+
+// OLED theme - Material 3 additional color roles
+val OledOnPrimary80 = Color(0xFF003350) // On-primary for dark theme
+val OledContainer80 = Color(0xFF004A77) // Primary container for dark theme
+val OledOnContainer80 = Color(0xFF9DCFFF) // On-primary-container for dark theme
+val OledOnSecondary80 = Color(0xFF253140) // On-secondary for dark theme
+val OledOnTertiary80 = Color(0xFF3F2844) // On-tertiary for dark theme
+val OledSurface80 = Color(0xFF101418) // Surface variant for dark theme (very dark, nearly black)
+
+// Surface containers for dark theme - All true black or near-black
+val OledSurfaceDim80 = Color(0xFF000000) // True black
+val OledSurfaceBright80 = Color(0xFF1A1C1E) // Slightly elevated from black
+val OledSurfaceContainerLowest80 = Color(0xFF000000) // True black
+val OledSurfaceContainerLow80 = Color(0xFF0A0C0E) // Nearly black
+val OledSurfaceContainer80 = Color(0xFF0E1013) // Nearly black
+val OledSurfaceContainerHigh80 = Color(0xFF12141A) // Dark gray
+val OledSurfaceContainerHighest80 = Color(0xFF1A1C21) // Darker gray
+val OledOnSurface80 = Color(0xFFE1E2E9) // Off-white text on black
+
+// Light theme colors
+val OledContainer40 = Color(0xFFD3E4FF) // Primary container for light theme
+val OledOnContainer40 = Color(0xFF001C38) // On-primary-container for light theme
+val OledSecondaryContainer40 = Color(0xFFD7E3F7) // Secondary container for light theme
+val OledOnSecondaryContainer40 = Color(0xFF0F1D2D) // On-secondary-container for light theme
+val OledSurface40 = Color(0xFFF8F9FD) // Surface for light theme
+val OledOutline40 = Color(0xFF73777F) // Outline for light theme

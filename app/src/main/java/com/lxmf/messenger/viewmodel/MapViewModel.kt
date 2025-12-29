@@ -64,6 +64,7 @@ data class ContactMarker(
 data class MapState(
     val userLocation: Location? = null,
     val hasLocationPermission: Boolean = false,
+    val isPermissionCardDismissed: Boolean = false,
     val contactMarkers: List<ContactMarker> = emptyList(),
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
@@ -239,6 +240,16 @@ class MapViewModel
         fun clearError() {
             _state.update { currentState ->
                 currentState.copy(errorMessage = null)
+            }
+        }
+
+        /**
+         * Dismiss the location permission card for this session.
+         * User can still trigger permission request via My Location button.
+         */
+        fun dismissPermissionCard() {
+            _state.update { currentState ->
+                currentState.copy(isPermissionCardDismissed = true)
             }
         }
 

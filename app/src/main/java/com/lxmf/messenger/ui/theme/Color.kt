@@ -25,6 +25,8 @@ val VibrantSurface80 = Color(0xFF4A454F) // Surface variant for dark theme
 val VibrantContainer40 = Color(0xFFEADDFF) // Primary container for light theme
 val VibrantOnContainer40 = Color(0xFF21005E) // On-primary-container for light theme
 val VibrantSurface40 = Color(0xFFE7E0EC) // Surface variant for light theme
+val VibrantOutline80 = Color(0xFFADA6B0) // Outline for dark theme - lighter for contrast
+val VibrantOutline40 = Color(0xFF5C5660) // Outline for light theme - darker for contrast
 
 // Mesh network colors
 val MeshConnected = Color(0xFF4CAF50) // Green
@@ -60,6 +62,8 @@ val OceanSurface80 = Color(0xFF40484C) // Surface variant for dark theme
 val OceanContainer40 = Color(0xFFD1E4FF) // Primary container for light theme
 val OceanOnContainer40 = Color(0xFF001D36) // On-primary-container for light theme
 val OceanSurface40 = Color(0xFFDCE3E9) // Surface variant for light theme
+val OceanOutline80 = Color(0xFFA8B0B4) // Outline for dark theme - lighter for contrast
+val OceanOutline40 = Color(0xFF4A5458) // Outline for light theme - darker for contrast
 
 // ============================================
 // Forest Theme Colors (Green/Emerald)
@@ -86,6 +90,8 @@ val ForestSurface80 = Color(0xFF414941) // Surface variant for dark theme
 val ForestContainer40 = Color(0xFFB7F0AD) // Primary container for light theme
 val ForestOnContainer40 = Color(0xFF002105) // On-primary-container for light theme
 val ForestSurface40 = Color(0xFFDEE5D9) // Surface variant for light theme
+val ForestOutline80 = Color(0xFFA8B0A6) // Outline for dark theme - lighter for contrast
+val ForestOutline40 = Color(0xFF4A524A) // Outline for light theme - darker for contrast
 
 // ============================================
 // Sunset Theme Colors (Orange/Red)
@@ -112,6 +118,8 @@ val SunsetSurface80 = Color(0xFF52443C) // Surface variant for dark theme
 val SunsetContainer40 = Color(0xFFFFDBC9) // Primary container for light theme
 val SunsetOnContainer40 = Color(0xFF2C1600) // On-primary-container for light theme
 val SunsetSurface40 = Color(0xFFF3DED4) // Surface variant for light theme
+val SunsetOutline80 = Color(0xFFBAACA3) // Outline for dark theme - lighter for contrast
+val SunsetOutline40 = Color(0xFF5C504A) // Outline for light theme - darker for contrast
 
 // ============================================
 // Monochrome Theme Colors (Grayscale)
@@ -138,6 +146,8 @@ val MonoSurface80 = Color(0xFF47464F) // Surface variant for dark theme
 val MonoContainer40 = Color(0xFFE1E2EC) // Primary container for light theme
 val MonoOnContainer40 = Color(0xFF1A1C22) // On-primary-container for light theme
 val MonoSurface40 = Color(0xFFE3E1E9) // Surface variant for light theme
+val MonoOutline80 = Color(0xFFAFAEB2) // Outline for dark theme - lighter for contrast
+val MonoOutline40 = Color(0xFF505054) // Outline for light theme - darker for contrast
 
 // ============================================
 // Expressive Theme Colors (Purple/Lavender with Sage/Mint)
@@ -162,7 +172,7 @@ val ExpressiveOnTertiary80 = Color(0xFF1E3A30) // Dark forest green - On-tertiar
 val ExpressiveTertiaryContainer80 = Color(0xFF3E5F53) // Medium muted sage - Tertiary container for dark theme
 val ExpressiveOnTertiaryContainer80 = Color(0xFFD0E6DC) // Very light mint - On-tertiary-container for dark theme
 val ExpressiveSurface80 = Color(0xFF4C444D) // Surface variant for dark theme
-val ExpressiveOutline80 = Color(0xFF988E97) // Medium gray-purple outline
+val ExpressiveOutline80 = Color(0xFFB0A6AF) // Outline for dark theme - lighter for contrast
 val ExpressiveOnSurface80 = Color(0xFFEAE0E7) // Off-white with purple tint
 val ExpressiveSecondaryContainer80 = Color(0xFF4A3C4D) // Dark mauve container for dark theme
 val ExpressiveOnSecondaryContainer80 = Color(0xFFE7D7E9) // Light mauve text for dark theme
@@ -186,7 +196,7 @@ val ExpressiveOnContainer40 = Color(0xFF452152) // Deep purple - On-primary-cont
 val ExpressiveSecondaryContainer40 = Color(0xFFF2DCF3) // Very light lavender - Secondary container
 val ExpressiveOnSecondaryContainer40 = Color(0xFF392C3D) // Dark purple-gray
 val ExpressiveSurface40 = Color(0xFFF9F7FA) // Very light surface for light theme
-val ExpressiveOutline40 = Color(0xFF7A7179) // Darker outline for light theme
+val ExpressiveOutline40 = Color(0xFF5A5259) // Outline for light theme - darker for contrast
 
 // ============================================
 // Dynamic Theme Preview Colors (Material You)

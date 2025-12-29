@@ -172,6 +172,8 @@ private val vibrantDarkScheme =
         tertiary = Pink80,
         onTertiary = VibrantOnTertiary80,
         surfaceVariant = VibrantSurface80,
+        outline = VibrantOutline80,
+        outlineVariant = VibrantOutline80,
     )
 
 private val vibrantLightScheme =
@@ -185,6 +187,8 @@ private val vibrantLightScheme =
         tertiary = Pink40,
         onTertiary = Color.White,
         surfaceVariant = VibrantSurface40,
+        outline = VibrantOutline40,
+        outlineVariant = VibrantOutline40,
     )
 
 // Ocean theme
@@ -199,6 +203,8 @@ private val oceanDarkScheme =
         tertiary = OceanCyan80,
         onTertiary = OceanOnTertiary80,
         surfaceVariant = OceanSurface80,
+        outline = OceanOutline80,
+        outlineVariant = OceanOutline80,
     )
 
 private val oceanLightScheme =
@@ -212,6 +218,8 @@ private val oceanLightScheme =
         tertiary = OceanCyan40,
         onTertiary = Color.White,
         surfaceVariant = OceanSurface40,
+        outline = OceanOutline40,
+        outlineVariant = OceanOutline40,
     )
 
 // Forest theme
@@ -226,6 +234,8 @@ private val forestDarkScheme =
         tertiary = ForestSage80,
         onTertiary = ForestOnTertiary80,
         surfaceVariant = ForestSurface80,
+        outline = ForestOutline80,
+        outlineVariant = ForestOutline80,
     )
 
 private val forestLightScheme =
@@ -239,6 +249,8 @@ private val forestLightScheme =
         tertiary = ForestSage40,
         onTertiary = Color.White,
         surfaceVariant = ForestSurface40,
+        outline = ForestOutline40,
+        outlineVariant = ForestOutline40,
     )
 
 // Sunset theme
@@ -253,6 +265,8 @@ private val sunsetDarkScheme =
         tertiary = SunsetCoral80,
         onTertiary = SunsetOnTertiary80,
         surfaceVariant = SunsetSurface80,
+        outline = SunsetOutline80,
+        outlineVariant = SunsetOutline80,
     )
 
 private val sunsetLightScheme =
@@ -266,6 +280,8 @@ private val sunsetLightScheme =
         tertiary = SunsetCoral40,
         onTertiary = Color.White,
         surfaceVariant = SunsetSurface40,
+        outline = SunsetOutline40,
+        outlineVariant = SunsetOutline40,
     )
 
 // Monochrome theme
@@ -280,6 +296,8 @@ private val monochromeDarkScheme =
         tertiary = MonoCharcoal80,
         onTertiary = MonoOnTertiary80,
         surfaceVariant = MonoSurface80,
+        outline = MonoOutline80,
+        outlineVariant = MonoOutline80,
     )
 
 private val monochromeLightScheme =
@@ -293,6 +311,8 @@ private val monochromeLightScheme =
         tertiary = MonoCharcoal40,
         onTertiary = Color.White,
         surfaceVariant = MonoSurface40,
+        outline = MonoOutline40,
+        outlineVariant = MonoOutline40,
     )
 
 // Expressive theme
@@ -325,7 +345,7 @@ private val expressiveDarkScheme =
         surfaceContainerHigh = ExpressiveSurfaceContainerHigh80,
         surfaceContainerHighest = ExpressiveSurfaceContainerHighest80,
         outline = ExpressiveOutline80,
-        outlineVariant = ExpressiveSurface80,
+        outlineVariant = ExpressiveOutline80,
         error = ExpressiveError80,
         onError = Color.Black,
     )
@@ -352,7 +372,7 @@ private val expressiveLightScheme =
         onSurfaceVariant = ExpressiveOnContainer40,
         surfaceTint = ExpressivePurple40,
         outline = ExpressiveOutline40,
-        outlineVariant = ExpressiveSurface40,
+        outlineVariant = ExpressiveOutline40,
         error = Color(0xFFBA1A1A),
         onError = Color.White,
     )

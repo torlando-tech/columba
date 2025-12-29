@@ -25,7 +25,9 @@ fun ColumbaTheme(
             // Dynamic (Material You) theme - extracts from wallpaper on Android 12+
             selectedTheme == PresetTheme.DYNAMIC && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
                 val context = LocalContext.current
-                if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                val dynamicScheme = if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                // Override outlineVariant to match outline for visible OutlinedButton borders
+                dynamicScheme.copy(outlineVariant = dynamicScheme.outline)
             }
             // All other themes use static color schemes from AppTheme
             else -> selectedTheme.getColorScheme(darkTheme)

@@ -3,7 +3,7 @@ kotlin = "2.0.21"
 compose = "1.7.5"
 composeBom = "2025.12.01"
 hilt = "2.52"
-room = "2.6.1"
+room = "2.8.4"
 coroutines = "1.9.0"
 lifecycle = "2.8.7"
 navigation = "2.8.4"
@@ -36,7 +36,6 @@ hilt-testing = { module = "com.google.dagger:hilt-android-testing", version.ref 
 
 # Room
 room = { module = "androidx.room:room-runtime", version.ref = "room" }
-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 
 # Coroutines

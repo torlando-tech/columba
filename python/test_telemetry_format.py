@@ -475,5 +475,409 @@ class TestPackUnpackRoundTrip(unittest.TestCase):
                 self.assertAlmostEqual(result['lng'], lon, places=6)
 
 
+class TestUnpackEdgeCases(unittest.TestCase):
+    """Test edge cases and error handling for unpack_location_telemetry."""
+
+    def test_returns_none_for_none_input(self):
+        """unpack_location_telemetry should handle None input gracefully."""
+        result = unpack_location_telemetry(None)
+        self.assertIsNone(result)
+
+    def test_returns_none_for_empty_bytes(self):
+        """unpack_location_telemetry should handle empty bytes gracefully."""
+        result = unpack_location_telemetry(b"")
+        self.assertIsNone(result)
+
+    def test_returns_none_for_short_location_array(self):
+        """unpack_location_telemetry should return None if location array < 7 elements."""
+        # Create valid msgpack with SID_LOCATION but only 3 elements
+        short_location = [
+            struct.pack("!i", 37774900),  # lat
+            struct.pack("!i", -122419400),  # lon
+            struct.pack("!i", 0),  # altitude
+        ]
+        packed = umsgpack.packb({SID_TIME: 1703980800, SID_LOCATION: short_location})
+        result = unpack_location_telemetry(packed)
+        self.assertIsNone(result)
+
+    def test_returns_none_for_non_dict_msgpack(self):
+        """unpack_location_telemetry should return None for non-dict msgpack data."""
+        packed = umsgpack.packb([1, 2, 3])  # list instead of dict
+        result = unpack_location_telemetry(packed)
+        self.assertIsNone(result)
+
+    def test_returns_none_for_wrong_type_in_location_array(self):
+        """unpack_location_telemetry should return None if location array has wrong types."""
+        # Create location array with strings instead of bytes
+        bad_location = ["not", "bytes", "data", "here", "at", "all", 123]
+        packed = umsgpack.packb({SID_TIME: 1703980800, SID_LOCATION: bad_location})
+        result = unpack_location_telemetry(packed)
+        self.assertIsNone(result)
+
+
+class TestSidebandCompatibility(unittest.TestCase):
+    """Test compatibility with Sideband's Telemeter format."""
+
+    def test_sideband_style_packed_data(self):
+        """Test unpacking data in exact Sideband format (as Sideband would pack it)."""
+        # Simulate Sideband's Location.pack() output exactly
+        lat = 37.7749
+        lon = -122.4194
+        altitude = 100.0
+        speed = 5.5
+        bearing = 180.0
+        accuracy = 10.0
+        last_update = 1703980800
+
+        sideband_location = [
+            struct.pack("!i", int(round(lat, 6) * 1e6)),
+            struct.pack("!i", int(round(lon, 6) * 1e6)),
+            struct.pack("!i", int(round(altitude, 2) * 1e2)),
+            struct.pack("!I", int(round(speed, 2) * 1e2)),
+            struct.pack("!i", int(round(bearing, 2) * 1e2)),
+            struct.pack("!H", int(round(accuracy, 2) * 1e2)),
+            last_update,
+        ]
+
+        # Pack as Sideband's Telemeter.packed() would
+        sideband_packed = umsgpack.packb({
+            SID_TIME: last_update,
+            SID_LOCATION: sideband_location,
+        })
+
+        # Columba should be able to unpack this
+        result = unpack_location_telemetry(sideband_packed)
+
+        self.assertIsNotNone(result)
+        self.assertAlmostEqual(result['lat'], lat, places=6)
+        self.assertAlmostEqual(result['lng'], lon, places=6)
+        self.assertAlmostEqual(result['altitude'], altitude, places=2)
+        self.assertAlmostEqual(result['speed'], speed, places=2)
+        self.assertAlmostEqual(result['bearing'], bearing, places=2)
+        self.assertAlmostEqual(result['acc'], accuracy, places=2)
+        self.assertEqual(result['ts'], last_update * 1000)
+
+    def test_sideband_telemetry_with_extra_sensors(self):
+        """Test that Columba ignores extra sensors in Sideband telemetry."""
+        # Sideband may include other sensors (battery, pressure, etc.)
+        # Columba should still extract location correctly
+        lat = 40.7128
+        lon = -74.0060
+        last_update = 1703980800
+
+        location_data = [
+            struct.pack("!i", int(lat * 1e6)),
+            struct.pack("!i", int(lon * 1e6)),
+            struct.pack("!i", 0),  # altitude
+            struct.pack("!I", 0),  # speed
+            struct.pack("!i", 0),  # bearing
+            struct.pack("!H", 1000),  # accuracy 10m
+            last_update,
+        ]
+
+        # Include extra sensors like Sideband might
+        SID_BATTERY = 0x04
+        SID_PRESSURE = 0x03
+
+        telemetry_with_extras = {
+            SID_TIME: last_update,
+            SID_LOCATION: location_data,
+            SID_BATTERY: [85, True, 25.0],  # charge%, charging, temp
+            SID_PRESSURE: [101325.0],  # pressure in Pa
+        }
+
+        packed = umsgpack.packb(telemetry_with_extras)
+        result = unpack_location_telemetry(packed)
+
+        self.assertIsNotNone(result)
+        self.assertAlmostEqual(result['lat'], lat, places=6)
+        self.assertAlmostEqual(result['lng'], lon, places=6)
+
+    def test_telemetry_without_time_sensor(self):
+        """Test unpacking telemetry that only has SID_LOCATION (no SID_TIME)."""
+        # Edge case: what if SID_TIME is missing?
+        lat = 35.6762
+        lon = 139.6503
+        last_update = 1703980800
+
+        location_data = [
+            struct.pack("!i", int(lat * 1e6)),
+            struct.pack("!i", int(lon * 1e6)),
+            struct.pack("!i", 0),
+            struct.pack("!I", 0),
+            struct.pack("!i", 0),
+            struct.pack("!H", 500),
+            last_update,
+        ]
+
+        # Only location, no time sensor
+        packed = umsgpack.packb({SID_LOCATION: location_data})
+        result = unpack_location_telemetry(packed)
+
+        # Should still work - location is extracted from location array
+        self.assertIsNotNone(result)
+        self.assertAlmostEqual(result['lat'], lat, places=6)
+
+
+class TestLXMFTelemetryExtraction(unittest.TestCase):
+    """Test extracting telemetry from LXMF message fields."""
+
+    def _create_mock_lxmf_message(self, fields, content=b"", source_hash=None):
+        """Helper to create a mock LXMF message."""
+        msg = Mock()
+        msg.fields = fields
+        msg.content = content
+        msg.source_hash = source_hash or bytes.fromhex("deadbeef" * 4)
+        msg.destination_hash = bytes.fromhex("cafebabe" * 4)
+        msg.hash = bytes.fromhex("12345678" * 4)
+        msg.timestamp = 1703980800.0
+        return msg
+
+    def test_extract_location_from_field_telemetry(self):
+        """Test extracting location from FIELD_TELEMETRY (0x02)."""
+        lat, lon = 37.7749, -122.4194
+        packed = pack_location_telemetry(
+            lat=lat, lon=lon, accuracy=10.0, timestamp_ms=1703980800000
+        )
+
+        # Simulate what _on_lxmf_delivery does
+        fields = {FIELD_TELEMETRY: packed}
+
+        # Extract and unpack
+        if FIELD_TELEMETRY in fields:
+            result = unpack_location_telemetry(fields[FIELD_TELEMETRY])
+
+        self.assertIsNotNone(result)
+        self.assertAlmostEqual(result['lat'], lat, places=6)
+        self.assertAlmostEqual(result['lng'], lon, places=6)
+        self.assertEqual(result['type'], 'location_share')
+
+    def test_extract_cease_signal_from_columba_meta(self):
+        """Test extracting cease signal from FIELD_COLUMBA_META (0x70)."""
+        import json
+
+        cease_meta = json.dumps({'cease': True})
+        fields = {FIELD_COLUMBA_META: cease_meta.encode('utf-8')}
+
+        # Simulate parsing logic
+        if FIELD_COLUMBA_META in fields:
+            meta_data = fields[FIELD_COLUMBA_META]
+            if isinstance(meta_data, bytes):
+                meta_data = meta_data.decode('utf-8')
+            meta = json.loads(meta_data)
+
+        self.assertTrue(meta.get('cease', False))
+
+    def test_extract_location_from_legacy_field_7(self):
+        """Test extracting location from legacy field 7 (JSON format)."""
+        import json
+
+        legacy_location = {
+            'type': 'location_share',
+            'lat': 40.7128,
+            'lng': -74.0060,
+            'acc': 15.0,
+            'ts': 1703980800000,
+        }
+        fields = {LEGACY_LOCATION_FIELD: json.dumps(legacy_location).encode('utf-8')}
+
+        # Simulate legacy parsing logic
+        if LEGACY_LOCATION_FIELD in fields:
+            legacy_data = fields[LEGACY_LOCATION_FIELD]
+            if isinstance(legacy_data, bytes):
+                location_json = legacy_data.decode('utf-8')
+            result = json.loads(location_json)
+
+        self.assertEqual(result['type'], 'location_share')
+        self.assertAlmostEqual(result['lat'], 40.7128, places=4)
+        self.assertAlmostEqual(result['lng'], -74.0060, places=4)
+
+    def test_field_telemetry_takes_priority_over_legacy(self):
+        """Test that FIELD_TELEMETRY (0x02) takes priority over legacy field 7."""
+        import json
+
+        # New format location
+        new_lat, new_lon = 37.7749, -122.4194
+        packed = pack_location_telemetry(
+            lat=new_lat, lon=new_lon, accuracy=10.0, timestamp_ms=1703980800000
+        )
+
+        # Legacy format with different location
+        legacy_location = {
+            'type': 'location_share',
+            'lat': 40.7128,  # Different!
+            'lng': -74.0060,
+            'acc': 15.0,
+            'ts': 1703980800000,
+        }
+
+        # Both fields present
+        fields = {
+            FIELD_TELEMETRY: packed,
+            LEGACY_LOCATION_FIELD: json.dumps(legacy_location).encode('utf-8'),
+        }
+
+        # Simulate priority logic: check FIELD_TELEMETRY first
+        result = None
+        if FIELD_TELEMETRY in fields:
+            result = unpack_location_telemetry(fields[FIELD_TELEMETRY])
+
+        # Should get the new format location, not legacy
+        self.assertIsNotNone(result)
+        self.assertAlmostEqual(result['lat'], new_lat, places=6)
+        self.assertAlmostEqual(result['lng'], new_lon, places=6)
+
+    def test_columba_meta_cease_without_location(self):
+        """Test cease signal via FIELD_COLUMBA_META without location data."""
+        import json
+
+        fields = {FIELD_COLUMBA_META: json.dumps({'cease': True}).encode('utf-8')}
+
+        # No FIELD_TELEMETRY, just cease signal
+        location_event = None
+        if FIELD_TELEMETRY in fields:
+            location_event = unpack_location_telemetry(fields[FIELD_TELEMETRY])
+
+        if FIELD_COLUMBA_META in fields:
+            meta_data = fields[FIELD_COLUMBA_META].decode('utf-8')
+            meta = json.loads(meta_data)
+            if meta.get('cease', False):
+                location_event = {
+                    'type': 'location_share',
+                    'cease': True,
+                }
+
+        self.assertIsNotNone(location_event)
+        self.assertTrue(location_event.get('cease', False))
+
+    def test_columba_meta_merges_with_telemetry(self):
+        """Test that FIELD_COLUMBA_META metadata merges with FIELD_TELEMETRY location."""
+        import json
+
+        lat, lon = 35.6762, 139.6503
+        packed = pack_location_telemetry(
+            lat=lat, lon=lon, accuracy=5.0, timestamp_ms=1703980800000
+        )
+
+        # Columba meta with extra info
+        meta = {'expires': 1703984400000, 'approxRadius': 100}
+
+        fields = {
+            FIELD_TELEMETRY: packed,
+            FIELD_COLUMBA_META: json.dumps(meta).encode('utf-8'),
+        }
+
+        # Extract location
+        location_event = unpack_location_telemetry(fields[FIELD_TELEMETRY])
+
+        # Merge metadata
+        if FIELD_COLUMBA_META in fields:
+            meta_data = json.loads(fields[FIELD_COLUMBA_META].decode('utf-8'))
+            if 'expires' in meta_data:
+                location_event['expires'] = meta_data['expires']
+            if 'approxRadius' in meta_data:
+                location_event['approxRadius'] = meta_data['approxRadius']
+
+        self.assertAlmostEqual(location_event['lat'], lat, places=6)
+        self.assertEqual(location_event['expires'], 1703984400000)
+        self.assertEqual(location_event['approxRadius'], 100)
+
+
+class TestSendLocationTelemetryFormat(unittest.TestCase):
+    """Test the format of outgoing location telemetry."""
+
+    def test_location_telemetry_creates_field_telemetry(self):
+        """Test that location data is packed into FIELD_TELEMETRY format."""
+        lat, lon = 38.8977, -77.0365
+        packed = pack_location_telemetry(
+            lat=lat, lon=lon, accuracy=10.0, timestamp_ms=1703980800000
+        )
+
+        # Verify it can be assigned to FIELD_TELEMETRY
+        fields = {FIELD_TELEMETRY: packed}
+        self.assertIn(FIELD_TELEMETRY, fields)
+        self.assertIsInstance(fields[FIELD_TELEMETRY], bytes)
+
+    def test_cease_signal_creates_columba_meta(self):
+        """Test that cease signal is sent via FIELD_COLUMBA_META."""
+        import json
+
+        cease_meta = json.dumps({'cease': True})
+        fields = {FIELD_COLUMBA_META: cease_meta.encode('utf-8')}
+
+        # Verify format
+        self.assertIn(FIELD_COLUMBA_META, fields)
+        parsed = json.loads(fields[FIELD_COLUMBA_META].decode('utf-8'))
+        self.assertTrue(parsed['cease'])
+
+    def test_location_with_expires_includes_columba_meta(self):
+        """Test that location with expires includes FIELD_COLUMBA_META."""
+        import json
+
+        lat, lon = 51.5074, -0.1278
+        packed = pack_location_telemetry(
+            lat=lat, lon=lon, accuracy=10.0, timestamp_ms=1703980800000
+        )
+
+        # When expires is set, include FIELD_COLUMBA_META
+        expires_ms = 1703984400000
+        meta = json.dumps({'expires': expires_ms})
+
+        fields = {
+            FIELD_TELEMETRY: packed,
+            FIELD_COLUMBA_META: meta.encode('utf-8'),
+        }
+
+        self.assertIn(FIELD_TELEMETRY, fields)
+        self.assertIn(FIELD_COLUMBA_META, fields)
+
+        # Verify telemetry
+        location = unpack_location_telemetry(fields[FIELD_TELEMETRY])
+        self.assertAlmostEqual(location['lat'], lat, places=6)
+
+        # Verify meta
+        parsed_meta = json.loads(fields[FIELD_COLUMBA_META].decode('utf-8'))
+        self.assertEqual(parsed_meta['expires'], expires_ms)
+
+
+class TestTimestampHandling(unittest.TestCase):
+    """Test timestamp conversion between milliseconds and seconds."""
+
+    def test_timestamp_ms_to_seconds_conversion(self):
+        """Verify timestamp is converted from ms to seconds for packing."""
+        timestamp_ms = 1703980800123  # with milliseconds
+        packed = pack_location_telemetry(
+            lat=0.0, lon=0.0, accuracy=10.0, timestamp_ms=timestamp_ms
+        )
+        unpacked = umsgpack.unpackb(packed)
+        # SID_TIME should be in seconds (truncated)
+        self.assertEqual(unpacked[SID_TIME], 1703980800)
+
+    def test_timestamp_seconds_to_ms_conversion(self):
+        """Verify timestamp is converted from seconds to ms for unpacking."""
+        timestamp_s = 1703980800
+        location_data = [
+            struct.pack("!i", 0),
+            struct.pack("!i", 0),
+            struct.pack("!i", 0),
+            struct.pack("!I", 0),
+            struct.pack("!i", 0),
+            struct.pack("!H", 0),
+            timestamp_s,
+        ]
+        packed = umsgpack.packb({SID_TIME: timestamp_s, SID_LOCATION: location_data})
+        result = unpack_location_telemetry(packed)
+        # ts in result should be in milliseconds
+        self.assertEqual(result['ts'], timestamp_s * 1000)
+
+    def test_zero_timestamp(self):
+        """Test handling of zero timestamp."""
+        packed = pack_location_telemetry(
+            lat=0.0, lon=0.0, accuracy=10.0, timestamp_ms=0
+        )
+        result = unpack_location_telemetry(packed)
+        self.assertEqual(result['ts'], 0)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -5,10 +5,12 @@ import com.lxmf.messenger.service.binder.ReticulumServiceBinder
 import com.lxmf.messenger.service.manager.AttachmentStorageManager
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
+import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
+import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PollingManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.RoutingManager
@@ -44,6 +46,8 @@ object ServiceModule {
         val state: ServiceState,
         val lockManager: LockManager,
         val maintenanceManager: MaintenanceManager,
+        val healthCheckManager: HealthCheckManager,
+        val networkChangeManager: NetworkChangeManager,
         val notificationManager: ServiceNotificationManager,
         val broadcaster: CallbackBroadcaster,
         val bleCoordinator: BleCoordinator,
@@ -59,11 +63,15 @@ object ServiceModule {
      *
      * @param context Service context
      * @param scope Coroutine scope for async operations
+     * @param onStaleHeartbeat Callback when Python heartbeat is stale (service should restart)
+     * @param onNetworkChanged Callback when network connectivity changes (for LXMF announce)
      * @return Container with all initialized managers
      */
     fun createManagers(
         context: Context,
         scope: CoroutineScope,
+        onStaleHeartbeat: () -> Unit = {},
+        onNetworkChanged: () -> Unit = {},
     ): ServiceManagers {
         // Phase 1: Foundation (no dependencies)
         val state = ServiceState()
@@ -76,21 +84,31 @@ object ServiceModule {
         // Phase 2: Python wrapper (depends on state, context, scope)
         val wrapperManager = PythonWrapperManager(state, context, scope)
 
-        // Phase 3: Business logic (depends on wrapperManager)
+        // Phase 3: Health monitoring (depends on wrapperManager, scope)
+        // Started after initialization completes (see ReticulumServiceBinder)
+        val healthCheckManager = HealthCheckManager(wrapperManager, scope, onStaleHeartbeat)
+
+        // Phase 4: Network change monitoring (depends on lockManager)
+        // Reacquires locks and triggers announce on network changes
+        val networkChangeManager = NetworkChangeManager(context, lockManager, onNetworkChanged)
+
+        // Phase 5: Business logic (depends on wrapperManager)
         val identityManager = IdentityManager(wrapperManager)
         val routingManager = RoutingManager(wrapperManager)
         val messagingManager = MessagingManager(wrapperManager)
 
-        // Phase 4: Attachment storage (depends on context)
+        // Phase 6: Attachment storage (depends on context)
         val attachmentStorage = AttachmentStorageManager(context)
 
-        // Phase 5: Polling (depends on state, wrapperManager, broadcaster, scope, attachmentStorage)
+        // Phase 7: Polling (depends on state, wrapperManager, broadcaster, scope, attachmentStorage)
         val pollingManager = PollingManager(state, wrapperManager, broadcaster, scope, attachmentStorage)
 
         return ServiceManagers(
             state = state,
             lockManager = lockManager,
             maintenanceManager = maintenanceManager,
+            healthCheckManager = healthCheckManager,
+            networkChangeManager = networkChangeManager,
             notificationManager = notificationManager,
             broadcaster = broadcaster,
             bleCoordinator = bleCoordinator,
@@ -131,6 +149,8 @@ object ServiceModule {
             broadcaster = managers.broadcaster,
             lockManager = managers.lockManager,
             maintenanceManager = managers.maintenanceManager,
+            healthCheckManager = managers.healthCheckManager,
+            networkChangeManager = managers.networkChangeManager,
             notificationManager = managers.notificationManager,
             bleCoordinator = managers.bleCoordinator,
             scope = scope,

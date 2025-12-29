@@ -3,10 +3,12 @@ package com.lxmf.messenger.service.binder
 import android.content.Context
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
+import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
+import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PollingManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.RoutingManager
@@ -49,6 +51,8 @@ class ReticulumServiceBinderTest {
     private lateinit var broadcaster: CallbackBroadcaster
     private lateinit var lockManager: LockManager
     private lateinit var maintenanceManager: MaintenanceManager
+    private lateinit var healthCheckManager: HealthCheckManager
+    private lateinit var networkChangeManager: NetworkChangeManager
     private lateinit var notificationManager: ServiceNotificationManager
     private lateinit var bleCoordinator: BleCoordinator
 
@@ -71,6 +75,8 @@ class ReticulumServiceBinderTest {
         broadcaster = mockk(relaxed = true)
         lockManager = mockk(relaxed = true)
         maintenanceManager = mockk(relaxed = true)
+        healthCheckManager = mockk(relaxed = true)
+        networkChangeManager = mockk(relaxed = true)
         notificationManager = mockk(relaxed = true)
         bleCoordinator = mockk(relaxed = true)
 
@@ -93,6 +99,8 @@ class ReticulumServiceBinderTest {
                 broadcaster = broadcaster,
                 lockManager = lockManager,
                 maintenanceManager = maintenanceManager,
+                healthCheckManager = healthCheckManager,
+                networkChangeManager = networkChangeManager,
                 notificationManager = notificationManager,
                 bleCoordinator = bleCoordinator,
                 scope = testScope,

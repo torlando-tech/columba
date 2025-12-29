@@ -1480,6 +1480,14 @@ class ServiceReticulumProtocol(
             debugInfo["wifi_lock_held"] = result.optBoolean("wifi_lock_held", false)
             debugInfo["wake_lock_held"] = result.optBoolean("wake_lock_held", false)
 
+            // Process persistence debug info
+            debugInfo["heartbeat_age_seconds"] = result.optLong("heartbeat_age_seconds", -1)
+            debugInfo["health_check_running"] = result.optBoolean("health_check_running", false)
+            debugInfo["network_monitor_running"] = result.optBoolean("network_monitor_running", false)
+            debugInfo["maintenance_running"] = result.optBoolean("maintenance_running", false)
+            debugInfo["last_lock_refresh_age_seconds"] = result.optLong("last_lock_refresh_age_seconds", -1)
+            debugInfo["failed_interface_count"] = result.optInt("failed_interface_count", 0)
+
             // Extract interfaces
             val interfacesList = mutableListOf<Map<String, Any>>()
             val interfacesArray = result.optJSONArray("interfaces")

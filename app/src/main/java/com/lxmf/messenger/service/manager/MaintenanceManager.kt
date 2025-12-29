@@ -20,11 +20,14 @@ class MaintenanceManager(
     companion object {
         private const val TAG = "MaintenanceManager"
 
-        // Refresh interval: 9 hours (before 10-hour wake lock timeout)
-        internal const val REFRESH_INTERVAL_MS = 9 * 60 * 60 * 1000L
+        // Refresh interval: 5 minutes (Sideband uses 2 minutes, we use 5 for efficiency)
+        // Changed from 9 hours to match Sideband's more aggressive lock renewal pattern.
+        // This ensures locks are maintained even if Android aggressively reclaims resources.
+        internal const val REFRESH_INTERVAL_MS = 5 * 60 * 1000L
     }
 
     private var maintenanceJob: Job? = null
+    private var lastRefreshTimeMs: Long = 0L
 
     /**
      * Start the periodic maintenance job.
@@ -63,9 +66,22 @@ class MaintenanceManager(
     internal fun refreshLocks() {
         try {
             lockManager.acquireAll()
+            lastRefreshTimeMs = System.currentTimeMillis()
             Log.d(TAG, "Locks refreshed")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to refresh locks", e)
+        }
+    }
+
+    /**
+     * Get the time in seconds since the last lock refresh.
+     * Returns -1 if no refresh has occurred yet.
+     */
+    fun getLastRefreshAgeSeconds(): Long {
+        return if (lastRefreshTimeMs > 0) {
+            (System.currentTimeMillis() - lastRefreshTimeMs) / 1000
+        } else {
+            -1L
         }
     }
 }

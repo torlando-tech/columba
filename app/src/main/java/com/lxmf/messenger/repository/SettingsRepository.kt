@@ -823,12 +823,12 @@ class SettingsRepository
         /**
          * Flow of the location sharing enabled setting.
          * When disabled, no location sharing is allowed and all active sessions should be stopped.
-         * Defaults to true if not set.
+         * Defaults to false if not set.
          */
         val locationSharingEnabledFlow: Flow<Boolean> =
             context.dataStore.data
                 .map { preferences ->
-                    preferences[PreferencesKeys.LOCATION_SHARING_ENABLED] ?: true
+                    preferences[PreferencesKeys.LOCATION_SHARING_ENABLED] ?: false
                 }
                 .distinctUntilChanged()
 

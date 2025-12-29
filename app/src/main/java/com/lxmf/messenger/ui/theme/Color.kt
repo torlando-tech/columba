@@ -211,3 +211,43 @@ val DynamicTertiary80 = Color(0xFFD4E8B4) // Light lime-green
 val DynamicPrimary40 = Color(0xFF00838F) // Teal-cyan
 val DynamicSecondary40 = Color(0xFF8E44AD) // Purple
 val DynamicTertiary40 = Color(0xFF689F38) // Green
+
+// ============================================
+// OLED Black Theme Colors (True Black)
+// ============================================
+
+// Dark theme colors - True black (#000000) for OLED pixel-off savings
+val OledPrimary80 = Color(0xFFE5B6F2) // Columba lavender - High contrast on black
+val OledSecondary80 = Color(0xFFD5C0D7) // Light mauve
+val OledTertiary80 = Color(0xFFB5CCBA) // Light sage/mint green
+
+// Light theme colors - Regular light theme (OLED benefits only in dark mode)
+val OledPrimary40 = Color(0xFF5D386A) // Medium purple
+val OledSecondary40 = Color(0xFF534457) // Medium purple-gray
+val OledTertiary40 = Color(0xFF5A7C6E) // Medium sage green
+
+// OLED theme - Material 3 additional color roles
+val OledOnPrimary80 = Color(0xFF452152) // Deep purple - On-primary for dark theme
+val OledContainer80 = Color(0xFF5D386A) // Medium purple - Primary container for dark theme
+val OledOnContainer80 = Color(0xFFF9D8FF) // Very light purple/pink - On-primary-container for dark theme
+val OledOnSecondary80 = Color(0xFF392C3D) // Dark purple-gray - On-secondary for dark theme
+val OledOnTertiary80 = Color(0xFF1E3A30) // Dark forest green - On-tertiary for dark theme
+val OledSurface80 = Color(0xFF101418) // Surface variant for dark theme (very dark, nearly black)
+
+// Surface containers for dark theme - All true black or near-black
+val OledSurfaceDim80 = Color(0xFF000000) // True black
+val OledSurfaceBright80 = Color(0xFF252729) // Elevated surface for dialogs/sheets
+val OledSurfaceContainerLowest80 = Color(0xFF000000) // True black
+val OledSurfaceContainerLow80 = Color(0xFF0A0C0E) // Nearly black
+val OledSurfaceContainer80 = Color(0xFF0E1013) // Nearly black
+val OledSurfaceContainerHigh80 = Color(0xFF12141A) // Dark gray
+val OledSurfaceContainerHighest80 = Color(0xFF1A1C21) // Darker gray
+val OledOnSurface80 = Color(0xFFEAE0E7) // Off-white with lavender tint on black
+
+// Light theme colors
+val OledContainer40 = Color(0xFFF9D8FF) // Very light purple/pink - Primary container for light theme
+val OledOnContainer40 = Color(0xFF452152) // Deep purple - On-primary-container for light theme
+val OledSecondaryContainer40 = Color(0xFFF2DCF3) // Very light lavender - Secondary container for light theme
+val OledOnSecondaryContainer40 = Color(0xFF392C3D) // Dark purple-gray
+val OledSurface40 = Color(0xFFF9F7FA) // Very light surface for light theme
+val OledOutline40 = Color(0xFF7A7179) // Purple-gray outline for light theme

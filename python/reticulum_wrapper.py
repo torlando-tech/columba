@@ -2129,9 +2129,6 @@ class ReticulumWrapper:
 
                         # Process reaction
                         try:
-                            import json
-                            import time
-
                             reaction_event = {
                                 'reaction_to': field_16.get('reaction_to', ''),
                                 'emoji': field_16.get('emoji', ''),
@@ -2180,9 +2177,6 @@ class ReticulumWrapper:
             # Same pattern as delivery status callbacks which work reliably
             if self.kotlin_message_received_callback:
                 try:
-                    import json
-                    import time
-
                     message_event = {
                         'message_hash': lxmf_message.hash.hex() if lxmf_message.hash else "unknown",
                         'source_hash': lxmf_message.source_hash.hex(),

@@ -89,8 +89,18 @@ class LocationTelemetryTest {
     }
 
     @Test
-    fun `LXMF_FIELD_ID constant is 7`() {
-        assertEquals(7, LocationTelemetry.LXMF_FIELD_ID)
+    fun `LXMF_FIELD_ID constant is FIELD_TELEMETRY (0x02)`() {
+        assertEquals(0x02, LocationTelemetry.LXMF_FIELD_ID)
+    }
+
+    @Test
+    fun `COLUMBA_META_FIELD_ID constant is 0x70`() {
+        assertEquals(0x70, LocationTelemetry.COLUMBA_META_FIELD_ID)
+    }
+
+    @Test
+    fun `LEGACY_FIELD_ID constant is 7 for backwards compat`() {
+        assertEquals(7, LocationTelemetry.LEGACY_FIELD_ID)
     }
 
     // ========== Optional Field Handling ==========

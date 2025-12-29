@@ -883,12 +883,12 @@ fun InterfaceTypeSelector(
                 )
                 InterfaceTypeOption(
                     title = "Bluetooth LE",
-                    description = "Connect to nearby devices via Bluetooth",
+                    description = "Direct connection to Columba users and Linux ble-reticulum devices",
                     onClick = { onTypeSelected("AndroidBLE") },
                 )
                 InterfaceTypeOption(
                     title = "RNode LoRa",
-                    description = "Long-range radio via RNode hardware",
+                    description = "Connects to separate RNode hardware via BLE or Bluetooth Classic",
                     onClick = { onTypeSelected("RNode") },
                 )
             }

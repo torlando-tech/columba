@@ -393,7 +393,7 @@ class ContactsScreenTest {
     }
 
     @Test
-    fun contactListItem_displaysTruncatedHash() {
+    fun contactListItem_displaysFullHash() {
         val contact =
             TestFactories.createEnrichedContact(
                 destinationHash = "0123456789abcdef0123456789abcdef",
@@ -407,8 +407,8 @@ class ContactsScreenTest {
             )
         }
 
-        // First 12 characters + "..."
-        composeTestRule.onNodeWithText("0123456789ab...").assertIsDisplayed()
+        // Full destination hash is displayed
+        composeTestRule.onNodeWithText("0123456789abcdef0123456789abcdef").assertIsDisplayed()
     }
 
     @Test
@@ -925,7 +925,7 @@ class ContactsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Contact: abcdef123456...", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Contact: abcdef123456789", substring = true).assertIsDisplayed()
     }
 
     @Test

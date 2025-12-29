@@ -143,8 +143,10 @@ class ColumbaApplication : Application() {
 
         // If using service-based protocol, bind to service and auto-initialize RNS
         if (reticulumProtocol is ServiceReticulumProtocol) {
+            val serviceProtocol = reticulumProtocol as ServiceReticulumProtocol
+
             // Set up the alternative relay handler for propagation failover
-            (reticulumProtocol as ServiceReticulumProtocol).alternativeRelayHandler = { excludeHashes ->
+            serviceProtocol.alternativeRelayHandler = { excludeHashes ->
                 val relay = propagationNodeManager.getAlternativeRelay(excludeHashes)
                 if (relay != null) {
                     android.util.Log.d("ColumbaApplication", "Providing alternative relay: ${relay.destinationHash.take(16)}")
@@ -153,6 +155,13 @@ class ColumbaApplication : Application() {
                     android.util.Log.d("ColumbaApplication", "No alternative relay available")
                     null
                 }
+            }
+
+            // Set up the reinitialization callback for when Android kills the service
+            // and we successfully rebind but Python/Reticulum needs to be restarted
+            serviceProtocol.onServiceNeedsInitialization = {
+                android.util.Log.i("ColumbaApplication", "Service needs reinitialization after rebind - starting initialization")
+                initializeReticulumService(serviceProtocol)
             }
 
             applicationScope.launch {
@@ -504,6 +513,103 @@ class ColumbaApplication : Application() {
             }
         } catch (e: Exception) {
             android.util.Log.w("ColumbaApplication", "Failed to register companion devices: ${e.message}")
+        }
+    }
+
+    /**
+     * Initialize the Reticulum service with configuration from the database.
+     * This is called both during normal app startup and when the service needs
+     * reinitialization after being killed by Android and successfully rebound.
+     *
+     * @param serviceProtocol The ServiceReticulumProtocol instance to initialize
+     */
+    private suspend fun initializeReticulumService(serviceProtocol: ServiceReticulumProtocol) {
+        try {
+            android.util.Log.d("ColumbaApplication", "initializeReticulumService: Loading configuration from database...")
+
+            // Load all configuration from database in parallel for faster startup
+            val startupConfig = startupConfigLoader.loadConfig()
+            val enabledInterfaces = startupConfig.interfaces
+            val activeIdentity = startupConfig.identity
+            val preferOwnInstance = startupConfig.preferOwn
+            val rpcKey = startupConfig.rpcKey
+            val transportNodeEnabled = startupConfig.transport
+            android.util.Log.d("ColumbaApplication", "initializeReticulumService: Loaded ${enabledInterfaces.size} enabled interface(s)")
+
+            // Ensure identity file exists (recover from keyData if missing)
+            var identityPath: String? = null
+            val displayName = activeIdentity?.displayName
+            if (activeIdentity != null) {
+                android.util.Log.d(
+                    "ColumbaApplication",
+                    "initializeReticulumService: Active identity: ${activeIdentity.displayName} " +
+                        "(${activeIdentity.identityHash.take(8)}...)",
+                )
+                val fileResult = identityRepository.ensureIdentityFileExists(activeIdentity)
+                if (fileResult.isSuccess) {
+                    identityPath = fileResult.getOrNull()
+                    android.util.Log.d("ColumbaApplication", "initializeReticulumService: Identity file verified/recovered: $identityPath")
+                } else {
+                    android.util.Log.e(
+                        "ColumbaApplication",
+                        "initializeReticulumService: Could not ensure identity file exists: ${fileResult.exceptionOrNull()}",
+                    )
+                }
+            } else {
+                android.util.Log.d("ColumbaApplication", "initializeReticulumService: No active identity found, Python will create default")
+            }
+
+            // Initialize Reticulum with config from database
+            android.util.Log.d("ColumbaApplication", "initializeReticulumService: Initializing Reticulum...")
+            val config =
+                ReticulumConfig(
+                    storagePath = filesDir.absolutePath + "/reticulum",
+                    enabledInterfaces = enabledInterfaces,
+                    identityFilePath = identityPath,
+                    displayName = displayName,
+                    logLevel = LogLevel.DEBUG,
+                    allowAnonymous = false,
+                    preferOwnInstance = preferOwnInstance,
+                    rpcKey = rpcKey,
+                    enableTransport = transportNodeEnabled,
+                )
+
+            serviceProtocol.initialize(config)
+                .onSuccess {
+                    android.util.Log.i("ColumbaApplication", "initializeReticulumService: Reticulum initialized successfully")
+
+                    // Restore peer identities from database to enable message sending
+                    applicationScope.launch(Dispatchers.IO) {
+                        try {
+                            val peerIdentities = conversationRepository.getAllPeerIdentities()
+                            if (peerIdentities.isNotEmpty()) {
+                                val result = serviceProtocol.restorePeerIdentities(peerIdentities)
+                                result.onSuccess { count ->
+                                    android.util.Log.d("ColumbaApplication", "initializeReticulumService: Restored $count peer identities")
+                                }.onFailure { error ->
+                                    android.util.Log.e("ColumbaApplication", "initializeReticulumService: Failed to restore peer identities", error)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("ColumbaApplication", "initializeReticulumService: Error restoring peer identities", e)
+                        }
+                    }
+
+                    // Start the message collector and other services after Reticulum is ready
+                    messageCollector.startCollecting()
+                    autoAnnounceManager.start()
+                    identityResolutionManager.start(applicationScope)
+                    propagationNodeManager.start()
+                    android.util.Log.d(
+                        "ColumbaApplication",
+                        "initializeReticulumService: MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started",
+                    )
+                }
+                .onFailure { error ->
+                    android.util.Log.e("ColumbaApplication", "initializeReticulumService: Failed to initialize Reticulum: ${error.message}", error)
+                }
+        } catch (e: Exception) {
+            android.util.Log.e("ColumbaApplication", "initializeReticulumService: Error during initialization", e)
         }
     }
 }

@@ -98,8 +98,9 @@ class ReticulumServiceBinder(
                             // Setup remaining bridges AFTER Python is initialized
                             setupBridges()
 
-                            // Acquire locks
-                            lockManager.acquireAll()
+                            // Note: Locks are already acquired in ReticulumService.onCreate()
+                            // to eliminate the vulnerable window during initialization.
+                            // The maintenance job will refresh them periodically.
 
                             // Start maintenance job to refresh locks before timeout
                             maintenanceManager.start()
@@ -139,8 +140,9 @@ class ReticulumServiceBinder(
                             onInitialized()
                         } catch (e: Exception) {
                             Log.e(TAG, "Error during post-initialization setup", e)
-                            // Clean up on failure - release any acquired resources
-                            lockManager.releaseAll()
+                            // Clean up on failure - stop polling but keep locks held
+                            // Locks are managed by ReticulumService lifecycle (acquired in onCreate,
+                            // released in onDestroy), so we don't release them here
                             pollingManager.stopAll()
 
                             val errorMsg = e.message ?: "Post-initialization setup failed"

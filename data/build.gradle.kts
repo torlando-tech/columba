@@ -39,7 +39,6 @@ dependencies {
 
     // Room
     implementation(libs.room)
-    implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
     // Room Paging (required for PagingSource)
@@ -67,7 +66,6 @@ dependencies {
     androidTestImplementation(libs.coroutines.test)
     androidTestImplementation(libs.turbine)
     androidTestImplementation(libs.room)
-    androidTestImplementation(libs.room.ktx)
 }
 
 ksp {

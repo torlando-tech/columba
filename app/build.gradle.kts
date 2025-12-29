@@ -266,7 +266,6 @@ dependencies {
 
     // Room
     implementation(libs.room)
-    implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
     // Crash Reporting - GlitchTip (Sentry-compatible)

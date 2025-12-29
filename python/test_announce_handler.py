@@ -743,6 +743,204 @@ class TestCallbackExceptionHandling(unittest.TestCase):
         self.assertEqual(announce_event['hops'], 2)
 
 
+class TestMsgpackUpgradeEdgeCases(unittest.TestCase):
+    """
+    Test umsgpack deserialization edge cases for propagation node announces.
+
+    These tests verify that the msgpack upgrade (0.9.8 -> 0.9.10) doesn't break
+    the propagation node stamp cost extraction at lines 1054-1057 of reticulum_wrapper.py:
+
+        from RNS.vendor import umsgpack
+        data = umsgpack.unpackb(app_data)
+        stamp_cost_flexibility = int(data[5][1])
+        peering_cost = int(data[5][2])
+    """
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_umsgpack_index_out_of_bounds_data5_missing(self, mock_rns, mock_lxmf):
+        """Test handler when data[5] doesn't exist (short array)"""
+        mock_rns.Transport.hops_to.return_value = 1
+        mock_lxmf.pn_stamp_cost_from_app_data.return_value = 16
+        mock_lxmf.pn_announce_data_is_valid.return_value = True
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        test_dest_hash = b'test_dest_hash_123'
+        test_identity = Mock()
+        test_identity.get_public_key = Mock(return_value=b'test_pubkey')
+        test_app_data = b'short_array_data'
+
+        # Mock umsgpack to return array with only 3 elements (no index 5)
+        with patch('RNS.vendor.umsgpack.unpackb', return_value=[1, 2, 3]):
+            handler = wrapper._announce_handlers["lxmf.propagation"]
+            # Should not raise - IndexError caught by except block
+            handler.received_announce(test_dest_hash, test_identity, test_app_data)
+
+        # Verify announce was stored with None values
+        self.assertEqual(len(wrapper.pending_announces), 1)
+        stored_announce = wrapper.pending_announces[0]
+        self.assertIsNone(stored_announce['stamp_cost_flexibility'])
+        self.assertIsNone(stored_announce['peering_cost'])
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_umsgpack_index_out_of_bounds_nested(self, mock_rns, mock_lxmf):
+        """Test handler when data[5][1] or data[5][2] doesn't exist"""
+        mock_rns.Transport.hops_to.return_value = 1
+        mock_lxmf.pn_stamp_cost_from_app_data.return_value = 16
+        mock_lxmf.pn_announce_data_is_valid.return_value = True
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        test_dest_hash = b'test_dest_hash_123'
+        test_identity = Mock()
+        test_identity.get_public_key = Mock(return_value=b'test_pubkey')
+        test_app_data = b'short_nested_data'
+
+        # Mock umsgpack to return data[5] with only 1 element
+        with patch('RNS.vendor.umsgpack.unpackb', return_value=[
+            None, None, None, None, None,
+            [16]  # Only stamp_cost, no flexibility or peering_cost
+        ]):
+            handler = wrapper._announce_handlers["lxmf.propagation"]
+            handler.received_announce(test_dest_hash, test_identity, test_app_data)
+
+        # Verify announce was stored with None values for missing indices
+        self.assertEqual(len(wrapper.pending_announces), 1)
+        stored_announce = wrapper.pending_announces[0]
+        self.assertIsNone(stored_announce['stamp_cost_flexibility'])
+        self.assertIsNone(stored_announce['peering_cost'])
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_umsgpack_type_error_on_int_conversion(self, mock_rns, mock_lxmf):
+        """Test handler when int() conversion fails (non-numeric value)"""
+        mock_rns.Transport.hops_to.return_value = 1
+        mock_lxmf.pn_stamp_cost_from_app_data.return_value = 16
+        mock_lxmf.pn_announce_data_is_valid.return_value = True
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        test_dest_hash = b'test_dest_hash_123'
+        test_identity = Mock()
+        test_identity.get_public_key = Mock(return_value=b'test_pubkey')
+        test_app_data = b'non_numeric_data'
+
+        # Mock umsgpack to return non-numeric values in the expected positions
+        with patch('RNS.vendor.umsgpack.unpackb', return_value=[
+            None, None, None, None, None,
+            [16, "not_a_number", {"dict": "value"}]  # Can't convert to int
+        ]):
+            handler = wrapper._announce_handlers["lxmf.propagation"]
+            handler.received_announce(test_dest_hash, test_identity, test_app_data)
+
+        # Verify announce was stored - exception caught
+        self.assertEqual(len(wrapper.pending_announces), 1)
+        stored_announce = wrapper.pending_announces[0]
+        # Due to exception, these will be None
+        self.assertIsNone(stored_announce['stamp_cost_flexibility'])
+        self.assertIsNone(stored_announce['peering_cost'])
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_umsgpack_large_values(self, mock_rns, mock_lxmf):
+        """Test handler with large int values at boundary"""
+        mock_rns.Transport.hops_to.return_value = 1
+        mock_lxmf.pn_stamp_cost_from_app_data.return_value = 999999
+        mock_lxmf.pn_announce_data_is_valid.return_value = True
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        test_dest_hash = b'test_dest_hash_123'
+        test_identity = Mock()
+        test_identity.get_public_key = Mock(return_value=b'test_pubkey')
+        test_app_data = b'large_values_data'
+
+        # Test with large but valid integer values
+        large_flex = 2**31 - 1  # Max 32-bit signed int
+        large_peer = 2**16      # Larger than typical values
+
+        with patch('RNS.vendor.umsgpack.unpackb', return_value=[
+            None, None, None, None, None,
+            [999999, large_flex, large_peer]
+        ]):
+            handler = wrapper._announce_handlers["lxmf.propagation"]
+            handler.received_announce(test_dest_hash, test_identity, test_app_data)
+
+        # Verify large values are handled correctly
+        self.assertEqual(len(wrapper.pending_announces), 1)
+        stored_announce = wrapper.pending_announces[0]
+        self.assertEqual(stored_announce['stamp_cost'], 999999)
+        self.assertEqual(stored_announce['stamp_cost_flexibility'], large_flex)
+        self.assertEqual(stored_announce['peering_cost'], large_peer)
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_umsgpack_empty_app_data(self, mock_rns, mock_lxmf):
+        """Test handler with empty app_data bytes"""
+        mock_rns.Transport.hops_to.return_value = 1
+        # Empty app_data should not trigger LXMF calls due to "if LXMF is not None and app_data" check
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        test_dest_hash = b'test_dest_hash_123'
+        test_identity = Mock()
+        test_identity.get_public_key = Mock(return_value=b'test_pubkey')
+        test_app_data = b''  # Empty bytes
+
+        handler = wrapper._announce_handlers["lxmf.propagation"]
+        handler.received_announce(test_dest_hash, test_identity, test_app_data)
+
+        # Verify announce was stored but costs are None (no LXMF extraction attempted)
+        self.assertEqual(len(wrapper.pending_announces), 1)
+        stored_announce = wrapper.pending_announces[0]
+        self.assertIsNone(stored_announce['stamp_cost'])
+        self.assertIsNone(stored_announce['stamp_cost_flexibility'])
+        self.assertIsNone(stored_announce['peering_cost'])
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_pn_announce_data_is_valid_returns_false(self, mock_rns, mock_lxmf):
+        """Test that umsgpack is not called when pn_announce_data_is_valid returns False"""
+        mock_rns.Transport.hops_to.return_value = 1
+        mock_lxmf.pn_stamp_cost_from_app_data.return_value = 16
+        mock_lxmf.pn_announce_data_is_valid.return_value = False  # Data not valid
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        test_dest_hash = b'test_dest_hash_123'
+        test_identity = Mock()
+        test_identity.get_public_key = Mock(return_value=b'test_pubkey')
+        test_app_data = b'invalid_pn_data'
+
+        # umsgpack should NOT be called since pn_announce_data_is_valid returns False
+        with patch('RNS.vendor.umsgpack.unpackb') as mock_unpackb:
+            handler = wrapper._announce_handlers["lxmf.propagation"]
+            handler.received_announce(test_dest_hash, test_identity, test_app_data)
+
+            # Verify umsgpack was not called
+            mock_unpackb.assert_not_called()
+
+        # Verify announce was stored with stamp_cost but no flexibility/peering
+        self.assertEqual(len(wrapper.pending_announces), 1)
+        stored_announce = wrapper.pending_announces[0]
+        self.assertEqual(stored_announce['stamp_cost'], 16)
+        self.assertIsNone(stored_announce['stamp_cost_flexibility'])
+        self.assertIsNone(stored_announce['peering_cost'])
+
+
 if __name__ == '__main__':
     # Run tests with verbose output
     unittest.main(verbosity=2)

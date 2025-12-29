@@ -421,6 +421,24 @@ class PythonWrapperManager(
         }
 
     /**
+     * Get the current heartbeat timestamp from Python.
+     *
+     * The Python wrapper updates this timestamp every second when running.
+     * Used by HealthCheckManager to detect if the Python process is hung.
+     *
+     * @return Unix timestamp of last heartbeat, or 0.0 if not available
+     */
+    fun getHeartbeat(): Double =
+        withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("get_heartbeat").toDouble()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to get heartbeat: ${e.message}")
+                0.0
+            }
+        } ?: 0.0
+
+    /**
      * Shutdown existing wrapper while holding the wrapperLock.
      * Must only be called from within wrapperLock.withLock { } block.
      */

@@ -11,10 +11,12 @@ import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
 import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
+import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
+import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PollingManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
@@ -38,6 +40,7 @@ import org.json.JSONObject
  * - Async operations use serviceScope for coroutines
  * - State is managed through ServiceState atomic operations
  */
+@Suppress("LongParameterList")
 class ReticulumServiceBinder(
     private val context: Context,
     private val state: ServiceState,
@@ -49,6 +52,8 @@ class ReticulumServiceBinder(
     private val broadcaster: CallbackBroadcaster,
     private val lockManager: LockManager,
     private val maintenanceManager: MaintenanceManager,
+    private val healthCheckManager: HealthCheckManager,
+    private val networkChangeManager: NetworkChangeManager,
     private val notificationManager: ServiceNotificationManager,
     private val bleCoordinator: BleCoordinator,
     private val scope: CoroutineScope,
@@ -98,6 +103,14 @@ class ReticulumServiceBinder(
 
                             // Start maintenance job to refresh locks before timeout
                             maintenanceManager.start()
+
+                            // Start health check monitoring (Sideband-inspired)
+                            // Monitors Python heartbeat and triggers restart if stale
+                            healthCheckManager.start()
+
+                            // Start network change monitoring (Sideband-inspired)
+                            // Reacquires locks when network changes and triggers announce
+                            networkChangeManager.start()
 
                             // Start announce polling and drain any pending messages
                             pollingManager.startAnnouncesPolling()
@@ -228,6 +241,12 @@ class ReticulumServiceBinder(
             val stackTrace = Thread.currentThread().stackTrace.take(10).joinToString("\n  ")
             Log.i(TAG, "shutdown() called from:\n  $stackTrace")
             Log.d(TAG, "Shutting down Reticulum (async)")
+
+            // Stop network change monitoring
+            networkChangeManager.stop()
+
+            // Stop health check monitoring
+            healthCheckManager.stop()
 
             // Stop maintenance job
             maintenanceManager.stop()
@@ -425,6 +444,20 @@ class ReticulumServiceBinder(
             debugInfo.put("multicast_lock_held", lockStatus.multicastHeld)
             debugInfo.put("wifi_lock_held", lockStatus.wifiHeld)
             debugInfo.put("wake_lock_held", lockStatus.wakeHeld)
+
+            // Add process persistence status
+            val heartbeat = wrapperManager.getHeartbeat()
+            val heartbeatAgeSeconds = if (heartbeat > 0) {
+                ((System.currentTimeMillis() / 1000.0) - heartbeat).toLong()
+            } else {
+                -1L
+            }
+            debugInfo.put("heartbeat_age_seconds", heartbeatAgeSeconds)
+            debugInfo.put("health_check_running", healthCheckManager.isRunning())
+            debugInfo.put("network_monitor_running", networkChangeManager.isMonitoring())
+            debugInfo.put("maintenance_running", maintenanceManager.isRunning())
+            debugInfo.put("last_lock_refresh_age_seconds", maintenanceManager.getLastRefreshAgeSeconds())
+            debugInfo.put("failed_interface_count", result.getDictValue("failed_interface_count")?.toInt() ?: 0)
 
             // Add interfaces
             val interfacesList = result.getDictValue("interfaces")?.asList()
@@ -871,7 +904,7 @@ class ReticulumServiceBinder(
         }
     }
 
-    private fun announceLxmfDestination() {
+    internal fun announceLxmfDestination() {
         try {
             val destResult =
                 wrapperManager.withWrapper { wrapper ->

@@ -33,6 +33,13 @@ data class DebugInfo(
     val wifiLockHeld: Boolean = false,
     val wakeLockHeld: Boolean = false,
     val error: String? = null,
+    // Process persistence debug info
+    val heartbeatAgeSeconds: Long = -1,
+    val healthCheckRunning: Boolean = false,
+    val networkMonitorRunning: Boolean = false,
+    val maintenanceRunning: Boolean = false,
+    val lastLockRefreshAgeSeconds: Long = -1,
+    val failedInterfaceCount: Int = 0,
 )
 
 @androidx.compose.runtime.Immutable
@@ -180,6 +187,13 @@ class DebugViewModel
                         error =
                             json.optString("error", null)
                                 ?: if (status is com.lxmf.messenger.reticulum.model.NetworkStatus.ERROR) status.message else null,
+                        // Process persistence debug info
+                        heartbeatAgeSeconds = json.optLong("heartbeat_age_seconds", -1),
+                        healthCheckRunning = json.optBoolean("health_check_running", false),
+                        networkMonitorRunning = json.optBoolean("network_monitor_running", false),
+                        maintenanceRunning = json.optBoolean("maintenance_running", false),
+                        lastLockRefreshAgeSeconds = json.optLong("last_lock_refresh_age_seconds", -1),
+                        failedInterfaceCount = json.optInt("failed_interface_count", 0),
                     )
 
                 Log.d(TAG, "Debug info updated from event")
@@ -209,6 +223,14 @@ class DebugViewModel
                     }
                 }
             }
+        }
+
+        /**
+         * Public method to trigger a refresh of debug info.
+         * Can be called from UI to update the display.
+         */
+        fun refreshDebugInfo() {
+            fetchDebugInfo()
         }
 
         private fun fetchDebugInfo() {
@@ -283,6 +305,13 @@ class DebugViewModel
                             error =
                                 pythonDebugInfo["error"] as? String
                                     ?: if (status is com.lxmf.messenger.reticulum.model.NetworkStatus.ERROR) status.message else null,
+                            // Process persistence debug info
+                            heartbeatAgeSeconds = (pythonDebugInfo["heartbeat_age_seconds"] as? Number)?.toLong() ?: -1,
+                            healthCheckRunning = pythonDebugInfo["health_check_running"] as? Boolean ?: false,
+                            networkMonitorRunning = pythonDebugInfo["network_monitor_running"] as? Boolean ?: false,
+                            maintenanceRunning = pythonDebugInfo["maintenance_running"] as? Boolean ?: false,
+                            lastLockRefreshAgeSeconds = (pythonDebugInfo["last_lock_refresh_age_seconds"] as? Number)?.toLong() ?: -1,
+                            failedInterfaceCount = (pythonDebugInfo["failed_interface_count"] as? Number)?.toInt() ?: 0,
                         )
                 } catch (e: Exception) {
                     Log.e(TAG, "Error fetching debug info", e)

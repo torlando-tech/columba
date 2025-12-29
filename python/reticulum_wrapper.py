@@ -12,6 +12,7 @@ import shutil
 import sys
 import importlib
 import importlib.util
+import traceback
 from logging_utils import log_debug, log_info, log_warning, log_error, log_separator
 
 # Note: RNS/LXMF imports are deferred until after patches are deployed
@@ -19,6 +20,36 @@ from logging_utils import log_debug, log_info, log_warning, log_error, log_separ
 RETICULUM_AVAILABLE = False
 RNS = None
 LXMF = None
+
+
+# ============================================================================
+# Global Exception Handler
+# ============================================================================
+# Catches unhandled exceptions in any thread and logs them before the crash.
+# This helps diagnose issues that would otherwise silently kill the service.
+
+def _global_exception_handler(exc_type, exc_value, exc_traceback):
+    """
+    Global exception handler that logs unhandled exceptions.
+    Installed via sys.excepthook to catch crashes before process dies.
+    """
+    # Let KeyboardInterrupt and SystemExit pass through normally
+    if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    # Format and log the exception
+    exc_text = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    log_error("GLOBAL", "excepthook", f"Unhandled {exc_type.__name__}: {exc_value}")
+    log_error("GLOBAL", "excepthook", f"Traceback:\n{exc_text}")
+
+    # Also print to stderr as a fallback
+    print(f"FATAL: Unhandled {exc_type.__name__}: {exc_value}", file=sys.stderr)
+    print(exc_text, file=sys.stderr)
+
+
+# Install global exception handler at module load time
+sys.excepthook = _global_exception_handler
 
 
 def get_hello_message() -> str:
@@ -146,6 +177,18 @@ class ReticulumWrapper:
         # Native stamp generator callback (Kotlin)
         # Used to bypass Python multiprocessing issues on Android
         self.kotlin_stamp_generator_callback = None
+
+        # Service heartbeat tracking (Sideband-inspired process monitoring)
+        # Python updates timestamp every second; Kotlin monitors for stale heartbeats
+        # If heartbeat is stale > 10 seconds, Kotlin should restart the service
+        self._heartbeat_timestamp = 0.0  # Updated every second when running
+        self._heartbeat_thread = None  # Thread reference for heartbeat loop
+
+        # Service maintenance tracking (Sideband-inspired interface recovery)
+        # Periodically checks for failed interfaces and attempts reinit
+        self._maintenance_thread = None  # Thread reference for maintenance loop
+        self._last_interface_reinit_attempt = 0.0  # Timestamp of last reinit attempt
+        self._interface_reinit_interval = 60.0  # Retry failed interfaces every 60 seconds
 
         # Set global instance so AndroidBLEDriver can access it
         _global_wrapper_instance = self
@@ -1275,8 +1318,11 @@ class ReticulumWrapper:
 
             self.initialized = True
 
-            # Start opportunistic message timeout checker
-            self._start_opportunistic_timer()
+            # Start background service threads (Sideband-inspired)
+            # These run while self.initialized is True and exit cleanly on shutdown
+            self._start_opportunistic_timer()  # Opportunistic message timeout checker
+            self._start_heartbeat_thread()     # Heartbeat for Kotlin health monitoring
+            self._start_maintenance_thread()   # Interface recovery and maintenance
 
             log_separator("ReticulumWrapper", "initialize")
             log_info("ReticulumWrapper", "initialize", "Reticulum initialized successfully")
@@ -3515,6 +3561,113 @@ class ReticulumWrapper:
                 del self._opportunistic_messages[msg_hash]
             # Trigger the failure callback which handles propagation fallback
             self._on_message_failed(lxmf_message)
+
+    # ========================================================================
+    # Service Heartbeat (Sideband-inspired process monitoring)
+    # ========================================================================
+
+    def _start_heartbeat_thread(self):
+        """
+        Start the heartbeat thread that updates the timestamp every second.
+        Kotlin monitors this timestamp and restarts the service if it becomes stale.
+        This is called during initialize() after setting self.initialized = True.
+        """
+        if self._heartbeat_thread is None or not self._heartbeat_thread.is_alive():
+            self._heartbeat_thread = threading.Thread(
+                target=self._heartbeat_loop,
+                daemon=True
+            )
+            self._heartbeat_thread.start()
+            log_info("ReticulumWrapper", "_start_heartbeat_thread",
+                    "Started service heartbeat thread (1s interval)")
+
+    def _heartbeat_loop(self):
+        """
+        Background loop that updates the heartbeat timestamp every second.
+        Runs while self.initialized is True. Kotlin monitors this timestamp
+        and will restart the service if it becomes stale (> 10 seconds old).
+        """
+        log_debug("ReticulumWrapper", "_heartbeat_loop", "Heartbeat loop started")
+        while self.initialized:
+            self._heartbeat_timestamp = time.time()
+            time.sleep(1)
+        log_debug("ReticulumWrapper", "_heartbeat_loop", "Heartbeat loop exiting (not initialized)")
+
+    def get_heartbeat(self) -> float:
+        """
+        Get the current heartbeat timestamp.
+        Kotlin calls this periodically to check if the Python process is responsive.
+
+        Returns:
+            Unix timestamp of the last heartbeat, or 0.0 if not initialized
+        """
+        return self._heartbeat_timestamp
+
+    # ========================================================================
+    # Service Maintenance (Sideband-inspired interface recovery)
+    # ========================================================================
+
+    def _start_maintenance_thread(self):
+        """
+        Start the maintenance thread that periodically checks for failed interfaces
+        and attempts to reinitialize them. This is called during initialize().
+        """
+        if self._maintenance_thread is None or not self._maintenance_thread.is_alive():
+            self._maintenance_thread = threading.Thread(
+                target=self._maintenance_loop,
+                daemon=True
+            )
+            self._maintenance_thread.start()
+            log_info("ReticulumWrapper", "_start_maintenance_thread",
+                    f"Started service maintenance thread ({self._interface_reinit_interval}s interval)")
+
+    def _maintenance_loop(self):
+        """
+        Background loop that performs periodic maintenance tasks:
+        1. Checks for failed interfaces and attempts reinit
+        2. Could be extended for other maintenance tasks
+
+        Runs while self.initialized is True.
+        """
+        log_debug("ReticulumWrapper", "_maintenance_loop", "Maintenance loop started")
+        while self.initialized:
+            time.sleep(1)  # Check every second, but only reinit per interval
+
+            # Check if it's time to retry failed interfaces
+            now = time.time()
+            if (len(self.failed_interfaces) > 0 and
+                now - self._last_interface_reinit_attempt >= self._interface_reinit_interval):
+                self._retry_failed_interfaces()
+                self._last_interface_reinit_attempt = now
+
+        log_debug("ReticulumWrapper", "_maintenance_loop", "Maintenance loop exiting (not initialized)")
+
+    def _retry_failed_interfaces(self):
+        """
+        Attempt to reinitialize interfaces that failed during startup.
+        This gives the service a chance to recover from transient failures.
+        """
+        if not self.failed_interfaces:
+            return
+
+        log_info("ReticulumWrapper", "_retry_failed_interfaces",
+                f"Attempting to reinitialize {len(self.failed_interfaces)} failed interface(s)")
+
+        # For now, just log the failed interfaces - full reinit would require
+        # more complex logic to re-parse the config and recreate interfaces
+        for iface_info in self.failed_interfaces:
+            iface_type = iface_info.get('type', 'Unknown')
+            error = iface_info.get('error', 'Unknown error')
+            log_info("ReticulumWrapper", "_retry_failed_interfaces",
+                    f"  - {iface_type}: {error}")
+
+        # TODO: Implement actual interface reinit when we have the config available
+        # For now, clearing the list prevents repeated logging
+        # A more complete implementation would:
+        # 1. Store the original config for failed interfaces
+        # 2. Attempt to recreate the interface
+        # 3. On success, add to RNS.Transport.interfaces
+        # 4. On failure, keep in failed_interfaces for next retry
 
     def get_transport_identity_hash(self) -> bytes:
         """

@@ -4,10 +4,12 @@ import android.content.Context
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
+import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
+import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PollingManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.RoutingManager
@@ -53,6 +55,8 @@ class ReticulumServiceBinderBleWiringTest {
     private lateinit var mockBroadcaster: CallbackBroadcaster
     private lateinit var mockLockManager: LockManager
     private lateinit var mockMaintenanceManager: MaintenanceManager
+    private lateinit var mockHealthCheckManager: HealthCheckManager
+    private lateinit var mockNetworkChangeManager: NetworkChangeManager
     private lateinit var mockNotificationManager: ServiceNotificationManager
     private lateinit var mockBleCoordinator: BleCoordinator
     private lateinit var mockBridge: KotlinBLEBridge
@@ -71,6 +75,8 @@ class ReticulumServiceBinderBleWiringTest {
         mockBroadcaster = mockk(relaxed = true)
         mockLockManager = mockk(relaxed = true)
         mockMaintenanceManager = mockk(relaxed = true)
+        mockHealthCheckManager = mockk(relaxed = true)
+        mockNetworkChangeManager = mockk(relaxed = true)
         mockNotificationManager = mockk(relaxed = true)
         mockBleCoordinator = mockk(relaxed = true)
         mockBridge = mockk(relaxed = true)
@@ -108,6 +114,8 @@ class ReticulumServiceBinderBleWiringTest {
                     broadcaster = mockBroadcaster,
                     lockManager = mockLockManager,
                     maintenanceManager = mockMaintenanceManager,
+                    healthCheckManager = mockHealthCheckManager,
+                    networkChangeManager = mockNetworkChangeManager,
                     notificationManager = mockNotificationManager,
                     bleCoordinator = mockBleCoordinator,
                     scope = CoroutineScope(testDispatcher),

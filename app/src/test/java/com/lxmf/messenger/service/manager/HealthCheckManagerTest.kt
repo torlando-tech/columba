@@ -217,8 +217,9 @@ class HealthCheckManagerTest {
     @Test
     fun `stale threshold is 10 seconds`() =
         runTest {
-            // Mock heartbeat that's exactly at threshold (10 seconds old)
-            val thresholdTime = (System.currentTimeMillis() / 1000.0) - 10.0
+            // Mock heartbeat that's just past the threshold (10.1 seconds old)
+            // Code uses > comparison, so exactly 10 seconds is not stale
+            val thresholdTime = (System.currentTimeMillis() / 1000.0) - 10.1
             every { wrapperManager.getHeartbeat() } returns thresholdTime
 
             healthCheckManager.start()
@@ -228,8 +229,8 @@ class HealthCheckManagerTest {
             testScope.advanceTimeBy(HealthCheckManager.CHECK_INTERVAL_MS * 2 + 1000)
             testScope.runCurrent()
 
-            // Should trigger at 10 second threshold
-            assertTrue("Callback should trigger at 10 second threshold", staleHeartbeatCallCount >= 1)
+            // Should trigger when past 10 second threshold
+            assertTrue("Callback should trigger past 10 second threshold", staleHeartbeatCallCount >= 1)
         }
 
     @Test

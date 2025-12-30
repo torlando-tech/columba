@@ -364,6 +364,32 @@ class AndroidBLEDriver(BLEDriverInterface):
             RNS.log(f"AndroidBLEDriver: Error ensuring advertising: {e}", RNS.LOG_ERROR)
             return False
 
+    def request_identity_resync(self, address: str) -> bool:
+        """Request identity resync from Kotlin for a peer.
+
+        Called by BLEInterface when it receives data from a peer but has no
+        identity mapping. This can happen if Python's disconnect callback
+        fired but Kotlin maintained the GATT connection.
+
+        Args:
+            address: BLE MAC address of the peer
+
+        Returns:
+            True if identity was found and callback will be fired, False otherwise
+        """
+        try:
+            if self.kotlin_bridge is None:
+                RNS.log("AndroidBLEDriver: Cannot resync identity - no bridge", RNS.LOG_WARNING)
+                return False
+
+            result = self.kotlin_bridge.requestIdentityResync(address)
+            RNS.log(f"AndroidBLEDriver: Identity resync for {address}: {'found' if result else 'not found'}", RNS.LOG_DEBUG)
+            return bool(result)
+
+        except Exception as e:
+            RNS.log(f"AndroidBLEDriver: Error requesting identity resync for {address}: {e}", RNS.LOG_ERROR)
+            return False
+
     # --- Internal Methods ---
 
     def _get_kotlin_bridge(self):

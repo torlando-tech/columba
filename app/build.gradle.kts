@@ -195,7 +195,7 @@ chaquopy {
         version = "3.11"
 
         pip {
-            // Install ble-reticulum from GitHub
+            // Install ble-reticulum from GitHub (main branch - includes identity cache fix)
             install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
 
             // Install requirements from requirements.txt

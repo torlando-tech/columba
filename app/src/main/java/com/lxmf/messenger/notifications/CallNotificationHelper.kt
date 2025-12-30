@@ -156,7 +156,7 @@ class CallNotificationHelper
             val notification =
                 NotificationCompat
                     .Builder(context, CHANNEL_ID_INCOMING_CALL)
-                    .setSmallIcon(R.drawable.ic_notification)
+                    .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle("Incoming Voice Call")
                     .setContentText(displayName)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -166,11 +166,11 @@ class CallNotificationHelper
                     .setAutoCancel(false)
                     .setFullScreenIntent(fullScreenPendingIntent, true)
                     .addAction(
-                        R.drawable.ic_notification,
+                        android.R.drawable.ic_menu_close_clear_cancel,
                         "Decline",
                         declinePendingIntent,
                     ).addAction(
-                        R.drawable.ic_notification,
+                        android.R.drawable.ic_menu_call,
                         "Answer",
                         answerPendingIntent,
                     ).build()
@@ -231,7 +231,7 @@ class CallNotificationHelper
             val notification =
                 NotificationCompat
                     .Builder(context, CHANNEL_ID_ONGOING_CALL)
-                    .setSmallIcon(R.drawable.ic_notification)
+                    .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle("Voice Call")
                     .setContentText("$displayName - $durationText")
                     .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -240,7 +240,7 @@ class CallNotificationHelper
                     .setAutoCancel(false)
                     .setContentIntent(openPendingIntent)
                     .addAction(
-                        R.drawable.ic_notification,
+                        android.R.drawable.ic_menu_close_clear_cancel,
                         "End Call",
                         endPendingIntent,
                     ).build()

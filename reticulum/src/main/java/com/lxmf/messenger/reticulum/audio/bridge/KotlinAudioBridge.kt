@@ -38,10 +38,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - Mode: Voice communication (enables AEC, AGC, NS)
  *
  * @property context Application context
+ * @property audioManager AudioManager instance (injectable for testing)
  */
 @SuppressLint("MissingPermission")
 class KotlinAudioBridge(
     private val context: Context,
+    private val audioManager: AudioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager,
 ) {
     companion object {
         private const val TAG = "Columba:AudioBridge"
@@ -63,10 +65,19 @@ class KotlinAudioBridge(
                 instance ?: KotlinAudioBridge(context.applicationContext).also { instance = it }
             }
         }
+
+        /**
+         * Reset singleton instance (for testing).
+         */
+        internal fun resetInstance() {
+            synchronized(this) {
+                instance?.shutdown()
+                instance = null
+            }
+        }
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
     // Playback state
     private var audioTrack: AudioTrack? = null

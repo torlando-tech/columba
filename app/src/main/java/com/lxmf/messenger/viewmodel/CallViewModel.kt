@@ -95,8 +95,8 @@ class CallViewModel
 
         private suspend fun resolvePeerName(identityHash: String) {
             try {
-                val contact = contactRepository.getContactByDestinationHash(identityHash)
-                _peerName.value = contact?.displayName ?: formatIdentityHash(identityHash)
+                val contact = contactRepository.getContact(identityHash)
+                _peerName.value = contact?.customNickname ?: formatIdentityHash(identityHash)
             } catch (e: Exception) {
                 Log.e(TAG, "Error resolving peer name", e)
                 _peerName.value = formatIdentityHash(identityHash)

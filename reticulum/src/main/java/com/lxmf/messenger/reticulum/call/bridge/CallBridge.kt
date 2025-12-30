@@ -2,6 +2,7 @@ package com.lxmf.messenger.reticulum.call.bridge
 
 import android.util.Log
 import com.chaquo.python.PyObject
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,6 +41,43 @@ sealed class CallState {
 }
 
 /**
+ * Interface for Python call manager interactions.
+ * Allows for mocking in unit tests.
+ */
+interface PythonCallManagerInterface {
+    fun call(destinationHash: String)
+    fun answer()
+    fun hangup()
+    fun muteMicrophone(muted: Boolean)
+    fun setSpeaker(enabled: Boolean)
+}
+
+/**
+ * Default implementation that wraps PyObject.
+ */
+internal class PyObjectCallManager(private val pyObject: PyObject) : PythonCallManagerInterface {
+    override fun call(destinationHash: String) {
+        pyObject.callAttr("call", destinationHash)
+    }
+
+    override fun answer() {
+        pyObject.callAttr("answer")
+    }
+
+    override fun hangup() {
+        pyObject.callAttr("hangup")
+    }
+
+    override fun muteMicrophone(muted: Boolean) {
+        pyObject.callAttr("mute_microphone", muted)
+    }
+
+    override fun setSpeaker(enabled: Boolean) {
+        pyObject.callAttr("set_speaker", enabled)
+    }
+}
+
+/**
  * Bridge for call state between Python LXST and Kotlin UI.
  *
  * Manages bidirectional communication:
@@ -49,7 +87,9 @@ sealed class CallState {
  * **Thread Safety**: All state flows are thread-safe. Python callbacks are
  * invoked on the bridge's coroutine scope.
  */
-class CallBridge private constructor() {
+class CallBridge private constructor(
+    dispatcher: CoroutineDispatcher = Dispatchers.Default,
+) {
     companion object {
         private const val TAG = "Columba:CallBridge"
 
@@ -64,9 +104,28 @@ class CallBridge private constructor() {
                 instance ?: CallBridge().also { instance = it }
             }
         }
+
+        /**
+         * Get singleton instance with custom dispatcher (for testing).
+         */
+        internal fun getInstance(dispatcher: CoroutineDispatcher): CallBridge {
+            return instance ?: synchronized(this) {
+                instance ?: CallBridge(dispatcher).also { instance = it }
+            }
+        }
+
+        /**
+         * Reset singleton instance (for testing).
+         */
+        internal fun resetInstance() {
+            synchronized(this) {
+                instance?.shutdown()
+                instance = null
+            }
+        }
     }
 
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val scope = CoroutineScope(dispatcher + SupervisorJob())
 
     // Call state flows for UI observation
     private val _callState = MutableStateFlow<CallState>(CallState.Idle)
@@ -89,7 +148,7 @@ class CallBridge private constructor() {
 
     // Python call manager reference (set by PythonWrapperManager)
     @Volatile
-    private var pythonCallManager: PyObject? = null
+    private var pythonCallManager: PythonCallManagerInterface? = null
 
     // Python callbacks for state changes (set by Python call_manager)
     @Volatile
@@ -103,8 +162,15 @@ class CallBridge private constructor() {
      * Called by PythonWrapperManager after initializing the call manager.
      */
     fun setPythonCallManager(manager: PyObject) {
-        pythonCallManager = manager
+        pythonCallManager = PyObjectCallManager(manager)
         Log.i(TAG, "Python CallManager set")
+    }
+
+    /**
+     * Set a custom call manager interface (for testing).
+     */
+    internal fun setCallManagerInterface(manager: PythonCallManagerInterface?) {
+        pythonCallManager = manager
     }
 
     /**
@@ -217,7 +283,7 @@ class CallBridge private constructor() {
             _callState.value = CallState.Connecting(destinationHash)
 
             try {
-                pythonCallManager?.callAttr("call", destinationHash)
+                pythonCallManager?.call(destinationHash)
             } catch (e: Exception) {
                 Log.e(TAG, "Error initiating call", e)
                 _callState.value = CallState.Ended
@@ -234,7 +300,7 @@ class CallBridge private constructor() {
         Log.d(TAG, "Answering call")
         scope.launch {
             try {
-                pythonCallManager?.callAttr("answer")
+                pythonCallManager?.answer()
             } catch (e: Exception) {
                 Log.e(TAG, "Error answering call", e)
             }
@@ -256,7 +322,7 @@ class CallBridge private constructor() {
         Log.d(TAG, "Ending call")
         scope.launch {
             try {
-                pythonCallManager?.callAttr("hangup")
+                pythonCallManager?.hangup()
             } catch (e: Exception) {
                 Log.e(TAG, "Error ending call", e)
             }
@@ -274,7 +340,7 @@ class CallBridge private constructor() {
 
         scope.launch {
             try {
-                pythonCallManager?.callAttr("mute_microphone", newMuted)
+                pythonCallManager?.muteMicrophone(newMuted)
             } catch (e: Exception) {
                 Log.e(TAG, "Error toggling mute", e)
             }
@@ -288,7 +354,7 @@ class CallBridge private constructor() {
         _isMuted.value = muted
         scope.launch {
             try {
-                pythonCallManager?.callAttr("mute_microphone", muted)
+                pythonCallManager?.muteMicrophone(muted)
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting mute", e)
             }
@@ -305,7 +371,7 @@ class CallBridge private constructor() {
 
         scope.launch {
             try {
-                pythonCallManager?.callAttr("set_speaker", newSpeaker)
+                pythonCallManager?.setSpeaker(newSpeaker)
             } catch (e: Exception) {
                 Log.e(TAG, "Error toggling speaker", e)
             }
@@ -319,7 +385,7 @@ class CallBridge private constructor() {
         _isSpeakerOn.value = enabled
         scope.launch {
             try {
-                pythonCallManager?.callAttr("set_speaker", enabled)
+                pythonCallManager?.setSpeaker(enabled)
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting speaker", e)
             }

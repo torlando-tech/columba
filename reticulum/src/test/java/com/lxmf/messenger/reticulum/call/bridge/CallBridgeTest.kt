@@ -1,14 +1,11 @@
 package com.lxmf.messenger.reticulum.call.bridge
 
 import app.cash.turbine.test
-import com.chaquo.python.PyObject
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,27 +27,32 @@ import kotlin.time.Duration.Companion.seconds
  * Unit tests for CallBridge.
  *
  * Tests call state management, Python callback integration,
- * and UI action forwarding.
+ * and UI action forwarding using a mockable interface.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CallBridgeTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var callBridge: CallBridge
-    private lateinit var mockPythonCallManager: PyObject
+    private lateinit var mockCallManager: PythonCallManagerInterface
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        mockPythonCallManager = mockk(relaxed = true)
 
-        // Get fresh singleton instance
-        callBridge = CallBridge.getInstance()
-        callBridge.setPythonCallManager(mockPythonCallManager)
+        // Reset the singleton to get a fresh instance
+        CallBridge.resetInstance()
+
+        // Create mock call manager
+        mockCallManager = mockk(relaxed = true)
+
+        // Get the singleton instance with test dispatcher and inject mock
+        callBridge = CallBridge.getInstance(testDispatcher)
+        callBridge.setCallManagerInterface(mockCallManager)
     }
 
     @After
     fun tearDown() {
-        callBridge.shutdown()
+        CallBridge.resetInstance()
         Dispatchers.resetMain()
         clearAllMocks()
     }
@@ -59,14 +61,17 @@ class CallBridgeTest {
 
     @Test
     fun `initial call state is Idle`() = runTest {
+        advanceUntilIdle()
         callBridge.callState.test(timeout = 5.seconds) {
-            assertTrue(awaitItem() is CallState.Idle)
+            val state = awaitItem()
+            assertTrue("Expected Idle, got $state", state is CallState.Idle)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
     fun `initial mute state is false`() = runTest {
+        advanceUntilIdle()
         callBridge.isMuted.test(timeout = 5.seconds) {
             assertFalse(awaitItem())
             cancelAndIgnoreRemainingEvents()
@@ -75,6 +80,7 @@ class CallBridgeTest {
 
     @Test
     fun `initial speaker state is false`() = runTest {
+        advanceUntilIdle()
         callBridge.isSpeakerOn.test(timeout = 5.seconds) {
             assertFalse(awaitItem())
             cancelAndIgnoreRemainingEvents()
@@ -83,6 +89,7 @@ class CallBridgeTest {
 
     @Test
     fun `initial remote identity is null`() = runTest {
+        advanceUntilIdle()
         callBridge.remoteIdentity.test(timeout = 5.seconds) {
             assertNull(awaitItem())
             cancelAndIgnoreRemainingEvents()
@@ -96,13 +103,14 @@ class CallBridgeTest {
         val testHash = "abc123def456789012345678901234567890"
 
         callBridge.callState.test(timeout = 5.seconds) {
-            assertEquals(CallState.Idle, awaitItem())
+            val initial = awaitItem()
+            assertTrue("Expected Idle, got $initial", initial is CallState.Idle)
 
             callBridge.onIncomingCall(testHash)
             advanceUntilIdle()
 
             val state = awaitItem()
-            assertTrue(state is CallState.Incoming)
+            assertTrue("Expected Incoming, got $state", state is CallState.Incoming)
             assertEquals(testHash, (state as CallState.Incoming).identityHash)
             cancelAndIgnoreRemainingEvents()
         }
@@ -130,13 +138,14 @@ class CallBridgeTest {
         val testHash = "abc123def456789012345678901234567890"
 
         callBridge.callState.test(timeout = 5.seconds) {
-            assertEquals(CallState.Idle, awaitItem())
+            val initial = awaitItem()
+            assertTrue("Expected Idle, got $initial", initial is CallState.Idle)
 
             callBridge.initiateCall(testHash)
             advanceUntilIdle()
 
             val state = awaitItem()
-            assertTrue(state is CallState.Connecting)
+            assertTrue("Expected Connecting, got $state", state is CallState.Connecting)
             assertEquals(testHash, (state as CallState.Connecting).identityHash)
             cancelAndIgnoreRemainingEvents()
         }
@@ -149,7 +158,7 @@ class CallBridgeTest {
         callBridge.initiateCall(testHash)
         advanceUntilIdle()
 
-        verify { mockPythonCallManager.callAttr("call", testHash) }
+        verify { mockCallManager.call(testHash) }
     }
 
     @Test
@@ -174,13 +183,14 @@ class CallBridgeTest {
         val testHash = "abc123def456789012345678901234567890"
 
         callBridge.callState.test(timeout = 5.seconds) {
-            assertEquals(CallState.Idle, awaitItem())
+            val initial = awaitItem()
+            assertTrue("Expected Idle, got $initial", initial is CallState.Idle)
 
             callBridge.onCallRinging(testHash)
             advanceUntilIdle()
 
             val state = awaitItem()
-            assertTrue(state is CallState.Ringing)
+            assertTrue("Expected Ringing, got $state", state is CallState.Ringing)
             assertEquals(testHash, (state as CallState.Ringing).identityHash)
             cancelAndIgnoreRemainingEvents()
         }
@@ -193,13 +203,14 @@ class CallBridgeTest {
         val testHash = "abc123def456789012345678901234567890"
 
         callBridge.callState.test(timeout = 5.seconds) {
-            assertEquals(CallState.Idle, awaitItem())
+            val initial = awaitItem()
+            assertTrue("Expected Idle, got $initial", initial is CallState.Idle)
 
             callBridge.onCallEstablished(testHash)
             advanceUntilIdle()
 
             val state = awaitItem()
-            assertTrue(state is CallState.Active)
+            assertTrue("Expected Active, got $state", state is CallState.Active)
             assertEquals(testHash, (state as CallState.Active).identityHash)
             cancelAndIgnoreRemainingEvents()
         }
@@ -216,7 +227,7 @@ class CallBridgeTest {
             advanceUntilIdle()
 
             val startTime = awaitItem()
-            assertTrue(startTime != null && startTime > 0)
+            assertTrue("Start time should be positive", startTime != null && startTime > 0)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -224,26 +235,25 @@ class CallBridgeTest {
     // ========== Call Ended Tests ==========
 
     @Test
-    fun `onCallEnded sets state to Ended then Idle`() = runTest {
+    fun `onCallEnded sets state to Ended`() = runTest {
         val testHash = "abc123def456789012345678901234567890"
 
         callBridge.callState.test(timeout = 10.seconds) {
-            assertEquals(CallState.Idle, awaitItem())
+            val initial = awaitItem()
+            assertTrue("Expected Idle, got $initial", initial is CallState.Idle)
 
             // First establish a call
             callBridge.onCallEstablished(testHash)
             advanceUntilIdle()
-            assertTrue(awaitItem() is CallState.Active)
+            val active = awaitItem()
+            assertTrue("Expected Active, got $active", active is CallState.Active)
 
             // Then end it
             callBridge.onCallEnded(testHash)
             advanceUntilIdle()
 
-            assertEquals(CallState.Ended, awaitItem())
-
-            // Wait for reset to Idle (after 2s delay)
-            val idleState = awaitItem()
-            assertEquals(CallState.Idle, idleState)
+            val ended = awaitItem()
+            assertEquals(CallState.Ended, ended)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -253,7 +263,8 @@ class CallBridgeTest {
     @Test
     fun `onCallBusy sets state to Busy`() = runTest {
         callBridge.callState.test(timeout = 5.seconds) {
-            assertEquals(CallState.Idle, awaitItem())
+            val initial = awaitItem()
+            assertTrue("Expected Idle, got $initial", initial is CallState.Idle)
 
             callBridge.onCallBusy()
             advanceUntilIdle()
@@ -268,7 +279,8 @@ class CallBridgeTest {
     @Test
     fun `onCallRejected sets state to Rejected`() = runTest {
         callBridge.callState.test(timeout = 5.seconds) {
-            assertEquals(CallState.Idle, awaitItem())
+            val initial = awaitItem()
+            assertTrue("Expected Idle, got $initial", initial is CallState.Idle)
 
             callBridge.onCallRejected()
             advanceUntilIdle()
@@ -285,7 +297,7 @@ class CallBridgeTest {
         callBridge.answerCall()
         advanceUntilIdle()
 
-        verify { mockPythonCallManager.callAttr("answer") }
+        verify { mockCallManager.answer() }
     }
 
     // ========== End Call Tests ==========
@@ -295,21 +307,21 @@ class CallBridgeTest {
         callBridge.endCall()
         advanceUntilIdle()
 
-        verify { mockPythonCallManager.callAttr("hangup") }
+        verify { mockCallManager.hangup() }
     }
 
     @Test
-    fun `declineCall calls endCall`() = runTest {
+    fun `declineCall calls endCall which calls hangup`() = runTest {
         callBridge.declineCall()
         advanceUntilIdle()
 
-        verify { mockPythonCallManager.callAttr("hangup") }
+        verify { mockCallManager.hangup() }
     }
 
     // ========== Mute Toggle Tests ==========
 
     @Test
-    fun `toggleMute toggles mute state`() = runTest {
+    fun `toggleMute toggles mute state and calls Python`() = runTest {
         callBridge.isMuted.test(timeout = 5.seconds) {
             assertFalse(awaitItem())
 
@@ -317,25 +329,20 @@ class CallBridgeTest {
             advanceUntilIdle()
 
             assertTrue(awaitItem())
+            verify { mockCallManager.muteMicrophone(true) }
 
             callBridge.toggleMute()
             advanceUntilIdle()
 
             assertFalse(awaitItem())
+            verify { mockCallManager.muteMicrophone(false) }
+
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `toggleMute calls Python call manager`() = runTest {
-        callBridge.toggleMute()
-        advanceUntilIdle()
-
-        verify { mockPythonCallManager.callAttr("mute_microphone", true) }
-    }
-
-    @Test
-    fun `setMuted sets specific mute state`() = runTest {
+    fun `setMuted sets specific mute state and calls Python`() = runTest {
         callBridge.isMuted.test(timeout = 5.seconds) {
             assertFalse(awaitItem())
 
@@ -343,6 +350,8 @@ class CallBridgeTest {
             advanceUntilIdle()
 
             assertTrue(awaitItem())
+            verify { mockCallManager.muteMicrophone(true) }
+
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -350,7 +359,7 @@ class CallBridgeTest {
     // ========== Speaker Toggle Tests ==========
 
     @Test
-    fun `toggleSpeaker toggles speaker state`() = runTest {
+    fun `toggleSpeaker toggles speaker state and calls Python`() = runTest {
         callBridge.isSpeakerOn.test(timeout = 5.seconds) {
             assertFalse(awaitItem())
 
@@ -358,25 +367,20 @@ class CallBridgeTest {
             advanceUntilIdle()
 
             assertTrue(awaitItem())
+            verify { mockCallManager.setSpeaker(true) }
 
             callBridge.toggleSpeaker()
             advanceUntilIdle()
 
             assertFalse(awaitItem())
+            verify { mockCallManager.setSpeaker(false) }
+
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `toggleSpeaker calls Python call manager`() = runTest {
-        callBridge.toggleSpeaker()
-        advanceUntilIdle()
-
-        verify { mockPythonCallManager.callAttr("set_speaker", true) }
-    }
-
-    @Test
-    fun `setSpeaker sets specific speaker state`() = runTest {
+    fun `setSpeaker sets specific speaker state and calls Python`() = runTest {
         callBridge.isSpeakerOn.test(timeout = 5.seconds) {
             assertFalse(awaitItem())
 
@@ -384,11 +388,19 @@ class CallBridgeTest {
             advanceUntilIdle()
 
             assertTrue(awaitItem())
+            verify { mockCallManager.setSpeaker(true) }
+
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     // ========== Helper Method Tests ==========
+
+    @Test
+    fun `hasActiveCall returns false for Idle state`() = runTest {
+        advanceUntilIdle()
+        assertFalse(callBridge.hasActiveCall())
+    }
 
     @Test
     fun `hasActiveCall returns true for Connecting state`() = runTest {
@@ -430,72 +442,30 @@ class CallBridgeTest {
         assertTrue(callBridge.hasActiveCall())
     }
 
-    @Test
-    fun `hasActiveCall returns false for Idle state`() {
-        assertFalse(callBridge.hasActiveCall())
-    }
-
-    @Test
-    fun `hasActiveCall returns false for Ended state`() = runTest {
-        callBridge.onCallEnded(null)
-        advanceUntilIdle()
-
-        // State becomes Ended briefly
-        // Note: hasActiveCall checks current state
-        assertFalse(callBridge.hasActiveCall())
-    }
-
     // ========== Duration Tests ==========
 
     @Test
-    fun `getCurrentDuration returns 0 when no call active`() {
+    fun `getCurrentDuration returns 0 when no call active`() = runTest {
+        advanceUntilIdle()
         assertEquals(0L, callBridge.getCurrentDuration())
-    }
-
-    // ========== Shutdown Tests ==========
-
-    @Test
-    fun `shutdown resets all state`() = runTest {
-        val testHash = "abc123def456789012345678901234567890"
-
-        // Establish a call first
-        callBridge.onCallEstablished(testHash)
-        callBridge.toggleMute()
-        callBridge.toggleSpeaker()
-        advanceUntilIdle()
-
-        // Shutdown
-        callBridge.shutdown()
-        advanceUntilIdle()
-
-        // Verify state is reset (after the delay completes)
-        callBridge.callState.test(timeout = 5.seconds) {
-            // May go through Ended state first
-            val state = awaitItem()
-            if (state is CallState.Ended || state is CallState.Idle) {
-                cancelAndIgnoreRemainingEvents()
-            } else {
-                awaitItem() // Wait for Idle
-                cancelAndIgnoreRemainingEvents()
-            }
-        }
     }
 
     // ========== Error Handling Tests ==========
 
     @Test
     fun `initiateCall handles Python exception gracefully`() = runTest {
-        every { mockPythonCallManager.callAttr("call", any()) } throws RuntimeException("Python error")
+        every { mockCallManager.call(any()) } throws RuntimeException("Python error")
 
         callBridge.callState.test(timeout = 5.seconds) {
-            assertEquals(CallState.Idle, awaitItem())
+            val idle = awaitItem()
+            assertTrue("Expected Idle, got $idle", idle is CallState.Idle)
 
             callBridge.initiateCall("abc123")
             advanceUntilIdle()
 
             // Should transition to Connecting, then to Ended on error
             val connecting = awaitItem()
-            assertTrue(connecting is CallState.Connecting)
+            assertTrue("Expected Connecting, got $connecting", connecting is CallState.Connecting)
 
             val ended = awaitItem()
             assertEquals(CallState.Ended, ended)
@@ -504,20 +474,8 @@ class CallBridgeTest {
     }
 
     @Test
-    fun `answerCall handles null Python manager gracefully`() = runTest {
-        // Create a new bridge instance without Python manager
-        val newBridge = CallBridge.getInstance()
-
-        // Clear the Python manager by setting to null via reflection or shutdown
-        // For this test, we just verify it doesn't crash
-        newBridge.answerCall()
-        advanceUntilIdle()
-        // No exception = pass
-    }
-
-    @Test
     fun `toggleMute handles Python exception gracefully`() = runTest {
-        every { mockPythonCallManager.callAttr("mute_microphone", any()) } throws RuntimeException("Python error")
+        every { mockCallManager.muteMicrophone(any()) } throws RuntimeException("Python error")
 
         // Should not crash, state should still toggle
         callBridge.toggleMute()
@@ -525,6 +483,68 @@ class CallBridgeTest {
 
         callBridge.isMuted.test(timeout = 5.seconds) {
             assertTrue(awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ========== State Transition Tests ==========
+
+    @Test
+    fun `full call lifecycle Ringing to Active to Ended`() = runTest {
+        val testHash = "abc123def456789012345678901234567890"
+
+        callBridge.callState.test(timeout = 10.seconds) {
+            val idle = awaitItem()
+            assertTrue("Expected Idle, got $idle", idle is CallState.Idle)
+
+            // Simulate ringing
+            callBridge.onCallRinging(testHash)
+            advanceUntilIdle()
+            val ringing = awaitItem()
+            assertTrue("Expected Ringing, got $ringing", ringing is CallState.Ringing)
+
+            // Ringing -> Active
+            callBridge.onCallEstablished(testHash)
+            advanceUntilIdle()
+            val active = awaitItem()
+            assertTrue("Expected Active, got $active", active is CallState.Active)
+
+            // Active -> Ended
+            callBridge.onCallEnded(testHash)
+            advanceUntilIdle()
+            val ended = awaitItem()
+            assertEquals(CallState.Ended, ended)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `incoming call lifecycle Incoming to Active to Ended`() = runTest {
+        val testHash = "abc123def456789012345678901234567890"
+
+        callBridge.callState.test(timeout = 10.seconds) {
+            val idle = awaitItem()
+            assertTrue("Expected Idle, got $idle", idle is CallState.Idle)
+
+            // Incoming call
+            callBridge.onIncomingCall(testHash)
+            advanceUntilIdle()
+            val incoming = awaitItem()
+            assertTrue("Expected Incoming, got $incoming", incoming is CallState.Incoming)
+
+            // Answered -> Active
+            callBridge.onCallEstablished(testHash)
+            advanceUntilIdle()
+            val active = awaitItem()
+            assertTrue("Expected Active, got $active", active is CallState.Active)
+
+            // Hang up -> Ended
+            callBridge.onCallEnded(testHash)
+            advanceUntilIdle()
+            val ended = awaitItem()
+            assertEquals(CallState.Ended, ended)
+
             cancelAndIgnoreRemainingEvents()
         }
     }

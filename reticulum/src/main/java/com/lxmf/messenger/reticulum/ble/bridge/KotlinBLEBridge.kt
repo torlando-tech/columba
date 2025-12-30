@@ -773,6 +773,26 @@ class KotlinBLEBridge(
     }
 
     /**
+     * Ensure advertising is active, restarting if necessary.
+     *
+     * Use this to check and recover advertising that may have been
+     * silently stopped by Android (app backgrounding, screen off, etc.).
+     *
+     * @return true if advertising was already active, false if restart was triggered
+     */
+    fun ensureAdvertising(): Boolean {
+        if (!advertiser.isAdvertising.value && transportIdentityHash != null) {
+            scope.launch {
+                val name = storedDeviceName ?: "Reticulum"
+                Log.d(TAG, "ensureAdvertising: restarting as '$name'")
+                advertiser.startAdvertising(name)
+            }
+            return false // Was not advertising, now restarting
+        }
+        return true // Already advertising (or no identity set)
+    }
+
+    /**
      * Check if a discovered device should be skipped due to recent deduplication.
      *
      * Protocol v2.2 includes 3 bytes (6 hex chars) of identity in the advertised name.
@@ -1226,6 +1246,17 @@ class KotlinBLEBridge(
             scope.launch {
                 handleIdentityReceived(address, identityHash, isCentralConnection = false)
             }
+        }
+
+        // Advertiser callbacks (for logging and potential Python notification)
+        advertiser.onAdvertisingStarted = { deviceName: String ->
+            Log.i(TAG, "Advertising started: $deviceName")
+        }
+        advertiser.onAdvertisingStopped = {
+            Log.i(TAG, "Advertising stopped")
+        }
+        advertiser.onAdvertisingFailed = { errorCode: Int, message: String ->
+            Log.e(TAG, "Advertising failed: $message (code: $errorCode)")
         }
     }
 

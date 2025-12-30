@@ -282,6 +282,11 @@ class ReticulumWrapper:
         # General Reticulum bridge for protocol-level callbacks (announces, link events, etc.)
         self.kotlin_reticulum_bridge = None  # KotlinReticulumBridge instance (passed from Kotlin)
 
+        # Voice call support (LXST Telephony integration)
+        self.kotlin_audio_bridge = None  # KotlinAudioBridge instance (passed from Kotlin)
+        self.kotlin_call_bridge = None  # CallBridge instance (passed from Kotlin)
+        self._call_manager = None  # LXST CallManager instance (initialized when bridges are set)
+
         # Opportunistic message timeout tracking
         # When opportunistic messages are sent but recipient is offline, they get stuck in SENT state
         # forever waiting for a delivery receipt. This tracking dict + timer provides a timeout
@@ -376,6 +381,90 @@ class ReticulumWrapper:
         """
         self.kotlin_rnode_bridge = bridge
         log_info("ReticulumWrapper", "set_rnode_bridge", "KotlinRNodeBridge instance set")
+
+    def set_audio_bridge(self, bridge):
+        """
+        Set the KotlinAudioBridge instance for voice call audio operations.
+        Should be called from Kotlin before initialize_call_manager().
+
+        Args:
+            bridge: KotlinAudioBridge instance from Kotlin
+        """
+        self.kotlin_audio_bridge = bridge
+        log_info("ReticulumWrapper", "set_audio_bridge", "KotlinAudioBridge instance set")
+
+    def set_call_bridge(self, bridge):
+        """
+        Set the CallBridge instance for call state management.
+        Should be called from Kotlin before initialize_call_manager().
+
+        Args:
+            bridge: CallBridge instance from Kotlin
+        """
+        self.kotlin_call_bridge = bridge
+        log_info("ReticulumWrapper", "set_call_bridge", "CallBridge instance set")
+
+    def initialize_call_manager(self) -> Dict:
+        """
+        Initialize the LXST CallManager for voice calls.
+
+        Requires audio_bridge and call_bridge to be set first.
+        Also requires Reticulum to be initialized.
+
+        Returns:
+            Dict with success status and optional error message
+        """
+        try:
+            if not self.initialized:
+                return {'success': False, 'error': 'Reticulum not initialized'}
+
+            if self.kotlin_audio_bridge is None:
+                return {'success': False, 'error': 'Audio bridge not set'}
+
+            if self.kotlin_call_bridge is None:
+                return {'success': False, 'error': 'Call bridge not set'}
+
+            if self._call_manager is not None:
+                return {'success': True, 'message': 'CallManager already initialized'}
+
+            # Get the local identity for calls
+            identity = self.router.identity if self.router else None
+            if identity is None:
+                return {'success': False, 'error': 'No local identity available'}
+
+            # Initialize the CallManager
+            from lxst_modules.call_manager import initialize_call_manager
+            self._call_manager = initialize_call_manager(
+                identity=identity,
+                audio_bridge=self.kotlin_audio_bridge,
+                kotlin_call_bridge=self.kotlin_call_bridge,
+            )
+
+            if self._call_manager is None:
+                return {'success': False, 'error': 'CallManager initialization failed'}
+
+            # Set the Python call manager in CallBridge for bidirectional communication
+            self.kotlin_call_bridge.setPythonCallManager(self._call_manager)
+
+            log_info("ReticulumWrapper", "initialize_call_manager", "CallManager initialized successfully")
+            return {'success': True}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "initialize_call_manager", f"Error: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def shutdown_call_manager(self):
+        """
+        Shutdown the LXST CallManager and cleanup resources.
+        """
+        try:
+            if self._call_manager is not None:
+                from lxst_modules.call_manager import shutdown_call_manager
+                shutdown_call_manager()
+                self._call_manager = None
+                log_info("ReticulumWrapper", "shutdown_call_manager", "CallManager shutdown complete")
+        except Exception as e:
+            log_error("ReticulumWrapper", "shutdown_call_manager", f"Error: {e}")
 
     def get_paired_rnodes(self) -> Dict:
         """

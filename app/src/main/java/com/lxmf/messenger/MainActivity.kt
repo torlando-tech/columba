@@ -79,6 +79,8 @@ import com.lxmf.messenger.ui.screens.QrScannerScreen
 import com.lxmf.messenger.ui.screens.SettingsScreen
 import com.lxmf.messenger.ui.screens.ThemeEditorScreen
 import com.lxmf.messenger.ui.screens.ThemeManagementScreen
+import com.lxmf.messenger.ui.screens.VoiceCallScreen
+import com.lxmf.messenger.ui.screens.IncomingCallScreen
 import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapDownloadScreen
 import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapsScreen
 import com.lxmf.messenger.ui.screens.onboarding.OnboardingPagerScreen
@@ -391,6 +393,8 @@ fun ColumbaNavigation(
             "message_detail/",
             "theme_editor",
             "rnode_wizard",
+            "voice_call/",
+            "incoming_call/",
         )
     val shouldShowBottomNav =
         currentRoute != null &&
@@ -780,6 +784,10 @@ fun ColumbaNavigation(
                                 val encodedId = Uri.encode(messageId)
                                 navController.navigate("message_detail/$encodedId")
                             },
+                            onVoiceCall = {
+                                val encodedHash = Uri.encode(destinationHash)
+                                navController.navigate("voice_call/$encodedHash")
+                            },
                         )
                     }
 
@@ -841,6 +849,45 @@ fun ColumbaNavigation(
                         OfflineMapDownloadScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onDownloadComplete = { navController.popBackStack() },
+                        )
+                    }
+
+                    // Voice Call Screen (outgoing/active call)
+                    composable(
+                        route = "voice_call/{destinationHash}",
+                        arguments =
+                            listOf(
+                                navArgument("destinationHash") { type = NavType.StringType },
+                            ),
+                    ) { backStackEntry ->
+                        val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
+
+                        VoiceCallScreen(
+                            destinationHash = destinationHash,
+                            onEndCall = { navController.popBackStack() },
+                        )
+                    }
+
+                    // Incoming Call Screen
+                    composable(
+                        route = "incoming_call/{identityHash}",
+                        arguments =
+                            listOf(
+                                navArgument("identityHash") { type = NavType.StringType },
+                            ),
+                    ) { backStackEntry ->
+                        val identityHash = backStackEntry.arguments?.getString("identityHash").orEmpty()
+
+                        IncomingCallScreen(
+                            identityHash = identityHash,
+                            onCallAnswered = {
+                                // Navigate to voice call screen when answered
+                                val encodedHash = Uri.encode(identityHash)
+                                navController.navigate("voice_call/$encodedHash") {
+                                    popUpTo("incoming_call/$identityHash") { inclusive = true }
+                                }
+                            },
+                            onCallDeclined = { navController.popBackStack() },
                         )
                     }
                 }

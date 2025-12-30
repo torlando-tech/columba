@@ -50,6 +50,12 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
+    <!-- Voice call permissions (LXST Telephony) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
     <!-- Companion Device Manager (Android 12+) for RNode association -->
     <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
@@ -129,6 +135,11 @@
         <meta-data
             android:name="io.sentry.auto-init"
             android:value="false" />
+
+        <!-- Call notification action receiver -->
+        <receiver
+            android:name=".notifications.CallActionReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

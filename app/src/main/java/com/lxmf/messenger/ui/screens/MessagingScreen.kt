@@ -60,6 +60,7 @@ import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.BrokenImage
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
@@ -177,6 +178,7 @@ fun MessagingScreen(
     onBackClick: () -> Unit,
     onPeerClick: () -> Unit = {},
     onViewMessageDetails: (messageId: String) -> Unit = {},
+    onVoiceCall: () -> Unit = {},
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
@@ -593,6 +595,17 @@ fun MessagingScreen(
                     }
                 },
                 actions = {
+                    // Voice call button
+                    IconButton(
+                        onClick = onVoiceCall,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = "Voice call",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
                     // Location sharing button
                     IconButton(
                         onClick = {

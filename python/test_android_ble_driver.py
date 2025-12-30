@@ -795,5 +795,121 @@ class TestEnsureAdvertisingRealClass(unittest.TestCase):
         self.assertTrue(any("error" in str(msg).lower() for msg, _ in self.log_calls))
 
 
+class TestRequestIdentityResyncRealClass(unittest.TestCase):
+    """
+    Test request_identity_resync() method on the REAL AndroidBLEDriver class.
+
+    This tests the actual code in android_ble_driver.py to get coverage.
+    The method is called when BLEInterface receives data from a peer but has
+    no identity mapping (Python's disconnect callback fired but Kotlin
+    maintained the GATT connection).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Import the real AndroidBLEDriver class with proper mock setup."""
+        # Remove existing bluetooth_driver mock to replace with proper class mock
+        if 'bluetooth_driver' in sys.modules:
+            del sys.modules['bluetooth_driver']
+        if 'android_ble_driver' in sys.modules:
+            del sys.modules['android_ble_driver']
+
+        # Create proper base class (not MagicMock)
+        class MockBLEDriverInterface:
+            """Mock base class for AndroidBLEDriver."""
+            pass
+
+        # Set up bluetooth_driver with proper class
+        mock_bt_driver = MagicMock()
+        mock_bt_driver.BLEDriverInterface = MockBLEDriverInterface
+        mock_bt_driver.DriverState = MockDriverState
+        mock_bt_driver.BLEDevice = MagicMock()
+        sys.modules['bluetooth_driver'] = mock_bt_driver
+
+        # Add ble_modules to path
+        ble_modules_dir = os.path.join(os.path.dirname(__file__), 'ble_modules')
+        if ble_modules_dir not in sys.path:
+            sys.path.insert(0, ble_modules_dir)
+
+        # Import the real class and module
+        import android_ble_driver as abd_module
+        cls.AndroidBLEDriver = abd_module.AndroidBLEDriver
+        cls.abd_module = abd_module
+
+    def setUp(self):
+        """Set up test fixtures with a real driver instance."""
+        # Create driver instance without calling __init__
+        self.driver = object.__new__(self.AndroidBLEDriver)
+        self.driver.kotlin_bridge = None
+        # Set up log capture in the module's namespace
+        self.log_calls = []
+        self._original_log = self.abd_module.RNS.log
+        self.abd_module.RNS.log = lambda msg, level=4: self.log_calls.append((msg, level))
+
+    def tearDown(self):
+        """Restore original RNS.log."""
+        self.abd_module.RNS.log = self._original_log
+
+    def test_request_identity_resync_no_bridge_returns_false(self):
+        """
+        Test that request_identity_resync returns False when no bridge.
+
+        Without a Kotlin bridge, we cannot request identity resync.
+        """
+        self.driver.kotlin_bridge = None
+
+        result = self.driver.request_identity_resync("AA:BB:CC:DD:EE:FF")
+
+        self.assertFalse(result)
+        self.assertTrue(len(self.log_calls) > 0, "Expected log calls")
+        self.assertTrue(any("no bridge" in str(msg).lower() for msg, _ in self.log_calls))
+
+    def test_request_identity_resync_found_returns_true(self):
+        """
+        Test that request_identity_resync returns True when identity found.
+
+        When Kotlin finds the identity for the address, return True.
+        """
+        mock_bridge = Mock()
+        mock_bridge.requestIdentityResync.return_value = True
+        self.driver.kotlin_bridge = mock_bridge
+
+        result = self.driver.request_identity_resync("AA:BB:CC:DD:EE:FF")
+
+        self.assertTrue(result)
+        mock_bridge.requestIdentityResync.assert_called_once_with("AA:BB:CC:DD:EE:FF")
+
+    def test_request_identity_resync_not_found_returns_false(self):
+        """
+        Test that request_identity_resync returns False when identity not found.
+
+        When Kotlin doesn't find the identity for the address, return False.
+        """
+        mock_bridge = Mock()
+        mock_bridge.requestIdentityResync.return_value = False
+        self.driver.kotlin_bridge = mock_bridge
+
+        result = self.driver.request_identity_resync("AA:BB:CC:DD:EE:FF")
+
+        self.assertFalse(result)
+        mock_bridge.requestIdentityResync.assert_called_once()
+
+    def test_request_identity_resync_exception_returns_false(self):
+        """
+        Test that request_identity_resync returns False on exception.
+
+        If Kotlin bridge throws an exception, catch it, log error, return False.
+        """
+        mock_bridge = Mock()
+        mock_bridge.requestIdentityResync.side_effect = RuntimeError("Bridge error")
+        self.driver.kotlin_bridge = mock_bridge
+
+        result = self.driver.request_identity_resync("AA:BB:CC:DD:EE:FF")
+
+        self.assertFalse(result)
+        self.assertTrue(len(self.log_calls) > 0, "Expected log calls")
+        self.assertTrue(any("error" in str(msg).lower() for msg, _ in self.log_calls))
+
+
 if __name__ == '__main__':
     unittest.main()

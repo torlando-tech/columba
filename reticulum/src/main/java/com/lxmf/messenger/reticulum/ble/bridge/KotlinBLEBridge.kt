@@ -1077,6 +1077,57 @@ class KotlinBLEBridge(
     }
 
     /**
+     * Request identity resync for a peer.
+     *
+     * Called by Python when it receives data from a peer but has no identity mapping.
+     * This can happen if Python's disconnect callback fired but Kotlin maintained
+     * the GATT connection.
+     *
+     * @param address BLE MAC address of the peer
+     * @return true if identity was found and callback fired, false otherwise
+     */
+    fun requestIdentityResync(address: String): Boolean {
+        Log.d(TAG, "Identity resync requested for $address")
+
+        // Try to get identity from our tracking
+        val identityHash = addressToIdentity[address]
+        if (identityHash != null) {
+            Log.i(TAG, "Identity resync: found identity ${identityHash.take(16)}... for $address")
+
+            // Re-fire the identity received callback to Python
+            onIdentityReceived?.callAttr("__call__", address, identityHash)
+
+            // Also re-fire connected callback to restore full state
+            val peer = connectedPeers[address]
+            if (peer != null) {
+                val roleString = when {
+                    peer.isCentral && peer.isPeripheral -> "both"
+                    peer.isCentral -> "central"
+                    peer.isPeripheral -> "peripheral"
+                    else -> "unknown"
+                }
+                onConnected?.callAttr("__call__", address, peer.mtu, roleString, identityHash)
+                Log.d(TAG, "Identity resync: re-fired onConnected for $address")
+            }
+            return true
+        }
+
+        // No identity found in our tracking
+        val peer = connectedPeers[address]
+        if (peer != null) {
+            Log.w(
+                TAG,
+                "Identity resync: peer $address is connected but has no tracked identity " +
+                    "(central=${peer.isCentral}, peripheral=${peer.isPeripheral})",
+            )
+        } else {
+            Log.w(TAG, "Identity resync: peer $address is not connected")
+        }
+
+        return false
+    }
+
+    /**
      * Get detailed information about all connected peers.
      * Combines connection state with device discovery info.
      *

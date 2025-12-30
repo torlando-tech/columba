@@ -195,11 +195,8 @@ chaquopy {
         version = "3.11"
 
         pip {
-            // Install from local wheels directory
-            options("--find-links", "../python/wheels")
-
-            // Install ble-reticulum from local wheel (no external dependencies)
-            install("ble-reticulum")
+            // Install ble-reticulum from GitHub (testing branch with namespace fix)
+            install("git+https://github.com/torlando-tech/ble-reticulum.git@refactor/package-namespace")
 
             // Install requirements from requirements.txt
             install("-r", "../python/requirements.txt")
@@ -320,58 +317,6 @@ ksp {
     arg("correctErrorTypes", "true")
 }
 
-// Task to build ble-reticulum wheel from submodule
-tasks.register<Exec>("buildBleReticulumWheel") {
-    description = "Builds ble-reticulum wheel from submodule"
-    group = "build"
-
-    val submoduleDir = file("${project.rootDir}/external/ble-reticulum")
-    val wheelsDir = file("${project.rootDir}/python/wheels")
-    val distDir = file("$submoduleDir/dist")
-    val wheelFile = file("$distDir/ble_reticulum-0.1.0-py3-none-any.whl")
-
-    // Inputs: submodule source files
-    inputs.dir("$submoduleDir/src")
-    inputs.file("$submoduleDir/pyproject.toml")
-
-    // Outputs: wheel file
-    outputs.file(wheelFile)
-    outputs.dir(wheelsDir)
-
-    doFirst {
-        // Create wheels directory if it doesn't exist
-        wheelsDir.mkdirs()
-
-        // Clean old wheels
-        distDir.deleteRecursively()
-    }
-
-    // Build the wheel
-    workingDir = submoduleDir
-    commandLine("python3", "-m", "build", "--wheel", "--outdir", "dist/")
-
-    doLast {
-        // Copy wheel to python/wheels directory
-        copy {
-            from(distDir)
-            into(wheelsDir)
-            include("*.whl")
-        }
-        println("✓ Built ble-reticulum wheel and copied to python/wheels/")
-    }
-}
-
-// Run wheel build before Chaquopy's tasks that need the wheel
-tasks.named("preBuild") {
-    dependsOn("buildBleReticulumWheel")
-}
-
-// Ensure wheel is built before Python sources are merged
-tasks.configureEach {
-    if (name.contains("PythonSources") || name.contains("PythonRequirements")) {
-        dependsOn("buildBleReticulumWheel")
-    }
-}
 
 // Task to print version info for CI/CD
 tasks.register("printVersion") {

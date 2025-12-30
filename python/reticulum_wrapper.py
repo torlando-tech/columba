@@ -1123,11 +1123,12 @@ class ReticulumWrapper:
                 # Import ble_modules to trigger extraction from APK (Chaquopy requirement)
                 log_debug("ReticulumWrapper", "initialize", "Deploying BLE modules from bundled sources")
                 import pkgutil
-                import ble_modules  # Triggers extraction of package files from APK to filesystem
+                import ble_reticulum  # Triggers extraction of package files from APK to filesystem
+                import ble_modules  # Android-specific BLE modules
 
                 # Deploy bluetooth_driver base interface
                 log_debug("ReticulumWrapper", "initialize", "Deploying bluetooth_driver from bundled source")
-                bluetooth_driver_bytes = pkgutil.get_data('ble_modules', 'bluetooth_driver.py')
+                bluetooth_driver_bytes = pkgutil.get_data('ble_reticulum', 'bluetooth_driver.py')
                 bluetooth_driver_dest = os.path.join(interfaces_dir, "bluetooth_driver.py")
                 with open(bluetooth_driver_dest, 'wb') as f:
                     f.write(bluetooth_driver_bytes)
@@ -1135,7 +1136,7 @@ class ReticulumWrapper:
 
                 # Deploy linux_bluetooth_driver
                 log_debug("ReticulumWrapper", "initialize", "Deploying linux_bluetooth_driver from bundled source")
-                linux_bluetooth_driver_bytes = pkgutil.get_data('ble_modules', 'linux_bluetooth_driver.py')
+                linux_bluetooth_driver_bytes = pkgutil.get_data('ble_reticulum', 'linux_bluetooth_driver.py')
                 linux_bluetooth_driver_dest = os.path.join(interfaces_dir, "linux_bluetooth_driver.py")
                 with open(linux_bluetooth_driver_dest, 'wb') as f:
                     f.write(linux_bluetooth_driver_bytes)
@@ -1143,7 +1144,7 @@ class ReticulumWrapper:
 
                 # Deploy BLEFragmentation
                 log_debug("ReticulumWrapper", "initialize", "Deploying BLEFragmentation from bundled source")
-                ble_fragmentation_bytes = pkgutil.get_data('ble_modules', 'BLEFragmentation.py')
+                ble_fragmentation_bytes = pkgutil.get_data('ble_reticulum', 'BLEFragmentation.py')
                 ble_fragmentation_dest = os.path.join(interfaces_dir, "BLEFragmentation.py")
                 with open(ble_fragmentation_dest, 'wb') as f:
                     f.write(ble_fragmentation_bytes)
@@ -1151,7 +1152,7 @@ class ReticulumWrapper:
 
                 # Deploy BLEGATTServer
                 log_debug("ReticulumWrapper", "initialize", "Deploying BLEGATTServer from bundled source")
-                ble_gatt_server_bytes = pkgutil.get_data('ble_modules', 'BLEGATTServer.py')
+                ble_gatt_server_bytes = pkgutil.get_data('ble_reticulum', 'BLEGATTServer.py')
                 ble_gatt_server_dest = os.path.join(interfaces_dir, "BLEGATTServer.py")
                 with open(ble_gatt_server_dest, 'wb') as f:
                     f.write(ble_gatt_server_bytes)
@@ -1159,7 +1160,7 @@ class ReticulumWrapper:
 
                 # Deploy BLEInterface
                 log_debug("ReticulumWrapper", "initialize", "Deploying BLEInterface from bundled source")
-                ble_interface_bytes = pkgutil.get_data('ble_modules', 'BLEInterface.py')
+                ble_interface_bytes = pkgutil.get_data('ble_reticulum', 'BLEInterface.py')
                 ble_interface_dest = os.path.join(interfaces_dir, "BLEInterface.py")
                 with open(ble_interface_dest, 'wb') as f:
                     f.write(ble_interface_bytes)

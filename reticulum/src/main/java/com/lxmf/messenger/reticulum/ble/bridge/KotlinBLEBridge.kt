@@ -1639,7 +1639,14 @@ class KotlinBLEBridge(
                         val closedAddr = if (weKeepCentral) peripheralAddr else centralAddr
                         onAddressChanged?.callAttr("__call__", closedAddr, remainingAddr, identityHash)
 
-                        // Continue to notify Python about the remaining connection
+                        // If this callback is for the CLOSED address, return early.
+                        // Python's _handle_address_changed already set up identity for remainingAddr.
+                        // Continuing would overwrite correct mappings with the closed address.
+                        if (address == closedAddr) {
+                            Log.d(TAG, "Returning early - this callback was for closed address $closedAddr")
+                            return
+                        }
+                        // Otherwise, this callback is for the remaining address - continue normally
                     } else {
                         Log.w(TAG, "Cannot deduplicate dual connection - local identity not set")
                         // Clean up old MAC mapping and continue with both for now

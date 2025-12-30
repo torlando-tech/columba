@@ -337,6 +337,33 @@ class AndroidBLEDriver(BLEDriverInterface):
         """Get the negotiated MTU for a peer."""
         return self._peer_mtus.get(address)
 
+    def ensure_advertising(self) -> bool:
+        """Ensure advertising is active, restarting if silently stopped.
+
+        Android may silently stop BLE advertising when:
+        - App goes to background
+        - Screen turns off
+        - Device enters Doze mode
+
+        This method checks if advertising is active and restarts it if needed.
+
+        Returns:
+            True if advertising was already active, False if restart was triggered
+        """
+        try:
+            if self.kotlin_bridge is None:
+                RNS.log("AndroidBLEDriver: Cannot ensure advertising - no bridge", RNS.LOG_WARNING)
+                return False
+
+            result = self.kotlin_bridge.ensureAdvertising()
+            if not result:
+                RNS.log("AndroidBLEDriver: Advertising was stopped, restarting...", RNS.LOG_INFO)
+            return bool(result)
+
+        except Exception as e:
+            RNS.log(f"AndroidBLEDriver: Error ensuring advertising: {e}", RNS.LOG_ERROR)
+            return False
+
     # --- Internal Methods ---
 
     def _get_kotlin_bridge(self):

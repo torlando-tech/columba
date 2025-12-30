@@ -16,12 +16,14 @@ import androidx.core.content.ContextCompat
 import com.lxmf.messenger.reticulum.ble.model.BleConstants
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -47,6 +49,7 @@ class BleAdvertiser(
         private const val TAG = "Columba:Kotlin:BleAdvertiser"
         private const val MAX_RETRY_ATTEMPTS = 5
         private const val RETRY_BACKOFF_MS = 2000L // 2 seconds
+        private const val ADVERTISING_REFRESH_INTERVAL_MS = 60_000L // 1 minute
     }
 
     private val bluetoothLeAdvertiser: BluetoothLeAdvertiser? = bluetoothAdapter.bluetoothLeAdvertiser
@@ -61,6 +64,11 @@ class BleAdvertiser(
 
     private var currentDeviceName: String? = null
     private var retryAttempts = 0
+
+    // Proactive refresh job to keep advertising alive
+    // Android silently stops advertising when app goes to background/screen off
+    private var refreshJob: Job? = null
+    private var isRefreshing = false
 
     // Callbacks
     var onAdvertisingStarted: ((String) -> Unit)? = null
@@ -77,6 +85,12 @@ class BleAdvertiser(
                 scope.launch {
                     _isAdvertising.value = true
                     retryAttempts = 0
+
+                    // Start proactive refresh job (only if not already in a refresh)
+                    if (!isRefreshing) {
+                        startRefreshJob()
+                    }
+
                     onAdvertisingStarted?.invoke(currentDeviceName ?: "Unknown")
                 }
             }
@@ -256,6 +270,9 @@ class BleAdvertiser(
      */
     suspend fun stopAdvertising() {
         try {
+            // Stop refresh job first
+            stopRefreshJob()
+
             withContext(Dispatchers.Main) {
                 if (_isAdvertising.value && bluetoothLeAdvertiser != null) {
                     bluetoothLeAdvertiser.stopAdvertising(advertiseCallback)
@@ -308,9 +325,137 @@ class BleAdvertiser(
         }
 
     /**
+     * Start periodic refresh job to keep advertising alive.
+     *
+     * Android silently stops BLE advertising when:
+     * - App goes to background
+     * - Screen turns off
+     * - Device enters Doze mode
+     *
+     * By proactively refreshing advertising every minute, we ensure
+     * the device remains discoverable even after Android kills it.
+     */
+    private fun startRefreshJob() {
+        refreshJob?.cancel()
+        refreshJob = scope.launch {
+            while (isActive) {
+                delay(ADVERTISING_REFRESH_INTERVAL_MS)
+                if (_isAdvertising.value && !isRefreshing) {
+                    Log.d(TAG, "Proactive advertising refresh")
+                    refreshAdvertising()
+                }
+            }
+        }
+        Log.d(TAG, "Advertising refresh job started (interval: ${ADVERTISING_REFRESH_INTERVAL_MS}ms)")
+    }
+
+    /**
+     * Stop the refresh job.
+     */
+    private fun stopRefreshJob() {
+        refreshJob?.cancel()
+        refreshJob = null
+        Log.d(TAG, "Advertising refresh job stopped")
+    }
+
+    /**
+     * Refresh advertising by stopping and restarting.
+     * This ensures advertising is actually active even if Android silently stopped it.
+     */
+    private suspend fun refreshAdvertising() {
+        val name = currentDeviceName ?: return
+        if (bluetoothAdapter.isEnabled != true) {
+            Log.w(TAG, "Cannot refresh advertising - Bluetooth disabled")
+            return
+        }
+
+        isRefreshing = true
+        try {
+            // Stop current advertising
+            withContext(Dispatchers.Main) {
+                try {
+                    bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error stopping advertising during refresh: ${e.message}")
+                }
+            }
+
+            delay(100) // Brief delay for cleanup
+
+            // Restart advertising
+            withContext(Dispatchers.Main) {
+                startAdvertisingInternal(name)
+            }
+            Log.d(TAG, "Advertising refreshed successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error refreshing advertising", e)
+        } finally {
+            isRefreshing = false
+        }
+    }
+
+    /**
+     * Internal method to start advertising without the "already advertising" check.
+     * Used by refresh to restart advertising.
+     */
+    @SuppressLint("MissingPermission")
+    private fun startAdvertisingInternal(deviceName: String) {
+        if (bluetoothLeAdvertiser == null) {
+            Log.e(TAG, "Cannot start advertising - advertiser not available")
+            return
+        }
+
+        val settings =
+            AdvertiseSettings.Builder()
+                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
+                .setConnectable(true)
+                .setTimeout(0)
+                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+                .build()
+
+        val advertiseData =
+            AdvertiseData.Builder()
+                .setIncludeDeviceName(false)
+                .setIncludeTxPowerLevel(false)
+                .addServiceUuid(ParcelUuid(BleConstants.SERVICE_UUID))
+                .build()
+
+        val scanResponseData =
+            AdvertiseData.Builder()
+                .setIncludeDeviceName(true)
+                .build()
+
+        // Temporarily set Bluetooth name
+        val originalName = bluetoothAdapter.name
+        try {
+            bluetoothAdapter.name = deviceName
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Cannot set Bluetooth name during refresh")
+        }
+
+        bluetoothLeAdvertiser.startAdvertising(
+            settings,
+            advertiseData,
+            scanResponseData,
+            advertiseCallback,
+        )
+
+        // Restore original name after a delay
+        scope.launch {
+            delay(1000)
+            try {
+                bluetoothAdapter.name = originalName
+            } catch (e: SecurityException) {
+                // Ignore
+            }
+        }
+    }
+
+    /**
      * Shutdown the advertiser.
      */
     fun shutdown() {
+        stopRefreshJob()
         scope.launch {
             stopAdvertising()
         }

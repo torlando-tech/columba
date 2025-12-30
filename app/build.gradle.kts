@@ -195,8 +195,8 @@ chaquopy {
         version = "3.11"
 
         pip {
-            // Install ble-reticulum from GitHub (testing branch with namespace fix)
-            install("git+https://github.com/torlando-tech/ble-reticulum.git@refactor/package-namespace")
+            // Install ble-reticulum from GitHub
+            install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
 
             // Install requirements from requirements.txt
             install("-r", "../python/requirements.txt")

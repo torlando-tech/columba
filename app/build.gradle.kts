@@ -195,8 +195,8 @@ chaquopy {
         version = "3.11"
 
         pip {
-            // Install ble-reticulum from GitHub (fix/identity-cache-on-disconnect branch)
-            install("git+https://github.com/torlando-tech/ble-reticulum.git@fix/identity-cache-on-disconnect")
+            // Install ble-reticulum from GitHub (main branch - includes identity cache fix)
+            install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
 
             // Install requirements from requirements.txt
             install("-r", "../python/requirements.txt")

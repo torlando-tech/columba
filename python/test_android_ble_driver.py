@@ -712,17 +712,24 @@ class TestEnsureAdvertisingRealClass(unittest.TestCase):
         if ble_modules_dir not in sys.path:
             sys.path.insert(0, ble_modules_dir)
 
-        # Import the real class
-        from android_ble_driver import AndroidBLEDriver
-        cls.AndroidBLEDriver = AndroidBLEDriver
+        # Import the real class and module
+        import android_ble_driver as abd_module
+        cls.AndroidBLEDriver = abd_module.AndroidBLEDriver
+        cls.abd_module = abd_module
 
     def setUp(self):
         """Set up test fixtures with a real driver instance."""
         # Create driver instance without calling __init__
-        # (to avoid Kotlin bridge initialization)
         self.driver = object.__new__(self.AndroidBLEDriver)
         self.driver.kotlin_bridge = None
-        mock_rns.log.reset_mock()
+        # Set up log capture in the module's namespace
+        self.log_calls = []
+        self._original_log = self.abd_module.RNS.log
+        self.abd_module.RNS.log = lambda msg, level=4: self.log_calls.append((msg, level))
+
+    def tearDown(self):
+        """Restore original RNS.log."""
+        self.abd_module.RNS.log = self._original_log
 
     def test_ensure_advertising_no_bridge_returns_false(self):
         """
@@ -735,10 +742,8 @@ class TestEnsureAdvertisingRealClass(unittest.TestCase):
         result = self.driver.ensure_advertising()
 
         self.assertFalse(result)
-        mock_rns.log.assert_called()
-        # Check that "no bridge" warning was logged
-        calls = [str(c) for c in mock_rns.log.call_args_list]
-        self.assertTrue(any("no bridge" in c.lower() for c in calls))
+        self.assertTrue(len(self.log_calls) > 0, "Expected log calls")
+        self.assertTrue(any("no bridge" in str(msg).lower() for msg, _ in self.log_calls))
 
     def test_ensure_advertising_already_active_returns_true(self):
         """
@@ -770,10 +775,8 @@ class TestEnsureAdvertisingRealClass(unittest.TestCase):
 
         self.assertFalse(result)
         mock_bridge.ensureAdvertising.assert_called_once()
-        # Should log "restarting" message
-        mock_rns.log.assert_called()
-        calls = [str(c) for c in mock_rns.log.call_args_list]
-        self.assertTrue(any("restarting" in c.lower() for c in calls))
+        self.assertTrue(len(self.log_calls) > 0, "Expected log calls")
+        self.assertTrue(any("restarting" in str(msg).lower() for msg, _ in self.log_calls))
 
     def test_ensure_advertising_exception_returns_false(self):
         """
@@ -788,9 +791,8 @@ class TestEnsureAdvertisingRealClass(unittest.TestCase):
         result = self.driver.ensure_advertising()
 
         self.assertFalse(result)
-        mock_rns.log.assert_called()
-        calls = [str(c) for c in mock_rns.log.call_args_list]
-        self.assertTrue(any("error" in c.lower() for c in calls))
+        self.assertTrue(len(self.log_calls) > 0, "Expected log calls")
+        self.assertTrue(any("error" in str(msg).lower() for msg, _ in self.log_calls))
 
 
 if __name__ == '__main__':

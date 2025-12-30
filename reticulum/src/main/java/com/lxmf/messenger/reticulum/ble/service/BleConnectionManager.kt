@@ -693,6 +693,10 @@ class BleConnectionManager(
                 Log.d(TAG, "Blacklisted $address (key: $peerKey) for ${blacklistDuration / 1000}s")
             }
         }
+
+        // Remove from scanner cache so device can be rediscovered and reconnected
+        // This enables retry on next scan (unless blacklisted above)
+        scanner.removeDevice(address)
     }
 
     private fun handlePeripheralConnected(address: String) {

@@ -417,6 +417,24 @@ class BleScanner(
     }
 
     /**
+     * Remove a specific device from the cache.
+     *
+     * This allows the device to be "rediscovered" on the next scan,
+     * triggering onDeviceDiscovered again. Use this when a connection
+     * fails and you want to retry connecting on subsequent scans.
+     *
+     * @param address Device MAC address to remove
+     */
+    suspend fun removeDevice(address: String) {
+        devicesMutex.withLock {
+            if (devices.remove(address) != null) {
+                _discoveredDevices.value = devices.toMap()
+                Log.d(TAG, "Removed device from cache: $address (will be rediscovered)")
+            }
+        }
+    }
+
+    /**
      * Shutdown the scanner.
      */
     fun shutdown() {

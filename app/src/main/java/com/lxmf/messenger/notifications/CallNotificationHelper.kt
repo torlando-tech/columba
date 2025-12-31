@@ -14,6 +14,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.lxmf.messenger.MainActivity
 import com.lxmf.messenger.R
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,8 +32,6 @@ class CallNotificationHelper
         @ApplicationContext private val context: Context,
     ) {
         companion object {
-            private const val TAG = "CallNotificationHelper"
-
             // Notification channel IDs
             private const val CHANNEL_ID_INCOMING_CALL = "incoming_calls"
             private const val CHANNEL_ID_ONGOING_CALL = "ongoing_calls"
@@ -287,6 +286,6 @@ class CallNotificationHelper
         private fun formatDuration(seconds: Long): String {
             val mins = seconds / 60
             val secs = seconds % 60
-            return String.format("%02d:%02d", mins, secs)
+            return String.format(Locale.US, "%02d:%02d", mins, secs)
         }
     }

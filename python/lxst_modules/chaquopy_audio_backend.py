@@ -235,6 +235,9 @@ class ChaquopyPlayer:
                     RNS.log(f"ChaquopyPlayer: Error stopping playback: {e}", RNS.LOG_ERROR)
             self._started = False
 
+    _play_count = 0
+    _play_nonzero_count = 0
+
     def play(self, frame):
         """Play an audio frame.
 
@@ -249,6 +252,14 @@ class ChaquopyPlayer:
             return
 
         try:
+            # Log periodically to understand audio flow
+            ChaquopyPlayer._play_count += 1
+            frame_max = abs(frame).max()
+            if frame_max > 0.001:
+                ChaquopyPlayer._play_nonzero_count += 1
+            if ChaquopyPlayer._play_count % 100 == 1:
+                RNS.log(f"📞 Player: frame #{ChaquopyPlayer._play_count}, nonzero={ChaquopyPlayer._play_nonzero_count}, shape={frame.shape}, min={frame.min():.3f}, max={frame.max():.3f}", RNS.LOG_DEBUG)
+
             # Convert float32 [-1, 1] to int16 bytes
             samples = (frame * self.TYPE_MAP_FACTOR).astype(np.int16)
             audio_bytes = samples.tobytes()
@@ -273,6 +284,8 @@ class ChaquopyRecorder:
     """
 
     TYPE_MAP_FACTOR = np.iinfo("int16").max
+    _record_count = 0
+    _record_nonzero_count = 0
 
     def __init__(self, samplerate, samples_per_frame, preferred_device):
         self.samplerate = samplerate
@@ -372,7 +385,17 @@ class ChaquopyRecorder:
             return np.zeros((0,), dtype="float32")
 
         samples = np.frombuffer(audio_bytes, dtype=np.int16) / self.TYPE_MAP_FACTOR
-        return samples.astype("float32")
+        result = samples.astype("float32")
+
+        # Log periodically to understand audio capture
+        ChaquopyRecorder._record_count += 1
+        sample_max = abs(result).max() if len(result) > 0 else 0
+        if sample_max > 0.001:
+            ChaquopyRecorder._record_nonzero_count += 1
+        if ChaquopyRecorder._record_count % 100 == 1:
+            RNS.log(f"📞 Recorder: chunk #{ChaquopyRecorder._record_count}, nonzero={ChaquopyRecorder._record_nonzero_count}, len={len(result)}, max={sample_max:.3f}", RNS.LOG_DEBUG)
+
+        return result
 
     def flush(self):
         """Flush pending audio data."""

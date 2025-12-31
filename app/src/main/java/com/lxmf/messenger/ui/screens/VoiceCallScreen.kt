@@ -1,5 +1,9 @@
 package com.lxmf.messenger.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -30,11 +34,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lxmf.messenger.reticulum.call.bridge.CallState
@@ -55,28 +64,66 @@ fun VoiceCallScreen(
     onEndCall: () -> Unit,
     viewModel: CallViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
     val callState by viewModel.callState.collectAsStateWithLifecycle()
     val isMuted by viewModel.isMuted.collectAsStateWithLifecycle()
     val isSpeakerOn by viewModel.isSpeakerOn.collectAsStateWithLifecycle()
     val callDuration by viewModel.callDuration.collectAsStateWithLifecycle()
     val peerName by viewModel.peerName.collectAsStateWithLifecycle()
 
-    // Initiate call when screen opens (if not already in a call)
+    // Permission state
+    var hasAudioPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    var permissionRequested by remember { mutableStateOf(false) }
+
+    // Permission launcher
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            hasAudioPermission = isGranted
+            if (isGranted && callState is CallState.Idle) {
+                android.util.Log.w("VoiceCallScreen", "📞 Permission granted, initiating call...")
+                viewModel.initiateCall(destinationHash)
+            } else if (!isGranted) {
+                android.util.Log.w("VoiceCallScreen", "📞 Permission denied, cannot make call")
+            }
+        }
+
+    // Request permission and initiate call when screen opens
     LaunchedEffect(destinationHash) {
+        android.util.Log.w("VoiceCallScreen", "📞 VoiceCallScreen opened! destHash=${destinationHash.take(16)}...")
+        android.util.Log.w("VoiceCallScreen", "📞 Current callState=$callState, hasAudioPermission=$hasAudioPermission")
         if (callState is CallState.Idle) {
-            viewModel.initiateCall(destinationHash)
+            if (hasAudioPermission) {
+                android.util.Log.w("VoiceCallScreen", "📞 Permission already granted, calling initiateCall()...")
+                viewModel.initiateCall(destinationHash)
+            } else if (!permissionRequested) {
+                android.util.Log.w("VoiceCallScreen", "📞 Requesting microphone permission...")
+                permissionRequested = true
+                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        } else {
+            android.util.Log.w("VoiceCallScreen", "📞 CallState is NOT Idle, NOT calling initiateCall()")
         }
     }
 
     // Handle call ended - navigate back
     LaunchedEffect(callState) {
+        android.util.Log.w("VoiceCallScreen", "📞 callState changed to: $callState")
         when (callState) {
             is CallState.Ended,
             is CallState.Rejected,
             is CallState.Busy,
             -> {
+                android.util.Log.w("VoiceCallScreen", "📞 Call ended/rejected/busy, navigating back in 1.5s...")
                 // Small delay to show the end state
                 kotlinx.coroutines.delay(1500)
+                android.util.Log.w("VoiceCallScreen", "📞 Calling onEndCall()...")
                 onEndCall()
             }
             else -> {}

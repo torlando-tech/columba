@@ -466,6 +466,15 @@ class ReticulumWrapper:
         except Exception as e:
             log_error("ReticulumWrapper", "shutdown_call_manager", f"Error: {e}")
 
+    def get_call_manager(self):
+        """
+        Get the LXST CallManager instance.
+
+        Returns:
+            CallManager instance or None if not initialized
+        """
+        return self._call_manager
+
     def get_paired_rnodes(self) -> Dict:
         """
         Get list of paired Bluetooth devices that might be RNodes.

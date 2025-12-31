@@ -46,9 +46,13 @@ sealed class CallState {
  */
 interface PythonCallManagerInterface {
     fun call(destinationHash: String)
+
     fun answer()
+
     fun hangup()
+
     fun muteMicrophone(muted: Boolean)
+
     fun setSpeaker(enabled: Boolean)
 }
 
@@ -87,6 +91,7 @@ internal class PyObjectCallManager(private val pyObject: PyObject) : PythonCallM
  * **Thread Safety**: All state flows are thread-safe. Python callbacks are
  * invoked on the bridge's coroutine scope.
  */
+@Suppress("TooManyFunctions")
 class CallBridge private constructor(
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
@@ -154,6 +159,19 @@ class CallBridge private constructor(
     @Volatile
     private var onCallStateChanged: PyObject? = null
 
+    // Callback for incoming calls (for IPC notification to UI process)
+    @Volatile
+    private var incomingCallListener: ((String) -> Unit)? = null
+
+    // Callback for call ended (for IPC notification to UI process)
+    @Volatile
+    private var callEndedListener: ((String?) -> Unit)? = null
+
+    // Callback for call state changes (for IPC notification to UI process)
+    // Parameters: state (String), identityHash (String?)
+    @Volatile
+    private var callStateChangedListener: ((String, String?) -> Unit)? = null
+
     // ===== Python Call Manager Setup =====
 
     /**
@@ -180,6 +198,31 @@ class CallBridge private constructor(
         onCallStateChanged = callback
     }
 
+    /**
+     * Set listener for incoming calls (for IPC notification).
+     * Called by the service binder to broadcast to UI process.
+     */
+    fun setIncomingCallListener(listener: ((String) -> Unit)?) {
+        incomingCallListener = listener
+    }
+
+    /**
+     * Set listener for call ended events (for IPC notification).
+     * Called by the service binder to broadcast to UI process.
+     */
+    fun setCallEndedListener(listener: ((String?) -> Unit)?) {
+        callEndedListener = listener
+    }
+
+    /**
+     * Set listener for call state changes (for IPC notification).
+     * Called by the service binder to broadcast to UI process.
+     * Listener receives (state: String, identityHash: String?)
+     */
+    fun setCallStateChangedListener(listener: ((String, String?) -> Unit)?) {
+        callStateChangedListener = listener
+    }
+
     // ===== Called by Python (via Chaquopy callbacks) =====
 
     /**
@@ -193,6 +236,8 @@ class CallBridge private constructor(
             _remoteIdentity.value = identityHash
             _callState.value = CallState.Incoming(identityHash)
         }
+        // Notify listener for IPC broadcast to UI process
+        incomingCallListener?.invoke(identityHash)
     }
 
     /**
@@ -205,6 +250,8 @@ class CallBridge private constructor(
         scope.launch {
             _callState.value = CallState.Ringing(identityHash)
         }
+        // Notify listener for IPC broadcast to UI process
+        callStateChangedListener?.invoke("ringing", identityHash)
     }
 
     /**
@@ -218,6 +265,8 @@ class CallBridge private constructor(
             _callState.value = CallState.Active(identityHash)
             _callStartTime.value = System.currentTimeMillis()
         }
+        // Notify listener for IPC broadcast to UI process
+        callStateChangedListener?.invoke("established", identityHash)
     }
 
     /**
@@ -227,6 +276,8 @@ class CallBridge private constructor(
      */
     fun onCallEnded(identityHash: String?) {
         Log.i(TAG, "Call ended: ${identityHash?.take(16) ?: "unknown"}")
+        // Notify listener for IPC broadcast to UI process
+        callEndedListener?.invoke(identityHash)
         scope.launch {
             // Calculate final duration before resetting
             _callStartTime.value?.let { startTime ->
@@ -252,6 +303,8 @@ class CallBridge private constructor(
             kotlinx.coroutines.delay(3000)
             resetState()
         }
+        // Notify listener for IPC broadcast to UI process
+        callStateChangedListener?.invoke("busy", null)
     }
 
     /**
@@ -266,6 +319,8 @@ class CallBridge private constructor(
             kotlinx.coroutines.delay(2000)
             resetState()
         }
+        // Notify listener for IPC broadcast to UI process
+        callStateChangedListener?.invoke("rejected", null)
     }
 
     // ===== Called by Kotlin UI =====
@@ -426,6 +481,43 @@ class CallBridge private constructor(
         _isSpeakerOn.value = false
         _callDuration.value = 0L
         _callStartTime.value = null
+    }
+
+    // ===== Local State Helpers (for UI layer) =====
+
+    /**
+     * Set local connecting state. Used by UI when initiating call via protocol.
+     */
+    fun setConnecting(destinationHash: String) {
+        _remoteIdentity.value = destinationHash
+        _callState.value = CallState.Connecting(destinationHash)
+    }
+
+    /**
+     * Set local ended state. Used by UI after calling protocol.hangupCall().
+     */
+    fun setEnded() {
+        scope.launch {
+            _callState.value = CallState.Ended
+            kotlinx.coroutines.delay(2000)
+            resetState()
+        }
+    }
+
+    /**
+     * Update local mute state without calling Python.
+     * Used by UI when mute is controlled via protocol.
+     */
+    fun setMutedLocally(muted: Boolean) {
+        _isMuted.value = muted
+    }
+
+    /**
+     * Update local speaker state without calling Python.
+     * Used by UI when speaker is controlled via protocol.
+     */
+    fun setSpeakerLocally(enabled: Boolean) {
+        _isSpeakerOn.value = enabled
     }
 
     /**

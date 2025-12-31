@@ -1,5 +1,9 @@
 package com.lxmf.messenger.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -31,13 +35,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lxmf.messenger.reticulum.call.bridge.CallState
@@ -58,8 +67,41 @@ fun IncomingCallScreen(
     onCallDeclined: () -> Unit,
     viewModel: CallViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
     val callState by viewModel.callState.collectAsStateWithLifecycle()
     val peerName by viewModel.peerName.collectAsStateWithLifecycle()
+
+    // Permission state
+    var hasAudioPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+
+    // Permission launcher - answers call after permission granted
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            hasAudioPermission = isGranted
+            if (isGranted) {
+                android.util.Log.i("IncomingCallScreen", "📞 Permission granted, answering call...")
+                viewModel.answerCall()
+            } else {
+                android.util.Log.w("IncomingCallScreen", "📞 Permission denied, cannot answer call")
+            }
+        }
+
+    // Function to handle answer with permission check
+    val handleAnswer: () -> Unit = {
+        if (hasAudioPermission) {
+            viewModel.answerCall()
+        } else {
+            android.util.Log.i("IncomingCallScreen", "📞 Requesting microphone permission to answer...")
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     // Handle call state changes
     LaunchedEffect(callState) {
@@ -219,7 +261,7 @@ fun IncomingCallScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     FilledIconButton(
-                        onClick = { viewModel.answerCall() },
+                        onClick = handleAnswer,
                         modifier = Modifier.size(72.dp),
                         colors =
                             IconButtonDefaults.filledIconButtonColors(

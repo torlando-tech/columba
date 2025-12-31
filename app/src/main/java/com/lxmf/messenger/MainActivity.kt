@@ -59,6 +59,8 @@ import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
+import com.lxmf.messenger.reticulum.call.bridge.CallBridge
+import com.lxmf.messenger.reticulum.call.bridge.CallState
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
 import com.lxmf.messenger.ui.screens.AnnounceDetailScreen
@@ -373,6 +375,25 @@ fun ColumbaNavigation(
                 Screen.Settings.route -> 3
                 else -> selectedTab // Keep current selection for nested screens
             }
+    }
+
+    // Observe CallBridge state for incoming calls and navigate to IncomingCallScreen
+    val callBridge = remember { CallBridge.getInstance() }
+    val callState by callBridge.callState.collectAsState()
+
+    LaunchedEffect(callState) {
+        when (val state = callState) {
+            is CallState.Incoming -> {
+                val identityHash = state.identityHash
+                Log.i("MainActivity", "📞 Incoming call detected, navigating to IncomingCallScreen: $identityHash")
+                val encodedHash = Uri.encode(identityHash)
+                // Only navigate if not already on an incoming call screen
+                if (currentRoute?.startsWith("incoming_call/") != true) {
+                    navController.navigate("incoming_call/$encodedHash")
+                }
+            }
+            else -> { /* No action needed for other states */ }
+        }
     }
 
     // Screens that should hide the bottom navigation bar

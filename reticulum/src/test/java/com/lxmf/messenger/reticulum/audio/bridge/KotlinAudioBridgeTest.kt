@@ -243,12 +243,13 @@ class KotlinAudioBridgeTest {
     // ========== Buffer Size Validation Tests ==========
 
     @Test
+    @Suppress("SwallowedException")
     fun `startPlayback handles invalid parameters gracefully`() {
         // With Robolectric, AudioTrack may not work fully, but should not crash
         try {
             audioBridge.startPlayback(0, 0, false)
         } catch (e: Exception) {
-            // Expected to fail with invalid parameters
+            // Expected to fail with invalid parameters - exception is intentionally ignored
         }
 
         // Should still be in a valid state
@@ -256,12 +257,13 @@ class KotlinAudioBridgeTest {
     }
 
     @Test
+    @Suppress("SwallowedException")
     fun `startRecording handles invalid parameters gracefully`() {
         // With Robolectric, AudioRecord may not work fully, but should not crash
         try {
             audioBridge.startRecording(0, 0, 0)
         } catch (e: Exception) {
-            // Expected to fail with invalid parameters
+            // Expected to fail with invalid parameters - exception is intentionally ignored
         }
 
         // Should still be in a valid state

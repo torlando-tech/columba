@@ -54,6 +54,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!-- Companion Device Manager (Android 12+) for RNode association -->
@@ -100,7 +101,7 @@
             android:enabled="true"
             android:exported="false"
             android:process=":reticulum"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="connectedDevice|microphone" />
 
         <!-- RNode Companion Device Service (Android 12+) -->
         <!-- Enables Android to recognize Columba as the companion app for RNode devices -->

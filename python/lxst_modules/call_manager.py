@@ -137,10 +137,25 @@ class CallManager:
         from .chaquopy_audio_backend import set_kotlin_audio_bridge
         set_kotlin_audio_bridge(audio_bridge)
 
+        # Pre-populate sys.modules so LXST uses our Chaquopy-compatible soundcard
+        # instead of its Pyjnius-based implementation which doesn't work with Chaquopy
+        import sys
+        from lxst_modules import chaquopy_audio_backend
+        sys.modules['LXST.Platforms.android.soundcard'] = chaquopy_audio_backend
+        RNS.log("Registered chaquopy_audio_backend as LXST soundcard backend", RNS.LOG_DEBUG)
+
         try:
             # Import LXST Telephony
             # Note: LXST must be installed or available in Python path
             from LXST.Primitives.Telephony import Telephone
+
+            # Check Telephone constructor parameters for sidetone/monitoring options
+            import inspect
+            try:
+                sig = inspect.signature(Telephone.__init__)
+                RNS.log(f"📞 Telephone constructor params: {list(sig.parameters.keys())}", RNS.LOG_DEBUG)
+            except Exception as e:
+                RNS.log(f"📞 Could not inspect Telephone: {e}", RNS.LOG_DEBUG)
 
             self.telephone = Telephone(
                 self.identity,
@@ -148,6 +163,14 @@ class CallManager:
                 wait_time=70,
                 auto_answer=None,
             )
+
+            # Log any sidetone/monitoring attributes
+            try:
+                for attr in ['sidetone', 'monitoring', 'local_monitor', 'echo']:
+                    if hasattr(self.telephone, attr):
+                        RNS.log(f"📞 Telephone.{attr} = {getattr(self.telephone, attr)}", RNS.LOG_DEBUG)
+            except Exception:
+                pass
 
             # Wire up LXST callbacks to Kotlin callbacks
             self.telephone.set_ringing_callback(self._handle_ringing)
@@ -262,14 +285,29 @@ class CallManager:
 
     def hangup(self):
         """End the current call."""
+        RNS.log("📞 hangup() called", RNS.LOG_INFO)
         if not self._initialized or self.telephone is None:
+            RNS.log("📞 hangup() - not initialized or no telephone", RNS.LOG_WARNING)
+            # Still notify Kotlin that call ended locally
+            if self._kotlin_call_bridge is not None:
+                try:
+                    self._kotlin_call_bridge.onCallEnded(self._active_call_identity)
+                except Exception as e:
+                    RNS.log(f"Error notifying Kotlin of hangup: {e}", RNS.LOG_ERROR)
             return
 
         try:
+            RNS.log(f"📞 Calling telephone.hangup() for call with {self._active_call_identity}", RNS.LOG_INFO)
             self.telephone.hangup()
-            RNS.log("Call hung up", RNS.LOG_INFO)
+            RNS.log("📞 Call hung up successfully", RNS.LOG_INFO)
         except Exception as e:
-            RNS.log(f"Error hanging up: {e}", RNS.LOG_ERROR)
+            RNS.log(f"📞 Error hanging up: {e}", RNS.LOG_ERROR)
+            # Still notify Kotlin that call ended due to error
+            if self._kotlin_call_bridge is not None:
+                try:
+                    self._kotlin_call_bridge.onCallEnded(self._active_call_identity)
+                except Exception as ex:
+                    RNS.log(f"Error notifying Kotlin of hangup error: {ex}", RNS.LOG_ERROR)
 
     def mute_microphone(self, muted):
         """Mute or unmute the microphone.
@@ -277,6 +315,14 @@ class CallManager:
         Args:
             muted: True to mute, False to unmute
         """
+        # Also mute at audio bridge level for reliable muting
+        if self._audio_bridge is not None:
+            try:
+                self._audio_bridge.setMicrophoneMute(muted)
+                RNS.log(f"Audio bridge microphone mute: {muted}", RNS.LOG_DEBUG)
+            except Exception as e:
+                RNS.log(f"Error setting audio bridge mute: {e}", RNS.LOG_ERROR)
+
         if not self._initialized or self.telephone is None:
             return
 
@@ -285,9 +331,9 @@ class CallManager:
                 self.telephone.mute_transmit()
             else:
                 self.telephone.unmute_transmit()
-            RNS.log(f"Microphone muted: {muted}", RNS.LOG_DEBUG)
+            RNS.log(f"LXST transmit muted: {muted}", RNS.LOG_DEBUG)
         except Exception as e:
-            RNS.log(f"Error muting microphone: {e}", RNS.LOG_ERROR)
+            RNS.log(f"Error muting LXST transmit: {e}", RNS.LOG_ERROR)
 
     def set_speaker(self, enabled):
         """Enable or disable speaker.
@@ -373,31 +419,37 @@ class CallManager:
 
     def _handle_established(self, identity):
         """Handle call established."""
+        RNS.log("📞 _handle_established() CALLBACK FIRED", RNS.LOG_INFO)
         identity_hash = identity.hash.hex() if identity else None
         self._active_call_identity = identity_hash
         import time
         self._call_start_time = time.time()
-        RNS.log(f"Call established with {identity_hash[:16] if identity_hash else 'unknown'}...", RNS.LOG_INFO)
+        RNS.log(f"📞 Call established with {identity_hash[:16] if identity_hash else 'unknown'}...", RNS.LOG_INFO)
 
         if self._kotlin_call_bridge is not None:
             try:
+                RNS.log("📞 Notifying Kotlin CallBridge of established", RNS.LOG_DEBUG)
                 self._kotlin_call_bridge.onCallEstablished(identity_hash)
             except Exception as e:
-                RNS.log(f"Error notifying Kotlin of call established: {e}", RNS.LOG_ERROR)
+                RNS.log(f"📞 Error notifying Kotlin of call established: {e}", RNS.LOG_ERROR)
 
     def _handle_ended(self, identity):
         """Handle call ended."""
+        RNS.log("📞 _handle_ended() CALLBACK FIRED", RNS.LOG_INFO)
         identity_hash = identity.hash.hex() if identity else self._active_call_identity
-        RNS.log(f"Call ended with {identity_hash[:16] if identity_hash else 'unknown'}...", RNS.LOG_INFO)
+        RNS.log(f"📞 Call ended with {identity_hash[:16] if identity_hash else 'unknown'}...", RNS.LOG_INFO)
 
         self._active_call_identity = None
         self._call_start_time = None
 
         if self._kotlin_call_bridge is not None:
             try:
+                RNS.log("📞 Notifying Kotlin CallBridge of call ended", RNS.LOG_DEBUG)
                 self._kotlin_call_bridge.onCallEnded(identity_hash)
             except Exception as e:
-                RNS.log(f"Error notifying Kotlin of call ended: {e}", RNS.LOG_ERROR)
+                RNS.log(f"📞 Error notifying Kotlin of call ended: {e}", RNS.LOG_ERROR)
+        else:
+            RNS.log("📞 WARNING: No Kotlin CallBridge set!", RNS.LOG_WARNING)
 
     def _handle_busy(self, identity):
         """Handle remote busy."""

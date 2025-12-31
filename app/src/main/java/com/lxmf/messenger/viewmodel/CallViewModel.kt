@@ -6,15 +6,15 @@ import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.reticulum.call.bridge.CallBridge
 import com.lxmf.messenger.reticulum.call.bridge.CallState
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -22,12 +22,16 @@ import javax.inject.Inject
  *
  * Observes CallBridge state and provides UI-friendly state for
  * VoiceCallScreen and IncomingCallScreen.
+ *
+ * Uses ReticulumProtocol for call actions (IPC to service process)
+ * and CallBridge for local state management.
  */
 @HiltViewModel
 class CallViewModel
     @Inject
     constructor(
         private val contactRepository: ContactRepository,
+        private val protocol: ReticulumProtocol,
     ) : ViewModel() {
         companion object {
             private const val TAG = "CallViewModel"
@@ -113,12 +117,30 @@ class CallViewModel
 
         /**
          * Initiate an outgoing call.
+         * Uses ReticulumProtocol for IPC to service process where Python runs.
          */
         fun initiateCall(destinationHash: String) {
-            Log.i(TAG, "Initiating call to ${destinationHash.take(16)}...")
+            Log.w(TAG, "📞📞📞 initiateCall() CALLED - destHash=${destinationHash.take(16)}...")
+            Log.w(TAG, "📞 Current callState=${callState.value}")
             _isConnecting.value = true
             resolvePeerNameSync(destinationHash)
-            callBridge.initiateCall(destinationHash)
+
+            // Update local state
+            callBridge.setConnecting(destinationHash)
+
+            // Initiate call via service IPC
+            viewModelScope.launch {
+                Log.w(TAG, "📞 Calling protocol.initiateCall()...")
+                val result = protocol.initiateCall(destinationHash)
+                Log.w(TAG, "📞 protocol.initiateCall() returned: success=${result.isSuccess}")
+                if (result.isFailure) {
+                    Log.e(TAG, "📞❌ Failed to initiate call: ${result.exceptionOrNull()?.message}")
+                    _isConnecting.value = false
+                    callBridge.setEnded()
+                } else {
+                    Log.w(TAG, "📞✅ Call initiated successfully!")
+                }
+            }
         }
 
         private fun resolvePeerNameSync(identityHash: String) {
@@ -129,10 +151,16 @@ class CallViewModel
 
         /**
          * Answer an incoming call.
+         * Uses ReticulumProtocol for IPC to service process.
          */
         fun answerCall() {
             Log.d(TAG, "Answering call")
-            callBridge.answerCall()
+            viewModelScope.launch {
+                val result = protocol.answerCall()
+                if (result.isFailure) {
+                    Log.e(TAG, "Failed to answer call: ${result.exceptionOrNull()?.message}")
+                }
+            }
         }
 
         /**
@@ -140,29 +168,41 @@ class CallViewModel
          */
         fun declineCall() {
             Log.d(TAG, "Declining call")
-            callBridge.declineCall()
+            endCall()
         }
 
         /**
          * End the current call.
+         * Uses ReticulumProtocol for IPC to service process.
          */
         fun endCall() {
             Log.d(TAG, "Ending call")
-            callBridge.endCall()
+            viewModelScope.launch {
+                protocol.hangupCall()
+                callBridge.setEnded()
+            }
         }
 
         /**
          * Toggle microphone mute.
          */
         fun toggleMute() {
-            callBridge.toggleMute()
+            val newMuted = !callBridge.isMuted.value
+            callBridge.setMutedLocally(newMuted)
+            viewModelScope.launch {
+                protocol.setCallMuted(newMuted)
+            }
         }
 
         /**
          * Toggle speaker/earpiece.
          */
         fun toggleSpeaker() {
-            callBridge.toggleSpeaker()
+            val newSpeaker = !callBridge.isSpeakerOn.value
+            callBridge.setSpeakerLocally(newSpeaker)
+            viewModelScope.launch {
+                protocol.setCallSpeaker(newSpeaker)
+            }
         }
 
         /**
@@ -176,7 +216,7 @@ class CallViewModel
         fun formatDuration(seconds: Long): String {
             val mins = seconds / 60
             val secs = seconds % 60
-            return String.format("%02d:%02d", mins, secs)
+            return String.format(Locale.US, "%02d:%02d", mins, secs)
         }
 
         /**

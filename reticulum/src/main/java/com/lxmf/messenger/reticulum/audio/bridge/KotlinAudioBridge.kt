@@ -40,6 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * @property context Application context
  * @property audioManager AudioManager instance (injectable for testing)
  */
+@Suppress("TooManyFunctions")
 @SuppressLint("MissingPermission")
 class KotlinAudioBridge(
     private val context: Context,
@@ -105,7 +106,7 @@ class KotlinAudioBridge(
 
     // Audio routing
     @Volatile
-    private var speakerphoneOn = false
+    private var speakerphoneOn = false  // Default to earpiece, user can enable speaker via UI
 
     @Volatile
     private var microphoneMuted = false
@@ -193,19 +194,25 @@ class KotlinAudioBridge(
             audioTrack = trackBuilder.build()
 
             // Set audio mode for voice communication
+            // Note: MODE_IN_COMMUNICATION enables earpiece by default
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            Log.i(TAG, "📞 Audio mode set to MODE_IN_COMMUNICATION, speakerphoneOn=$speakerphoneOn")
 
-            // Apply speaker routing
+            // Apply speaker routing AFTER setting mode
             audioManager.isSpeakerphoneOn = speakerphoneOn
+            Log.i(TAG, "📞 Speakerphone set to: ${audioManager.isSpeakerphoneOn}")
 
             audioTrack?.play()
             isPlaying.set(true)
-            Log.i(TAG, "Playback started successfully")
+            Log.i(TAG, "Playback started successfully, speaker=${audioManager.isSpeakerphoneOn}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start playback", e)
             onPlaybackError?.callAttr("__call__", e.message ?: "Unknown error")
         }
     }
+
+    private var writeAudioCount = 0L
+    private var writeNonZeroCount = 0L
 
     /**
      * Write audio data to the output.
@@ -222,6 +229,24 @@ class KotlinAudioBridge(
         val track = audioTrack ?: return
 
         try {
+            writeAudioCount++
+            // Check if data has non-zero samples
+            var hasNonZero = false
+            for (i in 0 until audioData.size step 2) {
+                if (i + 1 < audioData.size) {
+                    val sample = (audioData[i].toInt() and 0xFF) or (audioData[i + 1].toInt() shl 8)
+                    if (sample != 0 && sample != -1) {
+                        hasNonZero = true
+                        break
+                    }
+                }
+            }
+            if (hasNonZero) writeNonZeroCount++
+
+            if (writeAudioCount % 100L == 1L) {
+                Log.d(TAG, "📞 writeAudio #$writeAudioCount: ${audioData.size} bytes, nonzero=$writeNonZeroCount, hasAudio=$hasNonZero")
+            }
+
             val written =
                 track.write(
                     audioData,
@@ -309,17 +334,22 @@ class KotlinAudioBridge(
         }
 
         try {
+            // Use MIC source - VOICE_COMMUNICATION seems to cause issues on some Samsung devices
+            val audioSource = MediaRecorder.AudioSource.MIC
+            Log.i(TAG, "📞 Using audio source: $audioSource (MIC=${MediaRecorder.AudioSource.MIC}, VOICE_COMM=${MediaRecorder.AudioSource.VOICE_COMMUNICATION})")
+
             audioRecord =
                 AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                    audioSource,
                     sampleRate,
                     channelConfig,
                     AudioFormat.ENCODING_PCM_16BIT,
-                    maxOf(bufferSize, samplesPerFrame * channels * 2 * 2), // At least 2 frames
+                    // At least 2 frames buffer
+                    maxOf(bufferSize, samplesPerFrame * channels * 2 * 2),
                 )
 
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                Log.e(TAG, "AudioRecord failed to initialize")
+                Log.e(TAG, "AudioRecord failed to initialize, state=${audioRecord?.state}")
                 onRecordingError?.callAttr("__call__", "AudioRecord failed to initialize")
                 audioRecord?.release()
                 audioRecord = null
@@ -327,6 +357,9 @@ class KotlinAudioBridge(
             }
 
             audioRecord?.startRecording()
+            val recordingState = audioRecord?.recordingState
+            Log.i(TAG, "📞 AudioRecord state after startRecording: $recordingState (RECORDSTATE_RECORDING=${AudioRecord.RECORDSTATE_RECORDING})")
+
             isRecording.set(true)
             recordBuffer.clear()
 
@@ -347,9 +380,15 @@ class KotlinAudioBridge(
      *
      * Continuously reads from AudioRecord and queues frames for Python to consume.
      */
+    private var recordFrameCount = 0L
+    private var recordNonZeroCount = 0L
+
+    @Suppress("LoopWithTooManyJumpStatements")
     private fun recordingLoop() {
         val frameBytes = recordFrameSize * recordChannels * 2 // 16-bit = 2 bytes per sample
         val buffer = ByteArray(frameBytes)
+        recordFrameCount = 0
+        recordNonZeroCount = 0
 
         Log.d(TAG, "Recording loop started, frame size: $frameBytes bytes")
 
@@ -361,6 +400,29 @@ class KotlinAudioBridge(
 
                 when {
                     bytesRead > 0 -> {
+                        recordFrameCount++
+                        // Check if frame has any non-zero samples and find max amplitude
+                        var hasNonZero = false
+                        var maxSample = 0
+                        for (i in 0 until bytesRead step 2) {
+                            if (i + 1 < bytesRead) {
+                                // Read as signed int16
+                                val sample = (buffer[i].toInt() and 0xFF) or (buffer[i + 1].toInt() shl 8)
+                                val signedSample = if (sample > 32767) sample - 65536 else sample
+                                val absSample = kotlin.math.abs(signedSample)
+                                if (absSample > maxSample) maxSample = absSample
+                                if (absSample > 10) { // Small threshold to ignore noise floor
+                                    hasNonZero = true
+                                }
+                            }
+                        }
+                        if (hasNonZero) recordNonZeroCount++
+
+                        // Log periodically with max amplitude
+                        if (recordFrameCount % 100L == 1L) {
+                            Log.d(TAG, "📞 Recording: frame #$recordFrameCount, nonzero=$recordNonZeroCount, bytes=$bytesRead, maxAmp=$maxSample")
+                        }
+
                         // Queue frame for Python (non-blocking, drops oldest if full)
                         if (!recordBuffer.offer(buffer.copyOf(bytesRead))) {
                             recordBuffer.poll() // Remove oldest
@@ -389,10 +451,14 @@ class KotlinAudioBridge(
      * Read audio data from the recording buffer.
      *
      * Called by Python to retrieve recorded audio frames.
+     * Returns silence (zeros) when microphone is muted.
      *
      * @param numSamples Number of samples to read (ignored, returns one frame)
      * @return Audio data as byte array, or null if no data available
      */
+    private var readAudioCount = 0L
+
+    @Suppress("UnusedParameter")
     fun readAudio(numSamples: Int): ByteArray? {
         if (!isRecording.get()) {
             return null
@@ -400,7 +466,21 @@ class KotlinAudioBridge(
 
         return try {
             // Wait up to 50ms for data (allows for ~20ms frames)
-            recordBuffer.poll(50, TimeUnit.MILLISECONDS)
+            val data = recordBuffer.poll(50, TimeUnit.MILLISECONDS)
+
+            readAudioCount++
+            if (readAudioCount % 100L == 1L) {
+                val size = data?.size ?: 0
+                val queueSize = recordBuffer.size
+                Log.d(TAG, "📞 readAudio #$readAudioCount: ${if (data != null) "$size bytes" else "null"}, queue=$queueSize, muted=$microphoneMuted")
+            }
+
+            // Return silence if muted (software mute for reliability)
+            if (microphoneMuted && data != null) {
+                ByteArray(data.size) // Returns zeros (silence)
+            } else {
+                data
+            }
         } catch (e: InterruptedException) {
             null
         }
@@ -443,12 +523,20 @@ class KotlinAudioBridge(
     /**
      * Mute or unmute the microphone.
      *
+     * Uses software mute (returning silence in readAudio) for reliability,
+     * plus system-level mute as backup.
+     *
      * @param muted True to mute, false to unmute
      */
     fun setMicrophoneMute(muted: Boolean) {
+        Log.i(TAG, "📞 Microphone mute set to: $muted (software mute active)")
         microphoneMuted = muted
-        audioManager.isMicrophoneMute = muted
-        Log.d(TAG, "Microphone mute: $muted")
+        // Also try system-level mute (may not work on all devices)
+        try {
+            audioManager.isMicrophoneMute = muted
+        } catch (e: Exception) {
+            Log.w(TAG, "System microphone mute not available: ${e.message}")
+        }
     }
 
     /**

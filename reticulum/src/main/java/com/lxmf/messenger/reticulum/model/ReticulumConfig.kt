@@ -118,7 +118,7 @@ sealed class InterfaceConfig {
         val codingRate: Int = 5,
         val stAlock: Double? = null, // Short-term airtime limit %
         val ltAlock: Double? = null, // Long-term airtime limit %
-        val mode: String = "full",
+        val mode: String = "access_point",
         val enableFramebuffer: Boolean = true, // Display logo on RNode OLED
     ) : InterfaceConfig()
 

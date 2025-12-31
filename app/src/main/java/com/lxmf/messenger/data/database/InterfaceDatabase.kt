@@ -321,7 +321,7 @@ abstract class InterfaceDatabase : RoomDatabase() {
                         {
                             "device_name": "Reticulum-Android",
                             "max_connections": 7,
-                            "mode": "full"
+                            "mode": "roaming"
                         }
                         """.trimIndent(),
                     displayOrder = 1,
@@ -338,7 +338,7 @@ abstract class InterfaceDatabase : RoomDatabase() {
                             "target_host": "sideband.connect.reticulum.network",
                             "target_port": 4965,
                             "kiss_framing": false,
-                            "mode": "full"
+                            "mode": "boundary"
                         }
                         """.trimIndent(),
                     displayOrder = 2,

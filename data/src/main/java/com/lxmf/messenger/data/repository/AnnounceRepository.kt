@@ -30,6 +30,9 @@ data class Announce(
     val stampCost: Int? = null, // Stamp cost for message delivery
     val stampCostFlexibility: Int? = null, // Flexibility range for propagation nodes
     val peeringCost: Int? = null, // Peering cost for propagation nodes
+    val iconName: String? = null, // Icon name (e.g., Material icon name)
+    val iconForegroundColor: String? = null, // Hex RGB e.g., "FFFFFF"
+    val iconBackgroundColor: String? = null, // Hex RGB e.g., "1E88E5"
 ) {
     @Suppress("CyclomaticComplexMethod")
     override fun equals(other: Any?): Boolean {
@@ -57,6 +60,9 @@ data class Announce(
         if (stampCost != other.stampCost) return false
         if (stampCostFlexibility != other.stampCostFlexibility) return false
         if (peeringCost != other.peeringCost) return false
+        if (iconName != other.iconName) return false
+        if (iconForegroundColor != other.iconForegroundColor) return false
+        if (iconBackgroundColor != other.iconBackgroundColor) return false
 
         return true
     }
@@ -76,6 +82,9 @@ data class Announce(
         result = 31 * result + (stampCost?.hashCode() ?: 0)
         result = 31 * result + (stampCostFlexibility?.hashCode() ?: 0)
         result = 31 * result + (peeringCost?.hashCode() ?: 0)
+        result = 31 * result + (iconName?.hashCode() ?: 0)
+        result = 31 * result + (iconForegroundColor?.hashCode() ?: 0)
+        result = 31 * result + (iconBackgroundColor?.hashCode() ?: 0)
         return result
     }
 }
@@ -213,8 +222,11 @@ class AnnounceRepository
             stampCost: Int? = null,
             stampCostFlexibility: Int? = null,
             peeringCost: Int? = null,
+            iconName: String? = null,
+            iconForegroundColor: String? = null,
+            iconBackgroundColor: String? = null,
         ) {
-            // Preserve favorite status if announce already exists
+            // Preserve favorite status and icon appearance if announce already exists
             val existing = announceDao.getAnnounce(destinationHash)
 
             val entity =
@@ -234,6 +246,9 @@ class AnnounceRepository
                     stampCost = stampCost,
                     stampCostFlexibility = stampCostFlexibility,
                     peeringCost = peeringCost,
+                    iconName = iconName ?: existing?.iconName,
+                    iconForegroundColor = iconForegroundColor ?: existing?.iconForegroundColor,
+                    iconBackgroundColor = iconBackgroundColor ?: existing?.iconBackgroundColor,
                 )
             announceDao.upsertAnnounce(entity)
         }
@@ -348,6 +363,22 @@ class AnnounceRepository
             return announceDao.getNodeTypeCounts().map { it.nodeType to it.count }
         }
 
+        /**
+         * Update the icon appearance for an announce.
+         * @param destinationHash The destination hash of the announce
+         * @param iconName The icon name (e.g., Material icon name)
+         * @param foregroundColor Hex RGB color for icon foreground (e.g., "FFFFFF")
+         * @param backgroundColor Hex RGB color for icon background (e.g., "1E88E5")
+         */
+        suspend fun updateIconAppearance(
+            destinationHash: String,
+            iconName: String?,
+            foregroundColor: String?,
+            backgroundColor: String?,
+        ) {
+            announceDao.updateIconAppearance(destinationHash, iconName, foregroundColor, backgroundColor)
+        }
+
         private fun AnnounceEntity.toAnnounce() =
             Announce(
                 destinationHash = destinationHash,
@@ -365,5 +396,8 @@ class AnnounceRepository
                 stampCost = stampCost,
                 stampCostFlexibility = stampCostFlexibility,
                 peeringCost = peeringCost,
+                iconName = iconName,
+                iconForegroundColor = iconForegroundColor,
+                iconBackgroundColor = iconBackgroundColor,
             )
     }

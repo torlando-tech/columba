@@ -233,6 +233,36 @@ class IdentityRepository
             }
 
         /**
+         * Update the icon appearance (icon, foreground color, background color) for an identity.
+         *
+         * @param identityHash The identity to update
+         * @param iconName Material Design Icon name (e.g., "account", "star"), or null to clear
+         * @param foregroundColor Hex RGB color for icon foreground (e.g., "FFFFFF"), or null to clear
+         * @param backgroundColor Hex RGB color for icon background (e.g., "1E88E5"), or null to clear
+         */
+        suspend fun updateIconAppearance(
+            identityHash: String,
+            iconName: String?,
+            foregroundColor: String?,
+            backgroundColor: String?,
+        ): Result<Unit> =
+            withContext(ioDispatcher) {
+                try {
+                    Log.d(
+                        TAG,
+                        "updateIconAppearance: Updating icon for ${identityHash.take(8)}... " +
+                            "to icon=$iconName, fg=$foregroundColor, bg=$backgroundColor",
+                    )
+                    identityDao.updateIconAppearance(identityHash, iconName, foregroundColor, backgroundColor)
+                    Log.d(TAG, "updateIconAppearance: Icon appearance updated successfully")
+                    Result.success(Unit)
+                } catch (e: Exception) {
+                    Log.e(TAG, "updateIconAppearance: Failed to update icon appearance", e)
+                    Result.failure(e)
+                }
+            }
+
+        /**
          * Ensure the identity file exists at the canonical path (identity_<hash>).
          * If the file doesn't exist, recreate it from keyData stored in the database.
          * Also updates the database filePath if it was pointing to default_identity.

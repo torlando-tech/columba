@@ -30,7 +30,7 @@ import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
         LocalIdentityEntity::class,
         ReceivedLocationEntity::class,
     ],
-    version = 26,
+    version = 27,
     exportSchema = false,
 )
 abstract class ColumbaDatabase : RoomDatabase() {

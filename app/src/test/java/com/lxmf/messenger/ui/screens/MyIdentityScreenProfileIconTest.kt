@@ -1,32 +1,11 @@
 package com.lxmf.messenger.ui.screens
 
 import android.app.Application
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.test.RegisterComponentActivityRule
-import com.lxmf.messenger.ui.components.Identicon
-import com.lxmf.messenger.ui.components.ProfileIcon
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -37,7 +16,7 @@ import org.robolectric.annotation.Config
 
 /**
  * Unit tests for ProfileIconCard in MyIdentityScreen.
- * Tests the profile icon customization UI section.
+ * Tests the profile icon customization UI section using the actual production component.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -50,85 +29,12 @@ class MyIdentityScreenProfileIconTest {
 
     val composeTestRule get() = composeRule
 
-    // Test composable that mirrors ProfileIconCard from MyIdentityScreen
-    @Composable
-    private fun TestProfileIconCard(
-        iconName: String?,
-        foregroundColor: String?,
-        backgroundColor: String?,
-        fallbackHash: ByteArray,
-        onEditIcon: () -> Unit,
-    ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Palette,
-                        contentDescription = "Profile Icon",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = "Profile Icon",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-
-                Text(
-                    text = "Customize your profile icon that others will see. " +
-                        "This is compatible with Sideband and other Reticulum apps.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (iconName != null && foregroundColor != null && backgroundColor != null) {
-                        ProfileIcon(
-                            iconName = iconName,
-                            foregroundColor = foregroundColor,
-                            backgroundColor = backgroundColor,
-                            size = 64.dp,
-                            fallbackHash = fallbackHash,
-                        )
-                    } else {
-                        Identicon(
-                            hash = fallbackHash,
-                            size = 64.dp,
-                        )
-                    }
-
-                    Button(onClick = onEditIcon) {
-                        Text(if (iconName != null) "Change Icon" else "Set Icon")
-                    }
-                }
-            }
-        }
-    }
-
     // ========== Display Tests ==========
 
     @Test
     fun profileIconCard_displaysTitle() {
         composeTestRule.setContent {
-            TestProfileIconCard(
+            ProfileIconCard(
                 iconName = null,
                 foregroundColor = null,
                 backgroundColor = null,
@@ -143,7 +49,7 @@ class MyIdentityScreenProfileIconTest {
     @Test
     fun profileIconCard_displaysDescription() {
         composeTestRule.setContent {
-            TestProfileIconCard(
+            ProfileIconCard(
                 iconName = null,
                 foregroundColor = null,
                 backgroundColor = null,
@@ -154,14 +60,14 @@ class MyIdentityScreenProfileIconTest {
 
         composeTestRule.onNodeWithText(
             "Customize your profile icon that others will see. " +
-                "This is compatible with Sideband and other Reticulum apps."
+                "This is compatible with Sideband and other Reticulum apps.",
         ).assertIsDisplayed()
     }
 
     @Test
-    fun profileIconCard_displaysSetIconButton_whenNoIcon() {
+    fun profileIconCard_displaysChooseCustomIconButton_whenNoIcon() {
         composeTestRule.setContent {
-            TestProfileIconCard(
+            ProfileIconCard(
                 iconName = null,
                 foregroundColor = null,
                 backgroundColor = null,
@@ -170,13 +76,13 @@ class MyIdentityScreenProfileIconTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Set Icon").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Choose Custom Icon").assertIsDisplayed()
     }
 
     @Test
     fun profileIconCard_displaysChangeIconButton_whenIconSet() {
         composeTestRule.setContent {
-            TestProfileIconCard(
+            ProfileIconCard(
                 iconName = "account",
                 foregroundColor = "FFFFFF",
                 backgroundColor = "1E88E5",
@@ -188,14 +94,74 @@ class MyIdentityScreenProfileIconTest {
         composeTestRule.onNodeWithText("Change Icon").assertIsDisplayed()
     }
 
+    @Test
+    fun profileIconCard_displaysUsingIdenticon_whenNoIcon() {
+        composeTestRule.setContent {
+            ProfileIconCard(
+                iconName = null,
+                foregroundColor = null,
+                backgroundColor = null,
+                fallbackHash = ByteArray(16) { it.toByte() },
+                onEditIcon = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Using Identicon").assertIsDisplayed()
+    }
+
+    @Test
+    fun profileIconCard_displaysCustomIconName_whenIconSet() {
+        composeTestRule.setContent {
+            ProfileIconCard(
+                iconName = "account",
+                foregroundColor = "FFFFFF",
+                backgroundColor = "1E88E5",
+                fallbackHash = ByteArray(16) { it.toByte() },
+                onEditIcon = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Custom Icon: account").assertIsDisplayed()
+    }
+
+    @Test
+    fun profileIconCard_displaysAutoGeneratedText_whenNoIcon() {
+        composeTestRule.setContent {
+            ProfileIconCard(
+                iconName = null,
+                foregroundColor = null,
+                backgroundColor = null,
+                fallbackHash = ByteArray(16) { it.toByte() },
+                onEditIcon = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Auto-generated from your identity").assertIsDisplayed()
+    }
+
+    @Test
+    fun profileIconCard_displaysTapToChangeText_whenIconSet() {
+        composeTestRule.setContent {
+            ProfileIconCard(
+                iconName = "star",
+                foregroundColor = "FF0000",
+                backgroundColor = "0000FF",
+                fallbackHash = ByteArray(16) { it.toByte() },
+                onEditIcon = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Tap to change your custom icon").assertIsDisplayed()
+    }
+
     // ========== Callback Tests ==========
 
     @Test
-    fun profileIconCard_setIconButtonCallsOnEditIcon() {
+    fun profileIconCard_chooseCustomIconButtonCallsOnEditIcon() {
         var editCalled = false
 
         composeTestRule.setContent {
-            TestProfileIconCard(
+            ProfileIconCard(
                 iconName = null,
                 foregroundColor = null,
                 backgroundColor = null,
@@ -204,7 +170,7 @@ class MyIdentityScreenProfileIconTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Set Icon").performClick()
+        composeTestRule.onNodeWithText("Choose Custom Icon").performClick()
         assertTrue("onEditIcon should be called", editCalled)
     }
 
@@ -213,7 +179,7 @@ class MyIdentityScreenProfileIconTest {
         var editCalled = false
 
         composeTestRule.setContent {
-            TestProfileIconCard(
+            ProfileIconCard(
                 iconName = "star",
                 foregroundColor = "FF0000",
                 backgroundColor = "0000FF",
@@ -231,7 +197,7 @@ class MyIdentityScreenProfileIconTest {
     @Test
     fun profileIconCard_showsIdenticon_whenNoIconSet() {
         composeTestRule.setContent {
-            TestProfileIconCard(
+            ProfileIconCard(
                 iconName = null,
                 foregroundColor = null,
                 backgroundColor = null,
@@ -242,12 +208,13 @@ class MyIdentityScreenProfileIconTest {
 
         // Card should render without crashing when using identicon fallback
         composeTestRule.onNodeWithText("Profile Icon").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Using Identicon").assertIsDisplayed()
     }
 
     @Test
     fun profileIconCard_showsProfileIcon_whenIconSet() {
         composeTestRule.setContent {
-            TestProfileIconCard(
+            ProfileIconCard(
                 iconName = "account",
                 foregroundColor = "FFFFFF",
                 backgroundColor = "1E88E5",
@@ -258,12 +225,13 @@ class MyIdentityScreenProfileIconTest {
 
         // Card should render without crashing when showing profile icon
         composeTestRule.onNodeWithText("Profile Icon").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Custom Icon: account").assertIsDisplayed()
     }
 
     @Test
     fun profileIconCard_handlesEmptyFallbackHash() {
         composeTestRule.setContent {
-            TestProfileIconCard(
+            ProfileIconCard(
                 iconName = null,
                 foregroundColor = null,
                 backgroundColor = null,
@@ -278,10 +246,10 @@ class MyIdentityScreenProfileIconTest {
 
     @Test
     fun profileIconCard_handlesPartialIconData() {
-        // Only icon name provided, missing colors - shows identicon but button says Change
-        // because the button text is based on whether iconName is set
+        // Only icon name provided, missing colors - shows identicon but displays custom icon info
+        // because the display text is based on whether iconName is set
         composeTestRule.setContent {
-            TestProfileIconCard(
+            ProfileIconCard(
                 iconName = "account",
                 foregroundColor = null,
                 backgroundColor = null,
@@ -290,8 +258,39 @@ class MyIdentityScreenProfileIconTest {
             )
         }
 
-        // Since iconName is set (even if colors are missing), button shows "Change Icon"
-        // The actual display falls back to identicon but UX allows changing the incomplete icon
-        composeTestRule.onNodeWithText("Profile Icon").assertIsDisplayed()
+        // Since iconName is set (even if colors are missing), shows custom icon text
+        // The actual display falls back to identicon but UX shows custom icon info
+        composeTestRule.onNodeWithText("Custom Icon: account").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Change Icon").assertIsDisplayed()
+    }
+
+    @Test
+    fun profileIconCard_handlesSpecialCharactersInIconName() {
+        composeTestRule.setContent {
+            ProfileIconCard(
+                iconName = "account-circle-outline",
+                foregroundColor = "FFFFFF",
+                backgroundColor = "1E88E5",
+                fallbackHash = ByteArray(16) { it.toByte() },
+                onEditIcon = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Custom Icon: account-circle-outline").assertIsDisplayed()
+    }
+
+    @Test
+    fun profileIconCard_handlesLongIconName() {
+        composeTestRule.setContent {
+            ProfileIconCard(
+                iconName = "emoticon-happy-outline",
+                foregroundColor = "FFFFFF",
+                backgroundColor = "1E88E5",
+                fallbackHash = ByteArray(16) { it.toByte() },
+                onEditIcon = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Custom Icon: emoticon-happy-outline").assertIsDisplayed()
     }
 }

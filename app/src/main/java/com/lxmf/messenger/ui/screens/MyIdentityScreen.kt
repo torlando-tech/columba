@@ -413,7 +413,7 @@ private fun DisplayNameIdentityCard(
  * Shows the current profile icon with an option to customize it.
  */
 @Composable
-private fun ProfileIconCard(
+internal fun ProfileIconCard(
     iconName: String?,
     foregroundColor: String?,
     backgroundColor: String?,

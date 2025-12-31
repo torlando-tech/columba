@@ -218,6 +218,7 @@ interface ReticulumProtocol {
         imageFormat: String? = null,
         fileAttachments: List<Pair<String, ByteArray>>? = null,
         replyToMessageId: String? = null,
+        iconAppearance: IconAppearance? = null,
     ): Result<MessageReceipt>
 
     /**
@@ -278,6 +279,15 @@ data class MessageReceipt(
 )
 
 /**
+ * Icon appearance data sent with messages (LXMF Field 4 - Sideband/MeshChat interop)
+ */
+data class IconAppearance(
+    val iconName: String,
+    val foregroundColor: String, // Hex RGB e.g., "FFFFFF"
+    val backgroundColor: String, // Hex RGB e.g., "1E88E5"
+)
+
+/**
  * A received LXMF message
  */
 data class ReceivedMessage(
@@ -290,6 +300,8 @@ data class ReceivedMessage(
     val fieldsJson: String? = null,
     // Sender's public key (if available from RNS identity cache)
     val publicKey: ByteArray? = null,
+    // Sender's icon appearance (LXMF Field 4 - Sideband/MeshChat interop)
+    val iconAppearance: IconAppearance? = null,
 )
 
 /**

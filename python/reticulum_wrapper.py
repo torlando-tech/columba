@@ -64,6 +64,7 @@ sys.excepthook = _global_exception_handler
 # ============================================================================
 FIELD_TELEMETRY = 0x02        # Standard telemetry field for Sideband interoperability
 FIELD_COLUMBA_META = 0x70     # Custom field for Columba-specific metadata (cease signals, etc.)
+FIELD_ICON_APPEARANCE = 0x04  # Icon appearance [name, fg_rgb, bg_rgb] for Sideband/MeshChat interoperability
 LEGACY_LOCATION_FIELD = 7     # Legacy field ID for backwards compatibility
 
 # Sensor IDs (from Sideband sense.py)
@@ -2174,6 +2175,22 @@ class ReticulumWrapper:
             else:
                 log_debug("ReticulumWrapper", "_on_lxmf_delivery", "Message already in pending_inbound")
 
+            # Parse icon appearance from message fields (Sideband/MeshChat interoperability)
+            icon_appearance = None
+            if hasattr(lxmf_message, 'fields') and lxmf_message.fields and FIELD_ICON_APPEARANCE in lxmf_message.fields:
+                try:
+                    icon_data = lxmf_message.fields[FIELD_ICON_APPEARANCE]
+                    if isinstance(icon_data, list) and len(icon_data) >= 3:
+                        icon_appearance = {
+                            'icon_name': icon_data[0],
+                            'foreground_color': icon_data[1].hex() if isinstance(icon_data[1], bytes) else icon_data[1],
+                            'background_color': icon_data[2].hex() if isinstance(icon_data[2], bytes) else icon_data[2],
+                        }
+                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                 f"Parsed icon appearance: {icon_appearance['icon_name']}")
+                except Exception as e:
+                    log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Failed to parse icon appearance: {e}")
+
             # ✅ PHASE 2.2: Invoke Kotlin callback for instant notification (event-driven)
             # Same pattern as delivery status callbacks which work reliably
             if self.kotlin_message_received_callback:
@@ -2183,7 +2200,8 @@ class ReticulumWrapper:
                         'source_hash': lxmf_message.source_hash.hex(),
                         'destination_hash': lxmf_message.destination_hash.hex(),
                         'timestamp': int(time.time() * 1000),
-                        'content_length': len(lxmf_message.content) if lxmf_message.content else 0
+                        'content_length': len(lxmf_message.content) if lxmf_message.content else 0,
+                        'icon_appearance': icon_appearance
                     }
 
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
@@ -2347,7 +2365,7 @@ class ReticulumWrapper:
             traceback.print_exc()
             return []
 
-    def send_lxmf_message(self, dest_hash: bytes, content: str, source_identity_private_key: bytes, image_data: bytes = None, image_format: str = None, file_attachments: list = None) -> Dict:
+    def send_lxmf_message(self, dest_hash: bytes, content: str, source_identity_private_key: bytes, image_data: bytes = None, image_format: str = None, file_attachments: list = None, icon_name: str = None, icon_fg_color: str = None, icon_bg_color: str = None) -> Dict:
         """
         Send an LXMF message to a destination.
 
@@ -2358,6 +2376,9 @@ class ReticulumWrapper:
             image_data: Optional image data bytes
             image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
             file_attachments: Optional list of [filename, bytes] tuples for file attachments (Field 5)
+            icon_name: Optional icon name for FIELD_ICON_APPEARANCE (Sideband/MeshChat interop)
+            icon_fg_color: Optional foreground color hex string (3 bytes RGB)
+            icon_bg_color: Optional background color hex string (3 bytes RGB)
 
         Returns:
             Dict with 'success', 'message_hash', 'timestamp' or 'error'
@@ -2520,6 +2541,17 @@ class ReticulumWrapper:
                 if field_5_data:
                     fields[5] = field_5_data
                     log_info("ReticulumWrapper", "send_lxmf_message", f"📎 Attaching {len(field_5_data)} file(s)")
+
+            # Add icon appearance to outgoing messages if provided (Sideband/MeshChat interop)
+            if icon_name and icon_fg_color and icon_bg_color:
+                if fields is None:
+                    fields = {}
+                fields[FIELD_ICON_APPEARANCE] = [
+                    icon_name,
+                    bytes.fromhex(icon_fg_color),
+                    bytes.fromhex(icon_bg_color)
+                ]
+                log_debug("ReticulumWrapper", "send_lxmf_message", f"📎 Adding icon appearance: {icon_name}")
 
             # Create LXMF message using destination OBJECTS
             log_debug("ReticulumWrapper", "send_lxmf_message", f"Creating LXMessage with destination objects...")
@@ -2988,7 +3020,8 @@ class ReticulumWrapper:
     def send_lxmf_message_with_method(self, dest_hash: bytes, content: str, source_identity_private_key: bytes,
                                        delivery_method: str = "direct", try_propagation_on_fail: bool = True,
                                        image_data: bytes = None, image_format: str = None,
-                                       file_attachments: list = None, reply_to_message_id: str = None) -> Dict:
+                                       file_attachments: list = None, reply_to_message_id: str = None,
+                                       icon_name: str = None, icon_fg_color: str = None, icon_bg_color: str = None) -> Dict:
         """
         Send an LXMF message with explicit delivery method.
 
@@ -3002,6 +3035,9 @@ class ReticulumWrapper:
             image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
             file_attachments: Optional list of [filename, bytes] pairs for Field 5
             reply_to_message_id: Optional message ID being replied to (stored in Field 16)
+            icon_name: Optional icon name for FIELD_ICON_APPEARANCE (Sideband/MeshChat interop)
+            icon_fg_color: Optional foreground color hex string (3 bytes RGB)
+            icon_bg_color: Optional background color hex string (3 bytes RGB)
 
         Returns:
             Dict with 'success', 'message_hash', 'timestamp', 'delivery_method' or 'error'
@@ -3137,6 +3173,17 @@ class ReticulumWrapper:
                 fields[16] = app_extensions
                 log_info("ReticulumWrapper", "send_lxmf_message_with_method",
                         f"📎 Replying to message: {reply_to_message_id[:16]}...")
+
+            # Add icon appearance to outgoing messages if provided (Sideband/MeshChat interop)
+            if icon_name and icon_fg_color and icon_bg_color:
+                if fields is None:
+                    fields = {}
+                fields[FIELD_ICON_APPEARANCE] = [
+                    icon_name,
+                    bytes.fromhex(icon_fg_color),
+                    bytes.fromhex(icon_bg_color)
+                ]
+                log_debug("ReticulumWrapper", "send_lxmf_message_with_method", f"📎 Adding icon appearance: {icon_name}")
 
             # Create LXMF message with specified delivery method
             lxmf_message = LXMF.LXMessage(
@@ -4423,6 +4470,23 @@ class ReticulumWrapper:
                                     else:
                                         log_debug("ReticulumWrapper", "poll_received_messages",
                                                  f"Field 16: app extensions with keys {list(value.keys())}")
+
+                                elif key == 4 and isinstance(value, list) and len(value) >= 3:
+                                    # Field 4 (FIELD_ICON_APPEARANCE): [icon_name, fg_rgb, bg_rgb]
+                                    try:
+                                        icon_appearance = {
+                                            'icon_name': value[0],
+                                            'foreground_color': value[1].hex() if isinstance(value[1], bytes) else value[1],
+                                            'background_color': value[2].hex() if isinstance(value[2], bytes) else value[2],
+                                        }
+                                        message_event['icon_appearance'] = icon_appearance
+                                        fields_serialized['4'] = icon_appearance
+                                        log_debug("ReticulumWrapper", "poll_received_messages",
+                                                 f"Field 4: icon appearance '{icon_appearance['icon_name']}'")
+                                    except Exception as e:
+                                        log_debug("ReticulumWrapper", "poll_received_messages",
+                                                 f"Failed to parse icon appearance: {e}")
+                                        fields_serialized[str(key)] = str(value)
 
                                 elif isinstance(value, (list, tuple)) and len(value) >= 2:
                                     # Image/audio format: [format_string, bytes_data]

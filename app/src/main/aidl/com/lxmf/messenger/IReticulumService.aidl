@@ -335,9 +335,12 @@ interface IReticulumService {
      * @param imageFormat Optional image format string (e.g., "jpg", "png", null if none)
      * @param fileAttachments Optional map of filename -> file bytes (null if none)
      * @param replyToMessageId Optional message ID being replied to (stored in LXMF field 16)
+     * @param iconName Optional icon name for FIELD_ICON_APPEARANCE (Sideband/MeshChat interop)
+     * @param iconFgColor Optional icon foreground color hex string (3 bytes RGB, e.g., "FFFFFF")
+     * @param iconBgColor Optional icon background color hex string (3 bytes RGB, e.g., "1E88E5")
      * @return JSON string with result: {"success": true, "message_hash": "...", "delivery_method": "..."}
      */
-    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat, in Map fileAttachments, String replyToMessageId);
+    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat, in Map fileAttachments, String replyToMessageId, String iconName, String iconFgColor, String iconBgColor);
 
     /**
      * Provide an alternative relay for message retry.

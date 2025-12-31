@@ -40,6 +40,10 @@ data class SettingsState(
     val identityHash: String? = null,
     val destinationHash: String? = null,
     val showQrDialog: Boolean = false,
+    // Profile icon settings
+    val iconName: String? = null,
+    val iconForegroundColor: String? = null, // Hex RGB e.g., "FFFFFF"
+    val iconBackgroundColor: String? = null, // Hex RGB e.g., "1E88E5"
     val selectedTheme: AppTheme = PresetTheme.VIBRANT,
     val customThemes: List<AppTheme> = emptyList(),
     val isRestarting: Boolean = false,
@@ -237,6 +241,10 @@ class SettingsViewModel
                             identityHash = identityInfo.first,
                             destinationHash = identityInfo.second,
                             showQrDialog = _state.value.showQrDialog,
+                            // Profile icon from active identity
+                            iconName = activeIdentity?.iconName,
+                            iconForegroundColor = activeIdentity?.iconForegroundColor,
+                            iconBackgroundColor = activeIdentity?.iconBackgroundColor,
                             selectedTheme = selectedTheme,
                             customThemes = customThemes,
                             isRestarting = _state.value.isRestarting,
@@ -451,6 +459,43 @@ class SettingsViewModel
 
         fun clearSaveSuccess() {
             _state.value = _state.value.copy(showSaveSuccess = false)
+        }
+
+        /**
+         * Update the icon appearance (icon, foreground color, background color) for the active identity.
+         *
+         * @param iconName Material Design Icon name (e.g., "account", "star"), or null to clear
+         * @param foregroundColor Hex RGB color for icon foreground (e.g., "FFFFFF"), or null to clear
+         * @param backgroundColor Hex RGB color for icon background (e.g., "1E88E5"), or null to clear
+         */
+        fun updateIconAppearance(
+            iconName: String?,
+            foregroundColor: String?,
+            backgroundColor: String?,
+        ) {
+            viewModelScope.launch {
+                try {
+                    val activeIdentity = identityRepository.getActiveIdentitySync()
+
+                    if (activeIdentity != null) {
+                        identityRepository.updateIconAppearance(
+                            activeIdentity.identityHash,
+                            iconName,
+                            foregroundColor,
+                            backgroundColor,
+                        ).onSuccess {
+                            Log.d(TAG, "Icon appearance updated successfully")
+                            _state.value = _state.value.copy(showSaveSuccess = true)
+                        }.onFailure { error ->
+                            Log.e(TAG, "Failed to update icon appearance", error)
+                        }
+                    } else {
+                        Log.w(TAG, "Cannot update icon appearance - no active identity")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error updating icon appearance", e)
+                }
+            }
         }
 
         /**
@@ -1039,7 +1084,6 @@ class SettingsViewModel
                     }
                 }
             }
-
         }
 
         /**

@@ -42,6 +42,10 @@ data class EnrichedContact(
     val isReceivingLocationFrom: Boolean = false,
     // When their location share expires (null = indefinite)
     val locationSharingExpiresAt: Long? = null,
+    // Profile icon (from announces table)
+    val iconName: String? = null,
+    val iconForegroundColor: String? = null,
+    val iconBackgroundColor: String? = null,
 ) {
     /**
      * Parse tags from JSON string to list
@@ -93,6 +97,9 @@ data class EnrichedContact(
         if (nodeType != other.nodeType) return false
         if (isReceivingLocationFrom != other.isReceivingLocationFrom) return false
         if (locationSharingExpiresAt != other.locationSharingExpiresAt) return false
+        if (iconName != other.iconName) return false
+        if (iconForegroundColor != other.iconForegroundColor) return false
+        if (iconBackgroundColor != other.iconBackgroundColor) return false
 
         return true
     }
@@ -119,6 +126,9 @@ data class EnrichedContact(
         result = 31 * result + (nodeType?.hashCode() ?: 0)
         result = 31 * result + isReceivingLocationFrom.hashCode()
         result = 31 * result + (locationSharingExpiresAt?.hashCode() ?: 0)
+        result = 31 * result + (iconName?.hashCode() ?: 0)
+        result = 31 * result + (iconForegroundColor?.hashCode() ?: 0)
+        result = 31 * result + (iconBackgroundColor?.hashCode() ?: 0)
         return result
     }
 }

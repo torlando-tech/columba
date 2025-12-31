@@ -56,7 +56,10 @@ interface ContactDao {
             c.isMyRelay,
             a.nodeType,
             CASE WHEN loc.senderHash IS NOT NULL THEN 1 ELSE 0 END as isReceivingLocationFrom,
-            loc.expiresAt as locationSharingExpiresAt
+            loc.expiresAt as locationSharingExpiresAt,
+            a.iconName as iconName,
+            a.iconForegroundColor as iconForegroundColor,
+            a.iconBackgroundColor as iconBackgroundColor
         FROM contacts c
         LEFT JOIN announces a ON c.destinationHash = a.destinationHash
         LEFT JOIN conversations conv ON c.destinationHash = conv.peerHash AND c.identityHash = conv.identityHash

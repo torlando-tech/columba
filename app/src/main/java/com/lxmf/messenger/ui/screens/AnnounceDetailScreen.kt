@@ -58,8 +58,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.lxmf.messenger.ui.components.Identicon
 import com.lxmf.messenger.ui.components.NodeTypeBadge
+import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.util.formatTimeSince
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 
@@ -193,9 +193,12 @@ fun AnnounceDetailScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Identicon(
-                            hash = announceNonNull.publicKey,
+                        ProfileIcon(
+                            iconName = announceNonNull.iconName,
+                            foregroundColor = announceNonNull.iconForegroundColor,
+                            backgroundColor = announceNonNull.iconBackgroundColor,
                             size = 96.dp,
+                            fallbackHash = announceNonNull.publicKey,
                         )
 
                         Text(

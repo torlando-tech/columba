@@ -66,7 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.service.SyncResult
-import com.lxmf.messenger.ui.components.Identicon
+import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.viewmodel.ChatsViewModel
@@ -282,11 +282,14 @@ fun ConversationCard(
                         .padding(end = 32.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Identicon (reuse from AnnounceStreamScreen)
+                // Profile icon with identicon fallback
                 Box(modifier = Modifier.align(Alignment.CenterVertically)) {
-                    Identicon(
-                        hash = conversation.peerPublicKey ?: conversation.peerHash.hexStringToByteArray(),
+                    ProfileIcon(
+                        iconName = conversation.iconName,
+                        foregroundColor = conversation.iconForegroundColor,
+                        backgroundColor = conversation.iconBackgroundColor,
                         size = 56.dp,
+                        fallbackHash = conversation.peerPublicKey ?: conversation.peerHash.hexStringToByteArray(),
                     )
                     // Unread badge (top-right)
                     if (conversation.unreadCount > 0) {

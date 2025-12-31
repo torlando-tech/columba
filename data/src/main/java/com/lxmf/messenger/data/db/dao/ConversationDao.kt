@@ -7,12 +7,63 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.lxmf.messenger.data.db.entity.ConversationEntity
+import com.lxmf.messenger.data.model.EnrichedConversation
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ConversationDao {
     @Query("SELECT * FROM conversations WHERE identityHash = :identityHash ORDER BY lastMessageTimestamp DESC")
     fun getAllConversations(identityHash: String): Flow<List<ConversationEntity>>
+
+    /**
+     * Get enriched conversations with profile icon data from announces.
+     * Combines conversation data with icon appearance from announces table.
+     */
+    @Query(
+        """
+        SELECT
+            c.peerHash,
+            c.peerName,
+            c.peerPublicKey,
+            c.lastMessage,
+            c.lastMessageTimestamp,
+            c.unreadCount,
+            a.iconName as iconName,
+            a.iconForegroundColor as iconForegroundColor,
+            a.iconBackgroundColor as iconBackgroundColor
+        FROM conversations c
+        LEFT JOIN announces a ON c.peerHash = a.destinationHash
+        WHERE c.identityHash = :identityHash
+        ORDER BY c.lastMessageTimestamp DESC
+        """,
+    )
+    fun getEnrichedConversations(identityHash: String): Flow<List<EnrichedConversation>>
+
+    /**
+     * Search enriched conversations by peer name with profile icon data.
+     */
+    @Query(
+        """
+        SELECT
+            c.peerHash,
+            c.peerName,
+            c.peerPublicKey,
+            c.lastMessage,
+            c.lastMessageTimestamp,
+            c.unreadCount,
+            a.iconName as iconName,
+            a.iconForegroundColor as iconForegroundColor,
+            a.iconBackgroundColor as iconBackgroundColor
+        FROM conversations c
+        LEFT JOIN announces a ON c.peerHash = a.destinationHash
+        WHERE c.identityHash = :identityHash AND c.peerName LIKE '%' || :query || '%'
+        ORDER BY c.lastMessageTimestamp DESC
+        """,
+    )
+    fun searchEnrichedConversations(
+        identityHash: String,
+        query: String,
+    ): Flow<List<EnrichedConversation>>
 
     @Query(
         """

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Save
@@ -72,6 +73,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.ui.components.IconPickerDialog
+import com.lxmf.messenger.ui.components.Identicon
+import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.components.QrCodeImage
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.SettingsViewModel
@@ -108,6 +112,7 @@ fun MyIdentityScreen(
     // Dialog state
     var showQrDialog by remember { mutableStateOf(false) }
     var showAdvanced by remember { mutableStateOf(false) }
+    var showIconPicker by remember { mutableStateOf(false) }
 
     // Update input when settings state changes
     LaunchedEffect(settingsState.displayName) {
@@ -168,19 +173,28 @@ fun MyIdentityScreen(
                 onViewQrCode = { showQrDialog = true },
             )
 
-            // 2. QR Code Quick View Card
+            // 2. Profile Icon Card
+            ProfileIconCard(
+                iconName = settingsState.iconName,
+                foregroundColor = settingsState.iconForegroundColor,
+                backgroundColor = settingsState.iconBackgroundColor,
+                fallbackHash = publicKey ?: ByteArray(0),
+                onEditIcon = { showIconPicker = true },
+            )
+
+            // 3. QR Code Quick View Card
             QrCodeQuickCard(
                 qrCodeData = qrCodeData,
                 displayName = settingsState.displayName,
                 onViewFullScreen = { showQrDialog = true },
             )
 
-            // 3. Identity Management Card (TODO: conditionally show if multiple identities exist)
+            // 4. Identity Management Card (TODO: conditionally show if multiple identities exist)
             // IdentityManagementCard(
             //     onManageClick = onNavigateToIdentityManager
             // )
 
-            // 4. Advanced Identity Card (Collapsible)
+            // 5. Advanced Identity Card (Collapsible)
             AdvancedIdentityCard(
                 showAdvanced = showAdvanced,
                 onToggle = { showAdvanced = !showAdvanced },
@@ -203,6 +217,20 @@ fun MyIdentityScreen(
             qrCodeData = qrCodeData,
             publicKey = publicKey,
             onDismiss = { showQrDialog = false },
+        )
+    }
+
+    // Icon Picker Dialog
+    if (showIconPicker) {
+        IconPickerDialog(
+            currentIconName = settingsState.iconName,
+            currentForegroundColor = settingsState.iconForegroundColor,
+            currentBackgroundColor = settingsState.iconBackgroundColor,
+            onConfirm = { iconName, foregroundColor, backgroundColor ->
+                settingsViewModel.updateIconAppearance(iconName, foregroundColor, backgroundColor)
+                showIconPicker = false
+            },
+            onDismiss = { showIconPicker = false },
         )
     }
 }
@@ -375,6 +403,118 @@ private fun DisplayNameIdentityCard(
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Profile Icon Card
+ * Shows the current profile icon with an option to customize it.
+ */
+@Composable
+private fun ProfileIconCard(
+    iconName: String?,
+    foregroundColor: String?,
+    backgroundColor: String?,
+    fallbackHash: ByteArray,
+    onEditIcon: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Palette,
+                    contentDescription = "Profile Icon",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "Profile Icon",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+            // Description
+            Text(
+                text = "Customize your profile icon that others will see. " +
+                    "This is compatible with Sideband and other Reticulum apps.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            // Icon preview and edit button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Icon preview
+                if (iconName != null && foregroundColor != null && backgroundColor != null) {
+                    ProfileIcon(
+                        iconName = iconName,
+                        foregroundColor = foregroundColor,
+                        backgroundColor = backgroundColor,
+                        size = 64.dp,
+                        fallbackHash = fallbackHash,
+                    )
+                } else {
+                    // Show identicon as fallback
+                    Identicon(
+                        hash = fallbackHash,
+                        size = 64.dp,
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = if (iconName != null) "Custom Icon: $iconName" else "Using Identicon",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = if (iconName != null) {
+                            "Tap to change your custom icon"
+                        } else {
+                            "Auto-generated from your identity"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // Edit button
+            OutlinedButton(
+                onClick = onEditIcon,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Palette,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(if (iconName != null) "Change Icon" else "Choose Custom Icon")
             }
         }
     }

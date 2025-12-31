@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -88,10 +87,13 @@ fun PeerCard(
                         .padding(end = 32.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Identicon
-                Identicon(
-                    hash = announce.publicKey,
+                // Profile icon (with identicon fallback)
+                ProfileIcon(
+                    iconName = announce.iconName,
+                    foregroundColor = announce.iconForegroundColor,
+                    backgroundColor = announce.iconBackgroundColor,
                     size = 56.dp,
+                    fallbackHash = announce.publicKey,
                     modifier = Modifier.align(Alignment.CenterVertically),
                 )
 

@@ -388,7 +388,7 @@ private fun ColorSelectionSection(
             initialColor = bgColor,
             title = "Background Color",
             onConfirm = { color ->
-                val hex = String.format("%06X", color.toArgb() and 0xFFFFFF)
+                val hex = String.format(java.util.Locale.US, "%06X", color.toArgb() and 0xFFFFFF)
                 onBackgroundColorChange(hex)
             },
             onDismiss = { showBgColorPicker = false },
@@ -401,57 +401,11 @@ private fun ColorSelectionSection(
             initialColor = fgColor,
             title = "Icon Color",
             onConfirm = { color ->
-                val hex = String.format("%06X", color.toArgb() and 0xFFFFFF)
+                val hex = String.format(java.util.Locale.US, "%06X", color.toArgb() and 0xFFFFFF)
                 onForegroundColorChange(hex)
             },
             onDismiss = { showFgColorPicker = false },
         )
-    }
-}
-
-/**
- * Single color swatch button.
- */
-@Composable
-private fun ColorSwatch(
-    hexColor: String,
-    colorName: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
-    val color = parseHexColor(hexColor, Color.Gray)
-    val borderColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-    }
-
-    Box(
-        modifier = Modifier
-            .size(24.dp)
-            .clip(CircleShape)
-            .background(color)
-            .border(
-                width = if (isSelected) 2.dp else 1.dp,
-                color = borderColor,
-                shape = CircleShape,
-            )
-            .clickable(
-                onClick = onClick,
-                onClickLabel = colorName,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (isSelected) {
-            // Show check mark with contrasting color
-            val checkColor = if (isColorDark(color)) Color.White else Color.Black
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = "Selected: $colorName",
-                tint = checkColor,
-                modifier = Modifier.size(14.dp),
-            )
-        }
     }
 }
 
@@ -717,12 +671,3 @@ private fun parseHexColor(hex: String, default: Color): Color {
         default
     }
 }
-
-/**
- * Check if a color is dark (for choosing contrasting text color).
- */
-private fun isColorDark(color: Color): Boolean {
-    val luminance = 0.299 * color.red + 0.587 * color.green + 0.114 * color.blue
-    return luminance < 0.5
-}
-

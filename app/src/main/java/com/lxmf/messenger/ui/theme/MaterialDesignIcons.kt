@@ -16,6 +16,7 @@ package com.lxmf.messenger.ui.theme
  *
  * @see <a href="https://pictogrammers.com/library/mdi/">MDI Icon Library</a>
  */
+@Suppress("LargeClass", "TooManyFunctions", "LongMethod")
 object MaterialDesignIcons {
 
     private fun codepoints0(): Map<String, String> = mapOf(
@@ -7282,7 +7283,7 @@ object MaterialDesignIcons {
      * Default character to display when an icon is not found.
      * Uses the help-circle-outline icon (U+F0625).
      */
-    private val DEFAULT_CODEPOINT: String = "\uDB80\uDE25"
+    private const val DEFAULT_CODEPOINT: String = "\uDB80\uDE25"
 
     /**
      * Get the Unicode character string for the given MDI icon name.

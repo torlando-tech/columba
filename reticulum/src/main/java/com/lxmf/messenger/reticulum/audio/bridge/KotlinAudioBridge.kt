@@ -457,6 +457,7 @@ class KotlinAudioBridge(
      * @return Audio data as byte array, or null if no data available
      */
     private var readAudioCount = 0L
+    private var lastMuteState = false
 
     @Suppress("UnusedParameter")
     fun readAudio(numSamples: Int): ByteArray? {
@@ -469,18 +470,25 @@ class KotlinAudioBridge(
             val data = recordBuffer.poll(50, TimeUnit.MILLISECONDS)
 
             readAudioCount++
-            if (readAudioCount % 100L == 1L) {
+
+            // Log on mute state change or every 100 frames
+            val muteStateChanged = microphoneMuted != lastMuteState
+            if (muteStateChanged) {
+                Log.i(TAG, "📞 readAudio: MUTE STATE CHANGED from $lastMuteState to $microphoneMuted at frame #$readAudioCount")
+                lastMuteState = microphoneMuted
+            }
+
+            if (readAudioCount % 100L == 1L || muteStateChanged) {
                 val size = data?.size ?: 0
                 val queueSize = recordBuffer.size
                 Log.d(TAG, "📞 readAudio #$readAudioCount: ${if (data != null) "$size bytes" else "null"}, queue=$queueSize, muted=$microphoneMuted")
             }
 
-            // Return silence if muted (software mute for reliability)
-            if (microphoneMuted && data != null) {
-                ByteArray(data.size) // Returns zeros (silence)
-            } else {
-                data
-            }
+            // NOTE: We do NOT do software mute here anymore.
+            // LXST's transmit_mixer.mute() handles muting at the codec level,
+            // which properly stops packet transmission without causing
+            // "No interfaces could process the outbound packet" errors.
+            data
         } catch (e: InterruptedException) {
             null
         }
@@ -529,11 +537,14 @@ class KotlinAudioBridge(
      * @param muted True to mute, false to unmute
      */
     fun setMicrophoneMute(muted: Boolean) {
-        Log.i(TAG, "📞 Microphone mute set to: $muted (software mute active)")
+        val previousState = microphoneMuted
+        Log.i(TAG, "📞 setMicrophoneMute: $previousState -> $muted")
         microphoneMuted = muted
+        Log.i(TAG, "📞 Microphone mute now: $microphoneMuted (software mute active)")
         // Also try system-level mute (may not work on all devices)
         try {
             audioManager.isMicrophoneMute = muted
+            Log.d(TAG, "📞 System mic mute set to: ${audioManager.isMicrophoneMute}")
         } catch (e: Exception) {
             Log.w(TAG, "System microphone mute not available: ${e.message}")
         }

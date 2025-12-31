@@ -315,25 +315,26 @@ class CallManager:
         Args:
             muted: True to mute, False to unmute
         """
-        # Also mute at audio bridge level for reliable muting
-        if self._audio_bridge is not None:
+        RNS.log(f"📞 mute_microphone() called with muted={muted}", RNS.LOG_INFO)
+
+        # Use LXST's transmit_mixer mute - this handles muting at the codec level
+        # which prevents the "No interfaces could process the outbound packet" error
+        # that occurs when we return silence from the audio bridge
+        if self._initialized and self.telephone is not None:
             try:
-                self._audio_bridge.setMicrophoneMute(muted)
-                RNS.log(f"Audio bridge microphone mute: {muted}", RNS.LOG_DEBUG)
+                # IMPORTANT: Always use mute_transmit() with explicit True/False.
+                # DO NOT use unmute_transmit() - LXST's Mixer.unmute() has a bug where
+                # unmute(True) sets muted=True instead of muted=False (inverted logic).
+                # mute_transmit(False) correctly sets muted=False via Mixer.mute(False).
+                RNS.log(f"📞 Calling telephone.mute_transmit({muted})", RNS.LOG_INFO)
+                self.telephone.mute_transmit(muted)
+                RNS.log(f"📞 LXST transmit mute set: {muted}", RNS.LOG_INFO)
             except Exception as e:
-                RNS.log(f"Error setting audio bridge mute: {e}", RNS.LOG_ERROR)
+                RNS.log(f"📞 Error muting LXST transmit: {e}", RNS.LOG_ERROR)
+        else:
+            RNS.log(f"📞 Telephone not initialized, skipping LXST mute", RNS.LOG_WARNING)
 
-        if not self._initialized or self.telephone is None:
-            return
-
-        try:
-            if muted:
-                self.telephone.mute_transmit()
-            else:
-                self.telephone.unmute_transmit()
-            RNS.log(f"LXST transmit muted: {muted}", RNS.LOG_DEBUG)
-        except Exception as e:
-            RNS.log(f"Error muting LXST transmit: {e}", RNS.LOG_ERROR)
+        RNS.log(f"📞 Mute operation complete", RNS.LOG_INFO)
 
     def set_speaker(self, enabled):
         """Enable or disable speaker.

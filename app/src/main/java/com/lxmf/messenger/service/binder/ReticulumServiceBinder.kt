@@ -1227,10 +1227,16 @@ class ReticulumServiceBinder(
 
     override fun setCallMuted(muted: Boolean) {
         try {
-            Log.d(TAG, "📞 Setting call muted: $muted")
+            Log.i(TAG, "📞 setCallMuted($muted) - calling Python mute_microphone")
             wrapperManager.withWrapper { wrapper ->
                 val callManager = wrapper.callAttr("get_call_manager")
-                callManager?.callAttr("mute_microphone", muted)
+                if (callManager != null) {
+                    Log.i(TAG, "📞 Calling callManager.mute_microphone($muted)")
+                    callManager.callAttr("mute_microphone", muted)
+                    Log.i(TAG, "📞 mute_microphone call completed")
+                } else {
+                    Log.w(TAG, "📞 WARNING: get_call_manager returned null!")
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error setting call mute", e)

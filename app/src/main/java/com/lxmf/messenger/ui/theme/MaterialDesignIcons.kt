@@ -7341,7 +7341,7 @@ object MaterialDesignIcons {
         "pine-tree", "clover", "sprout",
         // Weather & Sky
         "weather-sunny", "moon-waning-crescent", "star", "star-four-points",
-        "cloud", "snowflake", "fire", "lightning-bolt", "meteor",
+        "cloud", "snowflake", "fire", "lightning-bolt", "firework",
         // Objects & Symbols
         "heart", "heart-outline", "diamond", "diamond-stone", "key", "key-variant",
         "shield", "shield-outline", "crown", "crown-outline", "sword", "sword-cross",
@@ -7376,7 +7376,7 @@ object MaterialDesignIcons {
             "cat", "dog", "paw", "paw-outline", "rabbit", "bird", "fish",
             "owl", "penguin", "spider", "turtle", "duck", "elephant", "snake",
             "dolphin", "bee", "butterfly", "ladybug", "bat", "koala",
-            "horse", "cow", "pig", "sheep", "goat", "unicorn",
+            "horse", "cow", "pig", "sheep", "donkey", "unicorn",
         ),
         "Nature" to listOf(
             "tree", "tree-outline", "pine-tree", "palm-tree", "flower",
@@ -7404,7 +7404,7 @@ object MaterialDesignIcons {
         "Technology" to listOf(
             "radio", "radio-tower", "antenna", "satellite-variant", "satellite-uplink",
             "cellphone", "laptop", "desktop-classic", "server", "server-network",
-            "chip", "memory", "cpu-64-bit", "circuit-board", "console",
+            "chip", "memory", "cpu-64-bit", "integrated-circuit-chip", "console",
             "controller-classic", "gamepad-variant",
         ),
         "Communication" to listOf(
@@ -7419,17 +7419,17 @@ object MaterialDesignIcons {
         ),
         "Music & Arts" to listOf(
             "music", "music-note", "guitar-acoustic", "guitar-electric",
-            "piano", "violin", "drum", "saxophone", "microphone-variant",
+            "piano", "violin", "trumpet", "saxophone", "microphone-variant",
             "palette", "brush", "pencil", "fountain-pen",
         ),
         "Science & Space" to listOf(
             "atom", "atom-variant", "flask", "flask-outline", "microscope",
             "telescope", "rocket", "rocket-outline", "ufo", "ufo-outline",
-            "meteor", "earth", "moon-waning-crescent", "star-shooting",
+            "earth", "moon-waning-crescent", "star-shooting",
         ),
         "Transport" to listOf(
             "car", "car-outline", "bus", "train", "airplane",
-            "airplane-takeoff", "helicopter", "boat", "sailboat", "bicycle",
+            "airplane-takeoff", "helicopter", "ferry", "sail-boat", "bicycle",
             "motorbike", "rocket-launch",
         ),
         "Sports" to listOf(

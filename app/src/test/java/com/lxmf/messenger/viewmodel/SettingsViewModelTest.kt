@@ -11,7 +11,6 @@ import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
-import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.PresetTheme
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -22,7 +21,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -2215,6 +2213,113 @@ class SettingsViewModelTest {
             viewModel.selectRelay(testHash, testName)
 
             coVerify { propagationNodeManager.setManualRelay(testHash, testName) }
+        }
+
+    // endregion
+
+    // region updateIconAppearance Tests
+
+    private fun createTestIdentity(identityHash: String = "abc123") =
+        LocalIdentityEntity(
+            identityHash = identityHash,
+            displayName = "Test User",
+            destinationHash = "dest123",
+            filePath = "/path/to/identity",
+            createdTimestamp = System.currentTimeMillis(),
+            lastUsedTimestamp = System.currentTimeMillis(),
+            isActive = true,
+        )
+
+    @Test
+    fun `updateIconAppearance updates icon when active identity exists`() =
+        runTest {
+            val testIdentity = createTestIdentity()
+            coEvery { identityRepository.getActiveIdentitySync() } returns testIdentity
+            coEvery {
+                identityRepository.updateIconAppearance(any(), any(), any(), any())
+            } returns Result.success(Unit)
+
+            viewModel = createViewModel()
+
+            viewModel.updateIconAppearance("account", "FFFFFF", "1E88E5")
+
+            coVerify {
+                identityRepository.updateIconAppearance("abc123", "account", "FFFFFF", "1E88E5")
+            }
+        }
+
+    @Test
+    fun `updateIconAppearance clears icon when null values provided`() =
+        runTest {
+            val testIdentity = createTestIdentity()
+            coEvery { identityRepository.getActiveIdentitySync() } returns testIdentity
+            coEvery {
+                identityRepository.updateIconAppearance(any(), any(), any(), any())
+            } returns Result.success(Unit)
+
+            viewModel = createViewModel()
+
+            viewModel.updateIconAppearance(null, null, null)
+
+            coVerify {
+                identityRepository.updateIconAppearance("abc123", null, null, null)
+            }
+        }
+
+    @Test
+    fun `updateIconAppearance does not update when no active identity`() =
+        runTest {
+            coEvery { identityRepository.getActiveIdentitySync() } returns null
+
+            viewModel = createViewModel()
+
+            viewModel.updateIconAppearance("account", "FFFFFF", "1E88E5")
+
+            coVerify(exactly = 0) {
+                identityRepository.updateIconAppearance(any(), any(), any(), any())
+            }
+        }
+
+    @Test
+    fun `updateIconAppearance shows success when update succeeds`() =
+        runTest {
+            val testIdentity = createTestIdentity()
+            coEvery { identityRepository.getActiveIdentitySync() } returns testIdentity
+            coEvery {
+                identityRepository.updateIconAppearance(any(), any(), any(), any())
+            } returns Result.success(Unit)
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val initial = awaitItem()
+                assertFalse(initial.showSaveSuccess)
+
+                viewModel.updateIconAppearance("star", "FF0000", "0000FF")
+
+                val updated = awaitItem()
+                assertTrue(updated.showSaveSuccess)
+            }
+        }
+
+    @Test
+    fun `updateIconAppearance handles repository failure gracefully`() =
+        runTest {
+            val testIdentity = createTestIdentity()
+            coEvery { identityRepository.getActiveIdentitySync() } returns testIdentity
+            coEvery {
+                identityRepository.updateIconAppearance(any(), any(), any(), any())
+            } returns Result.failure(Exception("Database error"))
+
+            viewModel = createViewModel()
+
+            // Should not throw exception
+            viewModel.updateIconAppearance("account", "FFFFFF", "1E88E5")
+
+            // Verify update was attempted
+            coVerify {
+                identityRepository.updateIconAppearance("abc123", "account", "FFFFFF", "1E88E5")
+            }
         }
 
     // endregion

@@ -449,11 +449,12 @@ class ReticulumServiceBinder(
 
             // Add process persistence status
             val heartbeat = wrapperManager.getHeartbeat()
-            val heartbeatAgeSeconds = if (heartbeat > 0) {
-                ((System.currentTimeMillis() / 1000.0) - heartbeat).toLong()
-            } else {
-                -1L
-            }
+            val heartbeatAgeSeconds =
+                if (heartbeat > 0) {
+                    ((System.currentTimeMillis() / 1000.0) - heartbeat).toLong()
+                } else {
+                    -1L
+                }
             debugInfo.put("heartbeat_age_seconds", heartbeatAgeSeconds)
             debugInfo.put("health_check_running", healthCheckManager.isRunning())
             debugInfo.put("network_monitor_running", networkChangeManager.isMonitoring())
@@ -650,6 +651,9 @@ class ReticulumServiceBinder(
         imageFormat: String?,
         fileAttachments: Map<*, *>?,
         replyToMessageId: String?,
+        iconName: String?,
+        iconFgColor: String?,
+        iconBgColor: String?,
     ): String {
         return try {
             wrapperManager.withWrapper { wrapper ->
@@ -671,6 +675,9 @@ class ReticulumServiceBinder(
                         imageFormat,
                         fileAttachmentsList,
                         replyToMessageId,
+                        iconName,
+                        iconFgColor,
+                        iconBgColor,
                     )
                 // Use PythonResultConverter to properly convert Python dict to JSON
                 // (bytes values like message_hash need Base64 encoding)

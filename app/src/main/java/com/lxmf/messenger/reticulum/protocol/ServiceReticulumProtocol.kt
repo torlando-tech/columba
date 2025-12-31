@@ -1856,6 +1856,7 @@ class ServiceReticulumProtocol(
         imageFormat: String?,
         fileAttachments: List<Pair<String, ByteArray>>?,
         replyToMessageId: String?,
+        iconAppearance: IconAppearance?,
     ): Result<MessageReceipt> {
         return runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
@@ -1883,6 +1884,9 @@ class ServiceReticulumProtocol(
                     imageFormat,
                     fileAttachmentsMap,
                     replyToMessageId,
+                    iconAppearance?.iconName,
+                    iconAppearance?.foregroundColor,
+                    iconAppearance?.backgroundColor,
                 )
             val result = JSONObject(resultJson)
 
@@ -2072,6 +2076,24 @@ class ServiceReticulumProtocol(
         val publicKeyB64 = json.optString("public_key", null)
         val publicKey = publicKeyB64?.takeIf { it.isNotEmpty() }?.toByteArrayFromBase64()
 
+        // Extract icon appearance (LXMF Field 4 - Sideband/MeshChat interop)
+        // Check both top-level "icon_appearance" (callback path) and "fields.4" (polling path)
+        val iconAppearance = (
+            json.optJSONObject("icon_appearance")
+                ?: json.optJSONObject("fields")?.optJSONObject("4")
+        )?.let { iconJson ->
+            try {
+                IconAppearance(
+                    iconName = iconJson.optString("icon_name", ""),
+                    foregroundColor = iconJson.optString("foreground_color", ""),
+                    backgroundColor = iconJson.optString("background_color", ""),
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to parse icon appearance", e)
+                null
+            }
+        }
+
         return ReceivedMessage(
             messageHash = messageHash,
             content = content,
@@ -2080,6 +2102,7 @@ class ServiceReticulumProtocol(
             timestamp = timestamp,
             fieldsJson = fieldsJson,
             publicKey = publicKey,
+            iconAppearance = iconAppearance,
         )
     }
 

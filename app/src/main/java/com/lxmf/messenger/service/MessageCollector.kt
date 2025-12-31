@@ -134,6 +134,21 @@ class MessageCollector
                                 Log.d(TAG, "Stored sender's public key for $sourceHash")
                             }
 
+                            // Store sender's icon appearance if present (Sideband/MeshChat interop)
+                            receivedMessage.iconAppearance?.let { appearance ->
+                                try {
+                                    announceRepository.updateIconAppearance(
+                                        destinationHash = sourceHash,
+                                        iconName = appearance.iconName,
+                                        foregroundColor = appearance.foregroundColor,
+                                        backgroundColor = appearance.backgroundColor,
+                                    )
+                                    Log.d(TAG, "Updated icon appearance for $sourceHash: ${appearance.iconName}")
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to update icon appearance for $sourceHash", e)
+                                }
+                            }
+
                             conversationRepository.saveMessage(sourceHash, peerName, dataMessage, publicKey)
                             Log.d(TAG, "Message saved to database for peer: $peerName ($sourceHash) (hasPublicKey=${publicKey != null})")
 

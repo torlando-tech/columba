@@ -102,7 +102,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.ui.components.AddContactConfirmationDialog
-import com.lxmf.messenger.ui.components.Identicon
+import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.InputValidator
@@ -295,14 +295,16 @@ fun ContactsScreen(
 
                 // Search bar
                 AnimatedVisibility(visible = isSearching) {
-                    val currentSearchQuery = when (selectedTab) {
-                        ContactsTab.MY_CONTACTS -> searchQuery
-                        ContactsTab.NETWORK -> announceSearchQuery
-                    }
-                    val currentPlaceholder = when (selectedTab) {
-                        ContactsTab.MY_CONTACTS -> "Search by name, hash, or tag..."
-                        ContactsTab.NETWORK -> "Search by name or hash..."
-                    }
+                    val currentSearchQuery =
+                        when (selectedTab) {
+                            ContactsTab.MY_CONTACTS -> searchQuery
+                            ContactsTab.NETWORK -> announceSearchQuery
+                        }
+                    val currentPlaceholder =
+                        when (selectedTab) {
+                            ContactsTab.MY_CONTACTS -> "Search by name, hash, or tag..."
+                            ContactsTab.NETWORK -> "Search by name or hash..."
+                        }
                     OutlinedTextField(
                         value = currentSearchQuery,
                         onValueChange = { query ->
@@ -873,12 +875,15 @@ fun ContactListItem(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Identicon with online/status indicator
+            // Profile icon with online/status indicator
             Box {
-                // Use publicKey if available, otherwise use destinationHash bytes for identicon
-                Identicon(
-                    hash = contact.publicKey ?: contact.destinationHash.toByteArray(),
+                // Use ProfileIcon with icon data if available, fallback to identicon
+                ProfileIcon(
+                    iconName = contact.iconName,
+                    foregroundColor = contact.iconForegroundColor,
+                    backgroundColor = contact.iconBackgroundColor,
                     size = 48.dp,
+                    fallbackHash = contact.publicKey ?: contact.destinationHash.toByteArray(),
                 )
 
                 // Status indicator overlay
@@ -1427,14 +1432,17 @@ fun PendingContactBottomSheet(
                     .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // Header with identicon and name
+            // Header with profile icon and name
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Identicon(
-                    hash = contact.destinationHash.toByteArray(),
+                ProfileIcon(
+                    iconName = contact.iconName,
+                    foregroundColor = contact.iconForegroundColor,
+                    backgroundColor = contact.iconBackgroundColor,
                     size = 48.dp,
+                    fallbackHash = contact.publicKey ?: contact.destinationHash.toByteArray(),
                 )
                 Column {
                     Text(

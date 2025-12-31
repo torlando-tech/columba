@@ -1107,6 +1107,24 @@ object DatabaseModule {
             }
         }
 
+    // Migration from version 26 to 27: Add profile icon fields to local_identities and announces
+    // Enables users to set custom icons with foreground/background colors for their identity
+    // and to receive icon appearance from peers via announces
+    private val MIGRATION_26_27 =
+        object : Migration(26, 27) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add icon columns to local_identities table
+                database.execSQL("ALTER TABLE local_identities ADD COLUMN iconName TEXT DEFAULT NULL")
+                database.execSQL("ALTER TABLE local_identities ADD COLUMN iconForegroundColor TEXT DEFAULT NULL")
+                database.execSQL("ALTER TABLE local_identities ADD COLUMN iconBackgroundColor TEXT DEFAULT NULL")
+
+                // Add icon columns to announces table
+                database.execSQL("ALTER TABLE announces ADD COLUMN iconName TEXT DEFAULT NULL")
+                database.execSQL("ALTER TABLE announces ADD COLUMN iconForegroundColor TEXT DEFAULT NULL")
+                database.execSQL("ALTER TABLE announces ADD COLUMN iconBackgroundColor TEXT DEFAULT NULL")
+            }
+        }
+
     @Provides
     @Singleton
     fun provideColumbaDatabase(
@@ -1117,7 +1135,7 @@ object DatabaseModule {
             ColumbaDatabase::class.java,
             "columba_database",
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27)
             .build()
     }
 

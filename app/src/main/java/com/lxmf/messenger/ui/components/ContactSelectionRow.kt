@@ -18,9 +18,12 @@ import androidx.compose.ui.unit.dp
  * A selectable row displaying a contact with checkbox and avatar.
  *
  * @param displayName The contact's display name
- * @param destinationHash The contact's destination hash (used for identicon)
+ * @param destinationHash The contact's destination hash (used for identicon fallback)
  * @param isSelected Whether this contact is currently selected
  * @param onSelectionChanged Called when the selection state changes
+ * @param iconName Optional icon name for ProfileIcon
+ * @param iconForegroundColor Optional foreground color (hex RGB) for ProfileIcon
+ * @param iconBackgroundColor Optional background color (hex RGB) for ProfileIcon
  * @param modifier Optional modifier for the row
  */
 @Composable
@@ -29,14 +32,18 @@ fun ContactSelectionRow(
     destinationHash: String,
     isSelected: Boolean,
     onSelectionChanged: (Boolean) -> Unit,
+    iconName: String? = null,
+    iconForegroundColor: String? = null,
+    iconBackgroundColor: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onSelectionChanged(!isSelected) }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable { onSelectionChanged(!isSelected) }
+                .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Checkbox(
             checked = isSelected,
@@ -45,14 +52,18 @@ fun ContactSelectionRow(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Use destinationHash bytes for identicon
-        val hashBytes = destinationHash.chunked(2)
-            .mapNotNull { it.toIntOrNull(16)?.toByte() }
-            .toByteArray()
+        // Use destinationHash bytes for identicon fallback
+        val hashBytes =
+            destinationHash.chunked(2)
+                .mapNotNull { it.toIntOrNull(16)?.toByte() }
+                .toByteArray()
 
-        Identicon(
-            hash = hashBytes,
+        ProfileIcon(
+            iconName = iconName,
+            foregroundColor = iconForegroundColor,
+            backgroundColor = iconBackgroundColor,
             size = 40.dp,
+            fallbackHash = hashBytes,
         )
 
         Spacer(modifier = Modifier.width(12.dp))

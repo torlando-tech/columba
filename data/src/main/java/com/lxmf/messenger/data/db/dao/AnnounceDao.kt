@@ -217,6 +217,23 @@ interface AnnounceDao {
      */
     @Query("SELECT nodeType, COUNT(*) as count FROM announces GROUP BY nodeType")
     suspend fun getNodeTypeCounts(): List<NodeTypeCount>
+
+    /**
+     * Update the icon appearance for an announce.
+     * @param destinationHash The destination hash of the announce
+     * @param iconName The icon name (e.g., Material icon name)
+     * @param foregroundColor Hex RGB color for icon foreground (e.g., "FFFFFF")
+     * @param backgroundColor Hex RGB color for icon background (e.g., "1E88E5")
+     */
+    @Query(
+        "UPDATE announces SET iconName = :iconName, iconForegroundColor = :foregroundColor, iconBackgroundColor = :backgroundColor WHERE destinationHash = :destinationHash",
+    )
+    suspend fun updateIconAppearance(
+        destinationHash: String,
+        iconName: String?,
+        foregroundColor: String?,
+        backgroundColor: String?,
+    )
 }
 
 /**

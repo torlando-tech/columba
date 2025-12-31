@@ -12,6 +12,7 @@ import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
+import com.lxmf.messenger.data.model.EnrichedConversation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -27,6 +28,10 @@ data class Conversation(
     val lastMessage: String,
     val lastMessageTimestamp: Long,
     val unreadCount: Int,
+    // Profile icon (from announces table)
+    val iconName: String? = null,
+    val iconForegroundColor: String? = null,
+    val iconBackgroundColor: String? = null,
 )
 
 data class Message(
@@ -66,6 +71,7 @@ class ConversationRepository
     ) {
         /**
          * Get all conversations for the active identity, sorted by most recent activity.
+         * Includes profile icon data from announces table.
          * Automatically switches when identity changes.
          */
         fun getConversations(): Flow<List<Conversation>> {
@@ -82,13 +88,13 @@ class ConversationRepository
                     )
                     flowOf(emptyList())
                 } else {
-                    conversationDao.getAllConversations(identity.identityHash).map { entities ->
+                    conversationDao.getEnrichedConversations(identity.identityHash).map { enriched ->
                         android.util.Log.d(
                             "ConversationRepository",
-                            "getConversations: Loaded ${entities.size} conversations " +
+                            "getConversations: Loaded ${enriched.size} conversations " +
                                 "for identity ${identity.identityHash.take(8)}",
                         )
-                        entities.map { it.toConversation() }
+                        enriched.map { it.toConversation() }
                     }
                 }
             }
@@ -96,6 +102,7 @@ class ConversationRepository
 
         /**
          * Search conversations by peer name for the active identity.
+         * Includes profile icon data from announces table.
          * Automatically switches when identity changes.
          */
         fun searchConversations(query: String): Flow<List<Conversation>> {
@@ -103,8 +110,8 @@ class ConversationRepository
                 if (identity == null) {
                     flowOf(emptyList())
                 } else {
-                    conversationDao.searchConversations(identity.identityHash, query).map { entities ->
-                        entities.map { it.toConversation() }
+                    conversationDao.searchEnrichedConversations(identity.identityHash, query).map { enriched ->
+                        enriched.map { it.toConversation() }
                     }
                 }
             }
@@ -416,6 +423,19 @@ class ConversationRepository
                 unreadCount = unreadCount,
             )
 
+        private fun EnrichedConversation.toConversation() =
+            Conversation(
+                peerHash = peerHash,
+                peerName = peerName,
+                peerPublicKey = peerPublicKey,
+                lastMessage = lastMessage,
+                lastMessageTimestamp = lastMessageTimestamp,
+                unreadCount = unreadCount,
+                iconName = iconName,
+                iconForegroundColor = iconForegroundColor,
+                iconBackgroundColor = iconBackgroundColor,
+            )
+
         private fun MessageEntity.toMessage() =
             Message(
                 id = id,
@@ -516,24 +536,27 @@ class ConversationRepository
             peerName: String,
         ): ReplyPreview? {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return null
-            val previewEntity = messageDao.getReplyPreviewData(messageId, activeIdentity.identityHash)
-                ?: return null
+            val previewEntity =
+                messageDao.getReplyPreviewData(messageId, activeIdentity.identityHash)
+                    ?: return null
 
             // Parse fieldsJson to detect attachments
             val hasImage = previewEntity.fieldsJson?.contains("\"6\"") == true
             val hasFileAttachment = previewEntity.fieldsJson?.contains("\"5\"") == true
 
             // Extract first filename if file attachment exists
-            val firstFileName = if (hasFileAttachment && previewEntity.fieldsJson != null) {
-                extractFirstFileName(previewEntity.fieldsJson)
-            } else {
-                null
-            }
+            val firstFileName =
+                if (hasFileAttachment && previewEntity.fieldsJson != null) {
+                    extractFirstFileName(previewEntity.fieldsJson)
+                } else {
+                    null
+                }
 
             // Truncate content for preview
-            val contentPreview = previewEntity.content.take(REPLY_PREVIEW_MAX_LENGTH).let {
-                if (previewEntity.content.length > REPLY_PREVIEW_MAX_LENGTH) "$it..." else it
-            }
+            val contentPreview =
+                previewEntity.content.take(REPLY_PREVIEW_MAX_LENGTH).let {
+                    if (previewEntity.content.length > REPLY_PREVIEW_MAX_LENGTH) "$it..." else it
+                }
 
             return ReplyPreview(
                 messageId = previewEntity.id,

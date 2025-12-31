@@ -2,6 +2,7 @@ package com.lxmf.messenger.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -37,6 +39,30 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
 import com.lxmf.messenger.util.ThemeColorGenerator
+
+/**
+ * ROYGBIV preset colors for quick selection.
+ * Each color is defined by its HSL values for easy slider updates.
+ */
+private data class PresetColor(
+    val name: String,
+    val color: Color,
+    val hue: Float,
+    val saturation: Float,
+    val lightness: Float,
+)
+
+private val roygbivPresets = listOf(
+    PresetColor("Red", Color(0xFFF44336), 4f, 0.90f, 0.58f),
+    PresetColor("Orange", Color(0xFFFF9800), 36f, 1.0f, 0.50f),
+    PresetColor("Yellow", Color(0xFFFFEB3B), 54f, 1.0f, 0.62f),
+    PresetColor("Green", Color(0xFF4CAF50), 122f, 0.39f, 0.49f),
+    PresetColor("Blue", Color(0xFF2196F3), 207f, 0.90f, 0.54f),
+    PresetColor("Indigo", Color(0xFF3F51B5), 231f, 0.48f, 0.48f),
+    PresetColor("Violet", Color(0xFF9C27B0), 291f, 0.64f, 0.42f),
+    PresetColor("White", Color(0xFFFFFFFF), 0f, 0f, 1f),
+    PresetColor("Black", Color(0xFF000000), 0f, 0f, 0f),
+)
 
 /**
  * Color picker dialog with HSV sliders and hex input.
@@ -97,7 +123,7 @@ fun ColorPickerDialog(
                     Box(
                         modifier =
                             Modifier
-                                .size(120.dp)
+                                .size(100.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(currentColor)
                                 .border(
@@ -106,6 +132,32 @@ fun ColorPickerDialog(
                                     shape = RoundedCornerShape(12.dp),
                                 ),
                     )
+                }
+
+                // Quick color presets (ROYGBIV + B&W)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    roygbivPresets.forEach { preset ->
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(preset.color)
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                    shape = CircleShape,
+                                )
+                                .clickable {
+                                    hue = preset.hue
+                                    saturation = preset.saturation
+                                    lightness = preset.lightness
+                                },
+                        )
+                    }
                 }
 
                 // Hex input field

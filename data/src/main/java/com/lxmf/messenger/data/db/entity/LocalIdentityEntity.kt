@@ -34,6 +34,9 @@ data class LocalIdentityEntity(
     val createdTimestamp: Long,
     val lastUsedTimestamp: Long,
     val isActive: Boolean,
+    val iconName: String? = null,
+    val iconForegroundColor: String? = null, // Hex RGB e.g., "FFFFFF"
+    val iconBackgroundColor: String? = null, // Hex RGB e.g., "1E88E5"
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

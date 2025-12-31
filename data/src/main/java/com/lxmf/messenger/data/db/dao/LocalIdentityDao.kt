@@ -125,4 +125,21 @@ interface LocalIdentityDao {
         identityHash: String,
         filePath: String,
     )
+
+    /**
+     * Update the icon appearance of an identity.
+     * @param identityHash The identity to update
+     * @param iconName The icon name (e.g., Material icon name)
+     * @param foregroundColor Hex RGB color for icon foreground (e.g., "FFFFFF")
+     * @param backgroundColor Hex RGB color for icon background (e.g., "1E88E5")
+     */
+    @Query(
+        "UPDATE local_identities SET iconName = :iconName, iconForegroundColor = :foregroundColor, iconBackgroundColor = :backgroundColor WHERE identityHash = :identityHash",
+    )
+    suspend fun updateIconAppearance(
+        identityHash: String,
+        iconName: String?,
+        foregroundColor: String?,
+        backgroundColor: String?,
+    )
 }

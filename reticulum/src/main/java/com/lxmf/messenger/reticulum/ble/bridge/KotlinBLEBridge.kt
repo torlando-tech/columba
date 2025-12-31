@@ -1501,6 +1501,10 @@ class KotlinBLEBridge(
 
                 Log.i(TAG, "Peer disconnected: $address")
                 onDisconnected?.callAttr("__call__", address)
+
+                // Remove from scanner cache so device can be rediscovered and reconnected
+                // This enables automatic reconnection on next scan cycle
+                scanner.removeDevice(address)
             } else {
                 Log.d(TAG, "Peer $address partially disconnected (central=${peer.isCentral}, peripheral=${peer.isPeripheral})")
             }

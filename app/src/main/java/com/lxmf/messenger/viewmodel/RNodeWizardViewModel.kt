@@ -1842,7 +1842,19 @@ class RNodeWizardViewModel
                     val state = _state.value
 
                     // Check for duplicate interface names before saving
-                    val existingNames = interfaceRepository.allInterfaces.first().map { it.name }
+                    var existingNames = interfaceRepository.allInterfaces.first().map { it.name }
+
+                    // When editing, exclude the original interface from duplicate check
+                    if (state.editingInterfaceId != null) {
+                        val originalInterface =
+                            interfaceRepository.getInterfaceById(state.editingInterfaceId).first()
+                        originalInterface?.name?.let { originalName ->
+                            existingNames = existingNames.filter {
+                                !it.equals(originalName, ignoreCase = true)
+                            }
+                        }
+                    }
+
                     when (
                         val uniqueResult =
                             InputValidator.validateInterfaceNameUniqueness(

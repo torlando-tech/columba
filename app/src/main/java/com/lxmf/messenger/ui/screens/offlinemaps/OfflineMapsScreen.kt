@@ -103,25 +103,28 @@ fun OfflineMapsScreen(
     ) { paddingValues ->
         if (state.isLoading) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator()
             }
         } else if (state.regions.isEmpty()) {
             EmptyOfflineMapsState(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
             )
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .consumeWindowInsets(paddingValues),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .consumeWindowInsets(paddingValues),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -162,14 +165,16 @@ fun StorageSummaryCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -212,14 +217,16 @@ fun OfflineMapRegionCard(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
@@ -227,9 +234,10 @@ fun OfflineMapRegionCard(
             Icon(
                 imageVector = Icons.Default.Map,
                 contentDescription = null,
-                modifier = Modifier
-                    .size(40.dp)
-                    .padding(end = 12.dp),
+                modifier =
+                    Modifier
+                        .size(40.dp)
+                        .padding(end = 12.dp),
                 tint = MaterialTheme.colorScheme.primary,
             )
 
@@ -359,12 +367,13 @@ fun StatusChip(
     status: OfflineMapRegion.Status,
     modifier: Modifier = Modifier,
 ) {
-    val (text, color) = when (status) {
-        OfflineMapRegion.Status.PENDING -> "Pending" to MaterialTheme.colorScheme.tertiary
-        OfflineMapRegion.Status.DOWNLOADING -> "Downloading" to MaterialTheme.colorScheme.primary
-        OfflineMapRegion.Status.COMPLETE -> "Complete" to MaterialTheme.colorScheme.secondary
-        OfflineMapRegion.Status.ERROR -> "Error" to MaterialTheme.colorScheme.error
-    }
+    val (text, color) =
+        when (status) {
+            OfflineMapRegion.Status.PENDING -> "Pending" to MaterialTheme.colorScheme.tertiary
+            OfflineMapRegion.Status.DOWNLOADING -> "Downloading" to MaterialTheme.colorScheme.primary
+            OfflineMapRegion.Status.COMPLETE -> "Complete" to MaterialTheme.colorScheme.secondary
+            OfflineMapRegion.Status.ERROR -> "Error" to MaterialTheme.colorScheme.error
+        }
 
     Text(
         text = text,

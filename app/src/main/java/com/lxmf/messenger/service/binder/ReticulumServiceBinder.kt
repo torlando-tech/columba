@@ -874,18 +874,20 @@ class ReticulumServiceBinder(
             val timeoutSec = timeoutMs / 1000.0f
             wrapperManager.withWrapper { wrapper ->
                 // Create Python list for zoom_range (Java ArrayList doesn't serialize properly)
-                val pyList = com.chaquo.python.Python.getInstance()
-                    .builtins.callAttr("list", arrayOf(zoomMin, zoomMax))
+                val pyList =
+                    com.chaquo.python.Python.getInstance()
+                        .builtins.callAttr("list", arrayOf(zoomMin, zoomMax))
 
-                val result = wrapper.callAttr(
-                    "fetch_rmsp_tiles",
-                    destinationHashHex,
-                    publicKey,
-                    geohash,
-                    pyList,
-                    null, // format
-                    timeoutSec,
-                )
+                val result =
+                    wrapper.callAttr(
+                        "fetch_rmsp_tiles",
+                        destinationHashHex,
+                        publicKey,
+                        geohash,
+                        pyList,
+                        null, // format
+                        timeoutSec,
+                    )
                 result?.toJava(ByteArray::class.java)
             }
         } catch (e: Exception) {

@@ -31,6 +31,19 @@ import kotlin.math.sinh
 import kotlin.math.tan
 
 /**
+ * Parameters for downloading a map region.
+ */
+data class RegionParams(
+    val centerLat: Double,
+    val centerLon: Double,
+    val radiusKm: Int,
+    val minZoom: Int,
+    val maxZoom: Int,
+    val name: String,
+    val outputFile: File,
+)
+
+/**
  * Tile source for downloads.
  */
 sealed class TileSource {
@@ -95,16 +108,17 @@ class TileDownloadManager(
         val y: Int,
     )
 
-    private val _progress = MutableStateFlow(
-        DownloadProgress(
-            status = DownloadProgress.Status.IDLE,
-            totalTiles = 0,
-            downloadedTiles = 0,
-            failedTiles = 0,
-            bytesDownloaded = 0,
-            currentZoom = 0,
-        ),
-    )
+    private val _progress =
+        MutableStateFlow(
+            DownloadProgress(
+                status = DownloadProgress.Status.IDLE,
+                totalTiles = 0,
+                downloadedTiles = 0,
+                failedTiles = 0,
+                bytesDownloaded = 0,
+                currentZoom = 0,
+            ),
+        )
     val progress: StateFlow<DownloadProgress> = _progress.asStateFlow()
 
     @Volatile
@@ -130,49 +144,34 @@ class TileDownloadManager(
         maxZoom: Int,
         name: String,
         outputFile: File,
-    ): File? = withContext(Dispatchers.IO) {
-        isCancelled = false
+    ): File? =
+        withContext(Dispatchers.IO) {
+            isCancelled = false
 
-        // Branch based on tile source
-        when (tileSource) {
-            is TileSource.Http -> downloadRegionHttp(
-                centerLat, centerLon, radiusKm, minZoom, maxZoom, name, outputFile,
-            )
-            is TileSource.Rmsp -> downloadRegionRmsp(
-                tileSource, centerLat, centerLon, radiusKm, minZoom, maxZoom, name, outputFile,
-            )
+            val params = RegionParams(centerLat, centerLon, radiusKm, minZoom, maxZoom, name, outputFile)
+
+            // Branch based on tile source
+            when (tileSource) {
+                is TileSource.Http -> downloadRegionHttp(params)
+                is TileSource.Rmsp -> downloadRegionRmsp(tileSource, params)
+            }
         }
-    }
 
     /**
      * Download tiles from HTTP source.
      */
-    private suspend fun downloadRegionHttp(
-        centerLat: Double,
-        centerLon: Double,
-        radiusKm: Int,
-        minZoom: Int,
-        maxZoom: Int,
-        name: String,
-        outputFile: File,
-    ): File? {
-        try {
+    private suspend fun downloadRegionHttp(params: RegionParams): File? {
+        return try {
             // Calculate bounds and tiles
-            _progress.value = _progress.value.copy(
-                status = DownloadProgress.Status.CALCULATING,
-            )
+            _progress.value = _progress.value.copy(status = DownloadProgress.Status.CALCULATING)
+            val bounds = MBTilesWriter.boundsFromCenter(params.centerLat, params.centerLon, params.radiusKm)
+            val tiles = calculateTilesForRegion(bounds, params.minZoom, params.maxZoom)
 
-            val bounds = MBTilesWriter.boundsFromCenter(centerLat, centerLon, radiusKm)
-            val tiles = calculateTilesForRegion(bounds, minZoom, maxZoom)
-
-            Log.d(TAG, "HTTP Download region: center=($centerLat, $centerLon), radius=$radiusKm km")
-            Log.d(TAG, "Calculated ${tiles.size} tiles across zoom levels $minZoom-$maxZoom")
+            Log.d(TAG, "HTTP Download: center=(${params.centerLat}, ${params.centerLon}), radius=${params.radiusKm} km")
+            Log.d(TAG, "Calculated ${tiles.size} tiles across zoom levels ${params.minZoom}-${params.maxZoom}")
 
             if (tiles.isEmpty()) {
-                _progress.value = _progress.value.copy(
-                    status = DownloadProgress.Status.ERROR,
-                    errorMessage = "No tiles found for region",
-                )
+                updateErrorStatus("No tiles found for region")
                 return null
             }
 
@@ -184,297 +183,242 @@ class TileDownloadManager(
                 bytesDownloaded = 0,
             )
 
-            // Create MBTiles writer
             val writer = MBTilesWriter(
-                file = outputFile,
-                name = name,
-                description = "Offline map for $name",
-                minZoom = minZoom,
-                maxZoom = maxZoom,
+                file = params.outputFile,
+                name = params.name,
+                description = "Offline map for ${params.name}",
+                minZoom = params.minZoom,
+                maxZoom = params.maxZoom,
                 bounds = bounds,
-                center = MBTilesWriter.Center(centerLon, centerLat, (minZoom + maxZoom) / 2),
+                center = MBTilesWriter.Center(params.centerLon, params.centerLat, (params.minZoom + params.maxZoom) / 2),
             )
-
             writer.open()
-            // Note: We use a mutex to serialize database writes since SQLite connections
-            // are not thread-safe across different coroutine dispatcher threads
-            val writeMutex = Mutex()
 
             try {
-                // Download tiles with concurrency limit
-                val semaphore = Semaphore(CONCURRENT_DOWNLOADS)
-                var downloadedCount = 0
-                var failedCount = 0
-                var totalBytes = 0L
-
-                coroutineScope {
-                    // Group tiles by zoom level for progress reporting
-                    val tilesByZoom = tiles.groupBy { it.z }
-
-                    for (zoom in minZoom..maxZoom) {
-                        if (isCancelled) break
-
-                        val zoomTiles = tilesByZoom[zoom] ?: continue
-
-                        Log.d(TAG, "Starting zoom level $zoom with ${zoomTiles.size} tiles")
-                        _progress.value = _progress.value.copy(currentZoom = zoom)
-
-                        val results = zoomTiles.map { tile ->
-                            async {
-                                if (isCancelled) return@async null
-
-                                semaphore.withPermit {
-                                    downloadTileWithRetry(tile)
-                                }
-                            }
-                        }.awaitAll()
-
-                        // Write successful tiles (serialized with mutex)
-                        for ((index, data) in results.withIndex()) {
-                            if (data != null) {
-                                val tile = zoomTiles[index]
-                                writeMutex.withLock {
-                                    writer.writeTile(tile.z, tile.x, tile.y, data)
-                                }
-                                downloadedCount++
-                                totalBytes += data.size
-                            } else {
-                                failedCount++
-                            }
-
-                            _progress.value = _progress.value.copy(
-                                downloadedTiles = downloadedCount,
-                                failedTiles = failedCount,
-                                bytesDownloaded = totalBytes,
-                            )
-                        }
-                    }
-                }
-
-                if (isCancelled) {
-                    writer.close()
-                    outputFile.delete()
-
-                    _progress.value = _progress.value.copy(
-                        status = DownloadProgress.Status.CANCELLED,
-                    )
-                    return null
-                }
-
-                // Finalize
-                _progress.value = _progress.value.copy(
-                    status = DownloadProgress.Status.WRITING,
-                )
-
+                val success = executeHttpDownload(writer, tiles, params)
+                if (!success) return null
+                _progress.value = _progress.value.copy(status = DownloadProgress.Status.WRITING)
                 writer.optimize()
                 writer.close()
-
-                _progress.value = _progress.value.copy(
-                    status = DownloadProgress.Status.COMPLETE,
-                )
-
-                return outputFile
+                _progress.value = _progress.value.copy(status = DownloadProgress.Status.COMPLETE)
+                params.outputFile
             } catch (e: Exception) {
                 writer.close()
-                outputFile.delete()
+                params.outputFile.delete()
                 throw e
             }
         } catch (e: Exception) {
-            _progress.value = _progress.value.copy(
-                status = DownloadProgress.Status.ERROR,
-                errorMessage = e.message ?: "Download failed",
-            )
-            return null
+            updateErrorStatus(e.message ?: "Download failed")
+            null
         }
+    }
+
+    private suspend fun executeHttpDownload(
+        writer: MBTilesWriter,
+        tiles: List<TileCoord>,
+        params: RegionParams,
+    ): Boolean {
+        val writeMutex = Mutex()
+        val semaphore = Semaphore(CONCURRENT_DOWNLOADS)
+        var downloadedCount = 0
+        var failedCount = 0
+        var totalBytes = 0L
+
+        coroutineScope {
+            val tilesByZoom = tiles.groupBy { it.z }
+
+            for (zoom in params.minZoom..params.maxZoom) {
+                if (isCancelled) break
+
+                tilesByZoom[zoom]?.let { zoomTiles ->
+                    Log.d(TAG, "Starting zoom level $zoom with ${zoomTiles.size} tiles")
+                    _progress.value = _progress.value.copy(currentZoom = zoom)
+
+                    // Download tiles concurrently
+                    val results = zoomTiles.map { tile ->
+                        async {
+                            if (isCancelled) return@async null
+                            semaphore.withPermit { downloadTileWithRetry(tile) }
+                        }
+                    }.awaitAll()
+
+                    // Write tiles and update counts
+                    for ((index, data) in results.withIndex()) {
+                        if (data != null) {
+                            val tile = zoomTiles[index]
+                            writeMutex.withLock { writer.writeTile(tile.z, tile.x, tile.y, data) }
+                            downloadedCount++
+                            totalBytes += data.size
+                        } else {
+                            failedCount++
+                        }
+                        _progress.value = _progress.value.copy(
+                            downloadedTiles = downloadedCount,
+                            failedTiles = failedCount,
+                            bytesDownloaded = totalBytes,
+                        )
+                    }
+                }
+            }
+        }
+
+        if (isCancelled) {
+            writer.close()
+            params.outputFile.delete()
+            _progress.value = _progress.value.copy(status = DownloadProgress.Status.CANCELLED)
+            return false
+        }
+
+        return true
+    }
+
+    private fun updateErrorStatus(message: String) {
+        _progress.value = _progress.value.copy(status = DownloadProgress.Status.ERROR, errorMessage = message)
     }
 
     /**
      * Download tiles from RMSP server.
      */
-    private suspend fun downloadRegionRmsp(
-        source: TileSource.Rmsp,
-        centerLat: Double,
-        centerLon: Double,
-        radiusKm: Int,
-        minZoom: Int,
-        maxZoom: Int,
-        name: String,
-        outputFile: File,
-    ): File? {
-        try {
-            _progress.value = _progress.value.copy(
-                status = DownloadProgress.Status.CALCULATING,
-            )
-
-            // Calculate bounds and get all geohashes covering the region
-            val bounds = MBTilesWriter.boundsFromCenter(centerLat, centerLon, radiusKm)
-
-            // Choose geohash precision based on radius
-            // Smaller precision = larger cells = fewer fetches but coarser coverage
-            val geohashPrecision = when {
-                radiusKm <= 5 -> 5   // ~5km cell
-                radiusKm <= 20 -> 4  // ~20km cell
-                radiusKm <= 80 -> 3  // ~80km cell
-                else -> 2            // ~600km cell
-            }
-
-            val geohashes = geohashesForBounds(bounds, geohashPrecision)
-            Log.d(TAG, "RMSP Download: ${geohashes.size} geohash cells at precision $geohashPrecision")
-            Log.d(TAG, "Geohashes: $geohashes")
-            Log.d(TAG, "Server: ${source.serverHash}")
-            Log.d(TAG, "Requesting zoom range $minZoom-$maxZoom")
-
-            _progress.value = _progress.value.copy(
-                status = DownloadProgress.Status.DOWNLOADING,
-                totalTiles = geohashes.size, // Update as we get actual tile counts
-                downloadedTiles = 0,
-            )
-
-            // Fetch tiles for each geohash cell
-            val allTiles = mutableListOf<RmspTile>()
-            val seenTileCoords = mutableSetOf<Triple<Int, Int, Int>>()
-            var geohashesProcessed = 0
-
-            for (geohash in geohashes) {
-                if (isCancelled) break
-
-                Log.d(TAG, "Fetching geohash $geohash (${geohashesProcessed + 1}/${geohashes.size})")
-
-                val tileData = source.fetchTiles(geohash, listOf(minZoom, maxZoom))
-                if (tileData != null && tileData.isNotEmpty()) {
-                    val tiles = unpackRmspTiles(tileData)
-                    Log.d(TAG, "Received ${tiles.size} tiles for $geohash (${tileData.size} bytes)")
-
-                    // Add tiles, avoiding duplicates (tiles at cell boundaries may overlap)
-                    for (tile in tiles) {
-                        val coord = Triple(tile.z, tile.x, tile.y)
-                        if (coord !in seenTileCoords) {
-                            seenTileCoords.add(coord)
-                            allTiles.add(tile)
-                        }
-                    }
-                } else {
-                    Log.w(TAG, "No data received for geohash $geohash")
-                }
-
-                geohashesProcessed++
-                _progress.value = _progress.value.copy(
-                    downloadedTiles = geohashesProcessed,
-                    totalTiles = geohashes.size,
-                )
-            }
-
-            if (isCancelled) {
-                _progress.value = _progress.value.copy(
-                    status = DownloadProgress.Status.CANCELLED,
-                )
-                return null
-            }
-
-            Log.d(TAG, "Total unique tiles collected: ${allTiles.size}")
+    private suspend fun downloadRegionRmsp(source: TileSource.Rmsp, params: RegionParams): File? {
+        return try {
+            val allTiles = fetchAllRmspTiles(source, params) ?: return null
 
             if (allTiles.isEmpty()) {
-                _progress.value = _progress.value.copy(
-                    status = DownloadProgress.Status.ERROR,
-                    errorMessage = "No tiles received from RMSP server",
-                )
+                updateErrorStatus("No tiles received from RMSP server")
                 return null
             }
 
-            _progress.value = _progress.value.copy(
-                totalTiles = allTiles.size,
-                downloadedTiles = 0,
-                status = DownloadProgress.Status.WRITING,
-            )
-
-            // Create MBTiles and write tiles
-            val writer = MBTilesWriter(
-                file = outputFile,
-                name = name,
-                description = "Offline map from RMSP: $name",
-                minZoom = minZoom,
-                maxZoom = maxZoom,
-                bounds = bounds,
-                center = MBTilesWriter.Center(centerLon, centerLat, (minZoom + maxZoom) / 2),
-            )
-
-            writer.open()
-            try {
-                var written = 0
-                var totalBytes = 0L
-                for ((z, x, y, data) in allTiles) {
-                    if (isCancelled) break
-                    writer.writeTile(z, x, y, data)
-                    written++
-                    totalBytes += data.size
-                    _progress.value = _progress.value.copy(
-                        downloadedTiles = written,
-                        bytesDownloaded = totalBytes,
-                        currentZoom = z,
-                    )
-                }
-
-                if (isCancelled) {
-                    writer.close()
-                    outputFile.delete()
-                    _progress.value = _progress.value.copy(
-                        status = DownloadProgress.Status.CANCELLED,
-                    )
-                    return null
-                }
-
-                writer.optimize()
-                writer.close()
-
-                _progress.value = _progress.value.copy(
-                    status = DownloadProgress.Status.COMPLETE,
-                )
-
-                Log.d(TAG, "RMSP download complete: ${allTiles.size} tiles, $totalBytes bytes")
-                return outputFile
-            } catch (e: Exception) {
-                writer.close()
-                outputFile.delete()
-                throw e
-            }
+            writeRmspTilesToFile(allTiles, params)
         } catch (e: Exception) {
             Log.e(TAG, "RMSP download failed: ${e.message}", e)
-            _progress.value = _progress.value.copy(
-                status = DownloadProgress.Status.ERROR,
-                errorMessage = e.message ?: "RMSP download failed",
-            )
+            updateErrorStatus(e.message ?: "RMSP download failed")
+            null
+        }
+    }
+
+    private suspend fun fetchAllRmspTiles(source: TileSource.Rmsp, params: RegionParams): List<RmspTile>? {
+        _progress.value = _progress.value.copy(status = DownloadProgress.Status.CALCULATING)
+
+        val bounds = MBTilesWriter.boundsFromCenter(params.centerLat, params.centerLon, params.radiusKm)
+        val geohashPrecision = when {
+            params.radiusKm <= 5 -> 5
+            params.radiusKm <= 20 -> 4
+            params.radiusKm <= 80 -> 3
+            else -> 2
+        }
+        val geohashes = geohashesForBounds(bounds, geohashPrecision)
+
+        Log.d(TAG, "RMSP Download: ${geohashes.size} geohash cells at precision $geohashPrecision")
+        Log.d(TAG, "Server: ${source.serverHash}, zoom range ${params.minZoom}-${params.maxZoom}")
+
+        _progress.value = _progress.value.copy(
+            status = DownloadProgress.Status.DOWNLOADING,
+            totalTiles = geohashes.size,
+            downloadedTiles = 0,
+        )
+
+        val allTiles = mutableListOf<RmspTile>()
+        val seenTileCoords = mutableSetOf<Triple<Int, Int, Int>>()
+        var processed = 0
+
+        for (geohash in geohashes) {
+            if (isCancelled) break
+
+            val tileData = source.fetchTiles(geohash, listOf(params.minZoom, params.maxZoom))
+            tileData?.takeIf { it.isNotEmpty() }?.let { data ->
+                unpackRmspTiles(data).forEach { tile ->
+                    val coord = Triple(tile.z, tile.x, tile.y)
+                    if (coord !in seenTileCoords) {
+                        seenTileCoords.add(coord)
+                        allTiles.add(tile)
+                    }
+                }
+            }
+            processed++
+            _progress.value = _progress.value.copy(downloadedTiles = processed, totalTiles = geohashes.size)
+        }
+
+        if (isCancelled) {
+            _progress.value = _progress.value.copy(status = DownloadProgress.Status.CANCELLED)
             return null
+        }
+
+        Log.d(TAG, "Total unique tiles collected: ${allTiles.size}")
+        return allTiles
+    }
+
+    private fun writeRmspTilesToFile(allTiles: List<RmspTile>, params: RegionParams): File? {
+        _progress.value = _progress.value.copy(totalTiles = allTiles.size, downloadedTiles = 0, status = DownloadProgress.Status.WRITING)
+
+        val bounds = MBTilesWriter.boundsFromCenter(params.centerLat, params.centerLon, params.radiusKm)
+        val writer = MBTilesWriter(
+            file = params.outputFile,
+            name = params.name,
+            description = "Offline map from RMSP: ${params.name}",
+            minZoom = params.minZoom,
+            maxZoom = params.maxZoom,
+            bounds = bounds,
+            center = MBTilesWriter.Center(params.centerLon, params.centerLat, (params.minZoom + params.maxZoom) / 2),
+        )
+        writer.open()
+
+        try {
+            var written = 0
+            var totalBytes = 0L
+            for (tile in allTiles) {
+                if (isCancelled) {
+                    writer.close()
+                    params.outputFile.delete()
+                    _progress.value = _progress.value.copy(status = DownloadProgress.Status.CANCELLED)
+                    return null
+                }
+                writer.writeTile(tile.z, tile.x, tile.y, tile.data)
+                written++
+                totalBytes += tile.data.size
+                _progress.value = _progress.value.copy(downloadedTiles = written, bytesDownloaded = totalBytes, currentZoom = tile.z)
+            }
+
+            writer.optimize()
+            writer.close()
+            _progress.value = _progress.value.copy(status = DownloadProgress.Status.COMPLETE)
+            Log.d(TAG, "RMSP download complete: ${allTiles.size} tiles, $totalBytes bytes")
+            return params.outputFile
+        } catch (e: Exception) {
+            writer.close()
+            params.outputFile.delete()
+            throw e
         }
     }
 
     /**
      * Unpack RMSP tile data.
      *
-     * Format: [tile_count: u32][tile_entries...]
-     * tile_entry: [z: u8][x: u32][y: u32][size: u32][data: bytes]
+     * Format: tile_count (u32), followed by tile_entries
+     * Each tile_entry: z (u8), x (u32), y (u32), size (u32), data (bytes)
      */
     private fun unpackRmspTiles(data: ByteArray): List<RmspTile> {
         val tiles = mutableListOf<RmspTile>()
-        val buffer = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN)
-
         if (data.size < 4) return tiles
 
+        val buffer = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN)
         val tileCount = buffer.int
         Log.d(TAG, "RMSP tile count in header: $tileCount")
 
         repeat(tileCount) {
-            if (buffer.remaining() < 13) return tiles // Need at least z(1) + x(4) + y(4) + size(4)
+            // Need at least z(1) + x(4) + y(4) + size(4) = 13 bytes, then tile data
+            val headerAvailable = buffer.remaining() >= 13
+            if (!headerAvailable) return@repeat
 
             val z = buffer.get().toInt() and 0xFF
             val x = buffer.int
             val y = buffer.int
             val size = buffer.int
 
-            if (buffer.remaining() < size) return tiles
+            val dataAvailable = buffer.remaining() >= size
+            if (!dataAvailable) return@repeat
 
             val tileData = ByteArray(size)
             buffer.get(tileData)
-
             tiles.add(RmspTile(z, x, y, tileData))
         }
 
@@ -500,14 +444,15 @@ class TileDownloadManager(
      */
     fun reset() {
         isCancelled = false
-        _progress.value = DownloadProgress(
-            status = DownloadProgress.Status.IDLE,
-            totalTiles = 0,
-            downloadedTiles = 0,
-            failedTiles = 0,
-            bytesDownloaded = 0,
-            currentZoom = 0,
-        )
+        _progress.value =
+            DownloadProgress(
+                status = DownloadProgress.Status.IDLE,
+                totalTiles = 0,
+                downloadedTiles = 0,
+                failedTiles = 0,
+                bytesDownloaded = 0,
+                currentZoom = 0,
+            )
     }
 
     /**
@@ -555,6 +500,7 @@ class TileDownloadManager(
             try {
                 return downloadTile(tile)
             } catch (e: IOException) {
+                Log.w(TAG, "Download attempt ${attempt + 1} failed for tile ${tile.z}/${tile.x}/${tile.y}: ${e.message}")
                 if (attempt < MAX_RETRIES - 1) {
                     delay(RETRY_DELAY_MS * (attempt + 1))
                 }
@@ -594,6 +540,7 @@ class TileDownloadManager(
 
     companion object {
         private const val TAG = "TileDownloadManager"
+
         // OpenFreeMap requires a version in the URL path
         // This version should be updated periodically or fetched dynamically
         const val DEFAULT_TILE_URL = "https://tiles.openfreemap.org/planet/20251224_001001_pt"
@@ -608,7 +555,11 @@ class TileDownloadManager(
         /**
          * Convert latitude/longitude to tile coordinates.
          */
-        fun latLonToTile(lat: Double, lon: Double, zoom: Int): TileCoord {
+        fun latLonToTile(
+            lat: Double,
+            lon: Double,
+            zoom: Int,
+        ): TileCoord {
             val n = 2.0.pow(zoom)
             val x = floor((lon + 180.0) / 360.0 * n).toInt()
             val latRad = Math.toRadians(lat)
@@ -619,7 +570,11 @@ class TileDownloadManager(
         /**
          * Convert tile coordinates to latitude/longitude (top-left corner).
          */
-        fun tileToLatLon(z: Int, x: Int, y: Int): Pair<Double, Double> {
+        fun tileToLatLon(
+            z: Int,
+            x: Int,
+            y: Int,
+        ): Pair<Double, Double> {
             val n = 2.0.pow(z)
             val lon = x / n * 360.0 - 180.0
             val latRad = atan(sinh(PI * (1 - 2 * y / n)))
@@ -651,7 +606,11 @@ class TileDownloadManager(
          * @param precision Number of characters in the geohash (1-12)
          * @return Geohash string
          */
-        fun encodeGeohash(lat: Double, lon: Double, precision: Int = 5): String {
+        fun encodeGeohash(
+            lat: Double,
+            lon: Double,
+            precision: Int = 5,
+        ): String {
             val base32 = "0123456789bcdefghjkmnpqrstuvwxyz"
             var minLat = -90.0
             var maxLat = 90.0
@@ -739,7 +698,10 @@ class TileDownloadManager(
          * @param precision Geohash precision (1-12)
          * @return Set of geohash strings covering the bounds
          */
-        fun geohashesForBounds(bounds: MBTilesWriter.Bounds, precision: Int): Set<String> {
+        fun geohashesForBounds(
+            bounds: MBTilesWriter.Bounds,
+            precision: Int,
+        ): Set<String> {
             val geohashes = mutableSetOf<String>()
 
             // Get the geohash cell size at this precision

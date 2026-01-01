@@ -3,6 +3,7 @@ package com.lxmf.messenger.reticulum.protocol
 import android.content.Context
 import android.content.ServiceConnection
 import com.lxmf.messenger.IReticulumService
+import com.lxmf.messenger.data.repository.RmspServerRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.reticulum.model.LogLevel
@@ -50,6 +51,7 @@ class ServiceReticulumProtocolTest {
 
     private lateinit var context: Context
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var rmspServerRepository: RmspServerRepository
     private lateinit var mockService: IReticulumService
     private lateinit var protocol: ServiceReticulumProtocol
 
@@ -72,6 +74,7 @@ class ServiceReticulumProtocolTest {
         // Create mocks
         context = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
+        rmspServerRepository = mockk(relaxed = true)
         mockService = mockk(relaxed = true)
 
         // Default settings repository behavior
@@ -103,7 +106,7 @@ class ServiceReticulumProtocolTest {
         every { IReticulumService.Stub.asInterface(any()) } returns mockService
 
         // Create protocol instance
-        protocol = ServiceReticulumProtocol(context, settingsRepository)
+        protocol = ServiceReticulumProtocol(context, settingsRepository, rmspServerRepository)
     }
 
     @After

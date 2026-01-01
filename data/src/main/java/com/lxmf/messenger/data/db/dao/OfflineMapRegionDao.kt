@@ -57,7 +57,12 @@ interface OfflineMapRegionDao {
         WHERE id = :id
         """,
     )
-    suspend fun updateProgress(id: Long, status: String, progress: Float, tileCount: Int)
+    suspend fun updateProgress(
+        id: Long,
+        status: String,
+        progress: Float,
+        tileCount: Int,
+    )
 
     /**
      * Mark a region as complete with final stats.
@@ -92,7 +97,10 @@ interface OfflineMapRegionDao {
         WHERE id = :id
         """,
     )
-    suspend fun markError(id: Long, errorMessage: String)
+    suspend fun markError(
+        id: Long,
+        errorMessage: String,
+    )
 
     /**
      * Delete a region.
@@ -134,5 +142,8 @@ interface OfflineMapRegionDao {
         LIMIT 1
         """,
     )
-    suspend fun findNearestRegion(latitude: Double, longitude: Double): OfflineMapRegionEntity?
+    suspend fun findNearestRegion(
+        latitude: Double,
+        longitude: Double,
+    ): OfflineMapRegionEntity?
 }

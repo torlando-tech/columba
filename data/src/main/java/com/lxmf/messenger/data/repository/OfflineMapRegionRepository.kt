@@ -100,27 +100,29 @@ class OfflineMapRegionRepository
             maxZoom: Int,
             source: OfflineMapRegion.Source = OfflineMapRegion.Source.HTTP,
         ): Long {
-            val entity = OfflineMapRegionEntity(
-                name = name,
-                centerLatitude = centerLatitude,
-                centerLongitude = centerLongitude,
-                radiusKm = radiusKm,
-                minZoom = minZoom,
-                maxZoom = maxZoom,
-                status = OfflineMapRegionEntity.STATUS_PENDING,
-                mbtilesPath = null,
-                tileCount = 0,
-                sizeBytes = 0,
-                downloadProgress = 0f,
-                errorMessage = null,
-                createdAt = System.currentTimeMillis(),
-                completedAt = null,
-                source = if (source == OfflineMapRegion.Source.RMSP) {
-                    OfflineMapRegionEntity.SOURCE_RMSP
-                } else {
-                    OfflineMapRegionEntity.SOURCE_HTTP
-                },
-            )
+            val entity =
+                OfflineMapRegionEntity(
+                    name = name,
+                    centerLatitude = centerLatitude,
+                    centerLongitude = centerLongitude,
+                    radiusKm = radiusKm,
+                    minZoom = minZoom,
+                    maxZoom = maxZoom,
+                    status = OfflineMapRegionEntity.STATUS_PENDING,
+                    mbtilesPath = null,
+                    tileCount = 0,
+                    sizeBytes = 0,
+                    downloadProgress = 0f,
+                    errorMessage = null,
+                    createdAt = System.currentTimeMillis(),
+                    completedAt = null,
+                    source =
+                        if (source == OfflineMapRegion.Source.RMSP) {
+                            OfflineMapRegionEntity.SOURCE_RMSP
+                        } else {
+                            OfflineMapRegionEntity.SOURCE_HTTP
+                        },
+                )
             return offlineMapRegionDao.insert(entity)
         }
 
@@ -161,7 +163,10 @@ class OfflineMapRegionRepository
         /**
          * Mark a region as failed.
          */
-        suspend fun markError(id: Long, errorMessage: String) {
+        suspend fun markError(
+            id: Long,
+            errorMessage: String,
+        ) {
             offlineMapRegionDao.markError(id, errorMessage)
         }
 
@@ -189,7 +194,10 @@ class OfflineMapRegionRepository
         /**
          * Find the nearest completed region to a location.
          */
-        suspend fun findNearestRegion(latitude: Double, longitude: Double): OfflineMapRegion? {
+        suspend fun findNearestRegion(
+            latitude: Double,
+            longitude: Double,
+        ): OfflineMapRegion? {
             return offlineMapRegionDao.findNearestRegion(latitude, longitude)?.toOfflineMapRegion()
         }
     }
@@ -206,12 +214,13 @@ private fun OfflineMapRegionEntity.toOfflineMapRegion(): OfflineMapRegion {
         radiusKm = radiusKm,
         minZoom = minZoom,
         maxZoom = maxZoom,
-        status = when (status) {
-            OfflineMapRegionEntity.STATUS_PENDING -> OfflineMapRegion.Status.PENDING
-            OfflineMapRegionEntity.STATUS_DOWNLOADING -> OfflineMapRegion.Status.DOWNLOADING
-            OfflineMapRegionEntity.STATUS_COMPLETE -> OfflineMapRegion.Status.COMPLETE
-            else -> OfflineMapRegion.Status.ERROR
-        },
+        status =
+            when (status) {
+                OfflineMapRegionEntity.STATUS_PENDING -> OfflineMapRegion.Status.PENDING
+                OfflineMapRegionEntity.STATUS_DOWNLOADING -> OfflineMapRegion.Status.DOWNLOADING
+                OfflineMapRegionEntity.STATUS_COMPLETE -> OfflineMapRegion.Status.COMPLETE
+                else -> OfflineMapRegion.Status.ERROR
+            },
         mbtilesPath = mbtilesPath,
         tileCount = tileCount,
         sizeBytes = sizeBytes,
@@ -219,11 +228,12 @@ private fun OfflineMapRegionEntity.toOfflineMapRegion(): OfflineMapRegion {
         errorMessage = errorMessage,
         createdAt = createdAt,
         completedAt = completedAt,
-        source = if (source == OfflineMapRegionEntity.SOURCE_RMSP) {
-            OfflineMapRegion.Source.RMSP
-        } else {
-            OfflineMapRegion.Source.HTTP
-        },
+        source =
+            if (source == OfflineMapRegionEntity.SOURCE_RMSP) {
+                OfflineMapRegion.Source.RMSP
+            } else {
+                OfflineMapRegion.Source.HTTP
+            },
     )
 }
 

@@ -1,6 +1,7 @@
 package com.lxmf.messenger.viewmodel
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -12,10 +13,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
@@ -59,27 +58,32 @@ class OfflineMapsViewModel
         @ApplicationContext private val context: Context,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
     ) : ViewModel() {
+        companion object {
+            private const val TAG = "OfflineMapsViewModel"
+        }
+
         private val _errorMessage = MutableStateFlow<String?>(null)
         private val _isDeleting = MutableStateFlow(false)
 
-        val state: StateFlow<OfflineMapsState> = combine(
-            offlineMapRegionRepository.getAllRegions(),
-            offlineMapRegionRepository.getTotalStorageUsed(),
-            _errorMessage,
-            _isDeleting,
-        ) { regions, totalStorage, error, isDeleting ->
-            OfflineMapsState(
-                regions = regions,
-                totalStorageBytes = totalStorage ?: 0L,
-                isLoading = false,
-                isDeleting = isDeleting,
-                errorMessage = error,
+        val state: StateFlow<OfflineMapsState> =
+            combine(
+                offlineMapRegionRepository.getAllRegions(),
+                offlineMapRegionRepository.getTotalStorageUsed(),
+                _errorMessage,
+                _isDeleting,
+            ) { regions, totalStorage, error, isDeleting ->
+                OfflineMapsState(
+                    regions = regions,
+                    totalStorageBytes = totalStorage ?: 0L,
+                    isLoading = false,
+                    isDeleting = isDeleting,
+                    errorMessage = error,
+                )
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000L),
+                initialValue = OfflineMapsState(),
             )
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = OfflineMapsState(),
-        )
 
         /**
          * Delete an offline map region.
@@ -109,10 +113,12 @@ class OfflineMapsViewModel
 
         /**
          * Retry a failed download.
+         *
+         * @param region The region to retry downloading
          */
         fun retryDownload(region: OfflineMapRegion) {
-            // This will be handled by navigating to the download screen
-            // with the region's parameters pre-filled
+            // Navigate to download screen with pre-filled parameters
+            Log.d(TAG, "Retry download requested for region: ${region.name}")
         }
 
         /**

@@ -22,40 +22,28 @@ data class RmspServerEntity(
     /** Hex destination hash of the RMSP server */
     @PrimaryKey
     val destinationHash: String,
-
     /** Server display name */
     val serverName: String,
-
     /** RNS identity public key (for verification) */
     val publicKey: ByteArray,
-
     /** Comma-separated geohash prefixes that this server covers (e.g., "9q,9n,9p") */
     val coverageGeohashes: String,
-
     /** Minimum zoom level available */
     val minZoom: Int,
-
     /** Maximum zoom level available */
     val maxZoom: Int,
-
     /** Comma-separated supported formats (e.g., "pmtiles,micro") */
     val formats: String,
-
     /** Comma-separated available layers (e.g., "osm") */
     val layers: String,
-
     /** Timestamp when the server's map data was last updated */
     val dataUpdatedTimestamp: Long,
-
     /** Total size of available data in bytes (optional) */
     val dataSize: Long?,
-
     /** RMSP protocol version (e.g., "0.1.0") */
     val version: String,
-
     /** When we last received an announce from this server */
     val lastSeenTimestamp: Long,
-
     /** Network hops to reach this server */
     val hops: Int,
 ) {

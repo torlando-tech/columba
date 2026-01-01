@@ -1,13 +1,11 @@
 package com.lxmf.messenger.map
 
-import android.content.Context
 import android.util.Log
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.data.repository.RmspServer
 import com.lxmf.messenger.data.repository.RmspServerRepository
 import com.lxmf.messenger.repository.SettingsRepository
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -53,7 +51,6 @@ sealed class MapStyleResult {
 class MapTileSourceManager
     @Inject
     constructor(
-        @ApplicationContext private val context: Context,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
         private val rmspServerRepository: RmspServerRepository,
         private val settingsRepository: SettingsRepository,
@@ -79,11 +76,15 @@ class MapTileSourceManager
 
         var httpEnabled: Boolean
             get() = _httpEnabledOverride ?: true
-            set(value) { _httpEnabledOverride = value }
+            set(value) {
+                _httpEnabledOverride = value
+            }
 
         var rmspEnabled: Boolean
             get() = _rmspEnabledOverride ?: false
-            set(value) { _rmspEnabledOverride = value }
+            set(value) {
+                _rmspEnabledOverride = value
+            }
 
         /**
          * Get the map style for a given location.
@@ -92,71 +93,65 @@ class MapTileSourceManager
          * @param longitude Current longitude (or null for default)
          * @return MapStyleResult indicating which source to use
          */
-        suspend fun getMapStyle(latitude: Double?, longitude: Double?): MapStyleResult {
-            // Get current settings from repository (or use runtime overrides if set)
+        suspend fun getMapStyle(
+            latitude: Double?,
+            longitude: Double?,
+        ): MapStyleResult {
             val httpEnabled = _httpEnabledOverride ?: settingsRepository.getMapSourceHttpEnabled()
             val rmspEnabled = _rmspEnabledOverride ?: settingsRepository.getMapSourceRmspEnabled()
 
             Log.d(TAG, "Getting map style for location: $latitude, $longitude (HTTP=$httpEnabled, RMSP=$rmspEnabled)")
 
-            // Check if we have offline coverage for this location
-            if (latitude != null && longitude != null) {
-                val offlineRegion = findOfflineRegion(latitude, longitude)
-                if (offlineRegion != null) {
-                    Log.d(TAG, "Found offline region: ${offlineRegion.name}")
-                    val styleJson = OfflineMapStyleBuilder.buildOfflineStyle(
-                        mbtilesPath = offlineRegion.mbtilesPath!!,
-                        name = offlineRegion.name,
-                    )
-                    return MapStyleResult.Offline(styleJson, offlineRegion.name)
+            // Check offline source first
+            val offlineResult = if (latitude != null && longitude != null) {
+                findOfflineRegion(latitude, longitude)?.let { region ->
+                    Log.d(TAG, "Found offline region: ${region.name}")
+                    val styleJson = OfflineMapStyleBuilder.buildOfflineStyle(region.mbtilesPath!!, region.name)
+                    MapStyleResult.Offline(styleJson, region.name)
                 }
-            }
-
-            // HTTP source (default)
-            if (httpEnabled) {
-                Log.d(TAG, "Using HTTP source")
-                return MapStyleResult.Online(DEFAULT_STYLE_URL)
-            }
-
-            // RMSP fallback
-            if (rmspEnabled) {
-                val servers = rmspServerRepository.getNearestServers(1).first()
-                if (servers.isNotEmpty()) {
-                    val server = servers.first()
-                    Log.d(TAG, "Using RMSP server: ${server.serverName}")
-                    // For now, RMSP would require additional tile fetching logic
-                    // This is a placeholder for Phase 4/5 integration
-                    return MapStyleResult.Rmsp(
-                        server = server,
-                        styleJson = "", // Will be populated after RMSP tile fetch
-                    )
-                }
-            }
-
-            // No source available
-            return if (!httpEnabled && !rmspEnabled) {
-                MapStyleResult.Unavailable("Both HTTP and RMSP sources are disabled")
-            } else if (rmspEnabled && !httpEnabled) {
-                MapStyleResult.Unavailable("No RMSP servers available")
             } else {
-                MapStyleResult.Unavailable("No map source available")
+                null
+            }
+            if (offlineResult != null) return offlineResult
+
+            // Check HTTP source, then RMSP source, then return unavailable
+            return when {
+                httpEnabled -> {
+                    Log.d(TAG, "Using HTTP source")
+                    MapStyleResult.Online(DEFAULT_STYLE_URL)
+                }
+                rmspEnabled -> {
+                    val servers = rmspServerRepository.getNearestServers(1).first()
+                    if (servers.isNotEmpty()) {
+                        val server = servers.first()
+                        Log.d(TAG, "Using RMSP server: ${server.serverName}")
+                        MapStyleResult.Rmsp(server = server, styleJson = "")
+                    } else {
+                        MapStyleResult.Unavailable("No RMSP servers available")
+                    }
+                }
+                else -> MapStyleResult.Unavailable("Both HTTP and RMSP sources are disabled")
             }
         }
 
         /**
          * Find an offline region that covers the given location.
          */
-        private suspend fun findOfflineRegion(latitude: Double, longitude: Double): OfflineMapRegion? {
+        private suspend fun findOfflineRegion(
+            latitude: Double,
+            longitude: Double,
+        ): OfflineMapRegion? {
             val regions = offlineMapRegionRepository.getCompletedRegions().first()
 
             return regions.find { region ->
                 // Check if location is within radius of region center
-                val distance = haversineDistance(
-                    lat1 = latitude,
-                    lon1 = longitude,
-                    lat2 = region.centerLatitude,
-                    lon2 = region.centerLongitude,
-                )
+                val distance =
+                    haversineDistance(
+                        lat1 = latitude,
+                        lon1 = longitude,
+                        lat2 = region.centerLatitude,
+                        lon2 = region.centerLongitude,
+                    )
                 val mbtilesPath = region.mbtilesPath
                 distance <= region.radiusKm && mbtilesPath != null && File(mbtilesPath).exists()
             }
@@ -167,15 +162,21 @@ class MapTileSourceManager
          *
          * @return Distance in kilometers
          */
-        private fun haversineDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        private fun haversineDistance(
+            lat1: Double,
+            lon1: Double,
+            lat2: Double,
+            lon2: Double,
+        ): Double {
             val r = 6371.0 // Earth radius in km
 
             val dLat = Math.toRadians(lat2 - lat1)
             val dLon = Math.toRadians(lon2 - lon1)
 
-            val a = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
-                kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
-                kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
+            val a =
+                kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
+                    kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
+                    kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
 
             val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
 

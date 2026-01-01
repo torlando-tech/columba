@@ -8,6 +8,24 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * Parameters for upserting an RMSP server from an announce.
+ */
+data class RmspServerAnnounce(
+    val destinationHash: String,
+    val serverName: String,
+    val publicKey: ByteArray,
+    val coverageGeohashes: List<String>,
+    val minZoom: Int,
+    val maxZoom: Int,
+    val formats: List<String>,
+    val layers: List<String>,
+    val dataUpdatedTimestamp: Long,
+    val dataSize: Long?,
+    val version: String,
+    val hops: Int,
+)
+
+/**
  * Data model for RMSP servers used in the app layer.
  */
 data class RmspServer(
@@ -149,34 +167,21 @@ class RmspServerRepository
         /**
          * Insert or update a server from an announce.
          */
-        suspend fun upsertServer(
-            destinationHash: String,
-            serverName: String,
-            publicKey: ByteArray,
-            coverageGeohashes: List<String>,
-            minZoom: Int,
-            maxZoom: Int,
-            formats: List<String>,
-            layers: List<String>,
-            dataUpdatedTimestamp: Long,
-            dataSize: Long?,
-            version: String,
-            hops: Int,
-        ) {
+        suspend fun upsertServer(announce: RmspServerAnnounce) {
             val entity = RmspServerEntity(
-                destinationHash = destinationHash,
-                serverName = serverName,
-                publicKey = publicKey,
-                coverageGeohashes = coverageGeohashes.joinToString(","),
-                minZoom = minZoom,
-                maxZoom = maxZoom,
-                formats = formats.joinToString(","),
-                layers = layers.joinToString(","),
-                dataUpdatedTimestamp = dataUpdatedTimestamp,
-                dataSize = dataSize,
-                version = version,
+                destinationHash = announce.destinationHash,
+                serverName = announce.serverName,
+                publicKey = announce.publicKey,
+                coverageGeohashes = announce.coverageGeohashes.joinToString(","),
+                minZoom = announce.minZoom,
+                maxZoom = announce.maxZoom,
+                formats = announce.formats.joinToString(","),
+                layers = announce.layers.joinToString(","),
+                dataUpdatedTimestamp = announce.dataUpdatedTimestamp,
+                dataSize = announce.dataSize,
+                version = announce.version,
                 lastSeenTimestamp = System.currentTimeMillis(),
-                hops = hops,
+                hops = announce.hops,
             )
             rmspServerDao.upsertServer(entity)
         }

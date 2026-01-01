@@ -33,9 +33,7 @@ object ReticulumModule {
 
     @Provides
     @Singleton
-    fun provideReticulumProtocol(
-        serviceProtocol: ServiceReticulumProtocol,
-    ): ReticulumProtocol {
+    fun provideReticulumProtocol(serviceProtocol: ServiceReticulumProtocol): ReticulumProtocol {
         // Return the same instance for interface injection
         // To use mock for testing, change to: return MockReticulumProtocol()
         return serviceProtocol

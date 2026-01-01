@@ -23,11 +23,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
+ * Feature flag to enable/disable RMSP UI.
+ * Set to true when RMSP feature is stable and ready for production.
+ */
+private const val RMSP_FEATURE_ENABLED = false
+
+/**
  * Settings card for managing map tile source preferences.
  *
  * Features:
  * - Toggle for HTTP map source (OpenFreeMap)
- * - Toggle for RMSP map source (Reticulum mesh)
+ * - Toggle for RMSP map source (Reticulum mesh) - controlled by RMSP_FEATURE_ENABLED
  * - Validation to prevent disabling both sources
  * - Info about available RMSP servers
  */
@@ -41,9 +47,11 @@ fun MapSourcesCard(
     hasOfflineMaps: Boolean = false,
 ) {
     // At least one source must be enabled (or have offline maps)
-    val canDisableHttp = rmspEnabled || hasOfflineMaps
+    // When RMSP is disabled via feature flag, only check hasOfflineMaps for HTTP toggle
+    val effectiveRmspEnabled = RMSP_FEATURE_ENABLED && rmspEnabled
+    val canDisableHttp = effectiveRmspEnabled || hasOfflineMaps
     val canDisableRmsp = httpEnabled || hasOfflineMaps
-    val showWarning = !httpEnabled && !rmspEnabled && !hasOfflineMaps
+    val showWarning = !httpEnabled && !effectiveRmspEnabled && !hasOfflineMaps
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -95,22 +103,24 @@ fun MapSourcesCard(
                 isDisabled = !httpEnabled && !canDisableHttp,
             )
 
-            // TODO: RMSP source toggle - temporarily hidden until feature is stable
-            // MapSourceToggle(
-            //     title = "RMSP (Mesh Network)",
-            //     description = if (rmspServerCount > 0) {
-            //         "$rmspServerCount server${if (rmspServerCount != 1) "s" else ""} available"
-            //     } else {
-            //         "Fetch tiles from Reticulum mesh"
-            //     },
-            //     enabled = rmspEnabled,
-            //     onEnabledChange = { enabled ->
-            //         if (enabled || canDisableRmsp) {
-            //             onRmspEnabledChange(enabled)
-            //         }
-            //     },
-            //     isDisabled = !rmspEnabled && !canDisableRmsp,
-            // )
+            // RMSP source toggle - controlled by feature flag
+            if (RMSP_FEATURE_ENABLED) {
+                MapSourceToggle(
+                    title = "RMSP (Mesh Network)",
+                    description = if (rmspServerCount > 0) {
+                        "$rmspServerCount server${if (rmspServerCount != 1) "s" else ""} available"
+                    } else {
+                        "Fetch tiles from Reticulum mesh"
+                    },
+                    enabled = rmspEnabled,
+                    onEnabledChange = { enabled ->
+                        if (enabled || canDisableRmsp) {
+                            onRmspEnabledChange(enabled)
+                        }
+                    },
+                    isDisabled = !rmspEnabled && !canDisableRmsp,
+                )
+            }
 
             // Warning when no sources enabled
             if (showWarning) {

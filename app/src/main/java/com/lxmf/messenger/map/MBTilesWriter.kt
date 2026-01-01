@@ -25,7 +25,6 @@ class MBTilesWriter(
     private val bounds: Bounds? = null,
     private val center: Center? = null,
 ) : Closeable {
-
     /**
      * Geographic bounds in WGS84 coordinates.
      */
@@ -106,15 +105,16 @@ class MBTilesWriter(
 
     private fun writeMetadata() {
         db?.let { database ->
-            val metadata = mutableMapOf(
-                "name" to name,
-                "format" to "pbf", // Vector tiles
-                "type" to "baselayer",
-                "version" to "1.0.0",
-                "minzoom" to minZoom.toString(),
-                "maxzoom" to maxZoom.toString(),
-                "scheme" to "tms", // MBTiles uses TMS scheme
-            )
+            val metadata =
+                mutableMapOf(
+                    "name" to name,
+                    "format" to "pbf", // Vector tiles
+                    "type" to "baselayer",
+                    "version" to "1.0.0",
+                    "minzoom" to minZoom.toString(),
+                    "maxzoom" to maxZoom.toString(),
+                    "scheme" to "tms", // MBTiles uses TMS scheme
+                )
 
             if (description.isNotEmpty()) {
                 metadata["description"] = description
@@ -130,10 +130,11 @@ class MBTilesWriter(
 
             // Write each metadata entry
             for ((key, value) in metadata) {
-                val values = ContentValues().apply {
-                    put("name", key)
-                    put("value", value)
-                }
+                val values =
+                    ContentValues().apply {
+                        put("name", key)
+                        put("value", value)
+                    }
                 database.insertWithOnConflict(
                     "metadata",
                     null,
@@ -152,18 +153,24 @@ class MBTilesWriter(
      * @param y Tile Y coordinate (XYZ scheme, origin at top-left)
      * @param data The tile data (PBF/MVT bytes)
      */
-    fun writeTile(z: Int, x: Int, y: Int, data: ByteArray) {
+    fun writeTile(
+        z: Int,
+        x: Int,
+        y: Int,
+        data: ByteArray,
+    ) {
         db?.let { database ->
             // Convert from XYZ to TMS y-coordinate
             // TMS y = (2^zoom - 1) - xyz_y
             val tmsY = flipY(z, y)
 
-            val values = ContentValues().apply {
-                put("zoom_level", z)
-                put("tile_column", x)
-                put("tile_row", tmsY)
-                put("tile_data", data)
-            }
+            val values =
+                ContentValues().apply {
+                    put("zoom_level", z)
+                    put("tile_column", x)
+                    put("tile_row", tmsY)
+                    put("tile_data", data)
+                }
 
             database.insertWithOnConflict(
                 "tiles",
@@ -240,14 +247,20 @@ class MBTilesWriter(
          * MBTiles uses TMS scheme (origin at bottom-left),
          * while most tile servers use XYZ (origin at top-left).
          */
-        fun flipY(zoom: Int, xyzY: Int): Int {
+        fun flipY(
+            zoom: Int,
+            xyzY: Int,
+        ): Int {
             return (2.0.pow(zoom) - 1 - xyzY).toInt()
         }
 
         /**
          * Convert TMS y-coordinate to XYZ y-coordinate.
          */
-        fun tmsToXyzY(zoom: Int, tmsY: Int): Int {
+        fun tmsToXyzY(
+            zoom: Int,
+            tmsY: Int,
+        ): Int {
             return (2.0.pow(zoom) - 1 - tmsY).toInt()
         }
 

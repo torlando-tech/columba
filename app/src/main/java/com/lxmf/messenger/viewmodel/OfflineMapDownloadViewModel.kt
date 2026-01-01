@@ -30,10 +30,13 @@ import javax.inject.Inject
 enum class DownloadWizardStep {
     /** Select the center location */
     LOCATION,
+
     /** Select radius and zoom range */
     RADIUS,
+
     /** Confirm and start download */
     CONFIRM,
+
     /** Download in progress */
     DOWNLOADING,
 }
@@ -137,7 +140,10 @@ class OfflineMapDownloadViewModel
         /**
          * Set the center location from map tap.
          */
-        fun setLocation(latitude: Double, longitude: Double) {
+        fun setLocation(
+            latitude: Double,
+            longitude: Double,
+        ) {
             _state.update {
                 it.copy(
                     centerLatitude = latitude,
@@ -158,7 +164,10 @@ class OfflineMapDownloadViewModel
         /**
          * Set the zoom range.
          */
-        fun setZoomRange(minZoom: Int, maxZoom: Int) {
+        fun setZoomRange(
+            minZoom: Int,
+            maxZoom: Int,
+        ) {
             _state.update {
                 it.copy(
                     minZoom = minZoom.coerceIn(0, 14),
@@ -180,15 +189,16 @@ class OfflineMapDownloadViewModel
          */
         fun nextStep() {
             val currentState = _state.value
-            val nextStep = when (currentState.step) {
-                DownloadWizardStep.LOCATION -> DownloadWizardStep.RADIUS
-                DownloadWizardStep.RADIUS -> DownloadWizardStep.CONFIRM
-                DownloadWizardStep.CONFIRM -> {
-                    startDownload()
-                    DownloadWizardStep.DOWNLOADING
+            val nextStep =
+                when (currentState.step) {
+                    DownloadWizardStep.LOCATION -> DownloadWizardStep.RADIUS
+                    DownloadWizardStep.RADIUS -> DownloadWizardStep.CONFIRM
+                    DownloadWizardStep.CONFIRM -> {
+                        startDownload()
+                        DownloadWizardStep.DOWNLOADING
+                    }
+                    DownloadWizardStep.DOWNLOADING -> DownloadWizardStep.DOWNLOADING
                 }
-                DownloadWizardStep.DOWNLOADING -> DownloadWizardStep.DOWNLOADING
-            }
             _state.update { it.copy(step = nextStep) }
         }
 
@@ -197,15 +207,16 @@ class OfflineMapDownloadViewModel
          */
         fun previousStep() {
             val currentState = _state.value
-            val prevStep = when (currentState.step) {
-                DownloadWizardStep.LOCATION -> DownloadWizardStep.LOCATION
-                DownloadWizardStep.RADIUS -> DownloadWizardStep.LOCATION
-                DownloadWizardStep.CONFIRM -> DownloadWizardStep.RADIUS
-                DownloadWizardStep.DOWNLOADING -> {
-                    cancelDownload()
-                    DownloadWizardStep.CONFIRM
+            val prevStep =
+                when (currentState.step) {
+                    DownloadWizardStep.LOCATION -> DownloadWizardStep.LOCATION
+                    DownloadWizardStep.RADIUS -> DownloadWizardStep.LOCATION
+                    DownloadWizardStep.CONFIRM -> DownloadWizardStep.RADIUS
+                    DownloadWizardStep.DOWNLOADING -> {
+                        cancelDownload()
+                        DownloadWizardStep.CONFIRM
+                    }
                 }
-            }
             _state.update { it.copy(step = prevStep) }
         }
 
@@ -236,17 +247,19 @@ class OfflineMapDownloadViewModel
             val lat = currentState.centerLatitude ?: return
             val lon = currentState.centerLongitude ?: return
 
-            val manager = downloadManager ?: TileDownloadManager(context).also {
-                downloadManager = it
-            }
+            val manager =
+                downloadManager ?: TileDownloadManager(context).also {
+                    downloadManager = it
+                }
 
-            val (tileCount, estimatedSize) = manager.estimateDownload(
-                centerLat = lat,
-                centerLon = lon,
-                radiusKm = currentState.radiusOption.km,
-                minZoom = currentState.minZoom,
-                maxZoom = currentState.maxZoom,
-            )
+            val (tileCount, estimatedSize) =
+                manager.estimateDownload(
+                    centerLat = lat,
+                    centerLon = lon,
+                    radiusKm = currentState.radiusOption.km,
+                    minZoom = currentState.minZoom,
+                    maxZoom = currentState.maxZoom,
+                )
 
             _state.update {
                 it.copy(
@@ -269,14 +282,15 @@ class OfflineMapDownloadViewModel
                     Log.d(TAG, "Using tile source: ${tileSource::class.simpleName}")
 
                     // Create database record
-                    val regionId = offlineMapRegionRepository.createRegion(
-                        name = name,
-                        centerLatitude = lat,
-                        centerLongitude = lon,
-                        radiusKm = currentState.radiusOption.km,
-                        minZoom = currentState.minZoom,
-                        maxZoom = currentState.maxZoom,
-                    )
+                    val regionId =
+                        offlineMapRegionRepository.createRegion(
+                            name = name,
+                            centerLatitude = lat,
+                            centerLongitude = lon,
+                            radiusKm = currentState.radiusOption.km,
+                            minZoom = currentState.minZoom,
+                            maxZoom = currentState.maxZoom,
+                        )
 
                     _state.update { it.copy(createdRegionId = regionId) }
 
@@ -286,9 +300,10 @@ class OfflineMapDownloadViewModel
                     val outputFile = File(outputDir, filename)
 
                     // Create download manager with the determined tile source
-                    val manager = TileDownloadManager(context, tileSource).also {
-                        downloadManager = it
-                    }
+                    val manager =
+                        TileDownloadManager(context, tileSource).also {
+                            downloadManager = it
+                        }
 
                     // Collect progress updates
                     launch {
@@ -324,15 +339,16 @@ class OfflineMapDownloadViewModel
                     }
 
                     // Start download
-                    val result = manager.downloadRegion(
-                        centerLat = lat,
-                        centerLon = lon,
-                        radiusKm = currentState.radiusOption.km,
-                        minZoom = currentState.minZoom,
-                        maxZoom = currentState.maxZoom,
-                        name = name,
-                        outputFile = outputFile,
-                    )
+                    val result =
+                        manager.downloadRegion(
+                            centerLat = lat,
+                            centerLon = lon,
+                            radiusKm = currentState.radiusOption.km,
+                            minZoom = currentState.minZoom,
+                            maxZoom = currentState.maxZoom,
+                            name = name,
+                            outputFile = outputFile,
+                        )
 
                     if (result != null) {
                         // Mark as complete in database
@@ -377,7 +393,7 @@ class OfflineMapDownloadViewModel
             if (rmspEnabled) {
                 val servers = rmspServerRepository.getAllServers().first()
                 if (servers.isEmpty()) {
-                    throw IllegalStateException(
+                    error(
                         "No RMSP servers discovered. Connect to the mesh network and wait for server announces.",
                     )
                 }
@@ -407,7 +423,7 @@ class OfflineMapDownloadViewModel
             }
 
             // No valid source
-            throw IllegalStateException(
+            error(
                 "No tile source available. Please enable HTTP or RMSP in Settings > Map Sources.",
             )
         }

@@ -2,6 +2,8 @@ package com.lxmf.messenger.ui.screens.offlinemaps
 
 import android.Manifest
 import android.location.Location
+import android.util.Log
+import java.util.Locale
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -65,6 +67,8 @@ import com.lxmf.messenger.map.TileDownloadManager
 import com.lxmf.messenger.viewmodel.DownloadWizardStep
 import com.lxmf.messenger.viewmodel.OfflineMapDownloadViewModel
 import com.lxmf.messenger.viewmodel.RadiusOption
+
+private const val TAG = "OfflineMapDownload"
 
 /**
  * Decode a geohash string to latitude and longitude coordinates.
@@ -155,16 +159,18 @@ fun OfflineMapDownloadScreen(
                         },
                     ) {
                         Icon(
-                            imageVector = if (state.step == DownloadWizardStep.DOWNLOADING) {
-                                Icons.Default.Close
-                            } else {
-                                Icons.AutoMirrored.Filled.ArrowBack
-                            },
-                            contentDescription = if (state.step == DownloadWizardStep.DOWNLOADING) {
-                                "Cancel"
-                            } else {
-                                "Back"
-                            },
+                            imageVector =
+                                if (state.step == DownloadWizardStep.DOWNLOADING) {
+                                    Icons.Default.Close
+                                } else {
+                                    Icons.AutoMirrored.Filled.ArrowBack
+                                },
+                            contentDescription =
+                                if (state.step == DownloadWizardStep.DOWNLOADING) {
+                                    "Cancel"
+                                } else {
+                                    "Back"
+                                },
                         )
                     }
                 },
@@ -173,52 +179,57 @@ fun OfflineMapDownloadScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
         ) {
             when (state.step) {
-                DownloadWizardStep.LOCATION -> LocationSelectionStep(
-                    hasLocation = state.hasLocation,
-                    latitude = state.centerLatitude,
-                    longitude = state.centerLongitude,
-                    onLocationSet = { lat, lon -> viewModel.setLocation(lat, lon) },
-                    onCurrentLocationRequest = { location ->
-                        viewModel.setLocationFromCurrent(location)
-                    },
-                    onNext = { viewModel.nextStep() },
-                )
+                DownloadWizardStep.LOCATION ->
+                    LocationSelectionStep(
+                        hasLocation = state.hasLocation,
+                        latitude = state.centerLatitude,
+                        longitude = state.centerLongitude,
+                        onLocationSet = { lat, lon -> viewModel.setLocation(lat, lon) },
+                        onCurrentLocationRequest = { location ->
+                            viewModel.setLocationFromCurrent(location)
+                        },
+                        onNext = { viewModel.nextStep() },
+                    )
 
-                DownloadWizardStep.RADIUS -> RadiusSelectionStep(
-                    radiusOption = state.radiusOption,
-                    minZoom = state.minZoom,
-                    maxZoom = state.maxZoom,
-                    estimatedTileCount = state.estimatedTileCount,
-                    estimatedSize = state.getEstimatedSizeString(),
-                    onRadiusChange = { viewModel.setRadiusOption(it) },
-                    onZoomRangeChange = { min, max -> viewModel.setZoomRange(min, max) },
-                    onNext = { viewModel.nextStep() },
-                    onBack = { viewModel.previousStep() },
-                )
+                DownloadWizardStep.RADIUS ->
+                    RadiusSelectionStep(
+                        radiusOption = state.radiusOption,
+                        minZoom = state.minZoom,
+                        maxZoom = state.maxZoom,
+                        estimatedTileCount = state.estimatedTileCount,
+                        estimatedSize = state.getEstimatedSizeString(),
+                        onRadiusChange = { viewModel.setRadiusOption(it) },
+                        onZoomRangeChange = { min, max -> viewModel.setZoomRange(min, max) },
+                        onNext = { viewModel.nextStep() },
+                        onBack = { viewModel.previousStep() },
+                    )
 
-                DownloadWizardStep.CONFIRM -> ConfirmDownloadStep(
-                    latitude = state.centerLatitude ?: 0.0,
-                    longitude = state.centerLongitude ?: 0.0,
-                    radiusKm = state.radiusOption.km,
-                    minZoom = state.minZoom,
-                    maxZoom = state.maxZoom,
-                    estimatedTileCount = state.estimatedTileCount,
-                    estimatedSize = state.getEstimatedSizeString(),
-                    name = state.name,
-                    onNameChange = { viewModel.setName(it) },
-                    onStartDownload = { viewModel.nextStep() },
-                    onBack = { viewModel.previousStep() },
-                )
+                DownloadWizardStep.CONFIRM ->
+                    ConfirmDownloadStep(
+                        latitude = state.centerLatitude ?: 0.0,
+                        longitude = state.centerLongitude ?: 0.0,
+                        radiusKm = state.radiusOption.km,
+                        minZoom = state.minZoom,
+                        maxZoom = state.maxZoom,
+                        estimatedTileCount = state.estimatedTileCount,
+                        estimatedSize = state.getEstimatedSizeString(),
+                        name = state.name,
+                        onNameChange = { viewModel.setName(it) },
+                        onStartDownload = { viewModel.nextStep() },
+                        onBack = { viewModel.previousStep() },
+                    )
 
-                DownloadWizardStep.DOWNLOADING -> DownloadingStep(
-                    progress = state.downloadProgress,
-                    onCancel = { showCancelDialog = true },
-                )
+                DownloadWizardStep.DOWNLOADING ->
+                    DownloadingStep(
+                        progress = state.downloadProgress,
+                        onCancel = { showCancelDialog = true },
+                    )
             }
         }
     }
@@ -265,38 +276,41 @@ fun LocationSelectionStep(
     var isGettingLocation by remember { mutableStateOf(false) }
     var hasPermission by remember { mutableStateOf(false) }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions(),
-    ) { permissions ->
-        hasPermission = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestMultiplePermissions(),
+        ) { permissions ->
+            hasPermission = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
 
-        if (hasPermission) {
-            isGettingLocation = true
-            val fusedClient = LocationServices.getFusedLocationProviderClient(context)
-            try {
-                fusedClient.getCurrentLocation(
-                    Priority.PRIORITY_HIGH_ACCURACY,
-                    CancellationTokenSource().token,
-                ).addOnSuccessListener { location ->
-                    isGettingLocation = false
-                    if (location != null) {
-                        onCurrentLocationRequest(location)
+            if (hasPermission) {
+                isGettingLocation = true
+                val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+                try {
+                    fusedClient.getCurrentLocation(
+                        Priority.PRIORITY_HIGH_ACCURACY,
+                        CancellationTokenSource().token,
+                    ).addOnSuccessListener { location ->
+                        isGettingLocation = false
+                        if (location != null) {
+                            onCurrentLocationRequest(location)
+                        }
+                    }.addOnFailureListener {
+                        isGettingLocation = false
                     }
-                }.addOnFailureListener {
+                } catch (e: SecurityException) {
+                    Log.w(TAG, "Location permission denied", e)
                     isGettingLocation = false
                 }
-            } catch (e: SecurityException) {
-                isGettingLocation = false
             }
         }
-    }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
@@ -403,8 +417,8 @@ fun LocationSelectionStep(
                     val coords = decodeGeohash(input)
                     if (coords != null) {
                         geohashError = null
-                        latText = String.format("%.6f", coords.first)
-                        lonText = String.format("%.6f", coords.second)
+                        latText = String.format(Locale.US, "%.6f", coords.first)
+                        lonText = String.format(Locale.US, "%.6f", coords.second)
                         onLocationSet(coords.first, coords.second)
                     } else {
                         geohashError = "Invalid geohash"
@@ -431,14 +445,16 @@ fun LocationSelectionStep(
             Spacer(modifier = Modifier.height(16.dp))
 
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                ),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
@@ -447,7 +463,8 @@ fun LocationSelectionStep(
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Text(
-                        text = "Location set: ${String.format("%.4f", latitude)}, ${String.format("%.4f", longitude)}",
+                        text = "Location set: ${String.format(Locale.US, "%.4f", latitude)}, " +
+                            String.format(Locale.US, "%.4f", longitude),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(start = 8.dp),
                     )
@@ -481,10 +498,11 @@ fun RadiusSelectionStep(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
     ) {
         Text(
             text = "Select Area Size",
@@ -497,14 +515,15 @@ fun RadiusSelectionStep(
         Column(modifier = Modifier.selectableGroup()) {
             RadiusOption.entries.forEach { option ->
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .selectable(
-                            selected = radiusOption == option,
-                            onClick = { onRadiusChange(option) },
-                            role = Role.RadioButton,
-                        )
-                        .padding(vertical = 8.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = radiusOption == option,
+                                onClick = { onRadiusChange(option) },
+                                role = Role.RadioButton,
+                            )
+                            .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RadioButton(
@@ -560,14 +579,16 @@ fun RadiusSelectionStep(
 
         // Estimate card
         Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
             ) {
                 Text(
                     text = "Estimated Download",
@@ -629,10 +650,11 @@ fun ConfirmDownloadStep(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
     ) {
         Text(
             text = "Name Your Map",
@@ -660,17 +682,23 @@ fun ConfirmDownloadStep(
         Spacer(modifier = Modifier.height(16.dp))
 
         Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SummaryRow("Location", "${String.format("%.4f", latitude)}, ${String.format("%.4f", longitude)}")
+                SummaryRow(
+                    "Location",
+                    "${String.format(Locale.US, "%.4f", latitude)}, " +
+                        String.format(Locale.US, "%.4f", longitude),
+                )
                 SummaryRow("Radius", "$radiusKm km")
                 SummaryRow("Zoom Range", "$minZoom - $maxZoom")
                 SummaryRow("Tiles", "$estimatedTileCount")
@@ -738,9 +766,10 @@ fun DownloadingStep(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -749,15 +778,16 @@ fun DownloadingStep(
             Spacer(modifier = Modifier.height(16.dp))
             Text("Preparing download...")
         } else {
-            val statusText = when (progress.status) {
-                TileDownloadManager.DownloadProgress.Status.IDLE -> "Preparing..."
-                TileDownloadManager.DownloadProgress.Status.CALCULATING -> "Calculating tiles..."
-                TileDownloadManager.DownloadProgress.Status.DOWNLOADING -> "Downloading..."
-                TileDownloadManager.DownloadProgress.Status.WRITING -> "Finalizing..."
-                TileDownloadManager.DownloadProgress.Status.COMPLETE -> "Complete!"
-                TileDownloadManager.DownloadProgress.Status.ERROR -> "Error"
-                TileDownloadManager.DownloadProgress.Status.CANCELLED -> "Cancelled"
-            }
+            val statusText =
+                when (progress.status) {
+                    TileDownloadManager.DownloadProgress.Status.IDLE -> "Preparing..."
+                    TileDownloadManager.DownloadProgress.Status.CALCULATING -> "Calculating tiles..."
+                    TileDownloadManager.DownloadProgress.Status.DOWNLOADING -> "Downloading..."
+                    TileDownloadManager.DownloadProgress.Status.WRITING -> "Finalizing..."
+                    TileDownloadManager.DownloadProgress.Status.COMPLETE -> "Complete!"
+                    TileDownloadManager.DownloadProgress.Status.ERROR -> "Error"
+                    TileDownloadManager.DownloadProgress.Status.CANCELLED -> "Cancelled"
+                }
 
             Text(
                 text = statusText,
@@ -804,7 +834,7 @@ fun DownloadingStep(
 
             val mbDownloaded = progress.bytesDownloaded / (1024.0 * 1024.0)
             Text(
-                text = String.format("%.1f MB downloaded", mbDownloaded),
+                text = String.format(Locale.US, "%.1f MB downloaded", mbDownloaded),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

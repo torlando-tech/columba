@@ -20,49 +20,34 @@ import androidx.room.PrimaryKey
 data class OfflineMapRegionEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-
     /** User-provided name for the region (e.g., "Home", "Downtown") */
     val name: String,
-
     /** Center point latitude */
     val centerLatitude: Double,
-
     /** Center point longitude */
     val centerLongitude: Double,
-
     /** Radius in kilometers (5, 10, 25, 50, 100) */
     val radiusKm: Int,
-
     /** Minimum zoom level stored */
     val minZoom: Int,
-
     /** Maximum zoom level stored */
     val maxZoom: Int,
-
     /** Download status: PENDING, DOWNLOADING, COMPLETE, ERROR */
     val status: String,
-
     /** Path to the .mbtiles file in app storage (null if not yet created) */
     val mbtilesPath: String?,
-
     /** Number of tiles downloaded */
     val tileCount: Int,
-
     /** Total file size in bytes */
     val sizeBytes: Long,
-
     /** Download progress from 0.0 to 1.0 */
     val downloadProgress: Float,
-
     /** Error message if status == ERROR */
     val errorMessage: String?,
-
     /** Timestamp when region was created */
     val createdAt: Long,
-
     /** Timestamp when download completed (null if not complete) */
     val completedAt: Long?,
-
     /** Source of the tiles: "http" or "rmsp" */
     val source: String = "http",
 ) {

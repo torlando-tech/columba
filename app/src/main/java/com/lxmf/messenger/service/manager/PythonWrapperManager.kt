@@ -498,4 +498,155 @@ class PythonWrapperManager(
      * Convert ByteArray to hex string for logging.
      */
     private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
+
+    // ============================================================================
+    // RMSP (Reticulum Map Service Protocol) Methods
+    // ============================================================================
+
+    /**
+     * Get all known RMSP map servers.
+     *
+     * @return JSON string array of server info, or null on error
+     */
+    fun getRmspServers(): String? =
+        withWrapper { wrapper ->
+            try {
+                val servers = wrapper.callAttr("get_rmsp_servers")?.asList() ?: return@withWrapper null
+                // Convert Python list to JSON array string
+                org.json.JSONArray().apply {
+                    servers.forEach { server ->
+                        put(org.json.JSONObject(server.toString()))
+                    }
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get RMSP servers: ${e.message}", e)
+                null
+            }
+        }
+
+    /**
+     * Get RMSP servers that cover a given geohash area.
+     *
+     * @param geohash Geohash string for the area of interest
+     * @return JSON string array of server info, or null on error
+     */
+    fun getRmspServersForGeohash(geohash: String): String? =
+        withWrapper { wrapper ->
+            try {
+                val servers = wrapper.callAttr("get_rmsp_servers_for_geohash", geohash)?.asList()
+                    ?: return@withWrapper null
+                org.json.JSONArray().apply {
+                    servers.forEach { server ->
+                        put(org.json.JSONObject(server.toString()))
+                    }
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get RMSP servers for geohash: ${e.message}", e)
+                null
+            }
+        }
+
+    /**
+     * Get nearest RMSP servers by hop count.
+     *
+     * @param limit Maximum number of servers to return
+     * @return JSON string array of server info, or null on error
+     */
+    fun getNearestRmspServers(limit: Int = 5): String? =
+        withWrapper { wrapper ->
+            try {
+                val servers = wrapper.callAttr("get_nearest_rmsp_servers", limit)?.asList()
+                    ?: return@withWrapper null
+                org.json.JSONArray().apply {
+                    servers.forEach { server ->
+                        put(org.json.JSONObject(server.toString()))
+                    }
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get nearest RMSP servers: ${e.message}", e)
+                null
+            }
+        }
+
+    /**
+     * Query an RMSP server for available map data.
+     *
+     * @param destinationHashHex Server destination hash as hex string
+     * @param geohash Geohash area to query
+     * @param zoomRange Optional zoom range [minZoom, maxZoom]
+     * @param format Optional format (pmtiles, micro)
+     * @param timeout Request timeout in seconds
+     * @return JSON string with query response, or null on error
+     */
+    fun queryRmspServer(
+        destinationHashHex: String,
+        geohash: String,
+        zoomRange: List<Int>? = null,
+        format: String? = null,
+        timeout: Float = 30.0f,
+    ): String? =
+        withWrapper { wrapper ->
+            try {
+                val result = wrapper.callAttr(
+                    "query_rmsp_server",
+                    destinationHashHex,
+                    geohash,
+                    zoomRange?.let { Python.getInstance().builtins.callAttr("list", it) },
+                    format,
+                    timeout,
+                )
+                result?.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to query RMSP server: ${e.message}", e)
+                null
+            }
+        }
+
+    /**
+     * Fetch tile data from an RMSP server.
+     *
+     * @param destinationHashHex Server destination hash as hex string
+     * @param geohash Geohash area to fetch
+     * @param zoomRange Optional zoom range [minZoom, maxZoom]
+     * @param format Optional format (pmtiles, micro)
+     * @param timeout Request timeout in seconds
+     * @return Raw tile data bytes, or null on failure
+     */
+    fun fetchRmspTiles(
+        destinationHashHex: String,
+        geohash: String,
+        zoomRange: List<Int>? = null,
+        format: String? = null,
+        timeout: Float = 3600.0f,
+    ): ByteArray? =
+        withWrapper { wrapper ->
+            try {
+                val result = wrapper.callAttr(
+                    "fetch_rmsp_tiles",
+                    destinationHashHex,
+                    geohash,
+                    zoomRange?.let { Python.getInstance().builtins.callAttr("list", it) },
+                    format,
+                    timeout,
+                )
+                result?.toJava(ByteArray::class.java)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch RMSP tiles: ${e.message}", e)
+                null
+            }
+        }
+
+    /**
+     * Clear all known RMSP servers.
+     */
+    fun clearRmspServers() {
+        withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("clear_rmsp_servers")
+                Log.d(TAG, "RMSP servers cleared")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to clear RMSP servers: ${e.message}", e)
+            }
+        }
+    }
 }

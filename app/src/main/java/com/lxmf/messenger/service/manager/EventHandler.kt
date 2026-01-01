@@ -309,6 +309,45 @@ class EventHandler(
                     if (peeringCost != null) {
                         put("peering_cost", peeringCost)
                     }
+
+                    // Handle RMSP map server announces
+                    if (aspect == "rmsp.maps") {
+                        val rmspServerName = event.getDictValue("rmsp_server_name")?.toString()
+                        val rmspVersion = event.getDictValue("rmsp_version")?.toString()
+                        val rmspCoverage = event.getDictValue("rmsp_coverage")?.asList()?.map { it.toString() }
+                        val rmspZoomRange = event.getDictValue("rmsp_zoom_range")?.asList()?.map { it.toInt() }
+                        val rmspFormats = event.getDictValue("rmsp_formats")?.asList()?.map { it.toString() }
+                        val rmspLayers = event.getDictValue("rmsp_layers")?.asList()?.map { it.toString() }
+                        val rmspUpdated = event.getDictValue("rmsp_updated")?.toLong()
+                        val rmspSize = event.getDictValue("rmsp_size")?.toLong()
+
+                        if (rmspServerName != null) {
+                            put("rmsp_server_name", rmspServerName)
+                        }
+                        if (rmspVersion != null) {
+                            put("rmsp_version", rmspVersion)
+                        }
+                        if (rmspCoverage != null) {
+                            put("rmsp_coverage", org.json.JSONArray(rmspCoverage))
+                        }
+                        if (rmspZoomRange != null) {
+                            put("rmsp_zoom_range", org.json.JSONArray(rmspZoomRange))
+                        }
+                        if (rmspFormats != null) {
+                            put("rmsp_formats", org.json.JSONArray(rmspFormats))
+                        }
+                        if (rmspLayers != null) {
+                            put("rmsp_layers", org.json.JSONArray(rmspLayers))
+                        }
+                        if (rmspUpdated != null) {
+                            put("rmsp_updated", rmspUpdated)
+                        }
+                        if (rmspSize != null) {
+                            put("rmsp_size", rmspSize)
+                        }
+
+                        Log.i(TAG, "  RMSP Server: $rmspServerName (coverage: ${rmspCoverage?.size ?: 0} areas)")
+                    }
                 }
 
             broadcaster.broadcastAnnounce(announceJson.toString())

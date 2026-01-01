@@ -332,7 +332,11 @@ class ReticulumWrapper:
             "lxmf.propagation": AnnounceHandler("lxmf.propagation", self._announce_handler),
             "call.audio": AnnounceHandler("call.audio", self._announce_handler),
             "nomadnetwork.node": AnnounceHandler("nomadnetwork.node", self._announce_handler),
+            "rmsp.maps": AnnounceHandler("rmsp.maps", self._announce_handler),
         }
+
+        # RMSP client for map tile fetching over Reticulum
+        self._rmsp_client = None
 
         # Shared instance state
         self.is_shared_instance = False  # True if connected to external shared RNS instance
@@ -1688,6 +1692,34 @@ class ReticulumWrapper:
                 'timestamp': int(time.time() * 1000),  # milliseconds
                 'interface': receiving_interface,  # Add interface name
             }
+
+            # Handle RMSP map server announces specially
+            if aspect == "rmsp.maps" and app_data:
+                try:
+                    # Parse RMSP announce and register server
+                    self.parse_rmsp_announce(destination_hash, announced_identity, app_data, hops)
+
+                    # Also parse RMSP-specific fields for Kotlin
+                    global umsgpack
+                    if umsgpack is None:
+                        import umsgpack as _umsgpack
+                        umsgpack = _umsgpack
+
+                    rmsp_data = umsgpack.unpackb(app_data)
+                    announce_event['rmsp_server_name'] = rmsp_data.get('n', 'Unknown')
+                    announce_event['rmsp_version'] = rmsp_data.get('v', '0.0.0')
+                    announce_event['rmsp_coverage'] = rmsp_data.get('c', [])
+                    announce_event['rmsp_zoom_range'] = rmsp_data.get('z', [0, 15])
+                    announce_event['rmsp_formats'] = rmsp_data.get('f', ['pmtiles'])
+                    announce_event['rmsp_layers'] = rmsp_data.get('l', ['osm'])
+                    announce_event['rmsp_updated'] = rmsp_data.get('u', 0)
+                    announce_event['rmsp_size'] = rmsp_data.get('s')
+
+                    log_info("ReticulumWrapper", "_announce_handler",
+                            f"RMSP server announce: {announce_event['rmsp_server_name']}")
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "_announce_handler",
+                               f"Failed to parse RMSP announce data: {e}")
 
             # Store in pending queue for Kotlin to retrieve
             with self.announce_lock:
@@ -6403,3 +6435,170 @@ class ReticulumWrapper:
             import traceback
             traceback.print_exc()
             return {'success': False, 'error': str(e)}
+
+    # ============================================================================
+    # RMSP (Reticulum Map Service Protocol) Methods
+    # ============================================================================
+
+    def _get_rmsp_client(self):
+        """
+        Get or create the RMSP client instance.
+        Lazy initialization to avoid importing until needed.
+        """
+        if self._rmsp_client is None:
+            try:
+                from rmsp_client import get_rmsp_client
+                self._rmsp_client = get_rmsp_client()
+                self._rmsp_client.initialize()
+                log_info("ReticulumWrapper", "_get_rmsp_client", "RMSP client initialized")
+            except ImportError as e:
+                log_error("ReticulumWrapper", "_get_rmsp_client", f"Failed to import rmsp_client: {e}")
+                return None
+            except Exception as e:
+                log_error("ReticulumWrapper", "_get_rmsp_client", f"Failed to initialize RMSP client: {e}")
+                return None
+        return self._rmsp_client
+
+    def parse_rmsp_announce(self, destination_hash: bytes, identity, app_data: bytes, hops: int = 0) -> Dict:
+        """
+        Parse RMSP announce data and register the server.
+
+        Args:
+            destination_hash: Server's destination hash
+            identity: RNS Identity object
+            app_data: Announce app data (msgpack-encoded RMSP server info)
+            hops: Number of network hops
+
+        Returns:
+            Dict with server info or error
+        """
+        try:
+            client = self._get_rmsp_client()
+            if client is None:
+                return {'success': False, 'error': 'RMSP client not available'}
+
+            server = client.parse_rmsp_announce(destination_hash, identity, app_data, hops)
+            if server:
+                log_info("ReticulumWrapper", "parse_rmsp_announce",
+                        f"Registered RMSP server: {server.name}")
+                return {'success': True, 'server': server.to_dict()}
+            else:
+                return {'success': False, 'error': 'Failed to parse RMSP announce'}
+        except Exception as e:
+            log_error("ReticulumWrapper", "parse_rmsp_announce", f"Error: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def get_rmsp_servers(self) -> List[Dict]:
+        """
+        Get all known RMSP map servers.
+
+        Returns:
+            List of server info dicts
+        """
+        try:
+            client = self._get_rmsp_client()
+            if client is None:
+                return []
+            return client.get_servers()
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_rmsp_servers", f"Error: {e}")
+            return []
+
+    def get_rmsp_servers_for_geohash(self, geohash: str) -> List[Dict]:
+        """
+        Get RMSP servers that cover the given geohash area.
+
+        Args:
+            geohash: Geohash string for the area of interest
+
+        Returns:
+            List of server info dicts that cover this area
+        """
+        try:
+            client = self._get_rmsp_client()
+            if client is None:
+                return []
+            return client.get_servers_for_geohash(geohash)
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_rmsp_servers_for_geohash", f"Error: {e}")
+            return []
+
+    def get_nearest_rmsp_servers(self, limit: int = 5) -> List[Dict]:
+        """
+        Get nearest RMSP servers by hop count.
+
+        Args:
+            limit: Maximum number of servers to return
+
+        Returns:
+            List of server info dicts sorted by hop count
+        """
+        try:
+            client = self._get_rmsp_client()
+            if client is None:
+                return []
+            return client.get_nearest_servers(limit)
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_nearest_rmsp_servers", f"Error: {e}")
+            return []
+
+    def query_rmsp_server(self, destination_hash_hex: str, geohash: str,
+                          zoom_range: List[int] = None, format: str = None,
+                          timeout: float = 30.0) -> Dict:
+        """
+        Query an RMSP server for available map data.
+
+        Args:
+            destination_hash_hex: Server destination hash as hex string
+            geohash: Geohash area to query
+            zoom_range: Optional [min_zoom, max_zoom]
+            format: Optional format (pmtiles, micro)
+            timeout: Request timeout in seconds
+
+        Returns:
+            QueryResponse dict
+        """
+        try:
+            client = self._get_rmsp_client()
+            if client is None:
+                return {'available': False, 'geohash': geohash, 'error_message': 'RMSP client not available'}
+            return client.query_server(destination_hash_hex, geohash, zoom_range, format, timeout)
+        except Exception as e:
+            log_error("ReticulumWrapper", "query_rmsp_server", f"Error: {e}")
+            return {'available': False, 'geohash': geohash, 'error_message': str(e)}
+
+    def fetch_rmsp_tiles(self, destination_hash_hex: str, geohash: str,
+                         zoom_range: List[int] = None, format: str = None,
+                         timeout: float = 3600.0) -> bytes:
+        """
+        Fetch tile data from an RMSP server.
+
+        Args:
+            destination_hash_hex: Server destination hash as hex string
+            geohash: Geohash area to fetch
+            zoom_range: Optional [min_zoom, max_zoom]
+            format: Optional format (pmtiles, micro)
+            timeout: Request timeout in seconds
+
+        Returns:
+            Raw tile data bytes, or empty bytes on failure
+        """
+        try:
+            client = self._get_rmsp_client()
+            if client is None:
+                return bytes()
+            data = client.fetch_tiles(destination_hash_hex, geohash, zoom_range, format, timeout)
+            return data if data else bytes()
+        except Exception as e:
+            log_error("ReticulumWrapper", "fetch_rmsp_tiles", f"Error: {e}")
+            return bytes()
+
+    def clear_rmsp_servers(self):
+        """Clear all known RMSP servers."""
+        try:
+            client = self._get_rmsp_client()
+            if client:
+                client.clear_servers()
+                log_info("ReticulumWrapper", "clear_rmsp_servers", "Cleared all RMSP servers")
+        except Exception as e:
+            log_error("ReticulumWrapper", "clear_rmsp_servers", f"Error: {e}")

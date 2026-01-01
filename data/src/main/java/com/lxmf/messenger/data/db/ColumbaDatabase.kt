@@ -9,15 +9,19 @@ import com.lxmf.messenger.data.db.dao.CustomThemeDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
+import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
+import com.lxmf.messenger.data.db.dao.RmspServerDao
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.CustomThemeEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
+import com.lxmf.messenger.data.db.entity.OfflineMapRegionEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
+import com.lxmf.messenger.data.db.entity.RmspServerEntity
 
 @Database(
     entities = [
@@ -29,6 +33,8 @@ import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
         CustomThemeEntity::class,
         LocalIdentityEntity::class,
         ReceivedLocationEntity::class,
+        OfflineMapRegionEntity::class,
+        RmspServerEntity::class,
     ],
     version = 28,
     exportSchema = false,
@@ -49,4 +55,8 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun localIdentityDao(): LocalIdentityDao
 
     abstract fun receivedLocationDao(): ReceivedLocationDao
+
+    abstract fun offlineMapRegionDao(): OfflineMapRegionDao
+
+    abstract fun rmspServerDao(): RmspServerDao
 }

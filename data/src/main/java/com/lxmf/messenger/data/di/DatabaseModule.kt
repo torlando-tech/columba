@@ -12,7 +12,9 @@ import com.lxmf.messenger.data.db.dao.CustomThemeDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
+import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
+import com.lxmf.messenger.data.db.dao.RmspServerDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -59,6 +61,7 @@ object DatabaseModule {
             MIGRATION_25_26,
             MIGRATION_26_27,
             MIGRATION_27_28,
+            MIGRATION_28_29,
         )
     }
 
@@ -1173,6 +1176,65 @@ object DatabaseModule {
             }
         }
 
+    // Migration from version 28 to 29: Add offline maps and RMSP server tables
+    // Creates offline_map_regions for storing downloaded map regions
+    // Creates rmsp_servers for tracking discovered RMSP map servers
+    private val MIGRATION_28_29 =
+        object : Migration(28, 29) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Create offline_map_regions table
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS offline_map_regions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        centerLatitude REAL NOT NULL,
+                        centerLongitude REAL NOT NULL,
+                        radiusKm INTEGER NOT NULL,
+                        minZoom INTEGER NOT NULL,
+                        maxZoom INTEGER NOT NULL,
+                        status TEXT NOT NULL,
+                        mbtilesPath TEXT,
+                        tileCount INTEGER NOT NULL,
+                        sizeBytes INTEGER NOT NULL,
+                        downloadProgress REAL NOT NULL,
+                        errorMessage TEXT,
+                        createdAt INTEGER NOT NULL,
+                        completedAt INTEGER,
+                        source TEXT NOT NULL DEFAULT 'http'
+                    )
+                    """.trimIndent(),
+                )
+                // Create indices for offline_map_regions
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_offline_map_regions_createdAt ON offline_map_regions(createdAt)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_offline_map_regions_status ON offline_map_regions(status)")
+
+                // Create rmsp_servers table
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS rmsp_servers (
+                        destinationHash TEXT NOT NULL PRIMARY KEY,
+                        serverName TEXT NOT NULL,
+                        publicKey BLOB NOT NULL,
+                        coverageGeohashes TEXT NOT NULL,
+                        minZoom INTEGER NOT NULL,
+                        maxZoom INTEGER NOT NULL,
+                        formats TEXT NOT NULL,
+                        layers TEXT NOT NULL,
+                        dataUpdatedTimestamp INTEGER NOT NULL,
+                        dataSize INTEGER,
+                        version TEXT NOT NULL,
+                        lastSeenTimestamp INTEGER NOT NULL,
+                        hops INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                // Create indices for rmsp_servers
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_rmsp_servers_lastSeenTimestamp ON rmsp_servers(lastSeenTimestamp)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_rmsp_servers_hops ON rmsp_servers(hops)")
+            }
+        }
+
     @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization
     @Provides
     @Singleton
@@ -1227,6 +1289,16 @@ object DatabaseModule {
     @Provides
     fun provideReceivedLocationDao(database: ColumbaDatabase): ReceivedLocationDao {
         return database.receivedLocationDao()
+    }
+
+    @Provides
+    fun provideOfflineMapRegionDao(database: ColumbaDatabase): OfflineMapRegionDao {
+        return database.offlineMapRegionDao()
+    }
+
+    @Provides
+    fun provideRmspServerDao(database: ColumbaDatabase): RmspServerDao {
+        return database.rmspServerDao()
     }
 
     @Provides

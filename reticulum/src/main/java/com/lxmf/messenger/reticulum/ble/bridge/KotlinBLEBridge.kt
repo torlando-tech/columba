@@ -357,8 +357,12 @@ class KotlinBLEBridge(
      */
     private fun buildConnectionDetailsJson(): String {
         return try {
+            val deviceMap = scanner.getDevicesSnapshot()
             val jsonArray = org.json.JSONArray()
             connectedPeers.values.forEach { peer ->
+                val device = deviceMap[peer.address]
+                // Use stored peer.rssi first, then fall back to scanner cache
+                val rssi = if (peer.rssi != -100) peer.rssi else device?.rssi ?: -100
                 val jsonObj =
                     org.json.JSONObject().apply {
                         put("identityHash", peer.identityHash ?: "unknown")
@@ -367,6 +371,10 @@ class KotlinBLEBridge(
                         put("hasPeripheralConnection", peer.isPeripheral)
                         put("mtu", peer.mtu)
                         put("connectedAt", peer.connectedAt)
+                        put("rssi", rssi)
+                        put("peerName", device?.name ?: "No Name")
+                        put("firstSeen", device?.firstSeen ?: peer.connectedAt)
+                        put("lastSeen", device?.lastSeen ?: System.currentTimeMillis())
                     }
                 jsonArray.put(jsonObj)
             }
@@ -411,6 +419,7 @@ class KotlinBLEBridge(
         var isPeripheral: Boolean = false, // true if they connected to us
         var identityHash: String? = null, // 32-char hex
         val connectedAt: Long = System.currentTimeMillis(),
+        var rssi: Int = -100, // Last known RSSI, -100 = unknown
     )
 
     /**
@@ -1292,6 +1301,7 @@ class KotlinBLEBridge(
             // Fallback to addressToIdentity if peer.identityHash not set (race condition)
             val identity = peer.identityHash ?: addressToIdentity[peer.address]
 
+            val finalRssi = if (peer.rssi != -100) peer.rssi else device?.rssi ?: -100
             details.add(
                 BleConnectionDetails(
                     identityHash = identity ?: "unknown",
@@ -1303,7 +1313,7 @@ class KotlinBLEBridge(
                     connectedAt = peer.connectedAt,
                     firstSeen = device?.firstSeen ?: peer.connectedAt,
                     lastSeen = device?.lastSeen ?: System.currentTimeMillis(),
-                    rssi = device?.rssi ?: -100, // Real RSSI from scanner, -100 fallback
+                    rssi = finalRssi,
                 ),
             )
         }
@@ -1451,10 +1461,14 @@ class KotlinBLEBridge(
             pendingCentralConnections.remove(address)
         }
 
+        // Get RSSI from scanner cache at connection time (before MAC rotation)
+        val scannedDevice = scanner.getDevicesSnapshot()[address]
+        val rssiAtConnection = scannedDevice?.rssi ?: -100
+
         peersMutex.withLock {
             val peer =
                 connectedPeers.getOrPut(address) {
-                    PeerConnection(address, mtu)
+                    PeerConnection(address, mtu, rssi = rssiAtConnection)
                 }
 
             if (isCentral) {
@@ -1463,6 +1477,10 @@ class KotlinBLEBridge(
                 peer.isPeripheral = true
             }
             peer.mtu = maxOf(peer.mtu, mtu) // Use best MTU
+            // Update RSSI if we got a valid one (might be first connection as central)
+            if (rssiAtConnection != -100) {
+                peer.rssi = rssiAtConnection
+            }
 
             // Check if we already received identity for this peer (race condition fix)
             val existingIdentity = addressToIdentity[address]

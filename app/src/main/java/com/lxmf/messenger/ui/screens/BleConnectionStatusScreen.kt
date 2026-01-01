@@ -477,7 +477,7 @@ fun ConnectionCard(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = connection.shortIdentityHash,
+                        text = connection.identityHash,
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

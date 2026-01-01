@@ -1866,46 +1866,50 @@ class KotlinBLEBridge(
         var completedPending: PendingConnection? = null
 
         peersMutex.withLock {
-            // Check if peer exists at new address - only clean up old entries if we have the new one
+            // Update peer with identity if it exists
+            // NOTE: We do NOT remove old peers here - let disconnect callbacks handle that.
+            // Removing peers here causes issues when MAC rotation creates a new connection
+            // before the old one has disconnected (the old connection may still be valid).
             val peerAtNewAddress = connectedPeers[address]
-
             if (peerAtNewAddress != null) {
-                // New peer exists - safe to clean up old entries for this identity
-                val addressesToRemove = mutableSetOf<String>()
-
-                // Find by identityHash field
-                connectedPeers.entries
-                    .filter { it.value.identityHash == identityHash && it.key != address }
-                    .forEach { addressesToRemove.add(it.key) }
-
-                // Find by addressToIdentity mapping (for peers where identityHash not yet set on PeerConnection)
-                addressToIdentity.entries
-                    .filter { it.value == identityHash && it.key != address && connectedPeers.containsKey(it.key) }
-                    .forEach { addressesToRemove.add(it.key) }
-
-                // Also check identityToAddress for the canonical old address
-                val existingAddress = identityToAddress[identityHash]
-                if (existingAddress != null && existingAddress != address && connectedPeers.containsKey(existingAddress)) {
-                    addressesToRemove.add(existingAddress)
-                }
-
-                if (addressesToRemove.isNotEmpty()) {
-                    Log.i(TAG, "Identity $identityHash: removing ${addressesToRemove.size} old connection(s): $addressesToRemove")
-                    addressesToRemove.forEach { oldAddress ->
-                        connectedPeers.remove(oldAddress)
-                        pendingConnections.remove(oldAddress)
-                    }
-                }
-
-                // Update peer with identity
                 peerAtNewAddress.identityHash = identityHash
+
+                // Decide whether to update identity→address mapping
+                // Prefer addresses with central connection (more reliable for sending)
+                val existingAddress = identityToAddress[identityHash]
+                val existingPeer = existingAddress?.let { connectedPeers[it] }
+                val shouldUpdate = when {
+                    existingAddress == null -> true // No existing mapping
+                    existingPeer == null -> true // Old peer no longer exists
+                    // Prefer peer with central connection
+                    peerAtNewAddress.isCentral && !existingPeer.isCentral -> true
+                    // If new has both, prefer it
+                    peerAtNewAddress.isCentral && peerAtNewAddress.isPeripheral -> true
+                    // If existing has central and new doesn't, keep existing
+                    existingPeer.isCentral && !peerAtNewAddress.isCentral -> false
+                    // Default: use the newer address
+                    else -> true
+                }
+
+                if (shouldUpdate) {
+                    identityToAddress[identityHash] = address
+                    Log.d(TAG, "Updated identity→address mapping: $identityHash → $address (central=${peerAtNewAddress.isCentral})")
+                } else {
+                    Log.d(TAG, "Keeping existing identity→address mapping: $identityHash → $existingAddress (existing has central)")
+                }
             } else {
-                // New peer doesn't exist yet - DON'T remove old entries, just log
-                Log.d(TAG, "Identity $identityHash received for $address but peer not in connectedPeers yet")
+                // Peer doesn't exist yet - update mapping only if no existing valid mapping
+                val existingAddress = identityToAddress[identityHash]
+                val existingPeer = existingAddress?.let { connectedPeers[it] }
+                if (existingPeer == null) {
+                    identityToAddress[identityHash] = address
+                    Log.d(TAG, "Set identity→address mapping: $identityHash → $address (no existing peer)")
+                } else {
+                    Log.d(TAG, "Identity $identityHash already mapped to $existingAddress with valid peer, not overwriting with $address")
+                }
             }
 
-            // Always update mappings (Kotlin needs this for send() address resolution)
-            identityToAddress[identityHash] = address
+            // Always update address→identity mapping (for data routing from this address)
             addressToIdentity[address] = identityHash
 
             // Check for pending connection that was waiting for identity

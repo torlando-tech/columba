@@ -389,6 +389,44 @@ class KotlinBLEBridge(
     @Volatile
     private var isStarted = false
 
+    // Periodic refresh job for real-time RSSI updates (only when UI is visible)
+    private var connectionRefreshJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Start periodic refresh of connection details (for real-time RSSI updates).
+     * Call this when the BLE connections screen becomes visible.
+     */
+    fun startPeriodicConnectionRefresh() {
+        if (connectionRefreshJob?.isActive == true) return
+        connectionRefreshJob = scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(1000L)
+                if (connectedPeers.isNotEmpty()) {
+                    // Update RSSI values from scanner cache
+                    val deviceMap = scanner.getDevicesSnapshot()
+                    connectedPeers.values.forEach { peer ->
+                        val device = deviceMap[peer.address]
+                        if (device != null && device.rssi != -100) {
+                            peer.rssi = device.rssi
+                        }
+                    }
+                    notifyConnectionChange()
+                }
+            }
+        }
+        Log.d(TAG, "Started periodic connection refresh")
+    }
+
+    /**
+     * Stop periodic refresh of connection details.
+     * Call this when the BLE connections screen is no longer visible.
+     */
+    fun stopPeriodicConnectionRefresh() {
+        connectionRefreshJob?.cancel()
+        connectionRefreshJob = null
+        Log.d(TAG, "Stopped periodic connection refresh")
+    }
+
     // Stored UUIDs for restart capability
     @Volatile
     private var storedServiceUuid: String? = null

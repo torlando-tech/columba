@@ -243,4 +243,20 @@ class BleStatusRepository
                 Log.e(TAG, "Error disconnecting peer $address", e)
             }
         }
+
+        /**
+         * Start periodic refresh of connection details for real-time RSSI updates.
+         * Call this when the BLE connections screen becomes visible.
+         */
+        fun startPeriodicRefresh() {
+            bleBridge.startPeriodicConnectionRefresh()
+        }
+
+        /**
+         * Stop periodic refresh of connection details.
+         * Call this when the BLE connections screen is no longer visible.
+         */
+        fun stopPeriodicRefresh() {
+            bleBridge.stopPeriodicConnectionRefresh()
+        }
     }

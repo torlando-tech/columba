@@ -50,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -83,6 +84,14 @@ fun BleConnectionStatusScreen(
     viewModel: BleConnectionsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // Start/stop periodic refresh when screen is visible/hidden
+    DisposableEffect(viewModel) {
+        viewModel.startPeriodicRefresh()
+        onDispose {
+            viewModel.stopPeriodicRefresh()
+        }
+    }
 
     // Bluetooth enable launcher
     val bluetoothEnableLauncher =

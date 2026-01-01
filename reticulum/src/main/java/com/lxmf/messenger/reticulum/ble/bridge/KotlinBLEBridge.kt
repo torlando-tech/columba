@@ -372,7 +372,7 @@ class KotlinBLEBridge(
                         put("mtu", peer.mtu)
                         put("connectedAt", peer.connectedAt)
                         put("rssi", rssi)
-                        put("peerName", device?.name ?: "No Name")
+                        put("peerName", device?.name ?: peer.identityHash?.take(8) ?: "Unknown")
                         put("firstSeen", device?.firstSeen ?: peer.connectedAt)
                         put("lastSeen", peer.lastActivity)
                     }
@@ -1304,7 +1304,7 @@ class KotlinBLEBridge(
                 details.add(
                     BleConnectionDetails(
                         identityHash = identity ?: "unknown",
-                        peerName = device?.name ?: "No Name",
+                        peerName = device?.name ?: identity?.take(8) ?: "Unknown",
                         currentMac = peer.address,
                         hasCentralConnection = peer.isCentral,
                         hasPeripheralConnection = peer.isPeripheral,
@@ -1347,7 +1347,7 @@ class KotlinBLEBridge(
             details.add(
                 BleConnectionDetails(
                     identityHash = identity ?: "unknown",
-                    peerName = device?.name ?: "No Name", // Real device name from scanner
+                    peerName = device?.name ?: identity?.take(8) ?: "Unknown",
                     currentMac = peer.address,
                     hasCentralConnection = peer.isCentral,
                     hasPeripheralConnection = peer.isPeripheral,

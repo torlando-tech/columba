@@ -9,6 +9,8 @@ import com.lxmf.messenger.data.db.dao.ConversationDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
+import com.lxmf.messenger.data.storage.AttachmentStorageManager
+import org.json.JSONObject
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
@@ -68,6 +70,7 @@ class ConversationRepository
         private val messageDao: MessageDao,
         private val peerIdentityDao: PeerIdentityDao,
         private val localIdentityDao: LocalIdentityDao,
+        private val attachmentStorage: AttachmentStorageManager,
     ) {
         /**
          * Get all conversations for the active identity, sorted by most recent activity.
@@ -253,6 +256,9 @@ class ConversationRepository
             // Only insert if message doesn't already exist - prevents LXMF replay from
             // overwriting imported messages with new timestamps (fixes ordering bug)
             if (!messageExists) {
+                // Extract large attachments to disk to avoid SQLite CursorWindow limit (~2MB)
+                val processedFieldsJson = extractLargeAttachments(message.id, message.fieldsJson)
+
                 val messageEntity =
                     MessageEntity(
                         id = message.id,
@@ -263,7 +269,7 @@ class ConversationRepository
                         isFromMe = message.isFromMe,
                         status = message.status,
                         isRead = message.isFromMe, // Our own messages are always "read"
-                        fieldsJson = message.fieldsJson, // LXMF fields (attachments, images, etc.)
+                        fieldsJson = processedFieldsJson, // LXMF fields with large attachments extracted
                         deliveryMethod = message.deliveryMethod,
                         errorMessage = message.errorMessage,
                         replyToMessageId = message.replyToMessageId, // Reply reference
@@ -582,6 +588,86 @@ class ConversationRepository
                 firstAttachment.optString(0).takeIf { it.isNotEmpty() }
             } catch (e: Exception) {
                 null
+            }
+        }
+
+        /**
+         * Extract large attachments from fieldsJson and save to disk.
+         *
+         * If the total fieldsJson size exceeds the threshold, large fields are saved to disk
+         * and replaced with file references. This prevents SQLite CursorWindow overflow
+         * when loading messages (~2MB row limit).
+         *
+         * @param messageId Message identifier for storage path
+         * @param fieldsJson Original fields JSON string
+         * @return Modified fields JSON with file references for large attachments, or original if no extraction needed
+         */
+        @Suppress("SwallowedException", "TooGenericExceptionCaught")
+        private fun extractLargeAttachments(
+            messageId: String,
+            fieldsJson: String?,
+        ): String? {
+            if (fieldsJson == null) return null
+
+            val totalSize = fieldsJson.length
+            if (totalSize < AttachmentStorageManager.SIZE_THRESHOLD) {
+                return fieldsJson // No extraction needed
+            }
+
+            android.util.Log.d(
+                "ConversationRepository",
+                "Fields size ($totalSize chars) exceeds threshold, extracting large attachments for message $messageId",
+            )
+
+            return try {
+                val fields = JSONObject(fieldsJson)
+                val modifiedFields = JSONObject()
+                val keys = fields.keys()
+
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val value = fields.opt(key)
+
+                    // Get string representation of value for size check
+                    val valueStr = value?.toString() ?: ""
+
+                    if (valueStr.length > AttachmentStorageManager.SIZE_THRESHOLD) {
+                        // Save large field to disk
+                        val filePath = attachmentStorage.saveAttachment(messageId, key, valueStr)
+                        if (filePath != null) {
+                            // Replace with file reference
+                            val refObj =
+                                JSONObject().apply {
+                                    put(AttachmentStorageManager.FILE_REF_KEY, filePath)
+                                }
+                            modifiedFields.put(key, refObj)
+                            android.util.Log.i(
+                                "ConversationRepository",
+                                "Extracted field '$key' (${valueStr.length} chars) to disk: $filePath",
+                            )
+                        } else {
+                            // Save failed, keep original (may still fail at load, but at least try)
+                            modifiedFields.put(key, value)
+                            android.util.Log.w(
+                                "ConversationRepository",
+                                "Failed to extract field '$key', keeping inline",
+                            )
+                        }
+                    } else {
+                        // Keep small fields inline
+                        modifiedFields.put(key, value)
+                    }
+                }
+
+                val newSize = modifiedFields.toString().length
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "Fields size reduced from $totalSize to $newSize chars",
+                )
+                modifiedFields.toString()
+            } catch (e: Exception) {
+                android.util.Log.e("ConversationRepository", "Error extracting attachments", e)
+                fieldsJson // Return original on error
             }
         }
 

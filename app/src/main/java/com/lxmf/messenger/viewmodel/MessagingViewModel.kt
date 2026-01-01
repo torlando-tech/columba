@@ -950,33 +950,15 @@ class MessagingViewModel
 
         /**
          * Add a file attachment from its data.
-         * Validates size limit and adds to the list if valid.
+         *
+         * File attachments have no size limit - they are sent uncompressed.
+         * Large files may be slow or unreliable over mesh networks.
          *
          * @param attachment The file attachment to add
          */
         fun addFileAttachment(attachment: FileAttachment) {
             viewModelScope.launch {
                 val currentFiles = _selectedFileAttachments.value
-                val currentTotal = currentFiles.sumOf { it.sizeBytes }
-
-                // Check if adding this file would exceed the limit
-                if (FileUtils.wouldExceedSizeLimit(currentTotal, attachment.sizeBytes)) {
-                    Log.w(TAG, "File attachment rejected: would exceed size limit")
-                    _fileAttachmentError.emit(
-                        "File too large. Total attachments cannot exceed ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
-                    )
-                    return@launch
-                }
-
-                // Check single file size
-                if (attachment.sizeBytes > FileUtils.MAX_SINGLE_FILE_SIZE) {
-                    Log.w(TAG, "File attachment rejected: exceeds single file size limit")
-                    _fileAttachmentError.emit(
-                        "File too large. Maximum size is ${FileUtils.formatFileSize(FileUtils.MAX_SINGLE_FILE_SIZE)}",
-                    )
-                    return@launch
-                }
-
                 _selectedFileAttachments.value = currentFiles + attachment
                 Log.d(TAG, "Added file attachment: ${attachment.filename} (${attachment.sizeBytes} bytes)")
             }
@@ -1356,14 +1338,29 @@ class MessagingViewModel
 
 private const val HELPER_TAG = "MessagingViewModel"
 
-private fun validateAndSanitizeContent(
+/**
+ * Validates and sanitizes message content for sending.
+ *
+ * Important: When sending attachments (images or files) without text content,
+ * returns a single space " " instead of empty string. This is required for
+ * Sideband compatibility - Sideband's database save logic skips messages with
+ * empty content AND empty title, which would cause attachment-only messages
+ * to be silently dropped.
+ *
+ * @param content The raw message content
+ * @param imageData Optional image attachment data
+ * @param fileAttachments Optional file attachments
+ * @return Sanitized content string, or null if validation fails
+ */
+internal fun validateAndSanitizeContent(
     content: String,
     imageData: ByteArray?,
     fileAttachments: List<FileAttachment> = emptyList(),
 ): String? {
-    // Empty content is OK when sending attachments only
+    // Sideband requires non-empty content to save messages to its database.
+    // When sending attachments without text, use a single space (matching Sideband's behavior).
     if (content.trim().isEmpty() && (imageData != null || fileAttachments.isNotEmpty())) {
-        return ""
+        return " "
     }
     val validationResult = InputValidator.validateMessageContent(content)
     if (validationResult is ValidationResult.Error) {
@@ -1408,7 +1405,7 @@ private fun determineDeliveryMethod(
     }
 }
 
-private fun buildFieldsJson(
+private suspend fun buildFieldsJson(
     imageData: ByteArray?,
     imageFormat: String?,
     fileAttachments: List<FileAttachment> = emptyList(),
@@ -1423,55 +1420,74 @@ private fun buildFieldsJson(
 
     if (!hasAnyContent) return null
 
-    val json = org.json.JSONObject()
+    // Move CPU-intensive hex encoding to background thread
+    return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        val json = org.json.JSONObject()
 
-    // Add image field (Field 6)
-    if (hasImage && imageData != null) {
-        val hexImageData = imageData.joinToString("") { "%02x".format(it) }
-        json.put("6", hexImageData)
-    }
-
-    // Add file attachments field (Field 5)
-    if (hasFiles) {
-        val attachmentsArray = org.json.JSONArray()
-        for (attachment in fileAttachments) {
-            val attachmentObj = org.json.JSONObject()
-            attachmentObj.put("filename", attachment.filename)
-            attachmentObj.put("data", attachment.data.joinToString("") { "%02x".format(it) })
-            attachmentObj.put("size", attachment.sizeBytes)
-            attachmentsArray.put(attachmentObj)
-        }
-        json.put("5", attachmentsArray)
-    }
-
-    // Add app extensions field (Field 16) for replies, reactions, and future features
-    if (hasReply || hasReactions) {
-        val appExtensions = org.json.JSONObject()
-
-        // Add reply_to if present
-        if (hasReply) {
-            appExtensions.put("reply_to", replyToMessageId)
+        // Add image field (Field 6)
+        if (hasImage && imageData != null) {
+            val hexImageData = imageData.toHexString()
+            json.put("6", hexImageData)
         }
 
-        // Add reactions if present
-        // Format: {"reactions": {"👍": ["sender_hash1", "sender_hash2"], "❤️": ["sender_hash3"]}}
-        if (hasReactions && reactions != null) {
-            val reactionsObj = org.json.JSONObject()
-            for ((emoji, senderHashes) in reactions) {
-                val sendersArray = org.json.JSONArray()
-                for (hash in senderHashes) {
-                    sendersArray.put(hash)
-                }
-                reactionsObj.put(emoji, sendersArray)
+        // Add file attachments field (Field 5)
+        if (hasFiles) {
+            val attachmentsArray = org.json.JSONArray()
+            for (attachment in fileAttachments) {
+                val attachmentObj = org.json.JSONObject()
+                attachmentObj.put("filename", attachment.filename)
+                attachmentObj.put("data", attachment.data.toHexString())
+                attachmentObj.put("size", attachment.sizeBytes)
+                attachmentsArray.put(attachmentObj)
             }
-            appExtensions.put("reactions", reactionsObj)
+            json.put("5", attachmentsArray)
         }
 
-        json.put("16", appExtensions)
-    }
+        // Add app extensions field (Field 16) for replies, reactions, and future features
+        if (hasReply || hasReactions) {
+            val appExtensions = org.json.JSONObject()
 
-    return json.toString()
+            // Add reply_to if present
+            if (hasReply) {
+                appExtensions.put("reply_to", replyToMessageId)
+            }
+
+            // Add reactions if present
+            // Format: {"reactions": {"👍": ["sender_hash1", "sender_hash2"], "❤️": ["sender_hash3"]}}
+            if (hasReactions && reactions != null) {
+                val reactionsObj = org.json.JSONObject()
+                for ((emoji, senderHashes) in reactions) {
+                    val sendersArray = org.json.JSONArray()
+                    for (hash in senderHashes) {
+                        sendersArray.put(hash)
+                    }
+                    reactionsObj.put(emoji, sendersArray)
+                }
+                appExtensions.put("reactions", reactionsObj)
+            }
+
+            json.put("16", appExtensions)
+        }
+
+        json.toString()
+    }
 }
+
+/**
+ * Efficient hex string conversion for ByteArray.
+ * Uses a lookup table for O(n) performance instead of O(n * string allocation).
+ */
+private fun ByteArray.toHexString(): String {
+    val hexChars = CharArray(size * 2)
+    for (i in indices) {
+        val v = this[i].toInt() and 0xFF
+        hexChars[i * 2] = HEX_CHARS[v ushr 4]
+        hexChars[i * 2 + 1] = HEX_CHARS[v and 0x0F]
+    }
+    return String(hexChars)
+}
+
+private val HEX_CHARS = "0123456789abcdef".toCharArray()
 
 private fun resolveActualDestHash(
     receipt: com.lxmf.messenger.reticulum.protocol.MessageReceipt,

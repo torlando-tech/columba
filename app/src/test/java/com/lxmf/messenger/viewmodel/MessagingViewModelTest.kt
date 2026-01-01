@@ -806,10 +806,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Assert: Protocol was called with image data
+            // Note: Empty content is replaced with single space for Sideband compatibility
             coVerify(exactly = 1) {
                 reticulumProtocol.sendLxmfMessageWithMethod(
                     destinationHash = any(),
-                    content = "", // Empty content is OK with image
+                    content = " ", // Single space for Sideband compatibility
                     sourceIdentity = testIdentity,
                     deliveryMethod = any(),
                     tryPropagationOnFail = any(),
@@ -1899,10 +1900,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Protocol should be called with file attachments
+            // Note: Empty content is replaced with single space for Sideband compatibility
             coVerify(exactly = 1) {
                 reticulumProtocol.sendLxmfMessageWithMethod(
                     destinationHash = any(),
-                    content = "",
+                    content = " ", // Single space for Sideband compatibility
                     sourceIdentity = testIdentity,
                     deliveryMethod = any(),
                     tryPropagationOnFail = any(),

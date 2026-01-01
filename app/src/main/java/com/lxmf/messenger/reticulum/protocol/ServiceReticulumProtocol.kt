@@ -31,6 +31,7 @@ import com.lxmf.messenger.reticulum.model.ReceivedPacket
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.service.manager.parseIdentityResultJson
+import com.lxmf.messenger.util.FileUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -1870,8 +1871,23 @@ class ServiceReticulumProtocol(
                     DeliveryMethod.PROPAGATED -> "propagated"
                 }
 
-            // Convert List<Pair<String, ByteArray>> to Map<String, ByteArray> for AIDL
-            val fileAttachmentsMap = fileAttachments?.associate { (filename, bytes) -> filename to bytes }
+            // Partition attachments into small (bytes via Binder) and large (file paths)
+            // This avoids Android Binder IPC transaction size limits (~1MB)
+            val smallAttachments = mutableMapOf<String, ByteArray>()
+            val largeAttachmentPaths = mutableMapOf<String, String>()
+
+            fileAttachments?.forEach { (filename, bytes) ->
+                if (bytes.size <= FileUtils.FILE_TRANSFER_THRESHOLD) {
+                    smallAttachments[filename] = bytes
+                } else {
+                    // Write large file to temp on IO thread and pass path
+                    val tempFile = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        FileUtils.writeTempAttachment(context, filename, bytes)
+                    }
+                    largeAttachmentPaths[filename] = tempFile.absolutePath
+                    Log.d(TAG, "Large attachment '$filename' (${bytes.size} bytes) written to temp file")
+                }
+            }
 
             val resultJson =
                 service.sendLxmfMessageWithMethod(
@@ -1882,7 +1898,8 @@ class ServiceReticulumProtocol(
                     tryPropagationOnFail,
                     imageData,
                     imageFormat,
-                    fileAttachmentsMap,
+                    smallAttachments.ifEmpty { null },
+                    largeAttachmentPaths.ifEmpty { null },
                     replyToMessageId,
                     iconAppearance?.iconName,
                     iconAppearance?.foregroundColor,

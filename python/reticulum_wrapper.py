@@ -1161,7 +1161,7 @@ class ReticulumWrapper:
 
                 # Deploy BLEInterface
                 log_debug("ReticulumWrapper", "initialize", "Deploying BLEInterface from bundled source")
-                ble_interface_bytes = pkgutil.get_data('ble_reticulum', 'BLEInterface.py')
+                ble_interface_bytes = pkgutil.get_data('ble_modules', 'BLEInterface.py')
                 ble_interface_dest = os.path.join(interfaces_dir, "BLEInterface.py")
                 with open(ble_interface_dest, 'wb') as f:
                     f.write(ble_interface_bytes)

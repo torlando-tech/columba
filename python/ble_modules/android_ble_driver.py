@@ -75,6 +75,10 @@ class AndroidBLEDriver(BLEDriverInterface):
         self._peer_roles = {}  # address -> "central" or "peripheral"
         self._peer_mtus = {}  # address -> mtu (int)
 
+        # Identity tracking for duplicate detection (MAC rotation handling)
+        self._address_to_identity = {}  # address -> identity_hash (32-char hex)
+        self._identity_to_address = {}  # identity_hash -> address
+
         # Thread safety for identity handling (prevents race conditions)
         self._identity_lock = threading.Lock()
         self._pending_identities = {}  # address -> identity bytes (cached before connection)
@@ -242,8 +246,45 @@ class AndroidBLEDriver(BLEDriverInterface):
         except Exception as e:
             RNS.log(f"AndroidBLEDriver: Error stopping advertising: {e}", RNS.LOG_ERROR)
 
+    def should_connect(self, peer_address: str) -> bool:
+        """Check if we should initiate connection based on MAC address sorting.
+
+        This implements the MAC sorting algorithm from the BLE protocol:
+        - Lower MAC address initiates connection (acts as central)
+        - Higher MAC address waits (acts as peripheral only)
+
+        This prevents dual connections by ensuring both devices independently
+        agree on connection direction.
+
+        NOTE: This method is exposed for BLEInterface to call BEFORE connect().
+        The MAC sorting decision has been moved to Python layer per RFC architecture.
+
+        Args:
+            peer_address: BLE MAC address of peer to potentially connect to
+
+        Returns:
+            True if we should connect (our MAC < peer MAC), False otherwise
+        """
+        try:
+            if not self.kotlin_bridge:
+                RNS.log("AndroidBLEDriver: Cannot check shouldConnect - no bridge", RNS.LOG_WARNING)
+                return False
+
+            result = self.kotlin_bridge.shouldConnect(peer_address)
+            RNS.log(f"AndroidBLEDriver: shouldConnect({peer_address}) = {result}", RNS.LOG_DEBUG)
+            return bool(result)
+
+        except Exception as e:
+            RNS.log(f"AndroidBLEDriver: Error in shouldConnect: {e}", RNS.LOG_ERROR)
+            return False
+
     def connect(self, address: str):
-        """Connect to a peer device (central role)."""
+        """Connect to a peer device (central role).
+
+        NOTE: MAC sorting is no longer enforced by Kotlin. BLEInterface should
+        call should_connect() first if it wants to follow the MAC sorting protocol.
+        This method now connects unconditionally when called.
+        """
         try:
             if not self.kotlin_bridge:
                 raise Exception("Driver not started")
@@ -256,7 +297,7 @@ class AndroidBLEDriver(BLEDriverInterface):
                 self.on_error("error", f"Failed to connect to {address}: {e}", e)
 
     def disconnect(self, address: str):
-        """Disconnect from a peer device."""
+        """Disconnect from a peer device (both central and peripheral connections)."""
         try:
             if self.kotlin_bridge:
                 # Kotlin bridge launches coroutines internally
@@ -266,6 +307,40 @@ class AndroidBLEDriver(BLEDriverInterface):
 
         except Exception as e:
             RNS.log(f"AndroidBLEDriver: Error disconnecting from {address}: {e}", RNS.LOG_ERROR)
+
+    def disconnect_central(self, address: str):
+        """Disconnect our central connection TO a peer device.
+
+        Used by BLEInterface for deduplication when we want to keep the
+        peripheral connection (them connected to us) but close our
+        central connection (us connected to them).
+        """
+        try:
+            if self.kotlin_bridge:
+                self.kotlin_bridge.disconnectCentralAsync(address)
+                RNS.log(f"AndroidBLEDriver: Disconnecting central connection to {address}", RNS.LOG_DEBUG)
+            else:
+                RNS.log("AndroidBLEDriver: Cannot disconnect central - no bridge", RNS.LOG_WARNING)
+
+        except Exception as e:
+            RNS.log(f"AndroidBLEDriver: Error disconnecting central from {address}: {e}", RNS.LOG_ERROR)
+
+    def disconnect_peripheral(self, address: str):
+        """Disconnect a peripheral connection FROM a peer device.
+
+        Used by BLEInterface for deduplication when we want to keep our
+        central connection (us connected to them) but close the
+        peripheral connection (them connected to us).
+        """
+        try:
+            if self.kotlin_bridge:
+                self.kotlin_bridge.disconnectPeripheralAsync(address)
+                RNS.log(f"AndroidBLEDriver: Disconnecting peripheral connection from {address}", RNS.LOG_DEBUG)
+            else:
+                RNS.log("AndroidBLEDriver: Cannot disconnect peripheral - no bridge", RNS.LOG_WARNING)
+
+        except Exception as e:
+            RNS.log(f"AndroidBLEDriver: Error disconnecting peripheral from {address}: {e}", RNS.LOG_ERROR)
 
     def send(self, address: str, data: bytes):
         """Send data to a connected peer (data already fragmented by BLEInterface)."""
@@ -488,6 +563,25 @@ class AndroidBLEDriver(BLEDriverInterface):
                 if identity:
                     RNS.log(f"AndroidBLEDriver: Using identity from pending cache", RNS.LOG_DEBUG)
 
+            # Track identity-to-address mapping for debugging/logging purposes only
+            # Deduplication is handled by BLEInterface, not the driver
+            # In dual-mode BLE, the same identity may legitimately have two addresses
+            # (one for central connection, one for peripheral connection)
+            if identity:
+                identity_hex = identity.hex()
+                with self._identity_lock:
+                    existing_address = self._identity_to_address.get(identity_hex)
+                    if existing_address and existing_address != address:
+                        # Same identity at different address - log but don't disconnect
+                        # This is normal in dual-mode BLE or during MAC rotation
+                        RNS.log(
+                            f"AndroidBLEDriver: Identity {identity_hex[:16]}... also at {address} (was at {existing_address})",
+                            RNS.LOG_DEBUG
+                        )
+                    # Update mappings - we track the most recent address per identity
+                    self._identity_to_address[identity_hex] = address
+                    self._address_to_identity[address] = identity_hex
+
             # Notify BLEInterface of connection (regardless of role)
             # Dual-connection prevention is handled by KotlinBLEBridge (lines 954-959)
             # If this callback fires, there's only ONE connection type (central XOR peripheral)
@@ -519,6 +613,16 @@ class AndroidBLEDriver(BLEDriverInterface):
                 del self._peer_roles[address]
             if address in self._peer_mtus:
                 del self._peer_mtus[address]
+
+            # Clean up identity mappings for this address
+            with self._identity_lock:
+                identity_hex = self._address_to_identity.pop(address, None)
+                if identity_hex:
+                    # Only remove identity->address mapping if it still points to this address
+                    # (might have been updated to a new address during MAC rotation)
+                    if self._identity_to_address.get(identity_hex) == address:
+                        del self._identity_to_address[identity_hex]
+                        RNS.log(f"AndroidBLEDriver: Cleared identity mapping for {address} ({identity_hex[:16]}...)", RNS.LOG_DEBUG)
 
             RNS.log(f"AndroidBLEDriver: Disconnected from {address}", RNS.LOG_INFO)
 
@@ -619,6 +723,23 @@ class AndroidBLEDriver(BLEDriverInterface):
 
             # Use lock to prevent race condition with _handle_connected
             with self._identity_lock:
+                # Track identity-to-address mapping for debugging/logging purposes only
+                # Deduplication is handled by BLEInterface, not the driver
+                # In dual-mode BLE, the same identity may legitimately have two addresses
+                # (one for central connection, one for peripheral connection)
+                existing_address = self._identity_to_address.get(identity_hash)
+                if existing_address and existing_address != address:
+                    # Same identity at different address - log but don't disconnect
+                    # This is normal in dual-mode BLE or during MAC rotation
+                    RNS.log(
+                        f"AndroidBLEDriver: Identity {identity_hash[:16]}... also at {address} (was at {existing_address})",
+                        RNS.LOG_DEBUG
+                    )
+
+                # Update identity mappings
+                self._identity_to_address[identity_hash] = address
+                self._address_to_identity[address] = identity_hash
+
                 # Check if peer is already connected (common case for peripheral mode)
                 # where onConnected fires before identity is received
                 if address in self._connected_peers:

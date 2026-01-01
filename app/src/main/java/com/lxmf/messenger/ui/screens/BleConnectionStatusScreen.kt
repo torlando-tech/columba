@@ -50,9 +50,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -428,6 +432,24 @@ fun ConnectionCard(
     connection: BleConnectionInfo,
     onDisconnect: () -> Unit,
 ) {
+    // Live-updating duration: recalculate every second based on connectedSince timestamp
+    val currentTimeMs = remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000L)
+            currentTimeMs.longValue = System.currentTimeMillis()
+        }
+    }
+
+    // Calculate duration from connectedAt (or use fallback to connectionDurationMs)
+    val liveDurationMs =
+        if (connection.connectedAt > 0) {
+            currentTimeMs.longValue - connection.connectedAt
+        } else {
+            connection.connectionDurationMs
+        }
+
     Card(
         modifier =
             Modifier
@@ -479,7 +501,7 @@ fun ConnectionCard(
             ConnectionDetailRow(label = "MTU", value = "${connection.mtu} bytes")
             ConnectionDetailRow(
                 label = "Connected",
-                value = formatDuration(connection.connectionDurationMs),
+                value = formatDuration(liveDurationMs),
             )
             ConnectionDetailRow(
                 label = "First Seen",

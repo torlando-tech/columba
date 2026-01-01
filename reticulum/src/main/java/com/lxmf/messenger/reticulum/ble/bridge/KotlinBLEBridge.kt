@@ -1713,17 +1713,27 @@ class KotlinBLEBridge(
             // Update last activity timestamp for this peer
             // Use identity-based lookup to handle MAC address rotation
             var peer = connectedPeers[address]
+            var resolvedAddress = address
             if (peer == null) {
                 // Try resolving via identity (handles address changes after deduplication)
                 val identityHash = addressToIdentity[address]
+                Log.d(TAG, "[LAST_ACTIVITY] address=$address not in connectedPeers, identityHash=$identityHash")
                 if (identityHash != null) {
                     val currentAddress = identityToAddress[identityHash]
+                    Log.d(TAG, "[LAST_ACTIVITY] identity $identityHash -> currentAddress=$currentAddress")
                     if (currentAddress != null) {
                         peer = connectedPeers[currentAddress]
+                        resolvedAddress = currentAddress
+                        Log.d(TAG, "[LAST_ACTIVITY] resolved peer at $currentAddress: ${peer != null}")
                     }
                 }
             }
-            peer?.lastActivity = System.currentTimeMillis()
+            if (peer != null) {
+                peer.lastActivity = System.currentTimeMillis()
+                Log.d(TAG, "[LAST_ACTIVITY] Updated lastActivity for $resolvedAddress")
+            } else {
+                Log.w(TAG, "[LAST_ACTIVITY] Could not find peer for $address")
+            }
 
             // Pass the raw fragment to the Python layer for reassembly
             Log.d(TAG, "Received ${fragment.size} byte fragment from $address")
@@ -1767,12 +1777,12 @@ class KotlinBLEBridge(
 
         peersMutex.withLock {
             // Check if identity already exists at different address (MAC rotation)
-            // Clean up old address to prevent duplicate entries in UI
+            // Clean up old peer connection to prevent duplicate entries in UI
+            // BUT keep addressToIdentity mapping so data on old connection can still update lastActivity
             val existingAddress = identityToAddress[identityHash]
             if (existingAddress != null && existingAddress != address) {
-                Log.i(TAG, "Identity $identityHash moved: $existingAddress -> $address (cleaning up old)")
-                // Remove old address mappings
-                addressToIdentity.remove(existingAddress)
+                Log.i(TAG, "Identity $identityHash moved: $existingAddress -> $address (cleaning up old peer)")
+                // Keep addressToIdentity[existingAddress] so handleDataReceived can still look up identity
                 // Remove old peer connection entry (prevents duplicate in UI)
                 connectedPeers.remove(existingAddress)
                 pendingConnections.remove(existingAddress)

@@ -95,22 +95,22 @@ fun MapSourcesCard(
                 isDisabled = !httpEnabled && !canDisableHttp,
             )
 
-            // RMSP source toggle
-            MapSourceToggle(
-                title = "RMSP (Mesh Network)",
-                description = if (rmspServerCount > 0) {
-                    "$rmspServerCount server${if (rmspServerCount != 1) "s" else ""} available"
-                } else {
-                    "Fetch tiles from Reticulum mesh"
-                },
-                enabled = rmspEnabled,
-                onEnabledChange = { enabled ->
-                    if (enabled || canDisableRmsp) {
-                        onRmspEnabledChange(enabled)
-                    }
-                },
-                isDisabled = !rmspEnabled && !canDisableRmsp,
-            )
+            // TODO: RMSP source toggle - temporarily hidden until feature is stable
+            // MapSourceToggle(
+            //     title = "RMSP (Mesh Network)",
+            //     description = if (rmspServerCount > 0) {
+            //         "$rmspServerCount server${if (rmspServerCount != 1) "s" else ""} available"
+            //     } else {
+            //         "Fetch tiles from Reticulum mesh"
+            //     },
+            //     enabled = rmspEnabled,
+            //     onEnabledChange = { enabled ->
+            //         if (enabled || canDisableRmsp) {
+            //             onRmspEnabledChange(enabled)
+            //         }
+            //     },
+            //     isDisabled = !rmspEnabled && !canDisableRmsp,
+            // )
 
             // Warning when no sources enabled
             if (showWarning) {

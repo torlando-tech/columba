@@ -1700,12 +1700,10 @@ class ReticulumWrapper:
                     self.parse_rmsp_announce(destination_hash, announced_identity, app_data, hops)
 
                     # Also parse RMSP-specific fields for Kotlin
-                    global umsgpack
-                    if umsgpack is None:
-                        import umsgpack as _umsgpack
-                        umsgpack = _umsgpack
+                    # Import umsgpack from RNS vendor (same as used elsewhere in this function)
+                    from RNS.vendor import umsgpack as rmsp_msgpack
 
-                    rmsp_data = umsgpack.unpackb(app_data)
+                    rmsp_data = rmsp_msgpack.unpackb(app_data)
                     announce_event['rmsp_server_name'] = rmsp_data.get('n', 'Unknown')
                     announce_event['rmsp_version'] = rmsp_data.get('v', '0.0.0')
                     announce_event['rmsp_coverage'] = rmsp_data.get('c', [])

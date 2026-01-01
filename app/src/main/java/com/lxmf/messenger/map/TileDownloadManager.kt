@@ -1,6 +1,7 @@
 package com.lxmf.messenger.map
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -9,7 +10,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -116,6 +119,9 @@ class TileDownloadManager(
             val bounds = MBTilesWriter.boundsFromCenter(centerLat, centerLon, radiusKm)
             val tiles = calculateTilesForRegion(bounds, minZoom, maxZoom)
 
+            Log.d(TAG, "Download region: center=($centerLat, $centerLon), radius=$radiusKm km")
+            Log.d(TAG, "Calculated ${tiles.size} tiles across zoom levels $minZoom-$maxZoom")
+
             if (tiles.isEmpty()) {
                 _progress.value = _progress.value.copy(
                     status = DownloadProgress.Status.ERROR,
@@ -144,7 +150,9 @@ class TileDownloadManager(
             )
 
             writer.open()
-            writer.beginTransaction()
+            // Note: We use a mutex to serialize database writes since SQLite connections
+            // are not thread-safe across different coroutine dispatcher threads
+            val writeMutex = Mutex()
 
             try {
                 // Download tiles with concurrency limit
@@ -162,6 +170,7 @@ class TileDownloadManager(
 
                         val zoomTiles = tilesByZoom[zoom] ?: continue
 
+                        Log.d(TAG, "Starting zoom level $zoom with ${zoomTiles.size} tiles")
                         _progress.value = _progress.value.copy(currentZoom = zoom)
 
                         val results = zoomTiles.map { tile ->
@@ -174,11 +183,13 @@ class TileDownloadManager(
                             }
                         }.awaitAll()
 
-                        // Write successful tiles
+                        // Write successful tiles (serialized with mutex)
                         for ((index, data) in results.withIndex()) {
                             if (data != null) {
                                 val tile = zoomTiles[index]
-                                writer.writeTile(tile.z, tile.x, tile.y, data)
+                                writeMutex.withLock {
+                                    writer.writeTile(tile.z, tile.x, tile.y, data)
+                                }
                                 downloadedCount++
                                 totalBytes += data.size
                             } else {
@@ -195,7 +206,6 @@ class TileDownloadManager(
                 }
 
                 if (isCancelled) {
-                    writer.endTransaction(success = false)
                     writer.close()
                     outputFile.delete()
 
@@ -210,7 +220,6 @@ class TileDownloadManager(
                     status = DownloadProgress.Status.WRITING,
                 )
 
-                writer.endTransaction(success = true)
                 writer.optimize()
                 writer.close()
 
@@ -220,7 +229,6 @@ class TileDownloadManager(
 
                 outputFile
             } catch (e: Exception) {
-                writer.endTransaction(success = false)
                 writer.close()
                 outputFile.delete()
                 throw e
@@ -322,17 +330,26 @@ class TileDownloadManager(
 
             val responseCode = connection.responseCode
             if (responseCode != HttpURLConnection.HTTP_OK) {
+                Log.w(TAG, "HTTP $responseCode for tile ${tile.z}/${tile.x}/${tile.y}")
                 throw IOException("HTTP $responseCode for $urlString")
             }
 
-            return connection.inputStream.use { it.readBytes() }
+            val data = connection.inputStream.use { it.readBytes() }
+            Log.v(TAG, "Downloaded tile ${tile.z}/${tile.x}/${tile.y} (${data.size} bytes)")
+            return data
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to download tile ${tile.z}/${tile.x}/${tile.y}: ${e.message}")
+            throw e
         } finally {
             connection.disconnect()
         }
     }
 
     companion object {
-        const val DEFAULT_TILE_URL = "https://tiles.openfreemap.org/planet"
+        private const val TAG = "TileDownloadManager"
+        // OpenFreeMap requires a version in the URL path
+        // This version should be updated periodically or fetched dynamically
+        const val DEFAULT_TILE_URL = "https://tiles.openfreemap.org/planet/20251224_001001_pt"
         const val CONCURRENT_DOWNLOADS = 4
         const val MAX_RETRIES = 3
         const val RETRY_DELAY_MS = 1000L

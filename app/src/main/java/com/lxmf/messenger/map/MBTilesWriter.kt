@@ -180,9 +180,11 @@ class MBTilesWriter(
     /**
      * Begin a transaction for bulk inserts.
      * Call [endTransaction] when done.
+     *
+     * Note: Uses IMMEDIATE transaction to avoid deadlocks with concurrent access.
      */
     fun beginTransaction() {
-        db?.beginTransaction()
+        db?.beginTransactionNonExclusive()
     }
 
     /**
@@ -191,10 +193,15 @@ class MBTilesWriter(
      */
     fun endTransaction(success: Boolean = true) {
         db?.let { database ->
-            if (success) {
-                database.setTransactionSuccessful()
+            try {
+                if (success && database.inTransaction()) {
+                    database.setTransactionSuccessful()
+                }
+            } finally {
+                if (database.inTransaction()) {
+                    database.endTransaction()
+                }
             }
-            database.endTransaction()
         }
     }
 

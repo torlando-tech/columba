@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens.settings.cards
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -154,7 +155,11 @@ private fun MapSourceToggle(
     isDisabled: Boolean = false,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !isDisabled) {
+                onEnabledChange(!enabled)
+            },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {

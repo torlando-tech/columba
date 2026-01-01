@@ -308,6 +308,11 @@ class SettingsViewModel
                             activeSharingSessions = _state.value.activeSharingSessions,
                             defaultSharingDuration = _state.value.defaultSharingDuration,
                             locationPrecisionRadius = _state.value.locationPrecisionRadius,
+                            // Preserve map source state from loadMapSourceSettings()
+                            mapSourceHttpEnabled = _state.value.mapSourceHttpEnabled,
+                            mapSourceRmspEnabled = _state.value.mapSourceRmspEnabled,
+                            rmspServerCount = _state.value.rmspServerCount,
+                            hasOfflineMaps = _state.value.hasOfflineMaps,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value

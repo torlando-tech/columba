@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -89,6 +90,7 @@ fun OfflineMapsScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToDownload,
+                modifier = Modifier.navigationBarsPadding(),
                 containerColor = MaterialTheme.colorScheme.primary,
             ) {
                 Icon(

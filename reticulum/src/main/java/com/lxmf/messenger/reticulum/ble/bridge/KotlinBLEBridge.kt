@@ -374,7 +374,7 @@ class KotlinBLEBridge(
                         put("rssi", rssi)
                         put("peerName", device?.name ?: "No Name")
                         put("firstSeen", device?.firstSeen ?: peer.connectedAt)
-                        put("lastSeen", device?.lastSeen ?: System.currentTimeMillis())
+                        put("lastSeen", peer.lastActivity)
                     }
                 jsonArray.put(jsonObj)
             }
@@ -458,6 +458,7 @@ class KotlinBLEBridge(
         var identityHash: String? = null, // 32-char hex
         val connectedAt: Long = System.currentTimeMillis(),
         var rssi: Int = -100, // Last known RSSI, -100 = unknown
+        var lastActivity: Long = System.currentTimeMillis(), // Last data exchange
     )
 
     /**
@@ -1180,6 +1181,9 @@ class KotlinBLEBridge(
                 return
             }
 
+            // Update last activity timestamp for this peer
+            peer.lastActivity = System.currentTimeMillis()
+
             // Data is now a pre-formatted fragment from the Python layer
             Log.d(TAG, "Sending ${data.size} byte fragment to $targetAddress")
 
@@ -1307,7 +1311,7 @@ class KotlinBLEBridge(
                         mtu = peer.mtu,
                         connectedAt = peer.connectedAt,
                         firstSeen = device?.firstSeen ?: peer.connectedAt,
-                        lastSeen = device?.lastSeen ?: System.currentTimeMillis(),
+                        lastSeen = peer.lastActivity,
                         rssi = device?.rssi ?: -100,
                     ),
                 )
@@ -1350,7 +1354,7 @@ class KotlinBLEBridge(
                     mtu = peer.mtu,
                     connectedAt = peer.connectedAt,
                     firstSeen = device?.firstSeen ?: peer.connectedAt,
-                    lastSeen = device?.lastSeen ?: System.currentTimeMillis(),
+                    lastSeen = peer.lastActivity,
                     rssi = finalRssi,
                 ),
             )
@@ -1705,6 +1709,9 @@ class KotlinBLEBridge(
                 Log.w(TAG, "BLE packet too large: ${fragment.size} bytes (max $MAX_BLE_PACKET_SIZE), discarding")
                 return
             }
+
+            // Update last activity timestamp for this peer
+            connectedPeers[address]?.lastActivity = System.currentTimeMillis()
 
             // Pass the raw fragment to the Python layer for reassembly
             Log.d(TAG, "Received ${fragment.size} byte fragment from $address")

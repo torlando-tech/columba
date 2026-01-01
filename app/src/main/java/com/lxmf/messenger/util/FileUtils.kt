@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import java.io.File
 import androidx.compose.material.icons.Icons
 import java.util.Locale
 import androidx.compose.material.icons.filled.AudioFile
@@ -30,17 +31,16 @@ object FileUtils {
     const val MAX_TOTAL_ATTACHMENT_SIZE = 512 * 1024 // 512KB
 
     /**
-     * Maximum size for a single file attachment.
-     */
-    const val MAX_SINGLE_FILE_SIZE = 512 * 1024 // 512KB
-
-    /**
      * Read file data from a content URI.
+     *
+     * File attachments have no size limit - they are sent uncompressed.
+     * For large files, users should be aware that transmission over mesh
+     * networks may be slow or unreliable.
      *
      * @param context Android context for ContentResolver access
      * @param uri The content URI of the file to read
      * @return FileAttachment containing the file data and metadata, or null if the file
-     *         couldn't be read or exceeds size limits
+     *         couldn't be read
      */
     fun readFileFromUri(
         context: Context,
@@ -58,11 +58,6 @@ object FileUtils {
             // Read data
             contentResolver.openInputStream(uri)?.use { inputStream ->
                 val data = inputStream.readBytes()
-
-                if (data.size > MAX_SINGLE_FILE_SIZE) {
-                    Log.w(TAG, "File too large: ${data.size} bytes (max: $MAX_SINGLE_FILE_SIZE)")
-                    return null
-                }
 
                 FileAttachment(
                     filename = filename,
@@ -218,5 +213,68 @@ object FileUtils {
         newFileSize: Int,
     ): Boolean {
         return (currentTotal + newFileSize) > MAX_TOTAL_ATTACHMENT_SIZE
+    }
+
+    /**
+     * Threshold for file-based transfer via temp files.
+     * Files larger than this are written to disk and passed via path to avoid
+     * Android Binder IPC transaction size limits (~1MB).
+     */
+    const val FILE_TRANSFER_THRESHOLD = 500 * 1024 // 500KB
+
+    private const val TEMP_ATTACHMENTS_DIR = "attachments"
+
+    /**
+     * Write file data to a temporary file for large file transfer.
+     *
+     * Used to bypass Android Binder IPC size limits by passing file paths
+     * instead of raw bytes through AIDL.
+     *
+     * @param context Android context for accessing cache directory
+     * @param filename Original filename (used as suffix for temp file)
+     * @param data File data to write
+     * @return The temporary file containing the data
+     */
+    fun writeTempAttachment(
+        context: Context,
+        filename: String,
+        data: ByteArray,
+    ): File {
+        val tempDir = File(context.cacheDir, TEMP_ATTACHMENTS_DIR)
+        if (!tempDir.exists()) {
+            tempDir.mkdirs()
+        }
+        // Use timestamp prefix to ensure uniqueness
+        val safeFilename = filename.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val tempFile = File(tempDir, "${System.currentTimeMillis()}_$safeFilename")
+        tempFile.writeBytes(data)
+        Log.d(TAG, "Wrote temp attachment: ${tempFile.absolutePath} (${data.size} bytes)")
+        return tempFile
+    }
+
+    /**
+     * Clean up old temporary attachment files.
+     *
+     * Call this periodically to remove any orphaned temp files that weren't
+     * cleaned up by Python after sending.
+     *
+     * @param context Android context for accessing cache directory
+     * @param maxAgeMs Maximum age in milliseconds before files are deleted (default: 1 hour)
+     */
+    fun cleanupTempAttachments(
+        context: Context,
+        maxAgeMs: Long = 60 * 60 * 1000,
+    ) {
+        val tempDir = File(context.cacheDir, TEMP_ATTACHMENTS_DIR)
+        if (!tempDir.exists()) return
+
+        val cutoffTime = System.currentTimeMillis() - maxAgeMs
+        tempDir.listFiles()?.forEach { file ->
+            if (file.lastModified() < cutoffTime) {
+                if (file.delete()) {
+                    Log.d(TAG, "Cleaned up old temp attachment: ${file.name}")
+                }
+            }
+        }
     }
 }

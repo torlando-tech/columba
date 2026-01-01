@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -245,6 +246,12 @@ fun MessagingScreen(
         }
     }
 
+    // State for compression warning dialog
+    var pendingCompressionResult by remember {
+        mutableStateOf<com.lxmf.messenger.util.ImageUtils.CompressionResult?>(null)
+    }
+    var showCompressionWarningDialog by remember { mutableStateOf(false) }
+
     // Image picker launcher
     val imageLauncher =
         rememberLauncherForActivityResult(
@@ -254,11 +261,21 @@ fun MessagingScreen(
                 viewModel.setProcessingImage(true)
                 scope.launch(Dispatchers.IO) {
                     try {
-                        val compressed = com.lxmf.messenger.util.ImageUtils.compressImage(context, it)
+                        val result = com.lxmf.messenger.util.ImageUtils.compressImageWithMetadata(
+                            context,
+                            it,
+                        )
                         withContext(Dispatchers.Main) {
                             viewModel.setProcessingImage(false)
-                            if (compressed != null) {
-                                viewModel.selectImage(compressed.data, compressed.format)
+                            if (result != null) {
+                                if (result.needsUserConfirmation) {
+                                    // Show warning dialog for heavy compression
+                                    pendingCompressionResult = result
+                                    showCompressionWarningDialog = true
+                                } else {
+                                    // Normal compression, just attach
+                                    viewModel.selectImage(result.data, result.format)
+                                }
                             }
                         }
                     } catch (e: Exception) {
@@ -869,6 +886,92 @@ fun MessagingScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showStopSharingDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    // Heavy compression warning dialog
+    if (showCompressionWarningDialog && pendingCompressionResult != null) {
+        val result = pendingCompressionResult!!
+        AlertDialog(
+            onDismissRequest = {
+                showCompressionWarningDialog = false
+                pendingCompressionResult = null
+            },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            title = {
+                Text(
+                    if (result.exceedsSizeLimit) {
+                        "Image Too Large"
+                    } else {
+                        "Heavy Compression Required"
+                    },
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (result.exceedsSizeLimit) {
+                        Text(
+                            "This image exceeds the 512KB limit even after maximum compression. " +
+                                "It may fail to send over the mesh network.",
+                        )
+                    } else {
+                        Text(
+                            "This image requires heavy compression to fit the 512KB limit. " +
+                                "Quality will be reduced.",
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Original: ${result.originalSizeBytes / 1024}KB",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "Compressed: ${result.compressedSizeBytes / 1024}KB (${result.compressionRatioText})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "Quality: ${result.qualityUsed}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Tip: Send as a file attachment to avoid compression.",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.selectImage(result.data, result.format)
+                        showCompressionWarningDialog = false
+                        pendingCompressionResult = null
+                    },
+                ) {
+                    Text(if (result.exceedsSizeLimit) "Send Anyway" else "Attach")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showCompressionWarningDialog = false
+                        pendingCompressionResult = null
+                    },
+                ) {
                     Text("Cancel")
                 }
             },

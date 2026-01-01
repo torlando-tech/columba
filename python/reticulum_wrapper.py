@@ -2812,7 +2812,7 @@ class ReticulumWrapper:
                 log_debug("ReticulumWrapper", "send_location_telemetry",
                           f"Sending Sideband-compatible telemetry in FIELD_TELEMETRY (0x02)")
 
-            # Create LXMF message with location telemetry (empty content body for telemetry-only)
+            # Create LXMF message with location telemetry
             lxmf_message = LXMF.LXMessage(
                 destination=recipient_lxmf_destination,
                 source=self.local_lxmf_destination,
@@ -3020,7 +3020,8 @@ class ReticulumWrapper:
     def send_lxmf_message_with_method(self, dest_hash: bytes, content: str, source_identity_private_key: bytes,
                                        delivery_method: str = "direct", try_propagation_on_fail: bool = True,
                                        image_data: bytes = None, image_format: str = None,
-                                       file_attachments: list = None, reply_to_message_id: str = None,
+                                       file_attachments: list = None, file_attachment_paths: list = None,
+                                       reply_to_message_id: str = None,
                                        icon_name: str = None, icon_fg_color: str = None, icon_bg_color: str = None) -> Dict:
         """
         Send an LXMF message with explicit delivery method.
@@ -3033,7 +3034,10 @@ class ReticulumWrapper:
             try_propagation_on_fail: If True and direct fails, retry via propagation
             image_data: Optional image data bytes
             image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
-            file_attachments: Optional list of [filename, bytes] pairs for Field 5
+            file_attachments: Optional list of [filename, bytes] pairs for Field 5 (small files)
+            file_attachment_paths: Optional list of [filename, path] pairs for large files
+                                   Files are read from disk to bypass Android Binder IPC limits.
+                                   Temp files are deleted after reading.
             reply_to_message_id: Optional message ID being replied to (stored in Field 16)
             icon_name: Optional icon name for FIELD_ICON_APPEARANCE (Sideband/MeshChat interop)
             icon_fg_color: Optional foreground color hex string (3 bytes RGB)
@@ -3129,21 +3133,23 @@ class ReticulumWrapper:
             if image_data and image_format:
                 if hasattr(image_data, '__iter__') and not isinstance(image_data, (bytes, bytearray)):
                     image_data = bytes(image_data)
-                fields = {6: [image_format, image_data]}
+                fields = {LXMF.FIELD_IMAGE: [image_format, image_data]}
                 log_info("ReticulumWrapper", "send_lxmf_message_with_method",
-                        f"📎 Attaching image: {len(image_data)} bytes, format={image_format}")
+                        f"📎 Attaching image: {len(image_data)} bytes, format={image_format}, "
+                        f"field_key={LXMF.FIELD_IMAGE}, format_type={type(image_format).__name__}, "
+                        f"data_type={type(image_data).__name__}")
 
             # Add file attachments to Field 5 if provided
+            converted_attachments = []
+
+            # Process small file attachments (bytes passed via Binder)
             if file_attachments:
-                if fields is None:
-                    fields = {}
                 # Convert Java ArrayList to Python list if needed
                 if hasattr(file_attachments, 'toArray'):
                     file_attachments = list(file_attachments.toArray())
                 elif hasattr(file_attachments, '__iter__') and not isinstance(file_attachments, (list, tuple)):
                     file_attachments = list(file_attachments)
                 # Convert each attachment: [filename, bytes]
-                converted_attachments = []
                 for attachment in file_attachments:
                     # Convert Java List to Python list if needed
                     if hasattr(attachment, 'toArray'):
@@ -3157,11 +3163,52 @@ class ReticulumWrapper:
                         if hasattr(data, '__iter__') and not isinstance(data, (bytes, bytearray)):
                             data = bytes(data)
                         converted_attachments.append([filename, data])
-                if converted_attachments:
-                    fields[5] = converted_attachments
-                    total_size = sum(len(a[1]) for a in converted_attachments)
-                    log_info("ReticulumWrapper", "send_lxmf_message_with_method",
-                            f"📎 Attaching {len(converted_attachments)} file(s): {total_size} bytes total")
+
+            # Process large file attachments (read from disk paths)
+            # These files were written to temp by Kotlin to bypass Binder IPC limits
+            if file_attachment_paths:
+                # Convert Java ArrayList to Python list if needed
+                if hasattr(file_attachment_paths, 'toArray'):
+                    file_attachment_paths = list(file_attachment_paths.toArray())
+                elif hasattr(file_attachment_paths, '__iter__') and not isinstance(file_attachment_paths, (list, tuple)):
+                    file_attachment_paths = list(file_attachment_paths)
+
+                for path_info in file_attachment_paths:
+                    # Convert Java List to Python list if needed
+                    if hasattr(path_info, 'toArray'):
+                        path_info = list(path_info.toArray())
+                    elif hasattr(path_info, '__iter__') and not isinstance(path_info, (list, tuple)):
+                        path_info = list(path_info)
+
+                    if len(path_info) >= 2:
+                        filename = str(path_info[0])
+                        file_path = str(path_info[1])
+                        try:
+                            with open(file_path, 'rb') as f:
+                                data = f.read()
+                            converted_attachments.append([filename, data])
+                            log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                                    f"📎 Read large file from disk: {filename} ({len(data)} bytes)")
+                            # Delete the temp file after reading
+                            try:
+                                import os
+                                os.remove(file_path)
+                                log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                                        f"🗑️ Deleted temp file: {file_path}")
+                            except Exception as del_err:
+                                log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                                           f"Failed to delete temp file {file_path}: {del_err}")
+                        except Exception as read_err:
+                            log_error("ReticulumWrapper", "send_lxmf_message_with_method",
+                                     f"Failed to read file from {file_path}: {read_err}")
+
+            if converted_attachments:
+                if fields is None:
+                    fields = {}
+                fields[5] = converted_attachments
+                total_size = sum(len(a[1]) for a in converted_attachments)
+                log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                        f"📎 Attaching {len(converted_attachments)} file(s): {total_size} bytes total")
 
             # Add Field 16 (app extensions) for reply_to and future features
             # Field 16 is a dict that can contain: {"reply_to": "message_id", "reactions": {...}, etc.}
@@ -3355,7 +3402,7 @@ class ReticulumWrapper:
                      f"Field 16: {app_extensions}")
 
             # Reactions are small, use OPPORTUNISTIC for fast delivery
-            # Empty content since all data is in Field 16
+            # Empty content - Sideband doesn't support reactions anyway
             lxmf_message = LXMF.LXMessage(
                 destination=recipient_lxmf_destination,
                 source=self.local_lxmf_destination,

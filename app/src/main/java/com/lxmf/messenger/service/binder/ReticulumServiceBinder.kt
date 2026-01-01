@@ -650,6 +650,7 @@ class ReticulumServiceBinder(
         imageData: ByteArray?,
         imageFormat: String?,
         fileAttachments: Map<*, *>?,
+        fileAttachmentPaths: Map<*, *>?,
         replyToMessageId: String?,
         iconName: String?,
         iconFgColor: String?,
@@ -663,6 +664,13 @@ class ReticulumServiceBinder(
                         listOf(filename as String, bytes as ByteArray)
                     }
 
+                // Convert Map<String, String> to List of (filename, path) pairs for Python
+                // These are large files written to temp files to bypass Binder IPC limits
+                val fileAttachmentPathsList =
+                    fileAttachmentPaths?.map { (filename, path) ->
+                        listOf(filename as String, path as String)
+                    }
+
                 val result =
                     wrapper.callAttr(
                         "send_lxmf_message_with_method",
@@ -674,6 +682,7 @@ class ReticulumServiceBinder(
                         imageData,
                         imageFormat,
                         fileAttachmentsList,
+                        fileAttachmentPathsList,
                         replyToMessageId,
                         iconName,
                         iconFgColor,

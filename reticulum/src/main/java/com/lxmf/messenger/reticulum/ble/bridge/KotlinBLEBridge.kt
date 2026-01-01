@@ -1711,7 +1711,19 @@ class KotlinBLEBridge(
             }
 
             // Update last activity timestamp for this peer
-            connectedPeers[address]?.lastActivity = System.currentTimeMillis()
+            // Use identity-based lookup to handle MAC address rotation
+            var peer = connectedPeers[address]
+            if (peer == null) {
+                // Try resolving via identity (handles address changes after deduplication)
+                val identityHash = addressToIdentity[address]
+                if (identityHash != null) {
+                    val currentAddress = identityToAddress[identityHash]
+                    if (currentAddress != null) {
+                        peer = connectedPeers[currentAddress]
+                    }
+                }
+            }
+            peer?.lastActivity = System.currentTimeMillis()
 
             // Pass the raw fragment to the Python layer for reassembly
             Log.d(TAG, "Received ${fragment.size} byte fragment from $address")

@@ -2121,6 +2121,53 @@ class RNodeWizardViewModelTest {
             coVerify(exactly = 0) { interfaceRepository.insertInterface(any()) }
         }
 
+    @Test
+    fun `saveConfiguration succeeds in edit mode with same name`() =
+        runTest {
+            val interfaceId = 42L
+            val entity =
+                InterfaceEntity(
+                    id = interfaceId,
+                    name = "My RNode",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode":"tcp","tcp_host":"10.0.0.1"}""",
+                )
+            val existingConfig =
+                InterfaceConfig.RNode(
+                    name = "My RNode",
+                    enabled = true,
+                    connectionMode = "tcp",
+                    tcpHost = "10.0.0.1",
+                    tcpPort = 7633,
+                    targetDeviceName = "",
+                    frequency = 915000000,
+                    bandwidth = 125000,
+                    txPower = 17,
+                    spreadingFactor = 8,
+                    codingRate = 5,
+                )
+
+            // The interface exists in the list (would cause duplicate error without fix)
+            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingConfig))
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns existingConfig
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            // Save without changing the name
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNull(state.nameError) // No duplicate error
+                assertTrue(state.saveSuccess)
+            }
+            coVerify { interfaceRepository.updateInterface(interfaceId, any()) }
+        }
+
     // ========== Connection Type Tests ==========
 
     @Test

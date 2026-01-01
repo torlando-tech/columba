@@ -91,6 +91,11 @@ data class SettingsState(
     val imageCompressionPreset: ImageCompressionPreset = ImageCompressionPreset.AUTO,
     /** Optimal preset based on interfaces */
     val detectedCompressionPreset: ImageCompressionPreset? = null,
+    // Map source state
+    val mapSourceHttpEnabled: Boolean = true,
+    val mapSourceRmspEnabled: Boolean = false,
+    val rmspServerCount: Int = 0,
+    val hasOfflineMaps: Boolean = false,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -141,6 +146,8 @@ class SettingsViewModel
             // Always load location sharing settings (not dependent on monitors)
             loadLocationSharingSettings()
             loadImageCompressionSettings()
+            // Load map source settings
+            loadMapSourceSettings()
             // Always start sync state monitoring (no infinite loops, needed for UI)
             startSyncStateMonitor()
             if (enableMonitors) {
@@ -1391,6 +1398,58 @@ class SettingsViewModel
                 _state.value.detectedCompressionPreset ?: ImageCompressionPreset.HIGH
             } else {
                 current
+            }
+        }
+
+        // Map source methods
+
+        /**
+         * Load map source settings from the repository.
+         */
+        private fun loadMapSourceSettings() {
+            viewModelScope.launch {
+                settingsRepository.mapSourceHttpEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(mapSourceHttpEnabled = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.mapSourceRmspEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(mapSourceRmspEnabled = enabled) }
+                }
+            }
+        }
+
+        /**
+         * Set the HTTP map source enabled setting.
+         *
+         * @param enabled Whether HTTP map source is enabled
+         */
+        fun setMapSourceHttpEnabled(enabled: Boolean) {
+            // Prevent disabling both sources (unless offline maps are available)
+            if (!enabled && !_state.value.mapSourceRmspEnabled && !_state.value.hasOfflineMaps) {
+                Log.w(TAG, "Cannot disable HTTP when RMSP is also disabled and no offline maps")
+                return
+            }
+            viewModelScope.launch {
+                settingsRepository.saveMapSourceHttpEnabled(enabled)
+                Log.d(TAG, "HTTP map source ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the RMSP map source enabled setting.
+         *
+         * @param enabled Whether RMSP map source is enabled
+         */
+        fun setMapSourceRmspEnabled(enabled: Boolean) {
+            // Prevent disabling both sources (unless offline maps are available)
+            if (!enabled && !_state.value.mapSourceHttpEnabled && !_state.value.hasOfflineMaps) {
+                Log.w(TAG, "Cannot disable RMSP when HTTP is also disabled and no offline maps")
+                return
+            }
+            viewModelScope.launch {
+                settingsRepository.saveMapSourceRmspEnabled(enabled)
+                Log.d(TAG, "RMSP map source ${if (enabled) "enabled" else "disabled"}")
             }
         }
     }

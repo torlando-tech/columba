@@ -1,6 +1,7 @@
 package com.lxmf.messenger.di
 
 import android.content.Context
+import com.lxmf.messenger.data.repository.RmspServerRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
@@ -20,13 +21,23 @@ import javax.inject.Singleton
 object ReticulumModule {
     @Provides
     @Singleton
-    fun provideReticulumProtocol(
+    fun provideServiceReticulumProtocol(
         @ApplicationContext context: Context,
         settingsRepository: SettingsRepository,
-    ): ReticulumProtocol {
+        rmspServerRepository: RmspServerRepository,
+    ): ServiceReticulumProtocol {
         // Use Service-based implementation for real Reticulum backend
         // This runs Python/RNS in a separate service process with proper threading
+        return ServiceReticulumProtocol(context, settingsRepository, rmspServerRepository)
+    }
+
+    @Provides
+    @Singleton
+    fun provideReticulumProtocol(
+        serviceProtocol: ServiceReticulumProtocol,
+    ): ReticulumProtocol {
+        // Return the same instance for interface injection
         // To use mock for testing, change to: return MockReticulumProtocol()
-        return ServiceReticulumProtocol(context, settingsRepository)
+        return serviceProtocol
     }
 }

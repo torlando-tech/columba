@@ -64,6 +64,7 @@ import kotlin.coroutines.resumeWithException
 class ServiceReticulumProtocol(
     private val context: Context,
     private val settingsRepository: com.lxmf.messenger.repository.SettingsRepository,
+    private val rmspServerRepository: com.lxmf.messenger.data.repository.RmspServerRepository,
 ) : ReticulumProtocol {
     companion object {
         private const val TAG = "ServiceReticulumProtocol"
@@ -329,6 +330,11 @@ class ServiceReticulumProtocol(
                             Log.e(TAG, "Failed to emit announce to flow (buffer full?)")
                         }
                         Log.d(TAG, "Announce received via service: ${destinationHash.take(8).joinToString("") { "%02x".format(it) }}")
+
+                        // Handle RMSP map server announces
+                        if (aspect == "rmsp.maps") {
+                            handleRmspAnnounce(json, destinationHash, publicKey, hops)
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling announce callback", e)
@@ -2355,6 +2361,170 @@ class ServiceReticulumProtocol(
             publicKey = publicKey,
             iconAppearance = iconAppearance,
         )
+    }
+
+    /**
+     * Handle RMSP map server announce and store in repository.
+     */
+    private fun handleRmspAnnounce(
+        json: JSONObject,
+        destinationHash: ByteArray,
+        publicKey: ByteArray,
+        hops: Int,
+    ) {
+        try {
+            val serverName = json.optString("rmsp_server_name", "Unknown")
+            val version = json.optString("rmsp_version", "0.0.0")
+            val coverageArray = json.optJSONArray("rmsp_coverage")
+            val zoomRangeArray = json.optJSONArray("rmsp_zoom_range")
+            val formatsArray = json.optJSONArray("rmsp_formats")
+            val layersArray = json.optJSONArray("rmsp_layers")
+            val dataUpdated = json.optLong("rmsp_updated", 0)
+            val dataSize = if (json.has("rmsp_size") && !json.isNull("rmsp_size")) {
+                json.optLong("rmsp_size")
+            } else {
+                null
+            }
+
+            // Parse arrays
+            val coverage = mutableListOf<String>()
+            coverageArray?.let {
+                for (i in 0 until it.length()) {
+                    coverage.add(it.getString(i))
+                }
+            }
+
+            val zoomRange = mutableListOf<Int>()
+            zoomRangeArray?.let {
+                for (i in 0 until it.length()) {
+                    zoomRange.add(it.getInt(i))
+                }
+            }
+            val minZoom = zoomRange.getOrElse(0) { 0 }
+            val maxZoom = zoomRange.getOrElse(1) { 15 }
+
+            val formats = mutableListOf<String>()
+            formatsArray?.let {
+                for (i in 0 until it.length()) {
+                    formats.add(it.getString(i))
+                }
+            }
+            if (formats.isEmpty()) formats.add("pmtiles")
+
+            val layers = mutableListOf<String>()
+            layersArray?.let {
+                for (i in 0 until it.length()) {
+                    layers.add(it.getString(i))
+                }
+            }
+            if (layers.isEmpty()) layers.add("osm")
+
+            val destHashHex = destinationHash.toHexString()
+
+            Log.i(TAG, "🗺️ RMSP server announce: $serverName (coverage: ${coverage.size} areas, hops: $hops)")
+
+            // Store in repository using protocolScope
+            protocolScope.launch {
+                try {
+                    rmspServerRepository.upsertServer(
+                        destinationHash = destHashHex,
+                        serverName = serverName,
+                        publicKey = publicKey,
+                        coverageGeohashes = coverage,
+                        minZoom = minZoom,
+                        maxZoom = maxZoom,
+                        formats = formats,
+                        layers = layers,
+                        dataUpdatedTimestamp = dataUpdated,
+                        dataSize = dataSize,
+                        version = version,
+                        hops = hops,
+                    )
+                    Log.d(TAG, "RMSP server stored: $serverName")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to store RMSP server: ${e.message}", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing RMSP announce: ${e.message}", e)
+        }
+    }
+
+    // ===========================================
+    // RMSP Map Service Methods
+    // ===========================================
+
+    /**
+     * Get all discovered RMSP servers from the service.
+     */
+    suspend fun getRmspServers(): List<Map<String, Any>> {
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                val service = this@ServiceReticulumProtocol.service
+                    ?: return@withContext emptyList()
+
+                val resultJson = service.rmspServers
+                val jsonArray = JSONArray(resultJson)
+                val servers = mutableListOf<Map<String, Any>>()
+
+                for (i in 0 until jsonArray.length()) {
+                    val serverJson = jsonArray.getJSONObject(i)
+                    val serverMap = mutableMapOf<String, Any>()
+                    val keys = serverJson.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        serverMap[key] = serverJson.get(key)
+                    }
+                    servers.add(serverMap)
+                }
+
+                servers
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting RMSP servers", e)
+                emptyList()
+            }
+        }
+    }
+
+    /**
+     * Fetch map tiles from an RMSP server.
+     *
+     * @param destinationHashHex Server destination hash as hex string
+     * @param publicKey Server's RNS identity public key (for establishing link)
+     * @param geohash Geohash area to fetch
+     * @param zoomMin Minimum zoom level
+     * @param zoomMax Maximum zoom level
+     * @param timeoutMs Request timeout in milliseconds
+     * @return Raw tile data bytes in RMSP format, or null on failure
+     */
+    suspend fun fetchRmspTiles(
+        destinationHashHex: String,
+        publicKey: ByteArray,
+        geohash: String,
+        zoomMin: Int,
+        zoomMax: Int,
+        timeoutMs: Long = 3600_000L,
+    ): ByteArray? {
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                val service = this@ServiceReticulumProtocol.service
+                    ?: throw IllegalStateException("Service not bound")
+
+                Log.d(TAG, "🗺️ Fetching RMSP tiles: geohash=$geohash, zoom=$zoomMin-$zoomMax")
+
+                service.fetchRmspTiles(
+                    destinationHashHex,
+                    publicKey,
+                    geohash,
+                    zoomMin,
+                    zoomMax,
+                    timeoutMs,
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching RMSP tiles", e)
+                null
+            }
+        }
     }
 
     // Helper extension functions

@@ -6565,14 +6565,15 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "query_rmsp_server", f"Error: {e}")
             return {'available': False, 'geohash': geohash, 'error_message': str(e)}
 
-    def fetch_rmsp_tiles(self, destination_hash_hex: str, geohash: str,
-                         zoom_range: List[int] = None, format: str = None,
-                         timeout: float = 3600.0) -> bytes:
+    def fetch_rmsp_tiles(self, destination_hash_hex: str, public_key: bytes,
+                         geohash: str, zoom_range: List[int] = None,
+                         format: str = None, timeout: float = 3600.0) -> bytes:
         """
         Fetch tile data from an RMSP server.
 
         Args:
             destination_hash_hex: Server destination hash as hex string
+            public_key: Server's RNS identity public key (for establishing link)
             geohash: Geohash area to fetch
             zoom_range: Optional [min_zoom, max_zoom]
             format: Optional format (pmtiles, micro)
@@ -6585,7 +6586,7 @@ class ReticulumWrapper:
             client = self._get_rmsp_client()
             if client is None:
                 return bytes()
-            data = client.fetch_tiles(destination_hash_hex, geohash, zoom_range, format, timeout)
+            data = client.fetch_tiles(destination_hash_hex, public_key, geohash, zoom_range, format, timeout)
             return data if data else bytes()
         except Exception as e:
             log_error("ReticulumWrapper", "fetch_rmsp_tiles", f"Error: {e}")

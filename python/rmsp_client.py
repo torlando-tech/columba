@@ -197,7 +197,7 @@ class RmspClientWrapper:
 
             self.servers[destination_hash] = server
             log_info("RmspClient", "parse_rmsp_announce",
-                     f"Discovered RMSP server: {server.name} (hops: {hops})")
+                     f"Discovered RMSP server: {server.name} hash={destination_hash.hex()[:16]} (hops: {hops})")
 
             return server
 
@@ -331,6 +331,7 @@ class RmspClientWrapper:
     def fetch_tiles(
         self,
         destination_hash_hex: str,
+        public_key: bytes,
         geohash: str,
         zoom_range: Optional[List[int]] = None,
         format: Optional[str] = None,
@@ -341,6 +342,7 @@ class RmspClientWrapper:
 
         Args:
             destination_hash_hex: Server destination hash as hex string
+            public_key: Server's RNS identity public key (for establishing link)
             geohash: Geohash area to fetch
             zoom_range: Optional [min_zoom, max_zoom]
             format: Optional format (pmtiles, micro)
@@ -353,9 +355,54 @@ class RmspClientWrapper:
 
         try:
             dest_hash = bytes.fromhex(destination_hash_hex)
+
+            # Try to get server from cache first (populated by announces)
             server = self.servers.get(dest_hash)
+
+            # If not in cache, wait for an announce to arrive
             if not server:
-                log_error("RmspClient", "fetch_tiles", "Server not found")
+                log_info("RmspClient", "fetch_tiles",
+                        f"Server not in cache, waiting for announce...")
+                wait_timeout = min(timeout, 60.0)  # Wait up to 60s for announce
+                start = time.time()
+                while not server and (time.time() - start) < wait_timeout:
+                    time.sleep(1.0)
+                    server = self.servers.get(dest_hash)
+                    if server:
+                        log_info("RmspClient", "fetch_tiles",
+                                f"Server appeared in cache after {time.time() - start:.1f}s")
+
+            # If still not in cache but we have public key, create from public key
+            if not server and public_key:
+                log_info("RmspClient", "fetch_tiles",
+                        f"Server not discovered, creating from public key")
+                try:
+                    # Create identity from public key
+                    identity = RNS.Identity(create_keys=False)
+                    identity.load_public_key(public_key)
+
+                    # Create a temporary server info
+                    server = RmspServerInfo(
+                        destination_hash=dest_hash,
+                        identity=identity,
+                        version="0.1.0",
+                        name="Remote Server",
+                        coverage=[],
+                        zoom_range=(0, 15),
+                        formats=[FORMAT_PMTILES],
+                        layers=["osm"],
+                        updated=0,
+                        hops=0,
+                    )
+                    log_info("RmspClient", "fetch_tiles",
+                            "Created server info from public key")
+                except Exception as e:
+                    log_error("RmspClient", "fetch_tiles",
+                             f"Failed to create identity from public key: {e}")
+                    return None
+
+            if not server:
+                log_error("RmspClient", "fetch_tiles", "Server not found and no public key")
                 return None
 
             # Build request
@@ -405,6 +452,28 @@ class RmspClientWrapper:
             return None
 
         try:
+            # First check if we have a path to this destination
+            dest_hash_hex = server.destination_hash.hex()[:16]
+            log_info("RmspClient", "_establish_link",
+                    f"Checking path to {dest_hash_hex}...")
+
+            if not RNS.Transport.has_path(server.destination_hash):
+                log_info("RmspClient", "_establish_link",
+                        f"No path to {dest_hash_hex}, requesting...")
+                RNS.Transport.request_path(server.destination_hash)
+
+                # Wait for path to be established
+                path_timeout = min(timeout, 30.0)
+                start = time.time()
+                while not RNS.Transport.has_path(server.destination_hash):
+                    if time.time() - start > path_timeout:
+                        log_error("RmspClient", "_establish_link",
+                                 "Path request timeout")
+                        return None
+                    time.sleep(0.5)
+                log_info("RmspClient", "_establish_link", "Path established")
+
+            # Create destination
             dest = RNS.Destination(
                 server.identity,
                 RNS.Destination.OUT,
@@ -412,7 +481,9 @@ class RmspClientWrapper:
                 RMSP_APP_NAME,
                 RMSP_ASPECT,
             )
-            dest.set_default_app_data(server.destination_hash)
+
+            log_debug("RmspClient", "_establish_link",
+                     f"Creating link to {server.destination_hash.hex()[:16]}...")
 
             link = RNS.Link(dest)
 
@@ -427,10 +498,13 @@ class RmspClientWrapper:
                     return None
                 time.sleep(0.1)
 
+            log_info("RmspClient", "_establish_link", "Link active")
             return link
 
         except Exception as e:
+            import traceback
             log_error("RmspClient", "_establish_link", f"Error: {e}")
+            log_error("RmspClient", "_establish_link", f"Traceback: {traceback.format_exc()}")
             return None
 
     def _request(

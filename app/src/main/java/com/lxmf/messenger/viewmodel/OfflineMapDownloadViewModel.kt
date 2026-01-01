@@ -2,17 +2,23 @@ package com.lxmf.messenger.viewmodel
 
 import android.content.Context
 import android.location.Location
+import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
+import com.lxmf.messenger.data.repository.RmspServerRepository
+import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.map.TileDownloadManager
+import com.lxmf.messenger.map.TileSource
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
@@ -102,7 +108,14 @@ class OfflineMapDownloadViewModel
     constructor(
         @ApplicationContext private val context: Context,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
+        private val mapTileSourceManager: MapTileSourceManager,
+        private val rmspServerRepository: RmspServerRepository,
+        private val reticulumProtocol: ServiceReticulumProtocol,
     ) : ViewModel() {
+        companion object {
+            private const val TAG = "OfflineMapDownloadVM"
+        }
+
         private val _state = MutableStateFlow(OfflineMapDownloadState())
         val state: StateFlow<OfflineMapDownloadState> = _state.asStateFlow()
 
@@ -251,6 +264,10 @@ class OfflineMapDownloadViewModel
 
             viewModelScope.launch {
                 try {
+                    // Determine tile source based on settings
+                    val tileSource = determineTileSource()
+                    Log.d(TAG, "Using tile source: ${tileSource::class.simpleName}")
+
                     // Create database record
                     val regionId = offlineMapRegionRepository.createRegion(
                         name = name,
@@ -268,8 +285,8 @@ class OfflineMapDownloadViewModel
                     val filename = TileDownloadManager.generateFilename(name)
                     val outputFile = File(outputDir, filename)
 
-                    // Create download manager if needed
-                    val manager = downloadManager ?: TileDownloadManager(context).also {
+                    // Create download manager with the determined tile source
+                    val manager = TileDownloadManager(context, tileSource).also {
                         downloadManager = it
                     }
 
@@ -334,6 +351,65 @@ class OfflineMapDownloadViewModel
                     }
                 }
             }
+        }
+
+        /**
+         * Determine which tile source to use based on settings.
+         *
+         * Priority:
+         * 1. If HTTP is enabled, use HTTP
+         * 2. If HTTP is disabled but RMSP is enabled, use RMSP via service
+         * 3. Otherwise, throw an error
+         */
+        private suspend fun determineTileSource(): TileSource {
+            val httpEnabled = mapTileSourceManager.httpEnabledFlow.first()
+            val rmspEnabled = mapTileSourceManager.rmspEnabledFlow.first()
+
+            Log.d(TAG, "Determining tile source: HTTP=$httpEnabled, RMSP=$rmspEnabled")
+
+            // If HTTP is enabled, use it
+            if (httpEnabled) {
+                Log.d(TAG, "Using HTTP tile source")
+                return TileSource.Http()
+            }
+
+            // If RMSP is enabled, find a server and use it
+            if (rmspEnabled) {
+                val servers = rmspServerRepository.getAllServers().first()
+                if (servers.isEmpty()) {
+                    throw IllegalStateException(
+                        "No RMSP servers discovered. Connect to the mesh network and wait for server announces.",
+                    )
+                }
+
+                // Use the nearest server (lowest hop count)
+                val server = servers.minByOrNull { it.hops } ?: servers.first()
+                Log.d(TAG, "Using RMSP server: ${server.serverName} (hops: ${server.hops})")
+
+                // Capture server public key for the lambda
+                val serverPublicKey = server.publicKey
+
+                return TileSource.Rmsp(
+                    serverHash = server.destinationHash,
+                    fetchTiles = { geohash, zoomRange ->
+                        val zoomMin = zoomRange.minOrNull() ?: 0
+                        val zoomMax = zoomRange.maxOrNull() ?: 14
+                        reticulumProtocol.fetchRmspTiles(
+                            destinationHashHex = server.destinationHash,
+                            publicKey = serverPublicKey,
+                            geohash = geohash,
+                            zoomMin = zoomMin,
+                            zoomMax = zoomMax,
+                            timeoutMs = 3600_000L, // 1 hour timeout for large downloads
+                        )
+                    },
+                )
+            }
+
+            // No valid source
+            throw IllegalStateException(
+                "No tile source available. Please enable HTTP or RMSP in Settings > Map Sources.",
+            )
         }
 
         override fun onCleared() {

@@ -363,12 +363,21 @@ class KotlinBLEBridge(
                 val device = deviceMap[peer.address]
                 // Use stored peer.rssi first, then fall back to scanner cache
                 val rssi = if (peer.rssi != -100) peer.rssi else device?.rssi ?: -100
+                // Use effective connection type based on deduplication state
+                val effectiveCentral = when (peer.deduplicationState) {
+                    DeduplicationState.CLOSING_CENTRAL -> false
+                    else -> peer.isCentral
+                }
+                val effectivePeripheral = when (peer.deduplicationState) {
+                    DeduplicationState.CLOSING_PERIPHERAL -> false
+                    else -> peer.isPeripheral
+                }
                 val jsonObj =
                     org.json.JSONObject().apply {
                         put("identityHash", peer.identityHash ?: "unknown")
                         put("address", peer.address)
-                        put("hasCentralConnection", peer.isCentral)
-                        put("hasPeripheralConnection", peer.isPeripheral)
+                        put("hasCentralConnection", effectiveCentral)
+                        put("hasPeripheralConnection", effectivePeripheral)
                         put("mtu", peer.mtu)
                         put("connectedAt", peer.connectedAt)
                         put("rssi", rssi)
@@ -448,6 +457,25 @@ class KotlinBLEBridge(
     private var identityReadyCallback: (() -> Unit)? = null
 
     /**
+     * Tracks deduplication state when closing one of two connections to the same peer.
+     * Used to report correct connection type to UI while disconnect is pending.
+     */
+    private enum class DeduplicationState {
+        NONE,              // Normal state - use actual isCentral/isPeripheral flags
+        CLOSING_CENTRAL,   // Keeping peripheral, central disconnect is pending
+        CLOSING_PERIPHERAL // Keeping central, peripheral disconnect is pending
+    }
+
+    /**
+     * Action to take after mutex for deduplication (avoids calling disconnect inside mutex).
+     */
+    private enum class DedupeAction {
+        NONE,
+        CLOSE_CENTRAL,
+        CLOSE_PERIPHERAL
+    }
+
+    /**
      * Data class to track peer connection state.
      */
     private data class PeerConnection(
@@ -459,6 +487,7 @@ class KotlinBLEBridge(
         val connectedAt: Long = System.currentTimeMillis(),
         var rssi: Int = -100, // Last known RSSI, -100 = unknown
         var lastActivity: Long = System.currentTimeMillis(), // Last data exchange
+        var deduplicationState: DeduplicationState = DeduplicationState.NONE,
     )
 
     /**
@@ -1300,14 +1329,23 @@ class KotlinBLEBridge(
                 val device = deviceMap[peer.address]
                 // Fallback to addressToIdentity if peer.identityHash not set (race condition)
                 val identity = peer.identityHash ?: addressToIdentity[peer.address]
+                // Use effective connection type based on deduplication state
+                val effectiveCentral = when (peer.deduplicationState) {
+                    DeduplicationState.CLOSING_CENTRAL -> false
+                    else -> peer.isCentral
+                }
+                val effectivePeripheral = when (peer.deduplicationState) {
+                    DeduplicationState.CLOSING_PERIPHERAL -> false
+                    else -> peer.isPeripheral
+                }
 
                 details.add(
                     BleConnectionDetails(
                         identityHash = identity ?: "unknown",
                         peerName = device?.name ?: identity?.take(8) ?: "Unknown",
                         currentMac = peer.address,
-                        hasCentralConnection = peer.isCentral,
-                        hasPeripheralConnection = peer.isPeripheral,
+                        hasCentralConnection = effectiveCentral,
+                        hasPeripheralConnection = effectivePeripheral,
                         mtu = peer.mtu,
                         connectedAt = peer.connectedAt,
                         firstSeen = device?.firstSeen ?: peer.connectedAt,
@@ -1344,13 +1382,22 @@ class KotlinBLEBridge(
             val identity = peer.identityHash ?: addressToIdentity[peer.address]
 
             val finalRssi = if (peer.rssi != -100) peer.rssi else device?.rssi ?: -100
+            // Use effective connection type based on deduplication state
+            val effectiveCentral = when (peer.deduplicationState) {
+                DeduplicationState.CLOSING_CENTRAL -> false
+                else -> peer.isCentral
+            }
+            val effectivePeripheral = when (peer.deduplicationState) {
+                DeduplicationState.CLOSING_PERIPHERAL -> false
+                else -> peer.isPeripheral
+            }
             details.add(
                 BleConnectionDetails(
                     identityHash = identity ?: "unknown",
                     peerName = device?.name ?: identity?.take(8) ?: "Unknown",
                     currentMac = peer.address,
-                    hasCentralConnection = peer.isCentral,
-                    hasPeripheralConnection = peer.isPeripheral,
+                    hasCentralConnection = effectiveCentral,
+                    hasPeripheralConnection = effectivePeripheral,
                     mtu = peer.mtu,
                     connectedAt = peer.connectedAt,
                     firstSeen = device?.firstSeen ?: peer.connectedAt,
@@ -1507,6 +1554,9 @@ class KotlinBLEBridge(
         val scannedDevice = scanner.getDevicesSnapshot()[address]
         val rssiAtConnection = scannedDevice?.rssi ?: -100
 
+        // Track deduplication action to perform after mutex (can't call disconnect inside mutex)
+        var dedupeAction = DedupeAction.NONE
+
         peersMutex.withLock {
             val peer =
                 connectedPeers.getOrPut(address) {
@@ -1530,14 +1580,31 @@ class KotlinBLEBridge(
                 peer.identityHash = existingIdentity
             }
 
-            // Log dual connection detection for monitoring (but don't deduplicate here)
+            // Handle dual connection - decide which to keep based on identity comparison
             if (peer.isCentral && peer.isPeripheral) {
-                Log.w(TAG, "Dual connection detected for $address - Python will handle deduplication")
                 dualConnectionRaceCount++
                 Log.d(TAG, "Dual connection count: $dualConnectionRaceCount")
+
+                val peerIdentity = addressToIdentity[address]
+                val localIdentityBytes = transportIdentityHash
+                if (peerIdentity != null && localIdentityBytes != null) {
+                    val localIdentityHex = localIdentityBytes.joinToString("") { "%02x".format(it) }
+                    // Lower identity hash keeps central role
+                    if (localIdentityHex < peerIdentity) {
+                        Log.i(TAG, "Deduplication: keeping central (local=$localIdentityHex < peer=$peerIdentity)")
+                        peer.deduplicationState = DeduplicationState.CLOSING_PERIPHERAL
+                        dedupeAction = DedupeAction.CLOSE_PERIPHERAL
+                    } else {
+                        Log.i(TAG, "Deduplication: keeping peripheral (local=$localIdentityHex > peer=$peerIdentity)")
+                        peer.deduplicationState = DeduplicationState.CLOSING_CENTRAL
+                        dedupeAction = DedupeAction.CLOSE_CENTRAL
+                    }
+                } else {
+                    Log.w(TAG, "Dual connection but identity not yet available - deferring deduplication")
+                }
             }
 
-            Log.i(TAG, "Peer connected: $address (central=$isCentral, peripheral=${peer.isPeripheral}, MTU=$mtu)")
+            Log.i(TAG, "Peer connected: $address (central=$isCentral, peripheral=${peer.isPeripheral}, dedupe=${peer.deduplicationState}, MTU=$mtu)")
 
             // ALWAYS notify Python of the connection - Python handles deduplication
             val identityHash = addressToIdentity[address]
@@ -1572,6 +1639,19 @@ class KotlinBLEBridge(
             }
         }
 
+        // Execute deduplication disconnect outside mutex to avoid deadlock
+        when (dedupeAction) {
+            DedupeAction.CLOSE_CENTRAL -> {
+                Log.i(TAG, "Deduplication: disconnecting central connection to $address")
+                gattClient.disconnect(address)
+            }
+            DedupeAction.CLOSE_PERIPHERAL -> {
+                Log.i(TAG, "Deduplication: disconnecting peripheral connection from $address")
+                gattServer.disconnectCentral(address)
+            }
+            DedupeAction.NONE -> { /* No deduplication needed */ }
+        }
+
         // Notify native listeners of connection state change
         notifyConnectionChange()
     }
@@ -1594,8 +1674,18 @@ class KotlinBLEBridge(
                 peer.isCentral = false
                 // Also clean up pending central tracking
                 pendingCentralConnections.remove(address)
+                // Clear deduplication state if we were closing this connection
+                if (peer.deduplicationState == DeduplicationState.CLOSING_CENTRAL) {
+                    peer.deduplicationState = DeduplicationState.NONE
+                    Log.d(TAG, "Deduplication complete: central connection closed for $address")
+                }
             } else {
                 peer.isPeripheral = false
+                // Clear deduplication state if we were closing this connection
+                if (peer.deduplicationState == DeduplicationState.CLOSING_PERIPHERAL) {
+                    peer.deduplicationState = DeduplicationState.NONE
+                    Log.d(TAG, "Deduplication complete: peripheral connection closed for $address")
+                }
             }
 
             // If no connections remain, remove peer and clean up mappings
@@ -1776,27 +1866,47 @@ class KotlinBLEBridge(
         var completedPending: PendingConnection? = null
 
         peersMutex.withLock {
-            // Check if identity already exists at different address (MAC rotation)
-            // Clean up old peer connection to prevent duplicate entries in UI
-            // BUT keep addressToIdentity mapping so data on old connection can still update lastActivity
-            val existingAddress = identityToAddress[identityHash]
-            if (existingAddress != null && existingAddress != address) {
-                Log.i(TAG, "Identity $identityHash moved: $existingAddress -> $address (cleaning up old peer)")
-                // Keep addressToIdentity[existingAddress] so handleDataReceived can still look up identity
-                // Remove old peer connection entry (prevents duplicate in UI)
-                connectedPeers.remove(existingAddress)
-                pendingConnections.remove(existingAddress)
+            // Check if peer exists at new address - only clean up old entries if we have the new one
+            val peerAtNewAddress = connectedPeers[address]
+
+            if (peerAtNewAddress != null) {
+                // New peer exists - safe to clean up old entries for this identity
+                val addressesToRemove = mutableSetOf<String>()
+
+                // Find by identityHash field
+                connectedPeers.entries
+                    .filter { it.value.identityHash == identityHash && it.key != address }
+                    .forEach { addressesToRemove.add(it.key) }
+
+                // Find by addressToIdentity mapping (for peers where identityHash not yet set on PeerConnection)
+                addressToIdentity.entries
+                    .filter { it.value == identityHash && it.key != address && connectedPeers.containsKey(it.key) }
+                    .forEach { addressesToRemove.add(it.key) }
+
+                // Also check identityToAddress for the canonical old address
+                val existingAddress = identityToAddress[identityHash]
+                if (existingAddress != null && existingAddress != address && connectedPeers.containsKey(existingAddress)) {
+                    addressesToRemove.add(existingAddress)
+                }
+
+                if (addressesToRemove.isNotEmpty()) {
+                    Log.i(TAG, "Identity $identityHash: removing ${addressesToRemove.size} old connection(s): $addressesToRemove")
+                    addressesToRemove.forEach { oldAddress ->
+                        connectedPeers.remove(oldAddress)
+                        pendingConnections.remove(oldAddress)
+                    }
+                }
+
+                // Update peer with identity
+                peerAtNewAddress.identityHash = identityHash
+            } else {
+                // New peer doesn't exist yet - DON'T remove old entries, just log
+                Log.d(TAG, "Identity $identityHash received for $address but peer not in connectedPeers yet")
             }
 
-            // Update mappings (Kotlin needs this for send() address resolution)
+            // Always update mappings (Kotlin needs this for send() address resolution)
             identityToAddress[identityHash] = address
             addressToIdentity[address] = identityHash
-
-            // Update peer connection (if it exists yet)
-            val peer = connectedPeers[address]
-            if (peer != null) {
-                peer.identityHash = identityHash
-            }
 
             // Check for pending connection that was waiting for identity
             completedPending = pendingConnections.remove(address)

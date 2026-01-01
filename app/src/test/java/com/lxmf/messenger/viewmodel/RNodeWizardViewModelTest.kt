@@ -2243,7 +2243,7 @@ class RNodeWizardViewModelTest {
         runTest {
             viewModel.state.test {
                 var state = awaitItem()
-                assertEquals("full", state.interfaceMode) // Default
+                assertEquals("accesspoint", state.interfaceMode) // Default
 
                 viewModel.updateInterfaceMode("gateway")
                 advanceUntilIdle()

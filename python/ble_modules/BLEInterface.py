@@ -387,6 +387,11 @@ class BLEInterface(Interface):
         self._pending_identity_connections = {}
         self._pending_identity_timeout = 30  # seconds
 
+        # Pending interface detachments with grace period (identity_hash -> timestamp)
+        # Allows new connections to establish before detaching the interface
+        self._pending_detach = {}
+        self._pending_detach_grace_period = 2.0  # seconds
+
         # Fragmentation
         self.fragmenters = {}  # address -> BLEFragmenter (per MTU)
         self.reassemblers = {}  # address -> BLEReassembler
@@ -720,6 +725,9 @@ class BLEInterface(Interface):
         # Check for pending connections that never received identity (timeout)
         self._cleanup_pending_identity_connections()
 
+        # Process pending interface detachments (after grace period)
+        self._process_pending_detaches()
+
         # Reschedule for next cleanup cycle
         self._start_cleanup_timer()
 
@@ -752,6 +760,49 @@ class BLEInterface(Interface):
                 self.driver.disconnect(address)
             except Exception as e:
                 RNS.log(f"{self} error disconnecting timed-out connection {address}: {e}", RNS.LOG_ERROR)
+
+    def _process_pending_detaches(self):
+        """
+        Process pending interface detachments after grace period.
+
+        When an address disconnects, we schedule the interface for delayed detachment
+        to allow new connections with the same identity to establish first (MAC rotation).
+        After the grace period, we check again if any addresses are connected with that
+        identity - if not, we detach the interface.
+        """
+        now = time.time()
+        to_detach = []
+
+        for identity_hash, scheduled_time in list(self._pending_detach.items()):
+            elapsed = now - scheduled_time
+            if elapsed >= self._pending_detach_grace_period:
+                # Grace period expired - check if any addresses now have this identity
+                has_connected_address = False
+                for addr, identity in self.address_to_identity.items():
+                    if self._compute_identity_hash(identity) == identity_hash:
+                        has_connected_address = True
+                        break
+
+                if has_connected_address:
+                    # New connection arrived during grace period - cancel detach
+                    RNS.log(f"{self} cancelled detach for {identity_hash[:8]} - address reconnected during grace period", RNS.LOG_DEBUG)
+                else:
+                    # No connections - safe to detach
+                    to_detach.append(identity_hash)
+
+        # Actually detach interfaces
+        for identity_hash in to_detach:
+            del self._pending_detach[identity_hash]
+            peer_if = self.spawned_interfaces.get(identity_hash)
+            if peer_if:
+                peer_if.detach()
+                RNS.log(f"{self} detached interface for {identity_hash[:8]} after grace period", RNS.LOG_DEBUG)
+                if identity_hash in self.spawned_interfaces:
+                    del self.spawned_interfaces[identity_hash]
+                if identity_hash in self.identity_to_address:
+                    del self.identity_to_address[identity_hash]
+            else:
+                RNS.log(f"{self} pending detach for {identity_hash[:8]} but interface already gone", RNS.LOG_DEBUG)
 
     def _validate_spawned_interfaces(self):
         """
@@ -881,6 +932,11 @@ class BLEInterface(Interface):
             # Identity provided by driver (central mode direct, peripheral mode via late callback)
             if len(peer_identity) == 16:
                 identity_hash = self._compute_identity_hash(peer_identity)
+
+                # Cancel any pending detach for this identity (new connection arrived in time)
+                if identity_hash in self._pending_detach:
+                    del self._pending_detach[identity_hash]
+                    RNS.log(f"{self} cancelled pending detach for {identity_hash[:8]} (new connection from {address})", RNS.LOG_DEBUG)
 
                 # Store identity mappings
                 self.address_to_identity[address] = peer_identity
@@ -1131,28 +1187,41 @@ class BLEInterface(Interface):
                     peer_identity = peer_if.peer_identity
                     identity_hash = self._compute_identity_hash(peer_identity)
 
-        # Detach interface if found
-        if peer_if:
-            peer_if.detach()
-            RNS.log(f"{self} detached interface for {address}", RNS.LOG_DEBUG)
-
-            # Clean up spawned_interfaces dict
-            if identity_hash and identity_hash in self.spawned_interfaces:
-                del self.spawned_interfaces[identity_hash]
-        else:
-            RNS.log(f"{self} no interface found for disconnected {address} (may have been cleaned already)", RNS.LOG_DEBUG)
-
-        # Always clean up address_to_interface mapping
+        # Clean up address-specific mappings first (before checking for other addresses)
         if address in self.address_to_interface:
             del self.address_to_interface[address]
 
-        # Clean up identity mappings
         if address in self.address_to_identity:
             del self.address_to_identity[address]
             RNS.log(f"{self} cleaned up address_to_identity for {address}", RNS.LOG_DEBUG)
-        if identity_hash and identity_hash in self.identity_to_address:
-            del self.identity_to_address[identity_hash]
-            RNS.log(f"{self} cleaned up identity_to_address for {identity_hash}", RNS.LOG_DEBUG)
+
+        # Check if any OTHER addresses still have the same identity
+        # If so, keep the peer interface alive - only detach when ALL addresses are gone
+        other_addresses_with_identity = []
+        if identity_hash:
+            for other_addr, other_identity in self.address_to_identity.items():
+                if other_addr != address:
+                    other_hash = self._compute_identity_hash(other_identity)
+                    if other_hash == identity_hash:
+                        other_addresses_with_identity.append(other_addr)
+
+        if other_addresses_with_identity:
+            # Other addresses still connected with same identity - keep interface alive
+            RNS.log(f"{self} keeping peer interface for {identity_hash[:8]} alive, other addresses still connected: {other_addresses_with_identity}", RNS.LOG_DEBUG)
+            # Update identity_to_address to point to one of the remaining addresses
+            self.identity_to_address[identity_hash] = other_addresses_with_identity[0]
+            # Cancel any pending detach for this identity
+            if identity_hash in self._pending_detach:
+                del self._pending_detach[identity_hash]
+                RNS.log(f"{self} cancelled pending detach for {identity_hash[:8]}", RNS.LOG_DEBUG)
+        else:
+            # No other addresses with this identity YET - schedule detach with grace period
+            # This allows new connections with the same identity to establish before detaching
+            if peer_if and identity_hash:
+                self._pending_detach[identity_hash] = time.time()
+                RNS.log(f"{self} scheduled detach for {identity_hash[:8]} in {self._pending_detach_grace_period}s", RNS.LOG_DEBUG)
+            elif not peer_if:
+                RNS.log(f"{self} no interface found for disconnected {address} (may have been cleaned already)", RNS.LOG_DEBUG)
 
         # Clean up fragmenter/reassembler
         if peer_identity:
@@ -2012,28 +2081,40 @@ class BLEInterface(Interface):
                     peer_identity = peer_if.peer_identity
                     identity_hash = self._compute_identity_hash(peer_identity)
 
-        # Detach interface if found
-        if peer_if:
-            peer_if.detach()
-            RNS.log(f"{self} detached interface for {address}", RNS.LOG_DEBUG)
-
-            # Clean up spawned_interfaces dict
-            if identity_hash and identity_hash in self.spawned_interfaces:
-                del self.spawned_interfaces[identity_hash]
-        else:
-            RNS.log(f"{self} no interface found for disconnected central {address} (may have been cleaned already)", RNS.LOG_DEBUG)
-
-        # Always clean up address_to_interface mapping
+        # Clean up address-specific mappings first (before checking for other addresses)
         if address in self.address_to_interface:
             del self.address_to_interface[address]
 
-        # Clean up identity mappings
         if address in self.address_to_identity:
             del self.address_to_identity[address]
             RNS.log(f"{self} cleaned up address_to_identity for {address}", RNS.LOG_DEBUG)
-        if identity_hash and identity_hash in self.identity_to_address:
-            del self.identity_to_address[identity_hash]
-            RNS.log(f"{self} cleaned up identity_to_address for {identity_hash}", RNS.LOG_DEBUG)
+
+        # Check if any OTHER addresses still have the same identity
+        # If so, keep the peer interface alive - only detach when ALL addresses are gone
+        other_addresses_with_identity = []
+        if identity_hash:
+            for other_addr, other_identity in self.address_to_identity.items():
+                if other_addr != address:
+                    other_hash = self._compute_identity_hash(other_identity)
+                    if other_hash == identity_hash:
+                        other_addresses_with_identity.append(other_addr)
+
+        if other_addresses_with_identity:
+            # Other addresses still connected with same identity - keep interface alive
+            RNS.log(f"{self} keeping peer interface for {identity_hash[:8]} alive (central disconnect), other addresses: {other_addresses_with_identity}", RNS.LOG_DEBUG)
+            # Update identity_to_address to point to one of the remaining addresses
+            self.identity_to_address[identity_hash] = other_addresses_with_identity[0]
+            # Cancel any pending detach for this identity
+            if identity_hash in self._pending_detach:
+                del self._pending_detach[identity_hash]
+                RNS.log(f"{self} cancelled pending detach for {identity_hash[:8]}", RNS.LOG_DEBUG)
+        else:
+            # No other addresses with this identity YET - schedule detach with grace period
+            if peer_if and identity_hash:
+                self._pending_detach[identity_hash] = time.time()
+                RNS.log(f"{self} scheduled detach for {identity_hash[:8]} in {self._pending_detach_grace_period}s (central)", RNS.LOG_DEBUG)
+            elif not peer_if:
+                RNS.log(f"{self} no interface found for disconnected central {address} (may have been cleaned already)", RNS.LOG_DEBUG)
 
         # Clean up fragmenter/reassembler
         if peer_identity:

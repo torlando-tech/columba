@@ -142,7 +142,7 @@ data class RNodeWizardState(
     val txPower: String = "17", // Safe default for all devices
     val stAlock: String = "",
     val ltAlock: String = "",
-    val interfaceMode: String = "full",
+    val interfaceMode: String = "accesspoint",
     val showAdvancedSettings: Boolean = false,
     val enableFramebuffer: Boolean = true, // Display logo on RNode OLED
     // Validation errors

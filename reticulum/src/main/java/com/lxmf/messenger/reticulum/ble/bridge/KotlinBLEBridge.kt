@@ -359,7 +359,28 @@ class KotlinBLEBridge(
         return try {
             val deviceMap = scanner.getDevicesSnapshot()
             val jsonArray = org.json.JSONArray()
+
+            // Deduplicate by identity - keep only the best peer per identity
+            // (prefer central connection, then most recent activity)
+            val bestPeerByIdentity = mutableMapOf<String, PeerConnection>()
             connectedPeers.values.forEach { peer ->
+                val identity = peer.identityHash ?: addressToIdentity[peer.address] ?: "unknown_${peer.address}"
+                val existing = bestPeerByIdentity[identity]
+                val dominated = when {
+                    existing == null -> false
+                    // Prefer peer with central connection
+                    peer.isCentral && !existing.isCentral -> false
+                    existing.isCentral && !peer.isCentral -> true
+                    // Prefer peer with more recent activity
+                    peer.lastActivity > existing.lastActivity -> false
+                    else -> true
+                }
+                if (!dominated) {
+                    bestPeerByIdentity[identity] = peer
+                }
+            }
+
+            bestPeerByIdentity.values.forEach { peer ->
                 val device = deviceMap[peer.address]
                 // Use stored peer.rssi first, then fall back to scanner cache
                 val rssi = if (peer.rssi != -100) peer.rssi else device?.rssi ?: -100
@@ -1375,8 +1396,28 @@ class KotlinBLEBridge(
         // Get snapshot of scanner devices (thread-safe, non-blocking)
         val deviceMap = scanner.getDevicesSnapshot()
 
-        // Safe iteration - connectedPeers is ConcurrentHashMap
+        // Deduplicate by identity - keep only the best peer per identity
+        // (prefer central connection, then most recent activity)
+        val bestPeerByIdentity = mutableMapOf<String, PeerConnection>()
         connectedPeers.values.forEach { peer ->
+            val identity = peer.identityHash ?: addressToIdentity[peer.address] ?: "unknown_${peer.address}"
+            val existing = bestPeerByIdentity[identity]
+            val dominated = when {
+                existing == null -> false
+                // Prefer peer with central connection
+                peer.isCentral && !existing.isCentral -> false
+                existing.isCentral && !peer.isCentral -> true
+                // Prefer peer with more recent activity
+                peer.lastActivity > existing.lastActivity -> false
+                else -> true
+            }
+            if (!dominated) {
+                bestPeerByIdentity[identity] = peer
+            }
+        }
+
+        // Build details from deduplicated peers
+        bestPeerByIdentity.values.forEach { peer ->
             val device = deviceMap[peer.address]
             // Fallback to addressToIdentity if peer.identityHash not set (race condition)
             val identity = peer.identityHash ?: addressToIdentity[peer.address]

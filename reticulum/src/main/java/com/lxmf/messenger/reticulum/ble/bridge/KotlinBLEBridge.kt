@@ -355,6 +355,7 @@ class KotlinBLEBridge(
     /**
      * Build JSON string of current connection details for listeners.
      */
+    @Suppress("CyclomaticComplexMethod")
     private fun buildConnectionDetailsJson(): String {
         return try {
             val deviceMap = scanner.getDevicesSnapshot()
@@ -1397,6 +1398,7 @@ class KotlinBLEBridge(
      *
      * @return List of connection details for all connected peers (without scanner data)
      */
+    @Suppress("CyclomaticComplexMethod")
     fun getConnectionDetailsSync(): List<BleConnectionDetails> {
         val details = mutableListOf<BleConnectionDetails>()
 
@@ -1478,6 +1480,7 @@ class KotlinBLEBridge(
     /**
      * Setup callbacks for all BLE components.
      */
+    @Suppress("LongMethod")
     private fun setupCallbacks() {
         // Scanner callbacks
         scanner.onDeviceDiscovered = { device: BleDevice ->
@@ -1591,6 +1594,7 @@ class KotlinBLEBridge(
      * Kotlin now reports ALL connections to Python, and Python decides which to close.
      * This follows the RFC architecture where protocol logic belongs in BLEInterface.
      */
+    @Suppress("LongMethod")
     private suspend fun handlePeerConnected(
         address: String,
         mtu: Int,

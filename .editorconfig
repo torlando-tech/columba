@@ -15,6 +15,7 @@ trim_trailing_whitespace = true
 max_line_length = 160
 ktlint_standard_comment-wrapping = disabled
 ktlint_standard_function-naming = disabled
+ktlint_standard_property-naming = disabled
 
 [*.xml]
 indent_size = 4

@@ -211,4 +211,68 @@ class EventHandlerTest {
         // Assert: Method was called (exception handling is internal)
         verify { broadcaster.broadcastDeliveryStatus(statusJson) }
     }
+
+    // ========== handleReactionReceivedEvent() Tests ==========
+
+    @Test
+    fun `handleReactionReceivedEvent broadcasts reaction`() {
+        val reactionJson = """{"reaction_to": "msg123", "emoji": "👍", "sender": "abc"}"""
+
+        // Act
+        eventHandler.handleReactionReceivedEvent(reactionJson)
+
+        // Assert
+        verify { broadcaster.broadcastReactionReceived(reactionJson) }
+    }
+
+    @Test
+    fun `handleReactionReceivedEvent handles exception gracefully`() {
+        val reactionJson = """{"reaction_to": "msg123", "emoji": "👍"}"""
+        every { broadcaster.broadcastReactionReceived(any()) } throws RuntimeException("Broadcast error")
+
+        // Act - should not throw
+        eventHandler.handleReactionReceivedEvent(reactionJson)
+
+        // Assert: Method was called
+        verify { broadcaster.broadcastReactionReceived(reactionJson) }
+    }
+
+    // ========== startEventHandling() Tests ==========
+
+    @Test
+    fun `startEventHandling drains pending announces on startup`() =
+        runTest {
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns emptyList()
+
+            // Act
+            eventHandler.startEventHandling()
+            testScope.advanceUntilIdle()
+
+            // Assert: wrapper was called to get pending announces
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) }
+        }
+
+    @Test
+    fun `startEventHandling handles null pending announces gracefully`() =
+        runTest {
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns null
+
+            // Act - should not throw
+            eventHandler.startEventHandling()
+            testScope.advanceUntilIdle()
+
+            // No crash
+        }
+
+    @Test
+    fun `startEventHandling handles exception in drain gracefully`() =
+        runTest {
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } throws RuntimeException("Error")
+
+            // Act - should not throw
+            eventHandler.startEventHandling()
+            testScope.advanceUntilIdle()
+
+            // No crash
+        }
 }

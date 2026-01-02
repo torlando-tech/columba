@@ -29,6 +29,7 @@ object ServiceDatabaseProvider {
         }
     }
 
+    @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization
     private fun createDatabase(context: Context): ColumbaDatabase {
         return Room.databaseBuilder(
             context.applicationContext,

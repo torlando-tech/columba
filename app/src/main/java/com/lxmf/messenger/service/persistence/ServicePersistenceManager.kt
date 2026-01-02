@@ -45,6 +45,7 @@ class ServicePersistenceManager(
      *
      * This preserves existing favorite status and icon appearance.
      */
+    @Suppress("LongParameterList") // Parameters mirror AnnounceEntity fields for direct persistence
     fun persistAnnounce(
         destinationHash: String,
         peerName: String,
@@ -127,6 +128,7 @@ class ServicePersistenceManager(
      *
      * This includes identity scoping to ensure messages are saved to the correct identity.
      */
+    @Suppress("LongParameterList") // Parameters mirror MessageEntity fields for direct persistence
     fun persistMessage(
         messageHash: String,
         content: String,

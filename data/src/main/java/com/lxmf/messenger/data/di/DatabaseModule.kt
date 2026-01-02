@@ -1163,6 +1163,7 @@ object DatabaseModule {
             }
         }
 
+    @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization
     @Provides
     @Singleton
     fun provideColumbaDatabase(

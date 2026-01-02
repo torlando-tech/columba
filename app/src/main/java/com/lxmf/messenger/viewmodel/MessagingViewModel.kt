@@ -70,6 +70,7 @@ class MessagingViewModel
         private val settingsRepository: SettingsRepository,
         private val propagationNodeManager: PropagationNodeManager,
         private val locationSharingManager: LocationSharingManager,
+        private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -815,6 +816,23 @@ class MessagingViewModel
                     // Get pending reply ID if replying to a message
                     val replyToId = _pendingReplyTo.value?.messageId
 
+                    // Get user's icon appearance for Sideband/MeshChat interoperability
+                    val iconAppearance =
+                        identityRepository.getActiveIdentitySync()?.let { activeId ->
+                            val name = activeId.iconName
+                            val fg = activeId.iconForegroundColor
+                            val bg = activeId.iconBackgroundColor
+                            if (name != null && fg != null && bg != null) {
+                                com.lxmf.messenger.reticulum.protocol.IconAppearance(
+                                    iconName = name,
+                                    foregroundColor = fg,
+                                    backgroundColor = bg,
+                                )
+                            } else {
+                                null
+                            }
+                        }
+
                     val result =
                         reticulumProtocol.sendLxmfMessageWithMethod(
                             destinationHash = destHashBytes,
@@ -826,6 +844,7 @@ class MessagingViewModel
                             imageFormat = imageFormat,
                             fileAttachments = fileAttachmentPairs.ifEmpty { null },
                             replyToMessageId = replyToId,
+                            iconAppearance = iconAppearance,
                         )
 
                     result.onSuccess { receipt ->

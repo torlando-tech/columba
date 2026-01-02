@@ -8,6 +8,7 @@ import androidx.paging.PagingData
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
@@ -72,6 +73,7 @@ class MessagingViewModelImageLoadingTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
+    private lateinit var identityRepository: IdentityRepository
     private lateinit var viewModel: MessagingViewModel
 
     @Before
@@ -89,6 +91,7 @@ class MessagingViewModelImageLoadingTest {
         settingsRepository = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
+        identityRepository = mockk(relaxed = true)
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
@@ -118,6 +121,7 @@ class MessagingViewModelImageLoadingTest {
                 settingsRepository = settingsRepository,
                 propagationNodeManager = propagationNodeManager,
                 locationSharingManager = locationSharingManager,
+                identityRepository = identityRepository,
             )
     }
 

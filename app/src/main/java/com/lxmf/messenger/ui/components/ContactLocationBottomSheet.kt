@@ -86,11 +86,14 @@ fun ContactLocationBottomSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                // Identicon avatar (dimmed for stale locations)
+                // Profile icon (dimmed for stale locations)
                 Box {
-                    Identicon(
-                        hash = hexStringToByteArray(marker.destinationHash),
+                    ProfileIcon(
+                        iconName = marker.iconName,
+                        foregroundColor = marker.iconForegroundColor,
+                        backgroundColor = marker.iconBackgroundColor,
                         size = 48.dp,
+                        fallbackHash = marker.publicKey ?: hexStringToByteArray(marker.destinationHash),
                         modifier = if (isStale) Modifier.alpha(0.6f) else Modifier,
                     )
                 }

@@ -4,13 +4,13 @@ import android.content.Context
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
+import com.lxmf.messenger.service.manager.EventHandler
 import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
-import com.lxmf.messenger.service.manager.PollingManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.RoutingManager
 import com.lxmf.messenger.service.manager.ServiceNotificationManager
@@ -51,7 +51,7 @@ class ReticulumServiceBinderBleWiringTest {
     private lateinit var mockIdentityManager: IdentityManager
     private lateinit var mockRoutingManager: RoutingManager
     private lateinit var mockMessagingManager: MessagingManager
-    private lateinit var mockPollingManager: PollingManager
+    private lateinit var mockEventHandler: EventHandler
     private lateinit var mockBroadcaster: CallbackBroadcaster
     private lateinit var mockLockManager: LockManager
     private lateinit var mockMaintenanceManager: MaintenanceManager
@@ -71,7 +71,7 @@ class ReticulumServiceBinderBleWiringTest {
         mockIdentityManager = mockk(relaxed = true)
         mockRoutingManager = mockk(relaxed = true)
         mockMessagingManager = mockk(relaxed = true)
-        mockPollingManager = mockk(relaxed = true)
+        mockEventHandler = mockk(relaxed = true)
         mockBroadcaster = mockk(relaxed = true)
         mockLockManager = mockk(relaxed = true)
         mockMaintenanceManager = mockk(relaxed = true)
@@ -110,7 +110,7 @@ class ReticulumServiceBinderBleWiringTest {
                     identityManager = mockIdentityManager,
                     routingManager = mockRoutingManager,
                     messagingManager = mockMessagingManager,
-                    pollingManager = mockPollingManager,
+                    eventHandler = mockEventHandler,
                     broadcaster = mockBroadcaster,
                     lockManager = mockLockManager,
                     maintenanceManager = mockMaintenanceManager,

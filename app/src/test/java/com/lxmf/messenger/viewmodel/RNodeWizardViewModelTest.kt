@@ -860,11 +860,11 @@ class RNodeWizardViewModelTest {
             viewModel.state.test {
                 awaitItem() // Initial
 
-                viewModel.updateInterfaceMode("boundary")
+                viewModel.updateInterfaceMode("gateway")
                 advanceUntilIdle()
 
                 val state = awaitItem()
-                assertEquals("boundary", state.interfaceMode)
+                assertEquals("gateway", state.interfaceMode)
             }
         }
 
@@ -2243,7 +2243,7 @@ class RNodeWizardViewModelTest {
         runTest {
             viewModel.state.test {
                 var state = awaitItem()
-                assertEquals("accesspoint", state.interfaceMode) // Default
+                assertEquals("boundary", state.interfaceMode) // Default
 
                 viewModel.updateInterfaceMode("gateway")
                 advanceUntilIdle()

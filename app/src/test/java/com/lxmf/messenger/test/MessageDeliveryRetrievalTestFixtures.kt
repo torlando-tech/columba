@@ -29,6 +29,7 @@ object MessageDeliveryRetrievalTestFixtures {
         val retrievalIntervalSeconds: Int = Constants.DEFAULT_INTERVAL_SECONDS,
         val lastSyncTimestamp: Long? = System.currentTimeMillis() - 30_000L,
         val isSyncing: Boolean = false,
+        val incomingMessageSizeLimitKb: Int = 1024, // Default 1 MB
     )
 
     // ========== Pre-configured State Factories ==========
@@ -82,6 +83,22 @@ object MessageDeliveryRetrievalTestFixtures {
     fun interval300sState() = CardConfig(retrievalIntervalSeconds = 300)
 
     fun mixedIntervalState() = CardConfig(retrievalIntervalSeconds = 90) // 1m 30s
+
+    // ========== Size Limit State Factories ==========
+
+    fun sizeLimit1MbState() = CardConfig(incomingMessageSizeLimitKb = 1024)
+
+    fun sizeLimit5MbState() = CardConfig(incomingMessageSizeLimitKb = 5120)
+
+    fun sizeLimit10MbState() = CardConfig(incomingMessageSizeLimitKb = 10240)
+
+    fun sizeLimit25MbState() = CardConfig(incomingMessageSizeLimitKb = 25600)
+
+    fun sizeLimitUnlimitedState() = CardConfig(incomingMessageSizeLimitKb = 131072)
+
+    fun sizeLimitCustomState() = CardConfig(incomingMessageSizeLimitKb = 3072) // 3 MB - not a preset
+
+    fun sizeLimitSubMbState() = CardConfig(incomingMessageSizeLimitKb = 512) // 512 KB
 
     // ========== Timestamp Fixtures for formatRelativeTime ==========
 

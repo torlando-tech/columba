@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.paging.PagingData
 import com.lxmf.messenger.test.MessagingTestFixtures
 import com.lxmf.messenger.test.RegisterComponentActivityRule
+import com.lxmf.messenger.ui.model.DecodedImageResult
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.ReplyPreviewUi
 import com.lxmf.messenger.viewmodel.ContactToggleResult
@@ -24,7 +25,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -38,7 +38,6 @@ import org.robolectric.annotation.Config
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
-@Ignore("TODO: Update mocks for reactions feature - tests need reactionModeState and related state")
 class MessagingScreenTest {
     private val registerActivityRule = RegisterComponentActivityRule()
     private val composeRule = createComposeRule()
@@ -78,6 +77,10 @@ class MessagingScreenTest {
         every { mockViewModel.replyPreviewCache } returns MutableStateFlow(emptyMap())
         // Reaction mode mocks
         every { mockViewModel.reactionModeState } returns MutableStateFlow(null)
+        every { mockViewModel.myIdentityHash } returns MutableStateFlow("my-identity-hash")
+        // Animated image mocks
+        every { mockViewModel.selectedImageIsAnimated } returns MutableStateFlow(false)
+        every { mockViewModel.decodedImages } returns MutableStateFlow(emptyMap())
     }
 
     // ========== Empty State Tests ==========
@@ -1147,6 +1150,144 @@ class MessagingScreenTest {
         // And should display cached preview
         composeTestRule.onNodeWithText("Grace").assertIsDisplayed()
         composeTestRule.onNodeWithText("Cached content").assertIsDisplayed()
+    }
+
+    // ========== GIF/Animated Image Tests ==========
+
+    @Test
+    fun animatedGifMessage_displaysWithoutBubble_whenMediaOnly() {
+        // Given - GIF-only message (no text, no reply, no attachments)
+        val gifMessage = MessagingTestFixtures.createAnimatedGifMessage()
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifMessage)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - media-only GIF shows sent status (overlay timestamp row)
+        // The "Animated GIF" AsyncImage may not render in Robolectric tests,
+        // but the status indicator should still appear
+        composeTestRule.onNodeWithText("✓").assertIsDisplayed()
+    }
+
+    @Test
+    fun animatedGifMessage_withText_displaysInBubble() {
+        // Given - GIF with text (not media-only)
+        val gifWithText = MessagingTestFixtures.createAnimatedGifMessageWithText()
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifWithText)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should display text content (in bubble)
+        composeTestRule.onNodeWithText("Check out this GIF!").assertIsDisplayed()
+    }
+
+    @Test
+    fun animatedGifMessage_asReply_displaysInBubble() {
+        // Given - GIF as a reply (not media-only due to reply context)
+        val replyPreview = ReplyPreviewUi(
+            messageId = "original-msg",
+            senderName = "Alice",
+            contentPreview = "Original message",
+        )
+        val gifReply = MessagingTestFixtures.createAnimatedGifReplyMessage(replyPreview = replyPreview)
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifReply)))
+        every { mockViewModel.replyPreviewCache } returns MutableStateFlow(mapOf(gifReply.id to replyPreview))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should display reply preview (in bubble)
+        composeTestRule.onNodeWithText("Alice").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Original message").assertIsDisplayed()
+    }
+
+    @Test
+    fun sentGifMessage_showsDeliveryStatus() {
+        // Given - sent GIF message
+        val gifMessage = MessagingTestFixtures.createAnimatedGifMessage(status = "sent")
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifMessage)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should show sent status indicator
+        composeTestRule.onNodeWithText("✓").assertIsDisplayed()
+    }
+
+    @Test
+    fun animatedGifPreview_displayed_whenSelectedAnimatedImage() {
+        // Given - animated image selected for sending
+        every { mockViewModel.selectedImageData } returns MutableStateFlow(MessagingTestFixtures.createTestGifData())
+        every { mockViewModel.selectedImageIsAnimated } returns MutableStateFlow(true)
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should show image attached with GIF label
+        composeTestRule.onNodeWithText("GIF attached", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Remove image").assertIsDisplayed()
+    }
+
+    @Test
+    fun staticImagePreview_displayed_whenSelectedNonAnimatedImage() {
+        // Given - static (non-animated) image selected
+        every { mockViewModel.selectedImageData } returns MutableStateFlow(MessagingTestFixtures.createTestImageData())
+        every { mockViewModel.selectedImageIsAnimated } returns MutableStateFlow(false)
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should show "Image attached" (not "GIF attached")
+        composeTestRule.onNodeWithText("Image attached", substring = true).assertIsDisplayed()
     }
 
     @Test

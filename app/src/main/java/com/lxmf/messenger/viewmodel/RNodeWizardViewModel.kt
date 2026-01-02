@@ -153,7 +153,7 @@ data class RNodeWizardState(
     val txPower: String = "17",
     val stAlock: String = "",
     val ltAlock: String = "",
-    val interfaceMode: String = "accesspoint",
+    val interfaceMode: String = "boundary",
     val showAdvancedSettings: Boolean = false,
     // Display logo on RNode OLED
     val enableFramebuffer: Boolean = true,

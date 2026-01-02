@@ -194,12 +194,13 @@ class MBTilesWriterTest {
 
     @Test
     fun `Bounds data class holds correct values`() {
-        val bounds = MBTilesWriter.Bounds(
-            west = -122.5,
-            south = 37.5,
-            east = -122.0,
-            north = 38.0,
-        )
+        val bounds =
+            MBTilesWriter.Bounds(
+                west = -122.5,
+                south = 37.5,
+                east = -122.0,
+                north = 38.0,
+            )
 
         assertEquals(-122.5, bounds.west, EPSILON)
         assertEquals(37.5, bounds.south, EPSILON)
@@ -209,12 +210,13 @@ class MBTilesWriterTest {
 
     @Test
     fun `Bounds toString produces correct format`() {
-        val bounds = MBTilesWriter.Bounds(
-            west = -122.5,
-            south = 37.5,
-            east = -122.0,
-            north = 38.0,
-        )
+        val bounds =
+            MBTilesWriter.Bounds(
+                west = -122.5,
+                south = 37.5,
+                east = -122.0,
+                north = 38.0,
+            )
 
         val str = bounds.toString()
         assertEquals("-122.5,37.5,-122.0,38.0", str)
@@ -234,11 +236,12 @@ class MBTilesWriterTest {
 
     @Test
     fun `Center data class holds correct values`() {
-        val center = MBTilesWriter.Center(
-            longitude = -122.4194,
-            latitude = 37.7749,
-            zoom = 10,
-        )
+        val center =
+            MBTilesWriter.Center(
+                longitude = -122.4194,
+                latitude = 37.7749,
+                zoom = 10,
+            )
 
         assertEquals(-122.4194, center.longitude, EPSILON)
         assertEquals(37.7749, center.latitude, EPSILON)
@@ -247,11 +250,12 @@ class MBTilesWriterTest {
 
     @Test
     fun `Center toString produces correct format`() {
-        val center = MBTilesWriter.Center(
-            longitude = -122.4194,
-            latitude = 37.7749,
-            zoom = 10,
-        )
+        val center =
+            MBTilesWriter.Center(
+                longitude = -122.4194,
+                latitude = 37.7749,
+                zoom = 10,
+            )
 
         val str = center.toString()
         assertEquals("-122.4194,37.7749,10", str)
@@ -313,7 +317,6 @@ class MBTilesWriterTest {
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MBTilesWriterRobolectricTest {
-
     private lateinit var tempDir: File
     private lateinit var testFile: File
 
@@ -332,13 +335,14 @@ class MBTilesWriterRobolectricTest {
 
     @Test
     fun `open creates database file and schema`() {
-        val writer = MBTilesWriter(
-            file = testFile,
-            name = "Test Map",
-            description = "Test description",
-            minZoom = 0,
-            maxZoom = 14,
-        )
+        val writer =
+            MBTilesWriter(
+                file = testFile,
+                name = "Test Map",
+                description = "Test description",
+                minZoom = 0,
+                maxZoom = 14,
+            )
 
         writer.open()
 
@@ -354,10 +358,11 @@ class MBTilesWriterRobolectricTest {
         writer.open()
 
         val db = SQLiteDatabase.openDatabase(testFile.path, null, SQLiteDatabase.OPEN_READONLY)
-        val cursor = db.rawQuery(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='tiles'",
-            null,
-        )
+        val cursor =
+            db.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='tiles'",
+                null,
+            )
         assertTrue("tiles table should exist", cursor.moveToFirst())
         cursor.close()
         db.close()
@@ -370,10 +375,11 @@ class MBTilesWriterRobolectricTest {
         writer.open()
 
         val db = SQLiteDatabase.openDatabase(testFile.path, null, SQLiteDatabase.OPEN_READONLY)
-        val cursor = db.rawQuery(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='metadata'",
-            null,
-        )
+        val cursor =
+            db.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='metadata'",
+                null,
+            )
         assertTrue("metadata table should exist", cursor.moveToFirst())
         cursor.close()
         db.close()
@@ -386,10 +392,11 @@ class MBTilesWriterRobolectricTest {
         writer.open()
 
         val db = SQLiteDatabase.openDatabase(testFile.path, null, SQLiteDatabase.OPEN_READONLY)
-        val cursor = db.rawQuery(
-            "SELECT name FROM sqlite_master WHERE type='index' AND name='tiles_index'",
-            null,
-        )
+        val cursor =
+            db.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='index' AND name='tiles_index'",
+                null,
+            )
         assertTrue("tiles_index should exist", cursor.moveToFirst())
         cursor.close()
         db.close()
@@ -406,10 +413,11 @@ class MBTilesWriterRobolectricTest {
         writer.close()
 
         val db = SQLiteDatabase.openDatabase(testFile.path, null, SQLiteDatabase.OPEN_READONLY)
-        val cursor = db.rawQuery(
-            "SELECT tile_data FROM tiles WHERE zoom_level = 5 AND tile_column = 10",
-            null,
-        )
+        val cursor =
+            db.rawQuery(
+                "SELECT tile_data FROM tiles WHERE zoom_level = 5 AND tile_column = 10",
+                null,
+            )
         assertTrue("Should find the written tile", cursor.moveToFirst())
         val readData = cursor.getBlob(0)
         assertArrayEquals("Tile data should match", tileData, readData)
@@ -429,10 +437,11 @@ class MBTilesWriterRobolectricTest {
         writer.close()
 
         val db = SQLiteDatabase.openDatabase(testFile.path, null, SQLiteDatabase.OPEN_READONLY)
-        val cursor = db.rawQuery(
-            "SELECT tile_data FROM tiles WHERE zoom_level = 8 AND tile_column = 100",
-            null,
-        )
+        val cursor =
+            db.rawQuery(
+                "SELECT tile_data FROM tiles WHERE zoom_level = 8 AND tile_column = 100",
+                null,
+            )
         assertTrue(cursor.moveToFirst())
         assertArrayEquals(tileData, cursor.getBlob(0))
         cursor.close()
@@ -535,10 +544,11 @@ class MBTilesWriterRobolectricTest {
         assertEquals(1, countCursor.getInt(0))
         countCursor.close()
 
-        val dataCursor = db.rawQuery(
-            "SELECT tile_data FROM tiles WHERE zoom_level = 5 AND tile_column = 10",
-            null,
-        )
+        val dataCursor =
+            db.rawQuery(
+                "SELECT tile_data FROM tiles WHERE zoom_level = 5 AND tile_column = 10",
+                null,
+            )
         dataCursor.moveToFirst()
         assertArrayEquals(secondData, dataCursor.getBlob(0))
         dataCursor.close()
@@ -556,10 +566,11 @@ class MBTilesWriterRobolectricTest {
         writer.close()
 
         val db = SQLiteDatabase.openDatabase(testFile.path, null, SQLiteDatabase.OPEN_READONLY)
-        val cursor = db.rawQuery(
-            "SELECT tile_row FROM tiles WHERE zoom_level = 0",
-            null,
-        )
+        val cursor =
+            db.rawQuery(
+                "SELECT tile_row FROM tiles WHERE zoom_level = 0",
+                null,
+            )
         assertTrue(cursor.moveToFirst())
         assertEquals(0, cursor.getInt(0))
         cursor.close()
@@ -577,18 +588,20 @@ class MBTilesWriterRobolectricTest {
 
         val db = SQLiteDatabase.openDatabase(testFile.path, null, SQLiteDatabase.OPEN_READONLY)
 
-        val cursor1 = db.rawQuery(
-            "SELECT tile_data FROM tiles WHERE zoom_level = 1 AND tile_row = 1",
-            null,
-        )
+        val cursor1 =
+            db.rawQuery(
+                "SELECT tile_data FROM tiles WHERE zoom_level = 1 AND tile_row = 1",
+                null,
+            )
         assertTrue("XYZ y=0 should be at TMS row 1", cursor1.moveToFirst())
         assertArrayEquals(byteArrayOf(1), cursor1.getBlob(0))
         cursor1.close()
 
-        val cursor2 = db.rawQuery(
-            "SELECT tile_data FROM tiles WHERE zoom_level = 1 AND tile_row = 0",
-            null,
-        )
+        val cursor2 =
+            db.rawQuery(
+                "SELECT tile_data FROM tiles WHERE zoom_level = 1 AND tile_row = 0",
+                null,
+            )
         assertTrue("XYZ y=1 should be at TMS row 0", cursor2.moveToFirst())
         assertArrayEquals(byteArrayOf(2), cursor2.getBlob(0))
         cursor2.close()
@@ -608,26 +621,29 @@ class MBTilesWriterRobolectricTest {
 
         val db = SQLiteDatabase.openDatabase(testFile.path, null, SQLiteDatabase.OPEN_READONLY)
 
-        val cursor1 = db.rawQuery(
-            "SELECT tile_data FROM tiles WHERE zoom_level = 10 AND tile_row = 1023",
-            null,
-        )
+        val cursor1 =
+            db.rawQuery(
+                "SELECT tile_data FROM tiles WHERE zoom_level = 10 AND tile_row = 1023",
+                null,
+            )
         assertTrue(cursor1.moveToFirst())
         assertArrayEquals(byteArrayOf(1), cursor1.getBlob(0))
         cursor1.close()
 
-        val cursor2 = db.rawQuery(
-            "SELECT tile_data FROM tiles WHERE zoom_level = 10 AND tile_row = 0",
-            null,
-        )
+        val cursor2 =
+            db.rawQuery(
+                "SELECT tile_data FROM tiles WHERE zoom_level = 10 AND tile_row = 0",
+                null,
+            )
         assertTrue(cursor2.moveToFirst())
         assertArrayEquals(byteArrayOf(2), cursor2.getBlob(0))
         cursor2.close()
 
-        val cursor3 = db.rawQuery(
-            "SELECT tile_data FROM tiles WHERE zoom_level = 10 AND tile_row = 511",
-            null,
-        )
+        val cursor3 =
+            db.rawQuery(
+                "SELECT tile_data FROM tiles WHERE zoom_level = 10 AND tile_row = 511",
+                null,
+            )
         assertTrue(cursor3.moveToFirst())
         assertArrayEquals(byteArrayOf(3), cursor3.getBlob(0))
         cursor3.close()
@@ -640,11 +656,12 @@ class MBTilesWriterRobolectricTest {
         val writer = MBTilesWriter(file = testFile, name = "Test Map")
         writer.open()
 
-        val testCases = listOf(
-            Triple(5, 10, 15),
-            Triple(8, 100, 200),
-            Triple(12, 2000, 1500),
-        )
+        val testCases =
+            listOf(
+                Triple(5, 10, 15),
+                Triple(8, 100, 200),
+                Triple(12, 2000, 1500),
+            )
 
         for ((z, x, y) in testCases) {
             writer.writeTile(z, x, y, byteArrayOf(z.toByte()))
@@ -655,10 +672,11 @@ class MBTilesWriterRobolectricTest {
 
         for ((z, x, y) in testCases) {
             val expectedTmsY = (2.0.pow(z) - 1 - y).toInt()
-            val cursor = db.rawQuery(
-                "SELECT tile_row FROM tiles WHERE zoom_level = ? AND tile_column = ?",
-                arrayOf(z.toString(), x.toString()),
-            )
+            val cursor =
+                db.rawQuery(
+                    "SELECT tile_row FROM tiles WHERE zoom_level = ? AND tile_column = ?",
+                    arrayOf(z.toString(), x.toString()),
+                )
             assertTrue("Should find tile at zoom $z", cursor.moveToFirst())
             assertEquals(
                 "TMS Y should be $expectedTmsY for XYZ y=$y at zoom $z",
@@ -675,12 +693,13 @@ class MBTilesWriterRobolectricTest {
 
     @Test
     fun `metadata contains required MBTiles fields`() {
-        val writer = MBTilesWriter(
-            file = testFile,
-            name = "Test Map",
-            minZoom = 2,
-            maxZoom = 16,
-        )
+        val writer =
+            MBTilesWriter(
+                file = testFile,
+                name = "Test Map",
+                minZoom = 2,
+                maxZoom = 16,
+            )
         writer.open()
         writer.close()
 
@@ -698,11 +717,12 @@ class MBTilesWriterRobolectricTest {
 
     @Test
     fun `metadata includes description when provided`() {
-        val writer = MBTilesWriter(
-            file = testFile,
-            name = "Test Map",
-            description = "A test map description",
-        )
+        val writer =
+            MBTilesWriter(
+                file = testFile,
+                name = "Test Map",
+                description = "A test map description",
+            )
         writer.open()
         writer.close()
 
@@ -713,19 +733,21 @@ class MBTilesWriterRobolectricTest {
 
     @Test
     fun `metadata excludes description when empty`() {
-        val writer = MBTilesWriter(
-            file = testFile,
-            name = "Test Map",
-            description = "",
-        )
+        val writer =
+            MBTilesWriter(
+                file = testFile,
+                name = "Test Map",
+                description = "",
+            )
         writer.open()
         writer.close()
 
         val db = SQLiteDatabase.openDatabase(testFile.path, null, SQLiteDatabase.OPEN_READONLY)
-        val cursor = db.rawQuery(
-            "SELECT value FROM metadata WHERE name = 'description'",
-            null,
-        )
+        val cursor =
+            db.rawQuery(
+                "SELECT value FROM metadata WHERE name = 'description'",
+                null,
+            )
         assertFalse("Description should not be in metadata", cursor.moveToFirst())
         cursor.close()
         db.close()
@@ -733,17 +755,19 @@ class MBTilesWriterRobolectricTest {
 
     @Test
     fun `metadata includes bounds when provided`() {
-        val bounds = MBTilesWriter.Bounds(
-            west = -122.5,
-            south = 37.5,
-            east = -122.0,
-            north = 38.0,
-        )
-        val writer = MBTilesWriter(
-            file = testFile,
-            name = "Test Map",
-            bounds = bounds,
-        )
+        val bounds =
+            MBTilesWriter.Bounds(
+                west = -122.5,
+                south = 37.5,
+                east = -122.0,
+                north = 38.0,
+            )
+        val writer =
+            MBTilesWriter(
+                file = testFile,
+                name = "Test Map",
+                bounds = bounds,
+            )
         writer.open()
         writer.close()
 
@@ -754,16 +778,18 @@ class MBTilesWriterRobolectricTest {
 
     @Test
     fun `metadata includes center when provided`() {
-        val center = MBTilesWriter.Center(
-            longitude = -122.4,
-            latitude = 37.8,
-            zoom = 10,
-        )
-        val writer = MBTilesWriter(
-            file = testFile,
-            name = "Test Map",
-            center = center,
-        )
+        val center =
+            MBTilesWriter.Center(
+                longitude = -122.4,
+                latitude = 37.8,
+                zoom = 10,
+            )
+        val writer =
+            MBTilesWriter(
+                file = testFile,
+                name = "Test Map",
+                center = center,
+            )
         writer.open()
         writer.close()
 
@@ -783,11 +809,16 @@ class MBTilesWriterRobolectricTest {
         db.close()
     }
 
-    private fun assertMetadataValue(db: SQLiteDatabase, name: String, expectedValue: String) {
-        val cursor = db.rawQuery(
-            "SELECT value FROM metadata WHERE name = ?",
-            arrayOf(name),
-        )
+    private fun assertMetadataValue(
+        db: SQLiteDatabase,
+        name: String,
+        expectedValue: String,
+    ) {
+        val cursor =
+            db.rawQuery(
+                "SELECT value FROM metadata WHERE name = ?",
+                arrayOf(name),
+            )
         assertTrue("Metadata '$name' should exist", cursor.moveToFirst())
         assertEquals("Metadata '$name' value", expectedValue, cursor.getString(0))
         cursor.close()
@@ -976,28 +1007,31 @@ class MBTilesWriterRobolectricTest {
 
     @Test
     fun `writer handles special characters in name and description`() {
-        val writer = MBTilesWriter(
-            file = testFile,
-            name = "Test's \"Map\" with <special> & chars",
-            description = "Description with unicode: cafe",
-        )
+        val writer =
+            MBTilesWriter(
+                file = testFile,
+                name = "Test's \"Map\" with <special> & chars",
+                description = "Description with unicode: cafe",
+            )
         writer.open()
         writer.close()
 
         val db = SQLiteDatabase.openDatabase(testFile.path, null, SQLiteDatabase.OPEN_READONLY)
 
-        val nameCursor = db.rawQuery(
-            "SELECT value FROM metadata WHERE name = 'name'",
-            null,
-        )
+        val nameCursor =
+            db.rawQuery(
+                "SELECT value FROM metadata WHERE name = 'name'",
+                null,
+            )
         assertTrue(nameCursor.moveToFirst())
         assertEquals("Test's \"Map\" with <special> & chars", nameCursor.getString(0))
         nameCursor.close()
 
-        val descCursor = db.rawQuery(
-            "SELECT value FROM metadata WHERE name = 'description'",
-            null,
-        )
+        val descCursor =
+            db.rawQuery(
+                "SELECT value FROM metadata WHERE name = 'description'",
+                null,
+            )
         assertTrue(descCursor.moveToFirst())
         assertEquals("Description with unicode: cafe", descCursor.getString(0))
         descCursor.close()
@@ -1007,12 +1041,13 @@ class MBTilesWriterRobolectricTest {
 
     @Test
     fun `writer handles boundary zoom levels`() {
-        val writer = MBTilesWriter(
-            file = testFile,
-            name = "Test Map",
-            minZoom = 0,
-            maxZoom = 22,
-        )
+        val writer =
+            MBTilesWriter(
+                file = testFile,
+                name = "Test Map",
+                minZoom = 0,
+                maxZoom = 22,
+            )
         writer.open()
         writer.close()
 
@@ -1024,17 +1059,19 @@ class MBTilesWriterRobolectricTest {
 
     @Test
     fun `writer handles negative coordinates in bounds`() {
-        val bounds = MBTilesWriter.Bounds(
-            west = -180.0,
-            south = -85.0,
-            east = 180.0,
-            north = 85.0,
-        )
-        val writer = MBTilesWriter(
-            file = testFile,
-            name = "World Map",
-            bounds = bounds,
-        )
+        val bounds =
+            MBTilesWriter.Bounds(
+                west = -180.0,
+                south = -85.0,
+                east = 180.0,
+                north = 85.0,
+            )
+        val writer =
+            MBTilesWriter(
+                file = testFile,
+                name = "World Map",
+                bounds = bounds,
+            )
         writer.open()
         writer.close()
 

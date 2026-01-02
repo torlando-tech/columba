@@ -1,6 +1,5 @@
 package com.lxmf.messenger.map
 
-import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -151,10 +150,11 @@ class OfflineMapStyleBuilderTest {
 
     @Test
     fun `buildCombinedOfflineStyle returns valid JSON`() {
-        val paths = mapOf(
-            "source1" to "/path/to/map1.mbtiles",
-            "source2" to "/path/to/map2.mbtiles",
-        )
+        val paths =
+            mapOf(
+                "source1" to "/path/to/map1.mbtiles",
+                "source2" to "/path/to/map2.mbtiles",
+            )
 
         val style = OfflineMapStyleBuilder.buildCombinedOfflineStyle(paths)
         val json = JSONObject(style)
@@ -165,10 +165,11 @@ class OfflineMapStyleBuilderTest {
 
     @Test
     fun `buildCombinedOfflineStyle creates multiple sources`() {
-        val paths = mapOf(
-            "region1" to "/path/to/region1.mbtiles",
-            "region2" to "/path/to/region2.mbtiles",
-        )
+        val paths =
+            mapOf(
+                "region1" to "/path/to/region1.mbtiles",
+                "region2" to "/path/to/region2.mbtiles",
+            )
 
         val style = OfflineMapStyleBuilder.buildCombinedOfflineStyle(paths)
         val json = JSONObject(style)
@@ -183,10 +184,11 @@ class OfflineMapStyleBuilderTest {
 
     @Test
     fun `buildCombinedOfflineStyle updates layers to use first source`() {
-        val paths = mapOf(
-            "primary" to "/path/to/primary.mbtiles",
-            "secondary" to "/path/to/secondary.mbtiles",
-        )
+        val paths =
+            mapOf(
+                "primary" to "/path/to/primary.mbtiles",
+                "secondary" to "/path/to/secondary.mbtiles",
+            )
 
         val style = OfflineMapStyleBuilder.buildCombinedOfflineStyle(paths)
         val json = JSONObject(style)

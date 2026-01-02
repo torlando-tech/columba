@@ -157,15 +157,18 @@ class TileDownloadManagerTest {
         val lat = 37.7749
         val lon = -122.4194
 
-        val bounds3 = TileDownloadManager.decodeGeohashBounds(
-            TileDownloadManager.encodeGeohash(lat, lon, 3),
-        )
-        val bounds5 = TileDownloadManager.decodeGeohashBounds(
-            TileDownloadManager.encodeGeohash(lat, lon, 5),
-        )
-        val bounds7 = TileDownloadManager.decodeGeohashBounds(
-            TileDownloadManager.encodeGeohash(lat, lon, 7),
-        )
+        val bounds3 =
+            TileDownloadManager.decodeGeohashBounds(
+                TileDownloadManager.encodeGeohash(lat, lon, 3),
+            )
+        val bounds5 =
+            TileDownloadManager.decodeGeohashBounds(
+                TileDownloadManager.encodeGeohash(lat, lon, 5),
+            )
+        val bounds7 =
+            TileDownloadManager.decodeGeohashBounds(
+                TileDownloadManager.encodeGeohash(lat, lon, 7),
+            )
 
         val area3 = (bounds3.north - bounds3.south) * (bounds3.east - bounds3.west)
         val area5 = (bounds5.north - bounds5.south) * (bounds5.east - bounds5.west)
@@ -190,12 +193,13 @@ class TileDownloadManagerTest {
 
     @Test
     fun `geohashesForBounds returns correct number of geohashes for small area`() {
-        val bounds = MBTilesWriter.Bounds(
-            west = -122.5,
-            south = 37.7,
-            east = -122.4,
-            north = 37.8,
-        )
+        val bounds =
+            MBTilesWriter.Bounds(
+                west = -122.5,
+                south = 37.7,
+                east = -122.4,
+                north = 37.8,
+            )
 
         val geohashes = TileDownloadManager.geohashesForBounds(bounds, 5)
 
@@ -206,12 +210,13 @@ class TileDownloadManagerTest {
 
     @Test
     fun `geohashesForBounds covers entire bounds`() {
-        val bounds = MBTilesWriter.Bounds(
-            west = -122.5,
-            south = 37.7,
-            east = -122.3,
-            north = 37.9,
-        )
+        val bounds =
+            MBTilesWriter.Bounds(
+                west = -122.5,
+                south = 37.7,
+                east = -122.3,
+                north = 37.9,
+            )
 
         val geohashes = TileDownloadManager.geohashesForBounds(bounds, 4)
 
@@ -232,19 +237,21 @@ class TileDownloadManagerTest {
 
     @Test
     fun `geohashesForBounds returns more geohashes for larger area`() {
-        val smallBounds = MBTilesWriter.Bounds(
-            west = -122.5,
-            south = 37.7,
-            east = -122.4,
-            north = 37.8,
-        )
+        val smallBounds =
+            MBTilesWriter.Bounds(
+                west = -122.5,
+                south = 37.7,
+                east = -122.4,
+                north = 37.8,
+            )
 
-        val largeBounds = MBTilesWriter.Bounds(
-            west = -123.0,
-            south = 37.5,
-            east = -122.0,
-            north = 38.0,
-        )
+        val largeBounds =
+            MBTilesWriter.Bounds(
+                west = -123.0,
+                south = 37.5,
+                east = -122.0,
+                north = 38.0,
+            )
 
         val smallGeohashes = TileDownloadManager.geohashesForBounds(smallBounds, 4)
         val largeGeohashes = TileDownloadManager.geohashesForBounds(largeBounds, 4)
@@ -254,12 +261,13 @@ class TileDownloadManagerTest {
 
     @Test
     fun `geohashesForBounds returns more geohashes for higher precision`() {
-        val bounds = MBTilesWriter.Bounds(
-            west = -122.5,
-            south = 37.7,
-            east = -122.4,
-            north = 37.8,
-        )
+        val bounds =
+            MBTilesWriter.Bounds(
+                west = -122.5,
+                south = 37.7,
+                east = -122.4,
+                north = 37.8,
+            )
 
         val precision3 = TileDownloadManager.geohashesForBounds(bounds, 3)
         val precision5 = TileDownloadManager.geohashesForBounds(bounds, 5)
@@ -371,15 +379,16 @@ class TileDownloadManagerTest {
 
     @Test
     fun `RegionParams data class holds correct values`() {
-        val params = RegionParams(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 10,
-            minZoom = 5,
-            maxZoom = 14,
-            name = "San Francisco",
-            outputFile = java.io.File("/tmp/test.mbtiles"),
-        )
+        val params =
+            RegionParams(
+                centerLat = 37.7749,
+                centerLon = -122.4194,
+                radiusKm = 10,
+                minZoom = 5,
+                maxZoom = 14,
+                name = "San Francisco",
+                outputFile = java.io.File("/tmp/test.mbtiles"),
+            )
 
         assertEquals(37.7749, params.centerLat, EPSILON)
         assertEquals(-122.4194, params.centerLon, EPSILON)
@@ -445,28 +454,30 @@ class TileDownloadManagerTest {
 
     @Test
     fun `DownloadProgress progress calculation is correct`() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
-            totalTiles = 100,
-            downloadedTiles = 50,
-            failedTiles = 5,
-            bytesDownloaded = 500_000,
-            currentZoom = 10,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
+                totalTiles = 100,
+                downloadedTiles = 50,
+                failedTiles = 5,
+                bytesDownloaded = 500_000,
+                currentZoom = 10,
+            )
 
         assertEquals(0.5f, progress.progress, 0.001f)
     }
 
     @Test
     fun `DownloadProgress progress is zero when totalTiles is zero`() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.IDLE,
-            totalTiles = 0,
-            downloadedTiles = 0,
-            failedTiles = 0,
-            bytesDownloaded = 0,
-            currentZoom = 0,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.IDLE,
+                totalTiles = 0,
+                downloadedTiles = 0,
+                failedTiles = 0,
+                bytesDownloaded = 0,
+                currentZoom = 0,
+            )
 
         assertEquals(0f, progress.progress, 0.001f)
     }
@@ -610,292 +621,308 @@ class TileDownloadManagerRobolectricTest {
     // ========== RMSP Download Tests ==========
 
     @Test
-    fun `downloadRegion with RMSP source returns file on success`() = runTest {
-        val outputFile = File(testOutputDir, "rmsp_test.mbtiles")
-        val tileData = createMockRmspTileData(listOf(Triple(10, 163, 395)))
+    fun `downloadRegion with RMSP source returns file on success`() =
+        runTest {
+            val outputFile = File(testOutputDir, "rmsp_test.mbtiles")
+            val tileData = createMockRmspTileData(listOf(Triple(10, 163, 395)))
 
-        val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ -> tileData }
-        val source = TileSource.Rmsp("test_server_hash", fetchTiles)
+            val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ -> tileData }
+            val source = TileSource.Rmsp("test_server_hash", fetchTiles)
 
-        mockkConstructor(MBTilesWriter::class)
+            mockkConstructor(MBTilesWriter::class)
 
-        val manager = TileDownloadManager(context, source)
-        val result = manager.downloadRegion(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 1,
-            minZoom = 10,
-            maxZoom = 10,
-            name = "Test Region",
-            outputFile = outputFile,
-        )
+            val manager = TileDownloadManager(context, source)
+            val result =
+                manager.downloadRegion(
+                    centerLat = 37.7749,
+                    centerLon = -122.4194,
+                    radiusKm = 1,
+                    minZoom = 10,
+                    maxZoom = 10,
+                    name = "Test Region",
+                    outputFile = outputFile,
+                )
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        assertNotNull(result)
-        assertEquals(outputFile, result)
+            assertNotNull(result)
+            assertEquals(outputFile, result)
 
-        unmockkConstructor(MBTilesWriter::class)
-    }
-
-    @Test
-    fun `downloadRegion with RMSP source returns null when no tiles received`() = runTest {
-        val outputFile = File(testOutputDir, "rmsp_empty.mbtiles")
-
-        val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ -> null }
-        val source = TileSource.Rmsp("test_server_hash", fetchTiles)
-
-        mockkConstructor(MBTilesWriter::class)
-
-        val manager = TileDownloadManager(context, source)
-        val result = manager.downloadRegion(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 1,
-            minZoom = 10,
-            maxZoom = 10,
-            name = "Test Region",
-            outputFile = outputFile,
-        )
-
-        advanceUntilIdle()
-
-        assertNull(result)
-
-        unmockkConstructor(MBTilesWriter::class)
-    }
-
-    @Test
-    fun `downloadRegion with RMSP source deduplicates tiles`() = runTest {
-        val outputFile = File(testOutputDir, "rmsp_dedup.mbtiles")
-        // Create data with duplicate tiles
-        val duplicateTileData = createMockRmspTileData(
-            listOf(
-                Triple(10, 163, 395),
-                Triple(10, 163, 395), // Duplicate
-                Triple(10, 164, 395),
-            ),
-        )
-
-        var fetchCount = 0
-        val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ ->
-            fetchCount++
-            duplicateTileData
+            unmockkConstructor(MBTilesWriter::class)
         }
-        val source = TileSource.Rmsp("test_server_hash", fetchTiles)
-
-        mockkConstructor(MBTilesWriter::class)
-
-        val manager = TileDownloadManager(context, source)
-        manager.downloadRegion(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 1,
-            minZoom = 10,
-            maxZoom = 10,
-            name = "Test Region",
-            outputFile = outputFile,
-        )
-
-        advanceUntilIdle()
-
-        // Verify fetchTiles was called (at least once for each geohash)
-        assertTrue(fetchCount > 0)
-
-        unmockkConstructor(MBTilesWriter::class)
-    }
 
     @Test
-    fun `downloadRegion with RMSP source handles empty tile data gracefully`() = runTest {
-        val outputFile = File(testOutputDir, "rmsp_empty_data.mbtiles")
+    fun `downloadRegion with RMSP source returns null when no tiles received`() =
+        runTest {
+            val outputFile = File(testOutputDir, "rmsp_empty.mbtiles")
 
-        val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ ->
-            ByteArray(0) // Empty data
+            val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ -> null }
+            val source = TileSource.Rmsp("test_server_hash", fetchTiles)
+
+            mockkConstructor(MBTilesWriter::class)
+
+            val manager = TileDownloadManager(context, source)
+            val result =
+                manager.downloadRegion(
+                    centerLat = 37.7749,
+                    centerLon = -122.4194,
+                    radiusKm = 1,
+                    minZoom = 10,
+                    maxZoom = 10,
+                    name = "Test Region",
+                    outputFile = outputFile,
+                )
+
+            advanceUntilIdle()
+
+            assertNull(result)
+
+            unmockkConstructor(MBTilesWriter::class)
         }
-        val source = TileSource.Rmsp("test_server_hash", fetchTiles)
 
-        mockkConstructor(MBTilesWriter::class)
+    @Test
+    fun `downloadRegion with RMSP source deduplicates tiles`() =
+        runTest {
+            val outputFile = File(testOutputDir, "rmsp_dedup.mbtiles")
+            // Create data with duplicate tiles
+            val duplicateTileData =
+                createMockRmspTileData(
+                    listOf(
+                        Triple(10, 163, 395),
+                        Triple(10, 163, 395), // Duplicate
+                        Triple(10, 164, 395),
+                    ),
+                )
 
-        val manager = TileDownloadManager(context, source)
-        val result = manager.downloadRegion(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 1,
-            minZoom = 10,
-            maxZoom = 10,
-            name = "Test Region",
-            outputFile = outputFile,
-        )
+            var fetchCount = 0
+            val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ ->
+                fetchCount++
+                duplicateTileData
+            }
+            val source = TileSource.Rmsp("test_server_hash", fetchTiles)
 
-        advanceUntilIdle()
+            mockkConstructor(MBTilesWriter::class)
 
-        // Should return null because no tiles were received
-        assertNull(result)
+            val manager = TileDownloadManager(context, source)
+            manager.downloadRegion(
+                centerLat = 37.7749,
+                centerLon = -122.4194,
+                radiusKm = 1,
+                minZoom = 10,
+                maxZoom = 10,
+                name = "Test Region",
+                outputFile = outputFile,
+            )
 
-        unmockkConstructor(MBTilesWriter::class)
-    }
+            advanceUntilIdle()
+
+            // Verify fetchTiles was called (at least once for each geohash)
+            assertTrue(fetchCount > 0)
+
+            unmockkConstructor(MBTilesWriter::class)
+        }
+
+    @Test
+    fun `downloadRegion with RMSP source handles empty tile data gracefully`() =
+        runTest {
+            val outputFile = File(testOutputDir, "rmsp_empty_data.mbtiles")
+
+            val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ ->
+                ByteArray(0) // Empty data
+            }
+            val source = TileSource.Rmsp("test_server_hash", fetchTiles)
+
+            mockkConstructor(MBTilesWriter::class)
+
+            val manager = TileDownloadManager(context, source)
+            val result =
+                manager.downloadRegion(
+                    centerLat = 37.7749,
+                    centerLon = -122.4194,
+                    radiusKm = 1,
+                    minZoom = 10,
+                    maxZoom = 10,
+                    name = "Test Region",
+                    outputFile = outputFile,
+                )
+
+            advanceUntilIdle()
+
+            // Should return null because no tiles were received
+            assertNull(result)
+
+            unmockkConstructor(MBTilesWriter::class)
+        }
 
     // ========== Progress Callback Tests ==========
 
     @Test
-    fun `downloadRegion with RMSP updates progress status through lifecycle`() = runTest {
-        val outputFile = File(testOutputDir, "rmsp_progress.mbtiles")
-        val tileData = createMockRmspTileData(listOf(Triple(10, 163, 395)))
+    fun `downloadRegion with RMSP updates progress status through lifecycle`() =
+        runTest {
+            val outputFile = File(testOutputDir, "rmsp_progress.mbtiles")
+            val tileData = createMockRmspTileData(listOf(Triple(10, 163, 395)))
 
-        val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ -> tileData }
-        val source = TileSource.Rmsp("test_server_hash", fetchTiles)
+            val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ -> tileData }
+            val source = TileSource.Rmsp("test_server_hash", fetchTiles)
 
-        mockkConstructor(MBTilesWriter::class)
+            mockkConstructor(MBTilesWriter::class)
 
-        val manager = TileDownloadManager(context, source)
-        val observedStatuses = mutableListOf<TileDownloadManager.DownloadProgress.Status>()
+            val manager = TileDownloadManager(context, source)
+            val observedStatuses = mutableListOf<TileDownloadManager.DownloadProgress.Status>()
 
-        // Collect progress updates
-        val collectJob = launch {
-            manager.progress.collect { progress ->
-                if (progress.status !in observedStatuses) {
-                    observedStatuses.add(progress.status)
+            // Collect progress updates
+            val collectJob =
+                launch {
+                    manager.progress.collect { progress ->
+                        if (progress.status !in observedStatuses) {
+                            observedStatuses.add(progress.status)
+                        }
+                    }
                 }
-            }
+
+            manager.downloadRegion(
+                centerLat = 37.7749,
+                centerLon = -122.4194,
+                radiusKm = 1,
+                minZoom = 10,
+                maxZoom = 10,
+                name = "Test Region",
+                outputFile = outputFile,
+            )
+
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            // Verify we went through expected status progression
+            assertTrue(
+                "Should include CALCULATING status",
+                observedStatuses.contains(TileDownloadManager.DownloadProgress.Status.CALCULATING),
+            )
+            assertTrue(
+                "Should include DOWNLOADING status",
+                observedStatuses.contains(TileDownloadManager.DownloadProgress.Status.DOWNLOADING),
+            )
+
+            unmockkConstructor(MBTilesWriter::class)
         }
-
-        manager.downloadRegion(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 1,
-            minZoom = 10,
-            maxZoom = 10,
-            name = "Test Region",
-            outputFile = outputFile,
-        )
-
-        advanceUntilIdle()
-        collectJob.cancel()
-
-        // Verify we went through expected status progression
-        assertTrue(
-            "Should include CALCULATING status",
-            observedStatuses.contains(TileDownloadManager.DownloadProgress.Status.CALCULATING),
-        )
-        assertTrue(
-            "Should include DOWNLOADING status",
-            observedStatuses.contains(TileDownloadManager.DownloadProgress.Status.DOWNLOADING),
-        )
-
-        unmockkConstructor(MBTilesWriter::class)
-    }
 
     // ========== Cancellation Tests ==========
 
     @Test
-    fun `cancel method sets isCancelled flag`() = runTest {
-        val manager = TileDownloadManager(context, TileSource.Http())
+    fun `cancel method sets isCancelled flag`() =
+        runTest {
+            val manager = TileDownloadManager(context, TileSource.Http())
 
-        // Cancel should not throw even when no download is in progress
-        manager.cancel()
+            // Cancel should not throw even when no download is in progress
+            manager.cancel()
 
-        // Verify progress is not changed (still IDLE since no download was running)
-        assertEquals(TileDownloadManager.DownloadProgress.Status.IDLE, manager.progress.value.status)
-    }
+            // Verify progress is not changed (still IDLE since no download was running)
+            assertEquals(TileDownloadManager.DownloadProgress.Status.IDLE, manager.progress.value.status)
+        }
 
     @Test
-    fun `cancel followed by reset restores idle state`() = runTest {
-        val manager = TileDownloadManager(context, TileSource.Http())
+    fun `cancel followed by reset restores idle state`() =
+        runTest {
+            val manager = TileDownloadManager(context, TileSource.Http())
 
-        manager.cancel()
-        manager.reset()
+            manager.cancel()
+            manager.reset()
 
-        val progress = manager.progress.value
-        assertEquals(TileDownloadManager.DownloadProgress.Status.IDLE, progress.status)
-    }
+            val progress = manager.progress.value
+            assertEquals(TileDownloadManager.DownloadProgress.Status.IDLE, progress.status)
+        }
 
     // ========== Reset Tests ==========
 
     @Test
-    fun `reset clears progress state`() = runTest {
-        val manager = TileDownloadManager(context, TileSource.Http())
+    fun `reset clears progress state`() =
+        runTest {
+            val manager = TileDownloadManager(context, TileSource.Http())
 
-        // Manually modify progress state by calling cancel (which sets CANCELLED status indirectly)
-        manager.cancel()
+            // Manually modify progress state by calling cancel (which sets CANCELLED status indirectly)
+            manager.cancel()
 
-        // Reset should restore to initial state
-        manager.reset()
+            // Reset should restore to initial state
+            manager.reset()
 
-        val progress = manager.progress.value
-        assertEquals(TileDownloadManager.DownloadProgress.Status.IDLE, progress.status)
-        assertEquals(0, progress.totalTiles)
-        assertEquals(0, progress.downloadedTiles)
-        assertEquals(0, progress.failedTiles)
-        assertEquals(0L, progress.bytesDownloaded)
-        assertEquals(0, progress.currentZoom)
-        assertNull(progress.errorMessage)
-    }
+            val progress = manager.progress.value
+            assertEquals(TileDownloadManager.DownloadProgress.Status.IDLE, progress.status)
+            assertEquals(0, progress.totalTiles)
+            assertEquals(0, progress.downloadedTiles)
+            assertEquals(0, progress.failedTiles)
+            assertEquals(0L, progress.bytesDownloaded)
+            assertEquals(0, progress.currentZoom)
+            assertNull(progress.errorMessage)
+        }
 
     // ========== Error Handling Tests ==========
 
     @Test
-    fun `downloadRegion with RMSP sets ERROR status on exception`() = runTest {
-        val outputFile = File(testOutputDir, "rmsp_error.mbtiles")
+    fun `downloadRegion with RMSP sets ERROR status on exception`() =
+        runTest {
+            val outputFile = File(testOutputDir, "rmsp_error.mbtiles")
 
-        val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ ->
-            throw RuntimeException("Simulated RMSP error")
+            val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ ->
+                throw java.io.IOException("Simulated RMSP error")
+            }
+            val source = TileSource.Rmsp("test_server_hash", fetchTiles)
+
+            mockkConstructor(MBTilesWriter::class)
+
+            val manager = TileDownloadManager(context, source)
+            val result =
+                manager.downloadRegion(
+                    centerLat = 37.7749,
+                    centerLon = -122.4194,
+                    radiusKm = 1,
+                    minZoom = 10,
+                    maxZoom = 10,
+                    name = "Test Region",
+                    outputFile = outputFile,
+                )
+
+            advanceUntilIdle()
+
+            assertNull(result)
+            assertEquals(
+                TileDownloadManager.DownloadProgress.Status.ERROR,
+                manager.progress.value.status,
+            )
+            assertNotNull(manager.progress.value.errorMessage)
+
+            unmockkConstructor(MBTilesWriter::class)
         }
-        val source = TileSource.Rmsp("test_server_hash", fetchTiles)
-
-        mockkConstructor(MBTilesWriter::class)
-
-        val manager = TileDownloadManager(context, source)
-        val result = manager.downloadRegion(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 1,
-            minZoom = 10,
-            maxZoom = 10,
-            name = "Test Region",
-            outputFile = outputFile,
-        )
-
-        advanceUntilIdle()
-
-        assertNull(result)
-        assertEquals(
-            TileDownloadManager.DownloadProgress.Status.ERROR,
-            manager.progress.value.status,
-        )
-        assertNotNull(manager.progress.value.errorMessage)
-
-        unmockkConstructor(MBTilesWriter::class)
-    }
 
     @Test
-    fun `error message is captured in progress state`() = runTest {
-        val outputFile = File(testOutputDir, "rmsp_error_msg.mbtiles")
-        val expectedErrorMessage = "Custom RMSP fetch error"
+    fun `error message is captured in progress state`() =
+        runTest {
+            val outputFile = File(testOutputDir, "rmsp_error_msg.mbtiles")
+            val expectedErrorMessage = "Custom RMSP fetch error"
 
-        val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ ->
-            throw RuntimeException(expectedErrorMessage)
+            val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ ->
+                throw java.io.IOException(expectedErrorMessage)
+            }
+            val source = TileSource.Rmsp("test_server_hash", fetchTiles)
+
+            mockkConstructor(MBTilesWriter::class)
+
+            val manager = TileDownloadManager(context, source)
+            manager.downloadRegion(
+                centerLat = 37.7749,
+                centerLon = -122.4194,
+                radiusKm = 1,
+                minZoom = 10,
+                maxZoom = 10,
+                name = "Test Region",
+                outputFile = outputFile,
+            )
+
+            advanceUntilIdle()
+
+            assertEquals(expectedErrorMessage, manager.progress.value.errorMessage)
+
+            unmockkConstructor(MBTilesWriter::class)
         }
-        val source = TileSource.Rmsp("test_server_hash", fetchTiles)
-
-        mockkConstructor(MBTilesWriter::class)
-
-        val manager = TileDownloadManager(context, source)
-        manager.downloadRegion(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 1,
-            minZoom = 10,
-            maxZoom = 10,
-            name = "Test Region",
-            outputFile = outputFile,
-        )
-
-        advanceUntilIdle()
-
-        assertEquals(expectedErrorMessage, manager.progress.value.errorMessage)
-
-        unmockkConstructor(MBTilesWriter::class)
-    }
 
     // ========== Estimate Download Tests ==========
 
@@ -903,13 +930,14 @@ class TileDownloadManagerRobolectricTest {
     fun `estimateDownload returns reasonable tile count for small radius`() {
         val manager = TileDownloadManager(context, TileSource.Http())
 
-        val (tileCount, estimatedSize) = manager.estimateDownload(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 1,
-            minZoom = 10,
-            maxZoom = 12,
-        )
+        val (tileCount, estimatedSize) =
+            manager.estimateDownload(
+                centerLat = 37.7749,
+                centerLon = -122.4194,
+                radiusKm = 1,
+                minZoom = 10,
+                maxZoom = 12,
+            )
 
         assertTrue("Tile count should be positive", tileCount > 0)
         assertTrue("Tile count should be reasonable for 1km radius", tileCount < 1000)
@@ -924,21 +952,23 @@ class TileDownloadManagerRobolectricTest {
     fun `estimateDownload scales with radius`() {
         val manager = TileDownloadManager(context, TileSource.Http())
 
-        val (smallCount, _) = manager.estimateDownload(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 1,
-            minZoom = 10,
-            maxZoom = 10,
-        )
+        val (smallCount, _) =
+            manager.estimateDownload(
+                centerLat = 37.7749,
+                centerLon = -122.4194,
+                radiusKm = 1,
+                minZoom = 10,
+                maxZoom = 10,
+            )
 
-        val (largeCount, _) = manager.estimateDownload(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 10,
-            minZoom = 10,
-            maxZoom = 10,
-        )
+        val (largeCount, _) =
+            manager.estimateDownload(
+                centerLat = 37.7749,
+                centerLon = -122.4194,
+                radiusKm = 10,
+                minZoom = 10,
+                maxZoom = 10,
+            )
 
         assertTrue("Larger radius should have more tiles", largeCount > smallCount)
     }
@@ -947,21 +977,23 @@ class TileDownloadManagerRobolectricTest {
     fun `estimateDownload scales with zoom range`() {
         val manager = TileDownloadManager(context, TileSource.Http())
 
-        val (smallZoomCount, _) = manager.estimateDownload(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 5,
-            minZoom = 10,
-            maxZoom = 10,
-        )
+        val (smallZoomCount, _) =
+            manager.estimateDownload(
+                centerLat = 37.7749,
+                centerLon = -122.4194,
+                radiusKm = 5,
+                minZoom = 10,
+                maxZoom = 10,
+            )
 
-        val (largeZoomCount, _) = manager.estimateDownload(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 5,
-            minZoom = 10,
-            maxZoom = 12,
-        )
+        val (largeZoomCount, _) =
+            manager.estimateDownload(
+                centerLat = 37.7749,
+                centerLon = -122.4194,
+                radiusKm = 5,
+                minZoom = 10,
+                maxZoom = 12,
+            )
 
         assertTrue("Larger zoom range should have more tiles", largeZoomCount > smallZoomCount)
     }
@@ -988,145 +1020,151 @@ class TileDownloadManagerRobolectricTest {
     // ========== RMSP Tile Unpacking Tests ==========
 
     @Test
-    fun `RMSP tile data with insufficient header bytes is handled`() = runTest {
-        val outputFile = File(testOutputDir, "rmsp_short_header.mbtiles")
+    fun `RMSP tile data with insufficient header bytes is handled`() =
+        runTest {
+            val outputFile = File(testOutputDir, "rmsp_short_header.mbtiles")
 
-        // Only 2 bytes - less than the 4-byte tile count header
-        val shortData = ByteArray(2) { 0 }
+            // Only 2 bytes - less than the 4-byte tile count header
+            val shortData = ByteArray(2) { 0 }
 
-        val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ -> shortData }
-        val source = TileSource.Rmsp("test_server_hash", fetchTiles)
+            val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ -> shortData }
+            val source = TileSource.Rmsp("test_server_hash", fetchTiles)
 
-        mockkConstructor(MBTilesWriter::class)
+            mockkConstructor(MBTilesWriter::class)
 
-        val manager = TileDownloadManager(context, source)
-        val result = manager.downloadRegion(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 1,
-            minZoom = 10,
-            maxZoom = 10,
-            name = "Test Region",
-            outputFile = outputFile,
-        )
+            val manager = TileDownloadManager(context, source)
+            val result =
+                manager.downloadRegion(
+                    centerLat = 37.7749,
+                    centerLon = -122.4194,
+                    radiusKm = 1,
+                    minZoom = 10,
+                    maxZoom = 10,
+                    name = "Test Region",
+                    outputFile = outputFile,
+                )
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Should return null because no valid tiles were unpacked
-        assertNull(result)
+            // Should return null because no valid tiles were unpacked
+            assertNull(result)
 
-        unmockkConstructor(MBTilesWriter::class)
-    }
+            unmockkConstructor(MBTilesWriter::class)
+        }
 
     @Test
-    fun `RMSP tile data with truncated tile entry is handled`() = runTest {
-        val outputFile = File(testOutputDir, "rmsp_truncated.mbtiles")
+    fun `RMSP tile data with truncated tile entry is handled`() =
+        runTest {
+            val outputFile = File(testOutputDir, "rmsp_truncated.mbtiles")
 
-        // Create data with tile count=1 but truncated tile entry
-        val buffer = ByteBuffer.allocate(10).order(ByteOrder.BIG_ENDIAN)
-        buffer.putInt(1) // tile count = 1
-        buffer.put(10.toByte()) // z
-        buffer.putInt(163) // x (incomplete - missing y, size, data)
+            // Create data with tile count=1 but truncated tile entry
+            val buffer = ByteBuffer.allocate(10).order(ByteOrder.BIG_ENDIAN)
+            buffer.putInt(1) // tile count = 1
+            buffer.put(10.toByte()) // z
+            buffer.putInt(163) // x (incomplete - missing y, size, data)
 
-        val truncatedData = buffer.array()
+            val truncatedData = buffer.array()
 
-        val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ -> truncatedData }
-        val source = TileSource.Rmsp("test_server_hash", fetchTiles)
+            val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { _, _ -> truncatedData }
+            val source = TileSource.Rmsp("test_server_hash", fetchTiles)
 
-        mockkConstructor(MBTilesWriter::class)
+            mockkConstructor(MBTilesWriter::class)
 
-        val manager = TileDownloadManager(context, source)
-        val result = manager.downloadRegion(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 1,
-            minZoom = 10,
-            maxZoom = 10,
-            name = "Test Region",
-            outputFile = outputFile,
-        )
+            val manager = TileDownloadManager(context, source)
+            val result =
+                manager.downloadRegion(
+                    centerLat = 37.7749,
+                    centerLon = -122.4194,
+                    radiusKm = 1,
+                    minZoom = 10,
+                    maxZoom = 10,
+                    name = "Test Region",
+                    outputFile = outputFile,
+                )
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Should return null because tile was truncated
-        assertNull(result)
+            // Should return null because tile was truncated
+            assertNull(result)
 
-        unmockkConstructor(MBTilesWriter::class)
-    }
+            unmockkConstructor(MBTilesWriter::class)
+        }
 
     // ========== Geohash Precision Selection Tests ==========
 
     @Test
-    fun `RMSP uses appropriate geohash precision for small radius`() = runTest {
-        val outputFile = File(testOutputDir, "rmsp_precision_small.mbtiles")
-        val observedGeohashes = mutableListOf<String>()
+    fun `RMSP uses appropriate geohash precision for small radius`() =
+        runTest {
+            val outputFile = File(testOutputDir, "rmsp_precision_small.mbtiles")
+            val observedGeohashes = mutableListOf<String>()
 
-        val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { geohash, _ ->
-            observedGeohashes.add(geohash)
-            createMockRmspTileData(listOf(Triple(10, 163, 395)))
+            val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { geohash, _ ->
+                observedGeohashes.add(geohash)
+                createMockRmspTileData(listOf(Triple(10, 163, 395)))
+            }
+            val source = TileSource.Rmsp("test_server_hash", fetchTiles)
+
+            mockkConstructor(MBTilesWriter::class)
+
+            val manager = TileDownloadManager(context, source)
+            manager.downloadRegion(
+                centerLat = 37.7749,
+                centerLon = -122.4194,
+                radiusKm = 3, // Small radius - should use precision 5
+                minZoom = 10,
+                maxZoom = 10,
+                name = "Test Region",
+                outputFile = outputFile,
+            )
+
+            advanceUntilIdle()
+
+            // Verify geohashes have precision 5 (5 characters)
+            assertTrue("Should have observed geohashes", observedGeohashes.isNotEmpty())
+            assertTrue(
+                "Geohashes should have precision 5 for small radius",
+                observedGeohashes.all { it.length == 5 },
+            )
+
+            unmockkConstructor(MBTilesWriter::class)
         }
-        val source = TileSource.Rmsp("test_server_hash", fetchTiles)
-
-        mockkConstructor(MBTilesWriter::class)
-
-        val manager = TileDownloadManager(context, source)
-        manager.downloadRegion(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 3, // Small radius - should use precision 5
-            minZoom = 10,
-            maxZoom = 10,
-            name = "Test Region",
-            outputFile = outputFile,
-        )
-
-        advanceUntilIdle()
-
-        // Verify geohashes have precision 5 (5 characters)
-        assertTrue("Should have observed geohashes", observedGeohashes.isNotEmpty())
-        assertTrue(
-            "Geohashes should have precision 5 for small radius",
-            observedGeohashes.all { it.length == 5 },
-        )
-
-        unmockkConstructor(MBTilesWriter::class)
-    }
 
     @Test
-    fun `RMSP uses appropriate geohash precision for large radius`() = runTest {
-        val outputFile = File(testOutputDir, "rmsp_precision_large.mbtiles")
-        val observedGeohashes = mutableListOf<String>()
+    fun `RMSP uses appropriate geohash precision for large radius`() =
+        runTest {
+            val outputFile = File(testOutputDir, "rmsp_precision_large.mbtiles")
+            val observedGeohashes = mutableListOf<String>()
 
-        val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { geohash, _ ->
-            observedGeohashes.add(geohash)
-            createMockRmspTileData(listOf(Triple(10, 163, 395)))
+            val fetchTiles: suspend (String, List<Int>) -> ByteArray? = { geohash, _ ->
+                observedGeohashes.add(geohash)
+                createMockRmspTileData(listOf(Triple(10, 163, 395)))
+            }
+            val source = TileSource.Rmsp("test_server_hash", fetchTiles)
+
+            mockkConstructor(MBTilesWriter::class)
+
+            val manager = TileDownloadManager(context, source)
+            manager.downloadRegion(
+                centerLat = 37.7749,
+                centerLon = -122.4194,
+                radiusKm = 100, // Large radius - should use precision 2
+                minZoom = 10,
+                maxZoom = 10,
+                name = "Test Region",
+                outputFile = outputFile,
+            )
+
+            advanceUntilIdle()
+
+            // Verify geohashes have precision 2 (2 characters)
+            assertTrue("Should have observed geohashes", observedGeohashes.isNotEmpty())
+            assertTrue(
+                "Geohashes should have precision 2 for large radius",
+                observedGeohashes.all { it.length == 2 },
+            )
+
+            unmockkConstructor(MBTilesWriter::class)
         }
-        val source = TileSource.Rmsp("test_server_hash", fetchTiles)
-
-        mockkConstructor(MBTilesWriter::class)
-
-        val manager = TileDownloadManager(context, source)
-        manager.downloadRegion(
-            centerLat = 37.7749,
-            centerLon = -122.4194,
-            radiusKm = 100, // Large radius - should use precision 2
-            minZoom = 10,
-            maxZoom = 10,
-            name = "Test Region",
-            outputFile = outputFile,
-        )
-
-        advanceUntilIdle()
-
-        // Verify geohashes have precision 2 (2 characters)
-        assertTrue("Should have observed geohashes", observedGeohashes.isNotEmpty())
-        assertTrue(
-            "Geohashes should have precision 2 for large radius",
-            observedGeohashes.all { it.length == 2 },
-        )
-
-        unmockkConstructor(MBTilesWriter::class)
-    }
 
     // ========== Helper Functions ==========
 

@@ -45,215 +45,232 @@ class MapTileSourceManagerTest {
         every { settingsRepository.mapSourceHttpEnabledFlow } returns flowOf(true)
         every { settingsRepository.mapSourceRmspEnabledFlow } returns flowOf(false)
 
-        mapTileSourceManager = MapTileSourceManager(
-            offlineMapRegionRepository,
-            rmspServerRepository,
-            settingsRepository,
-        )
+        mapTileSourceManager =
+            MapTileSourceManager(
+                offlineMapRegionRepository,
+                rmspServerRepository,
+                settingsRepository,
+            )
     }
 
     // ========== getMapStyle() Tests - HTTP Source ==========
 
     @Test
-    fun `getMapStyle returns Online when HTTP is enabled and no offline regions`() = runTest {
-        val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
+    fun `getMapStyle returns Online when HTTP is enabled and no offline regions`() =
+        runTest {
+            val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
 
-        assertTrue(result is MapStyleResult.Online)
-        assertEquals(MapTileSourceManager.DEFAULT_STYLE_URL, (result as MapStyleResult.Online).styleUrl)
-    }
+            assertTrue(result is MapStyleResult.Online)
+            assertEquals(MapTileSourceManager.DEFAULT_STYLE_URL, (result as MapStyleResult.Online).styleUrl)
+        }
 
     @Test
-    fun `getMapStyle returns Online when HTTP is enabled with null location`() = runTest {
-        val result = mapTileSourceManager.getMapStyle(null, null)
+    fun `getMapStyle returns Online when HTTP is enabled with null location`() =
+        runTest {
+            val result = mapTileSourceManager.getMapStyle(null, null)
 
-        assertTrue(result is MapStyleResult.Online)
-    }
+            assertTrue(result is MapStyleResult.Online)
+        }
 
     // ========== getMapStyle() Tests - RMSP Source ==========
 
     @Test
-    fun `getMapStyle returns Rmsp when HTTP is disabled and RMSP is enabled with server`() = runTest {
-        // Setup: HTTP disabled, RMSP enabled with server available
-        coEvery { settingsRepository.getMapSourceHttpEnabled() } returns false
-        coEvery { settingsRepository.getMapSourceRmspEnabled() } returns true
+    fun `getMapStyle returns Rmsp when HTTP is disabled and RMSP is enabled with server`() =
+        runTest {
+            // Setup: HTTP disabled, RMSP enabled with server available
+            coEvery { settingsRepository.getMapSourceHttpEnabled() } returns false
+            coEvery { settingsRepository.getMapSourceRmspEnabled() } returns true
 
-        val mockServer = createMockRmspServer("test-server")
-        every { rmspServerRepository.getNearestServers(any()) } returns flowOf(listOf(mockServer))
+            val mockServer = createMockRmspServer("test-server")
+            every { rmspServerRepository.getNearestServers(any()) } returns flowOf(listOf(mockServer))
 
-        val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
+            val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
 
-        assertTrue(result is MapStyleResult.Rmsp)
-        assertEquals(mockServer, (result as MapStyleResult.Rmsp).server)
-    }
-
-    @Test
-    fun `getMapStyle returns Unavailable when both HTTP and RMSP are disabled`() = runTest {
-        // Setup: Both disabled
-        coEvery { settingsRepository.getMapSourceHttpEnabled() } returns false
-        coEvery { settingsRepository.getMapSourceRmspEnabled() } returns false
-
-        val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
-
-        assertTrue(result is MapStyleResult.Unavailable)
-        assertEquals("Both HTTP and RMSP sources are disabled", (result as MapStyleResult.Unavailable).reason)
-    }
+            assertTrue(result is MapStyleResult.Rmsp)
+            assertEquals(mockServer, (result as MapStyleResult.Rmsp).server)
+        }
 
     @Test
-    fun `getMapStyle returns Unavailable when RMSP enabled but no servers available`() = runTest {
-        // Setup: HTTP disabled, RMSP enabled but no servers
-        coEvery { settingsRepository.getMapSourceHttpEnabled() } returns false
-        coEvery { settingsRepository.getMapSourceRmspEnabled() } returns true
-        every { rmspServerRepository.getNearestServers(any()) } returns flowOf(emptyList())
+    fun `getMapStyle returns Unavailable when both HTTP and RMSP are disabled`() =
+        runTest {
+            // Setup: Both disabled
+            coEvery { settingsRepository.getMapSourceHttpEnabled() } returns false
+            coEvery { settingsRepository.getMapSourceRmspEnabled() } returns false
 
-        val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
+            val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
 
-        assertTrue(result is MapStyleResult.Unavailable)
-        assertEquals("No RMSP servers available", (result as MapStyleResult.Unavailable).reason)
-    }
+            assertTrue(result is MapStyleResult.Unavailable)
+            assertEquals("Both HTTP and RMSP sources are disabled", (result as MapStyleResult.Unavailable).reason)
+        }
+
+    @Test
+    fun `getMapStyle returns Unavailable when RMSP enabled but no servers available`() =
+        runTest {
+            // Setup: HTTP disabled, RMSP enabled but no servers
+            coEvery { settingsRepository.getMapSourceHttpEnabled() } returns false
+            coEvery { settingsRepository.getMapSourceRmspEnabled() } returns true
+            every { rmspServerRepository.getNearestServers(any()) } returns flowOf(emptyList())
+
+            val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
+
+            assertTrue(result is MapStyleResult.Unavailable)
+            assertEquals("No RMSP servers available", (result as MapStyleResult.Unavailable).reason)
+        }
 
     // ========== getMapStyle() Tests - Offline Source ==========
 
     @Test
-    fun `getMapStyle returns Offline when offline region covers location`() = runTest {
-        // Setup: Offline region that covers San Francisco
-        val region = OfflineMapRegion(
-            id = 1,
-            name = "San Francisco",
-            centerLatitude = 37.7749,
-            centerLongitude = -122.4194,
-            radiusKm = 10,
-            minZoom = 5,
-            maxZoom = 14,
-            status = OfflineMapRegion.Status.COMPLETE,
-            mbtilesPath = null, // Will be null since file doesn't exist in tests
-            tileCount = 1000,
-            sizeBytes = 5000000L,
-            downloadProgress = 1.0f,
-            errorMessage = null,
-            createdAt = System.currentTimeMillis(),
-            completedAt = System.currentTimeMillis(),
-            source = OfflineMapRegion.Source.HTTP,
-        )
-        every { offlineMapRegionRepository.getCompletedRegions() } returns flowOf(listOf(region))
+    fun `getMapStyle returns Offline when offline region covers location`() =
+        runTest {
+            // Setup: Offline region that covers San Francisco
+            val region =
+                OfflineMapRegion(
+                    id = 1,
+                    name = "San Francisco",
+                    centerLatitude = 37.7749,
+                    centerLongitude = -122.4194,
+                    radiusKm = 10,
+                    minZoom = 5,
+                    maxZoom = 14,
+                    status = OfflineMapRegion.Status.COMPLETE,
+                    mbtilesPath = null, // Will be null since file doesn't exist in tests
+                    tileCount = 1000,
+                    sizeBytes = 5000000L,
+                    downloadProgress = 1.0f,
+                    errorMessage = null,
+                    createdAt = System.currentTimeMillis(),
+                    completedAt = System.currentTimeMillis(),
+                    source = OfflineMapRegion.Source.HTTP,
+                )
+            every { offlineMapRegionRepository.getCompletedRegions() } returns flowOf(listOf(region))
 
-        // Without a real file, the region won't be used
-        val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
+            // Without a real file, the region won't be used
+            val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
 
-        // Should fall back to HTTP since file doesn't exist
-        assertTrue(result is MapStyleResult.Online)
-    }
+            // Should fall back to HTTP since file doesn't exist
+            assertTrue(result is MapStyleResult.Online)
+        }
 
     // ========== httpEnabled/rmspEnabled Override Tests ==========
 
     @Test
-    fun `httpEnabled setter overrides repository value`() = runTest {
-        mapTileSourceManager.httpEnabled = false
+    fun `httpEnabled setter overrides repository value`() =
+        runTest {
+            mapTileSourceManager.httpEnabled = false
 
-        // Even though repository returns true, override should take precedence
-        val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
+            // Even though repository returns true, override should take precedence
+            val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
 
-        // With HTTP disabled and no RMSP, should be unavailable
-        assertTrue(result is MapStyleResult.Unavailable)
-    }
+            // With HTTP disabled and no RMSP, should be unavailable
+            assertTrue(result is MapStyleResult.Unavailable)
+        }
 
     @Test
-    fun `rmspEnabled setter overrides repository value`() = runTest {
-        mapTileSourceManager.httpEnabled = false
-        mapTileSourceManager.rmspEnabled = true
+    fun `rmspEnabled setter overrides repository value`() =
+        runTest {
+            mapTileSourceManager.httpEnabled = false
+            mapTileSourceManager.rmspEnabled = true
 
-        val mockServer = createMockRmspServer("test-server")
-        every { rmspServerRepository.getNearestServers(any()) } returns flowOf(listOf(mockServer))
+            val mockServer = createMockRmspServer("test-server")
+            every { rmspServerRepository.getNearestServers(any()) } returns flowOf(listOf(mockServer))
 
-        val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
+            val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
 
-        assertTrue(result is MapStyleResult.Rmsp)
-    }
+            assertTrue(result is MapStyleResult.Rmsp)
+        }
 
     // ========== observeSourceAvailability() Tests ==========
 
     @Test
-    fun `observeSourceAvailability combines all sources correctly`() = runTest {
-        every { offlineMapRegionRepository.getCompletedRegions() } returns flowOf(emptyList())
-        every { rmspServerRepository.hasServers() } returns flowOf(true)
-        every { settingsRepository.mapSourceHttpEnabledFlow } returns flowOf(true)
-        every { settingsRepository.mapSourceRmspEnabledFlow } returns flowOf(false)
+    fun `observeSourceAvailability combines all sources correctly`() =
+        runTest {
+            every { offlineMapRegionRepository.getCompletedRegions() } returns flowOf(emptyList())
+            every { rmspServerRepository.hasServers() } returns flowOf(true)
+            every { settingsRepository.mapSourceHttpEnabledFlow } returns flowOf(true)
+            every { settingsRepository.mapSourceRmspEnabledFlow } returns flowOf(false)
 
-        // Re-create manager with new mocks
-        mapTileSourceManager = MapTileSourceManager(
-            offlineMapRegionRepository,
-            rmspServerRepository,
-            settingsRepository,
-        )
+            // Re-create manager with new mocks
+            mapTileSourceManager =
+                MapTileSourceManager(
+                    offlineMapRegionRepository,
+                    rmspServerRepository,
+                    settingsRepository,
+                )
 
-        var availability: SourceAvailability? = null
-        mapTileSourceManager.observeSourceAvailability().collect {
-            availability = it
+            var availability: SourceAvailability? = null
+            mapTileSourceManager.observeSourceAvailability().collect {
+                availability = it
+            }
+
+            assertEquals(false, availability?.hasOfflineMaps)
+            assertEquals(true, availability?.hasRmspServers)
+            assertEquals(true, availability?.httpEnabled)
+            assertEquals(false, availability?.rmspEnabled)
         }
-
-        assertEquals(false, availability?.hasOfflineMaps)
-        assertEquals(true, availability?.hasRmspServers)
-        assertEquals(true, availability?.httpEnabled)
-        assertEquals(false, availability?.rmspEnabled)
-    }
 
     // ========== SourceAvailability Tests ==========
 
     @Test
     fun `SourceAvailability hasAnySource is true when offline maps available`() {
-        val availability = SourceAvailability(
-            hasOfflineMaps = true,
-            hasRmspServers = false,
-            httpEnabled = false,
-            rmspEnabled = false,
-        )
+        val availability =
+            SourceAvailability(
+                hasOfflineMaps = true,
+                hasRmspServers = false,
+                httpEnabled = false,
+                rmspEnabled = false,
+            )
 
         assertTrue(availability.hasAnySource)
     }
 
     @Test
     fun `SourceAvailability hasAnySource is true when HTTP enabled`() {
-        val availability = SourceAvailability(
-            hasOfflineMaps = false,
-            hasRmspServers = false,
-            httpEnabled = true,
-            rmspEnabled = false,
-        )
+        val availability =
+            SourceAvailability(
+                hasOfflineMaps = false,
+                hasRmspServers = false,
+                httpEnabled = true,
+                rmspEnabled = false,
+            )
 
         assertTrue(availability.hasAnySource)
     }
 
     @Test
     fun `SourceAvailability hasAnySource is true when RMSP enabled with servers`() {
-        val availability = SourceAvailability(
-            hasOfflineMaps = false,
-            hasRmspServers = true,
-            httpEnabled = false,
-            rmspEnabled = true,
-        )
+        val availability =
+            SourceAvailability(
+                hasOfflineMaps = false,
+                hasRmspServers = true,
+                httpEnabled = false,
+                rmspEnabled = true,
+            )
 
         assertTrue(availability.hasAnySource)
     }
 
     @Test
     fun `SourceAvailability hasAnySource is false when RMSP enabled but no servers`() {
-        val availability = SourceAvailability(
-            hasOfflineMaps = false,
-            hasRmspServers = false,
-            httpEnabled = false,
-            rmspEnabled = true,
-        )
+        val availability =
+            SourceAvailability(
+                hasOfflineMaps = false,
+                hasRmspServers = false,
+                httpEnabled = false,
+                rmspEnabled = true,
+            )
 
         assertFalse(availability.hasAnySource)
     }
 
     @Test
     fun `SourceAvailability hasAnySource is false when nothing available`() {
-        val availability = SourceAvailability(
-            hasOfflineMaps = false,
-            hasRmspServers = false,
-            httpEnabled = false,
-            rmspEnabled = false,
-        )
+        val availability =
+            SourceAvailability(
+                hasOfflineMaps = false,
+                hasRmspServers = false,
+                httpEnabled = false,
+                rmspEnabled = false,
+            )
 
         assertFalse(availability.hasAnySource)
     }

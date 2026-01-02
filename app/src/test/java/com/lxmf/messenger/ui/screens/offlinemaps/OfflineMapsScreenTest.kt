@@ -215,11 +215,12 @@ class OfflineMapsScreenTest {
 
     @Test
     fun regionCard_displaysDownloadingStatus() {
-        val region = createTestRegion(
-            status = OfflineMapRegion.Status.DOWNLOADING,
-            downloadProgress = 0.5f,
-            tileCount = 1000,
-        )
+        val region =
+            createTestRegion(
+                status = OfflineMapRegion.Status.DOWNLOADING,
+                downloadProgress = 0.5f,
+                tileCount = 1000,
+            )
 
         composeTestRule.setContent {
             OfflineMapRegionCard(
@@ -235,10 +236,11 @@ class OfflineMapsScreenTest {
 
     @Test
     fun regionCard_displaysErrorMessage() {
-        val region = createTestRegion(
-            status = OfflineMapRegion.Status.ERROR,
-            errorMessage = "Network error occurred",
-        )
+        val region =
+            createTestRegion(
+                status = OfflineMapRegion.Status.ERROR,
+                errorMessage = "Network error occurred",
+            )
 
         composeTestRule.setContent {
             OfflineMapRegionCard(
@@ -360,10 +362,11 @@ class OfflineMapsScreenTest {
 
     @Test
     fun regionCard_displaysCompletedDate() {
-        val region = createTestRegion(
-            status = OfflineMapRegion.Status.COMPLETE,
-            completedAt = 1703980800000L, // Dec 31, 2023
-        )
+        val region =
+            createTestRegion(
+                status = OfflineMapRegion.Status.COMPLETE,
+                completedAt = 1703980800000L, // Dec 31, 2023
+            )
 
         composeTestRule.setContent {
             OfflineMapRegionCard(
@@ -379,10 +382,11 @@ class OfflineMapsScreenTest {
 
     @Test
     fun regionCard_pendingStatusNoCompletedDate() {
-        val region = createTestRegion(
-            status = OfflineMapRegion.Status.PENDING,
-            completedAt = null,
-        )
+        val region =
+            createTestRegion(
+                status = OfflineMapRegion.Status.PENDING,
+                completedAt = null,
+            )
 
         composeTestRule.setContent {
             OfflineMapRegionCard(
@@ -398,6 +402,7 @@ class OfflineMapsScreenTest {
 
     // ========== Helper Functions ==========
 
+    @Suppress("LongParameterList")
     private fun createTestRegion(
         id: Long = 1L,
         name: String = "Test Region",

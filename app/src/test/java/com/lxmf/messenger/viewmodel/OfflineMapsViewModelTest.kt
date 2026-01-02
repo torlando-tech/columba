@@ -130,442 +130,470 @@ class OfflineMapsViewModelTest {
     // region Initial State Tests
 
     @Test
-    fun `initial state has correct defaults`() = runTest {
-        viewModel = createViewModel()
+    fun `initial state has correct defaults`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            val state = awaitItem()
-            assertTrue(state.regions.isEmpty())
-            assertEquals(0L, state.totalStorageBytes)
-            assertFalse(state.isLoading)
-            assertFalse(state.isDeleting)
-            assertNull(state.errorMessage)
-            cancelAndConsumeRemainingEvents()
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.regions.isEmpty())
+                assertEquals(0L, state.totalStorageBytes)
+                assertFalse(state.isLoading)
+                assertFalse(state.isDeleting)
+                assertNull(state.errorMessage)
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state updates when regions flow emits`() = runTest {
-        viewModel = createViewModel()
+    fun `state updates when regions flow emits`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            // Initial state with empty regions
-            var state = awaitItem()
-            assertTrue(state.regions.isEmpty())
+            viewModel.state.test {
+                // Initial state with empty regions
+                var state = awaitItem()
+                assertTrue(state.regions.isEmpty())
 
-            // Emit a region
-            val testRegion = createTestRegion()
-            regionsFlow.value = listOf(testRegion)
-            state = awaitItem()
+                // Emit a region
+                val testRegion = createTestRegion()
+                regionsFlow.value = listOf(testRegion)
+                state = awaitItem()
 
-            assertEquals(1, state.regions.size)
-            assertEquals(testRegion.id, state.regions[0].id)
-            assertEquals(testRegion.name, state.regions[0].name)
+                assertEquals(1, state.regions.size)
+                assertEquals(testRegion.id, state.regions[0].id)
+                assertEquals(testRegion.name, state.regions[0].name)
 
-            cancelAndConsumeRemainingEvents()
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state updates when totalStorage flow emits`() = runTest {
-        viewModel = createViewModel()
+    fun `state updates when totalStorage flow emits`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            // Initial state
-            var state = awaitItem()
-            assertEquals(0L, state.totalStorageBytes)
+            viewModel.state.test {
+                // Initial state
+                var state = awaitItem()
+                assertEquals(0L, state.totalStorageBytes)
 
-            // Emit new storage value
-            val newStorageBytes = 50_000_000L
-            totalStorageFlow.value = newStorageBytes
-            state = awaitItem()
+                // Emit new storage value
+                val newStorageBytes = 50_000_000L
+                totalStorageFlow.value = newStorageBytes
+                state = awaitItem()
 
-            assertEquals(newStorageBytes, state.totalStorageBytes)
+                assertEquals(newStorageBytes, state.totalStorageBytes)
 
-            cancelAndConsumeRemainingEvents()
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state handles null totalStorage as zero`() = runTest {
-        totalStorageFlow.value = null
-        viewModel = createViewModel()
+    fun `state handles null totalStorage as zero`() =
+        runTest {
+            totalStorageFlow.value = null
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            val state = awaitItem()
-            assertEquals(0L, state.totalStorageBytes)
-            cancelAndConsumeRemainingEvents()
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(0L, state.totalStorageBytes)
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     // endregion
 
     // region Regions List Tests
 
     @Test
-    fun `state contains multiple regions when repository returns list`() = runTest {
-        val regions = listOf(
-            createTestRegion(TestRegionConfig(id = 1, name = "Home")),
-            createTestRegion(TestRegionConfig(id = 2, name = "Work")),
-            createTestRegion(TestRegionConfig(id = 3, name = "Downtown")),
-        )
-        regionsFlow.value = regions
-        viewModel = createViewModel()
+    fun `state contains multiple regions when repository returns list`() =
+        runTest {
+            val regions =
+                listOf(
+                    createTestRegion(TestRegionConfig(id = 1, name = "Home")),
+                    createTestRegion(TestRegionConfig(id = 2, name = "Work")),
+                    createTestRegion(TestRegionConfig(id = 3, name = "Downtown")),
+                )
+            regionsFlow.value = regions
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            val state = awaitItem()
-            assertEquals(3, state.regions.size)
-            assertEquals("Home", state.regions[0].name)
-            assertEquals("Work", state.regions[1].name)
-            assertEquals("Downtown", state.regions[2].name)
-            cancelAndConsumeRemainingEvents()
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(3, state.regions.size)
+                assertEquals("Home", state.regions[0].name)
+                assertEquals("Work", state.regions[1].name)
+                assertEquals("Downtown", state.regions[2].name)
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state updates when region list changes`() = runTest {
-        viewModel = createViewModel()
+    fun `state updates when region list changes`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            // Initial empty state
-            var state = awaitItem()
-            assertTrue(state.regions.isEmpty())
+            viewModel.state.test {
+                // Initial empty state
+                var state = awaitItem()
+                assertTrue(state.regions.isEmpty())
 
-            // Add first region
-            regionsFlow.value = listOf(createTestRegion(TestRegionConfig(id = 1, name = "First")))
-            state = awaitItem()
-            assertEquals(1, state.regions.size)
+                // Add first region
+                regionsFlow.value = listOf(createTestRegion(TestRegionConfig(id = 1, name = "First")))
+                state = awaitItem()
+                assertEquals(1, state.regions.size)
 
-            // Add second region
-            regionsFlow.value = listOf(
-                createTestRegion(TestRegionConfig(id = 1, name = "First")),
-                createTestRegion(TestRegionConfig(id = 2, name = "Second")),
-            )
-            state = awaitItem()
-            assertEquals(2, state.regions.size)
+                // Add second region
+                regionsFlow.value =
+                    listOf(
+                        createTestRegion(TestRegionConfig(id = 1, name = "First")),
+                        createTestRegion(TestRegionConfig(id = 2, name = "Second")),
+                    )
+                state = awaitItem()
+                assertEquals(2, state.regions.size)
 
-            // Remove first region
-            regionsFlow.value = listOf(createTestRegion(TestRegionConfig(id = 2, name = "Second")))
-            state = awaitItem()
-            assertEquals(1, state.regions.size)
-            assertEquals("Second", state.regions[0].name)
+                // Remove first region
+                regionsFlow.value = listOf(createTestRegion(TestRegionConfig(id = 2, name = "Second")))
+                state = awaitItem()
+                assertEquals(1, state.regions.size)
+                assertEquals("Second", state.regions[0].name)
 
-            cancelAndConsumeRemainingEvents()
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state correctly reflects regions with different statuses`() = runTest {
-        val regions = listOf(
-            createTestRegion(TestRegionConfig(id = 1, name = "Complete", status = OfflineMapRegion.Status.COMPLETE)),
-            createTestRegion(
-                TestRegionConfig(
-                    id = 2,
-                    name = "Downloading",
-                    status = OfflineMapRegion.Status.DOWNLOADING,
-                    downloadProgress = 0.5f,
-                ),
-            ),
-            createTestRegion(
-                TestRegionConfig(
-                    id = 3,
-                    name = "Error",
-                    status = OfflineMapRegion.Status.ERROR,
-                    errorMessage = "Download failed",
-                ),
-            ),
-            createTestRegion(TestRegionConfig(id = 4, name = "Pending", status = OfflineMapRegion.Status.PENDING)),
-        )
-        regionsFlow.value = regions
-        viewModel = createViewModel()
+    fun `state correctly reflects regions with different statuses`() =
+        runTest {
+            val regions =
+                listOf(
+                    createTestRegion(TestRegionConfig(id = 1, name = "Complete", status = OfflineMapRegion.Status.COMPLETE)),
+                    createTestRegion(
+                        TestRegionConfig(
+                            id = 2,
+                            name = "Downloading",
+                            status = OfflineMapRegion.Status.DOWNLOADING,
+                            downloadProgress = 0.5f,
+                        ),
+                    ),
+                    createTestRegion(
+                        TestRegionConfig(
+                            id = 3,
+                            name = "Error",
+                            status = OfflineMapRegion.Status.ERROR,
+                            errorMessage = "Download failed",
+                        ),
+                    ),
+                    createTestRegion(TestRegionConfig(id = 4, name = "Pending", status = OfflineMapRegion.Status.PENDING)),
+                )
+            regionsFlow.value = regions
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            val state = awaitItem()
-            assertEquals(4, state.regions.size)
-            assertEquals(OfflineMapRegion.Status.COMPLETE, state.regions[0].status)
-            assertEquals(OfflineMapRegion.Status.DOWNLOADING, state.regions[1].status)
-            assertEquals(0.5f, state.regions[1].downloadProgress)
-            assertEquals(OfflineMapRegion.Status.ERROR, state.regions[2].status)
-            assertEquals("Download failed", state.regions[2].errorMessage)
-            assertEquals(OfflineMapRegion.Status.PENDING, state.regions[3].status)
-            cancelAndConsumeRemainingEvents()
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(4, state.regions.size)
+                assertEquals(OfflineMapRegion.Status.COMPLETE, state.regions[0].status)
+                assertEquals(OfflineMapRegion.Status.DOWNLOADING, state.regions[1].status)
+                assertEquals(0.5f, state.regions[1].downloadProgress)
+                assertEquals(OfflineMapRegion.Status.ERROR, state.regions[2].status)
+                assertEquals("Download failed", state.regions[2].errorMessage)
+                assertEquals(OfflineMapRegion.Status.PENDING, state.regions[3].status)
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state correctly reflects regions with different sources`() = runTest {
-        val regions = listOf(
-            createTestRegion(TestRegionConfig(id = 1, name = "HTTP Region", source = OfflineMapRegion.Source.HTTP)),
-            createTestRegion(TestRegionConfig(id = 2, name = "RMSP Region", source = OfflineMapRegion.Source.RMSP)),
-        )
-        regionsFlow.value = regions
-        viewModel = createViewModel()
+    fun `state correctly reflects regions with different sources`() =
+        runTest {
+            val regions =
+                listOf(
+                    createTestRegion(TestRegionConfig(id = 1, name = "HTTP Region", source = OfflineMapRegion.Source.HTTP)),
+                    createTestRegion(TestRegionConfig(id = 2, name = "RMSP Region", source = OfflineMapRegion.Source.RMSP)),
+                )
+            regionsFlow.value = regions
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            val state = awaitItem()
-            assertEquals(2, state.regions.size)
-            assertEquals(OfflineMapRegion.Source.HTTP, state.regions[0].source)
-            assertEquals(OfflineMapRegion.Source.RMSP, state.regions[1].source)
-            cancelAndConsumeRemainingEvents()
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(2, state.regions.size)
+                assertEquals(OfflineMapRegion.Source.HTTP, state.regions[0].source)
+                assertEquals(OfflineMapRegion.Source.RMSP, state.regions[1].source)
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     // endregion
 
     // region Delete Region Tests
 
     @Test
-    fun `deleteRegion sets isDeleting to true then false`() = runTest {
-        val testRegion = createTestRegion()
-        coEvery { offlineMapRegionRepository.deleteRegion(testRegion.id) } just Runs
-        viewModel = createViewModel()
+    fun `deleteRegion sets isDeleting to true then false`() =
+        runTest {
+            val testRegion = createTestRegion()
+            coEvery { offlineMapRegionRepository.deleteRegion(testRegion.id) } just Runs
+            viewModel = createViewModel()
 
-        // Verify initial state
-        assertFalse(viewModel.state.value.isDeleting)
+            // Verify initial state
+            assertFalse(viewModel.state.value.isDeleting)
 
-        // Delete region
-        viewModel.deleteRegion(testRegion)
+            // Delete region
+            viewModel.deleteRegion(testRegion)
 
-        // Since coroutine completes immediately with UnconfinedTestDispatcher,
-        // the final state should have isDeleting = false
-        assertFalse(viewModel.state.value.isDeleting)
+            // Since coroutine completes immediately with UnconfinedTestDispatcher,
+            // the final state should have isDeleting = false
+            assertFalse(viewModel.state.value.isDeleting)
 
-        // Verify the deletion was actually called
-        coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
-    }
-
-    @Test
-    fun `deleteRegion calls repository deleteRegion`() = runTest {
-        val testRegion = createTestRegion(TestRegionConfig(id = 42L))
-        coEvery { offlineMapRegionRepository.deleteRegion(42L) } just Runs
-        viewModel = createViewModel()
-
-        viewModel.deleteRegion(testRegion)
-
-        coVerify { offlineMapRegionRepository.deleteRegion(42L) }
-    }
+            // Verify the deletion was actually called
+            coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
+        }
 
     @Test
-    fun `deleteRegion deletes mbtiles file when path exists`() = runTest {
-        val tempFile = File.createTempFile("test", ".mbtiles")
-        tempFile.writeText("test content")
-        assertTrue(tempFile.exists())
-
-        val testRegion = createTestRegion(TestRegionConfig(mbtilesPath = tempFile.absolutePath))
-        coEvery { offlineMapRegionRepository.deleteRegion(testRegion.id) } just Runs
-        viewModel = createViewModel()
-
-        viewModel.deleteRegion(testRegion)
-
-        // File should be deleted
-        assertFalse(tempFile.exists())
-        coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
-    }
-
-    @Test
-    fun `deleteRegion handles null mbtiles path gracefully`() = runTest {
-        val testRegion = createTestRegion(TestRegionConfig(mbtilesPath = null))
-        coEvery { offlineMapRegionRepository.deleteRegion(testRegion.id) } just Runs
-        viewModel = createViewModel()
-
-        // Should not throw
-        viewModel.deleteRegion(testRegion)
-
-        coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
-    }
-
-    @Test
-    fun `deleteRegion handles non-existent mbtiles file gracefully`() = runTest {
-        val testRegion = createTestRegion(TestRegionConfig(mbtilesPath = "/non/existent/path.mbtiles"))
-        coEvery { offlineMapRegionRepository.deleteRegion(testRegion.id) } just Runs
-        viewModel = createViewModel()
-
-        // Should not throw
-        viewModel.deleteRegion(testRegion)
-
-        coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
-    }
-
-    @Test
-    fun `deleteRegion sets error message on exception`() = runTest {
-        val testRegion = createTestRegion()
-        coEvery {
-            offlineMapRegionRepository.deleteRegion(testRegion.id)
-        } throws RuntimeException("Database error")
-        viewModel = createViewModel()
-
-        viewModel.state.test {
-            // Initial state
-            assertNull(awaitItem().errorMessage)
+    fun `deleteRegion calls repository deleteRegion`() =
+        runTest {
+            val testRegion = createTestRegion(TestRegionConfig(id = 42L))
+            coEvery { offlineMapRegionRepository.deleteRegion(42L) } just Runs
+            viewModel = createViewModel()
 
             viewModel.deleteRegion(testRegion)
 
-            val finalState = expectMostRecentItem()
-            assertNotNull(finalState.errorMessage)
-            assertTrue(finalState.errorMessage!!.contains("Failed to delete region"))
-            assertTrue(finalState.errorMessage!!.contains("Database error"))
-            assertFalse(finalState.isDeleting)
-
-            cancelAndConsumeRemainingEvents()
+            coVerify { offlineMapRegionRepository.deleteRegion(42L) }
         }
-    }
 
     @Test
-    fun `deleteRegion resets isDeleting on error`() = runTest {
-        val testRegion = createTestRegion()
-        coEvery {
-            offlineMapRegionRepository.deleteRegion(testRegion.id)
-        } throws RuntimeException("Failed")
-        viewModel = createViewModel()
+    fun `deleteRegion deletes mbtiles file when path exists`() =
+        runTest {
+            val tempFile = File.createTempFile("test", ".mbtiles")
+            tempFile.writeText("test content")
+            assertTrue(tempFile.exists())
 
-        viewModel.deleteRegion(testRegion)
+            val testRegion = createTestRegion(TestRegionConfig(mbtilesPath = tempFile.absolutePath))
+            coEvery { offlineMapRegionRepository.deleteRegion(testRegion.id) } just Runs
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            val state = expectMostRecentItem()
-            assertFalse(state.isDeleting)
-            cancelAndConsumeRemainingEvents()
+            viewModel.deleteRegion(testRegion)
+
+            // File should be deleted
+            assertFalse(tempFile.exists())
+            coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
         }
-    }
+
+    @Test
+    fun `deleteRegion handles null mbtiles path gracefully`() =
+        runTest {
+            val testRegion = createTestRegion(TestRegionConfig(mbtilesPath = null))
+            coEvery { offlineMapRegionRepository.deleteRegion(testRegion.id) } just Runs
+            viewModel = createViewModel()
+
+            // Should not throw
+            viewModel.deleteRegion(testRegion)
+
+            coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
+        }
+
+    @Test
+    fun `deleteRegion handles non-existent mbtiles file gracefully`() =
+        runTest {
+            val testRegion = createTestRegion(TestRegionConfig(mbtilesPath = "/non/existent/path.mbtiles"))
+            coEvery { offlineMapRegionRepository.deleteRegion(testRegion.id) } just Runs
+            viewModel = createViewModel()
+
+            // Should not throw
+            viewModel.deleteRegion(testRegion)
+
+            coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
+        }
+
+    @Test
+    fun `deleteRegion sets error message on exception`() =
+        runTest {
+            val testRegion = createTestRegion()
+            coEvery {
+                offlineMapRegionRepository.deleteRegion(testRegion.id)
+            } throws RuntimeException("Database error")
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                // Initial state
+                assertNull(awaitItem().errorMessage)
+
+                viewModel.deleteRegion(testRegion)
+
+                val finalState = expectMostRecentItem()
+                assertNotNull(finalState.errorMessage)
+                assertTrue(finalState.errorMessage!!.contains("Failed to delete region"))
+                assertTrue(finalState.errorMessage!!.contains("Database error"))
+                assertFalse(finalState.isDeleting)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `deleteRegion resets isDeleting on error`() =
+        runTest {
+            val testRegion = createTestRegion()
+            coEvery {
+                offlineMapRegionRepository.deleteRegion(testRegion.id)
+            } throws RuntimeException("Failed")
+            viewModel = createViewModel()
+
+            viewModel.deleteRegion(testRegion)
+
+            viewModel.state.test {
+                val state = expectMostRecentItem()
+                assertFalse(state.isDeleting)
+                cancelAndConsumeRemainingEvents()
+            }
+        }
 
     // endregion
 
     // region Error Handling Tests
 
     @Test
-    fun `clearError sets errorMessage to null`() = runTest {
-        val testRegion = createTestRegion()
-        coEvery {
-            offlineMapRegionRepository.deleteRegion(testRegion.id)
-        } throws RuntimeException("Test error")
-        viewModel = createViewModel()
+    fun `clearError sets errorMessage to null`() =
+        runTest {
+            val testRegion = createTestRegion()
+            coEvery {
+                offlineMapRegionRepository.deleteRegion(testRegion.id)
+            } throws RuntimeException("Test error")
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            awaitItem() // Initial
+            viewModel.state.test {
+                awaitItem() // Initial
 
-            // Trigger an error
-            viewModel.deleteRegion(testRegion)
-            var state = expectMostRecentItem()
-            assertNotNull(state.errorMessage)
+                // Trigger an error
+                viewModel.deleteRegion(testRegion)
+                var state = expectMostRecentItem()
+                assertNotNull(state.errorMessage)
 
-            // Clear the error
+                // Clear the error
+                viewModel.clearError()
+                state = awaitItem()
+                assertNull(state.errorMessage)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `clearError does nothing when no error exists`() =
+        runTest {
+            viewModel = createViewModel()
+
+            // Verify initial state has no error
+            val initialState = viewModel.state.value
+            assertNull(initialState.errorMessage)
+
+            // Clear error when none exists
             viewModel.clearError()
-            state = awaitItem()
-            assertNull(state.errorMessage)
 
-            cancelAndConsumeRemainingEvents()
+            // State should still have no error
+            val finalState = viewModel.state.value
+            assertNull(finalState.errorMessage)
         }
-    }
 
     @Test
-    fun `clearError does nothing when no error exists`() = runTest {
-        viewModel = createViewModel()
+    fun `error message is preserved when other state changes`() =
+        runTest {
+            val testRegion = createTestRegion()
+            coEvery {
+                offlineMapRegionRepository.deleteRegion(testRegion.id)
+            } throws RuntimeException("Persistent error")
+            viewModel = createViewModel()
 
-        // Verify initial state has no error
-        val initialState = viewModel.state.value
-        assertNull(initialState.errorMessage)
+            viewModel.state.test {
+                awaitItem() // Initial
 
-        // Clear error when none exists
-        viewModel.clearError()
+                // Trigger an error
+                viewModel.deleteRegion(testRegion)
+                var state = expectMostRecentItem()
+                assertNotNull(state.errorMessage)
 
-        // State should still have no error
-        val finalState = viewModel.state.value
-        assertNull(finalState.errorMessage)
-    }
+                // Update regions - error should persist
+                regionsFlow.value = listOf(createTestRegion(TestRegionConfig(id = 99, name = "New Region")))
+                state = awaitItem()
+                assertNotNull(state.errorMessage)
+                assertTrue(state.errorMessage!!.contains("Persistent error"))
 
-    @Test
-    fun `error message is preserved when other state changes`() = runTest {
-        val testRegion = createTestRegion()
-        coEvery {
-            offlineMapRegionRepository.deleteRegion(testRegion.id)
-        } throws RuntimeException("Persistent error")
-        viewModel = createViewModel()
-
-        viewModel.state.test {
-            awaitItem() // Initial
-
-            // Trigger an error
-            viewModel.deleteRegion(testRegion)
-            var state = expectMostRecentItem()
-            assertNotNull(state.errorMessage)
-
-            // Update regions - error should persist
-            regionsFlow.value = listOf(createTestRegion(TestRegionConfig(id = 99, name = "New Region")))
-            state = awaitItem()
-            assertNotNull(state.errorMessage)
-            assertTrue(state.errorMessage!!.contains("Persistent error"))
-
-            cancelAndConsumeRemainingEvents()
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     // endregion
 
     // region Retry Download Tests
 
     @Test
-    fun `retryDownload does not throw for any region`() = runTest {
-        viewModel = createViewModel()
+    fun `retryDownload does not throw for any region`() =
+        runTest {
+            viewModel = createViewModel()
 
-        val pendingRegion = createTestRegion(TestRegionConfig(status = OfflineMapRegion.Status.PENDING))
-        val errorRegion = createTestRegion(
-            TestRegionConfig(
-                status = OfflineMapRegion.Status.ERROR,
-                errorMessage = "Previous failure",
-            ),
-        )
-        val completeRegion = createTestRegion(TestRegionConfig(status = OfflineMapRegion.Status.COMPLETE))
+            val pendingRegion = createTestRegion(TestRegionConfig(status = OfflineMapRegion.Status.PENDING))
+            val errorRegion =
+                createTestRegion(
+                    TestRegionConfig(
+                        status = OfflineMapRegion.Status.ERROR,
+                        errorMessage = "Previous failure",
+                    ),
+                )
+            val completeRegion = createTestRegion(TestRegionConfig(status = OfflineMapRegion.Status.COMPLETE))
 
-        // None of these should throw
-        viewModel.retryDownload(pendingRegion)
-        viewModel.retryDownload(errorRegion)
-        viewModel.retryDownload(completeRegion)
-    }
+            // None of these should throw
+            viewModel.retryDownload(pendingRegion)
+            viewModel.retryDownload(errorRegion)
+            viewModel.retryDownload(completeRegion)
+        }
 
     @Test
-    fun `retryDownload can be called multiple times`() = runTest {
-        viewModel = createViewModel()
+    fun `retryDownload can be called multiple times`() =
+        runTest {
+            viewModel = createViewModel()
 
-        val region = createTestRegion(
-            TestRegionConfig(
-                status = OfflineMapRegion.Status.ERROR,
-                errorMessage = "Failed",
-            ),
-        )
+            val region =
+                createTestRegion(
+                    TestRegionConfig(
+                        status = OfflineMapRegion.Status.ERROR,
+                        errorMessage = "Failed",
+                    ),
+                )
 
-        // Should not throw when called multiple times
-        repeat(5) {
-            viewModel.retryDownload(region)
+            // Should not throw when called multiple times
+            repeat(5) {
+                viewModel.retryDownload(region)
+            }
         }
-    }
 
     // endregion
 
     // region Offline Maps Directory Tests
 
     @Test
-    fun `getOfflineMapsDir returns directory from TileDownloadManager`() = runTest {
-        val expectedDir = File("/mock/path/offline_maps")
-        mockkObject(TileDownloadManager.Companion)
-        every { TileDownloadManager.getOfflineMapsDir(any()) } returns expectedDir
-        viewModel = createViewModel()
+    fun `getOfflineMapsDir returns directory from TileDownloadManager`() =
+        runTest {
+            val expectedDir = File("/mock/path/offline_maps")
+            mockkObject(TileDownloadManager.Companion)
+            every { TileDownloadManager.getOfflineMapsDir(any()) } returns expectedDir
+            viewModel = createViewModel()
 
-        val result = viewModel.getOfflineMapsDir()
+            val result = viewModel.getOfflineMapsDir()
 
-        assertEquals(expectedDir, result)
-        unmockkObject(TileDownloadManager.Companion)
-    }
+            assertEquals(expectedDir, result)
+            unmockkObject(TileDownloadManager.Companion)
+        }
 
     @Test
-    fun `getOfflineMapsDir passes context to TileDownloadManager`() = runTest {
-        mockkObject(TileDownloadManager.Companion)
-        every { TileDownloadManager.getOfflineMapsDir(any()) } returns File("/test")
-        viewModel = createViewModel()
+    fun `getOfflineMapsDir passes context to TileDownloadManager`() =
+        runTest {
+            mockkObject(TileDownloadManager.Companion)
+            every { TileDownloadManager.getOfflineMapsDir(any()) } returns File("/test")
+            viewModel = createViewModel()
 
-        viewModel.getOfflineMapsDir()
+            viewModel.getOfflineMapsDir()
 
-        io.mockk.verify { TileDownloadManager.getOfflineMapsDir(context) }
-        unmockkObject(TileDownloadManager.Companion)
-    }
+            io.mockk.verify { TileDownloadManager.getOfflineMapsDir(context) }
+            unmockkObject(TileDownloadManager.Companion)
+        }
 
     // endregion
 
@@ -665,13 +693,14 @@ class OfflineMapsViewModelTest {
     @Test
     fun `state copy preserves all fields correctly`() {
         val regions = listOf(createTestRegion())
-        val originalState = OfflineMapsState(
-            regions = regions,
-            totalStorageBytes = 1000L,
-            isLoading = false,
-            isDeleting = true,
-            errorMessage = "test error",
-        )
+        val originalState =
+            OfflineMapsState(
+                regions = regions,
+                totalStorageBytes = 1000L,
+                isLoading = false,
+                isDeleting = true,
+                errorMessage = "test error",
+            )
 
         // Copy with one field changed
         val copiedState = originalState.copy(isDeleting = false)
@@ -688,144 +717,154 @@ class OfflineMapsViewModelTest {
     // region Concurrent Operation Tests
 
     @Test
-    fun `deleteRegion handles concurrent calls safely`() = runTest {
-        val region1 = createTestRegion(TestRegionConfig(id = 1))
-        val region2 = createTestRegion(TestRegionConfig(id = 2))
-        coEvery { offlineMapRegionRepository.deleteRegion(any()) } just Runs
-        viewModel = createViewModel()
+    fun `deleteRegion handles concurrent calls safely`() =
+        runTest {
+            val region1 = createTestRegion(TestRegionConfig(id = 1))
+            val region2 = createTestRegion(TestRegionConfig(id = 2))
+            coEvery { offlineMapRegionRepository.deleteRegion(any()) } just Runs
+            viewModel = createViewModel()
 
-        // Call delete on multiple regions concurrently
-        viewModel.deleteRegion(region1)
-        viewModel.deleteRegion(region2)
+            // Call delete on multiple regions concurrently
+            viewModel.deleteRegion(region1)
+            viewModel.deleteRegion(region2)
 
-        coVerify { offlineMapRegionRepository.deleteRegion(1) }
-        coVerify { offlineMapRegionRepository.deleteRegion(2) }
-    }
+            coVerify { offlineMapRegionRepository.deleteRegion(1) }
+            coVerify { offlineMapRegionRepository.deleteRegion(2) }
+        }
 
     // endregion
 
     // region Flow Combination Tests
 
     @Test
-    fun `state combines regions and storage correctly`() = runTest {
-        val regions = listOf(
-            createTestRegion(TestRegionConfig(id = 1, sizeBytes = 10_000_000L)),
-            createTestRegion(TestRegionConfig(id = 2, sizeBytes = 20_000_000L)),
-        )
-        regionsFlow.value = regions
-        totalStorageFlow.value = 30_000_000L
-        viewModel = createViewModel()
+    fun `state combines regions and storage correctly`() =
+        runTest {
+            val regions =
+                listOf(
+                    createTestRegion(TestRegionConfig(id = 1, sizeBytes = 10_000_000L)),
+                    createTestRegion(TestRegionConfig(id = 2, sizeBytes = 20_000_000L)),
+                )
+            regionsFlow.value = regions
+            totalStorageFlow.value = 30_000_000L
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            val state = awaitItem()
-            assertEquals(2, state.regions.size)
-            assertEquals(30_000_000L, state.totalStorageBytes)
-            assertEquals("28 MB", state.getTotalStorageString())
-            cancelAndConsumeRemainingEvents()
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(2, state.regions.size)
+                assertEquals(30_000_000L, state.totalStorageBytes)
+                assertEquals("28 MB", state.getTotalStorageString())
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state updates independently for regions and storage`() = runTest {
-        viewModel = createViewModel()
+    fun `state updates independently for regions and storage`() =
+        runTest {
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            // Initial state
-            var state = awaitItem()
-            assertTrue(state.regions.isEmpty())
-            assertEquals(0L, state.totalStorageBytes)
+            viewModel.state.test {
+                // Initial state
+                var state = awaitItem()
+                assertTrue(state.regions.isEmpty())
+                assertEquals(0L, state.totalStorageBytes)
 
-            // Update only regions
-            regionsFlow.value = listOf(createTestRegion())
-            state = awaitItem()
-            assertEquals(1, state.regions.size)
-            assertEquals(0L, state.totalStorageBytes)
+                // Update only regions
+                regionsFlow.value = listOf(createTestRegion())
+                state = awaitItem()
+                assertEquals(1, state.regions.size)
+                assertEquals(0L, state.totalStorageBytes)
 
-            // Update only storage
-            totalStorageFlow.value = 5_000_000L
-            state = awaitItem()
-            assertEquals(1, state.regions.size)
-            assertEquals(5_000_000L, state.totalStorageBytes)
+                // Update only storage
+                totalStorageFlow.value = 5_000_000L
+                state = awaitItem()
+                assertEquals(1, state.regions.size)
+                assertEquals(5_000_000L, state.totalStorageBytes)
 
-            cancelAndConsumeRemainingEvents()
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     // endregion
 
     // region Edge Cases Tests
 
     @Test
-    fun `state handles empty region name`() = runTest {
-        val region = createTestRegion(TestRegionConfig(name = ""))
-        regionsFlow.value = listOf(region)
-        viewModel = createViewModel()
+    fun `state handles empty region name`() =
+        runTest {
+            val region = createTestRegion(TestRegionConfig(name = ""))
+            regionsFlow.value = listOf(region)
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            val state = awaitItem()
-            assertEquals(1, state.regions.size)
-            assertEquals("", state.regions[0].name)
-            cancelAndConsumeRemainingEvents()
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(1, state.regions.size)
+                assertEquals("", state.regions[0].name)
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state handles very large storage values`() = runTest {
-        val largeStorage = Long.MAX_VALUE / 2
-        totalStorageFlow.value = largeStorage
-        viewModel = createViewModel()
+    fun `state handles very large storage values`() =
+        runTest {
+            val largeStorage = Long.MAX_VALUE / 2
+            totalStorageFlow.value = largeStorage
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            val state = awaitItem()
-            assertEquals(largeStorage, state.totalStorageBytes)
-            // Should not throw when calculating string
-            assertNotNull(state.getTotalStorageString())
-            cancelAndConsumeRemainingEvents()
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(largeStorage, state.totalStorageBytes)
+                // Should not throw when calculating string
+                assertNotNull(state.getTotalStorageString())
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state handles region with all null optional fields`() = runTest {
-        val region = createTestRegion(
-            TestRegionConfig(
-                mbtilesPath = null,
-                errorMessage = null,
-            ),
-        )
-        regionsFlow.value = listOf(region)
-        viewModel = createViewModel()
+    fun `state handles region with all null optional fields`() =
+        runTest {
+            val region =
+                createTestRegion(
+                    TestRegionConfig(
+                        mbtilesPath = null,
+                        errorMessage = null,
+                    ),
+                )
+            regionsFlow.value = listOf(region)
+            viewModel = createViewModel()
 
-        viewModel.state.test {
-            val state = awaitItem()
-            assertEquals(1, state.regions.size)
-            assertNull(state.regions[0].mbtilesPath)
-            assertNull(state.regions[0].errorMessage)
-            cancelAndConsumeRemainingEvents()
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(1, state.regions.size)
+                assertNull(state.regions[0].mbtilesPath)
+                assertNull(state.regions[0].errorMessage)
+                cancelAndConsumeRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `deleteRegion with exception during file delete still deletes from repository`() = runTest {
-        // Create a directory instead of a file - File.delete() will return false for non-empty dir
-        val tempDir = File.createTempFile("test", "").also {
-            it.delete()
-            it.mkdir()
+    fun `deleteRegion with exception during file delete still deletes from repository`() =
+        runTest {
+            // Create a directory instead of a file - File.delete() will return false for non-empty dir
+            val tempDir =
+                File.createTempFile("test", "").also {
+                    it.delete()
+                    it.mkdir()
+                }
+            val tempFile = File(tempDir, "nested.txt").also { it.writeText("test") }
+
+            val testRegion = createTestRegion(TestRegionConfig(mbtilesPath = tempDir.absolutePath))
+            coEvery { offlineMapRegionRepository.deleteRegion(testRegion.id) } just Runs
+            viewModel = createViewModel()
+
+            viewModel.deleteRegion(testRegion)
+
+            // Repository delete should still be called even if file delete fails
+            coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
+
+            // Cleanup
+            tempFile.delete()
+            tempDir.delete()
         }
-        val tempFile = File(tempDir, "nested.txt").also { it.writeText("test") }
-
-        val testRegion = createTestRegion(TestRegionConfig(mbtilesPath = tempDir.absolutePath))
-        coEvery { offlineMapRegionRepository.deleteRegion(testRegion.id) } just Runs
-        viewModel = createViewModel()
-
-        viewModel.deleteRegion(testRegion)
-
-        // Repository delete should still be called even if file delete fails
-        coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
-
-        // Cleanup
-        tempFile.delete()
-        tempDir.delete()
-    }
 
     // endregion
 }

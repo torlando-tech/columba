@@ -8,7 +8,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performTextInput
 import com.lxmf.messenger.map.TileDownloadManager
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.viewmodel.RadiusOption
@@ -475,14 +474,15 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_showsIdleStatus() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.IDLE,
-            totalTiles = 0,
-            downloadedTiles = 0,
-            failedTiles = 0,
-            bytesDownloaded = 0,
-            currentZoom = 0,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.IDLE,
+                totalTiles = 0,
+                downloadedTiles = 0,
+                failedTiles = 0,
+                bytesDownloaded = 0,
+                currentZoom = 0,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -496,14 +496,15 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_showsCalculatingStatus() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.CALCULATING,
-            totalTiles = 0,
-            downloadedTiles = 0,
-            failedTiles = 0,
-            bytesDownloaded = 0,
-            currentZoom = 0,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.CALCULATING,
+                totalTiles = 0,
+                downloadedTiles = 0,
+                failedTiles = 0,
+                bytesDownloaded = 0,
+                currentZoom = 0,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -517,14 +518,15 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_showsDownloadingStatus() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
-            totalTiles = 100,
-            downloadedTiles = 50,
-            failedTiles = 0,
-            bytesDownloaded = 1024 * 1024,
-            currentZoom = 10,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
+                totalTiles = 100,
+                downloadedTiles = 50,
+                failedTiles = 0,
+                bytesDownloaded = 1024 * 1024,
+                currentZoom = 10,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -541,14 +543,15 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_showsWritingStatus() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.WRITING,
-            totalTiles = 100,
-            downloadedTiles = 100,
-            failedTiles = 0,
-            bytesDownloaded = 2 * 1024 * 1024,
-            currentZoom = 14,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.WRITING,
+                totalTiles = 100,
+                downloadedTiles = 100,
+                failedTiles = 0,
+                bytesDownloaded = 2 * 1024 * 1024,
+                currentZoom = 14,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -562,14 +565,15 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_showsCompleteStatus() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.COMPLETE,
-            totalTiles = 100,
-            downloadedTiles = 100,
-            failedTiles = 0,
-            bytesDownloaded = 2 * 1024 * 1024,
-            currentZoom = 14,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.COMPLETE,
+                totalTiles = 100,
+                downloadedTiles = 100,
+                failedTiles = 0,
+                bytesDownloaded = 2 * 1024 * 1024,
+                currentZoom = 14,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -583,15 +587,16 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_showsErrorStatus() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.ERROR,
-            totalTiles = 100,
-            downloadedTiles = 50,
-            failedTiles = 10,
-            bytesDownloaded = 1024 * 1024,
-            currentZoom = 10,
-            errorMessage = "Network error",
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.ERROR,
+                totalTiles = 100,
+                downloadedTiles = 50,
+                failedTiles = 10,
+                bytesDownloaded = 1024 * 1024,
+                currentZoom = 10,
+                errorMessage = "Network error",
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -605,14 +610,15 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_showsCancelledStatus() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.CANCELLED,
-            totalTiles = 100,
-            downloadedTiles = 25,
-            failedTiles = 0,
-            bytesDownloaded = 500 * 1024,
-            currentZoom = 8,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.CANCELLED,
+                totalTiles = 100,
+                downloadedTiles = 25,
+                failedTiles = 0,
+                bytesDownloaded = 500 * 1024,
+                currentZoom = 8,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -626,14 +632,15 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_showsFailedTilesCount() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
-            totalTiles = 100,
-            downloadedTiles = 50,
-            failedTiles = 5,
-            bytesDownloaded = 1024 * 1024,
-            currentZoom = 10,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
+                totalTiles = 100,
+                downloadedTiles = 50,
+                failedTiles = 5,
+                bytesDownloaded = 1024 * 1024,
+                currentZoom = 10,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -647,14 +654,15 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_showsBytesDownloaded() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
-            totalTiles = 100,
-            downloadedTiles = 50,
-            failedTiles = 0,
-            bytesDownloaded = (1.5 * 1024 * 1024).toLong(),
-            currentZoom = 10,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
+                totalTiles = 100,
+                downloadedTiles = 50,
+                failedTiles = 0,
+                bytesDownloaded = (1.5 * 1024 * 1024).toLong(),
+                currentZoom = 10,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -668,14 +676,15 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_cancelButtonVisibleDuringDownload() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
-            totalTiles = 100,
-            downloadedTiles = 50,
-            failedTiles = 0,
-            bytesDownloaded = 1024 * 1024,
-            currentZoom = 10,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
+                totalTiles = 100,
+                downloadedTiles = 50,
+                failedTiles = 0,
+                bytesDownloaded = 1024 * 1024,
+                currentZoom = 10,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -689,14 +698,15 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_cancelButtonNotVisibleWhenComplete() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.COMPLETE,
-            totalTiles = 100,
-            downloadedTiles = 100,
-            failedTiles = 0,
-            bytesDownloaded = 2 * 1024 * 1024,
-            currentZoom = 14,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.COMPLETE,
+                totalTiles = 100,
+                downloadedTiles = 100,
+                failedTiles = 0,
+                bytesDownloaded = 2 * 1024 * 1024,
+                currentZoom = 14,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -711,14 +721,15 @@ class OfflineMapDownloadScreenTest {
     @Test
     fun downloadingStep_cancelButtonCallsOnCancel() {
         var cancelCalled = false
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
-            totalTiles = 100,
-            downloadedTiles = 50,
-            failedTiles = 0,
-            bytesDownloaded = 1024 * 1024,
-            currentZoom = 10,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
+                totalTiles = 100,
+                downloadedTiles = 50,
+                failedTiles = 0,
+                bytesDownloaded = 1024 * 1024,
+                currentZoom = 10,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(
@@ -733,14 +744,15 @@ class OfflineMapDownloadScreenTest {
 
     @Test
     fun downloadingStep_hidesZoomLevelWhenZero() {
-        val progress = TileDownloadManager.DownloadProgress(
-            status = TileDownloadManager.DownloadProgress.Status.CALCULATING,
-            totalTiles = 0,
-            downloadedTiles = 0,
-            failedTiles = 0,
-            bytesDownloaded = 0,
-            currentZoom = 0,
-        )
+        val progress =
+            TileDownloadManager.DownloadProgress(
+                status = TileDownloadManager.DownloadProgress.Status.CALCULATING,
+                totalTiles = 0,
+                downloadedTiles = 0,
+                failedTiles = 0,
+                bytesDownloaded = 0,
+                currentZoom = 0,
+            )
 
         composeTestRule.setContent {
             DownloadingStep(

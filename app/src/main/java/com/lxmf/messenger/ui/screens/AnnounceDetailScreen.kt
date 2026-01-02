@@ -1,6 +1,8 @@
 package com.lxmf.messenger.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +55,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -63,7 +67,7 @@ import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.util.formatTimeSince
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun AnnounceDetailScreen(
     destinationHash: String,
@@ -71,6 +75,8 @@ fun AnnounceDetailScreen(
     onStartChat: (destinationHash: String, peerName: String) -> Unit,
     viewModel: AnnounceStreamViewModel = hiltViewModel(),
 ) {
+    val clipboardManager = LocalClipboardManager.current
+
     // Observe specific announce reactively (not search in list)
     val announce by viewModel.getAnnounceFlow(destinationHash).collectAsState(initial = null)
 
@@ -282,6 +288,9 @@ fun AnnounceDetailScreen(
                     title = "Destination Hash",
                     content = announceNonNull.destinationHash,
                     isMonospace = true,
+                    onLongClick = {
+                        clipboardManager.setText(AnnotatedString(announceNonNull.destinationHash))
+                    },
                 )
 
                 InfoCard(
@@ -470,6 +479,7 @@ private fun UnsetRelayConfirmationDialog(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun InfoCard(
     icon: ImageVector,
@@ -477,9 +487,22 @@ private fun InfoCard(
     content: String,
     subtitle: String? = null,
     isMonospace: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .then(
+                    if (onLongClick != null) {
+                        Modifier.combinedClickable(
+                            onClick = {},
+                            onLongClick = onLongClick,
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors =

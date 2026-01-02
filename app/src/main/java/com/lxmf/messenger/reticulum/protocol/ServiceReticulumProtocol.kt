@@ -2640,27 +2640,35 @@ class ServiceReticulumProtocol(
     // ===========================================
 
     override suspend fun initiateCall(destinationHash: String): Result<Unit> {
-        return runCatching {
-            val svc = this.service ?: throw IllegalStateException("Service not bound")
-            Log.i(TAG, "📞 Initiating call to ${destinationHash.take(16)}...")
-            val resultJson = svc.initiateCall(destinationHash)
-            val result = JSONObject(resultJson)
-            if (!result.optBoolean("success", false)) {
-                val error = result.optString("error", "Unknown error")
-                throw RuntimeException(error)
+        // Use IO dispatcher for blocking AIDL call - LXST may block for path discovery
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            runCatching {
+                val svc = this@ServiceReticulumProtocol.service
+                    ?: throw IllegalStateException("Service not bound")
+                Log.i(TAG, "📞 Initiating call to ${destinationHash.take(16)}...")
+                val resultJson = svc.initiateCall(destinationHash)
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    val error = result.optString("error", "Unknown error")
+                    throw RuntimeException(error)
+                }
             }
         }
     }
 
     override suspend fun answerCall(): Result<Unit> {
-        return runCatching {
-            val svc = this.service ?: throw IllegalStateException("Service not bound")
-            Log.i(TAG, "📞 Answering call")
-            val resultJson = svc.answerCall()
-            val result = JSONObject(resultJson)
-            if (!result.optBoolean("success", false)) {
-                val error = result.optString("error", "Unknown error")
-                throw RuntimeException(error)
+        // Use IO dispatcher for blocking AIDL call
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            runCatching {
+                val svc = this@ServiceReticulumProtocol.service
+                    ?: throw IllegalStateException("Service not bound")
+                Log.i(TAG, "📞 Answering call")
+                val resultJson = svc.answerCall()
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    val error = result.optString("error", "Unknown error")
+                    throw RuntimeException(error)
+                }
             }
         }
     }

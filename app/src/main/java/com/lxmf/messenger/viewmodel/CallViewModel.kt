@@ -118,6 +118,7 @@ class CallViewModel
         /**
          * Initiate an outgoing call.
          * Uses ReticulumProtocol for IPC to service process where Python runs.
+         * Retries if CallManager not yet initialized (can take time after app install).
          */
         fun initiateCall(destinationHash: String) {
             Log.w(TAG, "📞📞📞 initiateCall() CALLED - destHash=${destinationHash.take(16)}...")
@@ -128,17 +129,39 @@ class CallViewModel
             // Update local state
             callBridge.setConnecting(destinationHash)
 
-            // Initiate call via service IPC
+            // Initiate call via service IPC with retry for CallManager initialization
             viewModelScope.launch {
-                Log.w(TAG, "📞 Calling protocol.initiateCall()...")
-                val result = protocol.initiateCall(destinationHash)
-                Log.w(TAG, "📞 protocol.initiateCall() returned: success=${result.isSuccess}")
-                if (result.isFailure) {
-                    Log.e(TAG, "📞❌ Failed to initiate call: ${result.exceptionOrNull()?.message}")
+                var retryCount = 0
+                val maxRetries = 10
+                val retryDelayMs = 1000L
+
+                while (retryCount < maxRetries) {
+                    Log.w(TAG, "📞 Calling protocol.initiateCall() (attempt ${retryCount + 1}/$maxRetries)...")
+                    val result = protocol.initiateCall(destinationHash)
+                    Log.w(TAG, "📞 protocol.initiateCall() returned: success=${result.isSuccess}")
+
+                    if (result.isSuccess) {
+                        Log.w(TAG, "📞✅ Call initiated successfully!")
+                        return@launch
+                    }
+
+                    val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
+
+                    // Retry if CallManager not initialized yet
+                    if (errorMsg.contains("not initialized", ignoreCase = true)) {
+                        retryCount++
+                        if (retryCount < maxRetries) {
+                            Log.w(TAG, "📞 CallManager not ready, retrying in ${retryDelayMs}ms...")
+                            kotlinx.coroutines.delay(retryDelayMs)
+                            continue
+                        }
+                    }
+
+                    // Non-retryable error or max retries reached
+                    Log.e(TAG, "📞❌ Failed to initiate call: $errorMsg")
                     _isConnecting.value = false
                     callBridge.setEnded()
-                } else {
-                    Log.w(TAG, "📞✅ Call initiated successfully!")
+                    return@launch
                 }
             }
         }

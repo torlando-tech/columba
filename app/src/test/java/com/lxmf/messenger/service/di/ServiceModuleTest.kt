@@ -68,7 +68,7 @@ class ServiceModuleTest {
         assertNotNull("identityManager should not be null", managers.identityManager)
         assertNotNull("routingManager should not be null", managers.routingManager)
         assertNotNull("messagingManager should not be null", managers.messagingManager)
-        assertNotNull("pollingManager should not be null", managers.pollingManager)
+        assertNotNull("eventHandler should not be null", managers.eventHandler)
     }
 
     @Test

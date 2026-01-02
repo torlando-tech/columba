@@ -11,10 +11,11 @@ import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
-import com.lxmf.messenger.service.manager.PollingManager
+import com.lxmf.messenger.service.manager.EventHandler
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.RoutingManager
 import com.lxmf.messenger.service.manager.ServiceNotificationManager
+import com.lxmf.messenger.service.persistence.ServicePersistenceManager
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CoroutineScope
 
@@ -55,7 +56,8 @@ object ServiceModule {
         val identityManager: IdentityManager,
         val routingManager: RoutingManager,
         val messagingManager: MessagingManager,
-        val pollingManager: PollingManager,
+        val eventHandler: EventHandler,
+        val persistenceManager: ServicePersistenceManager,
     )
 
     /**
@@ -80,6 +82,7 @@ object ServiceModule {
         val notificationManager = ServiceNotificationManager(context, state)
         val broadcaster = CallbackBroadcaster()
         val bleCoordinator = BleCoordinator(context)
+        val persistenceManager = ServicePersistenceManager(context, scope)
 
         // Phase 2: Python wrapper (depends on state, context, scope)
         val wrapperManager = PythonWrapperManager(state, context, scope)
@@ -100,8 +103,8 @@ object ServiceModule {
         // Phase 6: Attachment storage (depends on context)
         val attachmentStorage = AttachmentStorageManager(context)
 
-        // Phase 7: Polling (depends on state, wrapperManager, broadcaster, scope, attachmentStorage)
-        val pollingManager = PollingManager(state, wrapperManager, broadcaster, scope, attachmentStorage)
+        // Phase 7: Event handling and persistence (depends on state, wrapperManager, broadcaster, scope, attachmentStorage, persistenceManager)
+        val eventHandler = EventHandler(state, wrapperManager, broadcaster, scope, attachmentStorage, persistenceManager)
 
         return ServiceManagers(
             state = state,
@@ -116,7 +119,8 @@ object ServiceModule {
             identityManager = identityManager,
             routingManager = routingManager,
             messagingManager = messagingManager,
-            pollingManager = pollingManager,
+            eventHandler = eventHandler,
+            persistenceManager = persistenceManager,
         )
     }
 
@@ -145,7 +149,7 @@ object ServiceModule {
             identityManager = managers.identityManager,
             routingManager = managers.routingManager,
             messagingManager = managers.messagingManager,
-            pollingManager = managers.pollingManager,
+            eventHandler = managers.eventHandler,
             broadcaster = managers.broadcaster,
             lockManager = managers.lockManager,
             maintenanceManager = managers.maintenanceManager,

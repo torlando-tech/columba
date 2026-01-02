@@ -26,6 +26,13 @@ import com.lxmf.messenger.data.repository.Message as DataMessage
  * messages and announces are received and stored even when no screens are open.
  *
  * This solves the issue where data was only collected when specific screens were active.
+ *
+ * Note: As of the service-side persistence implementation, announces and messages are now
+ * primarily persisted by ServicePersistenceManager in the :reticulum service process.
+ * This collector serves as a fallback/safety net and handles:
+ * - Notifications for new messages/announces
+ * - UI updates via repository flows
+ * - De-duplication to avoid double-persistence
  */
 @Singleton
 class MessageCollector
@@ -73,9 +80,18 @@ class MessageCollector
             scope.launch {
                 try {
                     reticulumProtocol.observeMessages().collect { receivedMessage ->
-                        // De-duplicate: Skip if we've already processed this message
+                        // De-duplicate: Skip if we've already processed this message in-memory
                         if (receivedMessage.messageHash in processedMessageIds) {
-                            Log.d(TAG, "Skipping duplicate message ${receivedMessage.messageHash.take(16)} (from replay buffer)")
+                            Log.d(TAG, "Skipping duplicate message ${receivedMessage.messageHash.take(16)} (in-memory cache)")
+                            return@collect
+                        }
+
+                        // De-duplicate: Check if message already exists in database
+                        // (may have been persisted by ServicePersistenceManager in service process)
+                        val existingMessage = conversationRepository.getMessageById(receivedMessage.messageHash)
+                        if (existingMessage != null) {
+                            processedMessageIds.add(receivedMessage.messageHash) // Add to cache to avoid repeat DB checks
+                            Log.d(TAG, "Skipping duplicate message ${receivedMessage.messageHash.take(16)} (already in database)")
                             return@collect
                         }
 
@@ -235,23 +251,33 @@ class MessageCollector
 
                         // Persist announce to database - this ensures announces are saved even when
                         // Discovered Nodes page is not open
+                        // Note: ServicePersistenceManager may have already persisted this announce;
+                        // saveAnnounce uses UPSERT, so re-saving is safe (just updates timestamp)
                         try {
-                            announceRepository.saveAnnounce(
-                                destinationHash = peerHash,
-                                peerName = peerName,
-                                publicKey = publicKey,
-                                appData = appData,
-                                hops = announce.hops,
-                                timestamp = announce.timestamp,
-                                nodeType = announce.nodeType.name,
-                                receivingInterface = announce.receivingInterface,
-                                receivingInterfaceType = InterfaceType.fromInterfaceName(announce.receivingInterface).name,
-                                aspect = announce.aspect,
-                                stampCost = announce.stampCost,
-                                stampCostFlexibility = announce.stampCostFlexibility,
-                                peeringCost = announce.peeringCost,
-                            )
-                            Log.d(TAG, "Persisted announce to database: $peerName ($peerHash)")
+                            // Check if announce already exists with recent timestamp (saved by service)
+                            // If it exists and was updated within last 5 seconds, skip to avoid unnecessary write
+                            val existingAnnounce = announceRepository.getAnnounce(peerHash)
+                            val fiveSecondsAgo = System.currentTimeMillis() - 5000
+                            if (existingAnnounce != null && existingAnnounce.lastSeenTimestamp > fiveSecondsAgo) {
+                                Log.d(TAG, "Announce already persisted by service: $peerName ($peerHash)")
+                            } else {
+                                announceRepository.saveAnnounce(
+                                    destinationHash = peerHash,
+                                    peerName = peerName,
+                                    publicKey = publicKey,
+                                    appData = appData,
+                                    hops = announce.hops,
+                                    timestamp = announce.timestamp,
+                                    nodeType = announce.nodeType.name,
+                                    receivingInterface = announce.receivingInterface,
+                                    receivingInterfaceType = InterfaceType.fromInterfaceName(announce.receivingInterface).name,
+                                    aspect = announce.aspect,
+                                    stampCost = announce.stampCost,
+                                    stampCostFlexibility = announce.stampCostFlexibility,
+                                    peeringCost = announce.peeringCost,
+                                )
+                                Log.d(TAG, "Persisted announce to database (fallback): $peerName ($peerHash)")
+                            }
 
                             // Check if this announce resolves a pending contact
                             if (publicKey.isNotEmpty()) {

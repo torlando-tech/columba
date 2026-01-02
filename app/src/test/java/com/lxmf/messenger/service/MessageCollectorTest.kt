@@ -77,6 +77,7 @@ class MessageCollectorTest {
         coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
         coEvery { conversationRepository.getConversation(any()) } returns null
         coEvery { conversationRepository.updatePeerName(any(), any()) } just Runs
+        coEvery { conversationRepository.getMessageById(any()) } returns null // For de-duplication check
 
         // Mock announce repository
         coEvery { announceRepository.getAnnounce(any()) } returns null

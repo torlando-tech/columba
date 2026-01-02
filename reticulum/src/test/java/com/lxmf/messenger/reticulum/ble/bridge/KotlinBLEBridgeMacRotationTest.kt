@@ -101,9 +101,13 @@ class KotlinBLEBridgeMacRotationTest {
         val identityHash = "ab5609dfffb33b21a102e1ff81196be5"
 
         val bridge = createBridgeWithMocks()
+        // Old connection exists at oldMac
         addMockPeer(bridge, oldMac, identityHash, isCentral = true)
         setAddressToIdentity(bridge, oldMac, identityHash)
         setIdentityToAddress(bridge, identityHash, oldMac)
+
+        // New connection established at newMac (MAC rotation - device reconnected with new address)
+        addMockPeer(bridge, newMac, null, isCentral = true) // identity not yet received
 
         // When: Identity received from new MAC
         invokeHandleIdentityReceivedBlocking(bridge, newMac, identityHash, isCentralConnection = true)

@@ -94,11 +94,16 @@ fun MessageDeliveryRetrievalCard(
     onIntervalChange: (Int) -> Unit,
     onSyncNow: () -> Unit,
     onViewMoreRelays: () -> Unit = {},
+    // Incoming message size limit
+    incomingMessageSizeLimitKb: Int = 1024,
+    onIncomingMessageSizeLimitChange: (Int) -> Unit = {},
 ) {
     var showMethodDropdown by remember { mutableStateOf(false) }
     var showCustomIntervalDialog by remember { mutableStateOf(false) }
     var showRelaySelectionDialog by remember { mutableStateOf(false) }
+    var showCustomSizeLimitDialog by remember { mutableStateOf(false) }
     var customIntervalInput by remember { mutableStateOf("") }
+    var customSizeLimitInput by remember { mutableStateOf("") }
     var manualHashInput by remember { mutableStateOf("") }
     var manualNicknameInput by remember { mutableStateOf("") }
 
@@ -510,6 +515,86 @@ fun MessageDeliveryRetrievalCard(
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 )
             }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+            // Incoming Message Size Limit Section
+            Text(
+                text = "INCOMING MESSAGE SIZE",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            Text(
+                text = "Maximum size of messages to accept. Larger messages will be rejected.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            // Size limit chips
+            val presetSizeLimitsKb = listOf(1024, 5120, 10240, 25600, 131072) // 1MB, 5MB, 10MB, 25MB, 128MB
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Size limit: ${formatSizeLimit(incomingMessageSizeLimitKb)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SizeLimitChip(
+                        label = "1 MB",
+                        selected = incomingMessageSizeLimitKb == 1024,
+                        onClick = { onIncomingMessageSizeLimitChange(1024) },
+                    )
+                    SizeLimitChip(
+                        label = "5 MB",
+                        selected = incomingMessageSizeLimitKb == 5120,
+                        onClick = { onIncomingMessageSizeLimitChange(5120) },
+                    )
+                    SizeLimitChip(
+                        label = "10 MB",
+                        selected = incomingMessageSizeLimitKb == 10240,
+                        onClick = { onIncomingMessageSizeLimitChange(10240) },
+                    )
+                    SizeLimitChip(
+                        label = "25 MB",
+                        selected = incomingMessageSizeLimitKb == 25600,
+                        onClick = { onIncomingMessageSizeLimitChange(25600) },
+                    )
+                    SizeLimitChip(
+                        label = "Unlimited",
+                        selected = incomingMessageSizeLimitKb == 131072,
+                        onClick = { onIncomingMessageSizeLimitChange(131072) },
+                    )
+                    // Custom chip
+                    FilterChip(
+                        selected = !presetSizeLimitsKb.contains(incomingMessageSizeLimitKb),
+                        onClick = {
+                            customSizeLimitInput = (incomingMessageSizeLimitKb / 1024).toString()
+                            showCustomSizeLimitDialog = true
+                        },
+                        label = {
+                            Text(
+                                if (presetSizeLimitsKb.contains(incomingMessageSizeLimitKb)) {
+                                    "Custom"
+                                } else {
+                                    "Custom (${formatSizeLimit(incomingMessageSizeLimitKb)})"
+                                },
+                            )
+                        },
+                        colors =
+                            FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                            ),
+                    )
+                }
+            }
         }
     }
 
@@ -537,6 +622,19 @@ fun MessageDeliveryRetrievalCard(
             },
             onViewMoreRelays = onViewMoreRelays,
             onDismiss = { showRelaySelectionDialog = false },
+        )
+    }
+
+    // Custom size limit dialog
+    if (showCustomSizeLimitDialog) {
+        CustomSizeLimitDialog(
+            customSizeLimitInput = customSizeLimitInput,
+            onInputChange = { customSizeLimitInput = it },
+            onConfirm = { valueMb ->
+                onIncomingMessageSizeLimitChange(valueMb * 1024)
+                showCustomSizeLimitDialog = false
+            },
+            onDismiss = { showCustomSizeLimitDialog = false },
         )
     }
 }
@@ -955,4 +1053,96 @@ private fun MoreRelaysItem(onClick: () -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun SizeLimitChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
+    )
+}
+
+/**
+ * Format size limit in KB to a readable string (e.g., "1 MB", "5.5 MB", "128 MB").
+ */
+private fun formatSizeLimit(limitKb: Int): String {
+    return when {
+        limitKb >= 131072 -> "Unlimited (128 MB)"
+        limitKb >= 1024 -> {
+            val mb = limitKb / 1024.0
+            if (mb == mb.toInt().toDouble()) {
+                "${mb.toInt()} MB"
+            } else {
+                "%.1f MB".format(mb)
+            }
+        }
+        else -> "$limitKb KB"
+    }
+}
+
+@Composable
+private fun CustomSizeLimitDialog(
+    customSizeLimitInput: String,
+    onInputChange: (String) -> Unit,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Custom Size Limit") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Enter maximum message size (1-128 MB):",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedTextField(
+                    value = customSizeLimitInput,
+                    onValueChange = {
+                        if (it.all { char -> char.isDigit() } && it.length <= 3) {
+                            onInputChange(it)
+                        }
+                    },
+                    label = { Text("MB") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    isError = customSizeLimitInput.toIntOrNull()?.let { it < 1 || it > 128 } ?: false,
+                    supportingText = {
+                        val value = customSizeLimitInput.toIntOrNull()
+                        when {
+                            value == null && customSizeLimitInput.isNotEmpty() -> Text("Enter a valid number")
+                            value != null && value < 1 -> Text("Minimum is 1 MB")
+                            value != null && value > 128 -> Text("Maximum is 128 MB")
+                            value != null -> Text("= ${value * 1024} KB")
+                            else -> {}
+                        }
+                    },
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val value = customSizeLimitInput.toIntOrNull()
+                    if (value != null && value in 1..128) {
+                        onConfirm(value)
+                    }
+                },
+                enabled = customSizeLimitInput.toIntOrNull()?.let { it in 1..128 } ?: false,
+            ) {
+                Text("Confirm")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }

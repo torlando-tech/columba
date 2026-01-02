@@ -2003,6 +2003,28 @@ class ServiceReticulumProtocol(
         }
     }
 
+    // ==================== MESSAGE SIZE LIMITS ====================
+
+    /**
+     * Update the incoming message size limit at runtime.
+     * This controls the maximum size of LXMF messages that can be received.
+     * Messages exceeding this limit will be rejected by the LXMF router.
+     *
+     * @param limitKb Size limit in KB (e.g., 1024 for 1MB, 131072 for 128MB "unlimited")
+     */
+    fun setIncomingMessageSizeLimit(limitKb: Int) {
+        try {
+            service?.setIncomingMessageSizeLimit(limitKb)
+            Log.d(TAG, "Updated incoming message size limit to ${limitKb}KB")
+        } catch (e: RemoteException) {
+            Log.e(TAG, "Error setting incoming message size limit", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error setting incoming message size limit", e)
+        }
+    }
+
+    // ==================== BLE SUPPORT ====================
+
     /**
      * Get BLE connection details from the service.
      */

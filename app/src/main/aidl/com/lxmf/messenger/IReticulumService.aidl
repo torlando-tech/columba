@@ -352,6 +352,17 @@ interface IReticulumService {
      */
     void provideAlternativeRelay(in byte[] relayHash);
 
+    // ==================== MESSAGE SIZE LIMITS ====================
+
+    /**
+     * Set the incoming message size limit.
+     * This controls the maximum size of LXMF messages that can be received.
+     * Messages exceeding this limit will be rejected by the LXMF router.
+     *
+     * @param limitKb Size limit in KB (e.g., 1024 for 1MB, 131072 for 128MB "unlimited")
+     */
+    void setIncomingMessageSizeLimit(int limitKb);
+
     // ==================== LOCATION TELEMETRY ====================
 
     /**

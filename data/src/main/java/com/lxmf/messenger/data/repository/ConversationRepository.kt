@@ -602,7 +602,7 @@ class ConversationRepository
          * @param fieldsJson Original fields JSON string
          * @return Modified fields JSON with file references for large attachments, or original if no extraction needed
          */
-        @Suppress("SwallowedException", "TooGenericExceptionCaught")
+        @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
         private fun extractLargeAttachments(
             messageId: String,
             fieldsJson: String?,

@@ -497,7 +497,8 @@ class MessageDeliveryRetrievalCardTest {
     fun intervalChips_customChipDisplayed() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().assertIsDisplayed()
+        // Use [0] to get the first Custom chip (retrieval interval, not size limit)
+        composeTestRule.onAllNodesWithText("Custom")[0].performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -550,7 +551,8 @@ class MessageDeliveryRetrievalCardTest {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
         // When preset is selected, custom should just show "Custom" without value
-        composeTestRule.onNodeWithText("Custom").performScrollTo().assertIsDisplayed()
+        // Use [0] to get the first Custom chip (retrieval interval, not size limit)
+        composeTestRule.onAllNodesWithText("Custom")[0].performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -597,16 +599,22 @@ class MessageDeliveryRetrievalCardTest {
         composeTestRule.onNodeWithText("60s").performScrollTo().assertIsNotEnabled()
         composeTestRule.onNodeWithText("2min").performScrollTo().assertIsNotEnabled()
         composeTestRule.onNodeWithText("5min").performScrollTo().assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Custom").performScrollTo().assertIsNotEnabled()
+        // Use [0] to get the first Custom chip (retrieval interval, not size limit)
+        composeTestRule.onAllNodesWithText("Custom")[0].performScrollTo().assertIsNotEnabled()
     }
 
     // ========== Category H: Custom Interval Dialog Tests (18 tests) ==========
+
+    // Helper to click the first "Custom" chip (retrieval interval, not size limit)
+    private fun clickRetrievalIntervalCustomChip() {
+        composeTestRule.onAllNodesWithText("Custom")[0].performScrollTo().performClick()
+    }
 
     @Test
     fun customChip_click_opensDialog() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
 
         composeTestRule.onNodeWithText("Custom Retrieval Interval").assertIsDisplayed()
     }
@@ -615,7 +623,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_displaysTitle() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
 
         composeTestRule.onNodeWithText("Custom Retrieval Interval").assertIsDisplayed()
     }
@@ -624,7 +632,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_displaysInstructions() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
 
         composeTestRule.onNodeWithText("Enter retrieval interval (10-600 seconds):")
             .assertIsDisplayed()
@@ -634,7 +642,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_displaysTextField() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
 
         composeTestRule.onNodeWithText("Seconds").assertIsDisplayed()
     }
@@ -643,7 +651,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_displaysConfirmButton() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
 
         composeTestRule.onNodeWithText("Confirm").assertIsDisplayed()
     }
@@ -652,7 +660,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_displaysCancelButton() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
 
         composeTestRule.onNodeWithText("Cancel").assertIsDisplayed()
     }
@@ -661,7 +669,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_prefilledWithCurrentInterval() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
 
         // Dialog should be prefilled with current interval (60)
         composeTestRule.onNodeWithText("60").assertIsDisplayed()
@@ -671,7 +679,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_validInput_confirmEnabled() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
 
         // Prefilled with 60, which is valid
         composeTestRule.onNodeWithText("Confirm").assertIsEnabled()
@@ -681,7 +689,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_inputBelowMin_confirmDisabled() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
         composeTestRule.onNodeWithText("60").performTextClearance()
         composeTestRule.onNodeWithText("Seconds").performTextInput("5")
 
@@ -692,7 +700,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_inputAboveMax_confirmDisabled() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
         composeTestRule.onNodeWithText("60").performTextClearance()
         composeTestRule.onNodeWithText("Seconds").performTextInput("700")
 
@@ -703,7 +711,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_emptyInput_confirmDisabled() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
         composeTestRule.onNodeWithText("60").performTextClearance()
 
         composeTestRule.onNodeWithText("Confirm").assertIsNotEnabled()
@@ -713,7 +721,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_inputBelowMin_showsMinError() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
         composeTestRule.onNodeWithText("60").performTextClearance()
         composeTestRule.onNodeWithText("Seconds").performTextInput("5")
 
@@ -724,7 +732,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_inputAboveMax_showsMaxError() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
         composeTestRule.onNodeWithText("60").performTextClearance()
         composeTestRule.onNodeWithText("Seconds").performTextInput("700")
 
@@ -735,7 +743,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_validInput_showsFormattedPreview() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
         composeTestRule.onNodeWithText("60").performTextClearance()
         composeTestRule.onNodeWithText("Seconds").performTextInput("120")
 
@@ -746,7 +754,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_validInput90s_showsMixedFormat() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
         composeTestRule.onNodeWithText("60").performTextClearance()
         composeTestRule.onNodeWithText("Seconds").performTextInput("90")
 
@@ -757,7 +765,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_confirmClick_invokesOnIntervalChange() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
         composeTestRule.onNodeWithText("60").performTextClearance()
         composeTestRule.onNodeWithText("Seconds").performTextInput("45")
         composeTestRule.onNodeWithText("Confirm").performClick()
@@ -769,7 +777,7 @@ class MessageDeliveryRetrievalCardTest {
     fun customIntervalDialog_cancelClick_dismissesWithoutCallback() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Custom").performScrollTo().performClick()
+        clickRetrievalIntervalCustomChip()
         composeTestRule.onNodeWithText("60").performTextClearance()
         composeTestRule.onNodeWithText("Seconds").performTextInput("45")
         composeTestRule.onNodeWithText("Cancel").performClick()

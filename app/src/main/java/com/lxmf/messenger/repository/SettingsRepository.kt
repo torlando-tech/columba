@@ -87,6 +87,9 @@ class SettingsRepository
             val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
             val DEFAULT_SHARING_DURATION = stringPreferencesKey("default_sharing_duration")
             val LOCATION_PRECISION_RADIUS = intPreferencesKey("location_precision_radius")
+
+            // Incoming message size limit
+            val INCOMING_MESSAGE_SIZE_LIMIT_KB = intPreferencesKey("incoming_message_size_limit_kb")
         }
 
         // Notification preferences
@@ -887,6 +890,53 @@ class SettingsRepository
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.LOCATION_PRECISION_RADIUS] = radiusMeters
             }
+        }
+
+        // Incoming message size limit
+
+        /**
+         * Flow of the incoming message size limit in KB.
+         * Controls the maximum size of messages that can be received.
+         * Defaults to 1024 KB (1MB) if not set.
+         */
+        val incomingMessageSizeLimitKbFlow: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.INCOMING_MESSAGE_SIZE_LIMIT_KB] ?: DEFAULT_INCOMING_SIZE_LIMIT_KB
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the incoming message size limit in KB (non-flow).
+         */
+        suspend fun getIncomingMessageSizeLimitKb(): Int =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.INCOMING_MESSAGE_SIZE_LIMIT_KB] ?: DEFAULT_INCOMING_SIZE_LIMIT_KB
+                }
+                .first()
+
+        /**
+         * Save the incoming message size limit in KB.
+         *
+         * @param limitKb Size limit in KB (512 to 131072, representing 0.5MB to 128MB)
+         */
+        suspend fun saveIncomingMessageSizeLimitKb(limitKb: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.INCOMING_MESSAGE_SIZE_LIMIT_KB] =
+                    limitKb.coerceIn(MIN_INCOMING_SIZE_LIMIT_KB, MAX_INCOMING_SIZE_LIMIT_KB)
+            }
+        }
+
+        companion object {
+            /** Default incoming message size limit: 1MB */
+            const val DEFAULT_INCOMING_SIZE_LIMIT_KB = 1024
+
+            /** Minimum incoming message size limit: 512KB */
+            const val MIN_INCOMING_SIZE_LIMIT_KB = 512
+
+            /** Maximum incoming message size limit: 128MB (effectively unlimited) */
+            const val MAX_INCOMING_SIZE_LIMIT_KB = 131072
         }
 
         // Custom theme methods (delegated to CustomThemeRepository)

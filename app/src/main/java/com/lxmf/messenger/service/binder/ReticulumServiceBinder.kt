@@ -711,6 +711,21 @@ class ReticulumServiceBinder(
     }
 
     // ===========================================
+    // Message Size Limits
+    // ===========================================
+
+    override fun setIncomingMessageSizeLimit(limitKb: Int) {
+        try {
+            Log.d(TAG, "Setting incoming message size limit to ${limitKb}KB")
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("set_incoming_message_size_limit", limitKb)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting incoming message size limit", e)
+        }
+    }
+
+    // ===========================================
     // Location Telemetry
     // ===========================================
 

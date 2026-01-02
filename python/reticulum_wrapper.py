@@ -905,7 +905,12 @@ class ReticulumWrapper:
             traceback.print_exc()
             return False
 
-    def initialize(self, config_json: str, identity_file_path: Optional[str] = None) -> Dict:
+    def initialize(
+        self,
+        config_json: str,
+        identity_file_path: Optional[str] = None,
+        incoming_message_limit_kb: int = 1024
+    ) -> Dict:
         """
         Initialize Reticulum with the given configuration.
 
@@ -917,6 +922,8 @@ class ReticulumWrapper:
                 - allowAnonymous: bool
             identity_file_path: Optional path to a specific identity file to load.
                                If None, uses default_identity file (backward compatible).
+            incoming_message_limit_kb: Maximum incoming message size in KB (default 1024 = 1MB).
+                                       Set to 131072 (128MB) for effectively unlimited.
 
         Returns:
             Dict with 'success' and optional 'error' keys
@@ -1404,10 +1411,12 @@ class ReticulumWrapper:
 
             # Initialize LXMF router with the default identity
             log_info("ReticulumWrapper", "initialize", "Creating LXMF router with default identity")
+            log_info("ReticulumWrapper", "initialize", f"Incoming message limit: {incoming_message_limit_kb}KB")
             self.router = LXMF.LXMRouter(
                 storagepath=self.storage_path,
                 identity=default_identity,
-                autopeer=True
+                autopeer=True,
+                delivery_limit=incoming_message_limit_kb
             )
             log_info("ReticulumWrapper", "initialize", "LXMF router created")
 
@@ -2848,6 +2857,36 @@ class ReticulumWrapper:
 
         except Exception as e:
             log_error("ReticulumWrapper", "send_location_telemetry", f"❌ ERROR sending location telemetry: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    # ==================== MESSAGE SIZE LIMITS ====================
+
+    def set_incoming_message_size_limit(self, limit_kb: int) -> Dict:
+        """
+        Set the incoming message size limit.
+
+        This controls the maximum size of LXMF messages that can be received.
+        Messages exceeding this limit will be rejected by the LXMF router.
+
+        Args:
+            limit_kb: Size limit in KB (e.g., 1024 for 1MB, 131072 for 128MB "unlimited")
+
+        Returns:
+            Dict with 'success' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            self.router.delivery_per_transfer_limit = limit_kb
+            log_info("ReticulumWrapper", "set_incoming_message_size_limit",
+                     f"Set incoming message limit to {limit_kb}KB")
+
+            return {"success": True}
+        except Exception as e:
+            log_error("ReticulumWrapper", "set_incoming_message_size_limit", f"Error: {e}")
             import traceback
             traceback.print_exc()
             return {"success": False, "error": str(e)}

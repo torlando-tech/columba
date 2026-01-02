@@ -82,6 +82,8 @@ data class SettingsState(
     val activeSharingSessions: List<com.lxmf.messenger.service.SharingSession> = emptyList(),
     val defaultSharingDuration: String = "ONE_HOUR",
     val locationPrecisionRadius: Int = 0,
+    // Incoming message size limit
+    val incomingMessageSizeLimitKb: Int = 1024, // Default 1MB
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -1207,6 +1209,11 @@ class SettingsViewModel
                     _state.update { it.copy(locationPrecisionRadius = radiusMeters) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.incomingMessageSizeLimitKbFlow.collect { limitKb ->
+                    _state.update { it.copy(incomingMessageSizeLimitKb = limitKb) }
+                }
+            }
         }
 
         /**
@@ -1278,6 +1285,27 @@ class SettingsViewModel
                 Log.d(TAG, "Location precision radius set to: ${radiusMeters}m")
                 // Send immediate update to all active sharing recipients with new precision
                 locationSharingManager.sendImmediateUpdate()
+            }
+        }
+
+        // Incoming message size limit methods
+
+        /**
+         * Set the incoming message size limit.
+         * This controls the maximum size of LXMF messages that can be received.
+         * Messages exceeding this limit will be rejected by the LXMF router.
+         *
+         * @param limitKb Size limit in KB (512 to 131072, representing 0.5MB to 128MB)
+         */
+        fun setIncomingMessageSizeLimit(limitKb: Int) {
+            viewModelScope.launch {
+                settingsRepository.saveIncomingMessageSizeLimitKb(limitKb)
+                Log.d(TAG, "Incoming message size limit set to: ${limitKb}KB")
+
+                // Apply the change at runtime via the protocol
+                if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
+                    reticulumProtocol.setIncomingMessageSizeLimit(limitKb)
+                }
             }
         }
     }

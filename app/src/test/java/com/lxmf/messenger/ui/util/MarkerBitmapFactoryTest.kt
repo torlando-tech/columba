@@ -25,7 +25,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MarkerBitmapFactoryTest {
-
     companion object {
         private const val TEST_DENSITY = 2.0f // Standard xhdpi density
     }
@@ -103,13 +102,14 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createInitialMarker returns non-null bitmap`() {
-        val bitmap = MarkerBitmapFactory.createInitialMarker(
-            initial = 'A',
-            displayName = "Alice",
-            backgroundColor = Color.BLUE,
-            sizeDp = 40f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = 'A',
+                displayName = "Alice",
+                backgroundColor = Color.BLUE,
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+            )
 
         assertNotNull(bitmap)
     }
@@ -117,13 +117,14 @@ class MarkerBitmapFactoryTest {
     @Test
     fun `createInitialMarker creates bitmap with correct minimum dimensions`() {
         val sizeDp = 40f
-        val bitmap = MarkerBitmapFactory.createInitialMarker(
-            initial = 'A',
-            displayName = "Al", // Short name
-            backgroundColor = Color.BLUE,
-            sizeDp = sizeDp,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = 'A',
+                displayName = "Al", // Short name
+                backgroundColor = Color.BLUE,
+                sizeDp = sizeDp,
+                density = TEST_DENSITY,
+            )
 
         val expectedMinWidth = (sizeDp * TEST_DENSITY).toInt()
         // Width should be at least as wide as the circle
@@ -135,21 +136,23 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createInitialMarker expands width for long display names`() {
-        val shortNameBitmap = MarkerBitmapFactory.createInitialMarker(
-            initial = 'A',
-            displayName = "Al",
-            backgroundColor = Color.BLUE,
-            sizeDp = 40f,
-            density = TEST_DENSITY,
-        )
+        val shortNameBitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = 'A',
+                displayName = "Al",
+                backgroundColor = Color.BLUE,
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+            )
 
-        val longNameBitmap = MarkerBitmapFactory.createInitialMarker(
-            initial = 'A',
-            displayName = "Alexander the Great of Macedonia",
-            backgroundColor = Color.BLUE,
-            sizeDp = 40f,
-            density = TEST_DENSITY,
-        )
+        val longNameBitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = 'A',
+                displayName = "Alexander the Great of Macedonia",
+                backgroundColor = Color.BLUE,
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+            )
 
         // Long name should create a wider bitmap (or at least equal for very short names)
         assertTrue(
@@ -163,13 +166,14 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createInitialMarker creates valid bitmap`() {
-        val bitmap = MarkerBitmapFactory.createInitialMarker(
-            initial = 'T',
-            displayName = "Test",
-            backgroundColor = Color.RED,
-            sizeDp = 40f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = 'T',
+                displayName = "Test",
+                backgroundColor = Color.RED,
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+            )
 
         // Verify bitmap is created with valid dimensions
         // Note: Robolectric doesn't render actual pixels, so we verify structure only
@@ -184,21 +188,23 @@ class MarkerBitmapFactoryTest {
         val lowDensity = 1.0f
         val highDensity = 3.0f
 
-        val lowDensityBitmap = MarkerBitmapFactory.createInitialMarker(
-            initial = 'X',
-            displayName = "Test",
-            backgroundColor = Color.GREEN,
-            sizeDp = sizeDp,
-            density = lowDensity,
-        )
+        val lowDensityBitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = 'X',
+                displayName = "Test",
+                backgroundColor = Color.GREEN,
+                sizeDp = sizeDp,
+                density = lowDensity,
+            )
 
-        val highDensityBitmap = MarkerBitmapFactory.createInitialMarker(
-            initial = 'X',
-            displayName = "Test",
-            backgroundColor = Color.GREEN,
-            sizeDp = sizeDp,
-            density = highDensity,
-        )
+        val highDensityBitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = 'X',
+                displayName = "Test",
+                backgroundColor = Color.GREEN,
+                sizeDp = sizeDp,
+                density = highDensity,
+            )
 
         // Higher density should produce larger bitmap
         assertTrue(highDensityBitmap.width > lowDensityBitmap.width)
@@ -207,13 +213,14 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createInitialMarker handles uppercase initial`() {
-        val bitmap = MarkerBitmapFactory.createInitialMarker(
-            initial = 'a', // lowercase
-            displayName = "alice",
-            backgroundColor = Color.BLUE,
-            sizeDp = 40f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = 'a', // lowercase
+                displayName = "alice",
+                backgroundColor = Color.BLUE,
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+            )
 
         // Should not crash and produce valid bitmap
         assertNotNull(bitmap)
@@ -223,13 +230,14 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createInitialMarker handles non-letter initial`() {
-        val bitmap = MarkerBitmapFactory.createInitialMarker(
-            initial = '?',
-            displayName = "Unknown",
-            backgroundColor = Color.GRAY,
-            sizeDp = 40f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = '?',
+                displayName = "Unknown",
+                backgroundColor = Color.GRAY,
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+            )
 
         assertNotNull(bitmap)
         assertTrue(bitmap.width > 0)
@@ -237,13 +245,14 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createInitialMarker handles empty display name`() {
-        val bitmap = MarkerBitmapFactory.createInitialMarker(
-            initial = 'X',
-            displayName = "",
-            backgroundColor = Color.BLUE,
-            sizeDp = 40f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = 'X',
+                displayName = "",
+                backgroundColor = Color.BLUE,
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+            )
 
         // Should not crash
         assertNotNull(bitmap)
@@ -251,13 +260,14 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createInitialMarker has ARGB_8888 config`() {
-        val bitmap = MarkerBitmapFactory.createInitialMarker(
-            initial = 'T',
-            displayName = "Test",
-            backgroundColor = Color.BLUE,
-            sizeDp = 40f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = 'T',
+                displayName = "Test",
+                backgroundColor = Color.BLUE,
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+            )
 
         assertEquals(Bitmap.Config.ARGB_8888, bitmap.config)
     }
@@ -266,14 +276,15 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createDashedCircle returns non-null bitmap`() {
-        val bitmap = MarkerBitmapFactory.createDashedCircle(
-            sizeDp = 28f,
-            strokeWidthDp = 3f,
-            color = Color.RED,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createDashedCircle(
+                sizeDp = 28f,
+                strokeWidthDp = 3f,
+                color = Color.RED,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = TEST_DENSITY,
+            )
 
         assertNotNull(bitmap)
     }
@@ -281,14 +292,15 @@ class MarkerBitmapFactoryTest {
     @Test
     fun `createDashedCircle creates square bitmap`() {
         val sizeDp = 28f
-        val bitmap = MarkerBitmapFactory.createDashedCircle(
-            sizeDp = sizeDp,
-            strokeWidthDp = 3f,
-            color = Color.RED,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createDashedCircle(
+                sizeDp = sizeDp,
+                strokeWidthDp = 3f,
+                color = Color.RED,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = TEST_DENSITY,
+            )
 
         val expectedSize = (sizeDp * TEST_DENSITY).toInt()
         assertEquals(expectedSize, bitmap.width)
@@ -297,14 +309,15 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createDashedCircle creates valid bitmap`() {
-        val bitmap = MarkerBitmapFactory.createDashedCircle(
-            sizeDp = 40f,
-            strokeWidthDp = 3f,
-            color = Color.RED,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createDashedCircle(
+                sizeDp = 40f,
+                strokeWidthDp = 3f,
+                color = Color.RED,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = TEST_DENSITY,
+            )
 
         // Verify bitmap structure (Robolectric doesn't render actual pixels)
         assertTrue("Bitmap should have positive width", bitmap.width > 0)
@@ -318,23 +331,25 @@ class MarkerBitmapFactoryTest {
         val lowDensity = 1.0f
         val highDensity = 3.0f
 
-        val lowDensityBitmap = MarkerBitmapFactory.createDashedCircle(
-            sizeDp = sizeDp,
-            strokeWidthDp = 3f,
-            color = Color.RED,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = lowDensity,
-        )
+        val lowDensityBitmap =
+            MarkerBitmapFactory.createDashedCircle(
+                sizeDp = sizeDp,
+                strokeWidthDp = 3f,
+                color = Color.RED,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = lowDensity,
+            )
 
-        val highDensityBitmap = MarkerBitmapFactory.createDashedCircle(
-            sizeDp = sizeDp,
-            strokeWidthDp = 3f,
-            color = Color.RED,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = highDensity,
-        )
+        val highDensityBitmap =
+            MarkerBitmapFactory.createDashedCircle(
+                sizeDp = sizeDp,
+                strokeWidthDp = 3f,
+                color = Color.RED,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = highDensity,
+            )
 
         assertEquals((sizeDp * lowDensity).toInt(), lowDensityBitmap.width)
         assertEquals((sizeDp * highDensity).toInt(), highDensityBitmap.width)
@@ -342,14 +357,15 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createDashedCircle has ARGB_8888 config`() {
-        val bitmap = MarkerBitmapFactory.createDashedCircle(
-            sizeDp = 28f,
-            strokeWidthDp = 3f,
-            color = Color.RED,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createDashedCircle(
+                sizeDp = 28f,
+                strokeWidthDp = 3f,
+                color = Color.RED,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = TEST_DENSITY,
+            )
 
         assertEquals(Bitmap.Config.ARGB_8888, bitmap.config)
     }
@@ -358,16 +374,17 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createFilledCircleWithDashedOutline returns non-null bitmap`() {
-        val bitmap = MarkerBitmapFactory.createFilledCircleWithDashedOutline(
-            sizeDp = 28f,
-            fillColor = Color.BLUE,
-            strokeColor = Color.WHITE,
-            fillOpacity = 0.6f,
-            strokeWidthDp = 3f,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createFilledCircleWithDashedOutline(
+                sizeDp = 28f,
+                fillColor = Color.BLUE,
+                strokeColor = Color.WHITE,
+                fillOpacity = 0.6f,
+                strokeWidthDp = 3f,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = TEST_DENSITY,
+            )
 
         assertNotNull(bitmap)
     }
@@ -375,16 +392,17 @@ class MarkerBitmapFactoryTest {
     @Test
     fun `createFilledCircleWithDashedOutline creates square bitmap`() {
         val sizeDp = 32f
-        val bitmap = MarkerBitmapFactory.createFilledCircleWithDashedOutline(
-            sizeDp = sizeDp,
-            fillColor = Color.BLUE,
-            strokeColor = Color.WHITE,
-            fillOpacity = 0.6f,
-            strokeWidthDp = 3f,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createFilledCircleWithDashedOutline(
+                sizeDp = sizeDp,
+                fillColor = Color.BLUE,
+                strokeColor = Color.WHITE,
+                fillOpacity = 0.6f,
+                strokeWidthDp = 3f,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = TEST_DENSITY,
+            )
 
         val expectedSize = (sizeDp * TEST_DENSITY).toInt()
         assertEquals(expectedSize, bitmap.width)
@@ -393,16 +411,17 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createFilledCircleWithDashedOutline creates valid bitmap`() {
-        val bitmap = MarkerBitmapFactory.createFilledCircleWithDashedOutline(
-            sizeDp = 40f,
-            fillColor = Color.BLUE,
-            strokeColor = Color.WHITE,
-            fillOpacity = 1.0f,
-            strokeWidthDp = 3f,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createFilledCircleWithDashedOutline(
+                sizeDp = 40f,
+                fillColor = Color.BLUE,
+                strokeColor = Color.WHITE,
+                fillOpacity = 1.0f,
+                strokeWidthDp = 3f,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = TEST_DENSITY,
+            )
 
         // Verify bitmap structure (Robolectric doesn't render actual pixels)
         assertTrue("Bitmap should have positive width", bitmap.width > 0)
@@ -416,16 +435,17 @@ class MarkerBitmapFactoryTest {
         val opacityValues = listOf(0.0f, 0.25f, 0.5f, 0.75f, 1.0f)
 
         for (opacity in opacityValues) {
-            val bitmap = MarkerBitmapFactory.createFilledCircleWithDashedOutline(
-                sizeDp = 40f,
-                fillColor = Color.BLUE,
-                strokeColor = Color.WHITE,
-                fillOpacity = opacity,
-                strokeWidthDp = 3f,
-                dashLengthDp = 4f,
-                gapLengthDp = 4f,
-                density = TEST_DENSITY,
-            )
+            val bitmap =
+                MarkerBitmapFactory.createFilledCircleWithDashedOutline(
+                    sizeDp = 40f,
+                    fillColor = Color.BLUE,
+                    strokeColor = Color.WHITE,
+                    fillOpacity = opacity,
+                    strokeWidthDp = 3f,
+                    dashLengthDp = 4f,
+                    gapLengthDp = 4f,
+                    density = TEST_DENSITY,
+                )
 
             assertNotNull("Bitmap should not be null for opacity $opacity", bitmap)
             assertTrue("Bitmap should have positive dimensions", bitmap.width > 0)
@@ -438,27 +458,29 @@ class MarkerBitmapFactoryTest {
         val lowDensity = 1.0f
         val highDensity = 3.0f
 
-        val lowDensityBitmap = MarkerBitmapFactory.createFilledCircleWithDashedOutline(
-            sizeDp = sizeDp,
-            fillColor = Color.BLUE,
-            strokeColor = Color.WHITE,
-            fillOpacity = 0.6f,
-            strokeWidthDp = 3f,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = lowDensity,
-        )
+        val lowDensityBitmap =
+            MarkerBitmapFactory.createFilledCircleWithDashedOutline(
+                sizeDp = sizeDp,
+                fillColor = Color.BLUE,
+                strokeColor = Color.WHITE,
+                fillOpacity = 0.6f,
+                strokeWidthDp = 3f,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = lowDensity,
+            )
 
-        val highDensityBitmap = MarkerBitmapFactory.createFilledCircleWithDashedOutline(
-            sizeDp = sizeDp,
-            fillColor = Color.BLUE,
-            strokeColor = Color.WHITE,
-            fillOpacity = 0.6f,
-            strokeWidthDp = 3f,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = highDensity,
-        )
+        val highDensityBitmap =
+            MarkerBitmapFactory.createFilledCircleWithDashedOutline(
+                sizeDp = sizeDp,
+                fillColor = Color.BLUE,
+                strokeColor = Color.WHITE,
+                fillOpacity = 0.6f,
+                strokeWidthDp = 3f,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = highDensity,
+            )
 
         assertEquals((sizeDp * lowDensity).toInt(), lowDensityBitmap.width)
         assertEquals((sizeDp * highDensity).toInt(), highDensityBitmap.width)
@@ -466,32 +488,34 @@ class MarkerBitmapFactoryTest {
 
     @Test
     fun `createFilledCircleWithDashedOutline has ARGB_8888 config`() {
-        val bitmap = MarkerBitmapFactory.createFilledCircleWithDashedOutline(
-            sizeDp = 28f,
-            fillColor = Color.BLUE,
-            strokeColor = Color.WHITE,
-            fillOpacity = 0.6f,
-            strokeWidthDp = 3f,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createFilledCircleWithDashedOutline(
+                sizeDp = 28f,
+                fillColor = Color.BLUE,
+                strokeColor = Color.WHITE,
+                fillOpacity = 0.6f,
+                strokeWidthDp = 3f,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = TEST_DENSITY,
+            )
 
         assertEquals(Bitmap.Config.ARGB_8888, bitmap.config)
     }
 
     @Test
     fun `createFilledCircleWithDashedOutline handles zero opacity without crash`() {
-        val bitmap = MarkerBitmapFactory.createFilledCircleWithDashedOutline(
-            sizeDp = 40f,
-            fillColor = Color.BLUE,
-            strokeColor = Color.WHITE,
-            fillOpacity = 0.0f, // Zero opacity
-            strokeWidthDp = 3f,
-            dashLengthDp = 4f,
-            gapLengthDp = 4f,
-            density = TEST_DENSITY,
-        )
+        val bitmap =
+            MarkerBitmapFactory.createFilledCircleWithDashedOutline(
+                sizeDp = 40f,
+                fillColor = Color.BLUE,
+                strokeColor = Color.WHITE,
+                fillOpacity = 0.0f, // Zero opacity
+                strokeWidthDp = 3f,
+                dashLengthDp = 4f,
+                gapLengthDp = 4f,
+                density = TEST_DENSITY,
+            )
 
         // Verify bitmap is created successfully
         assertNotNull(bitmap)

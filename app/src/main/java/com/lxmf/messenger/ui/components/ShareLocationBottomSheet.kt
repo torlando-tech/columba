@@ -68,27 +68,30 @@ fun ShareLocationBottomSheet(
     var selectedContactHashes by remember { mutableStateOf(initialSelectedHashes) }
     var selectedDuration by remember { mutableStateOf(SharingDuration.ONE_HOUR) }
 
-    val filteredContacts = remember(contacts, searchQuery) {
-        val uniqueContacts = contacts.distinctBy { it.destinationHash }
-        val filtered = if (searchQuery.isBlank()) {
-            uniqueContacts
-        } else {
-            uniqueContacts.filter { contact ->
-                contact.displayName.contains(searchQuery, ignoreCase = true)
-            }
+    val filteredContacts =
+        remember(contacts, searchQuery) {
+            val uniqueContacts = contacts.distinctBy { it.destinationHash }
+            val filtered =
+                if (searchQuery.isBlank()) {
+                    uniqueContacts
+                } else {
+                    uniqueContacts.filter { contact ->
+                        contact.displayName.contains(searchQuery, ignoreCase = true)
+                    }
+                }
+            // Sort by recency: lastMessageTimestamp (desc), fallback to addedTimestamp (desc)
+            filtered.sortedWith(
+                compareByDescending<EnrichedContact> { it.lastMessageTimestamp ?: 0L }
+                    .thenByDescending { it.addedTimestamp },
+            )
         }
-        // Sort by recency: lastMessageTimestamp (desc), fallback to addedTimestamp (desc)
-        filtered.sortedWith(
-            compareByDescending<EnrichedContact> { it.lastMessageTimestamp ?: 0L }
-                .thenByDescending { it.addedTimestamp }
-        )
-    }
 
-    val selectedContacts = remember(contacts, selectedContactHashes) {
-        contacts
-            .distinctBy { it.destinationHash }
-            .filter { it.destinationHash in selectedContactHashes }
-    }
+    val selectedContacts =
+        remember(contacts, selectedContactHashes) {
+            contacts
+                .distinctBy { it.destinationHash }
+                .filter { it.destinationHash in selectedContactHashes }
+        }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -97,9 +100,10 @@ fun ShareLocationBottomSheet(
         modifier = Modifier.systemBarsPadding(),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
         ) {
             // Title
             Text(
@@ -157,9 +161,10 @@ fun ShareLocationBottomSheet(
 
             // Contact list
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 200.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 200.dp),
             ) {
                 items(
                     items = filteredContacts,
@@ -170,11 +175,12 @@ fun ShareLocationBottomSheet(
                         destinationHash = contact.destinationHash,
                         isSelected = contact.destinationHash in selectedContactHashes,
                         onSelectionChanged = { selected ->
-                            selectedContactHashes = if (selected) {
-                                selectedContactHashes + contact.destinationHash
-                            } else {
-                                selectedContactHashes - contact.destinationHash
-                            }
+                            selectedContactHashes =
+                                if (selected) {
+                                    selectedContactHashes + contact.destinationHash
+                                } else {
+                                    selectedContactHashes - contact.destinationHash
+                                }
                         },
                     )
                 }

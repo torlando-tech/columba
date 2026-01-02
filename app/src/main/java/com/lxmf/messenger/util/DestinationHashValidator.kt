@@ -37,12 +37,14 @@ object DestinationHashValidator {
 
         return when {
             trimmed.isEmpty() -> ValidationResult.Error("Hash cannot be empty")
-            trimmed.length != REQUIRED_LENGTH -> ValidationResult.Error(
-                "Hash must be $REQUIRED_LENGTH characters (got ${trimmed.length})",
-            )
-            !HEX_PATTERN.matches(trimmed) -> ValidationResult.Error(
-                "Hash must contain only hex characters (0-9, a-f)",
-            )
+            trimmed.length != REQUIRED_LENGTH ->
+                ValidationResult.Error(
+                    "Hash must be $REQUIRED_LENGTH characters (got ${trimmed.length})",
+                )
+            !HEX_PATTERN.matches(trimmed) ->
+                ValidationResult.Error(
+                    "Hash must contain only hex characters (0-9, a-f)",
+                )
             else -> ValidationResult.Valid(trimmed.lowercase())
         }
     }

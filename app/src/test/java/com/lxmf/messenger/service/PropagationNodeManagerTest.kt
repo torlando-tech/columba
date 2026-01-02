@@ -2061,10 +2061,11 @@ class PropagationNodeManagerTest {
             // Given: Database has propagation nodes
             // Clear existing mock state and set up fresh behavior
             clearAllMocks()
-            coEvery { announceRepository.getNodeTypeCounts() } returns listOf(
-                Pair("PROPAGATION_NODE", 5),
-                Pair("PEER", 10),
-            )
+            coEvery { announceRepository.getNodeTypeCounts() } returns
+                listOf(
+                    Pair("PROPAGATION_NODE", 5),
+                    Pair("PEER", 10),
+                )
             every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(emptyList())
             every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
             coEvery { announceRepository.getAnnounce(any()) } returns null
@@ -2077,13 +2078,14 @@ class PropagationNodeManagerTest {
             coEvery { settingsRepository.getManualPropagationNode() } returns null
 
             // Create a fresh manager with the mock set up
-            val testManager = PropagationNodeManager(
-                settingsRepository = settingsRepository,
-                contactRepository = contactRepository,
-                announceRepository = announceRepository,
-                reticulumProtocol = reticulumProtocol,
-                scope = testScope.backgroundScope,
-            )
+            val testManager =
+                PropagationNodeManager(
+                    settingsRepository = settingsRepository,
+                    contactRepository = contactRepository,
+                    announceRepository = announceRepository,
+                    reticulumProtocol = reticulumProtocol,
+                    scope = testScope.backgroundScope,
+                )
 
             // When: Start is called - exercises the nodeType logging code path
             testManager.start()
@@ -2098,9 +2100,10 @@ class PropagationNodeManagerTest {
         runTest {
             // Given: Database has no propagation nodes (only peers) - triggers warning log
             clearAllMocks()
-            coEvery { announceRepository.getNodeTypeCounts() } returns listOf(
-                Pair("PEER", 10),
-            )
+            coEvery { announceRepository.getNodeTypeCounts() } returns
+                listOf(
+                    Pair("PEER", 10),
+                )
             every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(emptyList())
             every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
             coEvery { announceRepository.getAnnounce(any()) } returns null
@@ -2113,13 +2116,14 @@ class PropagationNodeManagerTest {
             coEvery { settingsRepository.getManualPropagationNode() } returns null
 
             // Create a fresh manager with the mock set up
-            val testManager = PropagationNodeManager(
-                settingsRepository = settingsRepository,
-                contactRepository = contactRepository,
-                announceRepository = announceRepository,
-                reticulumProtocol = reticulumProtocol,
-                scope = testScope.backgroundScope,
-            )
+            val testManager =
+                PropagationNodeManager(
+                    settingsRepository = settingsRepository,
+                    contactRepository = contactRepository,
+                    announceRepository = announceRepository,
+                    reticulumProtocol = reticulumProtocol,
+                    scope = testScope.backgroundScope,
+                )
 
             // When: Start is called - exercises the warning log code path
             testManager.start()
@@ -2147,13 +2151,14 @@ class PropagationNodeManagerTest {
             coEvery { settingsRepository.getManualPropagationNode() } returns null
 
             // Create a fresh manager with the mock set up
-            val testManager = PropagationNodeManager(
-                settingsRepository = settingsRepository,
-                contactRepository = contactRepository,
-                announceRepository = announceRepository,
-                reticulumProtocol = reticulumProtocol,
-                scope = testScope.backgroundScope,
-            )
+            val testManager =
+                PropagationNodeManager(
+                    settingsRepository = settingsRepository,
+                    contactRepository = contactRepository,
+                    announceRepository = announceRepository,
+                    reticulumProtocol = reticulumProtocol,
+                    scope = testScope.backgroundScope,
+                )
 
             // When: Start is called (should not throw) - exercises exception handler
             testManager.start()
@@ -2172,12 +2177,13 @@ class PropagationNodeManagerTest {
             clearAllMocks()
 
             // Given: Database has propagation node announces
-            val testAnnounce = TestFactories.createAnnounce(
-                destinationHash = testDestHash,
-                peerName = "Test Relay",
-                hops = 3,
-                nodeType = "PROPAGATION_NODE",
-            )
+            val testAnnounce =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Test Relay",
+                    hops = 3,
+                    nodeType = "PROPAGATION_NODE",
+                )
             every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(listOf(testAnnounce))
             every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
             coEvery { announceRepository.getAnnounce(any()) } returns null
@@ -2191,13 +2197,14 @@ class PropagationNodeManagerTest {
             coEvery { settingsRepository.getManualPropagationNode() } returns null
 
             // Create a new manager to get fresh StateFlow
-            val testManager = PropagationNodeManager(
-                settingsRepository = settingsRepository,
-                contactRepository = contactRepository,
-                announceRepository = announceRepository,
-                reticulumProtocol = reticulumProtocol,
-                scope = testScope.backgroundScope,
-            )
+            val testManager =
+                PropagationNodeManager(
+                    settingsRepository = settingsRepository,
+                    contactRepository = contactRepository,
+                    announceRepository = announceRepository,
+                    reticulumProtocol = reticulumProtocol,
+                    scope = testScope.backgroundScope,
+                )
 
             // Wait for StateFlow to emit
             testManager.availableRelaysState.test(timeout = 5.seconds) {
@@ -2242,13 +2249,14 @@ class PropagationNodeManagerTest {
             coEvery { settingsRepository.getManualPropagationNode() } returns null
 
             // Create a new manager
-            val testManager = PropagationNodeManager(
-                settingsRepository = settingsRepository,
-                contactRepository = contactRepository,
-                announceRepository = announceRepository,
-                reticulumProtocol = reticulumProtocol,
-                scope = testScope.backgroundScope,
-            )
+            val testManager =
+                PropagationNodeManager(
+                    settingsRepository = settingsRepository,
+                    contactRepository = contactRepository,
+                    announceRepository = announceRepository,
+                    reticulumProtocol = reticulumProtocol,
+                    scope = testScope.backgroundScope,
+                )
 
             // Wait for StateFlow to emit
             testManager.availableRelaysState.test(timeout = 5.seconds) {
@@ -2267,5 +2275,4 @@ class PropagationNodeManagerTest {
 
             testManager.stop()
         }
-
 }

@@ -13,13 +13,13 @@ import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.SharingSession
 import com.lxmf.messenger.ui.model.SharingDuration
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -54,7 +54,8 @@ data class ContactMarker(
     val timestamp: Long = 0L,
     val expiresAt: Long? = null,
     val state: MarkerState = MarkerState.FRESH,
-    val approximateRadius: Int = 0, // Coarsening radius in meters (0 = precise)
+    // Coarsening radius in meters (0 = precise)
+    val approximateRadius: Int = 0,
 )
 
 /**
@@ -149,19 +150,21 @@ class MapViewModel
                         // Calculate marker state - returns null if marker should be hidden
                         // Use receivedAt for staleness (when we got the update) rather than
                         // sender's timestamp to avoid issues with clock skew between devices
-                        val markerState = calculateMarkerState(
-                            timestamp = loc.receivedAt,
-                            expiresAt = loc.expiresAt,
-                            currentTime = currentTime,
-                        ) ?: return@mapNotNull null
+                        val markerState =
+                            calculateMarkerState(
+                                timestamp = loc.receivedAt,
+                                expiresAt = loc.expiresAt,
+                                currentTime = currentTime,
+                            ) ?: return@mapNotNull null
 
                         // Try contacts first (exact, then case-insensitive)
                         // Then try announces (exact, then case-insensitive)
-                        val displayName = contactMap[loc.senderHash]?.displayName
-                            ?: contactMapLower[loc.senderHash.lowercase()]?.displayName
-                            ?: announceMap[loc.senderHash]
-                            ?: announceMapLower[loc.senderHash.lowercase()]
-                            ?: loc.senderHash.take(8)
+                        val displayName =
+                            contactMap[loc.senderHash]?.displayName
+                                ?: contactMapLower[loc.senderHash.lowercase()]?.displayName
+                                ?: announceMap[loc.senderHash]
+                                ?: announceMapLower[loc.senderHash.lowercase()]
+                                ?: loc.senderHash.take(8)
 
                         if (displayName == loc.senderHash.take(8)) {
                             Log.w(TAG, "No name found for senderHash: ${loc.senderHash}")

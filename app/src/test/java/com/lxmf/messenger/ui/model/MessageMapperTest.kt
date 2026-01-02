@@ -353,11 +353,12 @@ class MessageMapperTest {
 
     @Test
     fun `toMessageUi maps replyToMessageId from Message data class`() {
-        val message = createMessage(
-            TestMessageConfig(
-                replyToMessageId = "original-message-hash-12345",
-            ),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(
+                    replyToMessageId = "original-message-hash-12345",
+                ),
+            )
 
         val result = message.toMessageUi()
 
@@ -382,12 +383,13 @@ class MessageMapperTest {
     fun `toMessageUi prefers replyToMessageId from data class over field 16`() {
         // Both data class and field 16 have reply info - prefer data class
         val fieldsJson = """{"16": {"reply_to": "from_field_16"}}"""
-        val message = createMessage(
-            TestMessageConfig(
-                fieldsJson = fieldsJson,
-                replyToMessageId = "from_data_class",
-            ),
-        )
+        val message =
+            createMessage(
+                TestMessageConfig(
+                    fieldsJson = fieldsJson,
+                    replyToMessageId = "from_data_class",
+                ),
+            )
 
         val result = message.toMessageUi()
 

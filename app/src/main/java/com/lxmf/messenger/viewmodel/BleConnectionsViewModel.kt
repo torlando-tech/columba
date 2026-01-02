@@ -185,8 +185,28 @@ class BleConnectionsViewModel
             }
         }
 
+        /**
+         * Start periodic refresh for real-time RSSI updates.
+         * Call when screen becomes visible.
+         */
+        fun startPeriodicRefresh() {
+            Log.d(TAG, "Starting periodic RSSI refresh")
+            bleStatusRepository.startPeriodicRefresh()
+        }
+
+        /**
+         * Stop periodic refresh for real-time RSSI updates.
+         * Call when screen is no longer visible.
+         */
+        fun stopPeriodicRefresh() {
+            Log.d(TAG, "Stopping periodic RSSI refresh")
+            bleStatusRepository.stopPeriodicRefresh()
+        }
+
         override fun onCleared() {
             super.onCleared()
+            // Ensure refresh is stopped when ViewModel is destroyed
+            stopPeriodicRefresh()
             Log.d(TAG, "BleConnectionsViewModel cleared")
         }
     }

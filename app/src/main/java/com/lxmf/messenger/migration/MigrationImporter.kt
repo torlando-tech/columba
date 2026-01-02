@@ -9,13 +9,13 @@ import com.lxmf.messenger.data.database.InterfaceDatabase
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
-import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.CustomThemeEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
+import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext

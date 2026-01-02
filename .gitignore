@@ -93,3 +93,6 @@ release/.envrc
 
 # Auto Claude data directory
 .auto-claude/
+.worktrees/
+python/ble_modules/BLEAgent.py
+python/ble_modules/BLEFragmentation.py

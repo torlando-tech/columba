@@ -1290,22 +1290,23 @@ class MessageDeliveryRetrievalCardTest {
 
     @Test
     fun relaySelectionDialog_showsAvailableRelays() {
-        val testRelays = listOf(
-            RelayInfo(
-                destinationHash = "hash1",
-                displayName = "Relay 1",
-                hops = 1,
-                isAutoSelected = false,
-                lastSeenTimestamp = System.currentTimeMillis(),
-            ),
-            RelayInfo(
-                destinationHash = "hash2",
-                displayName = "Relay 2",
-                hops = 3,
-                isAutoSelected = false,
-                lastSeenTimestamp = System.currentTimeMillis(),
-            ),
-        )
+        val testRelays =
+            listOf(
+                RelayInfo(
+                    destinationHash = "hash1",
+                    displayName = "Relay 1",
+                    hops = 1,
+                    isAutoSelected = false,
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                ),
+                RelayInfo(
+                    destinationHash = "hash2",
+                    displayName = "Relay 2",
+                    hops = 3,
+                    isAutoSelected = false,
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                ),
+            )
         setUpCardWithConfigAndRelays(
             MessageDeliveryRetrievalTestFixtures.defaultState(),
             testRelays,
@@ -1323,15 +1324,16 @@ class MessageDeliveryRetrievalCardTest {
 
     @Test
     fun relaySelectionDialog_showsHopCount() {
-        val testRelays = listOf(
-            RelayInfo(
-                destinationHash = "hash1",
-                displayName = "Relay 1",
-                hops = 2,
-                isAutoSelected = false,
-                lastSeenTimestamp = System.currentTimeMillis(),
-            ),
-        )
+        val testRelays =
+            listOf(
+                RelayInfo(
+                    destinationHash = "hash1",
+                    displayName = "Relay 1",
+                    hops = 2,
+                    isAutoSelected = false,
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                ),
+            )
         setUpCardWithConfigAndRelays(
             MessageDeliveryRetrievalTestFixtures.defaultState(),
             testRelays,
@@ -1350,15 +1352,16 @@ class MessageDeliveryRetrievalCardTest {
 
     @Test
     fun relaySelectionDialog_selectRelay_invokesCallback() {
-        val testRelays = listOf(
-            RelayInfo(
-                destinationHash = "hash1",
-                displayName = "Relay 1",
-                hops = 1,
-                isAutoSelected = false,
-                lastSeenTimestamp = System.currentTimeMillis(),
-            ),
-        )
+        val testRelays =
+            listOf(
+                RelayInfo(
+                    destinationHash = "hash1",
+                    displayName = "Relay 1",
+                    hops = 1,
+                    isAutoSelected = false,
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                ),
+            )
         setUpCardWithConfigAndRelays(
             MessageDeliveryRetrievalTestFixtures.defaultState(),
             testRelays,
@@ -1397,15 +1400,16 @@ class MessageDeliveryRetrievalCardTest {
 
     @Test
     fun relaySelectionDialog_showsViewAllRelaysOption() {
-        val testRelays = listOf(
-            RelayInfo(
-                destinationHash = "hash1",
-                displayName = "Relay 1",
-                hops = 1,
-                isAutoSelected = false,
-                lastSeenTimestamp = System.currentTimeMillis(),
-            ),
-        )
+        val testRelays =
+            listOf(
+                RelayInfo(
+                    destinationHash = "hash1",
+                    displayName = "Relay 1",
+                    hops = 1,
+                    isAutoSelected = false,
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                ),
+            )
         setUpCardWithConfigAndRelays(
             MessageDeliveryRetrievalTestFixtures.defaultState(),
             testRelays,

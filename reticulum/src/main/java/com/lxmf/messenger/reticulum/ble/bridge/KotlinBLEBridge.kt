@@ -228,6 +228,51 @@ class KotlinBLEBridge(
     fun setOnConnected(callback: PyObject) {
         // VALIDATION: Accept PyObject from Python - validation happens at call time
         onConnected = callback
+
+        // Sync existing connections to Python when callback is registered
+        // This handles the case where connections were established before Python started
+        scope.launch {
+            syncExistingConnectionsToPython()
+        }
+    }
+
+    /**
+     * Sync existing connections to Python.
+     * Called when Python registers the onConnected callback to ensure Python knows
+     * about connections that were established before Python started.
+     */
+    private suspend fun syncExistingConnectionsToPython() {
+        // Collect peers to sync outside the lock to avoid holding lock during callbacks
+        val peersToSync = mutableListOf<Triple<String, PeerConnection, String>>()
+
+        peersMutex.withLock {
+            connectedPeers.forEach { (address, peer) ->
+                val identityHash = peer.identityHash ?: addressToIdentity[address]
+                if (identityHash != null) {
+                    peersToSync.add(Triple(address, peer, identityHash))
+                }
+            }
+        }
+
+        if (peersToSync.isNotEmpty()) {
+            Log.i(TAG, "Syncing ${peersToSync.size} existing connections to Python")
+
+            peersToSync.forEach { (address, peer, identityHash) ->
+                Log.d(TAG, "Syncing connection: $address with identity ${identityHash.take(16)}...")
+                notifyPythonConnected(
+                    address = address,
+                    mtu = peer.mtu,
+                    isCentral = peer.isCentral,
+                    isPeripheral = peer.isPeripheral,
+                    identityHash = identityHash,
+                )
+
+                // Also sync MTU to ensure fragmenter/reassembler are created
+                onMtuNegotiated?.callAttr("__call__", address, peer.mtu)
+            }
+        } else {
+            Log.d(TAG, "No existing connections with identity to sync to Python")
+        }
     }
 
     fun setOnDisconnected(callback: PyObject) {
@@ -310,18 +355,60 @@ class KotlinBLEBridge(
     /**
      * Build JSON string of current connection details for listeners.
      */
+    @Suppress("CyclomaticComplexMethod")
     private fun buildConnectionDetailsJson(): String {
         return try {
+            val deviceMap = scanner.getDevicesSnapshot()
             val jsonArray = org.json.JSONArray()
+
+            // Deduplicate by identity - keep only the best peer per identity
+            // (prefer central connection, then most recent activity)
+            val bestPeerByIdentity = mutableMapOf<String, PeerConnection>()
             connectedPeers.values.forEach { peer ->
+                val identity = peer.identityHash ?: addressToIdentity[peer.address] ?: "unknown_${peer.address}"
+                val existing = bestPeerByIdentity[identity]
+                val dominated =
+                    when {
+                        existing == null -> false
+                        // Prefer peer with central connection
+                        peer.isCentral && !existing.isCentral -> false
+                        existing.isCentral && !peer.isCentral -> true
+                        // Prefer peer with more recent activity
+                        peer.lastActivity > existing.lastActivity -> false
+                        else -> true
+                    }
+                if (!dominated) {
+                    bestPeerByIdentity[identity] = peer
+                }
+            }
+
+            bestPeerByIdentity.values.forEach { peer ->
+                val device = deviceMap[peer.address]
+                // Use stored peer.rssi first, then fall back to scanner cache
+                val rssi = if (peer.rssi != -100) peer.rssi else device?.rssi ?: -100
+                // Use effective connection type based on deduplication state
+                val effectiveCentral =
+                    when (peer.deduplicationState) {
+                        DeduplicationState.CLOSING_CENTRAL -> false
+                        else -> peer.isCentral
+                    }
+                val effectivePeripheral =
+                    when (peer.deduplicationState) {
+                        DeduplicationState.CLOSING_PERIPHERAL -> false
+                        else -> peer.isPeripheral
+                    }
                 val jsonObj =
                     org.json.JSONObject().apply {
                         put("identityHash", peer.identityHash ?: "unknown")
                         put("address", peer.address)
-                        put("hasCentralConnection", peer.isCentral)
-                        put("hasPeripheralConnection", peer.isPeripheral)
+                        put("hasCentralConnection", effectiveCentral)
+                        put("hasPeripheralConnection", effectivePeripheral)
                         put("mtu", peer.mtu)
                         put("connectedAt", peer.connectedAt)
+                        put("rssi", rssi)
+                        put("peerName", device?.name ?: peer.identityHash?.take(8) ?: "Unknown")
+                        put("firstSeen", device?.firstSeen ?: peer.connectedAt)
+                        put("lastSeen", peer.lastActivity)
                     }
                 jsonArray.put(jsonObj)
             }
@@ -335,6 +422,45 @@ class KotlinBLEBridge(
     // State
     @Volatile
     private var isStarted = false
+
+    // Periodic refresh job for real-time RSSI updates (only when UI is visible)
+    private var connectionRefreshJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Start periodic refresh of connection details (for real-time RSSI updates).
+     * Call this when the BLE connections screen becomes visible.
+     */
+    fun startPeriodicConnectionRefresh() {
+        if (connectionRefreshJob?.isActive == true) return
+        connectionRefreshJob =
+            scope.launch {
+                while (true) {
+                    kotlinx.coroutines.delay(1000L)
+                    if (connectedPeers.isNotEmpty()) {
+                        // Update RSSI values from scanner cache
+                        val deviceMap = scanner.getDevicesSnapshot()
+                        connectedPeers.values.forEach { peer ->
+                            val device = deviceMap[peer.address]
+                            if (device != null && device.rssi != -100) {
+                                peer.rssi = device.rssi
+                            }
+                        }
+                        notifyConnectionChange()
+                    }
+                }
+            }
+        Log.d(TAG, "Started periodic connection refresh")
+    }
+
+    /**
+     * Stop periodic refresh of connection details.
+     * Call this when the BLE connections screen is no longer visible.
+     */
+    fun stopPeriodicConnectionRefresh() {
+        connectionRefreshJob?.cancel()
+        connectionRefreshJob = null
+        Log.d(TAG, "Stopped periodic connection refresh")
+    }
 
     // Stored UUIDs for restart capability
     @Volatile
@@ -357,6 +483,25 @@ class KotlinBLEBridge(
     private var identityReadyCallback: (() -> Unit)? = null
 
     /**
+     * Tracks deduplication state when closing one of two connections to the same peer.
+     * Used to report correct connection type to UI while disconnect is pending.
+     */
+    private enum class DeduplicationState {
+        NONE, // Normal state - use actual isCentral/isPeripheral flags
+        CLOSING_CENTRAL, // Keeping peripheral, central disconnect is pending
+        CLOSING_PERIPHERAL, // Keeping central, peripheral disconnect is pending
+    }
+
+    /**
+     * Action to take after mutex for deduplication (avoids calling disconnect inside mutex).
+     */
+    private enum class DedupeAction {
+        NONE,
+        CLOSE_CENTRAL,
+        CLOSE_PERIPHERAL,
+    }
+
+    /**
      * Data class to track peer connection state.
      */
     private data class PeerConnection(
@@ -366,6 +511,9 @@ class KotlinBLEBridge(
         var isPeripheral: Boolean = false, // true if they connected to us
         var identityHash: String? = null, // 32-char hex
         val connectedAt: Long = System.currentTimeMillis(),
+        var rssi: Int = -100, // Last known RSSI, -100 = unknown
+        var lastActivity: Long = System.currentTimeMillis(), // Last data exchange
+        var deduplicationState: DeduplicationState = DeduplicationState.NONE,
     )
 
     /**
@@ -839,6 +987,10 @@ class KotlinBLEBridge(
      * This prevents dual connections (both central and peripheral to same peer)
      * by ensuring both devices independently agree on connection direction.
      *
+     * NOTE: This method is exposed for Python (BLEInterface) to call BEFORE connect().
+     * The MAC sorting decision has been moved to Python layer per RFC architecture.
+     * Kotlin no longer automatically filters in connect() - Python must check first.
+     *
      * @param peerAddress BLE MAC address of peer
      * @return true if we should connect (our MAC < peer MAC), false otherwise
      */
@@ -893,9 +1045,9 @@ class KotlinBLEBridge(
     /**
      * Connect to a peer (central mode).
      *
-     * Uses MAC-based sorting to prevent dual connections:
-     * - Lower MAC initiates connection (central)
-     * - Higher MAC waits for connection (peripheral)
+     * NOTE: MAC sorting has been moved to Python (BLEInterface).
+     * Python should call shouldConnect() first to decide whether to connect.
+     * This method now connects unconditionally when called.
      *
      * Launches coroutines internally - safe to call from Python.
      *
@@ -905,22 +1057,15 @@ class KotlinBLEBridge(
         try {
             Log.i(TAG, "Connecting to $address...")
 
-            // MAC-based connection deduplication
-            if (!shouldConnect(address)) {
-                Log.i(TAG, "Skipping connection to $address (MAC sorting: our MAC is higher, wait for them to connect)")
-                return
-            }
-
-            // Check if already connected as peripheral (avoid dual connections)
+            // NOTE: MAC sorting moved to Python. Python should call shouldConnect() first.
+            // We still check for existing connections to avoid duplicate GATT operations.
             connectedPeers[address]?.let { peer ->
-                if (peer.isPeripheral) {
-                    Log.i(TAG, "Already connected to $address as peripheral, skipping central connection")
-                    return
-                }
                 if (peer.isCentral) {
                     Log.w(TAG, "Already connected to $address as central")
                     return
                 }
+                // NOTE: Dual connection handling moved to Python.
+                // We no longer skip connecting if peripheral exists - Python decides.
             }
 
             // Check connection limit
@@ -979,6 +1124,70 @@ class KotlinBLEBridge(
         }
     }
 
+    /**
+     * Disconnect only our central connection TO a peer (async wrapper).
+     * Used by Python for deduplication when keeping peripheral.
+     */
+    fun disconnectCentralAsync(address: String) {
+        scope.launch {
+            disconnectCentral(address)
+        }
+    }
+
+    /**
+     * Disconnect only our central connection TO a peer.
+     *
+     * Used for deduplication when Python wants to keep the peripheral
+     * connection (them connected to us) but close our central connection.
+     *
+     * @param address BLE MAC address
+     */
+    suspend fun disconnectCentral(address: String) {
+        try {
+            Log.i(TAG, "Disconnecting central connection to $address...")
+            gattClient.disconnect(address)
+
+            // Update peer state - mark as no longer central
+            peersMutex.withLock {
+                connectedPeers[address]?.isCentral = false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to disconnect central from $address", e)
+        }
+    }
+
+    /**
+     * Disconnect only the peripheral connection FROM a peer (async wrapper).
+     * Used by Python for deduplication when keeping central.
+     */
+    fun disconnectPeripheralAsync(address: String) {
+        scope.launch {
+            disconnectPeripheral(address)
+        }
+    }
+
+    /**
+     * Disconnect only the peripheral connection FROM a peer.
+     *
+     * Used for deduplication when Python wants to keep our central
+     * connection (us connected to them) but close the peripheral connection.
+     *
+     * @param address BLE MAC address
+     */
+    suspend fun disconnectPeripheral(address: String) {
+        try {
+            Log.i(TAG, "Disconnecting peripheral connection from $address...")
+            gattServer.disconnectCentral(address)
+
+            // Update peer state - mark as no longer peripheral
+            peersMutex.withLock {
+                connectedPeers[address]?.isPeripheral = false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to disconnect peripheral from $address", e)
+        }
+    }
+
     fun sendAsync(
         address: String,
         data: ByteArray,
@@ -1026,6 +1235,9 @@ class KotlinBLEBridge(
                 Log.w(TAG, "Cannot send to $address - not connected (identity lookup also failed)")
                 return
             }
+
+            // Update last activity timestamp for this peer
+            peer.lastActivity = System.currentTimeMillis()
 
             // Data is now a pre-formatted fragment from the Python layer
             Log.d(TAG, "Sending ${data.size} byte fragment to $targetAddress")
@@ -1100,12 +1312,13 @@ class KotlinBLEBridge(
             // Also re-fire connected callback to restore full state
             val peer = connectedPeers[address]
             if (peer != null) {
-                val roleString = when {
-                    peer.isCentral && peer.isPeripheral -> "both"
-                    peer.isCentral -> "central"
-                    peer.isPeripheral -> "peripheral"
-                    else -> "unknown"
-                }
+                val roleString =
+                    when {
+                        peer.isCentral && peer.isPeripheral -> "both"
+                        peer.isCentral -> "central"
+                        peer.isPeripheral -> "peripheral"
+                        else -> "unknown"
+                    }
                 onConnected?.callAttr("__call__", address, peer.mtu, roleString, identityHash)
                 Log.d(TAG, "Identity resync: re-fired onConnected for $address")
             }
@@ -1141,18 +1354,31 @@ class KotlinBLEBridge(
         peersMutex.withLock {
             connectedPeers.values.forEach { peer ->
                 val device = deviceMap[peer.address]
+                // Fallback to addressToIdentity if peer.identityHash not set (race condition)
+                val identity = peer.identityHash ?: addressToIdentity[peer.address]
+                // Use effective connection type based on deduplication state
+                val effectiveCentral =
+                    when (peer.deduplicationState) {
+                        DeduplicationState.CLOSING_CENTRAL -> false
+                        else -> peer.isCentral
+                    }
+                val effectivePeripheral =
+                    when (peer.deduplicationState) {
+                        DeduplicationState.CLOSING_PERIPHERAL -> false
+                        else -> peer.isPeripheral
+                    }
 
                 details.add(
                     BleConnectionDetails(
-                        identityHash = peer.identityHash ?: "unknown",
-                        peerName = device?.name ?: "No Name",
+                        identityHash = identity ?: "unknown",
+                        peerName = device?.name ?: identity?.take(8) ?: "Unknown",
                         currentMac = peer.address,
-                        hasCentralConnection = peer.isCentral,
-                        hasPeripheralConnection = peer.isPeripheral,
+                        hasCentralConnection = effectiveCentral,
+                        hasPeripheralConnection = effectivePeripheral,
                         mtu = peer.mtu,
                         connectedAt = peer.connectedAt,
                         firstSeen = device?.firstSeen ?: peer.connectedAt,
-                        lastSeen = device?.lastSeen ?: System.currentTimeMillis(),
+                        lastSeen = peer.lastActivity,
                         rssi = device?.rssi ?: -100,
                     ),
                 )
@@ -1172,28 +1398,64 @@ class KotlinBLEBridge(
      *
      * @return List of connection details for all connected peers (without scanner data)
      */
+    @Suppress("CyclomaticComplexMethod")
     fun getConnectionDetailsSync(): List<BleConnectionDetails> {
         val details = mutableListOf<BleConnectionDetails>()
 
         // Get snapshot of scanner devices (thread-safe, non-blocking)
         val deviceMap = scanner.getDevicesSnapshot()
 
-        // Safe iteration - connectedPeers is ConcurrentHashMap
+        // Deduplicate by identity - keep only the best peer per identity
+        // (prefer central connection, then most recent activity)
+        val bestPeerByIdentity = mutableMapOf<String, PeerConnection>()
         connectedPeers.values.forEach { peer ->
-            val device = deviceMap[peer.address]
+            val identity = peer.identityHash ?: addressToIdentity[peer.address] ?: "unknown_${peer.address}"
+            val existing = bestPeerByIdentity[identity]
+            val dominated =
+                when {
+                    existing == null -> false
+                    // Prefer peer with central connection
+                    peer.isCentral && !existing.isCentral -> false
+                    existing.isCentral && !peer.isCentral -> true
+                    // Prefer peer with more recent activity
+                    peer.lastActivity > existing.lastActivity -> false
+                    else -> true
+                }
+            if (!dominated) {
+                bestPeerByIdentity[identity] = peer
+            }
+        }
 
+        // Build details from deduplicated peers
+        bestPeerByIdentity.values.forEach { peer ->
+            val device = deviceMap[peer.address]
+            // Fallback to addressToIdentity if peer.identityHash not set (race condition)
+            val identity = peer.identityHash ?: addressToIdentity[peer.address]
+
+            val finalRssi = if (peer.rssi != -100) peer.rssi else device?.rssi ?: -100
+            // Use effective connection type based on deduplication state
+            val effectiveCentral =
+                when (peer.deduplicationState) {
+                    DeduplicationState.CLOSING_CENTRAL -> false
+                    else -> peer.isCentral
+                }
+            val effectivePeripheral =
+                when (peer.deduplicationState) {
+                    DeduplicationState.CLOSING_PERIPHERAL -> false
+                    else -> peer.isPeripheral
+                }
             details.add(
                 BleConnectionDetails(
-                    identityHash = peer.identityHash ?: "unknown",
-                    peerName = device?.name ?: "No Name", // Real device name from scanner
+                    identityHash = identity ?: "unknown",
+                    peerName = device?.name ?: identity?.take(8) ?: "Unknown",
                     currentMac = peer.address,
-                    hasCentralConnection = peer.isCentral,
-                    hasPeripheralConnection = peer.isPeripheral,
+                    hasCentralConnection = effectiveCentral,
+                    hasPeripheralConnection = effectivePeripheral,
                     mtu = peer.mtu,
                     connectedAt = peer.connectedAt,
                     firstSeen = device?.firstSeen ?: peer.connectedAt,
-                    lastSeen = device?.lastSeen ?: System.currentTimeMillis(),
-                    rssi = device?.rssi ?: -100, // Real RSSI from scanner, -100 fallback
+                    lastSeen = peer.lastActivity,
+                    rssi = finalRssi,
                 ),
             )
         }
@@ -1218,6 +1480,7 @@ class KotlinBLEBridge(
     /**
      * Setup callbacks for all BLE components.
      */
+    @Suppress("LongMethod")
     private fun setupCallbacks() {
         // Scanner callbacks
         scanner.onDeviceDiscovered = { device: BleDevice ->
@@ -1248,6 +1511,19 @@ class KotlinBLEBridge(
             // Clean up pending central tracking when connection fails
             pendingCentralConnections.remove(address)
             Log.d(TAG, "Central connection failed to $address: $error")
+
+            // Central handshake failed - try to complete via peripheral if connected
+            // This handles dual-connection scenarios where both devices connect as central
+            // and the central handshake times out (e.g., notification enable timeout)
+            scope.launch {
+                val identityHash = addressToIdentity[address]
+                if (identityHash != null) {
+                    val completed = gattServer.completeConnectionWithIdentity(address, identityHash)
+                    if (completed) {
+                        Log.i(TAG, "Central failed, completed peripheral connection for $address")
+                    }
+                }
+            }
         }
 
         gattClient.onDataReceived = { address: String, data: ByteArray ->
@@ -1313,8 +1589,12 @@ class KotlinBLEBridge(
 
     /**
      * Handle peer connection established.
+     *
+     * NOTE: Deduplication logic has been moved to Python (BLEInterface).
+     * Kotlin now reports ALL connections to Python, and Python decides which to close.
+     * This follows the RFC architecture where protocol logic belongs in BLEInterface.
      */
-    @Suppress("LongMethod") // Length due to verbose logging format, not complexity
+    @Suppress("LongMethod")
     private suspend fun handlePeerConnected(
         address: String,
         mtu: Int,
@@ -1325,14 +1605,17 @@ class KotlinBLEBridge(
             pendingCentralConnections.remove(address)
         }
 
-        // Track if we need to deduplicate (will do outside mutex)
-        var needsDedupeInConnect = false
-        var weKeepCentralInConnect = false
+        // Get RSSI from scanner cache at connection time (before MAC rotation)
+        val scannedDevice = scanner.getDevicesSnapshot()[address]
+        val rssiAtConnection = scannedDevice?.rssi ?: -100
+
+        // Track deduplication action to perform after mutex (can't call disconnect inside mutex)
+        var dedupeAction = DedupeAction.NONE
 
         peersMutex.withLock {
             val peer =
                 connectedPeers.getOrPut(address) {
-                    PeerConnection(address, mtu)
+                    PeerConnection(address, mtu, rssi = rssiAtConnection)
                 }
 
             if (isCentral) {
@@ -1341,6 +1624,10 @@ class KotlinBLEBridge(
                 peer.isPeripheral = true
             }
             peer.mtu = maxOf(peer.mtu, mtu) // Use best MTU
+            // Update RSSI if we got a valid one (might be first connection as central)
+            if (rssiAtConnection != -100) {
+                peer.rssi = rssiAtConnection
+            }
 
             // Check if we already received identity for this peer (race condition fix)
             val existingIdentity = addressToIdentity[address]
@@ -1348,100 +1635,76 @@ class KotlinBLEBridge(
                 peer.identityHash = existingIdentity
             }
 
-            // Detect dual connection: both central and peripheral established
-
+            // Handle dual connection - decide which to keep based on identity comparison
             if (peer.isCentral && peer.isPeripheral) {
-                Log.w(TAG, "Dual connection detected for $address")
-
-                // Track for production monitoring
                 dualConnectionRaceCount++
                 Log.d(TAG, "Dual connection count: $dualConnectionRaceCount")
 
-                // Use identity-based sorting to determine which connection to keep
-                // This is deterministic and works with MAC rotation
-                val peerIdentity = peer.identityHash
-                val localIdentity = transportIdentityHash
-
-                if (peerIdentity != null && localIdentity != null) {
-                    // Convert local identity to hex string for comparison
-                    val localIdentityHex = localIdentity.joinToString("") { "%02x".format(it) }
-
+                val peerIdentity = addressToIdentity[address]
+                val localIdentityBytes = transportIdentityHash
+                if (peerIdentity != null && localIdentityBytes != null) {
+                    val localIdentityHex = localIdentityBytes.joinToString("") { "%02x".format(it) }
                     // Lower identity hash keeps central role
-                    weKeepCentralInConnect = localIdentityHex < peerIdentity
-                    needsDedupeInConnect = true
-
-                    if (weKeepCentralInConnect) {
-                        Log.i(TAG, "Identity sorting: keeping central, will close peripheral for $address (local=$localIdentityHex < peer=$peerIdentity)")
-                        peer.isPeripheral = false
+                    if (localIdentityHex < peerIdentity) {
+                        Log.i(TAG, "Deduplication: keeping central (local=$localIdentityHex < peer=$peerIdentity)")
+                        peer.deduplicationState = DeduplicationState.CLOSING_PERIPHERAL
+                        dedupeAction = DedupeAction.CLOSE_PERIPHERAL
                     } else {
-                        Log.i(TAG, "Identity sorting: keeping peripheral, will close central to $address (local=$localIdentityHex >= peer=$peerIdentity)")
-                        peer.isCentral = false
+                        Log.i(TAG, "Deduplication: keeping peripheral (local=$localIdentityHex > peer=$peerIdentity)")
+                        peer.deduplicationState = DeduplicationState.CLOSING_CENTRAL
+                        dedupeAction = DedupeAction.CLOSE_CENTRAL
                     }
                 } else {
-                    // Identity not yet received - keep both for now, will deduplicate when identity arrives
-                    Log.d(TAG, "Dual connection for $address - waiting for identity to deduplicate")
+                    Log.w(TAG, "Dual connection but identity not yet available - deferring deduplication")
                 }
             }
 
-            Log.i(TAG, "Peer connected: $address (central=$isCentral, MTU=$mtu)")
+            Log.i(TAG, "Peer connected: $address (central=$isCentral, peripheral=${peer.isPeripheral}, dedupe=${peer.deduplicationState}, MTU=$mtu)")
 
-            // Notify Python (only once per peer, not per connection type)
-            if (peer.isCentral && !peer.isPeripheral || !peer.isCentral && peer.isPeripheral) {
-                val identityHash = addressToIdentity[address]
+            // ALWAYS notify Python of the connection - Python handles deduplication
+            val identityHash = addressToIdentity[address]
 
-                // DEBUG: Log decision point for Python notification
-                Log.w(
-                    TAG,
-                    "[CALLBACK] handlePeerConnected: address=$address, " +
-                        "identityHash=${identityHash?.take(16)}, " +
-                        "will_notify_immediately=${identityHash != null}",
-                )
+            Log.w(
+                TAG,
+                "[CALLBACK] handlePeerConnected: address=$address, " +
+                    "identityHash=${identityHash?.take(16)}, " +
+                    "isCentral=$isCentral, isPeripheral=${peer.isPeripheral}",
+            )
 
-                if (identityHash != null) {
-                    // Identity already available - notify Python immediately
-                    Log.w(
-                        TAG,
-                        "[CALLBACK] handlePeerConnected: IMMEDIATE notification to Python " +
-                            "for $address with identity ${identityHash.take(16)}...",
+            // ALWAYS notify Python immediately - Python handles timeout for missing identity
+            // This follows RFC architecture: protocol decisions belong in BLEInterface.py
+            Log.w(
+                TAG,
+                "[CALLBACK] handlePeerConnected: Notifying Python for $address " +
+                    "(identity=${identityHash?.take(16) ?: "pending"})",
+            )
+            notifyPythonConnected(address, peer.mtu, isCentral, peer.isPeripheral, identityHash)
+
+            // Track pending connection if identity not yet received
+            // When identity arrives via handleIdentityReceived, we'll notify Python again
+            if (identityHash == null) {
+                pendingConnections[address] =
+                    PendingConnection(
+                        address = address,
+                        mtu = peer.mtu,
+                        isCentral = isCentral,
+                        isPeripheral = peer.isPeripheral,
                     )
-                    notifyPythonConnected(address, peer.mtu, peer.isCentral, peer.isPeripheral, identityHash)
-                } else {
-                    // Identity not yet received - defer Python notification
-                    // The onIdentityReceived callback will complete the notification
-                    pendingConnections[address] =
-                        PendingConnection(
-                            address = address,
-                            mtu = peer.mtu,
-                            isCentral = peer.isCentral,
-                            isPeripheral = peer.isPeripheral,
-                        )
-                    Log.w(
-                        TAG,
-                        "[CALLBACK] handlePeerConnected: DEFERRED notification " +
-                            "for $address (waiting for identity)",
-                    )
-                    Log.d(TAG, "Connection $address pending - waiting for identity before notifying Python")
-                }
-            } else {
-                Log.w(
-                    TAG,
-                    "[CALLBACK] handlePeerConnected: NOT notifying Python for $address " +
-                        "(dual connection: central=${peer.isCentral}, peripheral=${peer.isPeripheral})",
-                )
+                Log.d(TAG, "Connection $address pending identity - Python will handle timeout")
             }
         }
 
-        // Perform disconnect outside mutex to avoid deadlock
-        if (needsDedupeInConnect) {
-            if (weKeepCentralInConnect) {
-                Log.i(TAG, "Disconnecting peripheral (server) for $address")
-                gattServer.disconnectCentral(address)
-                Log.d(TAG, "Disconnect peripheral request completed for $address")
-            } else {
-                Log.i(TAG, "Disconnecting central (client) to $address")
+        // Execute deduplication disconnect outside mutex to avoid deadlock
+        when (dedupeAction) {
+            DedupeAction.CLOSE_CENTRAL -> {
+                Log.i(TAG, "Deduplication: disconnecting central connection to $address")
                 gattClient.disconnect(address)
-                Log.d(TAG, "Disconnect central request completed for $address")
             }
+            DedupeAction.CLOSE_PERIPHERAL -> {
+                Log.i(TAG, "Deduplication: disconnecting peripheral connection from $address")
+                gattServer.disconnectCentral(address)
+            }
+            DedupeAction.NONE -> { /* No deduplication needed */ }
         }
 
         // Notify native listeners of connection state change
@@ -1466,8 +1729,18 @@ class KotlinBLEBridge(
                 peer.isCentral = false
                 // Also clean up pending central tracking
                 pendingCentralConnections.remove(address)
+                // Clear deduplication state if we were closing this connection
+                if (peer.deduplicationState == DeduplicationState.CLOSING_CENTRAL) {
+                    peer.deduplicationState = DeduplicationState.NONE
+                    Log.d(TAG, "Deduplication complete: central connection closed for $address")
+                }
             } else {
                 peer.isPeripheral = false
+                // Clear deduplication state if we were closing this connection
+                if (peer.deduplicationState == DeduplicationState.CLOSING_PERIPHERAL) {
+                    peer.deduplicationState = DeduplicationState.NONE
+                    Log.d(TAG, "Deduplication complete: peripheral connection closed for $address")
+                }
             }
 
             // If no connections remain, remove peer and clean up mappings
@@ -1543,22 +1816,23 @@ class KotlinBLEBridge(
      * @param mtu Negotiated MTU size
      * @param isCentral True if we connected to them (central role)
      * @param isPeripheral True if they connected to us (peripheral role)
-     * @param identityHash 32-char hex identity string
+     * @param identityHash 32-char hex identity string, or null if identity pending
      */
     private fun notifyPythonConnected(
         address: String,
         mtu: Int,
         isCentral: Boolean,
         isPeripheral: Boolean,
-        identityHash: String,
+        identityHash: String?,
     ) {
         // Determine role: "central" = we connected to them, "peripheral" = they connected to us
         val roleString = if (isCentral && !isPeripheral) "central" else "peripheral"
+        val identityLog = identityHash?.take(16) ?: "pending"
         Log.w(
             TAG,
             "[CALLBACK] notifyPythonConnected: CALLING Python " +
                 "onConnected(address=$address, mtu=$mtu, role=$roleString, " +
-                "identity=${identityHash.take(16)}...)",
+                "identity=$identityLog...)",
         )
         Log.d(TAG, "Notifying Python of connection: $address (role=$roleString, identity=$identityHash)")
         onConnected?.callAttr("__call__", address, mtu, roleString, identityHash)
@@ -1581,6 +1855,31 @@ class KotlinBLEBridge(
                 return
             }
 
+            // Update last activity timestamp for this peer
+            // Use identity-based lookup to handle MAC address rotation
+            var peer = connectedPeers[address]
+            var resolvedAddress = address
+            if (peer == null) {
+                // Try resolving via identity (handles address changes after deduplication)
+                val identityHash = addressToIdentity[address]
+                Log.d(TAG, "[LAST_ACTIVITY] address=$address not in connectedPeers, identityHash=$identityHash")
+                if (identityHash != null) {
+                    val currentAddress = identityToAddress[identityHash]
+                    Log.d(TAG, "[LAST_ACTIVITY] identity $identityHash -> currentAddress=$currentAddress")
+                    if (currentAddress != null) {
+                        peer = connectedPeers[currentAddress]
+                        resolvedAddress = currentAddress
+                        Log.d(TAG, "[LAST_ACTIVITY] resolved peer at $currentAddress: ${peer != null}")
+                    }
+                }
+            }
+            if (peer != null) {
+                peer.lastActivity = System.currentTimeMillis()
+                Log.d(TAG, "[LAST_ACTIVITY] Updated lastActivity for $resolvedAddress")
+            } else {
+                Log.w(TAG, "[LAST_ACTIVITY] Could not find peer for $address")
+            }
+
             // Pass the raw fragment to the Python layer for reassembly
             Log.d(TAG, "Received ${fragment.size} byte fragment from $address")
 
@@ -1600,8 +1899,10 @@ class KotlinBLEBridge(
      * Handle identity received from peer (Protocol v2.2).
      *
      * Maps the peer's identity to their current MAC address.
-     * Detects and rejects duplicate connections when the same identity
-     * connects from a rotated MAC address (Android MAC rotation).
+     *
+     * NOTE: Deduplication and MAC rotation handling has been moved to Python (BLEInterface).
+     * Kotlin now just tracks identity for address resolution and notifies Python.
+     * Python decides what to do with duplicate identities or dual connections.
      */
     private suspend fun handleIdentityReceived(
         address: String,
@@ -1616,186 +1917,56 @@ class KotlinBLEBridge(
             return
         }
 
-        // Check for duplicate identity BEFORE acquiring mutex for disconnect operations
-        val existingAddress = identityToAddress[identityHash]
-        if (existingAddress != null && existingAddress != address) {
-            // Same identity, different MAC - check if existing connection is still active
-            val existingPeer = connectedPeers[existingAddress]
-            // Also check for in-progress central connections (race condition fix)
-            // When identity arrives before handlePeerConnected, peer isn't in connectedPeers yet
-            val isPendingCentral = pendingCentralConnections.contains(existingAddress)
-            val existingPeerHasConnection = existingPeer?.isCentral == true || existingPeer?.isPeripheral == true
-            val isActiveConnection = existingPeerHasConnection || isPendingCentral
-            if (isActiveConnection) {
-                // Only treat as duplicate if SAME connection direction
-                // Central-to-peripheral and peripheral-to-central are valid dual connections
-                val existingIsCentral = existingPeer?.isCentral == true || isPendingCentral
-                val existingIsPeripheral = existingPeer?.isPeripheral == true
-                val existingIsSameDirection =
-                    if (isCentralConnection) {
-                        existingIsCentral // We're central now, was existing also central?
-                    } else {
-                        existingIsPeripheral // We're peripheral now, was existing also peripheral?
-                    }
-
-                if (existingIsSameDirection) {
-                    // MAC rotation detected: same identity, same direction, different MAC
-                    // The NEW connection is valid - peer can only be at one MAC address at a time
-                    // Trust the new connection and clean up the old one
-                    Log.i(TAG, "MAC rotation: identity $identityHash migrating from $existingAddress to $address")
-
-                    // Disconnect old address (may already be dead, that's OK)
-                    if (existingIsCentral) {
-                        gattClient.disconnect(existingAddress)
-                    } else {
-                        gattServer.disconnectCentral(existingAddress)
-                    }
-
-                    // Clean up old tracking entries
-                    // KEEP addressToIdentity[existingAddress] for send() address resolution
-                    // When Python sends to old address, send() can resolve: old → identity → new
-                    peersMutex.withLock {
-                        connectedPeers.remove(existingAddress)
-                        // Don't remove addressToIdentity[existingAddress] - needed for address resolution
-                        identityToAddress.remove(identityHash)
-                    }
-                    // Also clean up pending central tracking
-                    pendingCentralConnections.remove(existingAddress)
-
-                    // Fall through to accept the new connection
-                } else {
-                    // VALID dual connection: same identity but opposite directions (MAC rotation case)
-                    // Existing peer has one direction, new connection has opposite
-                    Log.i(TAG, "Dual connection via MAC rotation: $identityHash has both central and peripheral")
-                    Log.d(TAG, "  Existing: $existingAddress (central=$existingIsCentral, peripheral=$existingIsPeripheral)")
-                    Log.d(TAG, "  New: $address (${if (isCentralConnection) "central" else "peripheral"})")
-
-                    // Apply identity-based sorting to deduplicate
-                    val localIdentity = transportIdentityHash
-                    if (localIdentity != null) {
-                        val localIdentityHex = localIdentity.joinToString("") { "%02x".format(it) }
-                        val weKeepCentral = localIdentityHex < identityHash
-
-                        // Determine which connection to disconnect
-                        // If weKeepCentral: keep central (our connection to them), close peripheral (their connection to us)
-                        // If !weKeepCentral: keep peripheral, close central
-                        val centralAddr = if (isCentralConnection) address else existingAddress
-                        val peripheralAddr = if (isCentralConnection) existingAddress else address
-
-                        // Add cooldown to prevent immediate reconnection regardless of which connection is kept
-                        // This fixes asymmetry where cooldown was only set when keeping peripheral
-                        recentlyDeduplicatedIdentities[identityHash] = System.currentTimeMillis()
-                        Log.d(TAG, "Added $identityHash to deduplication cooldown (60s)")
-
-                        if (weKeepCentral) {
-                            Log.i(TAG, "Identity sorting (MAC rotation): keeping central at $centralAddr, closing peripheral at $peripheralAddr")
-                            Log.d(TAG, "  (local=$localIdentityHex < peer=$identityHash)")
-                            // Close peripheral - the device that connected to us
-                            gattServer.disconnectCentral(peripheralAddr)
-                            // Clean up the peripheral peer connection, but KEEP addressToIdentity
-                            // so that send() can resolve old addresses via identity lookup
-                            peersMutex.withLock {
-                                connectedPeers.remove(peripheralAddr)
-                                // Keep addressToIdentity[peripheralAddr] for identity-based resolution
-                            }
-                        } else {
-                            Log.i(TAG, "Identity sorting (MAC rotation): keeping peripheral at $peripheralAddr, closing central to $centralAddr")
-                            Log.d(TAG, "  (local=$localIdentityHex >= peer=$identityHash)")
-                            // Close central - our connection to them
-                            gattClient.disconnect(centralAddr)
-                            // Clean up the central peer connection, but KEEP addressToIdentity
-                            // so that send() can resolve old addresses via identity lookup
-                            peersMutex.withLock {
-                                connectedPeers.remove(centralAddr)
-                                // Keep addressToIdentity[centralAddr] for identity-based resolution
-                            }
-                            // Also clean up pending central tracking
-                            pendingCentralConnections.remove(centralAddr)
-                        }
-
-                        // Update identity mapping to remaining address
-                        val remainingAddr = if (weKeepCentral) centralAddr else peripheralAddr
-                        peersMutex.withLock {
-                            identityToAddress[identityHash] = remainingAddr
-                        }
-
-                        Log.i(TAG, "Dual connection deduplicated - $identityHash now only via $remainingAddr")
-
-                        // Notify Python of address change so it can update its mappings
-                        val closedAddr = if (weKeepCentral) peripheralAddr else centralAddr
-                        onAddressChanged?.callAttr("__call__", closedAddr, remainingAddr, identityHash)
-
-                        // If this callback is for the CLOSED address, return early.
-                        // Python's _handle_address_changed already set up identity for remainingAddr.
-                        // Continuing would overwrite correct mappings with the closed address.
-                        if (address == closedAddr) {
-                            Log.d(TAG, "Returning early - this callback was for closed address $closedAddr")
-                            return
-                        }
-                        // Otherwise, this callback is for the remaining address - continue normally
-                    } else {
-                        Log.w(TAG, "Cannot deduplicate dual connection - local identity not set")
-                        // Clean up old MAC mapping and continue with both for now
-                        peersMutex.withLock {
-                            addressToIdentity.remove(existingAddress)
-                        }
-                    }
-                }
-            } else {
-                // Old connection is stale/gone, clean up old mapping AND connection
-                Log.i(TAG, "Identity $identityHash migrating from stale $existingAddress to $address")
-
-                // Clean up the stale connection fully
-                val stalePeer = connectedPeers.remove(existingAddress)
-                if (stalePeer != null) {
-                    Log.d(TAG, "Removing stale connection entry for $existingAddress")
-                    // Disconnect if still somehow connected
-                    if (stalePeer.isCentral) {
-                        gattClient.disconnect(existingAddress)
-                    }
-                    if (stalePeer.isPeripheral) {
-                        gattServer.disconnectCentral(existingAddress)
-                    }
-                    // Notify Python of disconnect
-                    onDisconnected?.callAttr("__call__", existingAddress)
-                }
-
-                // Clean up pending connections for stale address
-                pendingConnections.remove(existingAddress)
-
-                // Clean up address mapping
-                peersMutex.withLock {
-                    addressToIdentity.remove(existingAddress)
-                }
-            }
-        }
-
-        // Track if we need to deduplicate after mutex
-        var needsDedupe = false
-        var weKeepCentral = false
-
         // Track pending connection that was waiting for identity (race condition fix)
         var completedPending: PendingConnection? = null
 
         peersMutex.withLock {
-            // Update mappings
-            identityToAddress[identityHash] = address
-            addressToIdentity[address] = identityHash
+            // Update peer with identity if it exists
+            // NOTE: We do NOT remove old peers here - let disconnect callbacks handle that.
+            // Removing peers here causes issues when MAC rotation creates a new connection
+            // before the old one has disconnected (the old connection may still be valid).
+            val peerAtNewAddress = connectedPeers[address]
+            if (peerAtNewAddress != null) {
+                peerAtNewAddress.identityHash = identityHash
 
-            // Update peer connection (if it exists yet)
-            val peer = connectedPeers[address]
-            if (peer != null) {
-                peer.identityHash = identityHash
+                // Decide whether to update identity→address mapping
+                // Prefer addresses with central connection (more reliable for sending)
+                val existingAddress = identityToAddress[identityHash]
+                val existingPeer = existingAddress?.let { connectedPeers[it] }
+                val shouldUpdate =
+                    when {
+                        existingAddress == null -> true // No existing mapping
+                        existingPeer == null -> true // Old peer no longer exists
+                        // Prefer peer with central connection
+                        peerAtNewAddress.isCentral && !existingPeer.isCentral -> true
+                        // If new has both, prefer it
+                        peerAtNewAddress.isCentral && peerAtNewAddress.isPeripheral -> true
+                        // If existing has central and new doesn't, keep existing
+                        existingPeer.isCentral && !peerAtNewAddress.isCentral -> false
+                        // Default: use the newer address
+                        else -> true
+                    }
 
-                // Check if this completes a dual connection that needs deduplication
-                val localIdentity = transportIdentityHash
-                if (peer.isCentral && peer.isPeripheral && localIdentity != null) {
-                    val localIdentityHex = localIdentity.joinToString("") { "%02x".format(it) }
-                    weKeepCentral = localIdentityHex < identityHash
-                    needsDedupe = true
-                    Log.i(TAG, "Identity received for dual connection $address - will deduplicate (local=$localIdentityHex, peer=$identityHash)")
+                if (shouldUpdate) {
+                    identityToAddress[identityHash] = address
+                    Log.d(TAG, "Updated identity→address mapping: $identityHash → $address (central=${peerAtNewAddress.isCentral})")
+                } else {
+                    Log.d(TAG, "Keeping existing identity→address mapping: $identityHash → $existingAddress (existing has central)")
+                }
+            } else {
+                // Peer doesn't exist yet - update mapping only if no existing valid mapping
+                val existingAddress = identityToAddress[identityHash]
+                val existingPeer = existingAddress?.let { connectedPeers[it] }
+                if (existingPeer == null) {
+                    identityToAddress[identityHash] = address
+                    Log.d(TAG, "Set identity→address mapping: $identityHash → $address (no existing peer)")
+                } else {
+                    Log.d(TAG, "Identity $identityHash already mapped to $existingAddress with valid peer, not overwriting with $address")
                 }
             }
+
+            // Always update address→identity mapping (for data routing from this address)
+            addressToIdentity[address] = identityHash
 
             // Check for pending connection that was waiting for identity
             completedPending = pendingConnections.remove(address)
@@ -1803,31 +1974,12 @@ class KotlinBLEBridge(
                 Log.d(TAG, "Completing pending connection for $address - identity now available")
             }
 
-            Log.i(TAG, "Identity received from $address: $identityHash")
-        }
-
-        // Deduplicate dual connection (outside mutex to avoid deadlock)
-        if (needsDedupe) {
-            val peer = connectedPeers[address]
-            if (peer != null) {
-                if (weKeepCentral) {
-                    Log.i(TAG, "Identity sorting (deferred): keeping central, closing peripheral for $address")
-                    gattServer.disconnectCentral(address)
-                    peer.isPeripheral = false
-                } else {
-                    Log.i(TAG, "Identity sorting (deferred): keeping peripheral, closing central to $address")
-                    gattClient.disconnect(address)
-                    peer.isCentral = false
-                }
-            }
+            Log.i(TAG, "Identity received from $address: $identityHash (isCentral=$isCentralConnection)")
         }
 
         // Complete pending connection notification (race condition fix)
         // This fires the deferred onConnected callback with the now-available identity
         completedPending?.let { pending ->
-            // Re-read peer state - deduplication may have changed isCentral/isPeripheral flags
-            // after pendingConnection was stored. Using stale flags would notify Python about
-            // a connection type that was closed during deduplication!
             val currentPeer = connectedPeers[address]
             Log.w(
                 TAG,
@@ -1855,14 +2007,9 @@ class KotlinBLEBridge(
             )
         }
 
-        // Notify Python (outside mutex to avoid blocking)
+        // Notify Python of identity (Python handles deduplication, MAC rotation, etc.)
         Log.w(TAG, "[CALLBACK] handleIdentityReceived: Calling onIdentityReceived Python callback for $address")
         onIdentityReceived?.callAttr("__call__", address, identityHash)
-
-        // NOTE: BLE bonding was attempted but Android-to-Android requires Numeric Comparison
-        // (user must confirm 6-digit code) because both devices have displays. This is
-        // Android's security model - we cannot force "Just Works" pairing.
-        // Instead, we rely entirely on app-layer identity tracking for MAC rotation handling.
     }
 
     /**

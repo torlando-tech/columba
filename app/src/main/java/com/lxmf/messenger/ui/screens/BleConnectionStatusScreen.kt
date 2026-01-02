@@ -50,9 +50,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -68,6 +72,7 @@ import com.lxmf.messenger.ui.components.PermissionDeniedCard
 import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.viewmodel.BleConnectionsUiState
 import com.lxmf.messenger.viewmodel.BleConnectionsViewModel
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -79,6 +84,14 @@ fun BleConnectionStatusScreen(
     viewModel: BleConnectionsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // Start/stop periodic refresh when screen is visible/hidden
+    DisposableEffect(viewModel) {
+        viewModel.startPeriodicRefresh()
+        onDispose {
+            viewModel.stopPeriodicRefresh()
+        }
+    }
 
     // Bluetooth enable launcher
     val bluetoothEnableLauncher =
@@ -428,6 +441,24 @@ fun ConnectionCard(
     connection: BleConnectionInfo,
     onDisconnect: () -> Unit,
 ) {
+    // Live-updating duration: recalculate every second based on connectedSince timestamp
+    val currentTimeMs = remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000L)
+            currentTimeMs.longValue = System.currentTimeMillis()
+        }
+    }
+
+    // Calculate duration from connectedAt (or use fallback to connectionDurationMs)
+    val liveDurationMs =
+        if (connection.connectedAt > 0) {
+            currentTimeMs.longValue - connection.connectedAt
+        } else {
+            connection.connectionDurationMs
+        }
+
     Card(
         modifier =
             Modifier
@@ -455,7 +486,7 @@ fun ConnectionCard(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = connection.shortIdentityHash,
+                        text = connection.identityHash,
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -479,7 +510,7 @@ fun ConnectionCard(
             ConnectionDetailRow(label = "MTU", value = "${connection.mtu} bytes")
             ConnectionDetailRow(
                 label = "Connected",
-                value = formatDuration(connection.connectionDurationMs),
+                value = formatDuration(liveDurationMs),
             )
             ConnectionDetailRow(
                 label = "First Seen",

@@ -24,9 +24,13 @@ import java.util.concurrent.ConcurrentHashMap
  * Unit tests for KotlinBLEBridge MAC rotation and identity handling.
  *
  * Tests the following scenarios:
- * - Stale MAC rotation cleanup (old connection removed when identity migrates)
+ * - Identity-to-address mapping updates on MAC rotation
  * - Pending connection completion (identity race condition fix)
- * - Identity-to-address mapping management
+ * - Identity mapping management
+ *
+ * NOTE: MAC rotation cleanup and deduplication have been moved to Python (BLEInterface).
+ * Kotlin now only tracks identity mappings for address resolution and notifies Python.
+ * Python decides what to do with duplicate identities or MAC rotation scenarios.
  *
  * Note: These tests use reflection to access private fields and verify state changes.
  */
@@ -64,9 +68,11 @@ class KotlinBLEBridgeMacRotationTest {
     }
 
     // ========== Active MAC Rotation Tests (existing peer still connected) ==========
+    // NOTE: These tests verify that Kotlin updates mappings but does NOT perform cleanup.
+    // Cleanup (disconnect, remove old peer) is now handled by Python (BLEInterface).
 
     @Test
-    fun `active MAC rotation removes old connection from connectedPeers`() {
+    fun `active MAC rotation keeps old connection in connectedPeers for Python to handle`() {
         // Given: Bridge with existing ACTIVE connection at old MAC address
         val oldMac = "72:B3:41:9C:50:56"
         val newMac = "53:6D:66:34:A3:07"
@@ -82,9 +88,9 @@ class KotlinBLEBridgeMacRotationTest {
         // When: Identity is received from NEW MAC (simulating MAC rotation while connected)
         invokeHandleIdentityReceivedBlocking(bridge, newMac, identityHash, isCentralConnection = true)
 
-        // Then: Old connection should be removed from connectedPeers
+        // Then: Old connection should STILL be in connectedPeers (Python handles cleanup)
         val connectedPeers = getConnectedPeers(bridge)
-        assertFalse("Old MAC should be removed from connectedPeers", connectedPeers.containsKey(oldMac))
+        assertTrue("Old MAC should remain in connectedPeers (Python handles cleanup)", connectedPeers.containsKey(oldMac))
     }
 
     @Test
@@ -95,9 +101,13 @@ class KotlinBLEBridgeMacRotationTest {
         val identityHash = "ab5609dfffb33b21a102e1ff81196be5"
 
         val bridge = createBridgeWithMocks()
+        // Old connection exists at oldMac
         addMockPeer(bridge, oldMac, identityHash, isCentral = true)
         setAddressToIdentity(bridge, oldMac, identityHash)
         setIdentityToAddress(bridge, identityHash, oldMac)
+
+        // New connection established at newMac (MAC rotation - device reconnected with new address)
+        addMockPeer(bridge, newMac, null, isCentral = true) // identity not yet received
 
         // When: Identity received from new MAC
         invokeHandleIdentityReceivedBlocking(bridge, newMac, identityHash, isCentralConnection = true)
@@ -108,7 +118,7 @@ class KotlinBLEBridgeMacRotationTest {
     }
 
     @Test
-    fun `active MAC rotation disconnects old central connection`() {
+    fun `active MAC rotation does not disconnect old central connection - Python handles`() {
         // Given: Bridge with existing CENTRAL connection at old MAC
         val oldMac = "72:B3:41:9C:50:56"
         val newMac = "53:6D:66:34:A3:07"
@@ -122,12 +132,12 @@ class KotlinBLEBridgeMacRotationTest {
         // When: Identity received from new MAC (same direction - central)
         invokeHandleIdentityReceivedBlocking(bridge, newMac, identityHash, isCentralConnection = true)
 
-        // Then: Should have called disconnect on GATT client for old MAC
-        coVerify { mockGattClient.disconnect(oldMac) }
+        // Then: Should NOT call disconnect (Python handles cleanup)
+        coVerify(exactly = 0) { mockGattClient.disconnect(oldMac) }
     }
 
     @Test
-    fun `active MAC rotation disconnects old peripheral connection`() {
+    fun `active MAC rotation does not disconnect old peripheral connection - Python handles`() {
         // Given: Bridge with existing PERIPHERAL connection at old MAC
         val oldMac = "72:B3:41:9C:50:56"
         val newMac = "53:6D:66:34:A3:07"
@@ -141,14 +151,15 @@ class KotlinBLEBridgeMacRotationTest {
         // When: Identity received from new MAC (same direction - peripheral)
         invokeHandleIdentityReceivedBlocking(bridge, newMac, identityHash, isCentralConnection = false)
 
-        // Then: Should have called disconnectCentral on GATT server for old MAC
-        coVerify { mockGattServer.disconnectCentral(oldMac) }
+        // Then: Should NOT call disconnect (Python handles cleanup)
+        coVerify(exactly = 0) { mockGattServer.disconnectCentral(oldMac) }
     }
 
     // ========== Stale MAC Rotation Tests (old connection gone, only mapping remains) ==========
+    // NOTE: Kotlin no longer cleans up old mappings - Python handles this via callbacks.
 
     @Test
-    fun `stale MAC rotation cleans up addressToIdentity mapping`() {
+    fun `stale MAC rotation keeps addressToIdentity mapping for Python to handle`() {
         // Given: Identity mapping exists but NO peer in connectedPeers (connection already gone)
         val oldMac = "72:B3:41:9C:50:56"
         val newMac = "53:6D:66:34:A3:07"
@@ -162,13 +173,13 @@ class KotlinBLEBridgeMacRotationTest {
         // When: Identity received from new MAC
         invokeHandleIdentityReceivedBlocking(bridge, newMac, identityHash, isCentralConnection = true)
 
-        // Then: Old address mapping should be removed
+        // Then: Old address mapping should STILL exist (Kotlin keeps for send() resolution, Python handles cleanup)
         val addressToIdentity = getAddressToIdentity(bridge)
-        assertFalse("Old MAC should be removed from addressToIdentity", addressToIdentity.containsKey(oldMac))
+        assertTrue("Old MAC should remain in addressToIdentity (Python handles cleanup)", addressToIdentity.containsKey(oldMac))
     }
 
     @Test
-    fun `stale MAC rotation cleans up pending connections for old address`() {
+    fun `stale MAC rotation keeps pending connections for Python to handle`() {
         // Given: Identity mapping and pending connection exist but NO active peer
         val oldMac = "72:B3:41:9C:50:56"
         val newMac = "53:6D:66:34:A3:07"
@@ -183,9 +194,9 @@ class KotlinBLEBridgeMacRotationTest {
         // When: Identity received from new MAC
         invokeHandleIdentityReceivedBlocking(bridge, newMac, identityHash, isCentralConnection = true)
 
-        // Then: Pending connection for old MAC should be removed
+        // Then: Pending connection for old MAC should STILL exist (Python handles cleanup)
         val pendingConnections = getPendingConnections(bridge)
-        assertFalse("Pending connection for old MAC should be removed", pendingConnections.containsKey(oldMac))
+        assertTrue("Pending connection for old MAC should remain (Python handles cleanup)", pendingConnections.containsKey(oldMac))
     }
 
     @Test
@@ -326,6 +337,10 @@ class KotlinBLEBridgeMacRotationTest {
             Class.forName(
                 "com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge\$PeerConnection",
             )
+        val deduplicationStateClass =
+            Class.forName(
+                "com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge\$DeduplicationState",
+            )
         val constructor =
             peerConnectionClass.getDeclaredConstructor(
                 String::class.java,
@@ -334,9 +349,13 @@ class KotlinBLEBridgeMacRotationTest {
                 Boolean::class.java,
                 String::class.java,
                 Long::class.java,
+                Int::class.java,
+                Long::class.java,
+                deduplicationStateClass,
             )
         constructor.isAccessible = true
 
+        val deduplicationStateNone = deduplicationStateClass.enumConstants[0]
         val peer =
             constructor.newInstance(
                 address,
@@ -345,6 +364,9 @@ class KotlinBLEBridgeMacRotationTest {
                 isPeripheral,
                 identityHash,
                 System.currentTimeMillis(),
+                -100, // rssi
+                System.currentTimeMillis(), // lastActivity
+                deduplicationStateNone,
             )
 
         val connectedPeersField = KotlinBLEBridge::class.java.getDeclaredField("connectedPeers")

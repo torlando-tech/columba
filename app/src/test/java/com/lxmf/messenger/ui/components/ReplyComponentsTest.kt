@@ -33,11 +33,12 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyPreviewBubble displays sender name`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-123",
-            senderName = "Alice",
-            contentPreview = "Hello there!",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-123",
+                senderName = "Alice",
+                contentPreview = "Hello there!",
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -54,11 +55,12 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyPreviewBubble displays content preview`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-123",
-            senderName = "Bob",
-            contentPreview = "This is a reply preview text",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-123",
+                senderName = "Bob",
+                contentPreview = "This is a reply preview text",
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -75,12 +77,13 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyPreviewBubble displays image icon when hasImage is true`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-123",
-            senderName = "Charlie",
-            contentPreview = "",
-            hasImage = true,
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-123",
+                senderName = "Charlie",
+                contentPreview = "",
+                hasImage = true,
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -97,13 +100,14 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyPreviewBubble displays file icon when hasFileAttachment is true`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-123",
-            senderName = "David",
-            contentPreview = "",
-            hasFileAttachment = true,
-            firstFileName = "document.pdf",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-123",
+                senderName = "David",
+                contentPreview = "",
+                hasFileAttachment = true,
+                firstFileName = "document.pdf",
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -122,11 +126,12 @@ class ReplyComponentsTest {
     @Test
     fun `ReplyPreviewBubble calls onClick when tapped`() {
         var clicked = false
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-123",
-            senderName = "Eve",
-            contentPreview = "Click me",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-123",
+                senderName = "Eve",
+                contentPreview = "Click me",
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -144,13 +149,14 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyPreviewBubble displays Message placeholder for empty content`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-123",
-            senderName = "Frank",
-            contentPreview = "",
-            hasImage = false,
-            hasFileAttachment = false,
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-123",
+                senderName = "Frank",
+                contentPreview = "",
+                hasImage = false,
+                hasFileAttachment = false,
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -169,11 +175,12 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyInputBar displays replying to sender name`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-456",
-            senderName = "George",
-            contentPreview = "Original message",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-456",
+                senderName = "George",
+                contentPreview = "Original message",
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -189,11 +196,12 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyInputBar displays content preview`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-456",
-            senderName = "Hannah",
-            contentPreview = "This is the original message content",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-456",
+                senderName = "Hannah",
+                contentPreview = "This is the original message content",
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -210,11 +218,12 @@ class ReplyComponentsTest {
     @Test
     fun `ReplyInputBar calls onCancelReply when close button tapped`() {
         var cancelled = false
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-456",
-            senderName = "Ivan",
-            contentPreview = "Some content",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-456",
+                senderName = "Ivan",
+                contentPreview = "Some content",
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -231,12 +240,13 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyInputBar displays Photo text for image attachment`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-456",
-            senderName = "Julia",
-            contentPreview = "",
-            hasImage = true,
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-456",
+                senderName = "Julia",
+                contentPreview = "",
+                hasImage = true,
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -252,13 +262,14 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyInputBar displays filename for file attachment`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-456",
-            senderName = "Kate",
-            contentPreview = "",
-            hasFileAttachment = true,
-            firstFileName = "report.xlsx",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-456",
+                senderName = "Kate",
+                contentPreview = "",
+                hasFileAttachment = true,
+                firstFileName = "report.xlsx",
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -326,11 +337,12 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyPreviewBubble displays for isFromMe true`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-789",
-            senderName = "You",
-            contentPreview = "Your original message",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-789",
+                senderName = "You",
+                contentPreview = "Your original message",
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -348,12 +360,13 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyPreviewBubble displays both image and content`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-123",
-            senderName = "Lisa",
-            contentPreview = "Check out this photo!",
-            hasImage = true,
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-123",
+                senderName = "Lisa",
+                contentPreview = "Check out this photo!",
+                hasImage = true,
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -371,13 +384,14 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyPreviewBubble displays both file and content`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-123",
-            senderName = "Mike",
-            contentPreview = "Here's the document",
-            hasFileAttachment = true,
-            firstFileName = "invoice.pdf",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-123",
+                senderName = "Mike",
+                contentPreview = "Here's the document",
+                hasFileAttachment = true,
+                firstFileName = "invoice.pdf",
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -396,13 +410,14 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyInputBar displays content preview when no attachments`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-456",
-            senderName = "Nancy",
-            contentPreview = "Just a text message",
-            hasImage = false,
-            hasFileAttachment = false,
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-456",
+                senderName = "Nancy",
+                contentPreview = "Just a text message",
+                hasImage = false,
+                hasFileAttachment = false,
+            )
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -419,13 +434,14 @@ class ReplyComponentsTest {
 
     @Test
     fun `ReplyInputBar hides file icon when no filename`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "msg-456",
-            senderName = "Oscar",
-            contentPreview = "Some text",
-            hasFileAttachment = true,
-            firstFileName = null, // No filename
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "msg-456",
+                senderName = "Oscar",
+                contentPreview = "Some text",
+                hasFileAttachment = true,
+                firstFileName = null, // No filename
+            )
 
         composeTestRule.setContent {
             MaterialTheme {

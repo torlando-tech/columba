@@ -13,18 +13,20 @@ class FileAttachmentTest {
     @Test
     fun `equals returns true for identical attachments`() {
         val data = byteArrayOf(1, 2, 3, 4, 5)
-        val attachment1 = FileAttachment(
-            filename = "test.pdf",
-            data = data,
-            mimeType = "application/pdf",
-            sizeBytes = 5,
-        )
-        val attachment2 = FileAttachment(
-            filename = "test.pdf",
-            data = data.copyOf(),
-            mimeType = "application/pdf",
-            sizeBytes = 5,
-        )
+        val attachment1 =
+            FileAttachment(
+                filename = "test.pdf",
+                data = data,
+                mimeType = "application/pdf",
+                sizeBytes = 5,
+            )
+        val attachment2 =
+            FileAttachment(
+                filename = "test.pdf",
+                data = data.copyOf(),
+                mimeType = "application/pdf",
+                sizeBytes = 5,
+            )
 
         assertEquals(attachment1, attachment2)
     }
@@ -107,12 +109,13 @@ class FileAttachmentTest {
     @Test
     fun `properties are accessible`() {
         val data = byteArrayOf(0x48, 0x65, 0x6c, 0x6c, 0x6f) // "Hello"
-        val attachment = FileAttachment(
-            filename = "hello.txt",
-            data = data,
-            mimeType = "text/plain",
-            sizeBytes = 5,
-        )
+        val attachment =
+            FileAttachment(
+                filename = "hello.txt",
+                data = data,
+                mimeType = "text/plain",
+                sizeBytes = 5,
+            )
 
         assertEquals("hello.txt", attachment.filename)
         assertTrue(data.contentEquals(attachment.data))
@@ -122,12 +125,13 @@ class FileAttachmentTest {
 
     @Test
     fun `handles empty data`() {
-        val attachment = FileAttachment(
-            filename = "empty.txt",
-            data = byteArrayOf(),
-            mimeType = "text/plain",
-            sizeBytes = 0,
-        )
+        val attachment =
+            FileAttachment(
+                filename = "empty.txt",
+                data = byteArrayOf(),
+                mimeType = "text/plain",
+                sizeBytes = 0,
+            )
 
         assertEquals("empty.txt", attachment.filename)
         assertEquals(0, attachment.data.size)
@@ -137,12 +141,13 @@ class FileAttachmentTest {
     @Test
     fun `handles large data`() {
         val largeData = ByteArray(100_000) { it.toByte() }
-        val attachment = FileAttachment(
-            filename = "large.bin",
-            data = largeData,
-            mimeType = "application/octet-stream",
-            sizeBytes = 100_000,
-        )
+        val attachment =
+            FileAttachment(
+                filename = "large.bin",
+                data = largeData,
+                mimeType = "application/octet-stream",
+                sizeBytes = 100_000,
+            )
 
         assertEquals(100_000, attachment.data.size)
         assertEquals(100_000, attachment.sizeBytes)
@@ -150,24 +155,26 @@ class FileAttachmentTest {
 
     @Test
     fun `handles special characters in filename`() {
-        val attachment = FileAttachment(
-            filename = "file (1) [copy].pdf",
-            data = byteArrayOf(1, 2, 3),
-            mimeType = "application/pdf",
-            sizeBytes = 3,
-        )
+        val attachment =
+            FileAttachment(
+                filename = "file (1) [copy].pdf",
+                data = byteArrayOf(1, 2, 3),
+                mimeType = "application/pdf",
+                sizeBytes = 3,
+            )
 
         assertEquals("file (1) [copy].pdf", attachment.filename)
     }
 
     @Test
     fun `handles unicode in filename`() {
-        val attachment = FileAttachment(
-            filename = "文档.pdf",
-            data = byteArrayOf(1, 2, 3),
-            mimeType = "application/pdf",
-            sizeBytes = 3,
-        )
+        val attachment =
+            FileAttachment(
+                filename = "文档.pdf",
+                data = byteArrayOf(1, 2, 3),
+                mimeType = "application/pdf",
+                sizeBytes = 3,
+            )
 
         assertEquals("文档.pdf", attachment.filename)
     }

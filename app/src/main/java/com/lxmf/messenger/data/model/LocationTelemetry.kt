@@ -32,10 +32,13 @@ data class LocationTelemetry(
 ) {
     companion object {
         const val TYPE_LOCATION_SHARE = "location_share"
+
         /** LXMF FIELD_TELEMETRY - Standard telemetry field for Sideband interoperability */
         const val LXMF_FIELD_ID = 0x02
+
         /** Custom field for Columba-specific metadata (cease signals, etc.) */
         const val COLUMBA_META_FIELD_ID = 0x70
+
         /** Legacy field ID for backwards compatibility with old Columba clients */
         const val LEGACY_FIELD_ID = 7
     }

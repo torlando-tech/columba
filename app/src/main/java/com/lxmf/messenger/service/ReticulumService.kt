@@ -52,25 +52,26 @@ class ReticulumService : Service() {
 
         // Initialize all managers via dependency injection
         // Provide callbacks for health monitoring and network changes
-        managers = ServiceModule.createManagers(
-            context = this,
-            scope = serviceScope,
-            onStaleHeartbeat = {
-                Log.e(TAG, "Python heartbeat stale - triggering service restart")
-                triggerServiceRestart()
-            },
-            onNetworkChanged = {
-                // Trigger LXMF announce when network changes so peers can discover us
-                Log.d(TAG, "Network changed - triggering LXMF announce")
-                if (::binder.isInitialized) {
-                    try {
-                        binder.announceLxmfDestination()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to announce on network change", e)
+        managers =
+            ServiceModule.createManagers(
+                context = this,
+                scope = serviceScope,
+                onStaleHeartbeat = {
+                    Log.e(TAG, "Python heartbeat stale - triggering service restart")
+                    triggerServiceRestart()
+                },
+                onNetworkChanged = {
+                    // Trigger LXMF announce when network changes so peers can discover us
+                    Log.d(TAG, "Network changed - triggering LXMF announce")
+                    if (::binder.isInitialized) {
+                        try {
+                            binder.announceLxmfDestination()
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to announce on network change", e)
+                        }
                     }
-                }
-            },
-        )
+                },
+            )
 
         // Create notification channel
         managers.notificationManager.createNotificationChannel()
@@ -222,9 +223,10 @@ class ReticulumService : Service() {
      */
     private fun scheduleServiceRestart() {
         try {
-            val restartIntent = Intent(applicationContext, ReticulumService::class.java).apply {
-                action = ACTION_START
-            }
+            val restartIntent =
+                Intent(applicationContext, ReticulumService::class.java).apply {
+                    action = ACTION_START
+                }
             // Start foreground service - Android will handle queueing if process is dying
             startForegroundService(restartIntent)
             Log.d(TAG, "Service restart scheduled")

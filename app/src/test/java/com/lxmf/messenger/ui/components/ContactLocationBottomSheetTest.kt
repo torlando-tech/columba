@@ -377,7 +377,10 @@ class ContactLocationBottomSheetTest {
 
     // ========== Helper Functions ==========
 
-    private fun createMockLocation(lat: Double, lng: Double): Location {
+    private fun createMockLocation(
+        lat: Double,
+        lng: Double,
+    ): Location {
         val location = mockk<Location>(relaxed = true)
         every { location.latitude } returns lat
         every { location.longitude } returns lng

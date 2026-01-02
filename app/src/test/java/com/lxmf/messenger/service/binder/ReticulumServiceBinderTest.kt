@@ -332,10 +332,11 @@ class ReticulumServiceBinderTest {
         val destHash = byteArrayOf(1, 2, 3)
         val content = "Multiple files"
         val privateKey = byteArrayOf(4, 5, 6)
-        val fileAttachmentsMap: Map<*, *> = mapOf(
-            "doc.pdf" to byteArrayOf(0x25, 0x50, 0x44, 0x46),
-            "notes.txt" to "Hello World".toByteArray(),
-        )
+        val fileAttachmentsMap: Map<*, *> =
+            mapOf(
+                "doc.pdf" to byteArrayOf(0x25, 0x50, 0x44, 0x46),
+                "notes.txt" to "Hello World".toByteArray(),
+            )
         every {
             messagingManager.sendLxmfMessage(destHash, content, privateKey, null, null, any())
         } returns """{"success": true}"""

@@ -454,8 +454,9 @@ internal fun ProfileIconCard(
 
             // Description
             Text(
-                text = "Customize your profile icon that others will see. " +
-                    "This is compatible with Sideband and other Reticulum apps.",
+                text =
+                    "Customize your profile icon that others will see. " +
+                        "This is compatible with Sideband and other Reticulum apps.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -492,11 +493,12 @@ internal fun ProfileIconCard(
                         fontWeight = FontWeight.Medium,
                     )
                     Text(
-                        text = if (iconName != null) {
-                            "Tap to change your custom icon"
-                        } else {
-                            "Auto-generated from your identity"
-                        },
+                        text =
+                            if (iconName != null) {
+                                "Tap to change your custom icon"
+                            } else {
+                                "Auto-generated from your identity"
+                            },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

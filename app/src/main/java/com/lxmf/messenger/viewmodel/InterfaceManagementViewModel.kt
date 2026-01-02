@@ -46,7 +46,8 @@ data class InterfaceManagementState(
     val applyChangesError: String? = null,
     val showBlePermissionRequest: Boolean = false,
     // Bluetooth state for BLE interface management
-    val bluetoothState: Int = BluetoothAdapter.STATE_ON, // Assume on initially
+    // Assume on initially
+    val bluetoothState: Int = BluetoothAdapter.STATE_ON,
     val blePermissionsGranted: Boolean = false,
     // Info message for transient notifications (lighter than error/success)
     val infoMessage: String? = null,
@@ -78,14 +79,20 @@ data class InterfaceConfigState(
     val maxConnections: String = "7",
     // RNode fields
     val targetDeviceName: String = "",
-    val connectionMode: String = "classic", // "classic" or "ble"
-    val frequency: String = "915000000", // Hz
-    val bandwidth: String = "125000", // Hz
-    val txPower: String = "7", // dBm
+    // "classic" or "ble"
+    val connectionMode: String = "classic",
+    // Hz
+    val frequency: String = "915000000",
+    // Hz
+    val bandwidth: String = "125000",
+    // dBm
+    val txPower: String = "7",
     val spreadingFactor: String = "7",
     val codingRate: String = "5",
-    val stAlock: String = "", // Short-term airtime limit % (optional)
-    val ltAlock: String = "", // Long-term airtime limit % (optional)
+    // Short-term airtime limit % (optional)
+    val stAlock: String = "",
+    // Long-term airtime limit % (optional)
+    val ltAlock: String = "",
     // Common fields
     val mode: String = "roaming",
     // Validation
@@ -743,7 +750,8 @@ class InterfaceManagementViewModel
                         enabled = state.enabled,
                         targetHost = state.targetHost.trim(),
                         targetPort = state.targetPort.toIntOrNull() ?: 4242,
-                        kissFraming = false, // Always false, removed from UI
+                        // Always false, removed from UI
+                        kissFraming = false,
                         mode = state.mode,
                         networkName = state.networkName.trim().ifEmpty { null },
                         passphrase = state.passphrase.ifEmpty { null },

@@ -61,7 +61,10 @@ interface ReceivedLocationDao {
         LIMIT :limit
         """,
     )
-    fun getLocationsForSender(senderHash: String, limit: Int = 100): Flow<List<ReceivedLocationEntity>>
+    fun getLocationsForSender(
+        senderHash: String,
+        limit: Int = 100,
+    ): Flow<List<ReceivedLocationEntity>>
 
     /**
      * Get the most recent location for a specific sender.

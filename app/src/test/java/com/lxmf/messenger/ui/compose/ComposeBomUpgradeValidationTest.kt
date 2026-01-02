@@ -18,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -27,7 +26,6 @@ import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.test.waitForCondition
 import com.lxmf.messenger.test.waitForNodeWithTag
-import com.lxmf.messenger.test.waitForNodeWithText
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -70,10 +68,11 @@ class ComposeBomUpgradeValidationTest {
                     items(items) { item ->
                         Text(
                             text = item,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                                .testTag("item-$item"),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                                    .testTag("item-$item"),
                         )
                     }
                 }
@@ -94,10 +93,11 @@ class ComposeBomUpgradeValidationTest {
                 LazyColumn(modifier = Modifier.testTag("lazy-list")) {
                     items(items) { item ->
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp)
-                                .testTag("card-$item"),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp)
+                                    .testTag("card-$item"),
                         ) {
                             Text(
                                 text = item,
@@ -130,9 +130,10 @@ class ComposeBomUpgradeValidationTest {
                     items(items) { item ->
                         Text(
                             text = item,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
                         )
                     }
                 }
@@ -157,9 +158,10 @@ class ComposeBomUpgradeValidationTest {
                     items(items) { item ->
                         Text(
                             text = item,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
                         )
                     }
                 }
@@ -413,9 +415,10 @@ class ComposeBomUpgradeValidationTest {
                 LazyColumn(modifier = Modifier.testTag("stress-list")) {
                     items(items) { item ->
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(4.dp),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(4.dp),
                         ) {
                             Text(
                                 text = item,
@@ -443,6 +446,5 @@ class ComposeBomUpgradeValidationTest {
     }
 
     // Helper extension for onAllNodesWithTag
-    private fun androidx.compose.ui.test.junit4.ComposeTestRule.onAllNodesWithTag(tag: String) =
-        onAllNodes(androidx.compose.ui.test.hasTestTag(tag))
+    private fun androidx.compose.ui.test.junit4.ComposeTestRule.onAllNodesWithTag(tag: String) = onAllNodes(androidx.compose.ui.test.hasTestTag(tag))
 }

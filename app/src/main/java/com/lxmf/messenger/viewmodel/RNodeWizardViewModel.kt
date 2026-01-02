@@ -123,28 +123,40 @@ data class RNodeWizardState(
     // Step 2: Region/Frequency Selection
     val searchQuery: String = "",
     val selectedCountry: String? = null,
-    val selectedPreset: RNodeRegionalPreset? = null, // Legacy: popular local presets
-    val selectedFrequencyRegion: FrequencyRegion? = null, // New: frequency band selection
+    // Legacy: popular local presets
+    val selectedPreset: RNodeRegionalPreset? = null,
+    // New: frequency band selection
+    val selectedFrequencyRegion: FrequencyRegion? = null,
     val isCustomMode: Boolean = false,
-    val showPopularPresets: Boolean = false, // Collapsible section for local presets
+    // Collapsible section for local presets
+    val showPopularPresets: Boolean = false,
     // Step 3: Modem Preset Selection
     val selectedModemPreset: ModemPreset = ModemPreset.DEFAULT,
     // Step 4: Frequency Slot Selection
-    val selectedSlot: Int = 20, // Default Meshtastic slot
-    val customFrequency: Long? = null, // Set when a preset is selected that doesn't align with slots
-    val selectedSlotPreset: RNodeRegionalPreset? = null, // The preset selected on slot page
+    // Default Meshtastic slot
+    val selectedSlot: Int = 20,
+    // Set when a preset is selected that doesn't align with slots
+    val customFrequency: Long? = null,
+    // The preset selected on slot page
+    val selectedSlotPreset: RNodeRegionalPreset? = null,
     // Step 5: Review & Configure
     val interfaceName: String = "RNode LoRa",
-    val frequency: String = "914875000", // US default
-    val bandwidth: String = "250000", // Long Fast default
-    val spreadingFactor: String = "11", // Long Fast default
-    val codingRate: String = "5", // Long Fast default (4/5)
-    val txPower: String = "17", // Safe default for all devices
+    // US default
+    val frequency: String = "914875000",
+    // Long Fast default
+    val bandwidth: String = "250000",
+    // Long Fast default
+    val spreadingFactor: String = "11",
+    // Long Fast default (4/5)
+    val codingRate: String = "5",
+    // Safe default for all devices
+    val txPower: String = "17",
     val stAlock: String = "",
     val ltAlock: String = "",
     val interfaceMode: String = "accesspoint",
     val showAdvancedSettings: Boolean = false,
-    val enableFramebuffer: Boolean = true, // Display logo on RNode OLED
+    // Display logo on RNode OLED
+    val enableFramebuffer: Boolean = true,
     // Validation errors
     val nameError: String? = null,
     val frequencyError: String? = null,
@@ -1162,7 +1174,8 @@ class RNodeWizardViewModel
                             }
                         }
                     },
-                    null, // Handler - use main thread
+                    // Handler - use main thread
+                    null,
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start CDM association", e)
@@ -1653,7 +1666,8 @@ class RNodeWizardViewModel
             _state.update {
                 it.copy(
                     selectedFrequencyRegion = region,
-                    selectedPreset = null, // Clear any popular preset selection
+                    // Clear any popular preset selection
+                    selectedPreset = null,
                     isCustomMode = false,
                 )
             }

@@ -195,7 +195,7 @@ chaquopy {
         version = "3.11"
 
         pip {
-            // Install ble-reticulum from GitHub (main branch - includes identity cache fix)
+            // Install ble-reticulum from GitHub
             install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
 
             // Install requirements from requirements.txt
@@ -316,7 +316,6 @@ dependencies {
 ksp {
     arg("correctErrorTypes", "true")
 }
-
 
 // Task to print version info for CI/CD
 tasks.register("printVersion") {

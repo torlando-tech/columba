@@ -97,10 +97,11 @@ fun SwipeableMessageBubble(
     // Animate the return to center when released
     val animatedOffsetX by animateFloatAsState(
         targetValue = offsetX,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec =
+            spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium,
+            ),
         label = "swipe_offset",
     )
 
@@ -114,9 +115,10 @@ fun SwipeableMessageBubble(
     ) {
         // Reply icon behind the bubble
         Box(
-            modifier = Modifier
-                .alpha(replyIconAlpha)
-                .padding(horizontal = 16.dp),
+            modifier =
+                Modifier
+                    .alpha(replyIconAlpha)
+                    .padding(horizontal = 16.dp),
             contentAlignment = Alignment.Center,
         ) {
             Surface(
@@ -137,59 +139,62 @@ fun SwipeableMessageBubble(
 
         // Message bubble with swipe gesture
         Box(
-            modifier = Modifier
-                .offset { IntOffset(animatedOffsetX.roundToInt(), 0) }
-                .pointerInput(isFromMe) {
-                    detectHorizontalDragGestures(
-                        onDragStart = {
-                            hasTriggeredHaptic = false
-                            shouldTriggerReply = false
-                        },
-                        onDragEnd = {
-                            if (shouldTriggerReply) {
-                                onReply()
-                            }
-                            offsetX = 0f
-                            hasTriggeredHaptic = false
-                            shouldTriggerReply = false
-                        },
-                        onDragCancel = {
-                            offsetX = 0f
-                            hasTriggeredHaptic = false
-                            shouldTriggerReply = false
-                        },
-                        onHorizontalDrag = { _, dragAmount ->
-                            // Determine valid swipe direction
-                            val newOffset = offsetX + dragAmount
-                            val isValidDirection = if (isFromMe) {
-                                // Sent messages: swipe left (negative offset)
-                                newOffset <= 0
-                            } else {
-                                // Received messages: swipe right (positive offset)
-                                newOffset >= 0
-                            }
-
-                            if (isValidDirection) {
-                                // Clamp to max swipe distance
-                                offsetX = if (isFromMe) {
-                                    newOffset.coerceIn(-maxSwipePx, 0f)
-                                } else {
-                                    newOffset.coerceIn(0f, maxSwipePx)
+            modifier =
+                Modifier
+                    .offset { IntOffset(animatedOffsetX.roundToInt(), 0) }
+                    .pointerInput(isFromMe) {
+                        detectHorizontalDragGestures(
+                            onDragStart = {
+                                hasTriggeredHaptic = false
+                                shouldTriggerReply = false
+                            },
+                            onDragEnd = {
+                                if (shouldTriggerReply) {
+                                    onReply()
                                 }
+                                offsetX = 0f
+                                hasTriggeredHaptic = false
+                                shouldTriggerReply = false
+                            },
+                            onDragCancel = {
+                                offsetX = 0f
+                                hasTriggeredHaptic = false
+                                shouldTriggerReply = false
+                            },
+                            onHorizontalDrag = { _, dragAmount ->
+                                // Determine valid swipe direction
+                                val newOffset = offsetX + dragAmount
+                                val isValidDirection =
+                                    if (isFromMe) {
+                                        // Sent messages: swipe left (negative offset)
+                                        newOffset <= 0
+                                    } else {
+                                        // Received messages: swipe right (positive offset)
+                                        newOffset >= 0
+                                    }
 
-                                // Check if threshold reached for haptic feedback
-                                val absOffset = abs(offsetX)
-                                if (absOffset >= thresholdPx && !hasTriggeredHaptic) {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    hasTriggeredHaptic = true
-                                    shouldTriggerReply = true
-                                } else if (absOffset < thresholdPx) {
-                                    shouldTriggerReply = false
+                                if (isValidDirection) {
+                                    // Clamp to max swipe distance
+                                    offsetX =
+                                        if (isFromMe) {
+                                            newOffset.coerceIn(-maxSwipePx, 0f)
+                                        } else {
+                                            newOffset.coerceIn(0f, maxSwipePx)
+                                        }
+
+                                    // Check if threshold reached for haptic feedback
+                                    val absOffset = abs(offsetX)
+                                    if (absOffset >= thresholdPx && !hasTriggeredHaptic) {
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        hasTriggeredHaptic = true
+                                        shouldTriggerReply = true
+                                    } else if (absOffset < thresholdPx) {
+                                        shouldTriggerReply = false
+                                    }
                                 }
-                            }
-                        },
-                    )
-                },
+                            },
+                        )
+                    },
         ) {
             content()
         }
@@ -214,39 +219,44 @@ fun ReplyPreviewBubble(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val accentColor = if (isFromMe) {
-        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-    } else {
-        MaterialTheme.colorScheme.primary
-    }
+    val accentColor =
+        if (isFromMe) {
+            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
 
-    val contentColor = if (isFromMe) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
+    val contentColor =
+        if (isFromMe) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
 
-    val backgroundColor = if (isFromMe) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerHighest
-    }
+    val backgroundColor =
+        if (isFromMe) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        }
 
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onClick),
         color = backgroundColor,
         shape = RoundedCornerShape(8.dp),
     ) {
         Row(modifier = Modifier.padding(8.dp)) {
             // Accent bar on left
             Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .height(36.dp)
-                    .background(accentColor, RoundedCornerShape(2.dp)),
+                modifier =
+                    Modifier
+                        .width(3.dp)
+                        .height(36.dp)
+                        .background(accentColor, RoundedCornerShape(2.dp)),
             )
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -336,9 +346,10 @@ fun ReplyInputBar(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -352,13 +363,14 @@ fun ReplyInputBar(
 
             // Accent bar
             Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .height(32.dp)
-                    .background(
-                        MaterialTheme.colorScheme.primary,
-                        RoundedCornerShape(2.dp),
-                    ),
+                modifier =
+                    Modifier
+                        .width(3.dp)
+                        .height(32.dp)
+                        .background(
+                            MaterialTheme.colorScheme.primary,
+                            RoundedCornerShape(2.dp),
+                        ),
             )
 
             // Reply info

@@ -1,6 +1,5 @@
 package com.lxmf.messenger.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,12 +18,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -258,15 +255,16 @@ private fun IconPreview(
     val fontSize = with(density) { (size * 0.6f).toSp() }
 
     Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(bgColor)
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline,
-                shape = CircleShape,
-            ),
+        modifier =
+            Modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(bgColor)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = CircleShape,
+                ),
         contentAlignment = Alignment.Center,
     ) {
         val codepoint = iconName?.let { MaterialDesignIcons.getCodepointOrNull(it) }
@@ -323,16 +321,17 @@ private fun ColorSelectionSection(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(bgColor)
-                        .border(
-                            width = 2.dp,
-                            color = MaterialTheme.colorScheme.outline,
-                            shape = CircleShape,
-                        )
-                        .clickable { showBgColorPicker = true },
+                    modifier =
+                        Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(bgColor)
+                            .border(
+                                width = 2.dp,
+                                color = MaterialTheme.colorScheme.outline,
+                                shape = CircleShape,
+                            )
+                            .clickable { showBgColorPicker = true },
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -354,16 +353,17 @@ private fun ColorSelectionSection(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(fgColor)
-                        .border(
-                            width = 2.dp,
-                            color = MaterialTheme.colorScheme.outline,
-                            shape = CircleShape,
-                        )
-                        .clickable { showFgColorPicker = true },
+                    modifier =
+                        Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(fgColor)
+                            .border(
+                                width = 2.dp,
+                                color = MaterialTheme.colorScheme.outline,
+                                shape = CircleShape,
+                            )
+                            .clickable { showFgColorPicker = true },
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -440,9 +440,10 @@ private fun IconCategoryList(
     }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 300.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 300.dp),
         contentPadding = PaddingValues(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -464,8 +465,9 @@ private fun IconCategoryList(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
-                                text = "${searchResults.size} icons" +
-                                    if (searchResults.size >= 100) " (showing first 100)" else "",
+                                text =
+                                    "${searchResults.size} icons" +
+                                        if (searchResults.size >= 100) " (showing first 100)" else "",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             )
@@ -539,16 +541,18 @@ private fun CategoryHeader(
     onToggle: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle),
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(8.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -584,9 +588,10 @@ private fun IconGrid(
     onIconSelected: (String) -> Unit,
 ) {
     FlowRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -609,34 +614,38 @@ private fun IconGridItem(
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    val backgroundColor = if (isSelected) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
-    val borderColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-    }
-    val iconTint = if (isSelected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
+    val backgroundColor =
+        if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
+    val borderColor =
+        if (isSelected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+        }
+    val iconTint =
+        if (isSelected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
 
     val codepoint = MaterialDesignIcons.getCodepointOrNull(iconName)
 
     Surface(
-        modifier = Modifier
-            .size(44.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .border(
-                width = if (isSelected) 2.dp else 1.dp,
-                color = borderColor,
-                shape = RoundedCornerShape(8.dp),
-            )
-            .clickable(onClick = onClick),
+        modifier =
+            Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .border(
+                    width = if (isSelected) 2.dp else 1.dp,
+                    color = borderColor,
+                    shape = RoundedCornerShape(8.dp),
+                )
+                .clickable(onClick = onClick),
         color = backgroundColor,
     ) {
         Box(
@@ -663,7 +672,10 @@ private fun IconGridItem(
  * Parse a hex color string to Compose Color.
  */
 @Suppress("SwallowedException")
-private fun parseHexColor(hex: String, default: Color): Color {
+private fun parseHexColor(
+    hex: String,
+    default: Color,
+): Color {
     return try {
         val cleanHex = hex.removePrefix("#")
         Color(android.graphics.Color.parseColor("#$cleanHex"))

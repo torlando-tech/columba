@@ -455,6 +455,9 @@ class BleGattServer(
 
     /**
      * Disconnect a specific central device.
+     *
+     * Note: Android's cancelConnection() does NOT reliably trigger onConnectionStateChange.
+     * We must manually clean up state and fire the disconnect callback.
      */
     suspend fun disconnectCentral(address: String) =
         withContext(Dispatchers.Main) {
@@ -468,6 +471,21 @@ class BleGattServer(
                 if (device != null) {
                     gattServer?.cancelConnection(device)
                     Log.d(TAG, "Connection cancelled for $address")
+
+                    // Manually clean up since cancelConnection doesn't reliably trigger callback
+                    centralsMutex.withLock {
+                        connectedCentrals.remove(address)
+                    }
+                    mtuMutex.withLock {
+                        centralMtus.remove(address)
+                    }
+                    identityMutex.withLock {
+                        addressToIdentity.remove(address)
+                    }
+                    Log.i(TAG, "Cleaned up central state for $address after disconnect")
+
+                    // Fire disconnect callback so bridge can clean up
+                    onCentralDisconnected?.invoke(address)
                 } else {
                     Log.w(TAG, "Cannot disconnect unknown central: $address")
                 }
@@ -481,6 +499,67 @@ class BleGattServer(
      */
     suspend fun isConnected(centralAddress: String): Boolean {
         return centralsMutex.withLock { connectedCentrals.containsKey(centralAddress) }
+    }
+
+    /**
+     * Check if a central has completed identity handshake.
+     */
+    suspend fun hasIdentity(centralAddress: String): Boolean {
+        return identityMutex.withLock { addressToIdentity.containsKey(centralAddress) }
+    }
+
+    /**
+     * Complete a peripheral connection using identity obtained from another source.
+     *
+     * In dual-connection scenarios, both devices connect to each other as central.
+     * Neither writes identity to the other's GATT server (they read via GATT client).
+     * This creates a deadlock where onCentralConnected never fires.
+     *
+     * This method allows the bridge to inject identity received via GATT client
+     * to complete the peripheral side of the connection.
+     *
+     * @param address Central's MAC address
+     * @param identityHash 32-char hex identity string (Protocol v2.2)
+     * @return true if connection was completed, false if not applicable
+     */
+    suspend fun completeConnectionWithIdentity(
+        address: String,
+        identityHash: String,
+    ): Boolean {
+        // Check if this central is connected but hasn't completed identity handshake
+        val isConnected = centralsMutex.withLock { connectedCentrals.containsKey(address) }
+        val hasIdentity = identityMutex.withLock { addressToIdentity.containsKey(address) }
+
+        if (!isConnected) {
+            Log.d(TAG, "completeConnectionWithIdentity: $address not connected as central")
+            return false
+        }
+
+        if (hasIdentity) {
+            Log.d(TAG, "completeConnectionWithIdentity: $address already has identity")
+            return false
+        }
+
+        // Convert hex string to bytes and store
+        val identityBytes = identityHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+
+        identityMutex.withLock {
+            addressToIdentity[address] = identityBytes
+            identityToAddress[identityHash] = address
+        }
+
+        // Get MTU for this connection
+        val mtu = mtuMutex.withLock { centralMtus[address] ?: BleConstants.MIN_MTU }
+
+        Log.i(TAG, "Completing peripheral connection via external identity: $address, MTU=$mtu, identity=$identityHash")
+
+        // Fire the connection callback (same as if identity was received via write)
+        onCentralConnected?.invoke(address, mtu)
+
+        // Start keepalive
+        startPeripheralKeepalive(address)
+
+        return true
     }
 
     /**
@@ -518,9 +597,11 @@ class BleGattServer(
                     centralMtus[address] = BleConstants.MIN_MTU
                 }
 
-                // Note: onCentralConnected callback will fire after identity handshake
-                // See handleCharacteristicWriteRequest where identity is received
-                Log.i(TAG, "GATT connection established from $address, waiting for identity handshake...")
+                // Fire connection callback immediately (Protocol logic moved to Python)
+                // Identity will be received later via RX characteristic write
+                val mtu = BleConstants.MIN_MTU
+                Log.i(TAG, "GATT connection established from $address, MTU=$mtu (identity pending)")
+                onCentralConnected?.invoke(address, mtu)
             }
 
             BluetoothProfile.STATE_DISCONNECTED -> {
@@ -645,39 +726,33 @@ class BleGattServer(
                     }
 
                     // Protocol v2.2: Check for identity handshake (16-byte identity)
+                    // NOTE: We still track identity here for Kotlin's send() address resolution,
+                    // but the handshake detection logic has moved to Python (BLEInterface).
+                    // All data is passed to onDataReceived; Python decides if it's a handshake.
                     val existingIdentity =
                         identityMutex.withLock {
                             addressToIdentity[device.address]
                         }
 
                     if (existingIdentity == null && value.size == 16) {
-                        // This is the identity handshake
+                        // Likely identity handshake - store for Kotlin's address resolution
                         val identityHash = value.joinToString("") { "%02x".format(it) }
-                        Log.d(TAG, "Identity handshake received from ${device.address}: $identityHash")
+                        Log.d(TAG, "Received 16-byte data from ${device.address} (likely identity): $identityHash")
 
                         identityMutex.withLock {
                             addressToIdentity[device.address] = value
                             identityToAddress[identityHash] = device.address
                         }
 
-                        // Notify callback for identity-based peer tracking
+                        // Notify identity callback (Python will also detect via data callback)
                         onIdentityReceived?.invoke(device.address, identityHash)
-
-                        // Fire connection established callback now that identity is available
-                        val mtu = mtuMutex.withLock { centralMtus[device.address] ?: BleConstants.MIN_MTU }
-
-                        Log.i(TAG, "Peripheral connection established: ${device.address}, MTU=$mtu, identity=$identityHash")
-
-                        onCentralConnected?.invoke(device.address, mtu)
 
                         // Start peripheral keepalive to prevent supervision timeout
                         startPeripheralKeepalive(device.address)
-
-                        // Don't pass handshake to data callback
-                        return@withContext
                     }
 
-                    // Regular data packet - notify callback
+                    // ALWAYS pass data to callback - Python handles handshake detection
+                    // This is the key change: don't filter out handshake from data stream
                     onDataReceived?.invoke(device.address, value)
                 }
                 else -> {

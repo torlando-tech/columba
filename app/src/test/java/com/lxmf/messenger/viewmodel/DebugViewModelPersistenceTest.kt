@@ -25,14 +25,15 @@ class DebugViewModelPersistenceTest {
 
     @Test
     fun `DebugInfo persistence fields can be set`() {
-        val debugInfo = DebugInfo(
-            heartbeatAgeSeconds = 5L,
-            healthCheckRunning = true,
-            networkMonitorRunning = true,
-            maintenanceRunning = true,
-            lastLockRefreshAgeSeconds = 120L,
-            failedInterfaceCount = 2,
-        )
+        val debugInfo =
+            DebugInfo(
+                heartbeatAgeSeconds = 5L,
+                healthCheckRunning = true,
+                networkMonitorRunning = true,
+                maintenanceRunning = true,
+                lastLockRefreshAgeSeconds = 120L,
+                failedInterfaceCount = 2,
+            )
 
         assertEquals(5L, debugInfo.heartbeatAgeSeconds)
         assertTrue(debugInfo.healthCheckRunning)
@@ -44,15 +45,16 @@ class DebugViewModelPersistenceTest {
 
     @Test
     fun `DebugInfo copy preserves persistence fields`() {
-        val original = DebugInfo(
-            initialized = true,
-            heartbeatAgeSeconds = 3L,
-            healthCheckRunning = true,
-            networkMonitorRunning = true,
-            maintenanceRunning = true,
-            lastLockRefreshAgeSeconds = 60L,
-            failedInterfaceCount = 1,
-        )
+        val original =
+            DebugInfo(
+                initialized = true,
+                heartbeatAgeSeconds = 3L,
+                healthCheckRunning = true,
+                networkMonitorRunning = true,
+                maintenanceRunning = true,
+                lastLockRefreshAgeSeconds = 60L,
+                failedInterfaceCount = 1,
+            )
 
         val copied = original.copy(error = "Test error")
 
@@ -67,15 +69,17 @@ class DebugViewModelPersistenceTest {
 
     @Test
     fun `DebugInfo copy can update persistence fields`() {
-        val original = DebugInfo(
-            heartbeatAgeSeconds = 5L,
-            healthCheckRunning = true,
-        )
+        val original =
+            DebugInfo(
+                heartbeatAgeSeconds = 5L,
+                healthCheckRunning = true,
+            )
 
-        val updated = original.copy(
-            heartbeatAgeSeconds = 10L,
-            healthCheckRunning = false,
-        )
+        val updated =
+            original.copy(
+                heartbeatAgeSeconds = 10L,
+                healthCheckRunning = false,
+            )
 
         assertEquals(10L, updated.heartbeatAgeSeconds)
         assertFalse(updated.healthCheckRunning)
@@ -83,9 +87,10 @@ class DebugViewModelPersistenceTest {
 
     @Test
     fun `heartbeatAgeSeconds extraction from debug info map`() {
-        val debugInfoMap = mapOf(
-            "heartbeat_age_seconds" to 7L,
-        )
+        val debugInfoMap =
+            mapOf(
+                "heartbeat_age_seconds" to 7L,
+            )
 
         val heartbeatAgeSeconds = debugInfoMap["heartbeat_age_seconds"] as? Long ?: -1L
 
@@ -103,9 +108,10 @@ class DebugViewModelPersistenceTest {
 
     @Test
     fun `healthCheckRunning extraction from debug info map`() {
-        val debugInfoMap = mapOf(
-            "health_check_running" to true,
-        )
+        val debugInfoMap =
+            mapOf(
+                "health_check_running" to true,
+            )
 
         val healthCheckRunning = debugInfoMap["health_check_running"] as? Boolean ?: false
 
@@ -123,9 +129,10 @@ class DebugViewModelPersistenceTest {
 
     @Test
     fun `networkMonitorRunning extraction from debug info map`() {
-        val debugInfoMap = mapOf(
-            "network_monitor_running" to true,
-        )
+        val debugInfoMap =
+            mapOf(
+                "network_monitor_running" to true,
+            )
 
         val networkMonitorRunning = debugInfoMap["network_monitor_running"] as? Boolean ?: false
 
@@ -134,9 +141,10 @@ class DebugViewModelPersistenceTest {
 
     @Test
     fun `maintenanceRunning extraction from debug info map`() {
-        val debugInfoMap = mapOf(
-            "maintenance_running" to true,
-        )
+        val debugInfoMap =
+            mapOf(
+                "maintenance_running" to true,
+            )
 
         val maintenanceRunning = debugInfoMap["maintenance_running"] as? Boolean ?: false
 
@@ -145,9 +153,10 @@ class DebugViewModelPersistenceTest {
 
     @Test
     fun `lastLockRefreshAgeSeconds extraction from debug info map`() {
-        val debugInfoMap = mapOf(
-            "last_lock_refresh_age_seconds" to 300L,
-        )
+        val debugInfoMap =
+            mapOf(
+                "last_lock_refresh_age_seconds" to 300L,
+            )
 
         val lastLockRefreshAgeSeconds = debugInfoMap["last_lock_refresh_age_seconds"] as? Long ?: -1L
 
@@ -156,9 +165,10 @@ class DebugViewModelPersistenceTest {
 
     @Test
     fun `failedInterfaceCount extraction from debug info map`() {
-        val debugInfoMap = mapOf(
-            "failed_interface_count" to 3,
-        )
+        val debugInfoMap =
+            mapOf(
+                "failed_interface_count" to 3,
+            )
 
         val failedInterfaceCount = debugInfoMap["failed_interface_count"] as? Int ?: 0
 
@@ -167,27 +177,29 @@ class DebugViewModelPersistenceTest {
 
     @Test
     fun `full persistence debug info extraction`() {
-        val debugInfoMap = mapOf(
-            "initialized" to true,
-            "reticulum_available" to true,
-            "heartbeat_age_seconds" to 2L,
-            "health_check_running" to true,
-            "network_monitor_running" to true,
-            "maintenance_running" to true,
-            "last_lock_refresh_age_seconds" to 45L,
-            "failed_interface_count" to 0,
-        )
+        val debugInfoMap =
+            mapOf(
+                "initialized" to true,
+                "reticulum_available" to true,
+                "heartbeat_age_seconds" to 2L,
+                "health_check_running" to true,
+                "network_monitor_running" to true,
+                "maintenance_running" to true,
+                "last_lock_refresh_age_seconds" to 45L,
+                "failed_interface_count" to 0,
+            )
 
-        val debugInfo = DebugInfo(
-            initialized = debugInfoMap["initialized"] as? Boolean ?: false,
-            reticulumAvailable = debugInfoMap["reticulum_available"] as? Boolean ?: false,
-            heartbeatAgeSeconds = debugInfoMap["heartbeat_age_seconds"] as? Long ?: -1L,
-            healthCheckRunning = debugInfoMap["health_check_running"] as? Boolean ?: false,
-            networkMonitorRunning = debugInfoMap["network_monitor_running"] as? Boolean ?: false,
-            maintenanceRunning = debugInfoMap["maintenance_running"] as? Boolean ?: false,
-            lastLockRefreshAgeSeconds = debugInfoMap["last_lock_refresh_age_seconds"] as? Long ?: -1L,
-            failedInterfaceCount = debugInfoMap["failed_interface_count"] as? Int ?: 0,
-        )
+        val debugInfo =
+            DebugInfo(
+                initialized = debugInfoMap["initialized"] as? Boolean ?: false,
+                reticulumAvailable = debugInfoMap["reticulum_available"] as? Boolean ?: false,
+                heartbeatAgeSeconds = debugInfoMap["heartbeat_age_seconds"] as? Long ?: -1L,
+                healthCheckRunning = debugInfoMap["health_check_running"] as? Boolean ?: false,
+                networkMonitorRunning = debugInfoMap["network_monitor_running"] as? Boolean ?: false,
+                maintenanceRunning = debugInfoMap["maintenance_running"] as? Boolean ?: false,
+                lastLockRefreshAgeSeconds = debugInfoMap["last_lock_refresh_age_seconds"] as? Long ?: -1L,
+                failedInterfaceCount = debugInfoMap["failed_interface_count"] as? Int ?: 0,
+            )
 
         assertTrue(debugInfo.initialized)
         assertTrue(debugInfo.reticulumAvailable)
@@ -201,26 +213,28 @@ class DebugViewModelPersistenceTest {
 
     @Test
     fun `persistence fields work with all other DebugInfo fields`() {
-        val debugInfo = DebugInfo(
-            initialized = true,
-            reticulumAvailable = true,
-            storagePath = "/data/app",
-            interfaceCount = 2,
-            interfaces = listOf(
-                InterfaceInfo("RNode", "ColumbaRNodeInterface", true, null),
-            ),
-            transportEnabled = true,
-            multicastLockHeld = true,
-            wifiLockHeld = true,
-            wakeLockHeld = true,
-            error = null,
-            heartbeatAgeSeconds = 1L,
-            healthCheckRunning = true,
-            networkMonitorRunning = true,
-            maintenanceRunning = true,
-            lastLockRefreshAgeSeconds = 30L,
-            failedInterfaceCount = 0,
-        )
+        val debugInfo =
+            DebugInfo(
+                initialized = true,
+                reticulumAvailable = true,
+                storagePath = "/data/app",
+                interfaceCount = 2,
+                interfaces =
+                    listOf(
+                        InterfaceInfo("RNode", "ColumbaRNodeInterface", true, null),
+                    ),
+                transportEnabled = true,
+                multicastLockHeld = true,
+                wifiLockHeld = true,
+                wakeLockHeld = true,
+                error = null,
+                heartbeatAgeSeconds = 1L,
+                healthCheckRunning = true,
+                networkMonitorRunning = true,
+                maintenanceRunning = true,
+                lastLockRefreshAgeSeconds = 30L,
+                failedInterfaceCount = 0,
+            )
 
         // Verify all fields work together
         assertTrue(debugInfo.initialized)

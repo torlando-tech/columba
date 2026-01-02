@@ -40,9 +40,10 @@ class ConversationDaoTest {
     @Before
     fun setup() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        database = Room.inMemoryDatabaseBuilder(context, ColumbaDatabase::class.java)
-            .allowMainThreadQueries()
-            .build()
+        database =
+            Room.inMemoryDatabaseBuilder(context, ColumbaDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
         conversationDao = database.conversationDao()
         identityDao = database.localIdentityDao()
 
@@ -59,18 +60,17 @@ class ConversationDaoTest {
 
     // ========== Helper Functions ==========
 
-    private fun createTestIdentity(
-        identityHash: String = IDENTITY_HASH,
-    ) = LocalIdentityEntity(
-        identityHash = identityHash,
-        displayName = "Test Identity",
-        destinationHash = DEST_HASH,
-        filePath = "/test/identity.key",
-        keyData = null,
-        createdTimestamp = System.currentTimeMillis(),
-        lastUsedTimestamp = System.currentTimeMillis(),
-        isActive = true,
-    )
+    private fun createTestIdentity(identityHash: String = IDENTITY_HASH) =
+        LocalIdentityEntity(
+            identityHash = identityHash,
+            displayName = "Test Identity",
+            destinationHash = DEST_HASH,
+            filePath = "/test/identity.key",
+            keyData = null,
+            createdTimestamp = System.currentTimeMillis(),
+            lastUsedTimestamp = System.currentTimeMillis(),
+            isActive = true,
+        )
 
     private fun createTestConversation(
         peerHash: String = "peer_${System.nanoTime()}",
@@ -90,295 +90,316 @@ class ConversationDaoTest {
     // ========== Insert Tests ==========
 
     @Test
-    fun insertConversation_createsNewConversation() = runTest {
-        val conversation = createTestConversation(peerHash = "peer1", peerName = "Alice")
-        conversationDao.insertConversation(conversation)
+    fun insertConversation_createsNewConversation() =
+        runTest {
+            val conversation = createTestConversation(peerHash = "peer1", peerName = "Alice")
+            conversationDao.insertConversation(conversation)
 
-        val retrieved = conversationDao.getConversation("peer1", IDENTITY_HASH)
-        assertNotNull(retrieved)
-        assertEquals("peer1", retrieved?.peerHash)
-        assertEquals("Alice", retrieved?.peerName)
-    }
-
-    @Test
-    fun insertConversation_replacesExisting() = runTest {
-        val original = createTestConversation(peerHash = "peer1", peerName = "Original")
-        conversationDao.insertConversation(original)
-
-        val updated = original.copy(peerName = "Updated")
-        conversationDao.insertConversation(updated)
-
-        val retrieved = conversationDao.getConversation("peer1", IDENTITY_HASH)
-        assertEquals("Updated", retrieved?.peerName)
-    }
-
-    @Test
-    fun insertConversations_bulkInserts() = runTest {
-        val conversations = (1..5).map { i ->
-            createTestConversation(peerHash = "peer$i", peerName = "Peer $i")
+            val retrieved = conversationDao.getConversation("peer1", IDENTITY_HASH)
+            assertNotNull(retrieved)
+            assertEquals("peer1", retrieved?.peerHash)
+            assertEquals("Alice", retrieved?.peerName)
         }
-        conversationDao.insertConversations(conversations)
 
-        val all = conversationDao.getAllConversationsList(IDENTITY_HASH)
-        assertEquals(5, all.size)
-    }
+    @Test
+    fun insertConversation_replacesExisting() =
+        runTest {
+            val original = createTestConversation(peerHash = "peer1", peerName = "Original")
+            conversationDao.insertConversation(original)
+
+            val updated = original.copy(peerName = "Updated")
+            conversationDao.insertConversation(updated)
+
+            val retrieved = conversationDao.getConversation("peer1", IDENTITY_HASH)
+            assertEquals("Updated", retrieved?.peerName)
+        }
+
+    @Test
+    fun insertConversations_bulkInserts() =
+        runTest {
+            val conversations =
+                (1..5).map { i ->
+                    createTestConversation(peerHash = "peer$i", peerName = "Peer $i")
+                }
+            conversationDao.insertConversations(conversations)
+
+            val all = conversationDao.getAllConversationsList(IDENTITY_HASH)
+            assertEquals(5, all.size)
+        }
 
     // ========== Update Tests ==========
 
     @Test
-    fun updateConversation_modifiesFields() = runTest {
-        val conversation = createTestConversation(peerHash = "peer1")
-        conversationDao.insertConversation(conversation)
+    fun updateConversation_modifiesFields() =
+        runTest {
+            val conversation = createTestConversation(peerHash = "peer1")
+            conversationDao.insertConversation(conversation)
 
-        val updated = conversation.copy(lastMessage = "New message", unreadCount = 5)
-        conversationDao.updateConversation(updated)
+            val updated = conversation.copy(lastMessage = "New message", unreadCount = 5)
+            conversationDao.updateConversation(updated)
 
-        val retrieved = conversationDao.getConversation("peer1", IDENTITY_HASH)
-        assertEquals("New message", retrieved?.lastMessage)
-        assertEquals(5, retrieved?.unreadCount)
-    }
+            val retrieved = conversationDao.getConversation("peer1", IDENTITY_HASH)
+            assertEquals("New message", retrieved?.lastMessage)
+            assertEquals(5, retrieved?.unreadCount)
+        }
 
     @Test
-    fun updatePeerName_changesName() = runTest {
-        conversationDao.insertConversation(
-            createTestConversation(peerHash = "peer1", peerName = "Old Name"),
-        )
+    fun updatePeerName_changesName() =
+        runTest {
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", peerName = "Old Name"),
+            )
 
-        conversationDao.updatePeerName("peer1", IDENTITY_HASH, "New Name")
+            conversationDao.updatePeerName("peer1", IDENTITY_HASH, "New Name")
 
-        val retrieved = conversationDao.getConversation("peer1", IDENTITY_HASH)
-        assertEquals("New Name", retrieved?.peerName)
-    }
+            val retrieved = conversationDao.getConversation("peer1", IDENTITY_HASH)
+            assertEquals("New Name", retrieved?.peerName)
+        }
 
     // ========== Delete Tests ==========
 
     @Test
-    fun deleteConversation_removesConversation() = runTest {
-        val conversation = createTestConversation(peerHash = "peer1")
-        conversationDao.insertConversation(conversation)
-        assertNotNull(conversationDao.getConversation("peer1", IDENTITY_HASH))
+    fun deleteConversation_removesConversation() =
+        runTest {
+            val conversation = createTestConversation(peerHash = "peer1")
+            conversationDao.insertConversation(conversation)
+            assertNotNull(conversationDao.getConversation("peer1", IDENTITY_HASH))
 
-        conversationDao.deleteConversation(conversation)
+            conversationDao.deleteConversation(conversation)
 
-        assertNull(conversationDao.getConversation("peer1", IDENTITY_HASH))
-    }
+            assertNull(conversationDao.getConversation("peer1", IDENTITY_HASH))
+        }
 
     @Test
-    fun deleteConversationByKey_removesConversation() = runTest {
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer1"))
+    fun deleteConversationByKey_removesConversation() =
+        runTest {
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer1"))
 
-        conversationDao.deleteConversationByKey("peer1", IDENTITY_HASH)
+            conversationDao.deleteConversationByKey("peer1", IDENTITY_HASH)
 
-        assertNull(conversationDao.getConversation("peer1", IDENTITY_HASH))
-    }
+            assertNull(conversationDao.getConversation("peer1", IDENTITY_HASH))
+        }
 
     // ========== Unread Count Tests ==========
 
     @Test
-    fun incrementUnreadCount_increasesCount() = runTest {
-        conversationDao.insertConversation(
-            createTestConversation(peerHash = "peer1", unreadCount = 0),
-        )
+    fun incrementUnreadCount_increasesCount() =
+        runTest {
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", unreadCount = 0),
+            )
 
-        conversationDao.incrementUnreadCount("peer1", IDENTITY_HASH)
-        assertEquals(1, conversationDao.getConversation("peer1", IDENTITY_HASH)?.unreadCount)
+            conversationDao.incrementUnreadCount("peer1", IDENTITY_HASH)
+            assertEquals(1, conversationDao.getConversation("peer1", IDENTITY_HASH)?.unreadCount)
 
-        conversationDao.incrementUnreadCount("peer1", IDENTITY_HASH)
-        assertEquals(2, conversationDao.getConversation("peer1", IDENTITY_HASH)?.unreadCount)
+            conversationDao.incrementUnreadCount("peer1", IDENTITY_HASH)
+            assertEquals(2, conversationDao.getConversation("peer1", IDENTITY_HASH)?.unreadCount)
 
-        conversationDao.incrementUnreadCount("peer1", IDENTITY_HASH)
-        assertEquals(3, conversationDao.getConversation("peer1", IDENTITY_HASH)?.unreadCount)
-    }
+            conversationDao.incrementUnreadCount("peer1", IDENTITY_HASH)
+            assertEquals(3, conversationDao.getConversation("peer1", IDENTITY_HASH)?.unreadCount)
+        }
 
     @Test
-    fun markAsRead_resetsCountAndUpdatesTimestamp() = runTest {
-        conversationDao.insertConversation(
-            createTestConversation(peerHash = "peer1", unreadCount = 10),
-        )
+    fun markAsRead_resetsCountAndUpdatesTimestamp() =
+        runTest {
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", unreadCount = 10),
+            )
 
-        val beforeMark = System.currentTimeMillis()
-        conversationDao.markAsRead("peer1", IDENTITY_HASH)
+            val beforeMark = System.currentTimeMillis()
+            conversationDao.markAsRead("peer1", IDENTITY_HASH)
 
-        val retrieved = conversationDao.getConversation("peer1", IDENTITY_HASH)
-        assertEquals(0, retrieved?.unreadCount)
-        assertTrue(retrieved?.lastSeenTimestamp ?: 0 >= beforeMark)
-    }
+            val retrieved = conversationDao.getConversation("peer1", IDENTITY_HASH)
+            assertEquals(0, retrieved?.unreadCount)
+            assertTrue(retrieved?.lastSeenTimestamp ?: 0 >= beforeMark)
+        }
 
     // ========== Query Tests ==========
 
     @Test
-    fun getConversation_returnsNullForNonexistent() = runTest {
-        val result = conversationDao.getConversation("nonexistent", IDENTITY_HASH)
-        assertNull(result)
-    }
+    fun getConversation_returnsNullForNonexistent() =
+        runTest {
+            val result = conversationDao.getConversation("nonexistent", IDENTITY_HASH)
+            assertNull(result)
+        }
 
     @Test
-    fun getAllConversationsList_returnsAllForIdentity() = runTest {
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer1"))
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer2"))
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer3"))
+    fun getAllConversationsList_returnsAllForIdentity() =
+        runTest {
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer1"))
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer2"))
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer3"))
 
-        val all = conversationDao.getAllConversationsList(IDENTITY_HASH)
-        assertEquals(3, all.size)
-    }
+            val all = conversationDao.getAllConversationsList(IDENTITY_HASH)
+            assertEquals(3, all.size)
+        }
 
     // ========== Flow Tests (validates Room 2.8.x race condition fix) ==========
 
     @Test
-    fun getAllConversations_flowEmitsOnInsert() = runTest {
-        conversationDao.getAllConversations(IDENTITY_HASH).test {
-            assertEquals(0, awaitItem().size)
+    fun getAllConversations_flowEmitsOnInsert() =
+        runTest {
+            conversationDao.getAllConversations(IDENTITY_HASH).test {
+                assertEquals(0, awaitItem().size)
 
+                conversationDao.insertConversation(createTestConversation(peerHash = "peer1"))
+                assertEquals(1, awaitItem().size)
+
+                conversationDao.insertConversation(createTestConversation(peerHash = "peer2"))
+                assertEquals(2, awaitItem().size)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getAllConversations_flowEmitsOnUpdate() =
+        runTest {
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", peerName = "Original"),
+            )
+
+            conversationDao.getAllConversations(IDENTITY_HASH).test {
+                val initial = awaitItem()
+                assertEquals("Original", initial[0].peerName)
+
+                conversationDao.updatePeerName("peer1", IDENTITY_HASH, "Updated")
+
+                val updated = awaitItem()
+                assertEquals("Updated", updated[0].peerName)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getAllConversations_flowEmitsOnDelete() =
+        runTest {
             conversationDao.insertConversation(createTestConversation(peerHash = "peer1"))
-            assertEquals(1, awaitItem().size)
-
             conversationDao.insertConversation(createTestConversation(peerHash = "peer2"))
-            assertEquals(2, awaitItem().size)
 
-            cancelAndIgnoreRemainingEvents()
+            conversationDao.getAllConversations(IDENTITY_HASH).test {
+                assertEquals(2, awaitItem().size)
+
+                conversationDao.deleteConversationByKey("peer1", IDENTITY_HASH)
+
+                assertEquals(1, awaitItem().size)
+
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun getAllConversations_flowEmitsOnUpdate() = runTest {
-        conversationDao.insertConversation(
-            createTestConversation(peerHash = "peer1", peerName = "Original"),
-        )
+    fun getAllConversations_orderedByLastMessageTimestamp() =
+        runTest {
+            val baseTime = System.currentTimeMillis()
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", lastMessageTimestamp = baseTime - 2000),
+            )
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer2", lastMessageTimestamp = baseTime),
+            )
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer3", lastMessageTimestamp = baseTime - 1000),
+            )
 
-        conversationDao.getAllConversations(IDENTITY_HASH).test {
-            val initial = awaitItem()
-            assertEquals("Original", initial[0].peerName)
-
-            conversationDao.updatePeerName("peer1", IDENTITY_HASH, "Updated")
-
-            val updated = awaitItem()
-            assertEquals("Updated", updated[0].peerName)
-
-            cancelAndIgnoreRemainingEvents()
+            conversationDao.getAllConversations(IDENTITY_HASH).test {
+                val conversations = awaitItem()
+                assertEquals(3, conversations.size)
+                assertEquals("peer2", conversations[0].peerHash) // Most recent first
+                assertEquals("peer3", conversations[1].peerHash)
+                assertEquals("peer1", conversations[2].peerHash) // Oldest last
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
-
-    @Test
-    fun getAllConversations_flowEmitsOnDelete() = runTest {
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer1"))
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer2"))
-
-        conversationDao.getAllConversations(IDENTITY_HASH).test {
-            assertEquals(2, awaitItem().size)
-
-            conversationDao.deleteConversationByKey("peer1", IDENTITY_HASH)
-
-            assertEquals(1, awaitItem().size)
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun getAllConversations_orderedByLastMessageTimestamp() = runTest {
-        val baseTime = System.currentTimeMillis()
-        conversationDao.insertConversation(
-            createTestConversation(peerHash = "peer1", lastMessageTimestamp = baseTime - 2000),
-        )
-        conversationDao.insertConversation(
-            createTestConversation(peerHash = "peer2", lastMessageTimestamp = baseTime),
-        )
-        conversationDao.insertConversation(
-            createTestConversation(peerHash = "peer3", lastMessageTimestamp = baseTime - 1000),
-        )
-
-        conversationDao.getAllConversations(IDENTITY_HASH).test {
-            val conversations = awaitItem()
-            assertEquals(3, conversations.size)
-            assertEquals("peer2", conversations[0].peerHash) // Most recent first
-            assertEquals("peer3", conversations[1].peerHash)
-            assertEquals("peer1", conversations[2].peerHash) // Oldest last
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
 
     // ========== Search Tests ==========
 
     @Test
-    fun searchConversations_findsByPeerName() = runTest {
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer1", peerName = "Alice Smith"))
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer2", peerName = "Bob Johnson"))
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer3", peerName = "Charlie Smith"))
+    fun searchConversations_findsByPeerName() =
+        runTest {
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer1", peerName = "Alice Smith"))
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer2", peerName = "Bob Johnson"))
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer3", peerName = "Charlie Smith"))
 
-        conversationDao.searchConversations(IDENTITY_HASH, "Smith").test {
-            val results = awaitItem()
-            assertEquals(2, results.size)
-            assertTrue(results.all { it.peerName.contains("Smith") })
-            cancelAndIgnoreRemainingEvents()
+            conversationDao.searchConversations(IDENTITY_HASH, "Smith").test {
+                val results = awaitItem()
+                assertEquals(2, results.size)
+                assertTrue(results.all { it.peerName.contains("Smith") })
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun searchConversations_caseInsensitiveSearch() = runTest {
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer1", peerName = "Alice"))
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer2", peerName = "ALICE"))
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer3", peerName = "alice"))
+    fun searchConversations_caseInsensitiveSearch() =
+        runTest {
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer1", peerName = "Alice"))
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer2", peerName = "ALICE"))
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer3", peerName = "alice"))
 
-        conversationDao.searchConversations(IDENTITY_HASH, "alice").test {
-            val results = awaitItem()
-            assertEquals(3, results.size)
-            cancelAndIgnoreRemainingEvents()
+            conversationDao.searchConversations(IDENTITY_HASH, "alice").test {
+                val results = awaitItem()
+                assertEquals(3, results.size)
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun searchConversations_partialMatch() = runTest {
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer1", peerName = "Christopher"))
+    fun searchConversations_partialMatch() =
+        runTest {
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer1", peerName = "Christopher"))
 
-        conversationDao.searchConversations(IDENTITY_HASH, "Chris").test {
-            val results = awaitItem()
-            assertEquals(1, results.size)
-            assertEquals("Christopher", results[0].peerName)
-            cancelAndIgnoreRemainingEvents()
+            conversationDao.searchConversations(IDENTITY_HASH, "Chris").test {
+                val results = awaitItem()
+                assertEquals(1, results.size)
+                assertEquals("Christopher", results[0].peerName)
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun searchConversations_emptyResultsForNoMatch() = runTest {
-        conversationDao.insertConversation(createTestConversation(peerHash = "peer1", peerName = "Alice"))
+    fun searchConversations_emptyResultsForNoMatch() =
+        runTest {
+            conversationDao.insertConversation(createTestConversation(peerHash = "peer1", peerName = "Alice"))
 
-        conversationDao.searchConversations(IDENTITY_HASH, "xyz").test {
-            val results = awaitItem()
-            assertTrue(results.isEmpty())
-            cancelAndIgnoreRemainingEvents()
+            conversationDao.searchConversations(IDENTITY_HASH, "xyz").test {
+                val results = awaitItem()
+                assertTrue(results.isEmpty())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     // ========== Composite Primary Key Tests ==========
 
     @Test
-    fun compositePrimaryKey_allowsSamePeerForDifferentIdentities() = runTest {
-        // Create second identity
-        val secondIdentity = createTestIdentity(identityHash = "second_identity_hash")
-        identityDao.insert(secondIdentity)
+    fun compositePrimaryKey_allowsSamePeerForDifferentIdentities() =
+        runTest {
+            // Create second identity
+            val secondIdentity = createTestIdentity(identityHash = "second_identity_hash")
+            identityDao.insert(secondIdentity)
 
-        // Insert same peer hash for both identities
-        conversationDao.insertConversation(
-            createTestConversation(peerHash = "shared_peer").copy(identityHash = IDENTITY_HASH),
-        )
-        conversationDao.insertConversation(
-            ConversationEntity(
-                peerHash = "shared_peer",
-                identityHash = "second_identity_hash",
-                peerName = "Different Context",
-                lastMessage = "Hello",
-                lastMessageTimestamp = System.currentTimeMillis(),
-                unreadCount = 0,
-            ),
-        )
+            // Insert same peer hash for both identities
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "shared_peer").copy(identityHash = IDENTITY_HASH),
+            )
+            conversationDao.insertConversation(
+                ConversationEntity(
+                    peerHash = "shared_peer",
+                    identityHash = "second_identity_hash",
+                    peerName = "Different Context",
+                    lastMessage = "Hello",
+                    lastMessageTimestamp = System.currentTimeMillis(),
+                    unreadCount = 0,
+                ),
+            )
 
-        // Both should exist independently
-        val first = conversationDao.getConversation("shared_peer", IDENTITY_HASH)
-        val second = conversationDao.getConversation("shared_peer", "second_identity_hash")
+            // Both should exist independently
+            val first = conversationDao.getConversation("shared_peer", IDENTITY_HASH)
+            val second = conversationDao.getConversation("shared_peer", "second_identity_hash")
 
-        assertNotNull(first)
-        assertNotNull(second)
-        assertEquals(IDENTITY_HASH, first?.identityHash)
-        assertEquals("second_identity_hash", second?.identityHash)
-    }
+            assertNotNull(first)
+            assertNotNull(second)
+            assertEquals(IDENTITY_HASH, first?.identityHash)
+            assertEquals("second_identity_hash", second?.identityHash)
+        }
 }

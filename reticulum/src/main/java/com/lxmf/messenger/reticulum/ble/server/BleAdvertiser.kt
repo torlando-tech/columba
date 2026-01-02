@@ -337,15 +337,16 @@ class BleAdvertiser(
      */
     private fun startRefreshJob() {
         refreshJob?.cancel()
-        refreshJob = scope.launch {
-            while (isActive) {
-                delay(ADVERTISING_REFRESH_INTERVAL_MS)
-                if (_isAdvertising.value && !isRefreshing) {
-                    Log.d(TAG, "Proactive advertising refresh")
-                    refreshAdvertising()
+        refreshJob =
+            scope.launch {
+                while (isActive) {
+                    delay(ADVERTISING_REFRESH_INTERVAL_MS)
+                    if (_isAdvertising.value && !isRefreshing) {
+                        Log.d(TAG, "Proactive advertising refresh")
+                        refreshAdvertising()
+                    }
                 }
             }
-        }
         Log.d(TAG, "Advertising refresh job started (interval: ${ADVERTISING_REFRESH_INTERVAL_MS}ms)")
     }
 

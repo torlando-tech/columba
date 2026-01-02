@@ -178,41 +178,43 @@ class KotlinBLEBridgeTest {
         }
 
     @Test
-    fun `getConnectionDetails returns No Name when device not in scanner`() =
+    fun `getConnectionDetails returns identity hash when device not in scanner`() =
         runTest {
             // Given
             val peerAddress = "AA:BB:CC:DD:EE:FF"
+            val identityHash = "test1234567890ab"
             coEvery { mockScanner.getDevicesSortedByPriority() } returns emptyList()
 
             val bridge = createBridgeWithMockScanner()
-            addMockPeer(bridge, peerAddress, "test123")
+            addMockPeer(bridge, peerAddress, identityHash)
 
             // When
             val details = bridge.getConnectionDetails()
 
-            // Then
+            // Then: Falls back to identity hash prefix when no device name available
             assertEquals(1, details.size)
-            assertEquals("No Name", details[0].peerName)
+            assertEquals(identityHash.take(8), details[0].peerName)
         }
 
     @Test
-    fun `getConnectionDetails returns No Name when scanner device has null name`() =
+    fun `getConnectionDetails returns identity hash when scanner device has null name`() =
         runTest {
             // Given
             val peerAddress = "AA:BB:CC:DD:EE:FF"
+            val identityHash = "test1234567890ab"
 
             val testDevice = createBleDevice(peerAddress, null, -50)
             coEvery { mockScanner.getDevicesSortedByPriority() } returns listOf(testDevice)
 
             val bridge = createBridgeWithMockScanner()
-            addMockPeer(bridge, peerAddress, "test123")
+            addMockPeer(bridge, peerAddress, identityHash)
 
             // When
             val details = bridge.getConnectionDetails()
 
-            // Then
+            // Then: Falls back to identity hash prefix when device name is null
             assertEquals(1, details.size)
-            assertEquals("No Name", details[0].peerName)
+            assertEquals(identityHash.take(8), details[0].peerName)
         }
 
     @Test
@@ -230,10 +232,14 @@ class KotlinBLEBridgeTest {
                 )
             coEvery { mockScanner.getDevicesSortedByPriority() } returns devices
 
+            val id1 = "id1_full_hash_here"
+            val id2 = "id2_full_hash_here"
+            val id3 = "id3_full_hash_here"
+
             val bridge = createBridgeWithMockScanner()
-            addMockPeer(bridge, peer1, "id1")
-            addMockPeer(bridge, peer2, "id2")
-            addMockPeer(bridge, peer3, "id3")
+            addMockPeer(bridge, peer1, id1)
+            addMockPeer(bridge, peer2, id2)
+            addMockPeer(bridge, peer3, id3)
 
             // When
             val details = bridge.getConnectionDetails()
@@ -250,7 +256,8 @@ class KotlinBLEBridgeTest {
             assertNotNull(detail3)
 
             assertEquals("Device1", detail1!!.peerName)
-            assertEquals("No Name", detail2!!.peerName)
+            // peer2 not in scanner, falls back to identity hash prefix
+            assertEquals(id2.take(8), detail2!!.peerName)
             assertEquals("Device3", detail3!!.peerName)
         }
 
@@ -467,9 +474,13 @@ class KotlinBLEBridgeTest {
             Class.forName(
                 "com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge\$PeerConnection",
             )
+        val deduplicationStateClass =
+            Class.forName(
+                "com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge\$DeduplicationState",
+            )
 
         // Create instance using constructor
-        // Parameters: address, mtu, isCentral, isPeripheral, identityHash, connectedAt
+        // Parameters: address, mtu, isCentral, isPeripheral, identityHash, connectedAt, rssi, lastActivity, deduplicationState
         val constructor =
             peerConnectionClass.getDeclaredConstructor(
                 String::class.java,
@@ -478,9 +489,13 @@ class KotlinBLEBridgeTest {
                 Boolean::class.java,
                 String::class.java,
                 Long::class.java,
+                Int::class.java,
+                Long::class.java,
+                deduplicationStateClass,
             )
         constructor.isAccessible = true
 
+        val deduplicationStateNone = deduplicationStateClass.enumConstants[0]
         val peer =
             constructor.newInstance(
                 address,
@@ -489,6 +504,9 @@ class KotlinBLEBridgeTest {
                 isPeripheral,
                 identityHash,
                 System.currentTimeMillis(),
+                -100, // rssi
+                System.currentTimeMillis(), // lastActivity
+                deduplicationStateNone,
             )
 
         // Add to connectedPeers map

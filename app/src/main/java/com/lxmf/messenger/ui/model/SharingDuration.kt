@@ -26,13 +26,14 @@ enum class SharingDuration(val displayText: String, val durationMillis: Long?) {
         return when (this) {
             INDEFINITE -> null
             UNTIL_MIDNIGHT -> {
-                val calendar = Calendar.getInstance().apply {
-                    timeInMillis = startTimeMillis
-                    set(Calendar.HOUR_OF_DAY, 23)
-                    set(Calendar.MINUTE, 59)
-                    set(Calendar.SECOND, 59)
-                    set(Calendar.MILLISECOND, 999)
-                }
+                val calendar =
+                    Calendar.getInstance().apply {
+                        timeInMillis = startTimeMillis
+                        set(Calendar.HOUR_OF_DAY, 23)
+                        set(Calendar.MINUTE, 59)
+                        set(Calendar.SECOND, 59)
+                        set(Calendar.MILLISECOND, 999)
+                    }
                 calendar.timeInMillis
             }
             else -> startTimeMillis + (durationMillis ?: 0L)

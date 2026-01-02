@@ -6,6 +6,7 @@ import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.ReplyPreview
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryStatusUpdate
@@ -14,6 +15,8 @@ import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.util.FileAttachment
+import com.lxmf.messenger.util.FileUtils
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,10 +42,7 @@ import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import java.io.ByteArrayOutputStream
-import com.lxmf.messenger.util.FileAttachment
-import com.lxmf.messenger.util.FileUtils
 import com.lxmf.messenger.data.repository.Message as DataMessage
-import com.lxmf.messenger.data.repository.ReplyPreview
 
 /**
  * Unit tests for MessagingViewModel.
@@ -1599,12 +1599,13 @@ class MessagingViewModelTest {
             val viewModel = createTestViewModel()
             advanceUntilIdle()
 
-            val attachment = FileAttachment(
-                filename = "test.pdf",
-                data = ByteArray(1024),
-                mimeType = "application/pdf",
-                sizeBytes = 1024,
-            )
+            val attachment =
+                FileAttachment(
+                    filename = "test.pdf",
+                    data = ByteArray(1024),
+                    mimeType = "application/pdf",
+                    sizeBytes = 1024,
+                )
 
             viewModel.addFileAttachment(attachment)
             advanceUntilIdle()
@@ -1619,18 +1620,20 @@ class MessagingViewModelTest {
             val viewModel = createTestViewModel()
             advanceUntilIdle()
 
-            val attachment1 = FileAttachment(
-                filename = "test1.pdf",
-                data = ByteArray(1024),
-                mimeType = "application/pdf",
-                sizeBytes = 1024,
-            )
-            val attachment2 = FileAttachment(
-                filename = "test2.txt",
-                data = ByteArray(512),
-                mimeType = "text/plain",
-                sizeBytes = 512,
-            )
+            val attachment1 =
+                FileAttachment(
+                    filename = "test1.pdf",
+                    data = ByteArray(1024),
+                    mimeType = "application/pdf",
+                    sizeBytes = 1024,
+                )
+            val attachment2 =
+                FileAttachment(
+                    filename = "test2.txt",
+                    data = ByteArray(512),
+                    mimeType = "text/plain",
+                    sizeBytes = 512,
+                )
 
             viewModel.addFileAttachment(attachment1)
             viewModel.addFileAttachment(attachment2)
@@ -1649,36 +1652,41 @@ class MessagingViewModelTest {
 
             // Collect error events BEFORE any operations
             var errorMessage: String? = null
-            val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-                viewModel.fileAttachmentError.collect { errorMessage = it }
-            }
+            val job =
+                launch(UnconfinedTestDispatcher(testScheduler)) {
+                    viewModel.fileAttachmentError.collect { errorMessage = it }
+                }
 
             // First add a file that's close to the limit (but under single file limit)
-            val attachment1 = FileAttachment(
-                filename = "large.pdf",
-                data = ByteArray(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 1000),
-                mimeType = "application/pdf",
-                sizeBytes = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 1000,
-            )
+            val attachment1 =
+                FileAttachment(
+                    filename = "large.pdf",
+                    data = ByteArray(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 1000),
+                    mimeType = "application/pdf",
+                    sizeBytes = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 1000,
+                )
             viewModel.addFileAttachment(attachment1)
             advanceUntilIdle()
 
             assertEquals(1, viewModel.selectedFileAttachments.value.size)
 
             // Try to add another file that would exceed the limit
-            val attachment2 = FileAttachment(
-                filename = "small.txt",
-                data = ByteArray(2000),
-                mimeType = "text/plain",
-                sizeBytes = 2000,
-            )
+            val attachment2 =
+                FileAttachment(
+                    filename = "small.txt",
+                    data = ByteArray(2000),
+                    mimeType = "text/plain",
+                    sizeBytes = 2000,
+                )
             viewModel.addFileAttachment(attachment2)
             advanceUntilIdle()
 
             // Second file should be rejected
             assertEquals(1, viewModel.selectedFileAttachments.value.size)
-            assertTrue("Expected error message containing 'File too large', got: $errorMessage",
-                errorMessage?.contains("File too large") == true)
+            assertTrue(
+                "Expected error message containing 'File too large', got: $errorMessage",
+                errorMessage?.contains("File too large") == true,
+            )
 
             job.cancel()
         }
@@ -1690,23 +1698,27 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             var errorMessage: String? = null
-            val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-                viewModel.fileAttachmentError.collect { errorMessage = it }
-            }
+            val job =
+                launch(UnconfinedTestDispatcher(testScheduler)) {
+                    viewModel.fileAttachmentError.collect { errorMessage = it }
+                }
 
             // Try to add a file larger than MAX_SINGLE_FILE_SIZE
-            val largeAttachment = FileAttachment(
-                filename = "huge.bin",
-                data = ByteArray(FileUtils.MAX_SINGLE_FILE_SIZE + 1),
-                mimeType = "application/octet-stream",
-                sizeBytes = FileUtils.MAX_SINGLE_FILE_SIZE + 1,
-            )
+            val largeAttachment =
+                FileAttachment(
+                    filename = "huge.bin",
+                    data = ByteArray(FileUtils.MAX_SINGLE_FILE_SIZE + 1),
+                    mimeType = "application/octet-stream",
+                    sizeBytes = FileUtils.MAX_SINGLE_FILE_SIZE + 1,
+                )
             viewModel.addFileAttachment(largeAttachment)
             advanceUntilIdle()
 
             assertEquals(0, viewModel.selectedFileAttachments.value.size)
-            assertTrue("Expected error message containing 'File too large', got: $errorMessage",
-                errorMessage?.contains("File too large") == true)
+            assertTrue(
+                "Expected error message containing 'File too large', got: $errorMessage",
+                errorMessage?.contains("File too large") == true,
+            )
 
             job.cancel()
         }
@@ -2119,10 +2131,11 @@ class MessagingViewModelTest {
             val viewModel = createTestViewModel()
 
             // Create temp directory for test
-            val tempDir = java.io.File.createTempFile("test", "dir").apply {
-                delete()
-                mkdirs()
-            }
+            val tempDir =
+                java.io.File.createTempFile("test", "dir").apply {
+                    delete()
+                    mkdirs()
+                }
             val attachmentsDir = java.io.File(tempDir, "attachments")
 
             val context = mockk<android.content.Context>()
@@ -2167,10 +2180,11 @@ class MessagingViewModelTest {
 
             val viewModel = createTestViewModel()
 
-            val tempDir = java.io.File.createTempFile("test", "dir").apply {
-                delete()
-                mkdirs()
-            }
+            val tempDir =
+                java.io.File.createTempFile("test", "dir").apply {
+                    delete()
+                    mkdirs()
+                }
 
             val context = mockk<android.content.Context>()
             every { context.filesDir } returns tempDir
@@ -2211,10 +2225,11 @@ class MessagingViewModelTest {
 
             val viewModel = createTestViewModel()
 
-            val tempDir = java.io.File.createTempFile("test", "dir").apply {
-                delete()
-                mkdirs()
-            }
+            val tempDir =
+                java.io.File.createTempFile("test", "dir").apply {
+                    delete()
+                    mkdirs()
+                }
 
             val context = mockk<android.content.Context>()
             every { context.filesDir } returns tempDir
@@ -2259,10 +2274,11 @@ class MessagingViewModelTest {
             val viewModel = createTestViewModel()
 
             // Create temp directory but NOT the attachments subdirectory
-            val tempDir = java.io.File.createTempFile("test", "dir").apply {
-                delete()
-                mkdirs()
-            }
+            val tempDir =
+                java.io.File.createTempFile("test", "dir").apply {
+                    delete()
+                    mkdirs()
+                }
             // Ensure attachments dir does NOT exist
             val attachmentsDir = java.io.File(tempDir, "attachments")
             assertFalse(attachmentsDir.exists())
@@ -2305,10 +2321,11 @@ class MessagingViewModelTest {
 
             val viewModel = createTestViewModel()
 
-            val tempDir = java.io.File.createTempFile("test", "dir").apply {
-                delete()
-                mkdirs()
-            }
+            val tempDir =
+                java.io.File.createTempFile("test", "dir").apply {
+                    delete()
+                    mkdirs()
+                }
 
             val context = mockk<android.content.Context>()
             every { context.filesDir } returns tempDir
@@ -2345,14 +2362,15 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Setup: Mock reply preview exists
-            val replyPreview = ReplyPreview(
-                messageId = "reply-msg-123",
-                senderName = "Alice",
-                contentPreview = "Hello there!",
-                hasImage = false,
-                hasFileAttachment = false,
-                firstFileName = null,
-            )
+            val replyPreview =
+                ReplyPreview(
+                    messageId = "reply-msg-123",
+                    senderName = "Alice",
+                    contentPreview = "Hello there!",
+                    hasImage = false,
+                    hasFileAttachment = false,
+                    firstFileName = null,
+                )
             coEvery { conversationRepository.getReplyPreview("reply-msg-123", any()) } returns replyPreview
 
             // Load conversation first
@@ -2399,14 +2417,15 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Setup: Set a pending reply first
-            val replyPreview = ReplyPreview(
-                messageId = "reply-msg-123",
-                senderName = "Alice",
-                contentPreview = "Hello there!",
-                hasImage = false,
-                hasFileAttachment = false,
-                firstFileName = null,
-            )
+            val replyPreview =
+                ReplyPreview(
+                    messageId = "reply-msg-123",
+                    senderName = "Alice",
+                    contentPreview = "Hello there!",
+                    hasImage = false,
+                    hasFileAttachment = false,
+                    firstFileName = null,
+                )
             coEvery { conversationRepository.getReplyPreview("reply-msg-123", any()) } returns replyPreview
 
             viewModel.loadMessages(testPeerHash, testPeerName)
@@ -2443,14 +2462,15 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Setup: Mock reply preview exists
-            val replyPreview = ReplyPreview(
-                messageId = "original-msg-456",
-                senderName = "Bob",
-                contentPreview = "Original message content",
-                hasImage = true,
-                hasFileAttachment = false,
-                firstFileName = null,
-            )
+            val replyPreview =
+                ReplyPreview(
+                    messageId = "original-msg-456",
+                    senderName = "Bob",
+                    contentPreview = "Original message content",
+                    hasImage = true,
+                    hasFileAttachment = false,
+                    firstFileName = null,
+                )
             coEvery { conversationRepository.getReplyPreview("original-msg-456", any()) } returns replyPreview
 
             // Load conversation first
@@ -2478,14 +2498,15 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Setup: Mock reply preview exists
-            val replyPreview = ReplyPreview(
-                messageId = "original-msg",
-                senderName = "Alice",
-                contentPreview = "Hello",
-                hasImage = false,
-                hasFileAttachment = false,
-                firstFileName = null,
-            )
+            val replyPreview =
+                ReplyPreview(
+                    messageId = "original-msg",
+                    senderName = "Alice",
+                    contentPreview = "Hello",
+                    hasImage = false,
+                    hasFileAttachment = false,
+                    firstFileName = null,
+                )
             coEvery { conversationRepository.getReplyPreview("original-msg", any()) } returns replyPreview
 
             viewModel.loadMessages(testPeerHash, testPeerName)
@@ -2549,11 +2570,12 @@ class MessagingViewModelTest {
 
             // Setup: Mock successful send
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-            val testReceipt = MessageReceipt(
-                messageHash = ByteArray(32) { it.toByte() },
-                timestamp = 3000L,
-                destinationHash = destHashBytes,
-            )
+            val testReceipt =
+                MessageReceipt(
+                    messageHash = ByteArray(32) { it.toByte() },
+                    timestamp = 3000L,
+                    destinationHash = destHashBytes,
+                )
             coEvery {
                 reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
@@ -2561,14 +2583,15 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
 
             // Setup: Set a pending reply
-            val replyPreview = ReplyPreview(
-                messageId = "reply-to-this-msg",
-                senderName = "Alice",
-                contentPreview = "Original message",
-                hasImage = false,
-                hasFileAttachment = false,
-                firstFileName = null,
-            )
+            val replyPreview =
+                ReplyPreview(
+                    messageId = "reply-to-this-msg",
+                    senderName = "Alice",
+                    contentPreview = "Original message",
+                    hasImage = false,
+                    hasFileAttachment = false,
+                    firstFileName = null,
+                )
             coEvery { conversationRepository.getReplyPreview("reply-to-this-msg", any()) } returns replyPreview
 
             viewModel.loadMessages(testPeerHash, testPeerName)
@@ -2603,11 +2626,12 @@ class MessagingViewModelTest {
 
             // Setup: Mock successful send
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-            val testReceipt = MessageReceipt(
-                messageHash = ByteArray(32) { it.toByte() },
-                timestamp = 3000L,
-                destinationHash = destHashBytes,
-            )
+            val testReceipt =
+                MessageReceipt(
+                    messageHash = ByteArray(32) { it.toByte() },
+                    timestamp = 3000L,
+                    destinationHash = destHashBytes,
+                )
             coEvery {
                 reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
@@ -2615,14 +2639,15 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
 
             // Setup: Set a pending reply
-            val replyPreview = ReplyPreview(
-                messageId = "reply-to-this-msg",
-                senderName = "Alice",
-                contentPreview = "Original message",
-                hasImage = false,
-                hasFileAttachment = false,
-                firstFileName = null,
-            )
+            val replyPreview =
+                ReplyPreview(
+                    messageId = "reply-to-this-msg",
+                    senderName = "Alice",
+                    contentPreview = "Original message",
+                    hasImage = false,
+                    hasFileAttachment = false,
+                    firstFileName = null,
+                )
             coEvery { conversationRepository.getReplyPreview("reply-to-this-msg", any()) } returns replyPreview
 
             viewModel.loadMessages(testPeerHash, testPeerName)
@@ -2650,11 +2675,12 @@ class MessagingViewModelTest {
 
             // Setup: Mock successful send
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-            val testReceipt = MessageReceipt(
-                messageHash = ByteArray(32) { it.toByte() },
-                timestamp = 3000L,
-                destinationHash = destHashBytes,
-            )
+            val testReceipt =
+                MessageReceipt(
+                    messageHash = ByteArray(32) { it.toByte() },
+                    timestamp = 3000L,
+                    destinationHash = destHashBytes,
+                )
             coEvery {
                 reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
@@ -2728,14 +2754,15 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Setup: Reply preview has image
-            val replyPreview = ReplyPreview(
-                messageId = "img-msg",
-                senderName = "Alice",
-                contentPreview = "Check out this photo",
-                hasImage = true,
-                hasFileAttachment = false,
-                firstFileName = null,
-            )
+            val replyPreview =
+                ReplyPreview(
+                    messageId = "img-msg",
+                    senderName = "Alice",
+                    contentPreview = "Check out this photo",
+                    hasImage = true,
+                    hasFileAttachment = false,
+                    firstFileName = null,
+                )
             coEvery { conversationRepository.getReplyPreview("img-msg", any()) } returns replyPreview
 
             viewModel.loadMessages(testPeerHash, testPeerName)
@@ -2758,14 +2785,15 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Setup: Reply preview has file attachment
-            val replyPreview = ReplyPreview(
-                messageId = "file-msg",
-                senderName = "Bob",
-                contentPreview = "Here is the document",
-                hasImage = false,
-                hasFileAttachment = true,
-                firstFileName = "report.pdf",
-            )
+            val replyPreview =
+                ReplyPreview(
+                    messageId = "file-msg",
+                    senderName = "Bob",
+                    contentPreview = "Here is the document",
+                    hasImage = false,
+                    hasFileAttachment = true,
+                    firstFileName = "report.pdf",
+                )
             coEvery { conversationRepository.getReplyPreview("file-msg", any()) } returns replyPreview
 
             viewModel.loadMessages(testPeerHash, testPeerName)
@@ -3016,19 +3044,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Setup: Mock existing message
-            val testMessage = MessageEntity(
-                id = "test-msg-id",
-                conversationHash = testPeerHash,
-                identityHash = "test_identity_hash",
-                content = "Hello",
-                timestamp = System.currentTimeMillis(),
-                isFromMe = false,
-                status = "delivered",
-                fieldsJson = null,
-                deliveryMethod = null,
-                errorMessage = null,
-                replyToMessageId = null,
-            )
+            val testMessage =
+                MessageEntity(
+                    id = "test-msg-id",
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Hello",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = null,
+                    deliveryMethod = null,
+                    errorMessage = null,
+                    replyToMessageId = null,
+                )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
             // Mock protocol send reaction
@@ -3066,19 +3095,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Setup: Mock existing message without reactions
-            val testMessage = MessageEntity(
-                id = "test-msg-id",
-                conversationHash = testPeerHash,
-                identityHash = "test_identity_hash",
-                content = "Hello",
-                timestamp = System.currentTimeMillis(),
-                isFromMe = false,
-                status = "delivered",
-                fieldsJson = null,
-                deliveryMethod = null,
-                errorMessage = null,
-                replyToMessageId = null,
-            )
+            val testMessage =
+                MessageEntity(
+                    id = "test-msg-id",
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Hello",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = null,
+                    deliveryMethod = null,
+                    errorMessage = null,
+                    replyToMessageId = null,
+                )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
             // Mock protocol send reaction
@@ -3118,19 +3148,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Setup: Mock existing message
-            val testMessage = MessageEntity(
-                id = "test-msg-id",
-                conversationHash = testPeerHash,
-                identityHash = "test_identity_hash",
-                content = "Hello",
-                timestamp = System.currentTimeMillis(),
-                isFromMe = false,
-                status = "delivered",
-                fieldsJson = null,
-                deliveryMethod = null,
-                errorMessage = null,
-                replyToMessageId = null,
-            )
+            val testMessage =
+                MessageEntity(
+                    id = "test-msg-id",
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Hello",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = null,
+                    deliveryMethod = null,
+                    errorMessage = null,
+                    replyToMessageId = null,
+                )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
             // Mock protocol send reaction
@@ -3164,19 +3195,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Setup: Mock existing message
-            val testMessage = MessageEntity(
-                id = "test-msg-id",
-                conversationHash = testPeerHash,
-                identityHash = "test_identity_hash",
-                content = "Hello",
-                timestamp = System.currentTimeMillis(),
-                isFromMe = false,
-                status = "delivered",
-                fieldsJson = null,
-                deliveryMethod = null,
-                errorMessage = null,
-                replyToMessageId = null,
-            )
+            val testMessage =
+                MessageEntity(
+                    id = "test-msg-id",
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Hello",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = null,
+                    deliveryMethod = null,
+                    errorMessage = null,
+                    replyToMessageId = null,
+                )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
             // Mock protocol failure
@@ -3211,19 +3243,20 @@ class MessagingViewModelTest {
 
             // Setup: Mock message that already has a reply_to in field 16
             val existingFieldsJson = """{"16": {"reply_to": "original-msg-id"}}"""
-            val testMessage = MessageEntity(
-                id = "test-msg-id",
-                conversationHash = testPeerHash,
-                identityHash = "test_identity_hash",
-                content = "Hello",
-                timestamp = System.currentTimeMillis(),
-                isFromMe = false,
-                status = "delivered",
-                fieldsJson = existingFieldsJson,
-                deliveryMethod = null,
-                errorMessage = null,
-                replyToMessageId = "original-msg-id",
-            )
+            val testMessage =
+                MessageEntity(
+                    id = "test-msg-id",
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Hello",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = existingFieldsJson,
+                    deliveryMethod = null,
+                    errorMessage = null,
+                    replyToMessageId = "original-msg-id",
+                )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
             // Mock protocol
@@ -3264,19 +3297,20 @@ class MessagingViewModelTest {
 
             // Setup: Mock message that already has a 👍 reaction from someone else
             val existingFieldsJson = """{"16": {"reactions": {"👍": ["other-sender-hash"]}}}"""
-            val testMessage = MessageEntity(
-                id = "test-msg-id",
-                conversationHash = testPeerHash,
-                identityHash = "test_identity_hash",
-                content = "Hello",
-                timestamp = System.currentTimeMillis(),
-                isFromMe = false,
-                status = "delivered",
-                fieldsJson = existingFieldsJson,
-                deliveryMethod = null,
-                errorMessage = null,
-                replyToMessageId = null,
-            )
+            val testMessage =
+                MessageEntity(
+                    id = "test-msg-id",
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Hello",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = existingFieldsJson,
+                    deliveryMethod = null,
+                    errorMessage = null,
+                    replyToMessageId = null,
+                )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
             // Mock protocol
@@ -3322,19 +3356,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Setup: Mock target message
-            val targetMessage = MessageEntity(
-                id = "target-msg-id",
-                conversationHash = testPeerHash,
-                identityHash = "test_identity_hash",
-                content = "Hello",
-                timestamp = System.currentTimeMillis(),
-                isFromMe = true,
-                status = "delivered",
-                fieldsJson = null,
-                deliveryMethod = null,
-                errorMessage = null,
-                replyToMessageId = null,
-            )
+            val targetMessage =
+                MessageEntity(
+                    id = "target-msg-id",
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Hello",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "delivered",
+                    fieldsJson = null,
+                    deliveryMethod = null,
+                    errorMessage = null,
+                    replyToMessageId = null,
+                )
             coEvery { conversationRepository.getMessageById("target-msg-id") } returns targetMessage
 
             // Capture the fieldsJson update
@@ -3422,19 +3457,20 @@ class MessagingViewModelTest {
 
             // Setup: Mock target message that already has reactions
             val existingFieldsJson = """{"16": {"reactions": {"👍": ["sender-1"]}}}"""
-            val targetMessage = MessageEntity(
-                id = "target-msg-id",
-                conversationHash = testPeerHash,
-                identityHash = "test_identity_hash",
-                content = "Hello",
-                timestamp = System.currentTimeMillis(),
-                isFromMe = true,
-                status = "delivered",
-                fieldsJson = existingFieldsJson,
-                deliveryMethod = null,
-                errorMessage = null,
-                replyToMessageId = null,
-            )
+            val targetMessage =
+                MessageEntity(
+                    id = "target-msg-id",
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Hello",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "delivered",
+                    fieldsJson = existingFieldsJson,
+                    deliveryMethod = null,
+                    errorMessage = null,
+                    replyToMessageId = null,
+                )
             coEvery { conversationRepository.getMessageById("target-msg-id") } returns targetMessage
 
             // Capture the fieldsJson update
@@ -3457,5 +3493,4 @@ class MessagingViewModelTest {
             assertEquals(1, reactions.getJSONArray("👍").length())
             assertEquals(1, reactions.getJSONArray("❤️").length())
         }
-
 }

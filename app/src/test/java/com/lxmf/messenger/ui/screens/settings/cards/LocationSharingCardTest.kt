@@ -2,8 +2,6 @@ package com.lxmf.messenger.ui.screens.settings.cards
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsOff
-import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -314,14 +312,15 @@ class LocationSharingCardTest {
 
     @Test
     fun `locationSharingCard with active sessions displays currently sharing section`() {
-        val sessions = listOf(
-            SharingSession(
-                destinationHash = "hash1",
-                displayName = "Alice",
-                startTime = System.currentTimeMillis(),
-                endTime = System.currentTimeMillis() + 3600_000,
-            ),
-        )
+        val sessions =
+            listOf(
+                SharingSession(
+                    destinationHash = "hash1",
+                    displayName = "Alice",
+                    startTime = System.currentTimeMillis(),
+                    endTime = System.currentTimeMillis() + 3600_000,
+                ),
+            )
 
         composeTestRule.setContent {
             LocationSharingCard(
@@ -343,14 +342,15 @@ class LocationSharingCardTest {
 
     @Test
     fun `locationSharingCard with active session displays stop button`() {
-        val sessions = listOf(
-            SharingSession(
-                destinationHash = "hash1",
-                displayName = "Bob",
-                startTime = System.currentTimeMillis(),
-                endTime = System.currentTimeMillis() + 3600_000,
-            ),
-        )
+        val sessions =
+            listOf(
+                SharingSession(
+                    destinationHash = "hash1",
+                    displayName = "Bob",
+                    startTime = System.currentTimeMillis(),
+                    endTime = System.currentTimeMillis() + 3600_000,
+                ),
+            )
 
         composeTestRule.setContent {
             LocationSharingCard(
@@ -371,20 +371,21 @@ class LocationSharingCardTest {
 
     @Test
     fun `locationSharingCard with multiple sessions displays stop all button`() {
-        val sessions = listOf(
-            SharingSession(
-                destinationHash = "hash1",
-                displayName = "Alice",
-                startTime = System.currentTimeMillis(),
-                endTime = System.currentTimeMillis() + 3600_000,
-            ),
-            SharingSession(
-                destinationHash = "hash2",
-                displayName = "Bob",
-                startTime = System.currentTimeMillis(),
-                endTime = System.currentTimeMillis() + 3600_000,
-            ),
-        )
+        val sessions =
+            listOf(
+                SharingSession(
+                    destinationHash = "hash1",
+                    displayName = "Alice",
+                    startTime = System.currentTimeMillis(),
+                    endTime = System.currentTimeMillis() + 3600_000,
+                ),
+                SharingSession(
+                    destinationHash = "hash2",
+                    displayName = "Bob",
+                    startTime = System.currentTimeMillis(),
+                    endTime = System.currentTimeMillis() + 3600_000,
+                ),
+            )
 
         composeTestRule.setContent {
             LocationSharingCard(
@@ -406,20 +407,21 @@ class LocationSharingCardTest {
     @Test
     fun `locationSharingCard stop all button invokes callback`() {
         var stopAllCalled = false
-        val sessions = listOf(
-            SharingSession(
-                destinationHash = "hash1",
-                displayName = "Alice",
-                startTime = System.currentTimeMillis(),
-                endTime = System.currentTimeMillis() + 3600_000,
-            ),
-            SharingSession(
-                destinationHash = "hash2",
-                displayName = "Bob",
-                startTime = System.currentTimeMillis(),
-                endTime = System.currentTimeMillis() + 3600_000,
-            ),
-        )
+        val sessions =
+            listOf(
+                SharingSession(
+                    destinationHash = "hash1",
+                    displayName = "Alice",
+                    startTime = System.currentTimeMillis(),
+                    endTime = System.currentTimeMillis() + 3600_000,
+                ),
+                SharingSession(
+                    destinationHash = "hash2",
+                    displayName = "Bob",
+                    startTime = System.currentTimeMillis(),
+                    endTime = System.currentTimeMillis() + 3600_000,
+                ),
+            )
 
         composeTestRule.setContent {
             LocationSharingCard(
@@ -442,14 +444,15 @@ class LocationSharingCardTest {
 
     @Test
     fun `locationSharingCard disabled hides active sessions section`() {
-        val sessions = listOf(
-            SharingSession(
-                destinationHash = "hash1",
-                displayName = "Alice",
-                startTime = System.currentTimeMillis(),
-                endTime = System.currentTimeMillis() + 3600_000,
-            ),
-        )
+        val sessions =
+            listOf(
+                SharingSession(
+                    destinationHash = "hash1",
+                    displayName = "Alice",
+                    startTime = System.currentTimeMillis(),
+                    endTime = System.currentTimeMillis() + 3600_000,
+                ),
+            )
 
         composeTestRule.setContent {
             LocationSharingCard(

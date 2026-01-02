@@ -7,11 +7,9 @@ import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,10 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
@@ -40,7 +35,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -55,7 +49,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -73,8 +68,8 @@ import com.lxmf.messenger.ui.components.ContactLocationBottomSheet
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.ShareLocationBottomSheet
 import com.lxmf.messenger.ui.components.SharingStatusChip
+import com.lxmf.messenger.ui.util.MarkerBitmapFactory
 import com.lxmf.messenger.util.LocationPermissionManager
-import org.maplibre.android.geometry.LatLng as MapLibreLatLng
 import com.lxmf.messenger.viewmodel.ContactMarker
 import com.lxmf.messenger.viewmodel.MapViewModel
 import com.lxmf.messenger.viewmodel.MarkerState
@@ -82,11 +77,11 @@ import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapView
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
@@ -96,7 +91,6 @@ import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Point
-import com.lxmf.messenger.ui.util.MarkerBitmapFactory
 
 /**
  * Map screen displaying user location and contact markers.
@@ -238,14 +232,15 @@ fun MapScreen(
 
                             // Add dashed circle bitmaps for stale markers
                             val density = ctx.resources.displayMetrics.density
-                            val staleCircleBitmap = MarkerBitmapFactory.createDashedCircle(
-                                sizeDp = 28f,
-                                strokeWidthDp = 3f,
-                                color = android.graphics.Color.parseColor("#E0E0E0"),
-                                dashLengthDp = 4f,
-                                gapLengthDp = 3f,
-                                density = density,
-                            )
+                            val staleCircleBitmap =
+                                MarkerBitmapFactory.createDashedCircle(
+                                    sizeDp = 28f,
+                                    strokeWidthDp = 3f,
+                                    color = android.graphics.Color.parseColor("#E0E0E0"),
+                                    dashLengthDp = 4f,
+                                    gapLengthDp = 3f,
+                                    density = density,
+                                )
                             style.addImage("stale-dashed-circle", staleCircleBitmap)
                             Log.d("MapScreen", "Added stale-dashed-circle image to style")
 
@@ -270,16 +265,18 @@ fun MapScreen(
                         // Add click listener for contact markers
                         map.addOnMapClickListener { latLng ->
                             val screenPoint = map.projection.toScreenLocation(latLng)
-                            val features = map.queryRenderedFeatures(
-                                screenPoint,
-                                "contact-markers-layer",
-                            )
+                            val features =
+                                map.queryRenderedFeatures(
+                                    screenPoint,
+                                    "contact-markers-layer",
+                                )
                             features.firstOrNull()?.let { feature ->
                                 val hash = feature.getStringProperty("hash")
                                 if (hash != null) {
-                                    val marker = state.contactMarkers.find {
-                                        it.destinationHash == hash
-                                    }
+                                    val marker =
+                                        state.contactMarkers.find {
+                                            it.destinationHash == hash
+                                        }
                                     if (marker != null) {
                                         selectedMarker = marker
                                         Log.d("MapScreen", "Marker tapped: ${marker.displayName}")
@@ -334,29 +331,31 @@ fun MapScreen(
                 if (style.getImage(imageId) == null) {
                     val initial = marker.displayName.firstOrNull() ?: '?'
                     val color = MarkerBitmapFactory.hashToColor(marker.destinationHash)
-                    val bitmap = MarkerBitmapFactory.createInitialMarker(
-                        initial = initial,
-                        displayName = marker.displayName,
-                        backgroundColor = color,
-                        density = screenDensity,
-                    )
+                    val bitmap =
+                        MarkerBitmapFactory.createInitialMarker(
+                            initial = initial,
+                            displayName = marker.displayName,
+                            backgroundColor = color,
+                            density = screenDensity,
+                        )
                     style.addImage(imageId, bitmap)
                 }
             }
 
             // Create GeoJSON features from contact markers with state and approximateRadius properties
-            val features = state.contactMarkers.map { marker ->
-                val imageId = "marker-${marker.destinationHash}"
-                Feature.fromGeometry(
-                    Point.fromLngLat(marker.longitude, marker.latitude)
-                ).apply {
-                    addStringProperty("name", marker.displayName)
-                    addStringProperty("hash", marker.destinationHash)
-                    addStringProperty("imageId", imageId) // Pre-computed image ID
-                    addStringProperty("state", marker.state.name) // FRESH, STALE, or EXPIRED_GRACE_PERIOD
-                    addNumberProperty("approximateRadius", marker.approximateRadius) // meters, 0 = precise
+            val features =
+                state.contactMarkers.map { marker ->
+                    val imageId = "marker-${marker.destinationHash}"
+                    Feature.fromGeometry(
+                        Point.fromLngLat(marker.longitude, marker.latitude),
+                    ).apply {
+                        addStringProperty("name", marker.displayName)
+                        addStringProperty("hash", marker.destinationHash)
+                        addStringProperty("imageId", imageId) // Pre-computed image ID
+                        addStringProperty("state", marker.state.name) // FRESH, STALE, or EXPIRED_GRACE_PERIOD
+                        addNumberProperty("approximateRadius", marker.approximateRadius) // meters, 0 = precise
+                    }
                 }
-            }
             val featureCollection = FeatureCollection.fromFeatures(features)
 
             // Update or create the source
@@ -389,29 +388,29 @@ fun MapScreen(
                                 Expression.stop(12, Expression.division(Expression.get("approximateRadius"), Expression.literal(10))),
                                 Expression.stop(15, Expression.division(Expression.get("approximateRadius"), Expression.literal(3))),
                                 Expression.stop(18, Expression.product(Expression.get("approximateRadius"), Expression.literal(0.8))),
-                            )
+                            ),
                         ),
                         // Semi-transparent fill
                         PropertyFactory.circleColor(
-                            Expression.color(android.graphics.Color.parseColor("#FF5722")) // Orange
+                            Expression.color(android.graphics.Color.parseColor("#FF5722")), // Orange
                         ),
                         PropertyFactory.circleOpacity(
-                            Expression.literal(0.15f)
+                            Expression.literal(0.15f),
                         ),
                         // Dashed stroke for the uncertainty boundary
                         PropertyFactory.circleStrokeWidth(
-                            Expression.literal(2f)
+                            Expression.literal(2f),
                         ),
                         PropertyFactory.circleStrokeColor(
-                            Expression.color(android.graphics.Color.parseColor("#FF5722")) // Orange
+                            Expression.color(android.graphics.Color.parseColor("#FF5722")), // Orange
                         ),
                         PropertyFactory.circleStrokeOpacity(
-                            Expression.literal(0.4f)
+                            Expression.literal(0.4f),
                         ),
                     ).withFilter(
                         // Only show for locations with approximateRadius > 0
-                        Expression.gt(Expression.get("approximateRadius"), Expression.literal(0))
-                    )
+                        Expression.gt(Expression.get("approximateRadius"), Expression.literal(0)),
+                    ),
                 )
 
                 // SymbolLayer for custom marker icons (colored circle with initial + name)
@@ -433,10 +432,10 @@ fun MapScreen(
                                 Expression.literal(0.5f),
                                 Expression.literal(MarkerState.EXPIRED_GRACE_PERIOD.name),
                                 Expression.literal(0.4f),
-                                Expression.literal(1.0f) // Default
-                            )
+                                Expression.literal(1.0f), // Default
+                            ),
                         ),
-                    )
+                    ),
                 )
             }
         }
@@ -482,20 +481,24 @@ fun MapScreen(
             SharingStatusChip(
                 sharingWithCount = state.activeSessions.size,
                 onStopAllClick = { viewModel.stopSharing() },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(top = 56.dp), // Below TopAppBar
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(top = 56.dp),
+                // Below TopAppBar
             )
         }
 
         // Scale bar (bottom right, next to My Location button)
         ScaleBar(
             metersPerPixel = metersPerPixel,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = 72.dp, bottom = 172.dp), // Left of My Location button
+            modifier =
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 72.dp, bottom = 172.dp),
+            // Left of My Location button
         )
 
         // FABs positioned above navigation bar
@@ -550,16 +553,18 @@ fun MapScreen(
                     )
                 },
                 text = { Text(if (state.isSharing) "Stop Sharing" else "Share Location") },
-                containerColor = if (state.isSharing) {
-                    MaterialTheme.colorScheme.errorContainer
-                } else {
-                    MaterialTheme.colorScheme.primaryContainer
-                },
-                contentColor = if (state.isSharing) {
-                    MaterialTheme.colorScheme.onErrorContainer
-                } else {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                },
+                containerColor =
+                    if (state.isSharing) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer
+                    },
+                contentColor =
+                    if (state.isSharing) {
+                        MaterialTheme.colorScheme.onErrorContainer
+                    } else {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    },
             )
         }
 
@@ -655,10 +660,12 @@ internal fun EmptyMapStateCard(
     ) {
         Box {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .padding(end = 32.dp), // Leave space for dismiss button
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .padding(end = 32.dp),
+                // Leave space for dismiss button
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
@@ -694,7 +701,6 @@ internal fun EmptyMapStateCard(
         }
     }
 }
-
 
 /**
  * Start location updates using FusedLocationProviderClient.
@@ -761,27 +767,30 @@ private fun ScaleBar(
     val maxMeters = metersPerPixel * maxBarWidthPx
 
     // Nice distance values in meters (up to 10,000 km for very zoomed out views)
-    val niceDistances = listOf(
-        5, 10, 20, 50, 100, 200, 500,
-        1_000, 2_000, 5_000, 10_000, 20_000, 50_000,
-        100_000, 200_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000,
-    )
+    val niceDistances =
+        listOf(
+            5, 10, 20, 50, 100, 200, 500,
+            1_000, 2_000, 5_000, 10_000, 20_000, 50_000,
+            100_000, 200_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000,
+        )
 
     // Find the best nice distance that fits in our range
     // Fall back to the largest distance if zoomed out extremely far
-    val selectedDistance = niceDistances.findLast { it >= minMeters && it <= maxMeters }
-        ?: niceDistances.firstOrNull { it >= minMeters }
-        ?: niceDistances.last()
+    val selectedDistance =
+        niceDistances.findLast { it >= minMeters && it <= maxMeters }
+            ?: niceDistances.firstOrNull { it >= minMeters }
+            ?: niceDistances.last()
 
     // Calculate bar width in pixels
     val barWidthPx = (selectedDistance / metersPerPixel).toFloat()
 
     // Format the distance text
-    val distanceText = when {
-        selectedDistance >= 1_000_000 -> "${selectedDistance / 1_000_000} km"
-        selectedDistance >= 1_000 -> "${selectedDistance / 1_000} km"
-        else -> "$selectedDistance m"
-    }
+    val distanceText =
+        when {
+            selectedDistance >= 1_000_000 -> "${selectedDistance / 1_000_000} km"
+            selectedDistance >= 1_000 -> "${selectedDistance / 1_000} km"
+            else -> "$selectedDistance m"
+        }
 
     // Google Maps style scale bar: |——————| with text
     val barWidth = with(LocalDensity.current) { barWidthPx.toDp() }
@@ -798,40 +807,45 @@ private fun ScaleBar(
             text = distanceText,
             style = MaterialTheme.typography.labelSmall,
             color = lineColor,
-            modifier = Modifier
-                .background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(2.dp))
-                .padding(horizontal = 4.dp, vertical = 1.dp),
+            modifier =
+                Modifier
+                    .background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(2.dp))
+                    .padding(horizontal = 4.dp, vertical = 1.dp),
         )
         Spacer(modifier = Modifier.height(2.dp))
         // Scale bar with end caps: |——————|
         Box(
-            modifier = Modifier
-                .width(barWidth)
-                .height(endCapHeight),
+            modifier =
+                Modifier
+                    .width(barWidth)
+                    .height(endCapHeight),
         ) {
             // Left end cap
             Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .width(lineThickness)
-                    .fillMaxHeight()
-                    .background(lineColor),
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .width(lineThickness)
+                        .fillMaxHeight()
+                        .background(lineColor),
             )
             // Horizontal line
             Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .fillMaxWidth()
-                    .height(lineThickness)
-                    .background(lineColor),
+                modifier =
+                    Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth()
+                        .height(lineThickness)
+                        .background(lineColor),
             )
             // Right end cap
             Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .width(lineThickness)
-                    .fillMaxHeight()
-                    .background(lineColor),
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .width(lineThickness)
+                        .fillMaxHeight()
+                        .background(lineColor),
             )
         }
     }

@@ -42,8 +42,10 @@ data class SettingsState(
     val showQrDialog: Boolean = false,
     // Profile icon settings
     val iconName: String? = null,
-    val iconForegroundColor: String? = null, // Hex RGB e.g., "FFFFFF"
-    val iconBackgroundColor: String? = null, // Hex RGB e.g., "1E88E5"
+    // Hex RGB e.g., "FFFFFF"
+    val iconForegroundColor: String? = null,
+    // Hex RGB e.g., "1E88E5"
+    val iconBackgroundColor: String? = null,
     val selectedTheme: AppTheme = PresetTheme.VIBRANT,
     val customThemes: List<AppTheme> = emptyList(),
     val isRestarting: Boolean = false,
@@ -52,11 +54,15 @@ data class SettingsState(
     val preferOwnInstance: Boolean = false,
     val isSharedInstanceBannerExpanded: Boolean = false,
     val rpcKey: String? = null,
-    val wasUsingSharedInstance: Boolean = false, // True if we were using shared but it went offline
-    val sharedInstanceAvailable: Boolean = false, // True when shared instance becomes newly available (notification)
-    val sharedInstanceOnline: Boolean = false, // True if shared instance is currently reachable (from service query)
+    // True if we were using shared but it went offline
+    val wasUsingSharedInstance: Boolean = false,
+    // True when shared instance becomes newly available (notification)
+    val sharedInstanceAvailable: Boolean = false,
+    // True if shared instance is currently reachable (from service query)
+    val sharedInstanceOnline: Boolean = false,
     // Message delivery state
-    val defaultDeliveryMethod: String = "direct", // "direct" or "propagated"
+    // "direct" or "propagated"
+    val defaultDeliveryMethod: String = "direct",
     val tryPropagationOnFail: Boolean = true,
     val autoSelectPropagationNode: Boolean = true,
     val currentRelayName: String? = null,
@@ -333,7 +339,11 @@ class SettingsViewModel
                             )
                         Log.d(
                             TAG,
-                            "Settings updated: displayName=${newState.displayName}, autoAnnounce=${newState.autoAnnounceEnabled}, interval=${newState.autoAnnounceIntervalMinutes}min, theme=${newState.selectedTheme}, customThemes=${newState.customThemes.size}",
+                            "Settings updated: displayName=${newState.displayName}, " +
+                                "autoAnnounce=${newState.autoAnnounceEnabled}, " +
+                                "interval=${newState.autoAnnounceIntervalMinutes}min, " +
+                                "theme=${newState.selectedTheme}, " +
+                                "customThemes=${newState.customThemes.size}",
                         )
                     }
                 } catch (e: Exception) {

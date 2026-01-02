@@ -15,7 +15,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
-          submodules: recursive
           fetch-depth: 0  # Fetch all history for version tagging
 
       - name: Set up Python
@@ -23,24 +22,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Python build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: false
-
-      - name: Build ble-reticulum wheel
-        run: |
-          cd external/ble-reticulum
-          python -m build --wheel --outdir dist/
-          cd ../..
-          mkdir -p python/wheels
-          cp external/ble-reticulum/dist/*.whl python/wheels/
-          echo "✓ Built ble-reticulum wheel"
 
       - name: Extract version from tag
         id: version

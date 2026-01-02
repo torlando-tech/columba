@@ -22,8 +22,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          submodules: recursive
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -35,24 +33,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Python build dependencies
-        run: pip install build
-
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v3
         continue-on-error: true
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-
-      - name: Build ble-reticulum wheel
-        run: |
-          cd external/ble-reticulum
-          python -m build --wheel --outdir dist/
-          cd ../..
-          mkdir -p python/wheels
-          cp external/ble-reticulum/dist/*.whl python/wheels/
-          echo "✓ Built ble-reticulum wheel"
 
       - name: Build Release APK
         env:

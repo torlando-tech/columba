@@ -105,8 +105,9 @@ class KotlinAudioBridge(
     private var recordFrameSize = 960 // 20ms at 48kHz
 
     // Audio routing
+    // Default to SPEAKER for testing - earpiece may have issues on some Android 16 devices
     @Volatile
-    private var speakerphoneOn = false  // Default to earpiece, user can enable speaker via UI
+    private var speakerphoneOn = true  // Default to speaker for debugging Android 16 issue
 
     @Volatile
     private var microphoneMuted = false
@@ -193,16 +194,41 @@ class KotlinAudioBridge(
 
             audioTrack = trackBuilder.build()
 
+            // Log AudioTrack state
+            val track = audioTrack
+            Log.i(TAG, "📞 AudioTrack created: state=${track?.state} (INITIALIZED=${AudioTrack.STATE_INITIALIZED})")
+            Log.i(TAG, "📞 AudioTrack: sampleRate=${track?.sampleRate}, channelCount=${track?.channelCount}, bufferSize=$bufferSize")
+
             // Set audio mode for voice communication
             // Note: MODE_IN_COMMUNICATION enables earpiece by default
+            val previousMode = audioManager.mode
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-            Log.i(TAG, "📞 Audio mode set to MODE_IN_COMMUNICATION, speakerphoneOn=$speakerphoneOn")
+            Log.i(TAG, "📞 Audio mode: $previousMode -> ${audioManager.mode} (MODE_IN_COMMUNICATION=${AudioManager.MODE_IN_COMMUNICATION})")
 
-            // Apply speaker routing AFTER setting mode
-            audioManager.isSpeakerphoneOn = speakerphoneOn
-            Log.i(TAG, "📞 Speakerphone set to: ${audioManager.isSpeakerphoneOn}")
+            // Log volume levels BEFORE setting speaker
+            val streamVoiceCall = AudioManager.STREAM_VOICE_CALL
+            val currentVol = audioManager.getStreamVolume(streamVoiceCall)
+            val maxVol = audioManager.getStreamMaxVolume(streamVoiceCall)
+            Log.i(TAG, "📞 Voice call volume: $currentVol / $maxVol")
+
+            // Apply audio routing using modern API on Android 12+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                setCommunicationDeviceByType(speakerphoneOn)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.isSpeakerphoneOn = speakerphoneOn
+                Log.i(TAG, "📞 Legacy speakerphone set to: ${audioManager.isSpeakerphoneOn}")
+            }
+
+            // Log available output devices
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val outputs = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                Log.i(TAG, "📞 Available outputs: ${outputs.map { "${it.type}:${it.productName}" }}")
+            }
 
             audioTrack?.play()
+            val playState = audioTrack?.playState
+            Log.i(TAG, "📞 AudioTrack.play() called, playState=$playState (PLAYING=${AudioTrack.PLAYSTATE_PLAYING})")
             isPlaying.set(true)
             Log.i(TAG, "Playback started successfully, speaker=${audioManager.isSpeakerphoneOn}")
         } catch (e: Exception) {
@@ -244,7 +270,8 @@ class KotlinAudioBridge(
             if (hasNonZero) writeNonZeroCount++
 
             if (writeAudioCount % 100L == 1L) {
-                Log.d(TAG, "📞 writeAudio #$writeAudioCount: ${audioData.size} bytes, nonzero=$writeNonZeroCount, hasAudio=$hasNonZero")
+                val trackState = track.playState
+                Log.d(TAG, "📞 writeAudio #$writeAudioCount: ${audioData.size} bytes, nonzero=$writeNonZeroCount, hasAudio=$hasNonZero, trackState=$trackState")
             }
 
             val written =
@@ -255,7 +282,9 @@ class KotlinAudioBridge(
                     AudioTrack.WRITE_BLOCKING,
                 )
             if (written < 0) {
-                Log.w(TAG, "AudioTrack write error: $written")
+                Log.w(TAG, "📞 AudioTrack write error: $written (ERROR_INVALID_OPERATION=${AudioTrack.ERROR_INVALID_OPERATION}, ERROR_BAD_VALUE=${AudioTrack.ERROR_BAD_VALUE})")
+            } else if (writeAudioCount % 100L == 1L) {
+                Log.d(TAG, "📞 writeAudio #$writeAudioCount: wrote $written bytes successfully")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error writing audio", e)
@@ -276,6 +305,12 @@ class KotlinAudioBridge(
             audioTrack?.stop()
             audioTrack?.release()
             audioTrack = null
+
+            // Clear communication device on Android 12+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioManager.clearCommunicationDevice()
+                Log.i(TAG, "📞 Communication device cleared")
+            }
 
             // Reset audio mode
             audioManager.mode = AudioManager.MODE_NORMAL
@@ -334,7 +369,16 @@ class KotlinAudioBridge(
         }
 
         try {
-            // Use MIC source - VOICE_COMMUNICATION seems to cause issues on some Samsung devices
+            // IMPORTANT: Set audio mode BEFORE creating AudioRecord
+            // On Samsung devices, mic routing depends on mode being set first
+            val previousMode = audioManager.mode
+            if (previousMode != AudioManager.MODE_IN_COMMUNICATION) {
+                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                Log.i(TAG, "📞 Pre-recording: Audio mode $previousMode -> ${audioManager.mode}")
+            }
+
+            // Use MIC source - VOICE_COMMUNICATION may not be available on all devices
+            // The key fix is setting MODE_IN_COMMUNICATION before creating AudioRecord
             val audioSource = MediaRecorder.AudioSource.MIC
             Log.i(TAG, "📞 Using audio source: $audioSource (MIC=${MediaRecorder.AudioSource.MIC}, VOICE_COMM=${MediaRecorder.AudioSource.VOICE_COMMUNICATION})")
 
@@ -356,9 +400,36 @@ class KotlinAudioBridge(
                 return
             }
 
+            // On Android 6+, try to set preferred input device to built-in mic
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val inputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+                val builtinMic = inputDevices.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC }
+                if (builtinMic != null) {
+                    val success = audioRecord?.setPreferredDevice(builtinMic)
+                    Log.i(TAG, "📞 Set preferred input device to ${builtinMic.productName}: $success")
+                } else {
+                    Log.w(TAG, "📞 No built-in mic found in ${inputDevices.map { "${it.type}:${it.productName}" }}")
+                }
+            }
+
             audioRecord?.startRecording()
             val recordingState = audioRecord?.recordingState
             Log.i(TAG, "📞 AudioRecord state after startRecording: $recordingState (RECORDSTATE_RECORDING=${AudioRecord.RECORDSTATE_RECORDING})")
+
+            // Log audio routing state for debugging
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val commDevice = audioManager.communicationDevice
+                Log.i(TAG, "📞 Communication device for recording: ${commDevice?.productName} (type=${commDevice?.type})")
+                val availableInputs = audioManager.availableCommunicationDevices.filter { !it.isSink }
+                Log.i(TAG, "📞 Available input devices: ${availableInputs.map { "${it.type}:${it.productName}" }}")
+            }
+
+            // Check and fix mic mute state
+            if (audioManager.isMicrophoneMute) {
+                Log.w(TAG, "📞 System mic was MUTED! Unmuting...")
+                audioManager.isMicrophoneMute = false
+            }
+            Log.i(TAG, "📞 System mic mute: ${audioManager.isMicrophoneMute}, mode: ${audioManager.mode}")
 
             isRecording.set(true)
             recordBuffer.clear()
@@ -520,12 +591,64 @@ class KotlinAudioBridge(
     /**
      * Enable or disable speakerphone.
      *
+     * Uses setCommunicationDevice() on Android 12+ (deprecated setSpeakerphoneOn on older).
+     *
      * @param enabled True for speaker, false for earpiece
      */
+    @Suppress("DEPRECATION")
     fun setSpeakerphoneOn(enabled: Boolean) {
         speakerphoneOn = enabled
-        audioManager.isSpeakerphoneOn = enabled
-        Log.d(TAG, "Speakerphone: $enabled")
+        Log.i(TAG, "📞 setSpeakerphoneOn($enabled)")
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12+: Use modern setCommunicationDevice API
+            setCommunicationDeviceByType(enabled)
+        } else {
+            // Legacy API for older Android versions
+            audioManager.isSpeakerphoneOn = enabled
+            Log.d(TAG, "📞 Legacy speakerphone set: $enabled")
+        }
+    }
+
+    /**
+     * Set communication device by type (Android 12+).
+     *
+     * @param useSpeaker True for speaker, false for earpiece
+     */
+    @android.annotation.SuppressLint("NewApi")
+    private fun setCommunicationDeviceByType(useSpeaker: Boolean) {
+        try {
+            val availableDevices = audioManager.availableCommunicationDevices
+            Log.i(TAG, "📞 Available communication devices: ${availableDevices.map { "${it.type}:${it.productName}" }}")
+
+            val targetType = if (useSpeaker) {
+                AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+            } else {
+                AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+            }
+
+            val targetDevice = availableDevices.find { it.type == targetType }
+
+            if (targetDevice != null) {
+                val success = audioManager.setCommunicationDevice(targetDevice)
+                Log.i(TAG, "📞 setCommunicationDevice(${targetDevice.productName}, type=$targetType): success=$success")
+
+                // Verify the change
+                val currentDevice = audioManager.communicationDevice
+                Log.i(TAG, "📞 Current communication device: ${currentDevice?.productName} (type=${currentDevice?.type})")
+            } else {
+                Log.w(TAG, "📞 Target device type $targetType not found in available devices")
+                // Fall back to legacy API
+                @Suppress("DEPRECATION")
+                audioManager.isSpeakerphoneOn = useSpeaker
+                Log.d(TAG, "📞 Fallback to legacy speakerphone: $useSpeaker")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "📞 Error setting communication device", e)
+            // Fall back to legacy API
+            @Suppress("DEPRECATION")
+            audioManager.isSpeakerphoneOn = useSpeaker
+        }
     }
 
     /**
@@ -553,7 +676,15 @@ class KotlinAudioBridge(
     /**
      * Check if speakerphone is enabled.
      */
-    fun isSpeakerphoneOn(): Boolean = audioManager.isSpeakerphoneOn
+    @Suppress("DEPRECATION")
+    fun isSpeakerphoneOn(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val device = audioManager.communicationDevice
+            device?.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+        } else {
+            audioManager.isSpeakerphoneOn
+        }
+    }
 
     /**
      * Check if microphone is muted.

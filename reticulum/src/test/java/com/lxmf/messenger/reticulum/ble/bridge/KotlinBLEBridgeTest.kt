@@ -467,9 +467,13 @@ class KotlinBLEBridgeTest {
             Class.forName(
                 "com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge\$PeerConnection",
             )
+        val deduplicationStateClass =
+            Class.forName(
+                "com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge\$DeduplicationState",
+            )
 
         // Create instance using constructor
-        // Parameters: address, mtu, isCentral, isPeripheral, identityHash, connectedAt
+        // Parameters: address, mtu, isCentral, isPeripheral, identityHash, connectedAt, rssi, lastActivity, deduplicationState
         val constructor =
             peerConnectionClass.getDeclaredConstructor(
                 String::class.java,
@@ -478,9 +482,13 @@ class KotlinBLEBridgeTest {
                 Boolean::class.java,
                 String::class.java,
                 Long::class.java,
+                Int::class.java,
+                Long::class.java,
+                deduplicationStateClass,
             )
         constructor.isAccessible = true
 
+        val deduplicationStateNone = deduplicationStateClass.enumConstants[0]
         val peer =
             constructor.newInstance(
                 address,
@@ -489,6 +497,9 @@ class KotlinBLEBridgeTest {
                 isPeripheral,
                 identityHash,
                 System.currentTimeMillis(),
+                -100, // rssi
+                System.currentTimeMillis(), // lastActivity
+                deduplicationStateNone,
             )
 
         // Add to connectedPeers map

@@ -333,6 +333,10 @@ class KotlinBLEBridgeMacRotationTest {
             Class.forName(
                 "com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge\$PeerConnection",
             )
+        val deduplicationStateClass =
+            Class.forName(
+                "com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge\$DeduplicationState",
+            )
         val constructor =
             peerConnectionClass.getDeclaredConstructor(
                 String::class.java,
@@ -341,9 +345,13 @@ class KotlinBLEBridgeMacRotationTest {
                 Boolean::class.java,
                 String::class.java,
                 Long::class.java,
+                Int::class.java,
+                Long::class.java,
+                deduplicationStateClass,
             )
         constructor.isAccessible = true
 
+        val deduplicationStateNone = deduplicationStateClass.enumConstants[0]
         val peer =
             constructor.newInstance(
                 address,
@@ -352,6 +360,9 @@ class KotlinBLEBridgeMacRotationTest {
                 isPeripheral,
                 identityHash,
                 System.currentTimeMillis(),
+                -100, // rssi
+                System.currentTimeMillis(), // lastActivity
+                deduplicationStateNone,
             )
 
         val connectedPeersField = KotlinBLEBridge::class.java.getDeclaredField("connectedPeers")

@@ -221,6 +221,9 @@ class CallManager:
 
         Returns:
             dict with "success" and optional "error" keys
+
+        Note: Path discovery is handled internally by LXST's Telephony.call().
+        It will request path if needed and wait up to wait_time (default 70s).
         """
         if not self._initialized or self.telephone is None:
             RNS.log("Cannot call: CallManager not initialized", RNS.LOG_ERROR)
@@ -231,18 +234,18 @@ class CallManager:
 
         try:
             # Convert hex string to bytes
-            dest_hash = bytes.fromhex(destination_hash_hex)
+            identity_hash = bytes.fromhex(destination_hash_hex)
 
             # Recall the identity from Reticulum
-            identity = RNS.Identity.recall(dest_hash)
+            identity = RNS.Identity.recall(identity_hash)
             if identity is None:
-                RNS.log(f"Unknown identity: {destination_hash_hex[:16]}...", RNS.LOG_WARNING)
+                RNS.log(f"📞 Unknown identity: {destination_hash_hex[:16]}...", RNS.LOG_WARNING)
                 return {"success": False, "error": "Unknown identity"}
 
-            # Initiate the call
+            # Initiate the call - LXST handles path discovery internally
             self._active_call_identity = destination_hash_hex
+            RNS.log(f"📞 Initiating call to {destination_hash_hex[:16]}...", RNS.LOG_INFO)
             self.telephone.call(identity, profile=profile)
-            RNS.log(f"Initiating call to {destination_hash_hex[:16]}...", RNS.LOG_INFO)
             return {"success": True}
 
         except ValueError as e:

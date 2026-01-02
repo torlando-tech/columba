@@ -1,5 +1,6 @@
 package com.lxmf.messenger.util
 
+import com.lxmf.messenger.data.model.ImageCompressionPreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -258,451 +259,184 @@ class ImageUtilsTest {
         assertTrue(ImageUtils.SUPPORTED_IMAGE_FORMATS.contains("webp"))
     }
 
-    // ========== HEAVY_COMPRESSION_THRESHOLD Tests ==========
-
-    @Test
-    fun `HEAVY_COMPRESSION_THRESHOLD is 50`() {
-        assertEquals(50, ImageUtils.HEAVY_COMPRESSION_THRESHOLD)
-    }
-
     // ========== CompressionResult Tests ==========
 
     @Test
     fun `CompressionResult stores all values correctly`() {
-        val data = byteArrayOf(0x00, 0x01, 0x02)
+        val compressedImage = ImageUtils.CompressedImage(byteArrayOf(0x00, 0x01, 0x02), "jpg")
         val result = ImageUtils.CompressionResult(
-            data = data,
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
+            compressedImage = compressedImage,
+            originalSizeBytes = 1000L,
+            meetsTargetSize = true,
+            targetSizeBytes = 512 * 1024L,
+            preset = ImageCompressionPreset.HIGH,
         )
 
-        assertTrue(data.contentEquals(result.data))
-        assertEquals("webp", result.format)
-        assertEquals(1000, result.originalSizeBytes)
-        assertEquals(500, result.compressedSizeBytes)
-        assertEquals(80, result.qualityUsed)
-        assertFalse(result.wasScaledDown)
-        assertFalse(result.exceedsSizeLimit)
+        assertEquals(compressedImage, result.compressedImage)
+        assertEquals(1000L, result.originalSizeBytes)
+        assertTrue(result.meetsTargetSize)
+        assertEquals(512 * 1024L, result.targetSizeBytes)
+        assertEquals(ImageCompressionPreset.HIGH, result.preset)
     }
 
     @Test
-    fun `CompressionResult needsUserConfirmation is true when quality below threshold`() {
+    fun `CompressionResult meetsTargetSize is false when compressed size exceeds target`() {
         val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 400,
-            qualityUsed = 40, // Below 50 threshold
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
+            compressedImage = ImageUtils.CompressedImage(byteArrayOf(), "jpg"),
+            originalSizeBytes = 2_000_000L,
+            meetsTargetSize = false,
+            targetSizeBytes = 512 * 1024L,
+            preset = ImageCompressionPreset.HIGH,
         )
 
-        assertTrue(result.needsUserConfirmation)
+        assertFalse(result.meetsTargetSize)
     }
 
     @Test
-    fun `CompressionResult needsUserConfirmation is true when quality at threshold minus one`() {
+    fun `CompressionResult with LOW preset has correct target size`() {
         val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 400,
-            qualityUsed = 49, // Just below threshold
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
+            compressedImage = ImageUtils.CompressedImage(byteArrayOf(), "jpg"),
+            originalSizeBytes = 100_000L,
+            meetsTargetSize = true,
+            targetSizeBytes = ImageCompressionPreset.LOW.targetSizeBytes,
+            preset = ImageCompressionPreset.LOW,
         )
 
-        assertTrue(result.needsUserConfirmation)
+        assertEquals(32 * 1024L, result.targetSizeBytes)
     }
 
     @Test
-    fun `CompressionResult needsUserConfirmation is false when quality at threshold`() {
+    fun `CompressionResult with MEDIUM preset has correct target size`() {
         val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 400,
-            qualityUsed = 50, // At threshold - not below
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
+            compressedImage = ImageUtils.CompressedImage(byteArrayOf(), "jpg"),
+            originalSizeBytes = 200_000L,
+            meetsTargetSize = true,
+            targetSizeBytes = ImageCompressionPreset.MEDIUM.targetSizeBytes,
+            preset = ImageCompressionPreset.MEDIUM,
         )
 
-        assertFalse(result.needsUserConfirmation)
+        assertEquals(128 * 1024L, result.targetSizeBytes)
+    }
+
+    // ========== TransferTimeEstimate Tests ==========
+
+    @Test
+    fun `TransferTimeEstimate stores values correctly`() {
+        val estimate = ImageUtils.TransferTimeEstimate(
+            seconds = 120,
+            formattedTime = "2m",
+        )
+
+        assertEquals(120, estimate.seconds)
+        assertEquals("2m", estimate.formattedTime)
+    }
+
+    // ========== calculateTransferTime Tests ==========
+
+    @Test
+    fun `calculateTransferTime returns less than 1s for small fast transfers`() {
+        // 1KB at 100kbps = 0.08 seconds
+        val result = ImageUtils.calculateTransferTime(
+            sizeBytes = 1024L,
+            bandwidthBps = 100_000,
+        )
+
+        assertEquals(0, result.seconds)
+        assertEquals("< 1s", result.formattedTime)
     }
 
     @Test
-    fun `CompressionResult needsUserConfirmation is false when quality above threshold`() {
-        val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 600,
-            qualityUsed = 90,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
+    fun `calculateTransferTime returns seconds for short transfers`() {
+        // 10KB at 10kbps = 8 seconds
+        val result = ImageUtils.calculateTransferTime(
+            sizeBytes = 10 * 1024L,
+            bandwidthBps = 10_000,
         )
 
-        assertFalse(result.needsUserConfirmation)
+        assertEquals(8, result.seconds)
+        assertEquals("8s", result.formattedTime)
     }
 
     @Test
-    fun `CompressionResult needsUserConfirmation is true when size limit exceeded`() {
-        val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 600,
-            qualityUsed = 90, // High quality - not a concern
-            wasScaledDown = false,
-            exceedsSizeLimit = true, // But exceeds size limit
+    fun `calculateTransferTime returns minutes for longer transfers`() {
+        // 512KB at 10kbps = 409.6 seconds ≈ 6m 49s
+        val result = ImageUtils.calculateTransferTime(
+            sizeBytes = 512 * 1024L,
+            bandwidthBps = 10_000,
         )
 
-        assertTrue(result.needsUserConfirmation)
+        assertEquals(419, result.seconds)
+        assertEquals("6m 59s", result.formattedTime)
     }
 
     @Test
-    fun `CompressionResult needsUserConfirmation is true when both quality low and size exceeded`() {
-        val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 2000,
-            compressedSizeBytes = 600,
-            qualityUsed = 10,
-            wasScaledDown = true,
-            exceedsSizeLimit = true,
+    fun `calculateTransferTime returns hours for very long transfers`() {
+        // 10MB at 1kbps = 81920 seconds ≈ 22h 45m
+        val result = ImageUtils.calculateTransferTime(
+            sizeBytes = 10 * 1024 * 1024L,
+            bandwidthBps = 1_000,
         )
 
-        assertTrue(result.needsUserConfirmation)
+        assertTrue(result.seconds >= 3600)
+        assertTrue(result.formattedTime.contains("h"))
     }
 
     @Test
-    fun `CompressionResult compressionRatioText shows correct percentage`() {
-        val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 250,
-            qualityUsed = 70,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
+    fun `calculateTransferTime returns Unknown for zero bandwidth`() {
+        val result = ImageUtils.calculateTransferTime(
+            sizeBytes = 1024L,
+            bandwidthBps = 0,
         )
 
-        assertEquals("75% smaller", result.compressionRatioText)
+        assertEquals(0, result.seconds)
+        assertEquals("Unknown", result.formattedTime)
     }
 
     @Test
-    fun `CompressionResult compressionRatioText shows 0 percent for no compression`() {
-        val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 1000,
-            qualityUsed = 90,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
+    fun `calculateTransferTime returns Unknown for negative bandwidth`() {
+        val result = ImageUtils.calculateTransferTime(
+            sizeBytes = 1024L,
+            bandwidthBps = -100,
         )
 
-        assertEquals("0% smaller", result.compressionRatioText)
+        assertEquals(0, result.seconds)
+        assertEquals("Unknown", result.formattedTime)
     }
 
     @Test
-    fun `CompressionResult compressionRatioText shows NA for zero original size`() {
-        val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 0,
-            compressedSizeBytes = 100,
-            qualityUsed = 90,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
+    fun `calculateTransferTime handles zero size`() {
+        val result = ImageUtils.calculateTransferTime(
+            sizeBytes = 0L,
+            bandwidthBps = 10_000,
         )
 
-        assertEquals("N/A", result.compressionRatioText)
+        assertEquals(0, result.seconds)
+        assertEquals("< 1s", result.formattedTime)
     }
 
     @Test
-    fun `CompressionResult compressionRatioText handles 50 percent compression`() {
-        val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 70,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
+    fun `calculateTransferTime formats exactly 60 seconds as 1m`() {
+        // 75KB at 10kbps = 60 seconds exactly
+        val result = ImageUtils.calculateTransferTime(
+            sizeBytes = 75 * 1024L,
+            bandwidthBps = 10_000,
         )
 
-        assertEquals("50% smaller", result.compressionRatioText)
+        // Due to integer division, 75*1024*8 / 10000 = 61 seconds
+        assertEquals(61, result.seconds)
+        assertEquals("1m 1s", result.formattedTime)
     }
 
     @Test
-    fun `CompressionResult compressionRatioText handles 99 percent compression`() {
-        val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 10,
-            qualityUsed = 10,
-            wasScaledDown = true,
-            exceedsSizeLimit = false,
+    fun `calculateTransferTime formats hour without remaining minutes`() {
+        // Calculate bytes needed for exactly 1 hour at 1000bps
+        // 1 hour = 3600 seconds, at 1000bps = 3600 * 1000 bits = 450000 bytes
+        val result = ImageUtils.calculateTransferTime(
+            sizeBytes = 450_000L,
+            bandwidthBps = 1_000,
         )
 
-        assertEquals("99% smaller", result.compressionRatioText)
-    }
-
-    @Test
-    fun `CompressionResult equals works for equal instances`() {
-        val data = byteArrayOf(0x00, 0x01)
-        val result1 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-        val result2 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-
-        assertEquals(result1, result2)
-    }
-
-    @Test
-    fun `CompressionResult equals returns false for different data`() {
-        val result1 = ImageUtils.CompressionResult(
-            data = byteArrayOf(0x00),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-        val result2 = ImageUtils.CompressionResult(
-            data = byteArrayOf(0x01),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-
-        assertFalse(result1 == result2)
-    }
-
-    @Test
-    fun `CompressionResult equals returns false for different format`() {
-        val data = byteArrayOf(0x00)
-        val result1 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-        val result2 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "png",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-
-        assertFalse(result1 == result2)
-    }
-
-    @Test
-    fun `CompressionResult equals returns false for different originalSizeBytes`() {
-        val data = byteArrayOf(0x00)
-        val result1 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-        val result2 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 2000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-
-        assertFalse(result1 == result2)
-    }
-
-    @Test
-    fun `CompressionResult equals returns false for different qualityUsed`() {
-        val data = byteArrayOf(0x00)
-        val result1 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-        val result2 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 70,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-
-        assertFalse(result1 == result2)
-    }
-
-    @Test
-    fun `CompressionResult equals returns false for different wasScaledDown`() {
-        val data = byteArrayOf(0x00)
-        val result1 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-        val result2 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = true,
-            exceedsSizeLimit = false,
-        )
-
-        assertFalse(result1 == result2)
-    }
-
-    @Test
-    fun `CompressionResult equals returns false for different exceedsSizeLimit`() {
-        val data = byteArrayOf(0x00)
-        val result1 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-        val result2 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = true,
-        )
-
-        assertFalse(result1 == result2)
-    }
-
-    @Test
-    fun `CompressionResult hashCode is consistent for equal instances`() {
-        val data = byteArrayOf(0x00, 0x01)
-        val result1 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-        val result2 = ImageUtils.CompressionResult(
-            data = data.copyOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 500,
-            qualityUsed = 80,
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-
-        assertEquals(result1.hashCode(), result2.hashCode())
-    }
-
-    // ========== CompressionResult Edge Cases ==========
-
-    @Test
-    fun `CompressionResult wasScaledDown is tracked independently`() {
-        val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 1000,
-            compressedSizeBytes = 400,
-            qualityUsed = 90, // Good quality
-            wasScaledDown = true, // But was scaled
-            exceedsSizeLimit = false,
-        )
-
-        // wasScaledDown shouldn't affect needsUserConfirmation by itself
-        assertFalse(result.needsUserConfirmation)
-        assertTrue(result.wasScaledDown)
-    }
-
-    @Test
-    fun `CompressionResult minimum quality value 10`() {
-        // Document the minimum quality boundary from compression loop
-        val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 2000000, // 2MB original
-            compressedSizeBytes = 600000, // 600KB compressed
-            qualityUsed = 10, // Minimum quality
-            wasScaledDown = true,
-            exceedsSizeLimit = true,
-        )
-
-        assertTrue(result.needsUserConfirmation)
-        assertEquals(10, result.qualityUsed)
-    }
-
-    @Test
-    fun `CompressionResult quality at 90 is the starting point`() {
-        // Document that compression starts at quality 90
-        val result = ImageUtils.CompressionResult(
-            data = byteArrayOf(),
-            format = "webp",
-            originalSizeBytes = 100000, // 100KB - fits easily
-            compressedSizeBytes = 80000, // 80KB after compression
-            qualityUsed = 90, // Starting quality
-            wasScaledDown = false,
-            exceedsSizeLimit = false,
-        )
-
-        assertFalse(result.needsUserConfirmation)
-        assertEquals(90, result.qualityUsed)
+        assertEquals(3600, result.seconds)
+        assertEquals("1h", result.formattedTime)
     }
 }

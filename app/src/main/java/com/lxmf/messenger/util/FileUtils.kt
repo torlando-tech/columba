@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import android.util.Log
 import java.io.File
 import androidx.compose.material.icons.Icons
+import java.util.Locale
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FolderZip
@@ -13,7 +14,6 @@ import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.ui.graphics.vector.ImageVector
-import java.util.Locale
 
 /**
  * Utilities for handling file attachments in LXMF messages.
@@ -29,6 +29,11 @@ object FileUtils {
      * Same limit as images for mesh network efficiency.
      */
     const val MAX_TOTAL_ATTACHMENT_SIZE = 512 * 1024 // 512KB
+
+    /**
+     * Maximum size for a single file attachment.
+     */
+    const val MAX_SINGLE_FILE_SIZE = 512 * 1024 // 512KB
 
     /**
      * Read file data from a content URI.

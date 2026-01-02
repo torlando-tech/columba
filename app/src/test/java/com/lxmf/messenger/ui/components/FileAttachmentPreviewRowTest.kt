@@ -108,7 +108,7 @@ class FileAttachmentPreviewRowTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Total: 100.0 KB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("100.0 KB / 512.0 KB").assertIsDisplayed()
     }
 
     @Test
@@ -123,11 +123,11 @@ class FileAttachmentPreviewRowTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Total: 512 B").assertIsDisplayed()
+        composeTestRule.onNodeWithText("512 B / 512.0 KB").assertIsDisplayed()
     }
 
     @Test
-    fun `total size indicator shows correct size`() {
+    fun `total size indicator shows correct max size`() {
         val attachments = listOf(createAttachment(sizeBytes = 1024))
 
         composeTestRule.setContent {
@@ -138,13 +138,17 @@ class FileAttachmentPreviewRowTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Total: 1.0 KB").assertIsDisplayed()
+        // Verify max size is displayed (512 KB)
+        val expectedMax = FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)
+        composeTestRule.onNodeWithText("1.0 KB / $expectedMax").assertIsDisplayed()
     }
 
+    // ========== Size Limit Visual Feedback Tests ==========
+
     @Test
-    fun `displays total size for large files`() {
-        // 1 MB file
-        val totalSize = 1024 * 1024
+    fun `normal state below 80 percent limit`() {
+        // 50% of limit = 256 KB
+        val totalSize = (FileUtils.MAX_TOTAL_ATTACHMENT_SIZE * 0.5).toInt()
         val attachments = listOf(createAttachment(sizeBytes = totalSize))
 
         composeTestRule.setContent {
@@ -361,7 +365,7 @@ class FileAttachmentPreviewRowTest {
         }
 
         // Should display total size indicator even with no attachments
-        composeTestRule.onNodeWithText("Total: 0 B").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0 B / 512.0 KB").assertIsDisplayed()
     }
 
     @Test
@@ -471,7 +475,7 @@ class FileAttachmentPreviewRowTest {
         composeTestRule.onNodeWithText("report.pdf").assertIsDisplayed()
         composeTestRule.onNodeWithText("75.0 KB").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Remove report.pdf").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Total: 75.0 KB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("75.0 KB / 512.0 KB").assertIsDisplayed()
 
         // Verify remove works
         composeTestRule.onNodeWithContentDescription("Remove report.pdf").performClick()

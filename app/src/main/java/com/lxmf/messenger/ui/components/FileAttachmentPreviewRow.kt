@@ -35,7 +35,8 @@ import com.lxmf.messenger.util.FileUtils
  * - Truncated filename
  * - Remove (X) button
  *
- * Also displays a total size indicator at the end of the row.
+ * Also displays a total size indicator at the end of the row with visual feedback
+ * when approaching or exceeding the maximum attachment size limit.
  *
  * @param attachments List of pending file attachments to display
  * @param totalSizeBytes Combined size of all attachments in bytes
@@ -50,6 +51,11 @@ fun FileAttachmentPreviewRow(
     onRemove: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Calculate size limit percentage for visual feedback
+    val sizePercentage = totalSizeBytes.toFloat() / FileUtils.MAX_TOTAL_ATTACHMENT_SIZE
+    val isNearLimit = sizePercentage >= 0.8f
+    val isAtLimit = sizePercentage >= 1.0f
+
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.surface,
@@ -82,6 +88,9 @@ fun FileAttachmentPreviewRow(
                 // Total size indicator
                 TotalSizeIndicator(
                     totalSizeBytes = totalSizeBytes,
+                    maxSizeBytes = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE,
+                    isNearLimit = isNearLimit,
+                    isAtLimit = isAtLimit,
                 )
             }
         }
@@ -154,24 +163,41 @@ private fun FileAttachmentChip(
 }
 
 /**
- * Total size indicator showing the combined size of all attachments.
+ * Total size indicator showing current usage vs. maximum limit.
  */
 @Suppress("FunctionNaming")
 @Composable
 private fun TotalSizeIndicator(
     totalSizeBytes: Int,
+    maxSizeBytes: Int,
+    isNearLimit: Boolean,
+    isAtLimit: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val textColor =
+        when {
+            isAtLimit -> MaterialTheme.colorScheme.error
+            isNearLimit -> MaterialTheme.colorScheme.tertiary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
+    val backgroundColor =
+        when {
+            isAtLimit -> MaterialTheme.colorScheme.errorContainer
+            isNearLimit -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+            else -> MaterialTheme.colorScheme.surfaceContainerHigh
+        }
+
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = backgroundColor,
     ) {
         Text(
-            text = "Total: ${FileUtils.formatFileSize(totalSizeBytes)}",
+            text = "${FileUtils.formatFileSize(totalSizeBytes)} / ${FileUtils.formatFileSize(maxSizeBytes)}",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = textColor,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         )
     }
@@ -213,10 +239,24 @@ private fun FileAttachmentPreviewRowPreview() {
             )
 
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            // Multiple files - 160 KB
+            // Normal state - 160 KB
             FileAttachmentPreviewRow(
                 attachments = sampleAttachments,
                 totalSizeBytes = 160 * 1024,
+                onRemove = {},
+            )
+
+            // Near limit state - 410 KB (~80%)
+            FileAttachmentPreviewRow(
+                attachments = sampleAttachments,
+                totalSizeBytes = 410 * 1024,
+                onRemove = {},
+            )
+
+            // At limit state - 520 KB (over limit)
+            FileAttachmentPreviewRow(
+                attachments = sampleAttachments,
+                totalSizeBytes = 520 * 1024,
                 onRemove = {},
             )
 

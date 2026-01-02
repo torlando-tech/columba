@@ -959,6 +959,26 @@ class MessagingViewModel
         fun addFileAttachment(attachment: FileAttachment) {
             viewModelScope.launch {
                 val currentFiles = _selectedFileAttachments.value
+                val currentTotal = currentFiles.sumOf { it.sizeBytes }
+
+                // Check if adding this file would exceed the limit
+                if (FileUtils.wouldExceedSizeLimit(currentTotal, attachment.sizeBytes)) {
+                    Log.w(TAG, "File attachment rejected: would exceed size limit")
+                    _fileAttachmentError.emit(
+                        "File too large. Total attachments cannot exceed ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
+                    )
+                    return@launch
+                }
+
+                // Check single file size
+                if (attachment.sizeBytes > FileUtils.MAX_SINGLE_FILE_SIZE) {
+                    Log.w(TAG, "File attachment rejected: exceeds single file size limit")
+                    _fileAttachmentError.emit(
+                        "File too large. Maximum size is ${FileUtils.formatFileSize(FileUtils.MAX_SINGLE_FILE_SIZE)}",
+                    )
+                    return@launch
+                }
+
                 _selectedFileAttachments.value = currentFiles + attachment
                 Log.d(TAG, "Added file attachment: ${attachment.filename} (${attachment.sizeBytes} bytes)")
             }

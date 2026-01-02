@@ -189,7 +189,7 @@ class ReticulumService : Service() {
         if (::managers.isInitialized) {
             managers.networkChangeManager.stop()
             managers.healthCheckManager.stop()
-            managers.pollingManager.stopAll()
+            managers.eventHandler.stopAll()
             managers.lockManager.releaseAll()
             managers.broadcaster.kill()
         }

@@ -77,6 +77,7 @@ class MessageCollectorTest {
         coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
         coEvery { conversationRepository.getConversation(any()) } returns null
         coEvery { conversationRepository.updatePeerName(any(), any()) } just Runs
+        coEvery { conversationRepository.getMessageById(any()) } returns null // For de-duplication check
 
         // Mock announce repository
         coEvery { announceRepository.getAnnounce(any()) } returns null
@@ -145,6 +146,7 @@ class MessageCollectorTest {
     fun `processMessage without publicKey uses database fallback`() =
         runBlocking {
             // Given: A message without public key, but database has public key
+            // No public key in message
             val testMessage =
                 ReceivedMessage(
                     messageHash = "test_message_456",
@@ -153,7 +155,7 @@ class MessageCollectorTest {
                     destinationHash = testDestHash,
                     timestamp = System.currentTimeMillis(),
                     fieldsJson = null,
-                    publicKey = null, // No public key in message
+                    publicKey = null,
                 )
 
             val databasePublicKey = ByteArray(64) { (it + 100).toByte() }
@@ -196,6 +198,7 @@ class MessageCollectorTest {
     fun `processMessage without publicKey passes null when database also has no key`() =
         runBlocking {
             // Given: A message without public key and database also has no key
+            // No public key in message
             val testMessage =
                 ReceivedMessage(
                     messageHash = "test_message_789",
@@ -204,7 +207,7 @@ class MessageCollectorTest {
                     destinationHash = testDestHash,
                     timestamp = System.currentTimeMillis(),
                     fieldsJson = null,
-                    publicKey = null, // No public key in message
+                    publicKey = null,
                 )
 
             coEvery { conversationRepository.getPeerPublicKey(testSourceHashHex) } returns null
@@ -229,6 +232,233 @@ class MessageCollectorTest {
                     message = any(),
                     peerPublicKey = null,
                 )
+            }
+        }
+
+    // ========== De-duplication Tests ==========
+
+    @Test
+    fun `processMessage skips duplicate message already in database`() =
+        runBlocking {
+            // Given: A message that already exists in the database
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "existing_message",
+                    content = "Already exists",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            // Message already exists in database (persisted by service)
+            coEvery { conversationRepository.getMessageById("existing_message") } returns mockk()
+
+            // When: Start collecting
+            messageCollector.startCollecting()
+
+            // Wait for collector to be ready
+            kotlinx.coroutines.delay(50)
+
+            // Emit message
+            messageFlow.emit(testMessage)
+
+            // Wait for processing
+            kotlinx.coroutines.delay(200)
+
+            // Then: saveMessage should NOT be called (duplicate skipped)
+            coVerify(exactly = 0) {
+                conversationRepository.saveMessage(
+                    peerHash = any(),
+                    peerName = any(),
+                    message = any(),
+                    peerPublicKey = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `processMessage skips in-memory duplicate`() =
+        runBlocking {
+            // Given: A message that we've already processed
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "duplicate_message",
+                    content = "Hello world",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            coEvery { conversationRepository.getMessageById(any()) } returns null
+
+            // When: Start collecting and emit the same message twice
+            messageCollector.startCollecting()
+            kotlinx.coroutines.delay(50)
+
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // First message should be saved
+            coVerify(exactly = 1, timeout = 2000) {
+                conversationRepository.saveMessage(
+                    peerHash = testSourceHashHex,
+                    peerName = any(),
+                    message = any(),
+                    peerPublicKey = any(),
+                )
+            }
+
+            // Emit the same message again
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // Second message should be skipped (in-memory cache)
+            coVerify(exactly = 1, timeout = 2000) {
+                conversationRepository.saveMessage(
+                    peerHash = testSourceHashHex,
+                    peerName = any(),
+                    message = any(),
+                    peerPublicKey = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `processMessage skips message for wrong identity`() =
+        runBlocking {
+            // Given: A message sent to a different identity
+            val wrongDestHash = ByteArray(16) { (it + 100).toByte() }
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "wrong_dest_message",
+                    content = "Wrong destination",
+                    sourceHash = testSourceHash,
+                    destinationHash = wrongDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            // When: Start collecting
+            messageCollector.startCollecting()
+            kotlinx.coroutines.delay(50)
+
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // Then: Message should NOT be saved (wrong identity)
+            coVerify(exactly = 0) {
+                conversationRepository.saveMessage(
+                    peerHash = any(),
+                    peerName = any(),
+                    message = any(),
+                    peerPublicKey = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `processMessage skips when no active identity`() =
+        runBlocking {
+            // Given: No active identity
+            coEvery { identityRepository.getActiveIdentitySync() } returns null
+
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "no_identity_message",
+                    content = "Hello",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            // When: Start collecting
+            messageCollector.startCollecting()
+            kotlinx.coroutines.delay(50)
+
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // Then: Message should NOT be saved
+            coVerify(exactly = 0) {
+                conversationRepository.saveMessage(
+                    peerHash = any(),
+                    peerName = any(),
+                    message = any(),
+                    peerPublicKey = any(),
+                )
+            }
+        }
+
+    // ========== Lifecycle Tests ==========
+
+    @Test
+    fun `stopCollecting clears caches`() =
+        runBlocking {
+            // Given: Start collecting
+            messageCollector.startCollecting()
+            kotlinx.coroutines.delay(50)
+
+            // When: Stop collecting
+            messageCollector.stopCollecting()
+
+            // Then: getStats should show cleared state
+            val stats = messageCollector.getStats()
+            assert(stats.contains("Known peers: 0"))
+        }
+
+    @Test
+    fun `startCollecting is idempotent`() =
+        runBlocking {
+            // Given: Already started
+            messageCollector.startCollecting()
+
+            // When: Start again
+            messageCollector.startCollecting()
+
+            // Then: No exception, single collection running
+            // This is primarily testing no crash occurs
+        }
+
+    // ========== Peer Name Tests ==========
+
+    @Test
+    fun `updatePeerName caches peer name`() =
+        runBlocking {
+            val peerHash = "test_peer_hash"
+
+            // When
+            messageCollector.updatePeerName(peerHash, "New Name")
+
+            // Wait for database update
+            kotlinx.coroutines.delay(100)
+
+            // Then: Database should be updated
+            coVerify(timeout = 1000) {
+                conversationRepository.updatePeerName(peerHash, "New Name")
+            }
+        }
+
+    @Test
+    fun `updatePeerName ignores blank names`() =
+        runBlocking {
+            val peerHash = "test_peer_hash"
+
+            // When
+            messageCollector.updatePeerName(peerHash, "")
+
+            // Wait
+            kotlinx.coroutines.delay(100)
+
+            // Then: Database should NOT be updated
+            coVerify(exactly = 0) {
+                conversationRepository.updatePeerName(any(), any())
             }
         }
 }

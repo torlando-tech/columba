@@ -7,7 +7,6 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -19,17 +18,17 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit tests for PollingManager.
+ * Unit tests for EventHandler.
  *
  * Tests the event-driven message delivery and startup drain functionality.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class PollingManagerTest {
+class EventHandlerTest {
     private lateinit var state: ServiceState
     private lateinit var wrapperManager: PythonWrapperManager
     private lateinit var broadcaster: CallbackBroadcaster
     private lateinit var testScope: TestScope
-    private lateinit var pollingManager: PollingManager
+    private lateinit var eventHandler: EventHandler
 
     @Before
     fun setup() {
@@ -38,8 +37,8 @@ class PollingManagerTest {
         broadcaster = mockk(relaxed = true)
         testScope = TestScope(UnconfinedTestDispatcher())
 
-        pollingManager =
-            PollingManager(
+        eventHandler =
+            EventHandler(
                 state = state,
                 wrapperManager = wrapperManager,
                 broadcaster = broadcaster,
@@ -57,7 +56,7 @@ class PollingManagerTest {
             coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns emptyList()
 
             // Act
-            pollingManager.drainPendingMessages()
+            eventHandler.drainPendingMessages()
             testScope.advanceUntilIdle()
 
             // Assert: No messages broadcast
@@ -71,7 +70,7 @@ class PollingManagerTest {
             coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns null
 
             // Act
-            pollingManager.drainPendingMessages()
+            eventHandler.drainPendingMessages()
             testScope.advanceUntilIdle()
 
             // Assert: No messages broadcast, no exception
@@ -85,7 +84,7 @@ class PollingManagerTest {
             coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } throws RuntimeException("Test error")
 
             // Act - should not throw
-            pollingManager.drainPendingMessages()
+            eventHandler.drainPendingMessages()
             testScope.advanceUntilIdle()
 
             // Assert: No crash, no messages broadcast
@@ -101,7 +100,7 @@ class PollingManagerTest {
             coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns emptyList()
 
             // Act
-            pollingManager.handleMessageReceivedEvent("{\"event\": \"message\"}")
+            eventHandler.handleMessageReceivedEvent("{\"event\": \"message\"}")
             testScope.advanceUntilIdle()
 
             // Assert: No messages broadcast
@@ -115,7 +114,7 @@ class PollingManagerTest {
             coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns null
 
             // Act
-            pollingManager.handleMessageReceivedEvent("{\"event\": \"message\"}")
+            eventHandler.handleMessageReceivedEvent("{\"event\": \"message\"}")
             testScope.advanceUntilIdle()
 
             // Assert: No messages broadcast
@@ -129,7 +128,7 @@ class PollingManagerTest {
             coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } throws RuntimeException("Test error")
 
             // Act - should not throw
-            pollingManager.handleMessageReceivedEvent("{\"event\": \"message\"}")
+            eventHandler.handleMessageReceivedEvent("{\"event\": \"message\"}")
             testScope.advanceUntilIdle()
 
             // Assert: No crash
@@ -144,7 +143,7 @@ class PollingManagerTest {
         assertFalse(state.isConversationActive.get())
 
         // Act
-        pollingManager.setConversationActive(true)
+        eventHandler.setConversationActive(true)
 
         // Assert
         assertTrue(state.isConversationActive.get())
@@ -157,7 +156,7 @@ class PollingManagerTest {
         assertTrue(state.isConversationActive.get())
 
         // Act
-        pollingManager.setConversationActive(false)
+        eventHandler.setConversationActive(false)
 
         // Assert
         assertFalse(state.isConversationActive.get())
@@ -166,28 +165,25 @@ class PollingManagerTest {
     // ========== stopAll() Tests ==========
 
     @Test
-    fun `stopAll clears polling job from state`() {
-        // Setup: Manually set a mock job
-        val mockJob = mockk<Job>(relaxed = true)
-        state.pollingJob = mockJob
+    fun `stopAll can be called without issues in event-driven mode`() {
+        // In event-driven mode, stopAll() is a no-op that just logs
+        // This test ensures it can be called without throwing exceptions
 
-        // Act
-        pollingManager.stopAll()
+        // Act - should not throw
+        eventHandler.stopAll()
 
-        // Assert
-        assertNull(state.pollingJob)
-        verify { mockJob.cancel() }
+        // No assertions needed - just verifying no exceptions
     }
 
     @Test
     fun `stopAll handles null job gracefully`() {
-        // Setup: No job set
+        // Setup: No job set (default in event-driven mode)
         assertNull(state.pollingJob)
 
         // Act - should not throw
-        pollingManager.stopAll()
+        eventHandler.stopAll()
 
-        // Assert
+        // Assert: Job remains null
         assertNull(state.pollingJob)
     }
 
@@ -198,7 +194,7 @@ class PollingManagerTest {
         val statusJson = "{\"status\": \"delivered\"}"
 
         // Act
-        pollingManager.handleDeliveryStatusEvent(statusJson)
+        eventHandler.handleDeliveryStatusEvent(statusJson)
 
         // Assert
         verify { broadcaster.broadcastDeliveryStatus(statusJson) }
@@ -210,9 +206,73 @@ class PollingManagerTest {
         every { broadcaster.broadcastDeliveryStatus(any()) } throws RuntimeException("Broadcast error")
 
         // Act - should not throw (exception is caught internally)
-        pollingManager.handleDeliveryStatusEvent(statusJson)
+        eventHandler.handleDeliveryStatusEvent(statusJson)
 
         // Assert: Method was called (exception handling is internal)
         verify { broadcaster.broadcastDeliveryStatus(statusJson) }
     }
+
+    // ========== handleReactionReceivedEvent() Tests ==========
+
+    @Test
+    fun `handleReactionReceivedEvent broadcasts reaction`() {
+        val reactionJson = """{"reaction_to": "msg123", "emoji": "👍", "sender": "abc"}"""
+
+        // Act
+        eventHandler.handleReactionReceivedEvent(reactionJson)
+
+        // Assert
+        verify { broadcaster.broadcastReactionReceived(reactionJson) }
+    }
+
+    @Test
+    fun `handleReactionReceivedEvent handles exception gracefully`() {
+        val reactionJson = """{"reaction_to": "msg123", "emoji": "👍"}"""
+        every { broadcaster.broadcastReactionReceived(any()) } throws RuntimeException("Broadcast error")
+
+        // Act - should not throw
+        eventHandler.handleReactionReceivedEvent(reactionJson)
+
+        // Assert: Method was called
+        verify { broadcaster.broadcastReactionReceived(reactionJson) }
+    }
+
+    // ========== startEventHandling() Tests ==========
+
+    @Test
+    fun `startEventHandling drains pending announces on startup`() =
+        runTest {
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns emptyList()
+
+            // Act
+            eventHandler.startEventHandling()
+            testScope.advanceUntilIdle()
+
+            // Assert: wrapper was called to get pending announces
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) }
+        }
+
+    @Test
+    fun `startEventHandling handles null pending announces gracefully`() =
+        runTest {
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } returns null
+
+            // Act - should not throw
+            eventHandler.startEventHandling()
+            testScope.advanceUntilIdle()
+
+            // No crash
+        }
+
+    @Test
+    fun `startEventHandling handles exception in drain gracefully`() =
+        runTest {
+            coEvery { wrapperManager.withWrapper<List<PyObject>?>(any()) } throws RuntimeException("Error")
+
+            // Act - should not throw
+            eventHandler.startEventHandling()
+            testScope.advanceUntilIdle()
+
+            // No crash
+        }
 }

@@ -2,32 +2,37 @@ package com.lxmf.messenger.service.manager
 
 import android.util.Log
 import com.chaquo.python.PyObject
-import com.lxmf.messenger.reticulum.util.SmartPoller
+import com.lxmf.messenger.data.model.InterfaceType
+import com.lxmf.messenger.reticulum.model.NodeType
+import com.lxmf.messenger.reticulum.protocol.NodeTypeDetector
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
+import com.lxmf.messenger.service.persistence.ServicePersistenceManager
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
- * Manages polling for announces and event-driven message delivery.
+ * Handles event-driven announce and message delivery with service-side persistence.
+ *
+ * Both announces and messages are handled via Python callbacks and persisted
+ * directly to the database in the service process. This ensures data survives
+ * even when the app process is killed by Android.
  *
  * Message delivery is 100% event-driven via Python callbacks.
  * A one-time startup drain catches any messages that arrived before callback registration.
- * Announce polling uses adaptive intervals (2-10s).
  */
-class PollingManager(
+class EventHandler(
     private val state: ServiceState,
     private val wrapperManager: PythonWrapperManager,
     private val broadcaster: CallbackBroadcaster,
     private val scope: CoroutineScope,
     private val attachmentStorage: AttachmentStorageManager? = null,
+    private val persistenceManager: ServicePersistenceManager? = null,
 ) {
     companion object {
-        private const val TAG = "PollingManager"
+        private const val TAG = "EventHandler"
 
         /**
          * Helper to convert ByteArray to Base64 string.
@@ -48,63 +53,40 @@ class PollingManager(
         }
     }
 
-    // Smart poller for adaptive announce polling
-    private val announcesPoller =
-        SmartPoller(
-            minInterval = 2_000, // 2s when active
-            maxInterval = 10_000, // 10s max (reduced from 30s for better responsiveness)
-        )
-
-    // Mutex for thread-safe job start/stop operations
-    private val jobLock = Any()
-
     /**
-     * Start announce polling.
-     * Thread-safe: synchronized on jobLock.
+     * Start event handling.
+     *
+     * Announces are now 100% event-driven via Python callbacks and handleAnnounceEvent().
+     * This method performs a one-time drain of any pending announces that arrived
+     * before the callback was registered.
      */
-    fun startAnnouncesPolling() {
-        synchronized(jobLock) {
-            state.pollingJob?.cancel()
-            state.pollingJob =
-                scope.launch {
-                    Log.d(TAG, "Started announces polling with callback-based announce queue")
-                    announcesPoller.reset()
+    fun startEventHandling() {
+        Log.d(TAG, "Announce handling started - using event-driven callbacks (polling disabled)")
 
-                    while (isActive) {
-                        try {
-                            if (state.wrapper == null) {
-                                announcesPoller.markIdle()
-                                delay(announcesPoller.getNextInterval())
-                                continue
-                            }
+        // One-time drain of pending announces from startup
+        scope.launch {
+            try {
+                Log.d(TAG, "Draining pending announces from startup queue...")
 
-                            val announces =
-                                wrapperManager.withWrapper { wrapper ->
-                                    wrapper.callAttr("get_pending_announces")?.asList()
-                                }
-
-                            if (announces != null && announces.isNotEmpty()) {
-                                Log.i(TAG, "Polled ${announces.size} new announces from callback queue!")
-                                announcesPoller.markActive()
-
-                                for (announceObj in announces) {
-                                    handleAnnounceEvent(announceObj as PyObject)
-                                }
-                            } else {
-                                announcesPoller.markIdle()
-                            }
-                        } catch (e: CancellationException) {
-                            Log.d(TAG, "Announces polling cancelled")
-                            throw e
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error polling announces", e)
-                        }
-
-                        val nextInterval = announcesPoller.getNextInterval()
-                        Log.d(TAG, "Next announce check in ${nextInterval}ms")
-                        delay(nextInterval)
+                val announces =
+                    wrapperManager.withWrapper { wrapper ->
+                        wrapper.callAttr("get_pending_announces")?.asList()
                     }
+
+                if (announces != null && announces.isNotEmpty()) {
+                    Log.i(TAG, "Startup drain found ${announces.size} pending announce(s)")
+                    for (announceObj in announces) {
+                        handleAnnounceEvent(announceObj as PyObject)
+                    }
+                } else {
+                    Log.d(TAG, "No pending announces in startup queue")
                 }
+            } catch (e: CancellationException) {
+                Log.d(TAG, "Announce drain cancelled")
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Error draining pending announces", e)
+            }
         }
     }
 
@@ -140,15 +122,11 @@ class PollingManager(
     }
 
     /**
-     * Stop announce polling.
-     * Thread-safe: synchronized on jobLock.
+     * Stop all polling operations.
+     * Note: With event-driven architecture, there's no continuous polling to stop.
      */
     fun stopAll() {
-        synchronized(jobLock) {
-            state.pollingJob?.cancel()
-            state.pollingJob = null
-            Log.d(TAG, "Announce polling stopped")
-        }
+        Log.d(TAG, "PollingManager stopped (event-driven mode)")
     }
 
     /**
@@ -231,8 +209,10 @@ class PollingManager(
 
     /**
      * Handle incoming announce event.
+     *
+     * Persists to database first (survives app process death), then broadcasts for UI updates.
      */
-    @Suppress("CyclomaticComplexMethod")
+    @Suppress("CyclomaticComplexMethod", "LongMethod")
     fun handleAnnounceEvent(event: PyObject) {
         try {
             Log.d(TAG, "handleAnnounceEvent() called - processing announce from Python")
@@ -243,16 +223,52 @@ class PollingManager(
             val appData = event.getDictValue("app_data")?.toJava(ByteArray::class.java) as? ByteArray
             val hops = event.getDictValue("hops")?.toInt() ?: 0
             val timestamp = event.getDictValue("timestamp")?.toLong() ?: System.currentTimeMillis()
-            val aspect = event.getDictValue("aspect")?.toString()
-            val receivingInterface = event.getDictValue("interface")?.toString()
+            val aspect = event.getDictValue("aspect")?.toString()?.takeIf { it != "None" }
+            val receivingInterface = event.getDictValue("interface")?.toString()?.takeIf { it != "None" }
             val displayName = event.getDictValue("display_name")?.toString()?.takeIf { it != "None" }
             val stampCost = event.getDictValue("stamp_cost").toIntOrNull()
             val stampCostFlexibility = event.getDictValue("stamp_cost_flexibility").toIntOrNull()
             val peeringCost = event.getDictValue("peering_cost").toIntOrNull()
 
-            Log.i(TAG, "  Hash: ${destinationHash?.take(8)?.joinToString("") { "%02x".format(it) }}")
+            val destinationHashHex = destinationHash?.joinToString("") { "%02x".format(it) } ?: return
+            Log.i(TAG, "  Hash: ${destinationHashHex.take(16)}")
             Log.i(TAG, "  Hops: $hops, Interface: $receivingInterface, Aspect: $aspect")
 
+            // Detect node type from aspect and app_data
+            val nodeType = NodeTypeDetector.detectNodeType(appData, aspect)
+
+            // Determine display name (prefer parsed name, fall back to identity hash)
+            val peerName = displayName
+                ?: appData?.let { String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 } }
+                ?: "Peer ${destinationHashHex.take(8).uppercase()}"
+
+            // Persist to database first (survives app process death)
+            if (persistenceManager != null && publicKey != null) {
+                persistenceManager.persistAnnounce(
+                    destinationHash = destinationHashHex,
+                    peerName = peerName,
+                    publicKey = publicKey,
+                    appData = appData,
+                    hops = hops,
+                    timestamp = timestamp,
+                    nodeType = nodeType.name,
+                    receivingInterface = receivingInterface,
+                    receivingInterfaceType = InterfaceType.fromInterfaceName(receivingInterface).name,
+                    aspect = aspect,
+                    stampCost = stampCost,
+                    stampCostFlexibility = stampCostFlexibility,
+                    peeringCost = peeringCost,
+                    iconName = null, // Icon appearance updated via message field 4
+                    iconForegroundColor = null,
+                    iconBackgroundColor = null,
+                )
+
+                // Also persist peer identity (public key)
+                persistenceManager.persistPeerIdentity(destinationHashHex, publicKey)
+                Log.d(TAG, "Announce persisted to database: $peerName ($destinationHashHex)")
+            }
+
+            // Broadcast to app process for UI updates (may be dead, that's OK)
             val announceJson =
                 JSONObject().apply {
                     put("destination_hash", destinationHash.toBase64())
@@ -264,7 +280,7 @@ class PollingManager(
                     if (aspect != null) {
                         put("aspect", aspect)
                     }
-                    if (receivingInterface != null && receivingInterface != "None") {
+                    if (receivingInterface != null) {
                         put("interface", receivingInterface)
                     }
                     if (displayName != null) {
@@ -290,6 +306,8 @@ class PollingManager(
 
     /**
      * Handle incoming message event.
+     *
+     * Persists to database first (survives app process death), then broadcasts for UI updates.
      */
     private fun handleMessageEvent(event: PyObject) {
         try {
@@ -320,6 +338,30 @@ class PollingManager(
             // to avoid AIDL TransactionTooLargeException (~1MB limit)
             fieldsJson = extractLargeAttachments(messageHash, fieldsJson)
 
+            val sourceHashHex = sourceHash?.joinToString("") { "%02x".format(it) } ?: ""
+
+            // Extract reply_to_message_id from fields (LXMF field 9)
+            val replyToMessageId = fieldsJson?.optString("9")?.takeIf { it.isNotBlank() }
+
+            // Extract delivery method if available
+            val deliveryMethod = event.getDictValue("delivery_method")?.toString()?.takeIf { it != "None" }
+
+            // Persist to database first (survives app process death)
+            if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
+                persistenceManager.persistMessage(
+                    messageHash = messageHash,
+                    content = content,
+                    sourceHash = sourceHashHex,
+                    timestamp = timestamp,
+                    fieldsJson = fieldsJson?.toString(),
+                    publicKey = publicKey,
+                    replyToMessageId = replyToMessageId,
+                    deliveryMethod = deliveryMethod,
+                )
+                Log.d(TAG, "Message persisted to database: $messageHash from $sourceHashHex")
+            }
+
+            // Broadcast to app process for UI updates (may be dead, that's OK)
             val messageJson =
                 JSONObject().apply {
                     put("message_hash", messageHash)

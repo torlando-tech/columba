@@ -3,13 +3,13 @@ package com.lxmf.messenger.service.binder
 import android.content.Context
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
+import com.lxmf.messenger.service.manager.EventHandler
 import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
-import com.lxmf.messenger.service.manager.PollingManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.RoutingManager
 import com.lxmf.messenger.service.manager.ServiceNotificationManager
@@ -47,7 +47,7 @@ class ReticulumServiceBinderTest {
     private lateinit var identityManager: IdentityManager
     private lateinit var routingManager: RoutingManager
     private lateinit var messagingManager: MessagingManager
-    private lateinit var pollingManager: PollingManager
+    private lateinit var eventHandler: EventHandler
     private lateinit var broadcaster: CallbackBroadcaster
     private lateinit var lockManager: LockManager
     private lateinit var maintenanceManager: MaintenanceManager
@@ -71,7 +71,7 @@ class ReticulumServiceBinderTest {
         identityManager = mockk(relaxed = true)
         routingManager = mockk(relaxed = true)
         messagingManager = mockk(relaxed = true)
-        pollingManager = mockk(relaxed = true)
+        eventHandler = mockk(relaxed = true)
         broadcaster = mockk(relaxed = true)
         lockManager = mockk(relaxed = true)
         maintenanceManager = mockk(relaxed = true)
@@ -95,7 +95,7 @@ class ReticulumServiceBinderTest {
                 identityManager = identityManager,
                 routingManager = routingManager,
                 messagingManager = messagingManager,
-                pollingManager = pollingManager,
+                eventHandler = eventHandler,
                 broadcaster = broadcaster,
                 lockManager = lockManager,
                 maintenanceManager = maintenanceManager,
@@ -130,16 +130,16 @@ class ReticulumServiceBinderTest {
 
         verifyOrder {
             maintenanceManager.stop()
-            pollingManager.stopAll()
+            eventHandler.stopAll()
             lockManager.releaseAll()
         }
     }
 
     @Test
-    fun `shutdown calls pollingManager stopAll`() {
+    fun `shutdown calls eventHandler stopAll`() {
         binder.shutdown()
 
-        verify(exactly = 1) { pollingManager.stopAll() }
+        verify(exactly = 1) { eventHandler.stopAll() }
     }
 
     @Test
@@ -181,7 +181,7 @@ class ReticulumServiceBinderTest {
         binder.forceExit()
 
         verify { maintenanceManager.stop() }
-        verify { pollingManager.stopAll() }
+        verify { eventHandler.stopAll() }
         verify { lockManager.releaseAll() }
     }
 
@@ -368,10 +368,10 @@ class ReticulumServiceBinderTest {
     }
 
     @Test
-    fun `setConversationActive delegates to pollingManager`() {
+    fun `setConversationActive delegates to eventHandler`() {
         binder.setConversationActive(true)
 
-        verify { pollingManager.setConversationActive(true) }
+        verify { eventHandler.setConversationActive(true) }
     }
 
     // ========== BLE Connection Tests ==========

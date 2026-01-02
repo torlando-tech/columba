@@ -17,7 +17,7 @@ import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
-import com.lxmf.messenger.service.manager.PollingManager
+import com.lxmf.messenger.service.manager.EventHandler
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import com.lxmf.messenger.service.manager.RoutingManager
@@ -48,7 +48,7 @@ class ReticulumServiceBinder(
     private val identityManager: IdentityManager,
     private val routingManager: RoutingManager,
     private val messagingManager: MessagingManager,
-    private val pollingManager: PollingManager,
+    private val eventHandler: EventHandler,
     private val broadcaster: CallbackBroadcaster,
     private val lockManager: LockManager,
     private val maintenanceManager: MaintenanceManager,
@@ -114,8 +114,8 @@ class ReticulumServiceBinder(
                             networkChangeManager.start()
 
                             // Start announce polling and drain any pending messages
-                            pollingManager.startAnnouncesPolling()
-                            pollingManager.drainPendingMessages()
+                            eventHandler.startEventHandling()
+                            eventHandler.drainPendingMessages()
 
                             // Announce LXMF destination
                             announceLxmfDestination()
@@ -143,7 +143,7 @@ class ReticulumServiceBinder(
                             // Clean up on failure - stop polling but keep locks held
                             // Locks are managed by ReticulumService lifecycle (acquired in onCreate,
                             // released in onDestroy), so we don't release them here
-                            pollingManager.stopAll()
+                            eventHandler.stopAll()
 
                             val errorMsg = e.message ?: "Post-initialization setup failed"
                             state.networkStatus.set("ERROR:$errorMsg")
@@ -156,7 +156,7 @@ class ReticulumServiceBinder(
                     onError = { error ->
                         // Clean up on failure
                         lockManager.releaseAll()
-                        pollingManager.stopAll()
+                        eventHandler.stopAll()
 
                         state.networkStatus.set("ERROR:$error")
                         broadcaster.broadcastStatusChange("ERROR:$error")
@@ -229,7 +229,7 @@ class ReticulumServiceBinder(
         // This ensures messages sent during init get their status reported
         try {
             val deliveryCallback: (String) -> Unit = { statusJson ->
-                pollingManager.handleDeliveryStatusEvent(statusJson)
+                eventHandler.handleDeliveryStatusEvent(statusJson)
             }
             wrapper.callAttr("set_delivery_status_callback", deliveryCallback)
             Log.d(TAG, "Delivery status callback set before Python initialization")
@@ -254,7 +254,7 @@ class ReticulumServiceBinder(
             maintenanceManager.stop()
 
             // Stop polling immediately
-            pollingManager.stopAll()
+            eventHandler.stopAll()
 
             // Release locks
             lockManager.releaseAll()
@@ -421,7 +421,7 @@ class ReticulumServiceBinder(
     }
 
     override fun setConversationActive(active: Boolean) {
-        pollingManager.setConversationActive(active)
+        eventHandler.setConversationActive(active)
     }
 
     // ===========================================
@@ -851,7 +851,7 @@ class ReticulumServiceBinder(
                         if (announces != null && announces.isNotEmpty()) {
                             Log.d(TAG, "Event-driven: processing ${announces.size} announces")
                             for (announceObj in announces) {
-                                pollingManager.handleAnnounceEvent(announceObj as com.chaquo.python.PyObject)
+                                eventHandler.handleAnnounceEvent(announceObj as com.chaquo.python.PyObject)
                             }
                         }
                     } catch (e: Exception) {
@@ -868,7 +868,7 @@ class ReticulumServiceBinder(
         // Setup message received callback
         try {
             wrapperManager.setMessageReceivedCallback { messageJson ->
-                pollingManager.handleMessageReceivedEvent(messageJson)
+                eventHandler.handleMessageReceivedEvent(messageJson)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set message received callback: ${e.message}", e)
@@ -897,7 +897,7 @@ class ReticulumServiceBinder(
         // Setup reaction received callback for emoji reactions
         try {
             wrapperManager.setReactionReceivedCallback { reactionJson ->
-                pollingManager.handleReactionReceivedEvent(reactionJson)
+                eventHandler.handleReactionReceivedEvent(reactionJson)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set reaction received callback: ${e.message}", e)

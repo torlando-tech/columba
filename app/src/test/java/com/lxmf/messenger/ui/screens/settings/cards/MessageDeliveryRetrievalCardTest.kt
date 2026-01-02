@@ -56,6 +56,7 @@ class MessageDeliveryRetrievalCardTest {
     private var syncNowCalled = false
     private var manualRelayAdded: Pair<String, String?>? = null
     private var relaySelected: Pair<String, String>? = null
+    private var sizeLimitChanged: Int? = null
 
     @Before
     fun resetCallbackTrackers() {
@@ -67,6 +68,7 @@ class MessageDeliveryRetrievalCardTest {
         syncNowCalled = false
         manualRelayAdded = null
         relaySelected = null
+        sizeLimitChanged = null
     }
 
     // ========== Setup Helper ==========
@@ -103,6 +105,8 @@ class MessageDeliveryRetrievalCardTest {
                     onAutoRetrieveToggle = { autoRetrieveToggled = it },
                     onIntervalChange = { intervalChanged = it },
                     onSyncNow = { syncNowCalled = true },
+                    incomingMessageSizeLimitKb = config.incomingMessageSizeLimitKb,
+                    onIncomingMessageSizeLimitChange = { sizeLimitChanged = it },
                 )
             }
         }
@@ -1431,5 +1435,352 @@ class MessageDeliveryRetrievalCardTest {
         // Should show "View All Relays..." option
         composeTestRule.onNodeWithText("View All Relays...")
             .assertIsDisplayed()
+    }
+
+    // ========== Category Q: Incoming Message Size Limit Tests ==========
+
+    @Test
+    fun sizeLimitSection_displaysSectionHeader() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText("INCOMING MESSAGE SIZE")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun sizeLimitSection_displaysDescription() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText(
+            "Maximum size of messages to accept. Larger messages will be rejected.",
+        ).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun sizeLimitChips_allPresetsDisplayed() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText("1 MB").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("5 MB").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("10 MB").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("25 MB").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Unlimited").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun sizeLimitChips_1MbSelected_showsAsSelected() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimit1MbState())
+
+        // 1 MB chip should be displayed
+        composeTestRule.onNodeWithText("1 MB").performScrollTo().assertIsDisplayed()
+        // Size limit label should show 1 MB
+        composeTestRule.onNodeWithText("Size limit: 1 MB").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun sizeLimitChips_5MbSelected_showsCorrectly() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimit5MbState())
+
+        composeTestRule.onNodeWithText("Size limit: 5 MB").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun sizeLimitChips_10MbSelected_showsCorrectly() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimit10MbState())
+
+        composeTestRule.onNodeWithText("Size limit: 10 MB").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun sizeLimitChips_25MbSelected_showsCorrectly() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimit25MbState())
+
+        composeTestRule.onNodeWithText("Size limit: 25 MB").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun sizeLimitChips_unlimitedSelected_showsCorrectly() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimitUnlimitedState())
+
+        composeTestRule.onNodeWithText("Size limit: Unlimited (128 MB)")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun sizeLimitChips_customValue_showsCustomChipSelected() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimitCustomState())
+
+        // Custom size of 3 MB (3072 KB) should show custom chip
+        composeTestRule.onNodeWithText("Custom (3 MB)").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun sizeLimitChips_subMbValue_showsKb() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimitSubMbState())
+
+        composeTestRule.onNodeWithText("Size limit: 512 KB").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun sizeLimitChip_click1Mb_invokesCallback() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimit5MbState())
+
+        composeTestRule.onNodeWithText("1 MB").performScrollTo().performClick()
+
+        assertEquals(1024, sizeLimitChanged)
+    }
+
+    @Test
+    fun sizeLimitChip_click5Mb_invokesCallback() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText("5 MB").performScrollTo().performClick()
+
+        assertEquals(5120, sizeLimitChanged)
+    }
+
+    @Test
+    fun sizeLimitChip_click10Mb_invokesCallback() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText("10 MB").performScrollTo().performClick()
+
+        assertEquals(10240, sizeLimitChanged)
+    }
+
+    @Test
+    fun sizeLimitChip_click25Mb_invokesCallback() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText("25 MB").performScrollTo().performClick()
+
+        assertEquals(25600, sizeLimitChanged)
+    }
+
+    @Test
+    fun sizeLimitChip_clickUnlimited_invokesCallback() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText("Unlimited").performScrollTo().performClick()
+
+        assertEquals(131072, sizeLimitChanged)
+    }
+
+    // ========== Category R: Custom Size Limit Dialog Tests ==========
+
+    // Helper to click the Custom chip for size limit (it's the second "Custom" chip)
+    private fun clickSizeLimitCustomChip() {
+        composeTestRule.onAllNodesWithText("Custom")[1].performScrollTo().performClick()
+    }
+
+    @Test
+    fun customSizeLimitChip_click_opensDialog() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+
+        composeTestRule.onNodeWithText("Custom Size Limit").assertIsDisplayed()
+    }
+
+    @Test
+    fun customSizeLimitDialog_displaysTitle() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+
+        composeTestRule.onNodeWithText("Custom Size Limit").assertIsDisplayed()
+    }
+
+    @Test
+    fun customSizeLimitDialog_displaysInstructions() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+
+        composeTestRule.onNodeWithText("Enter maximum message size (1-128 MB):")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun customSizeLimitDialog_displaysTextField() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+
+        composeTestRule.onNodeWithText("MB").assertIsDisplayed()
+    }
+
+    @Test
+    fun customSizeLimitDialog_displaysConfirmButton() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+
+        composeTestRule.onNodeWithText("Confirm").assertIsDisplayed()
+    }
+
+    @Test
+    fun customSizeLimitDialog_displaysCancelButton() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+
+        composeTestRule.onNodeWithText("Cancel").assertIsDisplayed()
+    }
+
+    @Test
+    fun customSizeLimitDialog_prefilledWithCurrentLimit() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+
+        // Default is 1024 KB = 1 MB, so dialog should show "1"
+        composeTestRule.onNodeWithText("1").assertIsDisplayed()
+    }
+
+    @Test
+    fun customSizeLimitDialog_validInput_confirmEnabled() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+
+        // Prefilled with 1, which is valid
+        composeTestRule.onNodeWithText("Confirm").assertIsEnabled()
+    }
+
+    @Test
+    fun customSizeLimitDialog_inputBelowMin_confirmDisabled() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+        composeTestRule.onNodeWithText("1").performTextClearance()
+        composeTestRule.onNodeWithText("MB").performTextInput("0")
+
+        composeTestRule.onNodeWithText("Confirm").assertIsNotEnabled()
+    }
+
+    @Test
+    fun customSizeLimitDialog_inputAboveMax_confirmDisabled() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+        composeTestRule.onNodeWithText("1").performTextClearance()
+        composeTestRule.onNodeWithText("MB").performTextInput("200")
+
+        composeTestRule.onNodeWithText("Confirm").assertIsNotEnabled()
+    }
+
+    @Test
+    fun customSizeLimitDialog_emptyInput_confirmDisabled() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+        composeTestRule.onNodeWithText("1").performTextClearance()
+
+        composeTestRule.onNodeWithText("Confirm").assertIsNotEnabled()
+    }
+
+    @Test
+    fun customSizeLimitDialog_inputBelowMin_showsMinError() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+        composeTestRule.onNodeWithText("1").performTextClearance()
+        composeTestRule.onNodeWithText("MB").performTextInput("0")
+
+        composeTestRule.onNodeWithText("Minimum is 1 MB").assertIsDisplayed()
+    }
+
+    @Test
+    fun customSizeLimitDialog_inputAboveMax_showsMaxError() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+        composeTestRule.onNodeWithText("1").performTextClearance()
+        composeTestRule.onNodeWithText("MB").performTextInput("200")
+
+        composeTestRule.onNodeWithText("Maximum is 128 MB").assertIsDisplayed()
+    }
+
+    @Test
+    fun customSizeLimitDialog_validInput_showsKbPreview() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+        composeTestRule.onNodeWithText("1").performTextClearance()
+        composeTestRule.onNodeWithText("MB").performTextInput("5")
+
+        composeTestRule.onNodeWithText("= 5120 KB").assertIsDisplayed()
+    }
+
+    @Test
+    fun customSizeLimitDialog_confirmClick_invokesCallback() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+        composeTestRule.onNodeWithText("1").performTextClearance()
+        composeTestRule.onNodeWithText("MB").performTextInput("7")
+        composeTestRule.onNodeWithText("Confirm").performClick()
+
+        // 7 MB = 7 * 1024 = 7168 KB
+        assertEquals(7168, sizeLimitChanged)
+    }
+
+    @Test
+    fun customSizeLimitDialog_cancelClick_dismissesWithoutCallback() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        clickSizeLimitCustomChip()
+        composeTestRule.onNodeWithText("1").performTextClearance()
+        composeTestRule.onNodeWithText("MB").performTextInput("7")
+        composeTestRule.onNodeWithText("Cancel").performClick()
+
+        // Dialog should be dismissed
+        composeTestRule.onNodeWithText("Custom Size Limit").assertDoesNotExist()
+        // Callback should not have been invoked
+        assertNull(sizeLimitChanged)
+    }
+
+    // ========== Category S: formatSizeLimit Utility Tests ==========
+
+    @Test
+    fun formatSizeLimit_1024Kb_shows1Mb() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimit1MbState())
+
+        composeTestRule.onNodeWithText("Size limit: 1 MB").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun formatSizeLimit_5120Kb_shows5Mb() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimit5MbState())
+
+        composeTestRule.onNodeWithText("Size limit: 5 MB").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun formatSizeLimit_131072Kb_showsUnlimited() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimitUnlimitedState())
+
+        composeTestRule.onNodeWithText("Size limit: Unlimited (128 MB)")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun formatSizeLimit_subMb_showsKb() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.sizeLimitSubMbState())
+
+        composeTestRule.onNodeWithText("Size limit: 512 KB").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun formatSizeLimit_fractionalMb_showsDecimal() {
+        // 1536 KB = 1.5 MB
+        val config = CardConfig(incomingMessageSizeLimitKb = 1536)
+        setUpCardWithConfig(config)
+
+        composeTestRule.onNodeWithText("Size limit: 1.5 MB").performScrollTo().assertIsDisplayed()
     }
 }

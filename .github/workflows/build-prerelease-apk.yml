@@ -1,4 +1,4 @@
-name: Build Pre-Release APK
+name: Manual Test Build
 
 on:
   workflow_dispatch:

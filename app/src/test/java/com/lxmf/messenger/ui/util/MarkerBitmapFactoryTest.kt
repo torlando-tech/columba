@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -521,5 +522,169 @@ class MarkerBitmapFactoryTest {
         assertNotNull(bitmap)
         assertTrue(bitmap.width > 0)
         assertTrue(bitmap.height > 0)
+    }
+
+    // ========== createProfileIconMarker Tests ==========
+
+    @Test
+    fun `createProfileIconMarker returns null for invalid icon name`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        val bitmap =
+            MarkerBitmapFactory.createProfileIconMarker(
+                iconName = "invalid_icon_that_does_not_exist",
+                foregroundColor = "FFFFFF",
+                backgroundColor = "1E88E5",
+                displayName = "Test",
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+                context = context,
+            )
+
+        assertNull(bitmap)
+    }
+
+    @Test
+    fun `createProfileIconMarker returns bitmap for valid icon name`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        val bitmap =
+            MarkerBitmapFactory.createProfileIconMarker(
+                iconName = "account",
+                foregroundColor = "FFFFFF",
+                backgroundColor = "1E88E5",
+                displayName = "Test User",
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+                context = context,
+            )
+
+        assertNotNull(bitmap)
+        assertTrue(bitmap!!.width > 0)
+        assertTrue(bitmap.height > 0)
+    }
+
+    @Test
+    fun `createProfileIconMarker handles various MDI icons`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val validIcons = listOf("account", "star", "heart", "home", "map-marker")
+
+        for (iconName in validIcons) {
+            val bitmap =
+                MarkerBitmapFactory.createProfileIconMarker(
+                    iconName = iconName,
+                    foregroundColor = "FFFFFF",
+                    backgroundColor = "FF5722",
+                    displayName = "Test",
+                    sizeDp = 40f,
+                    density = TEST_DENSITY,
+                    context = context,
+                )
+
+            assertNotNull("Icon '$iconName' should produce a valid bitmap", bitmap)
+        }
+    }
+
+    @Test
+    fun `createProfileIconMarker handles invalid color gracefully`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        val bitmap =
+            MarkerBitmapFactory.createProfileIconMarker(
+                iconName = "account",
+                foregroundColor = "invalid",
+                backgroundColor = "also_invalid",
+                displayName = "Test",
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+                context = context,
+            )
+
+        // Should not crash, falls back to default colors
+        assertNotNull(bitmap)
+    }
+
+    @Test
+    fun `createProfileIconMarker scales with density`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val sizeDp = 40f
+        val lowDensity = 1.0f
+        val highDensity = 3.0f
+
+        val lowDensityBitmap =
+            MarkerBitmapFactory.createProfileIconMarker(
+                iconName = "account",
+                foregroundColor = "FFFFFF",
+                backgroundColor = "1E88E5",
+                displayName = "Test",
+                sizeDp = sizeDp,
+                density = lowDensity,
+                context = context,
+            )
+
+        val highDensityBitmap =
+            MarkerBitmapFactory.createProfileIconMarker(
+                iconName = "account",
+                foregroundColor = "FFFFFF",
+                backgroundColor = "1E88E5",
+                displayName = "Test",
+                sizeDp = sizeDp,
+                density = highDensity,
+                context = context,
+            )
+
+        assertNotNull(lowDensityBitmap)
+        assertNotNull(highDensityBitmap)
+        assertTrue(highDensityBitmap!!.width > lowDensityBitmap!!.width)
+    }
+
+    @Test
+    fun `createProfileIconMarker expands width for long display names`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        val shortNameBitmap =
+            MarkerBitmapFactory.createProfileIconMarker(
+                iconName = "account",
+                foregroundColor = "FFFFFF",
+                backgroundColor = "1E88E5",
+                displayName = "Al",
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+                context = context,
+            )
+
+        val longNameBitmap =
+            MarkerBitmapFactory.createProfileIconMarker(
+                iconName = "account",
+                foregroundColor = "FFFFFF",
+                backgroundColor = "1E88E5",
+                displayName = "Alexander the Great",
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+                context = context,
+            )
+
+        assertNotNull(shortNameBitmap)
+        assertNotNull(longNameBitmap)
+        assertTrue(longNameBitmap!!.width >= shortNameBitmap!!.width)
+    }
+
+    @Test
+    fun `createProfileIconMarker has ARGB_8888 config`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        val bitmap =
+            MarkerBitmapFactory.createProfileIconMarker(
+                iconName = "account",
+                foregroundColor = "FFFFFF",
+                backgroundColor = "1E88E5",
+                displayName = "Test",
+                sizeDp = 40f,
+                density = TEST_DENSITY,
+                context = context,
+            )
+
+        assertNotNull(bitmap)
+        assertEquals(Bitmap.Config.ARGB_8888, bitmap!!.config)
     }
 }

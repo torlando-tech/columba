@@ -64,7 +64,7 @@ sys.excepthook = _global_exception_handler
 # ============================================================================
 FIELD_TELEMETRY = 0x02        # Standard telemetry field for Sideband interoperability
 FIELD_COLUMBA_META = 0x70     # Custom field for Columba-specific metadata (cease signals, etc.)
-FIELD_ICON_APPEARANCE = 0x04  # Icon appearance [name, fg_rgb, bg_rgb] for Sideband/MeshChat interoperability
+FIELD_ICON_APPEARANCE = 0x04  # Icon appearance [name, fg_bytes(3), bg_bytes(3)] for Sideband/MeshChat interoperability
 LEGACY_LOCATION_FIELD = 7     # Legacy field ID for backwards compatibility
 
 # Sensor IDs (from Sideband sense.py)
@@ -2543,15 +2543,19 @@ class ReticulumWrapper:
                     log_info("ReticulumWrapper", "send_lxmf_message", f"📎 Attaching {len(field_5_data)} file(s)")
 
             # Add icon appearance to outgoing messages if provided (Sideband/MeshChat interop)
+            # Format: [icon_name, fg_bytes(3), bg_bytes(3)] - same as Sideband
             if icon_name and icon_fg_color and icon_bg_color:
                 if fields is None:
                     fields = {}
+                fg_bytes = bytes.fromhex(icon_fg_color)
+                bg_bytes = bytes.fromhex(icon_bg_color)
                 fields[FIELD_ICON_APPEARANCE] = [
                     icon_name,
-                    bytes.fromhex(icon_fg_color),
-                    bytes.fromhex(icon_bg_color)
+                    fg_bytes,
+                    bg_bytes
                 ]
-                log_debug("ReticulumWrapper", "send_lxmf_message", f"📎 Adding icon appearance: {icon_name}")
+                log_info("ReticulumWrapper", "send_lxmf_message",
+                        f"📎 Adding icon appearance: {icon_name}, fg={icon_fg_color} ({fg_bytes.hex()}), bg={icon_bg_color} ({bg_bytes.hex()})")
 
             # Create LXMF message using destination OBJECTS
             log_debug("ReticulumWrapper", "send_lxmf_message", f"Creating LXMessage with destination objects...")
@@ -3175,15 +3179,19 @@ class ReticulumWrapper:
                         f"📎 Replying to message: {reply_to_message_id[:16]}...")
 
             # Add icon appearance to outgoing messages if provided (Sideband/MeshChat interop)
+            # Format: [icon_name, fg_bytes(3), bg_bytes(3)] - same as Sideband
             if icon_name and icon_fg_color and icon_bg_color:
                 if fields is None:
                     fields = {}
+                fg_bytes = bytes.fromhex(icon_fg_color)
+                bg_bytes = bytes.fromhex(icon_bg_color)
                 fields[FIELD_ICON_APPEARANCE] = [
                     icon_name,
-                    bytes.fromhex(icon_fg_color),
-                    bytes.fromhex(icon_bg_color)
+                    fg_bytes,
+                    bg_bytes
                 ]
-                log_debug("ReticulumWrapper", "send_lxmf_message_with_method", f"📎 Adding icon appearance: {icon_name}")
+                log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                        f"📎 Adding icon appearance: {icon_name}, fg={icon_fg_color} ({fg_bytes.hex()}), bg={icon_bg_color} ({bg_bytes.hex()})")
 
             # Create LXMF message with specified delivery method
             lxmf_message = LXMF.LXMessage(

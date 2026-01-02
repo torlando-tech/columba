@@ -6,6 +6,7 @@ import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.data.repository.ReplyPreview
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
@@ -64,6 +65,7 @@ class MessagingViewModelTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
+    private lateinit var identityRepository: IdentityRepository
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
     private val testPeerName = "Test Peer"
@@ -86,6 +88,10 @@ class MessagingViewModelTest {
         settingsRepository = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
+        identityRepository = mockk(relaxed = true)
+
+        // Mock identityRepository to return null by default (no icon set)
+        coEvery { identityRepository.getActiveIdentitySync() } returns null
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
@@ -148,6 +154,7 @@ class MessagingViewModelTest {
             settingsRepository,
             propagationNodeManager,
             locationSharingManager,
+            identityRepository,
         )
 
     @Test
@@ -450,6 +457,7 @@ class MessagingViewModelTest {
                     failingSettingsRepository,
                     failingPropagationNodeManager,
                     failingLocationSharingManager,
+                    identityRepository,
                 )
 
             // Attempt to send message
@@ -891,6 +899,7 @@ class MessagingViewModelTest {
                 settingsRepository,
                 propagationNodeManager,
                 locationSharingManager,
+                identityRepository,
             )
             advanceUntilIdle()
 
@@ -951,6 +960,7 @@ class MessagingViewModelTest {
                 settingsRepository,
                 propagationNodeManager,
                 locationSharingManager,
+                identityRepository,
             )
             advanceUntilIdle()
 
@@ -1007,6 +1017,7 @@ class MessagingViewModelTest {
                 settingsRepository,
                 propagationNodeManager,
                 locationSharingManager,
+                identityRepository,
             )
             advanceUntilIdle()
 
@@ -1053,6 +1064,7 @@ class MessagingViewModelTest {
                 settingsRepository,
                 propagationNodeManager,
                 locationSharingManager,
+                identityRepository,
             )
             advanceUntilIdle()
 

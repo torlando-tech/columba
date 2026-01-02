@@ -56,6 +56,13 @@ data class ContactMarker(
     val state: MarkerState = MarkerState.FRESH,
     // Coarsening radius in meters (0 = precise)
     val approximateRadius: Int = 0,
+    // Profile icon fields (null = use identicon/initials fallback)
+    // iconForegroundColor/iconBackgroundColor are Hex RGB e.g., "FFFFFF", "1E88E5"
+    val iconName: String? = null,
+    val iconForegroundColor: String? = null,
+    val iconBackgroundColor: String? = null,
+    // publicKey is for identicon fallback when no icon available
+    val publicKey: ByteArray? = null,
 )
 
 /**
@@ -140,9 +147,9 @@ class MapViewModel
                     val contactMap = contactList.associateBy { it.destinationHash }
                     val contactMapLower = contactList.associateBy { it.destinationHash.lowercase() }
 
-                    // Create lookup maps from announces (fallback for peers not in contacts)
-                    val announceMap = announceList.associate { it.destinationHash to it.peerName }
-                    val announceMapLower = announceList.associate { it.destinationHash.lowercase() to it.peerName }
+                    // Create lookup maps from announces (for name fallback and icon data)
+                    val announceMap = announceList.associateBy { it.destinationHash }
+                    val announceMapLower = announceList.associateBy { it.destinationHash.lowercase() }
 
                     Log.d(TAG, "Processing ${locations.size} locations, ${contactList.size} contacts, ${announceList.size} announces")
 
@@ -157,13 +164,17 @@ class MapViewModel
                                 currentTime = currentTime,
                             ) ?: return@mapNotNull null
 
+                        // Look up announce for icon data and name fallback
+                        val announce =
+                            announceMap[loc.senderHash]
+                                ?: announceMapLower[loc.senderHash.lowercase()]
+
                         // Try contacts first (exact, then case-insensitive)
                         // Then try announces (exact, then case-insensitive)
                         val displayName =
                             contactMap[loc.senderHash]?.displayName
                                 ?: contactMapLower[loc.senderHash.lowercase()]?.displayName
-                                ?: announceMap[loc.senderHash]
-                                ?: announceMapLower[loc.senderHash.lowercase()]
+                                ?: announce?.peerName
                                 ?: loc.senderHash.take(8)
 
                         if (displayName == loc.senderHash.take(8)) {
@@ -180,6 +191,10 @@ class MapViewModel
                             expiresAt = loc.expiresAt,
                             state = markerState,
                             approximateRadius = loc.approximateRadius,
+                            iconName = announce?.iconName,
+                            iconForegroundColor = announce?.iconForegroundColor,
+                            iconBackgroundColor = announce?.iconBackgroundColor,
+                            publicKey = announce?.publicKey,
                         )
                     }
                 }.collect { markers ->

@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -915,6 +916,149 @@ class MapViewModelTest {
                 assertEquals(1, state.contactMarkers.size)
                 // Contact name takes priority
                 assertEquals("Contact Name", state.contactMarkers[0].displayName)
+            }
+        }
+
+    // ===== Icon appearance in ContactMarker Tests =====
+
+    @Test
+    fun `markers include icon appearance from announces`() =
+        runTest {
+            val announces =
+                listOf(
+                    com.lxmf.messenger.data.db.entity.AnnounceEntity(
+                        destinationHash = "hash1",
+                        peerName = "Test User",
+                        publicKey = ByteArray(64) { it.toByte() },
+                        appData = null,
+                        hops = 1,
+                        lastSeenTimestamp = System.currentTimeMillis(),
+                        nodeType = "peer",
+                        receivingInterface = null,
+                        aspect = "lxmf.delivery",
+                        iconName = "account",
+                        iconForegroundColor = "FFFFFF",
+                        iconBackgroundColor = "1E88E5",
+                    ),
+                )
+            val receivedLocations =
+                listOf(
+                    ReceivedLocationEntity(
+                        id = "loc1",
+                        senderHash = "hash1",
+                        latitude = 37.7749,
+                        longitude = -122.4194,
+                        accuracy = 10f,
+                        timestamp = System.currentTimeMillis(),
+                        expiresAt = null,
+                        receivedAt = System.currentTimeMillis(),
+                    ),
+                )
+            every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
+            every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
+            every { announceDao.getAllAnnounces() } returns flowOf(announces)
+
+            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(1, state.contactMarkers.size)
+                val marker = state.contactMarkers[0]
+                assertEquals("account", marker.iconName)
+                assertEquals("FFFFFF", marker.iconForegroundColor)
+                assertEquals("1E88E5", marker.iconBackgroundColor)
+                assertNotNull(marker.publicKey)
+            }
+        }
+
+    @Test
+    fun `markers have null icon fields when announce has no icon`() =
+        runTest {
+            val announces =
+                listOf(
+                    com.lxmf.messenger.data.db.entity.AnnounceEntity(
+                        destinationHash = "hash1",
+                        peerName = "Test User",
+                        publicKey = ByteArray(64),
+                        appData = null,
+                        hops = 1,
+                        lastSeenTimestamp = System.currentTimeMillis(),
+                        nodeType = "peer",
+                        receivingInterface = null,
+                        aspect = "lxmf.delivery",
+                        // No icon set on this announce
+                        iconName = null,
+                        iconForegroundColor = null,
+                        iconBackgroundColor = null,
+                    ),
+                )
+            val receivedLocations =
+                listOf(
+                    ReceivedLocationEntity(
+                        id = "loc1",
+                        senderHash = "hash1",
+                        latitude = 37.7749,
+                        longitude = -122.4194,
+                        accuracy = 10f,
+                        timestamp = System.currentTimeMillis(),
+                        expiresAt = null,
+                        receivedAt = System.currentTimeMillis(),
+                    ),
+                )
+            every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
+            every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
+            every { announceDao.getAllAnnounces() } returns flowOf(announces)
+
+            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(1, state.contactMarkers.size)
+                val marker = state.contactMarkers[0]
+                assertNull(marker.iconName)
+                assertNull(marker.iconForegroundColor)
+                assertNull(marker.iconBackgroundColor)
+            }
+        }
+
+    @Test
+    fun `markers have null icon fields when no announce found`() =
+        runTest {
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(
+                        destinationHash = "hash1",
+                        displayName = "Contact Name",
+                    ),
+                )
+            val receivedLocations =
+                listOf(
+                    ReceivedLocationEntity(
+                        id = "loc1",
+                        senderHash = "hash1",
+                        latitude = 37.7749,
+                        longitude = -122.4194,
+                        accuracy = 10f,
+                        timestamp = System.currentTimeMillis(),
+                        expiresAt = null,
+                        receivedAt = System.currentTimeMillis(),
+                    ),
+                )
+            // Contact exists but no announce with icon
+            every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+            every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
+            every { announceDao.getAllAnnounces() } returns flowOf(emptyList())
+
+            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao)
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(1, state.contactMarkers.size)
+                val marker = state.contactMarkers[0]
+                assertNull(marker.iconName)
+                assertNull(marker.iconForegroundColor)
+                assertNull(marker.iconBackgroundColor)
+                assertNull(marker.publicKey)
             }
         }
 

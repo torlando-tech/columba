@@ -329,15 +329,33 @@ fun MapScreen(
             state.contactMarkers.forEach { marker ->
                 val imageId = "marker-${marker.destinationHash}"
                 if (style.getImage(imageId) == null) {
-                    val initial = marker.displayName.firstOrNull() ?: '?'
-                    val color = MarkerBitmapFactory.hashToColor(marker.destinationHash)
+                    // Try profile icon first, fall back to initials
                     val bitmap =
-                        MarkerBitmapFactory.createInitialMarker(
-                            initial = initial,
-                            displayName = marker.displayName,
-                            backgroundColor = color,
-                            density = screenDensity,
-                        )
+                        if (marker.iconName != null &&
+                            marker.iconForegroundColor != null &&
+                            marker.iconBackgroundColor != null
+                        ) {
+                            MarkerBitmapFactory.createProfileIconMarker(
+                                iconName = marker.iconName,
+                                foregroundColor = marker.iconForegroundColor,
+                                backgroundColor = marker.iconBackgroundColor,
+                                displayName = marker.displayName,
+                                density = screenDensity,
+                                context = context,
+                            )
+                        } else {
+                            null
+                        } ?: run {
+                            // Fallback to initials marker
+                            val initial = marker.displayName.firstOrNull() ?: '?'
+                            val color = MarkerBitmapFactory.hashToColor(marker.destinationHash)
+                            MarkerBitmapFactory.createInitialMarker(
+                                initial = initial,
+                                displayName = marker.displayName,
+                                backgroundColor = color,
+                                density = screenDensity,
+                            )
+                        }
                     style.addImage(imageId, bitmap)
                 }
             }

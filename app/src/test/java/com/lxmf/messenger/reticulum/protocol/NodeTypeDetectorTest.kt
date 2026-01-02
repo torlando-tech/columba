@@ -21,55 +21,61 @@ class NodeTypeDetectorTest {
 
     @Test
     fun `detectNodeType with aspect lxmf_propagation returns PROPAGATION_NODE`() {
-        val result = NodeTypeDetector.detectNodeType(
-            appData = null,
-            aspect = "lxmf.propagation",
-        )
+        val result =
+            NodeTypeDetector.detectNodeType(
+                appData = null,
+                aspect = "lxmf.propagation",
+            )
         assertEquals(NodeType.PROPAGATION_NODE, result)
     }
 
     @Test
     fun `detectNodeType with aspect nomadnetwork_node returns NODE`() {
-        val result = NodeTypeDetector.detectNodeType(
-            appData = null,
-            aspect = "nomadnetwork.node",
-        )
+        val result =
+            NodeTypeDetector.detectNodeType(
+                appData = null,
+                aspect = "nomadnetwork.node",
+            )
         assertEquals(NodeType.NODE, result)
     }
 
     @Test
     fun `detectNodeType with aspect lxmf_delivery returns PEER`() {
-        val result = NodeTypeDetector.detectNodeType(
-            appData = null,
-            aspect = "lxmf.delivery",
-        )
+        val result =
+            NodeTypeDetector.detectNodeType(
+                appData = null,
+                aspect = "lxmf.delivery",
+            )
         assertEquals(NodeType.PEER, result)
     }
 
     @Test
     fun `detectNodeType with aspect call_audio returns NODE`() {
-        val result = NodeTypeDetector.detectNodeType(
-            appData = null,
-            aspect = "call.audio",
-        )
+        val result =
+            NodeTypeDetector.detectNodeType(
+                appData = null,
+                aspect = "call.audio",
+            )
         assertEquals(NodeType.NODE, result)
     }
 
     @Test
     fun `detectNodeType with aspect meshchat_room returns NODE`() {
-        val result = NodeTypeDetector.detectNodeType(
-            appData = null,
-            aspect = "meshchat.room",
-        )
+        val result =
+            NodeTypeDetector.detectNodeType(
+                appData = null,
+                aspect = "meshchat.room",
+            )
         assertEquals(NodeType.NODE, result)
     }
 
     @Test
     fun `detectNodeType with unknown aspect and null appData returns NODE`() {
-        val result = NodeTypeDetector.detectNodeType(
-            appData = null,
-            aspect = "unknown.aspect",
-        )
+        val result =
+            NodeTypeDetector.detectNodeType(
+                appData = null,
+                aspect = "unknown.aspect",
+            )
         assertEquals(NodeType.NODE, result)
     }
 
@@ -160,7 +166,10 @@ class NodeTypeDetectorTest {
      * Helper to create msgpack-like binary data of specified length.
      * First byte is the msgpack format marker, rest is padding.
      */
-    private fun createMsgpackData(formatByte: Byte, totalLength: Int): ByteArray {
+    private fun createMsgpackData(
+        formatByte: Byte,
+        totalLength: Int,
+    ): ByteArray {
         return ByteArray(totalLength).apply {
             this[0] = formatByte
             // Fill rest with non-text bytes to avoid string pattern matches
@@ -410,20 +419,22 @@ class NodeTypeDetectorTest {
     fun `detectNodeType aspect takes precedence over msgpack appData`() {
         // Even if appData looks like msgpack, aspect should win
         val msgpackData = byteArrayOf(0x93.toByte(), 0x01, 0x02)
-        val result = NodeTypeDetector.detectNodeType(
-            appData = msgpackData,
-            aspect = "lxmf.delivery",
-        )
+        val result =
+            NodeTypeDetector.detectNodeType(
+                appData = msgpackData,
+                aspect = "lxmf.delivery",
+            )
         assertEquals(NodeType.PEER, result)
     }
 
     @Test
     fun `detectNodeType aspect takes precedence over Columba appData`() {
         val appData = "Columba User".toByteArray(StandardCharsets.UTF_8)
-        val result = NodeTypeDetector.detectNodeType(
-            appData = appData,
-            aspect = "nomadnetwork.node",
-        )
+        val result =
+            NodeTypeDetector.detectNodeType(
+                appData = appData,
+                aspect = "nomadnetwork.node",
+            )
         assertEquals(NodeType.NODE, result)
     }
 

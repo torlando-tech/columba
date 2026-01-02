@@ -155,15 +155,16 @@ class PropagationNodeManager
             announceRepository.getTopPropagationNodes(limit = 10)
                 .map { announces ->
                     Log.d(TAG, "availableRelays: got ${announces.size} top propagation nodes from DB")
-                    val relays = announces.map { announce ->
-                        RelayInfo(
-                            destinationHash = announce.destinationHash,
-                            displayName = announce.peerName,
-                            hops = announce.hops,
-                            isAutoSelected = false,
-                            lastSeenTimestamp = announce.lastSeenTimestamp,
-                        )
-                    }
+                    val relays =
+                        announces.map { announce ->
+                            RelayInfo(
+                                destinationHash = announce.destinationHash,
+                                displayName = announce.peerName,
+                                hops = announce.hops,
+                                isAutoSelected = false,
+                                lastSeenTimestamp = announce.lastSeenTimestamp,
+                            )
+                        }
                     AvailableRelaysState.Loaded(relays)
                 }
                 .stateIn(scope, SharingStarted.Eagerly, AvailableRelaysState.Loading)

@@ -106,15 +106,16 @@ class SharingDurationTest {
     @Test
     fun `calculateEndTime returns midnight for UNTIL_MIDNIGHT`() {
         // Use a known time: 2025-01-15 10:00:00
-        val calendar = Calendar.getInstance().apply {
-            set(Calendar.YEAR, 2025)
-            set(Calendar.MONTH, Calendar.JANUARY)
-            set(Calendar.DAY_OF_MONTH, 15)
-            set(Calendar.HOUR_OF_DAY, 10)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
+        val calendar =
+            Calendar.getInstance().apply {
+                set(Calendar.YEAR, 2025)
+                set(Calendar.MONTH, Calendar.JANUARY)
+                set(Calendar.DAY_OF_MONTH, 15)
+                set(Calendar.HOUR_OF_DAY, 10)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
         val startTime = calendar.timeInMillis
 
         val actual = SharingDuration.UNTIL_MIDNIGHT.calculateEndTime(startTime)
@@ -122,9 +123,10 @@ class SharingDurationTest {
         assertNotNull(actual)
 
         // Verify it's the same day at 23:59:59.999
-        val endCalendar = Calendar.getInstance().apply {
-            timeInMillis = actual!!
-        }
+        val endCalendar =
+            Calendar.getInstance().apply {
+                timeInMillis = actual!!
+            }
         assertEquals(2025, endCalendar.get(Calendar.YEAR))
         assertEquals(Calendar.JANUARY, endCalendar.get(Calendar.MONTH))
         assertEquals(15, endCalendar.get(Calendar.DAY_OF_MONTH))
@@ -136,12 +138,13 @@ class SharingDurationTest {
     @Test
     fun `calculateEndTime for UNTIL_MIDNIGHT is always after start time`() {
         // Even if we start at 11pm, end time should still be later
-        val calendar = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 23)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
+        val calendar =
+            Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 23)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
         val startTime = calendar.timeInMillis
 
         val actual = SharingDuration.UNTIL_MIDNIGHT.calculateEndTime(startTime)

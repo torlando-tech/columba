@@ -52,7 +52,8 @@ sealed class AddContactResult {
  */
 @androidx.compose.runtime.Immutable
 data class ContactGroups(
-    val relay: EnrichedContact?, // Current relay (if any)
+    // Current relay (if any)
+    val relay: EnrichedContact?,
     val pinned: List<EnrichedContact>,
     val all: List<EnrichedContact>,
 )

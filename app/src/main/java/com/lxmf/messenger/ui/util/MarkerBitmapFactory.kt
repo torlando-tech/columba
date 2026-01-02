@@ -11,7 +11,6 @@ import android.graphics.Typeface
  * Factory for creating marker bitmaps for the map.
  */
 object MarkerBitmapFactory {
-
     /**
      * Generate a consistent color from a hash string.
      * Uses HSV color space to ensure good saturation and brightness.
@@ -46,10 +45,11 @@ object MarkerBitmapFactory {
         val labelHeight = (18 * density).toInt()
 
         // Measure text width to size bitmap appropriately
-        val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 12f * density
-            typeface = Typeface.DEFAULT_BOLD
-        }
+        val namePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = 12f * density
+                typeface = Typeface.DEFAULT_BOLD
+            }
         val textWidth = namePaint.measureText(displayName)
         val haloPadding = 6f * density // Extra space for halo stroke
 
@@ -66,27 +66,30 @@ object MarkerBitmapFactory {
         val radius = circleSizePx / 2f - (2f * density)
 
         // Draw circle background
-        val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = backgroundColor
-            style = Paint.Style.FILL
-        }
+        val circlePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = backgroundColor
+                style = Paint.Style.FILL
+            }
         canvas.drawCircle(centerX, circleY, radius, circlePaint)
 
         // Draw white border
-        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            style = Paint.Style.STROKE
-            strokeWidth = 3f * density
-        }
+        val borderPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = 3f * density
+            }
         canvas.drawCircle(centerX, circleY, radius, borderPaint)
 
         // Draw initial letter in circle
-        val initialPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = circleSizePx * 0.45f
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-        }
+        val initialPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textSize = circleSizePx * 0.45f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.DEFAULT_BOLD
+            }
         val initialY = circleY - (initialPaint.descent() + initialPaint.ascent()) / 2
         canvas.drawText(initial.uppercase().toString(), centerX, initialY, initialPaint)
 
@@ -137,12 +140,13 @@ object MarkerBitmapFactory {
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = strokeWidthPx
-            this.color = color
-            pathEffect = DashPathEffect(floatArrayOf(dashLengthPx, gapLengthPx), 0f)
-        }
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = strokeWidthPx
+                this.color = color
+                pathEffect = DashPathEffect(floatArrayOf(dashLengthPx, gapLengthPx), 0f)
+            }
 
         // Draw circle with stroke inset by half stroke width to keep within bounds
         val radius = (sizePx - strokeWidthPx) / 2f
@@ -188,21 +192,23 @@ object MarkerBitmapFactory {
         val radius = (sizePx - strokeWidthPx) / 2f
 
         // Draw filled circle
-        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = fillColor
-            alpha = (fillOpacity * 255).toInt()
-        }
+        val fillPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = fillColor
+                alpha = (fillOpacity * 255).toInt()
+            }
         canvas.drawCircle(center, center, radius, fillPaint)
 
         // Draw dashed outline
-        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = strokeWidthPx
-            color = strokeColor
-            alpha = (fillOpacity * 255).toInt()
-            pathEffect = DashPathEffect(floatArrayOf(dashLengthPx, gapLengthPx), 0f)
-        }
+        val strokePaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = strokeWidthPx
+                color = strokeColor
+                alpha = (fillOpacity * 255).toInt()
+                pathEffect = DashPathEffect(floatArrayOf(dashLengthPx, gapLengthPx), 0f)
+            }
         canvas.drawCircle(center, center, radius, strokePaint)
 
         return bitmap

@@ -19,12 +19,13 @@ class LocationTelemetryTest {
 
     @Test
     fun `constructor sets required fields correctly`() {
-        val telemetry = LocationTelemetry(
-            lat = 37.7749,
-            lng = -122.4194,
-            acc = 10.0f,
-            ts = 1234567890L,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 37.7749,
+                lng = -122.4194,
+                acc = 10.0f,
+                ts = 1234567890L,
+            )
 
         assertEquals(37.7749, telemetry.lat, 0.0001)
         assertEquals(-122.4194, telemetry.lng, 0.0001)
@@ -34,12 +35,13 @@ class LocationTelemetryTest {
 
     @Test
     fun `type defaults to location_share`() {
-        val telemetry = LocationTelemetry(
-            lat = 0.0,
-            lng = 0.0,
-            acc = 0f,
-            ts = 0L,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 0.0,
+                lng = 0.0,
+                acc = 0f,
+                ts = 0L,
+            )
 
         assertEquals(LocationTelemetry.TYPE_LOCATION_SHARE, telemetry.type)
         assertEquals("location_share", telemetry.type)
@@ -47,36 +49,39 @@ class LocationTelemetryTest {
 
     @Test
     fun `expires defaults to null`() {
-        val telemetry = LocationTelemetry(
-            lat = 0.0,
-            lng = 0.0,
-            acc = 0f,
-            ts = 0L,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 0.0,
+                lng = 0.0,
+                acc = 0f,
+                ts = 0L,
+            )
 
         assertNull(telemetry.expires)
     }
 
     @Test
     fun `cease defaults to false`() {
-        val telemetry = LocationTelemetry(
-            lat = 0.0,
-            lng = 0.0,
-            acc = 0f,
-            ts = 0L,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 0.0,
+                lng = 0.0,
+                acc = 0f,
+                ts = 0L,
+            )
 
         assertFalse(telemetry.cease)
     }
 
     @Test
     fun `approxRadius defaults to 0`() {
-        val telemetry = LocationTelemetry(
-            lat = 0.0,
-            lng = 0.0,
-            acc = 0f,
-            ts = 0L,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 0.0,
+                lng = 0.0,
+                acc = 0f,
+                ts = 0L,
+            )
 
         assertEquals(0, telemetry.approxRadius)
     }
@@ -108,39 +113,42 @@ class LocationTelemetryTest {
     @Test
     fun `expires can be set to timestamp`() {
         val expiryTime = System.currentTimeMillis() + 3600_000L
-        val telemetry = LocationTelemetry(
-            lat = 37.7749,
-            lng = -122.4194,
-            acc = 10.0f,
-            ts = System.currentTimeMillis(),
-            expires = expiryTime,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 37.7749,
+                lng = -122.4194,
+                acc = 10.0f,
+                ts = System.currentTimeMillis(),
+                expires = expiryTime,
+            )
 
         assertEquals(expiryTime, telemetry.expires)
     }
 
     @Test
     fun `cease can be set to true`() {
-        val telemetry = LocationTelemetry(
-            lat = 0.0,
-            lng = 0.0,
-            acc = 0f,
-            ts = 0L,
-            cease = true,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 0.0,
+                lng = 0.0,
+                acc = 0f,
+                ts = 0L,
+                cease = true,
+            )
 
         assertTrue(telemetry.cease)
     }
 
     @Test
     fun `approxRadius can be set to coarsening value`() {
-        val telemetry = LocationTelemetry(
-            lat = 37.7749,
-            lng = -122.4194,
-            acc = 10.0f,
-            ts = System.currentTimeMillis(),
-            approxRadius = 1000, // 1km coarsening
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 37.7749,
+                lng = -122.4194,
+                acc = 10.0f,
+                ts = System.currentTimeMillis(),
+                approxRadius = 1000, // 1km coarsening
+            )
 
         assertEquals(1000, telemetry.approxRadius)
     }
@@ -149,12 +157,13 @@ class LocationTelemetryTest {
 
     @Test
     fun `serializes to JSON correctly`() {
-        val telemetry = LocationTelemetry(
-            lat = 37.7749,
-            lng = -122.4194,
-            acc = 10.0f,
-            ts = 1234567890L,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 37.7749,
+                lng = -122.4194,
+                acc = 10.0f,
+                ts = 1234567890L,
+            )
 
         val jsonString = json.encodeToString(telemetry)
 
@@ -166,7 +175,8 @@ class LocationTelemetryTest {
 
     @Test
     fun `deserializes from JSON correctly`() {
-        val jsonString = """
+        val jsonString =
+            """
             {
                 "type": "location_share",
                 "lat": 40.7128,
@@ -174,7 +184,7 @@ class LocationTelemetryTest {
                 "acc": 15.5,
                 "ts": 9876543210
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val telemetry = json.decodeFromString<LocationTelemetry>(jsonString)
 
@@ -187,7 +197,8 @@ class LocationTelemetryTest {
 
     @Test
     fun `deserializes with optional fields`() {
-        val jsonString = """
+        val jsonString =
+            """
             {
                 "type": "location_share",
                 "lat": 51.5074,
@@ -198,7 +209,7 @@ class LocationTelemetryTest {
                 "cease": true,
                 "approxRadius": 500
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val telemetry = json.decodeFromString<LocationTelemetry>(jsonString)
 
@@ -211,15 +222,16 @@ class LocationTelemetryTest {
 
     @Test
     fun `serialization roundtrip preserves data`() {
-        val original = LocationTelemetry(
-            lat = 35.6762,
-            lng = 139.6503,
-            acc = 8.5f,
-            ts = 5555555555L,
-            expires = 6666666666L,
-            cease = false,
-            approxRadius = 250,
-        )
+        val original =
+            LocationTelemetry(
+                lat = 35.6762,
+                lng = 139.6503,
+                acc = 8.5f,
+                ts = 5555555555L,
+                expires = 6666666666L,
+                cease = false,
+                approxRadius = 250,
+            )
 
         val jsonString = json.encodeToString(original)
         val decoded = json.decodeFromString<LocationTelemetry>(jsonString)
@@ -236,7 +248,8 @@ class LocationTelemetryTest {
 
     @Test
     fun `deserializes with missing optional fields using defaults`() {
-        val jsonString = """
+        val jsonString =
+            """
             {
                 "type": "location_share",
                 "lat": 48.8566,
@@ -244,7 +257,7 @@ class LocationTelemetryTest {
                 "acc": 12.0,
                 "ts": 7777777777
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val telemetry = json.decodeFromString<LocationTelemetry>(jsonString)
 
@@ -258,12 +271,13 @@ class LocationTelemetryTest {
 
     @Test
     fun `handles zero coordinates`() {
-        val telemetry = LocationTelemetry(
-            lat = 0.0,
-            lng = 0.0,
-            acc = 0f,
-            ts = 0L,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 0.0,
+                lng = 0.0,
+                acc = 0f,
+                ts = 0L,
+            )
 
         assertEquals(0.0, telemetry.lat, 0.0001)
         assertEquals(0.0, telemetry.lng, 0.0001)
@@ -271,12 +285,13 @@ class LocationTelemetryTest {
 
     @Test
     fun `handles negative coordinates`() {
-        val telemetry = LocationTelemetry(
-            lat = -33.8688,
-            lng = -151.2093,
-            acc = 5f,
-            ts = 1L,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = -33.8688,
+                lng = -151.2093,
+                acc = 5f,
+                ts = 1L,
+            )
 
         assertEquals(-33.8688, telemetry.lat, 0.0001)
         assertEquals(-151.2093, telemetry.lng, 0.0001)
@@ -284,12 +299,13 @@ class LocationTelemetryTest {
 
     @Test
     fun `handles extreme coordinates`() {
-        val telemetry = LocationTelemetry(
-            lat = 90.0, // North pole
-            lng = 180.0, // International date line
-            acc = 1f,
-            ts = 1L,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 90.0, // North pole
+                lng = 180.0, // International date line
+                acc = 1f,
+                ts = 1L,
+            )
 
         assertEquals(90.0, telemetry.lat, 0.0001)
         assertEquals(180.0, telemetry.lng, 0.0001)
@@ -298,24 +314,26 @@ class LocationTelemetryTest {
     @Test
     fun `handles very large timestamp`() {
         val futureTs = Long.MAX_VALUE
-        val telemetry = LocationTelemetry(
-            lat = 0.0,
-            lng = 0.0,
-            acc = 0f,
-            ts = futureTs,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 0.0,
+                lng = 0.0,
+                acc = 0f,
+                ts = futureTs,
+            )
 
         assertEquals(futureTs, telemetry.ts)
     }
 
     @Test
     fun `handles high accuracy value`() {
-        val telemetry = LocationTelemetry(
-            lat = 0.0,
-            lng = 0.0,
-            acc = Float.MAX_VALUE,
-            ts = 0L,
-        )
+        val telemetry =
+            LocationTelemetry(
+                lat = 0.0,
+                lng = 0.0,
+                acc = Float.MAX_VALUE,
+                ts = 0L,
+            )
 
         assertEquals(Float.MAX_VALUE, telemetry.acc, 0.1f)
     }

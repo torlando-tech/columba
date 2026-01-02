@@ -51,11 +51,12 @@ class ShareLocationBottomSheetTest {
     @Test
     fun `contacts sorted by lastMessageTimestamp descending`() {
         // Given - contacts with different message timestamps
-        val contacts = listOf(
-            createContact("alice", lastMessageTimestamp = 1000L),
-            createContact("bob", lastMessageTimestamp = 3000L), // Most recent
-            createContact("carol", lastMessageTimestamp = 2000L),
-        )
+        val contacts =
+            listOf(
+                createContact("alice", lastMessageTimestamp = 1000L),
+                createContact("bob", lastMessageTimestamp = 3000L), // Most recent
+                createContact("carol", lastMessageTimestamp = 2000L),
+            )
 
         // When - apply the same sorting logic as ShareLocationBottomSheet
         val sorted = sortContactsByRecency(contacts)
@@ -69,11 +70,12 @@ class ShareLocationBottomSheetTest {
     @Test
     fun `contacts without messages sorted by addedTimestamp descending`() {
         // Given - contacts without message history
-        val contacts = listOf(
-            createContact("alice", lastMessageTimestamp = null, addedTimestamp = 1000L),
-            createContact("bob", lastMessageTimestamp = null, addedTimestamp = 3000L), // Added most recently
-            createContact("carol", lastMessageTimestamp = null, addedTimestamp = 2000L),
-        )
+        val contacts =
+            listOf(
+                createContact("alice", lastMessageTimestamp = null, addedTimestamp = 1000L),
+                createContact("bob", lastMessageTimestamp = null, addedTimestamp = 3000L), // Added most recently
+                createContact("carol", lastMessageTimestamp = null, addedTimestamp = 2000L),
+            )
 
         // When
         val sorted = sortContactsByRecency(contacts)
@@ -87,11 +89,12 @@ class ShareLocationBottomSheetTest {
     @Test
     fun `contacts with messages appear before contacts without messages`() {
         // Given - mix of contacts with and without message history
-        val contacts = listOf(
-            createContact("no-messages-old", lastMessageTimestamp = null, addedTimestamp = 1000L),
-            createContact("has-messages", lastMessageTimestamp = 100L), // Very old message
-            createContact("no-messages-new", lastMessageTimestamp = null, addedTimestamp = 5000L),
-        )
+        val contacts =
+            listOf(
+                createContact("no-messages-old", lastMessageTimestamp = null, addedTimestamp = 1000L),
+                createContact("has-messages", lastMessageTimestamp = 100L), // Very old message
+                createContact("no-messages-new", lastMessageTimestamp = null, addedTimestamp = 5000L),
+            )
 
         // When
         val sorted = sortContactsByRecency(contacts)
@@ -106,11 +109,12 @@ class ShareLocationBottomSheetTest {
     @Test
     fun `contacts with same lastMessageTimestamp sorted by addedTimestamp`() {
         // Given - contacts with same message timestamp
-        val contacts = listOf(
-            createContact("alice", lastMessageTimestamp = 1000L, addedTimestamp = 100L),
-            createContact("bob", lastMessageTimestamp = 1000L, addedTimestamp = 300L), // Added more recently
-            createContact("carol", lastMessageTimestamp = 1000L, addedTimestamp = 200L),
-        )
+        val contacts =
+            listOf(
+                createContact("alice", lastMessageTimestamp = 1000L, addedTimestamp = 100L),
+                createContact("bob", lastMessageTimestamp = 1000L, addedTimestamp = 300L), // Added more recently
+                createContact("carol", lastMessageTimestamp = 1000L, addedTimestamp = 200L),
+            )
 
         // When
         val sorted = sortContactsByRecency(contacts)
@@ -269,10 +273,11 @@ class ShareLocationBottomSheetTest {
 
     @Test
     fun `shareLocationBottomSheet displays contacts in list`() {
-        val contacts = listOf(
-            TestFactories.createEnrichedContact(destinationHash = "hash1", displayName = "Alice"),
-            TestFactories.createEnrichedContact(destinationHash = "hash2", displayName = "Bob"),
-        )
+        val contacts =
+            listOf(
+                TestFactories.createEnrichedContact(destinationHash = "hash1", displayName = "Alice"),
+                TestFactories.createEnrichedContact(destinationHash = "hash2", displayName = "Bob"),
+            )
 
         composeTestRule.setContent {
             ShareLocationBottomSheet(
@@ -289,10 +294,11 @@ class ShareLocationBottomSheetTest {
 
     @Test
     fun `shareLocationBottomSheet preselected contacts show as chips`() {
-        val contacts = listOf(
-            TestFactories.createEnrichedContact(destinationHash = "hash1", displayName = "Alice"),
-            TestFactories.createEnrichedContact(destinationHash = "hash2", displayName = "Bob"),
-        )
+        val contacts =
+            listOf(
+                TestFactories.createEnrichedContact(destinationHash = "hash1", displayName = "Alice"),
+                TestFactories.createEnrichedContact(destinationHash = "hash2", displayName = "Bob"),
+            )
 
         composeTestRule.setContent {
             ShareLocationBottomSheet(
@@ -332,11 +338,12 @@ class ShareLocationBottomSheetTest {
 
     @Test
     fun `shareLocationBottomSheet search filters contacts`() {
-        val contacts = listOf(
-            TestFactories.createEnrichedContact(destinationHash = "hash1", displayName = "Alice"),
-            TestFactories.createEnrichedContact(destinationHash = "hash2", displayName = "Bob"),
-            TestFactories.createEnrichedContact(destinationHash = "hash3", displayName = "Charlie"),
-        )
+        val contacts =
+            listOf(
+                TestFactories.createEnrichedContact(destinationHash = "hash1", displayName = "Alice"),
+                TestFactories.createEnrichedContact(destinationHash = "hash2", displayName = "Bob"),
+                TestFactories.createEnrichedContact(destinationHash = "hash3", displayName = "Charlie"),
+            )
 
         composeTestRule.setContent {
             ShareLocationBottomSheet(
@@ -386,7 +393,7 @@ class ShareLocationBottomSheetTest {
     private fun sortContactsByRecency(contacts: List<EnrichedContact>): List<EnrichedContact> {
         return contacts.sortedWith(
             compareByDescending<EnrichedContact> { it.lastMessageTimestamp ?: 0L }
-                .thenByDescending { it.addedTimestamp }
+                .thenByDescending { it.addedTimestamp },
         )
     }
 

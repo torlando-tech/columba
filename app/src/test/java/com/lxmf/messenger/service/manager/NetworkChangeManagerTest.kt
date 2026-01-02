@@ -51,11 +51,12 @@ class NetworkChangeManagerTest {
             connectivityManager.registerNetworkCallback(any(), capture(callbackSlot))
         } just runs
 
-        networkChangeManager = NetworkChangeManager(
-            context = context,
-            lockManager = lockManager,
-            onNetworkChanged = { networkChangedCallCount++ },
-        )
+        networkChangeManager =
+            NetworkChangeManager(
+                context = context,
+                lockManager = lockManager,
+                onNetworkChanged = { networkChangedCallCount++ },
+            )
     }
 
     @After
@@ -198,11 +199,12 @@ class NetworkChangeManagerTest {
 
     @Test
     fun `exception in callback does not crash`() {
-        val crashingManager = NetworkChangeManager(
-            context = context,
-            lockManager = lockManager,
-            onNetworkChanged = { throw IllegalStateException("Test error") },
-        )
+        val crashingManager =
+            NetworkChangeManager(
+                context = context,
+                lockManager = lockManager,
+                onNetworkChanged = { throw IllegalStateException("Test error") },
+            )
 
         crashingManager.start()
 

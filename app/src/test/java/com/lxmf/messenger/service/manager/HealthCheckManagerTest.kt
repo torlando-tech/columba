@@ -3,7 +3,6 @@ package com.lxmf.messenger.service.manager
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -35,11 +34,12 @@ class HealthCheckManagerTest {
         testScope = TestScope(testDispatcher)
         wrapperManager = mockk(relaxed = true)
         staleHeartbeatCallCount = 0
-        healthCheckManager = HealthCheckManager(
-            wrapperManager = wrapperManager,
-            scope = testScope,
-            onStaleHeartbeat = { staleHeartbeatCallCount++ },
-        )
+        healthCheckManager =
+            HealthCheckManager(
+                wrapperManager = wrapperManager,
+                scope = testScope,
+                onStaleHeartbeat = { staleHeartbeatCallCount++ },
+            )
     }
 
     @After

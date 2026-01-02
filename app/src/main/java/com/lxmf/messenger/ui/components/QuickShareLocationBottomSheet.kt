@@ -53,9 +53,10 @@ fun QuickShareLocationBottomSheet(
         modifier = Modifier.systemBarsPadding(),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
         ) {
             // Title
             Text(

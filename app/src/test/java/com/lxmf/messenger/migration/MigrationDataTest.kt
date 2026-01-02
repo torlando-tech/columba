@@ -86,9 +86,8 @@ class MigrationDataTest {
             isPinned = true,
         )
 
-    private fun createTestAnnounce(
-        receivingInterfaceType: String? = "AUTO_INTERFACE",
-    ) = AnnounceExport(
+    private fun createTestAnnounce(receivingInterfaceType: String? = "AUTO_INTERFACE") =
+        AnnounceExport(
             destinationHash = "announce123",
             peerName = "Remote Node",
             publicKey = "YW5ub3VuY2VQdWJsaWNLZXk=",

@@ -7,7 +7,6 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
 import io.mockk.unmockkAll
 import org.junit.After
 import org.junit.Assert.assertEquals

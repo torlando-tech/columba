@@ -12,7 +12,6 @@ import org.junit.Test
  * Tests the font-based MDI implementation for Sideband/MeshChat interoperability.
  */
 class MaterialDesignIconsTest {
-
     // ========== getCodepoint() Method Tests ==========
 
     @Test
@@ -235,20 +234,21 @@ class MaterialDesignIconsTest {
     @Test
     fun sidebandCommonIcons_areAvailable() {
         // Icons commonly used in Sideband
-        val sidebandIcons = listOf(
-            "radio",
-            "account",
-            "alien",
-            "alien-outline",
-            "robot",
-            "robot-outline",
-            "cat",
-            "dog",
-            "star",
-            "heart",
-            "skull",
-            "ghost",
-        )
+        val sidebandIcons =
+            listOf(
+                "radio",
+                "account",
+                "alien",
+                "alien-outline",
+                "robot",
+                "robot-outline",
+                "cat",
+                "dog",
+                "star",
+                "heart",
+                "skull",
+                "ghost",
+            )
         sidebandIcons.forEach { iconName ->
             assertTrue(
                 "Sideband icon '$iconName' should be available",

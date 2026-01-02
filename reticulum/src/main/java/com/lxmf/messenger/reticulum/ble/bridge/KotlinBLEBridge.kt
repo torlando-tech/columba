@@ -366,15 +366,16 @@ class KotlinBLEBridge(
             connectedPeers.values.forEach { peer ->
                 val identity = peer.identityHash ?: addressToIdentity[peer.address] ?: "unknown_${peer.address}"
                 val existing = bestPeerByIdentity[identity]
-                val dominated = when {
-                    existing == null -> false
-                    // Prefer peer with central connection
-                    peer.isCentral && !existing.isCentral -> false
-                    existing.isCentral && !peer.isCentral -> true
-                    // Prefer peer with more recent activity
-                    peer.lastActivity > existing.lastActivity -> false
-                    else -> true
-                }
+                val dominated =
+                    when {
+                        existing == null -> false
+                        // Prefer peer with central connection
+                        peer.isCentral && !existing.isCentral -> false
+                        existing.isCentral && !peer.isCentral -> true
+                        // Prefer peer with more recent activity
+                        peer.lastActivity > existing.lastActivity -> false
+                        else -> true
+                    }
                 if (!dominated) {
                     bestPeerByIdentity[identity] = peer
                 }
@@ -385,14 +386,16 @@ class KotlinBLEBridge(
                 // Use stored peer.rssi first, then fall back to scanner cache
                 val rssi = if (peer.rssi != -100) peer.rssi else device?.rssi ?: -100
                 // Use effective connection type based on deduplication state
-                val effectiveCentral = when (peer.deduplicationState) {
-                    DeduplicationState.CLOSING_CENTRAL -> false
-                    else -> peer.isCentral
-                }
-                val effectivePeripheral = when (peer.deduplicationState) {
-                    DeduplicationState.CLOSING_PERIPHERAL -> false
-                    else -> peer.isPeripheral
-                }
+                val effectiveCentral =
+                    when (peer.deduplicationState) {
+                        DeduplicationState.CLOSING_CENTRAL -> false
+                        else -> peer.isCentral
+                    }
+                val effectivePeripheral =
+                    when (peer.deduplicationState) {
+                        DeduplicationState.CLOSING_PERIPHERAL -> false
+                        else -> peer.isPeripheral
+                    }
                 val jsonObj =
                     org.json.JSONObject().apply {
                         put("identityHash", peer.identityHash ?: "unknown")
@@ -428,22 +431,23 @@ class KotlinBLEBridge(
      */
     fun startPeriodicConnectionRefresh() {
         if (connectionRefreshJob?.isActive == true) return
-        connectionRefreshJob = scope.launch {
-            while (true) {
-                kotlinx.coroutines.delay(1000L)
-                if (connectedPeers.isNotEmpty()) {
-                    // Update RSSI values from scanner cache
-                    val deviceMap = scanner.getDevicesSnapshot()
-                    connectedPeers.values.forEach { peer ->
-                        val device = deviceMap[peer.address]
-                        if (device != null && device.rssi != -100) {
-                            peer.rssi = device.rssi
+        connectionRefreshJob =
+            scope.launch {
+                while (true) {
+                    kotlinx.coroutines.delay(1000L)
+                    if (connectedPeers.isNotEmpty()) {
+                        // Update RSSI values from scanner cache
+                        val deviceMap = scanner.getDevicesSnapshot()
+                        connectedPeers.values.forEach { peer ->
+                            val device = deviceMap[peer.address]
+                            if (device != null && device.rssi != -100) {
+                                peer.rssi = device.rssi
+                            }
                         }
+                        notifyConnectionChange()
                     }
-                    notifyConnectionChange()
                 }
             }
-        }
         Log.d(TAG, "Started periodic connection refresh")
     }
 
@@ -482,9 +486,9 @@ class KotlinBLEBridge(
      * Used to report correct connection type to UI while disconnect is pending.
      */
     private enum class DeduplicationState {
-        NONE,              // Normal state - use actual isCentral/isPeripheral flags
-        CLOSING_CENTRAL,   // Keeping peripheral, central disconnect is pending
-        CLOSING_PERIPHERAL // Keeping central, peripheral disconnect is pending
+        NONE, // Normal state - use actual isCentral/isPeripheral flags
+        CLOSING_CENTRAL, // Keeping peripheral, central disconnect is pending
+        CLOSING_PERIPHERAL, // Keeping central, peripheral disconnect is pending
     }
 
     /**
@@ -493,7 +497,7 @@ class KotlinBLEBridge(
     private enum class DedupeAction {
         NONE,
         CLOSE_CENTRAL,
-        CLOSE_PERIPHERAL
+        CLOSE_PERIPHERAL,
     }
 
     /**
@@ -1307,12 +1311,13 @@ class KotlinBLEBridge(
             // Also re-fire connected callback to restore full state
             val peer = connectedPeers[address]
             if (peer != null) {
-                val roleString = when {
-                    peer.isCentral && peer.isPeripheral -> "both"
-                    peer.isCentral -> "central"
-                    peer.isPeripheral -> "peripheral"
-                    else -> "unknown"
-                }
+                val roleString =
+                    when {
+                        peer.isCentral && peer.isPeripheral -> "both"
+                        peer.isCentral -> "central"
+                        peer.isPeripheral -> "peripheral"
+                        else -> "unknown"
+                    }
                 onConnected?.callAttr("__call__", address, peer.mtu, roleString, identityHash)
                 Log.d(TAG, "Identity resync: re-fired onConnected for $address")
             }
@@ -1351,14 +1356,16 @@ class KotlinBLEBridge(
                 // Fallback to addressToIdentity if peer.identityHash not set (race condition)
                 val identity = peer.identityHash ?: addressToIdentity[peer.address]
                 // Use effective connection type based on deduplication state
-                val effectiveCentral = when (peer.deduplicationState) {
-                    DeduplicationState.CLOSING_CENTRAL -> false
-                    else -> peer.isCentral
-                }
-                val effectivePeripheral = when (peer.deduplicationState) {
-                    DeduplicationState.CLOSING_PERIPHERAL -> false
-                    else -> peer.isPeripheral
-                }
+                val effectiveCentral =
+                    when (peer.deduplicationState) {
+                        DeduplicationState.CLOSING_CENTRAL -> false
+                        else -> peer.isCentral
+                    }
+                val effectivePeripheral =
+                    when (peer.deduplicationState) {
+                        DeduplicationState.CLOSING_PERIPHERAL -> false
+                        else -> peer.isPeripheral
+                    }
 
                 details.add(
                     BleConnectionDetails(
@@ -1402,15 +1409,16 @@ class KotlinBLEBridge(
         connectedPeers.values.forEach { peer ->
             val identity = peer.identityHash ?: addressToIdentity[peer.address] ?: "unknown_${peer.address}"
             val existing = bestPeerByIdentity[identity]
-            val dominated = when {
-                existing == null -> false
-                // Prefer peer with central connection
-                peer.isCentral && !existing.isCentral -> false
-                existing.isCentral && !peer.isCentral -> true
-                // Prefer peer with more recent activity
-                peer.lastActivity > existing.lastActivity -> false
-                else -> true
-            }
+            val dominated =
+                when {
+                    existing == null -> false
+                    // Prefer peer with central connection
+                    peer.isCentral && !existing.isCentral -> false
+                    existing.isCentral && !peer.isCentral -> true
+                    // Prefer peer with more recent activity
+                    peer.lastActivity > existing.lastActivity -> false
+                    else -> true
+                }
             if (!dominated) {
                 bestPeerByIdentity[identity] = peer
             }
@@ -1424,14 +1432,16 @@ class KotlinBLEBridge(
 
             val finalRssi = if (peer.rssi != -100) peer.rssi else device?.rssi ?: -100
             // Use effective connection type based on deduplication state
-            val effectiveCentral = when (peer.deduplicationState) {
-                DeduplicationState.CLOSING_CENTRAL -> false
-                else -> peer.isCentral
-            }
-            val effectivePeripheral = when (peer.deduplicationState) {
-                DeduplicationState.CLOSING_PERIPHERAL -> false
-                else -> peer.isPeripheral
-            }
+            val effectiveCentral =
+                when (peer.deduplicationState) {
+                    DeduplicationState.CLOSING_CENTRAL -> false
+                    else -> peer.isCentral
+                }
+            val effectivePeripheral =
+                when (peer.deduplicationState) {
+                    DeduplicationState.CLOSING_PERIPHERAL -> false
+                    else -> peer.isPeripheral
+                }
             details.add(
                 BleConnectionDetails(
                     identityHash = identity ?: "unknown",
@@ -1919,18 +1929,19 @@ class KotlinBLEBridge(
                 // Prefer addresses with central connection (more reliable for sending)
                 val existingAddress = identityToAddress[identityHash]
                 val existingPeer = existingAddress?.let { connectedPeers[it] }
-                val shouldUpdate = when {
-                    existingAddress == null -> true // No existing mapping
-                    existingPeer == null -> true // Old peer no longer exists
-                    // Prefer peer with central connection
-                    peerAtNewAddress.isCentral && !existingPeer.isCentral -> true
-                    // If new has both, prefer it
-                    peerAtNewAddress.isCentral && peerAtNewAddress.isPeripheral -> true
-                    // If existing has central and new doesn't, keep existing
-                    existingPeer.isCentral && !peerAtNewAddress.isCentral -> false
-                    // Default: use the newer address
-                    else -> true
-                }
+                val shouldUpdate =
+                    when {
+                        existingAddress == null -> true // No existing mapping
+                        existingPeer == null -> true // Old peer no longer exists
+                        // Prefer peer with central connection
+                        peerAtNewAddress.isCentral && !existingPeer.isCentral -> true
+                        // If new has both, prefer it
+                        peerAtNewAddress.isCentral && peerAtNewAddress.isPeripheral -> true
+                        // If existing has central and new doesn't, keep existing
+                        existingPeer.isCentral && !peerAtNewAddress.isCentral -> false
+                        // Default: use the newer address
+                        else -> true
+                    }
 
                 if (shouldUpdate) {
                     identityToAddress[identityHash] = address

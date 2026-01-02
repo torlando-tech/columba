@@ -46,38 +46,40 @@ class NetworkChangeManager(
             stop()
         }
 
-        networkCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                val networkId = network.toString()
-                Log.d(TAG, "Network available: $networkId (previous: $lastNetworkId)")
+        networkCallback =
+            object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    val networkId = network.toString()
+                    Log.d(TAG, "Network available: $networkId (previous: $lastNetworkId)")
 
-                // Only trigger if this is a new network (not initial connection)
-                if (lastNetworkId != null && lastNetworkId != networkId) {
-                    Log.i(TAG, "Network changed - reacquiring locks and triggering announce")
-                    handleNetworkChange()
+                    // Only trigger if this is a new network (not initial connection)
+                    if (lastNetworkId != null && lastNetworkId != networkId) {
+                        Log.i(TAG, "Network changed - reacquiring locks and triggering announce")
+                        handleNetworkChange()
+                    }
+                    lastNetworkId = networkId
                 }
-                lastNetworkId = networkId
+
+                override fun onLost(network: Network) {
+                    Log.d(TAG, "Network lost: $network")
+                    // Don't clear lastNetworkId here - we want to detect when a new network connects
+                }
+
+                override fun onCapabilitiesChanged(
+                    network: Network,
+                    networkCapabilities: NetworkCapabilities,
+                ) {
+                    // Log capability changes for debugging
+                    val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    val isValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                    Log.v(TAG, "Network capabilities changed: internet=$hasInternet, validated=$isValidated")
+                }
             }
 
-            override fun onLost(network: Network) {
-                Log.d(TAG, "Network lost: $network")
-                // Don't clear lastNetworkId here - we want to detect when a new network connects
-            }
-
-            override fun onCapabilitiesChanged(
-                network: Network,
-                networkCapabilities: NetworkCapabilities,
-            ) {
-                // Log capability changes for debugging
-                val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                val isValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                Log.v(TAG, "Network capabilities changed: internet=$hasInternet, validated=$isValidated")
-            }
-        }
-
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
+        val request =
+            NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
 
         try {
             connectivityManager.registerNetworkCallback(request, networkCallback!!)

@@ -8,14 +8,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -49,7 +49,6 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +56,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.util.DestinationHashValidator
+import kotlinx.coroutines.delay
 
 /**
  * Settings card for message delivery and retrieval options.
@@ -633,7 +633,10 @@ private fun CurrentRelayInfo(
  * @param timestamp The timestamp to format
  * @param now The current time (passed in to trigger recomposition on change)
  */
-private fun formatRelativeTime(timestamp: Long, now: Long = System.currentTimeMillis()): String {
+private fun formatRelativeTime(
+    timestamp: Long,
+    now: Long = System.currentTimeMillis(),
+): String {
     val diff = now - timestamp
 
     return when {

@@ -56,9 +56,10 @@ fun SharingStatusChip(
                 )
             }
         },
-        colors = AssistChipDefaults.assistChipColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-        ),
+        colors =
+            AssistChipDefaults.assistChipColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+            ),
         modifier = modifier,
     )
 }

@@ -225,9 +225,10 @@ class PeerCardTest {
     @Test
     fun peerCard_displaysWiFiIcon_forAutoInterface() {
         // Given
-        val announce = TestFactories.createAnnounce(
-            receivingInterfaceType = "AUTO_INTERFACE",
-        )
+        val announce =
+            TestFactories.createAnnounce(
+                receivingInterfaceType = "AUTO_INTERFACE",
+            )
 
         // When
         composeTestRule.setContent {
@@ -245,9 +246,10 @@ class PeerCardTest {
     @Test
     fun peerCard_displaysGlobeIcon_forTcpClient() {
         // Given
-        val announce = TestFactories.createAnnounce(
-            receivingInterfaceType = "TCP_CLIENT",
-        )
+        val announce =
+            TestFactories.createAnnounce(
+                receivingInterfaceType = "TCP_CLIENT",
+            )
 
         // When
         composeTestRule.setContent {
@@ -265,9 +267,10 @@ class PeerCardTest {
     @Test
     fun peerCard_displaysBluetoothIcon_forAndroidBle() {
         // Given
-        val announce = TestFactories.createAnnounce(
-            receivingInterfaceType = "ANDROID_BLE",
-        )
+        val announce =
+            TestFactories.createAnnounce(
+                receivingInterfaceType = "ANDROID_BLE",
+            )
 
         // When
         composeTestRule.setContent {
@@ -285,9 +288,10 @@ class PeerCardTest {
     @Test
     fun peerCard_displaysAntennaIcon_forRnode() {
         // Given
-        val announce = TestFactories.createAnnounce(
-            receivingInterfaceType = "RNODE",
-        )
+        val announce =
+            TestFactories.createAnnounce(
+                receivingInterfaceType = "RNODE",
+            )
 
         // When
         composeTestRule.setContent {
@@ -305,9 +309,10 @@ class PeerCardTest {
     @Test
     fun peerCard_doesNotDisplayInterfaceIcon_forUnknown() {
         // Given
-        val announce = TestFactories.createAnnounce(
-            receivingInterfaceType = "UNKNOWN",
-        )
+        val announce =
+            TestFactories.createAnnounce(
+                receivingInterfaceType = "UNKNOWN",
+            )
 
         // When
         composeTestRule.setContent {
@@ -328,9 +333,10 @@ class PeerCardTest {
     @Test
     fun peerCard_doesNotDisplayInterfaceIcon_forNull() {
         // Given
-        val announce = TestFactories.createAnnounce(
-            receivingInterfaceType = null,
-        )
+        val announce =
+            TestFactories.createAnnounce(
+                receivingInterfaceType = null,
+            )
 
         // When
         composeTestRule.setContent {

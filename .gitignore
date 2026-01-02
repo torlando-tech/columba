@@ -93,3 +93,4 @@ release/.envrc
 
 # Auto Claude data directory
 .auto-claude/
+.worktrees/

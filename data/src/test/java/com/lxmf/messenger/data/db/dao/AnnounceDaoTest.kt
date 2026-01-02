@@ -30,9 +30,10 @@ class AnnounceDaoTest {
     @Before
     fun setup() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        database = Room.inMemoryDatabaseBuilder(context, ColumbaDatabase::class.java)
-            .allowMainThreadQueries()
-            .build()
+        database =
+            Room.inMemoryDatabaseBuilder(context, ColumbaDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
         dao = database.announceDao()
     }
 
@@ -58,11 +59,12 @@ class AnnounceDaoTest {
         lastSeenTimestamp = lastSeenTimestamp,
         nodeType = nodeType,
         receivingInterface = null,
-        aspect = when (nodeType) {
-            "PROPAGATION_NODE" -> "lxmf.propagation"
-            "PEER" -> "lxmf.delivery"
-            else -> null
-        },
+        aspect =
+            when (nodeType) {
+                "PROPAGATION_NODE" -> "lxmf.propagation"
+                "PEER" -> "lxmf.delivery"
+                else -> null
+            },
         isFavorite = false,
         favoritedTimestamp = null,
         stampCost = null,
@@ -73,149 +75,157 @@ class AnnounceDaoTest {
     // ========== getTopPropagationNodes Tests ==========
 
     @Test
-    fun getTopPropagationNodes_returnsEmptyWhenNoAnnounces() = runTest {
-        // When/Then
-        dao.getTopPropagationNodes(10).test {
-            val nodes = awaitItem()
-            assertTrue(nodes.isEmpty())
+    fun getTopPropagationNodes_returnsEmptyWhenNoAnnounces() =
+        runTest {
+            // When/Then
+            dao.getTopPropagationNodes(10).test {
+                val nodes = awaitItem()
+                assertTrue(nodes.isEmpty())
+            }
         }
-    }
 
     @Test
-    fun getTopPropagationNodes_returnsOnlyPropagationNodeType() = runTest {
-        // Given - mix of node types
-        dao.upsertAnnounce(createTestAnnounce(destinationHash = "peer1", nodeType = "PEER", hops = 1))
-        dao.upsertAnnounce(createTestAnnounce(destinationHash = "node1", nodeType = "NODE", hops = 1))
-        dao.upsertAnnounce(createTestAnnounce(destinationHash = "prop1", nodeType = "PROPAGATION_NODE", hops = 1))
-        dao.upsertAnnounce(createTestAnnounce(destinationHash = "prop2", nodeType = "PROPAGATION_NODE", hops = 2))
-        dao.upsertAnnounce(createTestAnnounce(destinationHash = "peer2", nodeType = "PEER", hops = 3))
+    fun getTopPropagationNodes_returnsOnlyPropagationNodeType() =
+        runTest {
+            // Given - mix of node types
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "peer1", nodeType = "PEER", hops = 1))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "node1", nodeType = "NODE", hops = 1))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "prop1", nodeType = "PROPAGATION_NODE", hops = 1))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "prop2", nodeType = "PROPAGATION_NODE", hops = 2))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "peer2", nodeType = "PEER", hops = 3))
 
-        // When/Then
-        dao.getTopPropagationNodes(10).test {
-            val nodes = awaitItem()
-            assertEquals(2, nodes.size)
-            assertTrue(nodes.all { it.nodeType == "PROPAGATION_NODE" })
+            // When/Then
+            dao.getTopPropagationNodes(10).test {
+                val nodes = awaitItem()
+                assertEquals(2, nodes.size)
+                assertTrue(nodes.all { it.nodeType == "PROPAGATION_NODE" })
+            }
         }
-    }
 
     @Test
-    fun getTopPropagationNodes_respectsLimit() = runTest {
-        // Given - 5 propagation nodes
-        repeat(5) { i ->
+    fun getTopPropagationNodes_respectsLimit() =
+        runTest {
+            // Given - 5 propagation nodes
+            repeat(5) { i ->
+                dao.upsertAnnounce(
+                    createTestAnnounce(
+                        destinationHash = "prop$i",
+                        nodeType = "PROPAGATION_NODE",
+                        hops = i,
+                    ),
+                )
+            }
+
+            // When/Then - request only 3
+            dao.getTopPropagationNodes(3).test {
+                val nodes = awaitItem()
+                assertEquals(3, nodes.size)
+            }
+        }
+
+    @Test
+    fun getTopPropagationNodes_orderedByHopsAscending() =
+        runTest {
+            // Given - propagation nodes with different hop counts
             dao.upsertAnnounce(
-                createTestAnnounce(
-                    destinationHash = "prop$i",
-                    nodeType = "PROPAGATION_NODE",
-                    hops = i,
-                ),
+                createTestAnnounce(destinationHash = "far", nodeType = "PROPAGATION_NODE", hops = 5),
             )
-        }
-
-        // When/Then - request only 3
-        dao.getTopPropagationNodes(3).test {
-            val nodes = awaitItem()
-            assertEquals(3, nodes.size)
-        }
-    }
-
-    @Test
-    fun getTopPropagationNodes_orderedByHopsAscending() = runTest {
-        // Given - propagation nodes with different hop counts
-        dao.upsertAnnounce(
-            createTestAnnounce(destinationHash = "far", nodeType = "PROPAGATION_NODE", hops = 5),
-        )
-        dao.upsertAnnounce(
-            createTestAnnounce(destinationHash = "near", nodeType = "PROPAGATION_NODE", hops = 1),
-        )
-        dao.upsertAnnounce(
-            createTestAnnounce(destinationHash = "mid", nodeType = "PROPAGATION_NODE", hops = 3),
-        )
-
-        // When/Then
-        dao.getTopPropagationNodes(10).test {
-            val nodes = awaitItem()
-            assertEquals(3, nodes.size)
-            assertEquals("near", nodes[0].destinationHash) // 1 hop - nearest first
-            assertEquals("mid", nodes[1].destinationHash) // 3 hops
-            assertEquals("far", nodes[2].destinationHash) // 5 hops - farthest last
-        }
-    }
-
-    @Test
-    fun getTopPropagationNodes_emitsUpdatesWhenNodeAdded() = runTest {
-        // Given/When/Then
-        dao.getTopPropagationNodes(10).test {
-            // Initially empty
-            assertEquals(0, awaitItem().size)
-
-            // Add a propagation node
             dao.upsertAnnounce(
-                createTestAnnounce(destinationHash = "new_prop", nodeType = "PROPAGATION_NODE"),
+                createTestAnnounce(destinationHash = "near", nodeType = "PROPAGATION_NODE", hops = 1),
+            )
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "mid", nodeType = "PROPAGATION_NODE", hops = 3),
             )
 
-            // Should emit update
-            val updated = awaitItem()
-            assertEquals(1, updated.size)
-            assertEquals("new_prop", updated[0].destinationHash)
+            // When/Then
+            dao.getTopPropagationNodes(10).test {
+                val nodes = awaitItem()
+                assertEquals(3, nodes.size)
+                assertEquals("near", nodes[0].destinationHash) // 1 hop - nearest first
+                assertEquals("mid", nodes[1].destinationHash) // 3 hops
+                assertEquals("far", nodes[2].destinationHash) // 5 hops - farthest last
+            }
         }
-    }
 
     @Test
-    fun getTopPropagationNodes_notAffectedByNonPropagationNodeInsert() = runTest {
-        // Given - one propagation node exists
-        dao.upsertAnnounce(
-            createTestAnnounce(destinationHash = "prop1", nodeType = "PROPAGATION_NODE"),
-        )
+    fun getTopPropagationNodes_emitsUpdatesWhenNodeAdded() =
+        runTest {
+            // Given/When/Then
+            dao.getTopPropagationNodes(10).test {
+                // Initially empty
+                assertEquals(0, awaitItem().size)
 
-        dao.getTopPropagationNodes(10).test {
-            // Initial state
-            val initial = awaitItem()
-            assertEquals(1, initial.size)
-            assertEquals("prop1", initial[0].destinationHash)
+                // Add a propagation node
+                dao.upsertAnnounce(
+                    createTestAnnounce(destinationHash = "new_prop", nodeType = "PROPAGATION_NODE"),
+                )
 
-            // Add a PEER - should not affect the filtered result
+                // Should emit update
+                val updated = awaitItem()
+                assertEquals(1, updated.size)
+                assertEquals("new_prop", updated[0].destinationHash)
+            }
+        }
+
+    @Test
+    fun getTopPropagationNodes_notAffectedByNonPropagationNodeInsert() =
+        runTest {
+            // Given - one propagation node exists
             dao.upsertAnnounce(
-                createTestAnnounce(destinationHash = "peer1", nodeType = "PEER"),
+                createTestAnnounce(destinationHash = "prop1", nodeType = "PROPAGATION_NODE"),
             )
 
-            // Room may or may not emit on table changes (implementation detail).
-            // If it does emit, verify the result still only contains propagation nodes.
-            // We can't control Room's emission behavior, so we accept either case.
-            cancelAndIgnoreRemainingEvents()
+            dao.getTopPropagationNodes(10).test {
+                // Initial state
+                val initial = awaitItem()
+                assertEquals(1, initial.size)
+                assertEquals("prop1", initial[0].destinationHash)
+
+                // Add a PEER - should not affect the filtered result
+                dao.upsertAnnounce(
+                    createTestAnnounce(destinationHash = "peer1", nodeType = "PEER"),
+                )
+
+                // Room may or may not emit on table changes (implementation detail).
+                // If it does emit, verify the result still only contains propagation nodes.
+                // We can't control Room's emission behavior, so we accept either case.
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     // ========== getNodeTypeCounts Tests ==========
 
     @Test
-    fun getNodeTypeCounts_returnsEmptyWhenNoAnnounces() = runTest {
-        // When
-        val counts = dao.getNodeTypeCounts()
+    fun getNodeTypeCounts_returnsEmptyWhenNoAnnounces() =
+        runTest {
+            // When
+            val counts = dao.getNodeTypeCounts()
 
-        // Then
-        assertTrue(counts.isEmpty())
-    }
+            // Then
+            assertTrue(counts.isEmpty())
+        }
 
     @Test
-    fun getNodeTypeCounts_returnsCorrectDistribution() = runTest {
-        // Given
-        repeat(3) { i ->
-            dao.upsertAnnounce(createTestAnnounce(destinationHash = "peer$i", nodeType = "PEER"))
-        }
-        repeat(2) { i ->
-            dao.upsertAnnounce(createTestAnnounce(destinationHash = "node$i", nodeType = "NODE"))
-        }
-        repeat(5) { i ->
-            dao.upsertAnnounce(createTestAnnounce(destinationHash = "prop$i", nodeType = "PROPAGATION_NODE"))
-        }
+    fun getNodeTypeCounts_returnsCorrectDistribution() =
+        runTest {
+            // Given
+            repeat(3) { i ->
+                dao.upsertAnnounce(createTestAnnounce(destinationHash = "peer$i", nodeType = "PEER"))
+            }
+            repeat(2) { i ->
+                dao.upsertAnnounce(createTestAnnounce(destinationHash = "node$i", nodeType = "NODE"))
+            }
+            repeat(5) { i ->
+                dao.upsertAnnounce(createTestAnnounce(destinationHash = "prop$i", nodeType = "PROPAGATION_NODE"))
+            }
 
-        // When
-        val counts = dao.getNodeTypeCounts()
+            // When
+            val counts = dao.getNodeTypeCounts()
 
-        // Then
-        assertEquals(3, counts.size)
-        assertEquals(5, counts.find { it.nodeType == "PROPAGATION_NODE" }?.count)
-        assertEquals(3, counts.find { it.nodeType == "PEER" }?.count)
-        assertEquals(2, counts.find { it.nodeType == "NODE" }?.count)
-    }
+            // Then
+            assertEquals(3, counts.size)
+            assertEquals(5, counts.find { it.nodeType == "PROPAGATION_NODE" }?.count)
+            assertEquals(3, counts.find { it.nodeType == "PEER" }?.count)
+            assertEquals(2, counts.find { it.nodeType == "NODE" }?.count)
+        }
 }

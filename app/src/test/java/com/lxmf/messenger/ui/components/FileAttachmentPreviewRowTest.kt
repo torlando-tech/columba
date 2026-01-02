@@ -74,11 +74,12 @@ class FileAttachmentPreviewRowTest {
 
     @Test
     fun `displays multiple attachment filenames`() {
-        val attachments = listOf(
-            createAttachment(filename = "doc1.pdf"),
-            createAttachment(filename = "doc2.txt"),
-            createAttachment(filename = "doc3.zip"),
-        )
+        val attachments =
+            listOf(
+                createAttachment(filename = "doc1.pdf"),
+                createAttachment(filename = "doc2.txt"),
+                createAttachment(filename = "doc3.zip"),
+            )
 
         composeTestRule.setContent {
             FileAttachmentPreviewRow(
@@ -160,7 +161,7 @@ class FileAttachmentPreviewRowTest {
 
         // Should display without error styling (just verify it renders)
         composeTestRule.onNodeWithText(
-            "${FileUtils.formatFileSize(totalSize)} / ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}"
+            "${FileUtils.formatFileSize(totalSize)} / ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
         ).assertIsDisplayed()
     }
 
@@ -180,7 +181,7 @@ class FileAttachmentPreviewRowTest {
 
         // Should display (visual styling change is verified by existence)
         composeTestRule.onNodeWithText(
-            "${FileUtils.formatFileSize(totalSize)} / ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}"
+            "${FileUtils.formatFileSize(totalSize)} / ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
         ).assertIsDisplayed()
     }
 
@@ -217,7 +218,7 @@ class FileAttachmentPreviewRowTest {
 
         // Should still display (with error styling)
         composeTestRule.onNodeWithText(
-            "${FileUtils.formatFileSize(totalSize)} / ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}"
+            "${FileUtils.formatFileSize(totalSize)} / ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
         ).assertIsDisplayed()
     }
 
@@ -240,10 +241,11 @@ class FileAttachmentPreviewRowTest {
 
     @Test
     fun `remove button click invokes callback with correct index`() {
-        val attachments = listOf(
-            createAttachment(filename = "first.pdf"),
-            createAttachment(filename = "second.txt"),
-        )
+        val attachments =
+            listOf(
+                createAttachment(filename = "first.pdf"),
+                createAttachment(filename = "second.txt"),
+            )
 
         composeTestRule.setContent {
             FileAttachmentPreviewRow(
@@ -261,10 +263,11 @@ class FileAttachmentPreviewRowTest {
 
     @Test
     fun `remove button click on first attachment invokes callback with index 0`() {
-        val attachments = listOf(
-            createAttachment(filename = "first.pdf"),
-            createAttachment(filename = "second.txt"),
-        )
+        val attachments =
+            listOf(
+                createAttachment(filename = "first.pdf"),
+                createAttachment(filename = "second.txt"),
+            )
 
         composeTestRule.setContent {
             FileAttachmentPreviewRow(
@@ -281,11 +284,12 @@ class FileAttachmentPreviewRowTest {
 
     @Test
     fun `all attachments have remove buttons`() {
-        val attachments = listOf(
-            createAttachment(filename = "doc1.pdf"),
-            createAttachment(filename = "doc2.txt"),
-            createAttachment(filename = "doc3.zip"),
-        )
+        val attachments =
+            listOf(
+                createAttachment(filename = "doc1.pdf"),
+                createAttachment(filename = "doc2.txt"),
+                createAttachment(filename = "doc3.zip"),
+            )
 
         composeTestRule.setContent {
             FileAttachmentPreviewRow(
@@ -430,11 +434,12 @@ class FileAttachmentPreviewRowTest {
 
     @Test
     fun `multiple sizes display correctly`() {
-        val attachments = listOf(
-            createAttachment(filename = "small.txt", sizeBytes = 512),
-            createAttachment(filename = "medium.pdf", sizeBytes = 50 * 1024),
-            createAttachment(filename = "large.zip", sizeBytes = 200 * 1024),
-        )
+        val attachments =
+            listOf(
+                createAttachment(filename = "small.txt", sizeBytes = 512),
+                createAttachment(filename = "medium.pdf", sizeBytes = 50 * 1024),
+                createAttachment(filename = "large.zip", sizeBytes = 200 * 1024),
+            )
 
         composeTestRule.setContent {
             FileAttachmentPreviewRow(
@@ -453,9 +458,10 @@ class FileAttachmentPreviewRowTest {
 
     @Test
     fun `displays complete attachment info with filename size and remove button`() {
-        val attachments = listOf(
-            createAttachment(filename = "report.pdf", sizeBytes = 75 * 1024),
-        )
+        val attachments =
+            listOf(
+                createAttachment(filename = "report.pdf", sizeBytes = 75 * 1024),
+            )
 
         composeTestRule.setContent {
             FileAttachmentPreviewRow(

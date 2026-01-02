@@ -76,9 +76,10 @@ fun ContactLocationBottomSheet(
         modifier = Modifier.systemBarsPadding(),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
         ) {
             // Avatar, name, and last updated
             Row(
@@ -112,11 +113,12 @@ fun ContactLocationBottomSheet(
                     Text(
                         text = updatedText,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (isStale) {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                        color =
+                            if (isStale) {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                     )
                 }
             }
@@ -195,10 +197,11 @@ internal fun formatDistanceAndDirection(
     val distance = results[0]
     val bearing = results[1]
 
-    val distanceText = when {
-        distance < 1000 -> "${distance.toInt()}m"
-        else -> "%.1fkm".format(distance / 1000)
-    }
+    val distanceText =
+        when {
+            distance < 1000 -> "${distance.toInt()}m"
+            else -> "%.1fkm".format(distance / 1000)
+        }
 
     val direction = bearingToDirection(bearing)
     return "$distanceText $direction"
@@ -252,7 +255,11 @@ internal fun formatUpdatedTime(timestamp: Long): String {
  * @param lat Destination latitude
  * @param lng Destination longitude
  */
-internal fun openDirectionsInMaps(context: Context, lat: Double, lng: Double) {
+internal fun openDirectionsInMaps(
+    context: Context,
+    lat: Double,
+    lng: Double,
+) {
     // Try Google Maps navigation first (walking mode)
     val googleMapsUri = Uri.parse("google.navigation:q=$lat,$lng&mode=w")
     val googleIntent = Intent(Intent.ACTION_VIEW, googleMapsUri)
@@ -276,11 +283,12 @@ internal fun openDirectionsInMaps(context: Context, lat: Double, lng: Double) {
 private fun StaleLocationBadge(state: MarkerState) {
     if (state == MarkerState.FRESH) return
 
-    val (text, color) = when (state) {
-        MarkerState.STALE -> "Stale" to MaterialTheme.colorScheme.outline
-        MarkerState.EXPIRED_GRACE_PERIOD -> "Last known" to MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-        else -> return
-    }
+    val (text, color) =
+        when (state) {
+            MarkerState.STALE -> "Stale" to MaterialTheme.colorScheme.outline
+            MarkerState.EXPIRED_GRACE_PERIOD -> "Last known" to MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+            else -> return
+        }
 
     Surface(
         color = color.copy(alpha = 0.15f),

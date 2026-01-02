@@ -220,21 +220,24 @@ private fun ScaleBarTestWrapper(metersPerPixel: Double) {
     val minMeters = metersPerPixel * minBarWidthPx
     val maxMeters = metersPerPixel * maxBarWidthPx
 
-    val niceDistances = listOf(
-        5, 10, 20, 50, 100, 200, 500,
-        1_000, 2_000, 5_000, 10_000, 20_000, 50_000,
-        100_000, 200_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000,
-    )
+    val niceDistances =
+        listOf(
+            5, 10, 20, 50, 100, 200, 500,
+            1_000, 2_000, 5_000, 10_000, 20_000, 50_000,
+            100_000, 200_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000,
+        )
 
-    val selectedDistance = niceDistances.findLast { it >= minMeters && it <= maxMeters }
-        ?: niceDistances.firstOrNull { it >= minMeters }
-        ?: niceDistances.last()
+    val selectedDistance =
+        niceDistances.findLast { it >= minMeters && it <= maxMeters }
+            ?: niceDistances.firstOrNull { it >= minMeters }
+            ?: niceDistances.last()
 
-    val distanceText = when {
-        selectedDistance >= 1_000_000 -> "${selectedDistance / 1_000_000} km"
-        selectedDistance >= 1_000 -> "${selectedDistance / 1_000} km"
-        else -> "$selectedDistance m"
-    }
+    val distanceText =
+        when {
+            selectedDistance >= 1_000_000 -> "${selectedDistance / 1_000_000} km"
+            selectedDistance >= 1_000 -> "${selectedDistance / 1_000} km"
+            else -> "$selectedDistance m"
+        }
 
     Text(text = distanceText)
 }
@@ -270,4 +273,3 @@ private fun EmptyMapStateCardTestWrapper() {
         }
     }
 }
-

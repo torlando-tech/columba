@@ -379,12 +379,13 @@ class ThemeColorGeneratorTest {
         val greenSeed = Color.Green.toArgb()
         val blueSeed = Color.Blue.toArgb()
 
-        val colorScheme = ThemeColorGenerator.generateColorScheme(
-            primarySeed = redSeed,
-            secondarySeed = greenSeed,
-            tertiarySeed = blueSeed,
-            isDark = false,
-        )
+        val colorScheme =
+            ThemeColorGenerator.generateColorScheme(
+                primarySeed = redSeed,
+                secondarySeed = greenSeed,
+                tertiarySeed = blueSeed,
+                isDark = false,
+            )
 
         // Verify all required color roles are present and not null
         assertNotNull(colorScheme.primary)
@@ -413,12 +414,13 @@ class ThemeColorGeneratorTest {
         val greenSeed = Color.Green.toArgb()
         val blueSeed = Color.Blue.toArgb()
 
-        val colorScheme = ThemeColorGenerator.generateColorScheme(
-            primarySeed = redSeed,
-            secondarySeed = greenSeed,
-            tertiarySeed = blueSeed,
-            isDark = true,
-        )
+        val colorScheme =
+            ThemeColorGenerator.generateColorScheme(
+                primarySeed = redSeed,
+                secondarySeed = greenSeed,
+                tertiarySeed = blueSeed,
+                isDark = true,
+            )
 
         // Verify all required color roles are present
         assertNotNull(colorScheme.primary)
@@ -434,12 +436,13 @@ class ThemeColorGeneratorTest {
         val greenSeed = Color.Green.toArgb()
         val blueSeed = Color.Blue.toArgb()
 
-        val colorScheme = ThemeColorGenerator.generateColorScheme(
-            primarySeed = redSeed,
-            secondarySeed = greenSeed,
-            tertiarySeed = blueSeed,
-            isDark = false,
-        )
+        val colorScheme =
+            ThemeColorGenerator.generateColorScheme(
+                primarySeed = redSeed,
+                secondarySeed = greenSeed,
+                tertiarySeed = blueSeed,
+                isDark = false,
+            )
 
         // Primary, secondary, tertiary should be visually different
         val primary = colorScheme.primary.toArgb()
@@ -455,12 +458,13 @@ class ThemeColorGeneratorTest {
     fun generateColorScheme_withThreeIdenticalSeeds_stillProducesValidScheme() {
         val purpleSeed = 0xFF6200EE.toInt()
 
-        val colorScheme = ThemeColorGenerator.generateColorScheme(
-            primarySeed = purpleSeed,
-            secondarySeed = purpleSeed,
-            tertiarySeed = purpleSeed,
-            isDark = false,
-        )
+        val colorScheme =
+            ThemeColorGenerator.generateColorScheme(
+                primarySeed = purpleSeed,
+                secondarySeed = purpleSeed,
+                tertiarySeed = purpleSeed,
+                isDark = false,
+            )
 
         // Should not crash and should return valid ColorScheme
         assertNotNull(colorScheme)
@@ -475,18 +479,20 @@ class ThemeColorGeneratorTest {
         val greenSeed = Color.Green.toArgb()
         val blueSeed = Color.Blue.toArgb()
 
-        val lightScheme = ThemeColorGenerator.generateColorScheme(
-            primarySeed = redSeed,
-            secondarySeed = greenSeed,
-            tertiarySeed = blueSeed,
-            isDark = false,
-        )
-        val darkScheme = ThemeColorGenerator.generateColorScheme(
-            primarySeed = redSeed,
-            secondarySeed = greenSeed,
-            tertiarySeed = blueSeed,
-            isDark = true,
-        )
+        val lightScheme =
+            ThemeColorGenerator.generateColorScheme(
+                primarySeed = redSeed,
+                secondarySeed = greenSeed,
+                tertiarySeed = blueSeed,
+                isDark = false,
+            )
+        val darkScheme =
+            ThemeColorGenerator.generateColorScheme(
+                primarySeed = redSeed,
+                secondarySeed = greenSeed,
+                tertiarySeed = blueSeed,
+                isDark = true,
+            )
 
         // Dark mode colors should be different from light mode colors
         val lightPrimary = lightScheme.primary.toArgb()
@@ -501,12 +507,13 @@ class ThemeColorGeneratorTest {
         val greenSeed = Color.Green.toArgb()
         val blueSeed = Color.Blue.toArgb()
 
-        val colorScheme = ThemeColorGenerator.generateColorScheme(
-            primarySeed = redSeed,
-            secondarySeed = greenSeed,
-            tertiarySeed = blueSeed,
-            isDark = false,
-        )
+        val colorScheme =
+            ThemeColorGenerator.generateColorScheme(
+                primarySeed = redSeed,
+                secondarySeed = greenSeed,
+                tertiarySeed = blueSeed,
+                isDark = false,
+            )
 
         // Containers should exist and be different from main colors
         val primary = colorScheme.primary.toArgb()

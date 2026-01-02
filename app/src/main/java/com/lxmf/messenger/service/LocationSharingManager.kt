@@ -217,11 +217,12 @@ class LocationSharingManager
          */
         fun stopSharing(destinationHash: String? = null) {
             // Send cease messages BEFORE removing sessions
-            val sessionsToNotify = if (destinationHash != null) {
-                _activeSessions.value.filter { it.destinationHash == destinationHash }
-            } else {
-                _activeSessions.value
-            }
+            val sessionsToNotify =
+                if (destinationHash != null) {
+                    _activeSessions.value.filter { it.destinationHash == destinationHash }
+                } else {
+                    _activeSessions.value
+                }
 
             sessionsToNotify.forEach { session ->
                 sendCeaseMessage(session.destinationHash)
@@ -264,28 +265,30 @@ class LocationSharingManager
                     return@launch
                 }
 
-                val sourceIdentity = try {
-                    serviceProtocol.getLxmfIdentity().getOrNull()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to get LXMF identity for cease message", e)
-                    null
-                }
+                val sourceIdentity =
+                    try {
+                        serviceProtocol.getLxmfIdentity().getOrNull()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to get LXMF identity for cease message", e)
+                        null
+                    }
 
                 if (sourceIdentity == null) {
                     Log.e(TAG, "No LXMF identity available for cease message")
                     return@launch
                 }
 
-                val ceaseJson = Json.encodeToString(
-                    LocationTelemetry(
-                        lat = 0.0,
-                        lng = 0.0,
-                        acc = 0f,
-                        ts = System.currentTimeMillis(),
-                        expires = null,
-                        cease = true,
+                val ceaseJson =
+                    Json.encodeToString(
+                        LocationTelemetry(
+                            lat = 0.0,
+                            lng = 0.0,
+                            acc = 0f,
+                            ts = System.currentTimeMillis(),
+                            expires = null,
+                            cease = true,
+                        ),
                     )
-                )
 
                 try {
                     val destHashBytes = hexStringToByteArray(recipientHash)
@@ -362,9 +365,10 @@ class LocationSharingManager
 
         private suspend fun checkExpiredSessions() {
             val now = System.currentTimeMillis()
-            val (expired, active) = _activeSessions.value.partition { session ->
-                session.endTime != null && session.endTime < now
-            }
+            val (expired, active) =
+                _activeSessions.value.partition { session ->
+                    session.endTime != null && session.endTime < now
+                }
 
             if (expired.isNotEmpty()) {
                 Log.d(TAG, "${expired.size} sessions expired")
@@ -457,7 +461,11 @@ class LocationSharingManager
          * @param radiusMeters Coarsening radius in meters (0 = no coarsening)
          * @return Pair of coarsened (lat, lng)
          */
-        private fun coarsenLocation(lat: Double, lng: Double, radiusMeters: Int): Pair<Double, Double> {
+        private fun coarsenLocation(
+            lat: Double,
+            lng: Double,
+            radiusMeters: Int,
+        ): Pair<Double, Double> {
             if (radiusMeters <= 0) return Pair(lat, lng)
 
             // Convert radius to degrees (approximate: 111km per degree at equator)

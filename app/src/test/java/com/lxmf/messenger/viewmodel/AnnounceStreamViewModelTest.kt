@@ -768,5 +768,4 @@ class AnnounceStreamViewModelTest {
             // Then: getPathTableHashes should NOT be called after shutdown
             coVerify(exactly = 0) { reticulumProtocol.getPathTableHashes() }
         }
-
 }

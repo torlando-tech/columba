@@ -522,7 +522,10 @@ class BleGattServer(
      * @param identityHash 32-char hex identity string (Protocol v2.2)
      * @return true if connection was completed, false if not applicable
      */
-    suspend fun completeConnectionWithIdentity(address: String, identityHash: String): Boolean {
+    suspend fun completeConnectionWithIdentity(
+        address: String,
+        identityHash: String,
+    ): Boolean {
         // Check if this central is connected but hasn't completed identity handshake
         val isConnected = centralsMutex.withLock { connectedCentrals.containsKey(address) }
         val hasIdentity = identityMutex.withLock { addressToIdentity.containsKey(address) }

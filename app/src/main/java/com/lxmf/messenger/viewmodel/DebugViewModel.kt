@@ -47,7 +47,8 @@ data class InterfaceInfo(
     val name: String,
     val type: String,
     val online: Boolean,
-    val error: String? = null, // Error message if interface failed to initialize
+    // Error message if interface failed to initialize
+    val error: String? = null,
 )
 
 @androidx.compose.runtime.Immutable
@@ -261,7 +262,8 @@ class DebugViewModel
                         failedInterfaces.map { failed ->
                             InterfaceInfo(
                                 name = failed.name,
-                                type = failed.name, // Use name as type since we don't have detailed type info
+                                // Use name as type since we don't have detailed type info
+                                type = failed.name,
                                 online = false,
                                 error = failed.error,
                             )

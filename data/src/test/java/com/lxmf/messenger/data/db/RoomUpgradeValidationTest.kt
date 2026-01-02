@@ -46,9 +46,10 @@ class RoomUpgradeValidationTest {
     @Before
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
-        database = Room.inMemoryDatabaseBuilder(context, ColumbaDatabase::class.java)
-            .allowMainThreadQueries()
-            .build()
+        database =
+            Room.inMemoryDatabaseBuilder(context, ColumbaDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
     }
 
     @After
@@ -120,274 +121,294 @@ class RoomUpgradeValidationTest {
     // ========== LocalIdentity DAO Tests ==========
 
     @Test
-    fun localIdentityDao_insertAndRetrieve() = runTest {
-        val identity = createTestIdentity()
-        database.localIdentityDao().insert(identity)
+    fun localIdentityDao_insertAndRetrieve() =
+        runTest {
+            val identity = createTestIdentity()
+            database.localIdentityDao().insert(identity)
 
-        val retrieved = database.localIdentityDao().getIdentity(TEST_IDENTITY_HASH)
-        assertNotNull(retrieved)
-        assertEquals(identity.identityHash, retrieved?.identityHash)
-        assertEquals(identity.displayName, retrieved?.displayName)
-    }
+            val retrieved = database.localIdentityDao().getIdentity(TEST_IDENTITY_HASH)
+            assertNotNull(retrieved)
+            assertEquals(identity.identityHash, retrieved?.identityHash)
+            assertEquals(identity.displayName, retrieved?.displayName)
+        }
 
     @Test
-    fun localIdentityDao_flowEmitsUpdates() = runTest {
-        val identity = createTestIdentity()
-        database.localIdentityDao().insert(identity)
+    fun localIdentityDao_flowEmitsUpdates() =
+        runTest {
+            val identity = createTestIdentity()
+            database.localIdentityDao().insert(identity)
 
-        database.localIdentityDao().getAllIdentities().test {
-            val initial = awaitItem()
-            assertEquals(1, initial.size)
+            database.localIdentityDao().getAllIdentities().test {
+                val initial = awaitItem()
+                assertEquals(1, initial.size)
 
-            // Update identity (insert with REPLACE strategy)
-            val updated = identity.copy(displayName = "Updated Name")
-            database.localIdentityDao().insert(updated)
+                // Update identity (insert with REPLACE strategy)
+                val updated = identity.copy(displayName = "Updated Name")
+                database.localIdentityDao().insert(updated)
 
-            val afterUpdate = awaitItem()
-            assertEquals("Updated Name", afterUpdate[0].displayName)
+                val afterUpdate = awaitItem()
+                assertEquals("Updated Name", afterUpdate[0].displayName)
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     // ========== Conversation DAO Tests (Composite PK) ==========
 
     @Test
-    fun conversationDao_compositePrimaryKey_works() = runTest {
-        // Setup: Create identity first (FK constraint)
-        database.localIdentityDao().insert(createTestIdentity())
+    fun conversationDao_compositePrimaryKey_works() =
+        runTest {
+            // Setup: Create identity first (FK constraint)
+            database.localIdentityDao().insert(createTestIdentity())
 
-        val conversation = createTestConversation()
-        database.conversationDao().insertConversation(conversation)
+            val conversation = createTestConversation()
+            database.conversationDao().insertConversation(conversation)
 
-        val retrieved = database.conversationDao().getConversation(
-            TEST_PEER_HASH,
-            TEST_IDENTITY_HASH,
-        )
-        assertNotNull(retrieved)
-        assertEquals(conversation.peerHash, retrieved?.peerHash)
-        assertEquals(conversation.identityHash, retrieved?.identityHash)
-    }
+            val retrieved =
+                database.conversationDao().getConversation(
+                    TEST_PEER_HASH,
+                    TEST_IDENTITY_HASH,
+                )
+            assertNotNull(retrieved)
+            assertEquals(conversation.peerHash, retrieved?.peerHash)
+            assertEquals(conversation.identityHash, retrieved?.identityHash)
+        }
 
     @Test
-    fun conversationDao_flowEmitsOnInsert() = runTest {
-        database.localIdentityDao().insert(createTestIdentity())
+    fun conversationDao_flowEmitsOnInsert() =
+        runTest {
+            database.localIdentityDao().insert(createTestIdentity())
 
-        database.conversationDao().getAllConversations(TEST_IDENTITY_HASH).test {
-            // Initially empty
-            assertEquals(0, awaitItem().size)
+            database.conversationDao().getAllConversations(TEST_IDENTITY_HASH).test {
+                // Initially empty
+                assertEquals(0, awaitItem().size)
 
-            // Insert conversation
+                // Insert conversation
+                database.conversationDao().insertConversation(createTestConversation())
+
+                // Should emit update
+                val updated = awaitItem()
+                assertEquals(1, updated.size)
+                assertEquals(TEST_PEER_HASH, updated[0].peerHash)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun conversationDao_unreadCountOperations() =
+        runTest {
+            database.localIdentityDao().insert(createTestIdentity())
             database.conversationDao().insertConversation(createTestConversation())
 
-            // Should emit update
-            val updated = awaitItem()
-            assertEquals(1, updated.size)
-            assertEquals(TEST_PEER_HASH, updated[0].peerHash)
+            // Increment unread count
+            database.conversationDao().incrementUnreadCount(TEST_PEER_HASH, TEST_IDENTITY_HASH)
+            database.conversationDao().incrementUnreadCount(TEST_PEER_HASH, TEST_IDENTITY_HASH)
 
-            cancelAndIgnoreRemainingEvents()
+            var conversation =
+                database.conversationDao().getConversation(
+                    TEST_PEER_HASH,
+                    TEST_IDENTITY_HASH,
+                )
+            assertEquals(2, conversation?.unreadCount)
+
+            // Mark as read
+            database.conversationDao().markAsRead(TEST_PEER_HASH, TEST_IDENTITY_HASH)
+            conversation =
+                database.conversationDao().getConversation(
+                    TEST_PEER_HASH,
+                    TEST_IDENTITY_HASH,
+                )
+            assertEquals(0, conversation?.unreadCount)
         }
-    }
-
-    @Test
-    fun conversationDao_unreadCountOperations() = runTest {
-        database.localIdentityDao().insert(createTestIdentity())
-        database.conversationDao().insertConversation(createTestConversation())
-
-        // Increment unread count
-        database.conversationDao().incrementUnreadCount(TEST_PEER_HASH, TEST_IDENTITY_HASH)
-        database.conversationDao().incrementUnreadCount(TEST_PEER_HASH, TEST_IDENTITY_HASH)
-
-        var conversation = database.conversationDao().getConversation(
-            TEST_PEER_HASH,
-            TEST_IDENTITY_HASH,
-        )
-        assertEquals(2, conversation?.unreadCount)
-
-        // Mark as read
-        database.conversationDao().markAsRead(TEST_PEER_HASH, TEST_IDENTITY_HASH)
-        conversation = database.conversationDao().getConversation(
-            TEST_PEER_HASH,
-            TEST_IDENTITY_HASH,
-        )
-        assertEquals(0, conversation?.unreadCount)
-    }
 
     // ========== Message DAO Tests (Composite PK + FK) ==========
 
     @Test
-    fun messageDao_compositePrimaryKey_withForeignKeys() = runTest {
-        // Setup: Create identity and conversation (FK constraints)
-        database.localIdentityDao().insert(createTestIdentity())
-        database.conversationDao().insertConversation(createTestConversation())
+    fun messageDao_compositePrimaryKey_withForeignKeys() =
+        runTest {
+            // Setup: Create identity and conversation (FK constraints)
+            database.localIdentityDao().insert(createTestIdentity())
+            database.conversationDao().insertConversation(createTestConversation())
 
-        val message = createTestMessage()
-        database.messageDao().insertMessage(message)
+            val message = createTestMessage()
+            database.messageDao().insertMessage(message)
 
-        val retrieved = database.messageDao().getMessageById(message.id, TEST_IDENTITY_HASH)
-        assertNotNull(retrieved)
-        assertEquals(message.id, retrieved?.id)
-        assertEquals(message.content, retrieved?.content)
-    }
-
-    @Test
-    fun messageDao_flowEmitsOnStatusUpdate() = runTest {
-        database.localIdentityDao().insert(createTestIdentity())
-        database.conversationDao().insertConversation(createTestConversation())
-
-        val message = createTestMessage(id = "test_msg_1")
-        database.messageDao().insertMessage(message)
-
-        database.messageDao().observeMessageById("test_msg_1").test {
-            val initial = awaitItem()
-            assertEquals("sent", initial?.status)
-
-            // Update status
-            database.messageDao().updateMessageStatus("test_msg_1", TEST_IDENTITY_HASH, "delivered")
-
-            val updated = awaitItem()
-            assertEquals("delivered", updated?.status)
-
-            cancelAndIgnoreRemainingEvents()
+            val retrieved = database.messageDao().getMessageById(message.id, TEST_IDENTITY_HASH)
+            assertNotNull(retrieved)
+            assertEquals(message.id, retrieved?.id)
+            assertEquals(message.content, retrieved?.content)
         }
-    }
 
     @Test
-    fun messageDao_bulkInsert_replaceStrategy() = runTest {
-        database.localIdentityDao().insert(createTestIdentity())
-        database.conversationDao().insertConversation(createTestConversation())
+    fun messageDao_flowEmitsOnStatusUpdate() =
+        runTest {
+            database.localIdentityDao().insert(createTestIdentity())
+            database.conversationDao().insertConversation(createTestConversation())
 
-        val messages = listOf(
-            createTestMessage(id = "msg1", content = "First"),
-            createTestMessage(id = "msg2", content = "Second"),
-            createTestMessage(id = "msg3", content = "Third"),
-        )
-        database.messageDao().insertMessages(messages)
+            val message = createTestMessage(id = "test_msg_1")
+            database.messageDao().insertMessage(message)
 
-        val all = database.messageDao().getAllMessagesForIdentity(TEST_IDENTITY_HASH)
-        assertEquals(3, all.size)
+            database.messageDao().observeMessageById("test_msg_1").test {
+                val initial = awaitItem()
+                assertEquals("sent", initial?.status)
 
-        // Replace existing messages
-        val updated = listOf(
-            createTestMessage(id = "msg1", content = "First Updated"),
-            createTestMessage(id = "msg2", content = "Second Updated"),
-        )
-        database.messageDao().insertMessages(updated)
+                // Update status
+                database.messageDao().updateMessageStatus("test_msg_1", TEST_IDENTITY_HASH, "delivered")
 
-        val afterUpdate = database.messageDao().getMessageById("msg1", TEST_IDENTITY_HASH)
-        assertEquals("First Updated", afterUpdate?.content)
-    }
+                val updated = awaitItem()
+                assertEquals("delivered", updated?.status)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 
     @Test
-    fun messageDao_bulkInsert_ignoreStrategy() = runTest {
-        database.localIdentityDao().insert(createTestIdentity())
-        database.conversationDao().insertConversation(createTestConversation())
+    fun messageDao_bulkInsert_replaceStrategy() =
+        runTest {
+            database.localIdentityDao().insert(createTestIdentity())
+            database.conversationDao().insertConversation(createTestConversation())
 
-        val original = createTestMessage(id = "msg1", content = "Original")
-        database.messageDao().insertMessage(original)
+            val messages =
+                listOf(
+                    createTestMessage(id = "msg1", content = "First"),
+                    createTestMessage(id = "msg2", content = "Second"),
+                    createTestMessage(id = "msg3", content = "Third"),
+                )
+            database.messageDao().insertMessages(messages)
 
-        // Try to insert with same ID - should be ignored
-        val duplicate = createTestMessage(id = "msg1", content = "Duplicate")
-        database.messageDao().insertMessagesIgnoreDuplicates(listOf(duplicate))
+            val all = database.messageDao().getAllMessagesForIdentity(TEST_IDENTITY_HASH)
+            assertEquals(3, all.size)
 
-        val retrieved = database.messageDao().getMessageById("msg1", TEST_IDENTITY_HASH)
-        assertEquals("Original", retrieved?.content) // Original preserved
-    }
+            // Replace existing messages
+            val updated =
+                listOf(
+                    createTestMessage(id = "msg1", content = "First Updated"),
+                    createTestMessage(id = "msg2", content = "Second Updated"),
+                )
+            database.messageDao().insertMessages(updated)
+
+            val afterUpdate = database.messageDao().getMessageById("msg1", TEST_IDENTITY_HASH)
+            assertEquals("First Updated", afterUpdate?.content)
+        }
 
     @Test
-    fun messageDao_unreadCountQuery() = runTest {
-        database.localIdentityDao().insert(createTestIdentity())
-        database.conversationDao().insertConversation(createTestConversation())
+    fun messageDao_bulkInsert_ignoreStrategy() =
+        runTest {
+            database.localIdentityDao().insert(createTestIdentity())
+            database.conversationDao().insertConversation(createTestConversation())
 
-        // Insert mix of read/unread messages
-        database.messageDao().insertMessage(
-            createTestMessage(id = "msg1", isFromMe = false).copy(isRead = false),
-        )
-        database.messageDao().insertMessage(
-            createTestMessage(id = "msg2", isFromMe = false).copy(isRead = false),
-        )
-        database.messageDao().insertMessage(
-            createTestMessage(id = "msg3", isFromMe = false).copy(isRead = true),
-        )
-        database.messageDao().insertMessage(
-            createTestMessage(id = "msg4", isFromMe = true), // From me, doesn't count
-        )
+            val original = createTestMessage(id = "msg1", content = "Original")
+            database.messageDao().insertMessage(original)
 
-        val unreadCount = database.messageDao().getUnreadCount(TEST_PEER_HASH, TEST_IDENTITY_HASH)
-        assertEquals(2, unreadCount)
-    }
+            // Try to insert with same ID - should be ignored
+            val duplicate = createTestMessage(id = "msg1", content = "Duplicate")
+            database.messageDao().insertMessagesIgnoreDuplicates(listOf(duplicate))
+
+            val retrieved = database.messageDao().getMessageById("msg1", TEST_IDENTITY_HASH)
+            assertEquals("Original", retrieved?.content) // Original preserved
+        }
+
+    @Test
+    fun messageDao_unreadCountQuery() =
+        runTest {
+            database.localIdentityDao().insert(createTestIdentity())
+            database.conversationDao().insertConversation(createTestConversation())
+
+            // Insert mix of read/unread messages
+            database.messageDao().insertMessage(
+                createTestMessage(id = "msg1", isFromMe = false).copy(isRead = false),
+            )
+            database.messageDao().insertMessage(
+                createTestMessage(id = "msg2", isFromMe = false).copy(isRead = false),
+            )
+            database.messageDao().insertMessage(
+                createTestMessage(id = "msg3", isFromMe = false).copy(isRead = true),
+            )
+            database.messageDao().insertMessage(
+                createTestMessage(id = "msg4", isFromMe = true), // From me, doesn't count
+            )
+
+            val unreadCount = database.messageDao().getUnreadCount(TEST_PEER_HASH, TEST_IDENTITY_HASH)
+            assertEquals(2, unreadCount)
+        }
 
     // ========== Foreign Key Cascade Tests ==========
 
     @Test
-    fun foreignKey_cascadeDelete_conversationDeletesMessages() = runTest {
-        database.localIdentityDao().insert(createTestIdentity())
-        database.conversationDao().insertConversation(createTestConversation())
-        database.messageDao().insertMessage(createTestMessage(id = "msg1"))
-        database.messageDao().insertMessage(createTestMessage(id = "msg2"))
+    fun foreignKey_cascadeDelete_conversationDeletesMessages() =
+        runTest {
+            database.localIdentityDao().insert(createTestIdentity())
+            database.conversationDao().insertConversation(createTestConversation())
+            database.messageDao().insertMessage(createTestMessage(id = "msg1"))
+            database.messageDao().insertMessage(createTestMessage(id = "msg2"))
 
-        // Verify messages exist
-        assertEquals(2, database.messageDao().getAllMessagesForIdentity(TEST_IDENTITY_HASH).size)
+            // Verify messages exist
+            assertEquals(2, database.messageDao().getAllMessagesForIdentity(TEST_IDENTITY_HASH).size)
 
-        // Delete conversation
-        database.conversationDao().deleteConversationByKey(TEST_PEER_HASH, TEST_IDENTITY_HASH)
+            // Delete conversation
+            database.conversationDao().deleteConversationByKey(TEST_PEER_HASH, TEST_IDENTITY_HASH)
 
-        // Messages should be cascade deleted
-        assertEquals(0, database.messageDao().getAllMessagesForIdentity(TEST_IDENTITY_HASH).size)
-    }
+            // Messages should be cascade deleted
+            assertEquals(0, database.messageDao().getAllMessagesForIdentity(TEST_IDENTITY_HASH).size)
+        }
 
     @Test
-    fun foreignKey_cascadeDelete_identityDeletesAll() = runTest {
-        database.localIdentityDao().insert(createTestIdentity())
-        database.conversationDao().insertConversation(createTestConversation())
-        database.messageDao().insertMessage(createTestMessage())
+    fun foreignKey_cascadeDelete_identityDeletesAll() =
+        runTest {
+            database.localIdentityDao().insert(createTestIdentity())
+            database.conversationDao().insertConversation(createTestConversation())
+            database.messageDao().insertMessage(createTestMessage())
 
-        // Delete identity
-        database.localIdentityDao().delete(TEST_IDENTITY_HASH)
+            // Delete identity
+            database.localIdentityDao().delete(TEST_IDENTITY_HASH)
 
-        // Everything should be cascade deleted
-        assertEquals(0, database.conversationDao().getAllConversationsList(TEST_IDENTITY_HASH).size)
-        assertEquals(0, database.messageDao().getAllMessagesForIdentity(TEST_IDENTITY_HASH).size)
-    }
+            // Everything should be cascade deleted
+            assertEquals(0, database.conversationDao().getAllConversationsList(TEST_IDENTITY_HASH).size)
+            assertEquals(0, database.messageDao().getAllMessagesForIdentity(TEST_IDENTITY_HASH).size)
+        }
 
     // ========== Search Tests ==========
 
     @Test
-    fun conversationDao_searchByPeerName() = runTest {
-        database.localIdentityDao().insert(createTestIdentity())
-        database.conversationDao().insertConversation(
-            createTestConversation(peerHash = "peer1", peerName = "Alice Smith"),
-        )
-        database.conversationDao().insertConversation(
-            createTestConversation(peerHash = "peer2", peerName = "Bob Jones"),
-        )
-        database.conversationDao().insertConversation(
-            createTestConversation(peerHash = "peer3", peerName = "Charlie Smith"),
-        )
+    fun conversationDao_searchByPeerName() =
+        runTest {
+            database.localIdentityDao().insert(createTestIdentity())
+            database.conversationDao().insertConversation(
+                createTestConversation(peerHash = "peer1", peerName = "Alice Smith"),
+            )
+            database.conversationDao().insertConversation(
+                createTestConversation(peerHash = "peer2", peerName = "Bob Jones"),
+            )
+            database.conversationDao().insertConversation(
+                createTestConversation(peerHash = "peer3", peerName = "Charlie Smith"),
+            )
 
-        database.conversationDao().searchConversations(TEST_IDENTITY_HASH, "Smith").test {
-            val results = awaitItem()
-            assertEquals(2, results.size)
-            assertTrue(results.all { it.peerName.contains("Smith") })
-            cancelAndIgnoreRemainingEvents()
+            database.conversationDao().searchConversations(TEST_IDENTITY_HASH, "Smith").test {
+                val results = awaitItem()
+                assertEquals(2, results.size)
+                assertTrue(results.all { it.peerName.contains("Smith") })
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     // ========== Reply Preview Tests (for json_extract migration) ==========
 
     @Test
-    fun messageDao_replyPreviewData() = runTest {
-        database.localIdentityDao().insert(createTestIdentity())
-        database.conversationDao().insertConversation(createTestConversation())
+    fun messageDao_replyPreviewData() =
+        runTest {
+            database.localIdentityDao().insert(createTestIdentity())
+            database.conversationDao().insertConversation(createTestConversation())
 
-        val message = createTestMessage(id = "msg1", content = "Hello world")
-            .copy(fieldsJson = """{"16": {"reply_to": "other_msg"}}""")
-        database.messageDao().insertMessage(message)
+            val message =
+                createTestMessage(id = "msg1", content = "Hello world")
+                    .copy(fieldsJson = """{"16": {"reply_to": "other_msg"}}""")
+            database.messageDao().insertMessage(message)
 
-        val preview = database.messageDao().getReplyPreviewData("msg1", TEST_IDENTITY_HASH)
-        assertNotNull(preview)
-        assertEquals("msg1", preview?.id)
-        assertEquals("Hello world", preview?.content)
-        assertNotNull(preview?.fieldsJson)
-    }
+            val preview = database.messageDao().getReplyPreviewData("msg1", TEST_IDENTITY_HASH)
+            assertNotNull(preview)
+            assertEquals("msg1", preview?.id)
+            assertEquals("Hello world", preview?.content)
+            assertNotNull(preview?.fieldsJson)
+        }
 }

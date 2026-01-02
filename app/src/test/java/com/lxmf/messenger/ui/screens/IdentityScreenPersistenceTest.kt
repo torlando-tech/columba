@@ -46,10 +46,11 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_heartbeatNotStarted_displaysNotStarted() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            heartbeatAgeSeconds = -1L,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                heartbeatAgeSeconds = -1L,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -62,10 +63,11 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_heartbeatZeroSeconds_displaysZeroSecondsAgo() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            heartbeatAgeSeconds = 0L,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                heartbeatAgeSeconds = 0L,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -78,10 +80,11 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_heartbeatPositive_displaysSecondsAgo() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            heartbeatAgeSeconds = 5L,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                heartbeatAgeSeconds = 5L,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -96,12 +99,13 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_healthCheckRunning_displaysRunning() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            healthCheckRunning = true,
-            networkMonitorRunning = true,
-            maintenanceRunning = true,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                healthCheckRunning = true,
+                networkMonitorRunning = true,
+                maintenanceRunning = true,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -114,12 +118,13 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_healthCheckStopped_displaysStopped() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            healthCheckRunning = false,
-            networkMonitorRunning = false,
-            maintenanceRunning = false,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                healthCheckRunning = false,
+                networkMonitorRunning = false,
+                maintenanceRunning = false,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -134,10 +139,11 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_networkMonitorRunning_displaysLabel() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            networkMonitorRunning = true,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                networkMonitorRunning = true,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -151,10 +157,11 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_maintenanceRunning_displaysLabel() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            maintenanceRunning = true,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                maintenanceRunning = true,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -168,10 +175,11 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_lastLockRefreshNotYet_displaysNotYet() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            lastLockRefreshAgeSeconds = -1L,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                lastLockRefreshAgeSeconds = -1L,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -184,10 +192,11 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_lastLockRefreshPositive_displaysSecondsAgo() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            lastLockRefreshAgeSeconds = 120L,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                lastLockRefreshAgeSeconds = 120L,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -202,10 +211,11 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_noFailedInterfaces_doesNotDisplayRow() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            failedInterfaceCount = 0,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                failedInterfaceCount = 0,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -217,10 +227,11 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_hasFailedInterfaces_displaysCount() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            failedInterfaceCount = 2,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                failedInterfaceCount = 2,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -235,15 +246,16 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_allPersistenceFieldsRunning_displaysAllLabels() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            heartbeatAgeSeconds = 1L,
-            healthCheckRunning = true,
-            networkMonitorRunning = true,
-            maintenanceRunning = true,
-            lastLockRefreshAgeSeconds = 30L,
-            failedInterfaceCount = 0,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                heartbeatAgeSeconds = 1L,
+                healthCheckRunning = true,
+                networkMonitorRunning = true,
+                maintenanceRunning = true,
+                lastLockRefreshAgeSeconds = 30L,
+                failedInterfaceCount = 0,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -264,15 +276,16 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_allPersistenceFieldsStopped_displaysStoppedStates() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            heartbeatAgeSeconds = -1L,
-            healthCheckRunning = false,
-            networkMonitorRunning = false,
-            maintenanceRunning = false,
-            lastLockRefreshAgeSeconds = -1L,
-            failedInterfaceCount = 3,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                heartbeatAgeSeconds = -1L,
+                healthCheckRunning = false,
+                networkMonitorRunning = false,
+                maintenanceRunning = false,
+                lastLockRefreshAgeSeconds = -1L,
+                failedInterfaceCount = 3,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)
@@ -315,12 +328,13 @@ class IdentityScreenPersistenceTest {
 
     @Test
     fun reticulumInfoCard_displaysLockStates() {
-        val debugInfo = DebugInfo(
-            reticulumAvailable = true,
-            multicastLockHeld = true,
-            wifiLockHeld = false,
-            wakeLockHeld = true,
-        )
+        val debugInfo =
+            DebugInfo(
+                reticulumAvailable = true,
+                multicastLockHeld = true,
+                wifiLockHeld = false,
+                wakeLockHeld = true,
+            )
 
         composeTestRule.setContent {
             ReticulumInfoCard(debugInfo = debugInfo)

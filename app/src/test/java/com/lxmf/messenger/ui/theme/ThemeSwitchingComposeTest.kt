@@ -179,14 +179,15 @@ class ThemeSwitchingComposeTest {
         // Test all themes in a single composition using state
         var currentTheme by mutableStateOf<AppTheme>(PresetTheme.VIBRANT)
 
-        val themes = listOf(
-            PresetTheme.VIBRANT,
-            PresetTheme.OCEAN,
-            PresetTheme.FOREST,
-            PresetTheme.SUNSET,
-            PresetTheme.MONOCHROME,
-            PresetTheme.EXPRESSIVE,
-        )
+        val themes =
+            listOf(
+                PresetTheme.VIBRANT,
+                PresetTheme.OCEAN,
+                PresetTheme.FOREST,
+                PresetTheme.SUNSET,
+                PresetTheme.MONOCHROME,
+                PresetTheme.EXPRESSIVE,
+            )
 
         composeTestRule.setContent {
             ColumbaTheme(
@@ -225,11 +226,12 @@ class ThemeSwitchingComposeTest {
                         modifier = Modifier.testTag("header"),
                     )
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp)
-                            .background(MaterialTheme.colorScheme.primary)
-                            .testTag("primary-color-box"),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .testTag("primary-color-box"),
                     )
                 }
             }

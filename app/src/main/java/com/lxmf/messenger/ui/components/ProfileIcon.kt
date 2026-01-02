@@ -10,9 +10,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
@@ -55,28 +55,32 @@ fun ProfileIcon(
         if (codepoint != null) {
             // Intentionally swallow parse exceptions - fall back to default colors for invalid hex values
             @Suppress("SwallowedException")
-            val fgColor = try {
-                Color(android.graphics.Color.parseColor("#$foregroundColor"))
-            } catch (e: IllegalArgumentException) {
-                Color.White
-            }
+            val fgColor =
+                try {
+                    Color(android.graphics.Color.parseColor("#$foregroundColor"))
+                } catch (e: IllegalArgumentException) {
+                    Color.White
+                }
+
             @Suppress("SwallowedException")
-            val bgColor = try {
-                Color(android.graphics.Color.parseColor("#$backgroundColor"))
-            } catch (e: IllegalArgumentException) {
-                Color.Gray
-            }
+            val bgColor =
+                try {
+                    Color(android.graphics.Color.parseColor("#$backgroundColor"))
+                } catch (e: IllegalArgumentException) {
+                    Color.Gray
+                }
 
             // Calculate font size - icon should be about 60% of the container
             val density = LocalDensity.current
             val fontSize = with(density) { (size * 0.6f).toSp() }
 
             Box(
-                modifier = modifier
-                    .size(size)
-                    .clip(CircleShape)
-                    .background(bgColor)
-                    .semantics { contentDescription = "Profile icon" },
+                modifier =
+                    modifier
+                        .size(size)
+                        .clip(CircleShape)
+                        .background(bgColor)
+                        .semantics { contentDescription = "Profile icon" },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(

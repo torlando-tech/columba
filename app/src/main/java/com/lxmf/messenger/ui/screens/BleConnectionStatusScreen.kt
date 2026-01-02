@@ -57,7 +57,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -73,6 +72,7 @@ import com.lxmf.messenger.ui.components.PermissionDeniedCard
 import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.viewmodel.BleConnectionsUiState
 import com.lxmf.messenger.viewmodel.BleConnectionsViewModel
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

@@ -317,7 +317,6 @@ ksp {
     arg("correctErrorTypes", "true")
 }
 
-
 // Task to print version info for CI/CD
 tasks.register("printVersion") {
     doLast {

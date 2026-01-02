@@ -357,11 +357,12 @@ fun ReticulumInfoCard(
 
             InfoRow(
                 label = "Heartbeat",
-                value = if (debugInfo.heartbeatAgeSeconds >= 0) {
-                    "${debugInfo.heartbeatAgeSeconds}s ago"
-                } else {
-                    "Not started"
-                },
+                value =
+                    if (debugInfo.heartbeatAgeSeconds >= 0) {
+                        "${debugInfo.heartbeatAgeSeconds}s ago"
+                    } else {
+                        "Not started"
+                    },
             )
             InfoRow(
                 label = "Health Check",
@@ -377,11 +378,12 @@ fun ReticulumInfoCard(
             )
             InfoRow(
                 label = "Last Lock Refresh",
-                value = if (debugInfo.lastLockRefreshAgeSeconds >= 0) {
-                    "${debugInfo.lastLockRefreshAgeSeconds}s ago"
-                } else {
-                    "Not yet"
-                },
+                value =
+                    if (debugInfo.lastLockRefreshAgeSeconds >= 0) {
+                        "${debugInfo.lastLockRefreshAgeSeconds}s ago"
+                    } else {
+                        "Not yet"
+                    },
             )
             if (debugInfo.failedInterfaceCount > 0) {
                 InfoRow(

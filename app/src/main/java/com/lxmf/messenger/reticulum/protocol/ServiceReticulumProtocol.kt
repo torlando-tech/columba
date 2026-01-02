@@ -2078,21 +2078,22 @@ class ServiceReticulumProtocol(
 
         // Extract icon appearance (LXMF Field 4 - Sideband/MeshChat interop)
         // Check both top-level "icon_appearance" (callback path) and "fields.4" (polling path)
-        val iconAppearance = (
-            json.optJSONObject("icon_appearance")
-                ?: json.optJSONObject("fields")?.optJSONObject("4")
-        )?.let { iconJson ->
-            try {
-                IconAppearance(
-                    iconName = iconJson.optString("icon_name", ""),
-                    foregroundColor = iconJson.optString("foreground_color", ""),
-                    backgroundColor = iconJson.optString("background_color", ""),
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to parse icon appearance", e)
-                null
+        val iconAppearance =
+            (
+                json.optJSONObject("icon_appearance")
+                    ?: json.optJSONObject("fields")?.optJSONObject("4")
+            )?.let { iconJson ->
+                try {
+                    IconAppearance(
+                        iconName = iconJson.optString("icon_name", ""),
+                        foregroundColor = iconJson.optString("foreground_color", ""),
+                        backgroundColor = iconJson.optString("background_color", ""),
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse icon appearance", e)
+                    null
+                }
             }
-        }
 
         return ReceivedMessage(
             messageHash = messageHash,

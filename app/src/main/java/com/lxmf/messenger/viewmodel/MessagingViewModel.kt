@@ -21,7 +21,9 @@ import com.lxmf.messenger.ui.model.ImageCache
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.ui.model.SharingDuration
+import com.lxmf.messenger.ui.model.DecodedImageResult
 import com.lxmf.messenger.ui.model.decodeAndCacheImage
+import com.lxmf.messenger.ui.model.decodeImageWithAnimation
 import com.lxmf.messenger.ui.model.loadFileAttachmentData
 import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
 import com.lxmf.messenger.ui.model.toMessageUi
@@ -129,6 +131,9 @@ class MessagingViewModel
         private val _isProcessingImage = MutableStateFlow(false)
         val isProcessingImage: StateFlow<Boolean> = _isProcessingImage
 
+        private val _selectedImageIsAnimated = MutableStateFlow(false)
+        val selectedImageIsAnimated: StateFlow<Boolean> = _selectedImageIsAnimated.asStateFlow()
+
         // File attachment state (LXMF Field 5)
         private val _selectedFileAttachments = MutableStateFlow<List<FileAttachment>>(emptyList())
         val selectedFileAttachments: StateFlow<List<FileAttachment>> = _selectedFileAttachments.asStateFlow()
@@ -160,6 +165,10 @@ class MessagingViewModel
         // when images become available. The UI observes this to know when to re-check the cache.
         private val _loadedImageIds = MutableStateFlow<Set<String>>(emptySet())
         val loadedImageIds: StateFlow<Set<String>> = _loadedImageIds.asStateFlow()
+
+        // Map of messageId -> decoded image result (for animated GIFs and raw bytes)
+        private val _decodedImages = MutableStateFlow<Map<String, DecodedImageResult>>(emptyMap())
+        val decodedImages: StateFlow<Map<String, DecodedImageResult>> = _decodedImages.asStateFlow()
 
         // Cache for loaded reply previews - maps message ID to its reply preview
         private val _replyPreviewCache = MutableStateFlow<Map<String, com.lxmf.messenger.ui.model.ReplyPreviewUi>>(emptyMap())
@@ -917,16 +926,22 @@ class MessagingViewModel
         fun selectImage(
             imageData: ByteArray,
             imageFormat: String,
+            isAnimated: Boolean = false,
         ) {
-            Log.d(TAG, "Selected image: ${imageData.size} bytes, format=$imageFormat")
+            Log.d(
+                TAG,
+                "Selected image: ${imageData.size} bytes, format=$imageFormat, animated=$isAnimated",
+            )
             _selectedImageData.value = imageData
             _selectedImageFormat.value = imageFormat
+            _selectedImageIsAnimated.value = isAnimated
         }
 
         fun clearSelectedImage() {
             Log.d(TAG, "Clearing selected image")
             _selectedImageData.value = null
             _selectedImageFormat.value = null
+            _selectedImageIsAnimated.value = false
         }
 
         fun setProcessingImage(processing: Boolean) {
@@ -1172,23 +1187,32 @@ class MessagingViewModel
             messageId: String,
             fieldsJson: String?,
         ) {
-            // Skip if already loaded/loading
-            if (ImageCache.contains(messageId) || _loadedImageIds.value.contains(messageId)) {
+            // Skip if already loaded/loading or already in cache
+            if (_loadedImageIds.value.contains(messageId) ||
+                _decodedImages.value.containsKey(messageId) ||
+                ImageCache.contains(messageId)
+            ) {
                 return
             }
 
             viewModelScope.launch {
                 try {
-                    // Decode on IO thread
-                    val decoded =
+                    // Decode on IO thread with animation detection
+                    val result =
                         withContext(Dispatchers.IO) {
-                            decodeAndCacheImage(messageId, fieldsJson)
+                            decodeImageWithAnimation(messageId, fieldsJson)
                         }
 
-                    if (decoded != null) {
+                    if (result != null) {
+                        // Store the decoded result for animated images
+                        _decodedImages.update { it + (messageId to result) }
                         // Signal that this image is now available
                         _loadedImageIds.update { it + messageId }
-                        Log.d(TAG, "Image loaded async: ${messageId.take(8)}...")
+                        Log.d(
+                            TAG,
+                            "Image loaded async: ${messageId.take(8)}... " +
+                                "(animated=${result.isAnimated}, ${result.rawBytes.size} bytes)",
+                        )
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error loading image async: ${messageId.take(8)}...", e)

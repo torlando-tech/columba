@@ -39,6 +39,18 @@ data class MessageUi(
      */
     val hasImageAttachment: Boolean = false,
     /**
+     * Raw image bytes for animated GIF support.
+     * When isAnimatedImage is true, this contains the GIF bytes for Coil to render.
+     * For static images, decodedImage is used instead for efficiency.
+     */
+    val imageData: ByteArray? = null,
+    /**
+     * Indicates whether the image is animated (GIF).
+     * When true, imageData should be used with Coil for animated rendering.
+     * When false, decodedImage (static bitmap) should be used for efficiency.
+     */
+    val isAnimatedImage: Boolean = false,
+    /**
      * Raw LXMF fields JSON. Included when hasImageAttachment or hasFileAttachments is true
      * to enable async loading. Null for messages without attachments.
      */
@@ -80,7 +92,27 @@ data class MessageUi(
      * Parsed from LXMF Field 16 {"reactions": {"👍": ["sender1", "sender2"], ...}}.
      */
     val reactions: List<ReactionUi> = emptyList(),
-)
+) {
+    /**
+     * Whether this message should be displayed as a standalone media item without a bubble.
+     *
+     * Returns true when the message is:
+     * - An animated GIF (isAnimatedImage = true)
+     * - Has image data loaded (imageData != null)
+     * - Has no text content (content is blank)
+     * - Has no file attachments
+     * - Is not a reply to another message
+     *
+     * This allows GIF-only messages to be displayed large without a bubble background,
+     * similar to how Signal displays media-only messages.
+     */
+    val isMediaOnlyMessage: Boolean
+        get() = isAnimatedImage &&
+            imageData != null &&
+            content.isBlank() &&
+            !hasFileAttachments &&
+            replyPreview == null
+}
 
 /**
  * UI representation of a file attachment.

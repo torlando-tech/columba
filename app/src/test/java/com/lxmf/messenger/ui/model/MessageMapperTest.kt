@@ -1518,4 +1518,289 @@ class MessageMapperTest {
 
         assertNull(result)
     }
+
+    // ========== decodeImageWithAnimation() TESTS ==========
+
+    @Test
+    fun `decodeImageWithAnimation returns null for null fieldsJson`() {
+        val result = decodeImageWithAnimation("test-id", null)
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for empty fieldsJson`() {
+        val result = decodeImageWithAnimation("test-id", "")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for invalid JSON`() {
+        val result = decodeImageWithAnimation("test-id", "not valid json")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null when field 6 is missing`() {
+        val result = decodeImageWithAnimation("test-id", """{"1": "some text"}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for empty field 6`() {
+        val result = decodeImageWithAnimation("test-id", """{"6": ""}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for field 6 as number`() {
+        val result = decodeImageWithAnimation("test-id", """{"6": 12345}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for nonexistent file reference`() {
+        val result = decodeImageWithAnimation(
+            "test-id",
+            """{"6": {"_file_ref": "/nonexistent/path/to/file.dat"}}""",
+        )
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation detects animated GIF`() {
+        // Create animated GIF bytes
+        val animatedGifHex = createMinimalAnimatedGifHex()
+        val fieldsJson = """{"6": "$animatedGifHex"}"""
+
+        val result = decodeImageWithAnimation("animated-test", fieldsJson)
+
+        assertNotNull(result)
+        assertTrue(result!!.isAnimated)
+        assertNotNull(result.rawBytes)
+        // For animated GIFs, bitmap is not decoded (Coil handles it)
+        assertNull(result.bitmap)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation detects non-animated GIF as static`() {
+        // Non-animated GIF (GIF89a header only, no NETSCAPE extension, single frame)
+        val staticGif = createMinimalStaticGifBytes()
+        val staticGifHex = staticGif.joinToString("") { "%02x".format(it) }
+        val fieldsJson = """{"6": "$staticGifHex"}"""
+
+        val result = decodeImageWithAnimation("static-gif-test", fieldsJson)
+
+        assertNotNull(result)
+        assertFalse(result!!.isAnimated) // Single-frame GIF is not animated
+        assertNotNull(result.rawBytes)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for non-GIF header without decoding`() {
+        // PNG header bytes - will be extracted but may fail to decode as image
+        val pngHex = "89504e470d0a1a0a0000000d49484452"
+        val fieldsJson = """{"6": "$pngHex"}"""
+
+        // This tests that the function handles the bytes gracefully
+        // Result may be non-null (bytes extracted, not animated) or null (decode error)
+        // The important thing is it doesn't crash
+        val result = decodeImageWithAnimation("png-test", fieldsJson)
+
+        // If result is non-null, verify it's not detected as animated
+        result?.let {
+            assertFalse(it.isAnimated)
+            assertNotNull(it.rawBytes)
+        }
+    }
+
+    @Test
+    fun `decodeImageWithAnimation reads from file reference`() {
+        // Create animated GIF and save to temp file
+        val animatedGifHex = createMinimalAnimatedGifHex()
+        val tempFile = tempFolder.newFile("animated.dat")
+        tempFile.writeText(animatedGifHex)
+
+        val fieldsJson = """{"6": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = decodeImageWithAnimation("file-ref-test", fieldsJson)
+
+        assertNotNull(result)
+        assertTrue(result!!.isAnimated)
+        assertNotNull(result.rawBytes)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation uses cached bitmap for static image`() {
+        val messageId = "cache-test-id"
+
+        // Ensure cache is empty
+        assertNull(ImageCache.get(messageId))
+
+        // Pre-populate cache with test bitmap
+        val testBitmap = createTestBitmap()
+        ImageCache.put(messageId, testBitmap)
+
+        // Use a static GIF (which won't be detected as animated)
+        val staticGif = createMinimalStaticGifBytes()
+        val staticGifHex = staticGif.joinToString("") { "%02x".format(it) }
+        val fieldsJson = """{"6": "$staticGifHex"}"""
+
+        val result = decodeImageWithAnimation(messageId, fieldsJson)
+
+        // Should return a result with the cached bitmap
+        assertNotNull(result)
+        assertFalse(result!!.isAnimated)
+        assertNotNull(result.rawBytes)
+        // The cached bitmap should be used
+        assertEquals(testBitmap, result.bitmap)
+    }
+
+    @Test
+    fun `DecodedImageResult equals returns true for identical data`() {
+        val bytes = byteArrayOf(0x01, 0x02, 0x03)
+        val result1 = DecodedImageResult(bytes.copyOf(), null, true)
+        val result2 = DecodedImageResult(bytes.copyOf(), null, true)
+        assertTrue(result1 == result2)
+    }
+
+    @Test
+    fun `DecodedImageResult equals returns false for different bytes`() {
+        val result1 = DecodedImageResult(byteArrayOf(0x01), null, true)
+        val result2 = DecodedImageResult(byteArrayOf(0x02), null, true)
+        assertFalse(result1 == result2)
+    }
+
+    @Test
+    fun `DecodedImageResult equals returns false for different isAnimated`() {
+        val bytes = byteArrayOf(0x01, 0x02, 0x03)
+        val result1 = DecodedImageResult(bytes.copyOf(), null, true)
+        val result2 = DecodedImageResult(bytes.copyOf(), null, false)
+        assertFalse(result1 == result2)
+    }
+
+    @Test
+    fun `DecodedImageResult hashCode is consistent for equal objects`() {
+        val bytes = byteArrayOf(0x01, 0x02, 0x03)
+        val result1 = DecodedImageResult(bytes.copyOf(), null, true)
+        val result2 = DecodedImageResult(bytes.copyOf(), null, true)
+        assertTrue(result1.hashCode() == result2.hashCode())
+    }
+
+    @Test
+    fun `toMessageUi sets isAnimatedImage to false by default`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = null))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.isAnimatedImage)
+        assertNull(result.imageData)
+    }
+
+    @Test
+    fun `toMessageUi handles message with image but no animation data`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"6": "ffd8ffe0"}"""))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasImageAttachment)
+        // isAnimatedImage and imageData are populated by ViewModel, not mapper
+        assertFalse(result.isAnimatedImage)
+        assertNull(result.imageData)
+    }
+
+    // ========== Helper Functions for Animation Tests ==========
+
+    /**
+     * Creates hex string for a minimal valid animated GIF.
+     */
+    private fun createMinimalAnimatedGifHex(): String {
+        val bytes = createMinimalAnimatedGifBytes()
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Creates a minimal valid animated GIF with 2 frames.
+     */
+    private fun createMinimalAnimatedGifBytes(): ByteArray {
+        val output = mutableListOf<Byte>()
+
+        // GIF89a header
+        output.addAll("GIF89a".toByteArray(Charsets.US_ASCII).toList())
+
+        // Logical Screen Descriptor
+        output.add(0x01); output.add(0x00) // Width
+        output.add(0x01); output.add(0x00) // Height
+        output.add(0x00) // Packed field
+        output.add(0x00) // Background color
+        output.add(0x00) // Pixel aspect ratio
+
+        // NETSCAPE2.0 Application Extension
+        output.add(0x21); output.add(0xFF.toByte()); output.add(0x0B)
+        output.addAll("NETSCAPE2.0".toByteArray(Charsets.US_ASCII).toList())
+        output.add(0x03); output.add(0x01); output.add(0x00); output.add(0x00); output.add(0x00)
+
+        // Frame 1 - Graphic Control Extension
+        output.add(0x21); output.add(0xF9.toByte()); output.add(0x04)
+        output.add(0x00); output.add(0x0A); output.add(0x00); output.add(0x00); output.add(0x00)
+
+        // Frame 1 - Image Descriptor
+        output.add(0x2C)
+        output.add(0x00); output.add(0x00); output.add(0x00); output.add(0x00)
+        output.add(0x01); output.add(0x00); output.add(0x01); output.add(0x00)
+        output.add(0x00)
+
+        // Frame 1 - Image Data
+        output.add(0x02); output.add(0x02); output.add(0x44); output.add(0x01); output.add(0x00)
+
+        // Frame 2 - Graphic Control Extension
+        output.add(0x21); output.add(0xF9.toByte()); output.add(0x04)
+        output.add(0x00); output.add(0x0A); output.add(0x00); output.add(0x00); output.add(0x00)
+
+        // Frame 2 - Image Descriptor
+        output.add(0x2C)
+        output.add(0x00); output.add(0x00); output.add(0x00); output.add(0x00)
+        output.add(0x01); output.add(0x00); output.add(0x01); output.add(0x00)
+        output.add(0x00)
+
+        // Frame 2 - Image Data
+        output.add(0x02); output.add(0x02); output.add(0x44); output.add(0x01); output.add(0x00)
+
+        // Trailer
+        output.add(0x3B)
+
+        return output.toByteArray()
+    }
+
+    /**
+     * Creates a minimal valid static GIF (single frame, no animation).
+     */
+    private fun createMinimalStaticGifBytes(): ByteArray {
+        val output = mutableListOf<Byte>()
+
+        // GIF89a header
+        output.addAll("GIF89a".toByteArray(Charsets.US_ASCII).toList())
+
+        // Logical Screen Descriptor
+        output.add(0x01); output.add(0x00) // Width = 1
+        output.add(0x01); output.add(0x00) // Height = 1
+        output.add(0x00) // Packed field (no global color table)
+        output.add(0x00) // Background color
+        output.add(0x00) // Pixel aspect ratio
+
+        // Single frame - Image Descriptor (no graphic control extension)
+        output.add(0x2C)
+        output.add(0x00); output.add(0x00); output.add(0x00); output.add(0x00) // position
+        output.add(0x01); output.add(0x00); output.add(0x01); output.add(0x00) // size
+        output.add(0x00) // packed field
+
+        // Image Data (minimal LZW)
+        output.add(0x02) // LZW minimum code size
+        output.add(0x02) // Sub-block size
+        output.add(0x44); output.add(0x01) // LZW data
+        output.add(0x00) // Block terminator
+
+        // Trailer
+        output.add(0x3B)
+
+        return output.toByteArray()
+    }
 }

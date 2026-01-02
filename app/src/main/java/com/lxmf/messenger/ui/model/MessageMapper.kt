@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions") // Message mapping requires multiple utilities for different field types
+
 package com.lxmf.messenger.ui.model
 
 import android.graphics.BitmapFactory
@@ -6,6 +8,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.lxmf.messenger.data.repository.Message
 import com.lxmf.messenger.util.FileUtils
+import com.lxmf.messenger.util.ImageUtils
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -151,6 +154,39 @@ private fun hasImageField(fieldsJson: String?): Boolean {
 }
 
 /**
+ * Result of decoding image data from a message.
+ *
+ * @property rawBytes Raw image bytes (for animated GIFs with Coil)
+ * @property bitmap Decoded static bitmap (for non-animated images)
+ * @property isAnimated True if this is an animated GIF
+ */
+data class DecodedImageResult(
+    val rawBytes: ByteArray,
+    val bitmap: ImageBitmap?,
+    val isAnimated: Boolean,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as DecodedImageResult
+
+        if (!rawBytes.contentEquals(other.rawBytes)) return false
+        if (bitmap != other.bitmap) return false
+        if (isAnimated != other.isAnimated) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = rawBytes.contentHashCode()
+        result = 31 * result + (bitmap?.hashCode() ?: 0)
+        result = 31 * result + isAnimated.hashCode()
+        return result
+    }
+}
+
+/**
  * Decode and cache the image for a message.
  *
  * IMPORTANT: Call this from a background thread (Dispatchers.IO).
@@ -173,6 +209,84 @@ fun decodeAndCacheImage(
         Log.d(TAG, "Decoded and cached image for message ${messageId.take(8)}...")
     }
     return decoded
+}
+
+/**
+ * Decode image data from a message, detecting if it's an animated GIF.
+ *
+ * IMPORTANT: Call this from a background thread (Dispatchers.IO).
+ * This function performs disk I/O and expensive image decoding.
+ *
+ * For animated GIFs, returns raw bytes without decoding to bitmap (for Coil).
+ * For static images, returns both raw bytes and decoded bitmap (bitmap cached).
+ *
+ * @param messageId The message ID (used as cache key for static images)
+ * @param fieldsJson The message's fields JSON containing the image data
+ * @return DecodedImageResult with raw bytes, optional bitmap, and animated flag
+ */
+fun decodeImageWithAnimation(
+    messageId: String,
+    fieldsJson: String?,
+): DecodedImageResult? {
+    if (fieldsJson == null) return null
+
+    return try {
+        // Get raw image bytes
+        val rawBytes = extractImageBytes(fieldsJson) ?: return null
+
+        // Check if it's an animated GIF
+        val isAnimated = ImageUtils.isAnimatedGif(rawBytes)
+
+        if (isAnimated) {
+            // Animated GIF - don't decode to bitmap, just return raw bytes
+            Log.d(TAG, "Detected animated GIF for message ${messageId.take(8)}... (${rawBytes.size} bytes)")
+            DecodedImageResult(rawBytes, null, isAnimated = true)
+        } else {
+            // Static image - decode to bitmap and cache
+            val bitmap = ImageCache.get(messageId) ?: run {
+                val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)?.asImageBitmap()
+                decoded?.let { ImageCache.put(messageId, it) }
+                decoded
+            }
+            Log.d(TAG, "Decoded static image for message ${messageId.take(8)}... (${rawBytes.size} bytes)")
+            DecodedImageResult(rawBytes, bitmap, isAnimated = false)
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to decode image with animation check", e)
+        null
+    }
+}
+
+/**
+ * Extract raw image bytes from fields JSON.
+ *
+ * IMPORTANT: Call this from a background thread (Dispatchers.IO).
+ *
+ * @param fieldsJson The message's fields JSON containing the image data
+ * @return Raw image bytes, or null if not found
+ */
+@Suppress("ReturnCount")
+private fun extractImageBytes(fieldsJson: String?): ByteArray? {
+    if (fieldsJson == null) return null
+
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field6 = fields.opt("6") ?: return null
+
+        val hexImageData: String = when {
+            field6 is JSONObject && field6.has(FILE_REF_KEY) -> {
+                val filePath = field6.getString(FILE_REF_KEY)
+                loadAttachmentFromDisk(filePath) ?: return null
+            }
+            field6 is String && field6.isNotEmpty() -> field6
+            else -> return null
+        }
+
+        hexStringToByteArray(hexImageData)
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to extract image bytes", e)
+        null
+    }
 }
 
 /**

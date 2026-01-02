@@ -1,7 +1,6 @@
 package com.lxmf.messenger.di
 
-import android.content.Context
-import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import io.mockk.clearAllMocks
 import io.mockk.mockk
@@ -12,6 +11,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -23,22 +23,20 @@ import org.junit.Test
  * of ReticulumProtocol.
  *
  * Test coverage:
- * - provideReticulumProtocol returns ServiceReticulumProtocol instance
+ * - provideReticulumProtocol returns the same ServiceReticulumProtocol instance
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReticulumModuleTest {
     private val testDispatcher = StandardTestDispatcher()
 
-    private lateinit var context: Context
-    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var mockServiceProtocol: ServiceReticulumProtocol
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        // Create mocks
-        context = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
+        // Create mock ServiceReticulumProtocol
+        mockServiceProtocol = mockk(relaxed = true)
     }
 
     @After
@@ -48,37 +46,34 @@ class ReticulumModuleTest {
     }
 
     @Test
-    fun `provideReticulumProtocol - returns ServiceReticulumProtocol instance`() {
+    fun `provideReticulumProtocol - returns same ServiceReticulumProtocol instance`() {
         // When
-        val protocol = ReticulumModule.provideReticulumProtocol(context, settingsRepository)
+        val protocol: ReticulumProtocol = ReticulumModule.provideReticulumProtocol(mockServiceProtocol)
 
         // Then
         assertNotNull(protocol)
-        assertTrue(protocol is ServiceReticulumProtocol)
+        assertSame("Should return the same instance", mockServiceProtocol, protocol)
     }
 
     @Test
-    fun `provideReticulumProtocol - creates new instance with provided dependencies`() {
+    fun `provideReticulumProtocol - returns ReticulumProtocol interface`() {
         // When
-        val protocol = ReticulumModule.provideReticulumProtocol(context, settingsRepository)
+        val protocol = ReticulumModule.provideReticulumProtocol(mockServiceProtocol)
 
         // Then
         assertNotNull(protocol)
-        // Verify it's a ServiceReticulumProtocol with the correct type
-        assertTrue("Protocol should be ServiceReticulumProtocol", protocol is ServiceReticulumProtocol)
+        assertTrue("Protocol should implement ReticulumProtocol", protocol is ReticulumProtocol)
     }
 
     @Test
-    fun `provideReticulumProtocol - multiple calls return different instances`() {
-        // When
-        val protocol1 = ReticulumModule.provideReticulumProtocol(context, settingsRepository)
-        val protocol2 = ReticulumModule.provideReticulumProtocol(context, settingsRepository)
+    fun `provideReticulumProtocol - passes through ServiceReticulumProtocol`() {
+        // Given
+        val serviceProtocol: ServiceReticulumProtocol = mockk(relaxed = true)
 
-        // Then - While the module is @Singleton, the test calls directly without Hilt
-        // so we just verify both are valid instances
-        assertNotNull(protocol1)
-        assertNotNull(protocol2)
-        assertTrue(protocol1 is ServiceReticulumProtocol)
-        assertTrue(protocol2 is ServiceReticulumProtocol)
+        // When
+        val result = ReticulumModule.provideReticulumProtocol(serviceProtocol)
+
+        // Then
+        assertSame("Should pass through the same instance", serviceProtocol, result)
     }
 }

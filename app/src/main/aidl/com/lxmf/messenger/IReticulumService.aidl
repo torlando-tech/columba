@@ -374,4 +374,25 @@ interface IReticulumService {
      * @return JSON string with result: {"success": true, "message_hash": "...", "timestamp": ...}
      */
     String sendReaction(in byte[] destHash, String targetMessageId, String emoji, in byte[] sourceIdentityPrivateKey);
+
+    // ==================== RMSP MAP SERVICE ====================
+
+    /**
+     * Get all discovered RMSP map servers.
+     * @return JSON string containing array of server info objects
+     */
+    String getRmspServers();
+
+    /**
+     * Fetch map tiles from an RMSP server.
+     *
+     * @param destinationHashHex Server destination hash as hex string
+     * @param publicKey Server's RNS identity public key (for establishing link)
+     * @param geohash Geohash area to fetch
+     * @param zoomMin Minimum zoom level
+     * @param zoomMax Maximum zoom level
+     * @param timeoutMs Request timeout in milliseconds
+     * @return Raw tile data bytes in RMSP format, or null on failure
+     */
+    byte[] fetchRmspTiles(String destinationHashHex, in byte[] publicKey, String geohash, int zoomMin, int zoomMax, long timeoutMs);
 }

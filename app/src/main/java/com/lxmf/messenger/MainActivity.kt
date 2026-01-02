@@ -79,6 +79,8 @@ import com.lxmf.messenger.ui.screens.SettingsScreen
 import com.lxmf.messenger.ui.screens.ThemeEditorScreen
 import com.lxmf.messenger.ui.screens.ThemeManagementScreen
 import com.lxmf.messenger.ui.screens.WelcomeScreen
+import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapDownloadScreen
+import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapsScreen
 import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
 import com.lxmf.messenger.viewmodel.ContactsViewModel
@@ -396,6 +398,8 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
             "ble_connection_status",
             "theme_management",
             "tcp_client_wizard",
+            "offline_maps",
+            "offline_map_download",
         )
     val hideBottomNavPrefixes =
         listOf(
@@ -547,6 +551,9 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                                 val encodedHash = Uri.encode(destinationHash)
                                 // Use a placeholder name - the messaging screen will fetch the actual name
                                 navController.navigate("messaging/$encodedHash/Contact")
+                            },
+                            onNavigateToOfflineMaps = {
+                                navController.navigate("offline_maps")
                             },
                         )
                     }
@@ -831,6 +838,22 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                                 val encodedName = Uri.encode(peerName)
                                 navController.navigate("messaging/$encodedHash/$encodedName")
                             },
+                        )
+                    }
+
+                    // Offline Maps management screen
+                    composable("offline_maps") {
+                        OfflineMapsScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateToDownload = { navController.navigate("offline_map_download") },
+                        )
+                    }
+
+                    // Offline Map download wizard
+                    composable("offline_map_download") {
+                        OfflineMapDownloadScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onDownloadComplete = { navController.popBackStack() },
                         )
                     }
                 }

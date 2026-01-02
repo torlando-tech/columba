@@ -40,6 +40,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
 import com.lxmf.messenger.ui.screens.settings.cards.DataMigrationCard
 import com.lxmf.messenger.ui.screens.settings.cards.IdentityCard
 import com.lxmf.messenger.ui.screens.settings.cards.LocationSharingCard
+import com.lxmf.messenger.ui.screens.settings.cards.MapSourcesCard
 import com.lxmf.messenger.ui.screens.settings.cards.MessageDeliveryRetrievalCard
 import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
@@ -180,6 +181,15 @@ fun SettingsScreen(
                     onDefaultDurationChange = { viewModel.setDefaultSharingDuration(it) },
                     locationPrecisionRadius = state.locationPrecisionRadius,
                     onLocationPrecisionRadiusChange = { viewModel.setLocationPrecisionRadius(it) },
+                )
+
+                MapSourcesCard(
+                    httpEnabled = state.mapSourceHttpEnabled,
+                    onHttpEnabledChange = { viewModel.setMapSourceHttpEnabled(it) },
+                    rmspEnabled = state.mapSourceRmspEnabled,
+                    onRmspEnabledChange = { viewModel.setMapSourceRmspEnabled(it) },
+                    rmspServerCount = state.rmspServerCount,
+                    hasOfflineMaps = state.hasOfflineMaps,
                 )
 
                 MessageDeliveryRetrievalCard(

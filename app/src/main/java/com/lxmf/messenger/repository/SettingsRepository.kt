@@ -87,6 +87,10 @@ class SettingsRepository
             val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
             val DEFAULT_SHARING_DURATION = stringPreferencesKey("default_sharing_duration")
             val LOCATION_PRECISION_RADIUS = intPreferencesKey("location_precision_radius")
+
+            // Map source preferences
+            val MAP_SOURCE_HTTP_ENABLED = booleanPreferencesKey("map_source_http_enabled")
+            val MAP_SOURCE_RMSP_ENABLED = booleanPreferencesKey("map_source_rmsp_enabled")
         }
 
         // Notification preferences
@@ -886,6 +890,72 @@ class SettingsRepository
         suspend fun saveLocationPrecisionRadius(radiusMeters: Int) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.LOCATION_PRECISION_RADIUS] = radiusMeters
+            }
+        }
+
+        // Map source preferences
+
+        /**
+         * Flow of the HTTP map source enabled setting.
+         * When enabled (default), tiles are fetched from OpenFreeMap via HTTP.
+         * Defaults to true if not set.
+         */
+        val mapSourceHttpEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MAP_SOURCE_HTTP_ENABLED] ?: true
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the HTTP map source enabled setting (non-flow).
+         */
+        suspend fun getMapSourceHttpEnabled(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.MAP_SOURCE_HTTP_ENABLED] ?: true
+            }.first()
+        }
+
+        /**
+         * Save the HTTP map source enabled setting.
+         *
+         * @param enabled Whether HTTP map source is enabled
+         */
+        suspend fun saveMapSourceHttpEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.MAP_SOURCE_HTTP_ENABLED] = enabled
+            }
+        }
+
+        /**
+         * Flow of the RMSP map source enabled setting.
+         * When enabled, tiles can be fetched from RMSP servers over Reticulum mesh.
+         * Defaults to false if not set.
+         */
+        val mapSourceRmspEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MAP_SOURCE_RMSP_ENABLED] ?: false
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the RMSP map source enabled setting (non-flow).
+         */
+        suspend fun getMapSourceRmspEnabled(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.MAP_SOURCE_RMSP_ENABLED] ?: false
+            }.first()
+        }
+
+        /**
+         * Save the RMSP map source enabled setting.
+         *
+         * @param enabled Whether RMSP map source is enabled
+         */
+        suspend fun saveMapSourceRmspEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.MAP_SOURCE_RMSP_ENABLED] = enabled
             }
         }
 

@@ -312,6 +312,8 @@ data class DeliveryStatusUpdate(
     /** Status: "delivered", "failed", or "retrying_propagated" (direct failed, retrying via propagation) */
     val status: String,
     val timestamp: Long,
+    /** Optional failure reason (e.g., "rejected_size_limit", "rejected_by_recipient", "max_relay_retries_exceeded") */
+    val reason: String? = null,
 )
 
 /**

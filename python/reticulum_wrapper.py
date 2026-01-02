@@ -3504,7 +3504,8 @@ class ReticulumWrapper:
         Callback invoked by LXMF when a sent message delivery fails.
         This is called when delivery times out or is otherwise unsuccessful.
 
-        Handles three cases:
+        Handles four cases:
+        0. REJECTED state: Recipient explicitly rejected (likely size limit) - fail immediately
         1. First failure with try_propagation_on_fail=True: Retry via current propagation node
         2. Propagation retry failed, retries < max: Request alternative relay from Kotlin
         3. Max retries exceeded or no alternatives: Fail message permanently
@@ -3514,6 +3515,29 @@ class ReticulumWrapper:
         """
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
+
+            # Case 0: Check for REJECTED state - recipient explicitly rejected the message
+            # This typically happens when the message exceeds the recipient's size limit.
+            # Don't retry - rejection is final.
+            if hasattr(lxmf_message, 'state') and lxmf_message.state == LXMF.LXMessage.REJECTED:
+                # Estimate message size to provide helpful error message
+                msg_size = 0
+                if hasattr(lxmf_message, 'packed') and lxmf_message.packed:
+                    msg_size = len(lxmf_message.packed)
+                elif hasattr(lxmf_message, 'content') and lxmf_message.content:
+                    msg_size = len(lxmf_message.content)
+
+                if msg_size > 1_000_000:  # > 1MB
+                    reason = f"rejected_size_limit (message ~{msg_size // 1_000_000}MB exceeds recipient's 1MB limit)"
+                    log_error("ReticulumWrapper", "_on_message_failed",
+                             f"❌ Message {msg_hash[:16]}... REJECTED by recipient - likely exceeds their 1MB size limit")
+                else:
+                    reason = "rejected_by_recipient"
+                    log_error("ReticulumWrapper", "_on_message_failed",
+                             f"❌ Message {msg_hash[:16]}... REJECTED by recipient")
+
+                self._fail_message_permanently(lxmf_message, reason)
+                return
 
             # Remove from opportunistic tracking (if it was being tracked)
             if msg_hash in self._opportunistic_messages:

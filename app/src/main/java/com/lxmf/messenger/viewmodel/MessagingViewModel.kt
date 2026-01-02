@@ -659,6 +659,18 @@ class MessagingViewModel
                         )
                     }
 
+                    // When failed, set a user-friendly error message based on reason
+                    val reason = update.reason
+                    if (update.status == "failed" && reason != null) {
+                        val errorMessage = formatFailureReason(reason)
+                        conversationRepository.updateMessageDeliveryDetails(
+                            update.messageHash,
+                            deliveryMethod = null, // Keep existing
+                            errorMessage = errorMessage,
+                        )
+                        Log.w(TAG, "Message ${update.messageHash.take(16)}... failed: $errorMessage")
+                    }
+
                     Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status}")
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
@@ -1345,6 +1357,24 @@ private fun DeliveryMethod.toStorageString(): String =
     }
 
 private const val OPPORTUNISTIC_MAX_BYTES_HELPER = 295
+
+/**
+ * Convert internal failure reason codes to user-friendly messages.
+ */
+private fun formatFailureReason(reason: String): String =
+    when {
+        reason.startsWith("rejected_size_limit") ->
+            "Rejected: Message exceeds recipient's size limit (1MB). Ask them to disable the limit in settings."
+        reason == "rejected_by_recipient" ->
+            "Rejected by recipient"
+        reason == "max_relay_retries_exceeded" ->
+            "Delivery failed after multiple relay attempts"
+        reason == "delivery_failed" ->
+            "Delivery failed - recipient may be offline"
+        reason == "no_path" ->
+            "No path to recipient"
+        else -> reason
+    }
 
 private fun determineDeliveryMethod(
     sanitized: String,

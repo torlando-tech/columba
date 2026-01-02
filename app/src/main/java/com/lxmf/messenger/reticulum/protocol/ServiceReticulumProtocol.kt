@@ -394,16 +394,18 @@ class ServiceReticulumProtocol(
                     val messageHash = json.optString("message_hash")
                     val status = json.optString("status")
                     val timestamp = json.optLong("timestamp", System.currentTimeMillis())
+                    val reason = json.optString("reason").takeIf { it.isNotEmpty() }
 
                     val update =
                         DeliveryStatusUpdate(
                             messageHash = messageHash,
                             status = status,
                             timestamp = timestamp,
+                            reason = reason,
                         )
 
                     deliveryStatusFlow.tryEmit(update)
-                    Log.d(TAG, "Delivery status emitted to flow: hash=${messageHash.take(16)}..., status=$status")
+                    Log.d(TAG, "Delivery status emitted to flow: hash=${messageHash.take(16)}..., status=$status, reason=$reason")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling delivery status callback", e)
                 }

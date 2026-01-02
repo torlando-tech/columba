@@ -221,7 +221,7 @@ class BleConnectionStatusScreenTest {
 
         // Then
         composeTestRule.onNodeWithText("RNS-TestPeer").assertIsDisplayed()
-        composeTestRule.onNodeWithText("abcd1234").assertIsDisplayed() // Short hash
+        composeTestRule.onNodeWithText("abcd1234efgh5678").assertIsDisplayed() // Full identity hash
         composeTestRule.onNodeWithText("Both").assertIsDisplayed() // Connection type badge
     }
 

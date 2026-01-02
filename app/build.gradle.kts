@@ -66,6 +66,12 @@ android {
         }
     }
 
+    lint {
+        // Workaround for lint crash with Kotlin 2.x
+        // https://issuetracker.google.com/issues/344341744
+        disable += "NullSafeMutableLiveData"
+    }
+
     // Track whether release signing is configured
     val releaseSigningConfigured =
         run {

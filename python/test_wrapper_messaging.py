@@ -1812,6 +1812,8 @@ class TestFileAttachments(unittest.TestCase):
     @patch('reticulum_wrapper.LXMF')
     def test_send_with_both_image_and_file_attachments(self, mock_lxmf, mock_rns):
         """Test sending with both image (field 6) and file attachments (field 5)"""
+        # Set the FIELD_IMAGE constant so it's used as the key instead of a MagicMock
+        mock_lxmf.FIELD_IMAGE = 6
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
         wrapper.router = MagicMock()

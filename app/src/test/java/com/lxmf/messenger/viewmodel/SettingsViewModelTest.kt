@@ -4,10 +4,10 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.IdentityRepository
+import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.service.InterfaceDetector
@@ -76,6 +76,8 @@ class SettingsViewModelTest {
     private val retrievalIntervalSecondsFlow = MutableStateFlow(30)
     private val transportNodeEnabledFlow = MutableStateFlow(true)
     private val defaultDeliveryMethodFlow = MutableStateFlow("direct")
+    private val imageCompressionPresetFlow =
+        MutableStateFlow(com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO)
 
     @Before
     fun setup() {
@@ -112,6 +114,7 @@ class SettingsViewModelTest {
         every { settingsRepository.retrievalIntervalSecondsFlow } returns retrievalIntervalSecondsFlow
         every { settingsRepository.transportNodeEnabledFlow } returns transportNodeEnabledFlow
         every { settingsRepository.defaultDeliveryMethodFlow } returns defaultDeliveryMethodFlow
+        every { settingsRepository.imageCompressionPresetFlow } returns imageCompressionPresetFlow
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 
         // Mock PropagationNodeManager flows (StateFlows)
@@ -2334,6 +2337,105 @@ class SettingsViewModelTest {
             // Verify update was attempted
             coVerify {
                 identityRepository.updateIconAppearance("abc123", "account", "FFFFFF", "1E88E5")
+            }
+        }
+
+    // endregion
+
+    // region Image Compression Tests
+
+    @Test
+    fun `initial state has AUTO image compression preset`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO,
+                    state.imageCompressionPreset,
+                )
+            }
+        }
+
+    @Test
+    fun `setImageCompressionPreset saves preset to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.LOW)
+
+            coVerify {
+                settingsRepository.saveImageCompressionPreset(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.LOW,
+                )
+            }
+        }
+
+    @Test
+    fun `setImageCompressionPreset to HIGH saves preset`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.HIGH)
+
+            coVerify {
+                settingsRepository.saveImageCompressionPreset(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.HIGH,
+                )
+            }
+        }
+
+    @Test
+    fun `setImageCompressionPreset to MEDIUM saves preset`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.MEDIUM)
+
+            coVerify {
+                settingsRepository.saveImageCompressionPreset(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.MEDIUM,
+                )
+            }
+        }
+
+    @Test
+    fun `setImageCompressionPreset to ORIGINAL saves preset`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.ORIGINAL)
+
+            coVerify {
+                settingsRepository.saveImageCompressionPreset(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.ORIGINAL,
+                )
+            }
+        }
+
+    @Test
+    fun `image compression preset flow updates state`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                // Initial state
+                val initial = awaitItem()
+                assertEquals(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO,
+                    initial.imageCompressionPreset,
+                )
+
+                // Change preset via flow
+                imageCompressionPresetFlow.value = com.lxmf.messenger.data.model.ImageCompressionPreset.MEDIUM
+
+                // State should update
+                val updated = awaitItem()
+                assertEquals(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.MEDIUM,
+                    updated.imageCompressionPreset,
+                )
             }
         }
 

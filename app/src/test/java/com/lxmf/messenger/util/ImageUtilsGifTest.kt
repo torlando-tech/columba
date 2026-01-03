@@ -41,8 +41,9 @@ class ImageUtilsGifTest {
     @Test
     fun `isAnimatedGif returns false for GIF87a without animation`() {
         // GIF87a header without NETSCAPE extension or multiple frames
-        val gif87a = "GIF87a".toByteArray(Charsets.US_ASCII) +
-            byteArrayOf(0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00) // minimal non-animated gif data
+        val gif87a =
+            "GIF87a".toByteArray(Charsets.US_ASCII) +
+                byteArrayOf(0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00) // minimal non-animated gif data
         val result = ImageUtils.isAnimatedGif(gif87a)
         assertFalse(result)
     }
@@ -50,8 +51,9 @@ class ImageUtilsGifTest {
     @Test
     fun `isAnimatedGif returns false for GIF89a without animation`() {
         // GIF89a header without NETSCAPE extension or multiple frames
-        val gif89a = "GIF89a".toByteArray(Charsets.US_ASCII) +
-            byteArrayOf(0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00) // minimal non-animated gif data
+        val gif89a =
+            "GIF89a".toByteArray(Charsets.US_ASCII) +
+                byteArrayOf(0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00) // minimal non-animated gif data
         val result = ImageUtils.isAnimatedGif(gif89a)
         assertFalse(result)
     }
@@ -63,8 +65,9 @@ class ImageUtilsGifTest {
         // Some padding before the extension
         val padding = byteArrayOf(0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00)
         // NETSCAPE2.0 application extension: 0x21 0xFF 0x0B followed by "NETSCAPE2.0"
-        val netscapeExtension = byteArrayOf(0x21, 0xFF.toByte(), 0x0B) +
-            "NETSCAPE2.0".toByteArray(Charsets.US_ASCII)
+        val netscapeExtension =
+            byteArrayOf(0x21, 0xFF.toByte(), 0x0B) +
+                "NETSCAPE2.0".toByteArray(Charsets.US_ASCII)
         val trailer = byteArrayOf(0x00, 0x03, 0x01, 0x00, 0x00, 0x00, 0x3B)
 
         val animatedGif = header + padding + netscapeExtension + trailer
@@ -105,10 +108,11 @@ class ImageUtilsGifTest {
     @Test
     fun `isAnimatedGif handles random binary data without crashing`() {
         // Random bytes that aren't a valid image
-        val randomData = byteArrayOf(
-            0x12, 0x34, 0x56, 0x78, 0x9A.toByte(), 0xBC.toByte(), 0xDE.toByte(), 0xF0.toByte(),
-            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88.toByte(),
-        )
+        val randomData =
+            byteArrayOf(
+                0x12, 0x34, 0x56, 0x78, 0x9A.toByte(), 0xBC.toByte(), 0xDE.toByte(), 0xF0.toByte(),
+                0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88.toByte(),
+            )
         val result = ImageUtils.isAnimatedGif(randomData)
         assertFalse(result)
     }
@@ -117,8 +121,9 @@ class ImageUtilsGifTest {
     fun `isAnimatedGif handles truncated NETSCAPE extension`() {
         // GIF header followed by partial NETSCAPE extension (not enough bytes)
         val header = "GIF89a".toByteArray(Charsets.US_ASCII)
-        val partialExtension = byteArrayOf(0x21, 0xFF.toByte(), 0x0B) +
-            "NETSCAPE".toByteArray(Charsets.US_ASCII) // Missing "2.0"
+        val partialExtension =
+            byteArrayOf(0x21, 0xFF.toByte(), 0x0B) +
+                "NETSCAPE".toByteArray(Charsets.US_ASCII) // Missing "2.0"
 
         val truncatedGif = header + partialExtension
         val result = ImageUtils.isAnimatedGif(truncatedGif)
@@ -138,10 +143,11 @@ class ImageUtilsGifTest {
     @Test
     fun `isAnimatedGif returns false for non-GIF with similar byte pattern`() {
         // Data that has 0x21 0xFF 0x0B pattern but isn't a GIF
-        val fakeData = byteArrayOf(
-            0x50, 0x4B, 0x03, 0x04, // ZIP header
-            0x21, 0xFF.toByte(), 0x0B, // Matches NETSCAPE pattern prefix
-        ) + "NETSCAPE2.0".toByteArray(Charsets.US_ASCII)
+        val fakeData =
+            byteArrayOf(
+                0x50, 0x4B, 0x03, 0x04, // ZIP header
+                0x21, 0xFF.toByte(), 0x0B, // Matches NETSCAPE pattern prefix
+            ) + "NETSCAPE2.0".toByteArray(Charsets.US_ASCII)
 
         val result = ImageUtils.isAnimatedGif(fakeData)
         assertFalse(result)

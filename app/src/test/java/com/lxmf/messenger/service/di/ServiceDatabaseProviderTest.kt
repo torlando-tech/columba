@@ -3,14 +3,9 @@ package com.lxmf.messenger.service.di
 import android.content.Context
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import io.mockk.clearAllMocks
-import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
 import io.mockk.unmockkAll
-import io.mockk.verify
 import org.junit.After
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertSame
 import org.junit.Before
 import org.junit.Test
 
@@ -66,13 +61,14 @@ class ServiceDatabaseProviderTest {
     @Test
     fun `close is thread-safe`() {
         // Run close from multiple threads concurrently
-        val threads = (1..10).map {
-            Thread {
-                repeat(10) {
-                    ServiceDatabaseProvider.close()
+        val threads =
+            (1..10).map {
+                Thread {
+                    repeat(10) {
+                        ServiceDatabaseProvider.close()
+                    }
                 }
             }
-        }
 
         threads.forEach { it.start() }
         threads.forEach { it.join() }

@@ -3,7 +3,6 @@ package com.lxmf.messenger.service.manager
 import android.util.Log
 import com.chaquo.python.PyObject
 import com.lxmf.messenger.data.model.InterfaceType
-import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.NodeTypeDetector
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import com.lxmf.messenger.service.persistence.ServicePersistenceManager
@@ -238,9 +237,10 @@ class EventHandler(
             val nodeType = NodeTypeDetector.detectNodeType(appData, aspect)
 
             // Determine display name (prefer parsed name, fall back to identity hash)
-            val peerName = displayName
-                ?: appData?.let { String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 } }
-                ?: "Peer ${destinationHashHex.take(8).uppercase()}"
+            val peerName =
+                displayName
+                    ?: appData?.let { String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 } }
+                    ?: "Peer ${destinationHashHex.take(8).uppercase()}"
 
             // Persist to database first (survives app process death)
             if (persistenceManager != null && publicKey != null) {

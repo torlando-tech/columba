@@ -89,608 +89,654 @@ class ServicePersistenceManagerTest {
     // ========== persistAnnounce() Tests ==========
 
     @Test
-    fun `persistAnnounce saves new announce to database`() = runTest {
-        coEvery { announceDao.getAnnounce(testDestinationHash) } returns null
-        coEvery { announceDao.upsertAnnounce(any()) } just Runs
+    fun `persistAnnounce saves new announce to database`() =
+        runTest {
+            coEvery { announceDao.getAnnounce(testDestinationHash) } returns null
+            coEvery { announceDao.upsertAnnounce(any()) } just Runs
 
-        persistenceManager.persistAnnounce(
-            destinationHash = testDestinationHash,
-            peerName = "Test Peer",
-            publicKey = testPublicKey,
-            appData = testAppData,
-            hops = 2,
-            timestamp = System.currentTimeMillis(),
-            nodeType = "LXMF_PEER",
-            receivingInterface = "BLE",
-            receivingInterfaceType = "BLE",
-            aspect = "lxmf.delivery",
-            stampCost = null,
-            stampCostFlexibility = null,
-            peeringCost = null,
-            iconName = null,
-            iconForegroundColor = null,
-            iconBackgroundColor = null,
-        )
+            persistenceManager.persistAnnounce(
+                destinationHash = testDestinationHash,
+                peerName = "Test Peer",
+                publicKey = testPublicKey,
+                appData = testAppData,
+                hops = 2,
+                timestamp = System.currentTimeMillis(),
+                nodeType = "LXMF_PEER",
+                receivingInterface = "BLE",
+                receivingInterfaceType = "BLE",
+                aspect = "lxmf.delivery",
+                stampCost = null,
+                stampCostFlexibility = null,
+                peeringCost = null,
+                iconName = null,
+                iconForegroundColor = null,
+                iconBackgroundColor = null,
+            )
 
-        testScope.advanceUntilIdle()
+            testScope.advanceUntilIdle()
 
-        coVerify { announceDao.upsertAnnounce(any()) }
-    }
-
-    @Test
-    fun `persistAnnounce preserves existing favorite status`() = runTest {
-        val existingAnnounce = AnnounceEntity(
-            destinationHash = testDestinationHash,
-            peerName = "Old Name",
-            publicKey = testPublicKey,
-            appData = null,
-            hops = 1,
-            lastSeenTimestamp = System.currentTimeMillis() - 10000,
-            nodeType = "LXMF_PEER",
-            receivingInterface = "BLE",
-            isFavorite = true,
-            favoritedTimestamp = System.currentTimeMillis() - 5000,
-        )
-
-        coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
-        coEvery { announceDao.upsertAnnounce(any()) } just Runs
-
-        persistenceManager.persistAnnounce(
-            destinationHash = testDestinationHash,
-            peerName = "New Name",
-            publicKey = testPublicKey,
-            appData = testAppData,
-            hops = 3,
-            timestamp = System.currentTimeMillis(),
-            nodeType = "LXMF_PEER",
-            receivingInterface = null,
-            receivingInterfaceType = null,
-            aspect = null,
-            stampCost = null,
-            stampCostFlexibility = null,
-            peeringCost = null,
-            iconName = null,
-            iconForegroundColor = null,
-            iconBackgroundColor = null,
-        )
-
-        testScope.advanceUntilIdle()
-
-        coVerify {
-            announceDao.upsertAnnounce(match { entity ->
-                entity.isFavorite && entity.peerName == "New Name"
-            })
+            coVerify { announceDao.upsertAnnounce(any()) }
         }
-    }
 
     @Test
-    fun `persistAnnounce preserves existing icon appearance when not provided`() = runTest {
-        val existingAnnounce = AnnounceEntity(
-            destinationHash = testDestinationHash,
-            peerName = "Test Peer",
-            publicKey = testPublicKey,
-            appData = null,
-            hops = 1,
-            lastSeenTimestamp = System.currentTimeMillis(),
-            nodeType = "LXMF_PEER",
-            receivingInterface = "BLE",
-            iconName = "home",
-            iconForegroundColor = "#FFFFFF",
-            iconBackgroundColor = "#000000",
-        )
+    fun `persistAnnounce preserves existing favorite status`() =
+        runTest {
+            val existingAnnounce =
+                AnnounceEntity(
+                    destinationHash = testDestinationHash,
+                    peerName = "Old Name",
+                    publicKey = testPublicKey,
+                    appData = null,
+                    hops = 1,
+                    lastSeenTimestamp = System.currentTimeMillis() - 10000,
+                    nodeType = "LXMF_PEER",
+                    receivingInterface = "BLE",
+                    isFavorite = true,
+                    favoritedTimestamp = System.currentTimeMillis() - 5000,
+                )
 
-        coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
-        coEvery { announceDao.upsertAnnounce(any()) } just Runs
+            coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
+            coEvery { announceDao.upsertAnnounce(any()) } just Runs
 
-        persistenceManager.persistAnnounce(
-            destinationHash = testDestinationHash,
-            peerName = "Test Peer",
-            publicKey = testPublicKey,
-            appData = null,
-            hops = 2,
-            timestamp = System.currentTimeMillis(),
-            nodeType = "LXMF_PEER",
-            receivingInterface = null,
-            receivingInterfaceType = null,
-            aspect = null,
-            stampCost = null,
-            stampCostFlexibility = null,
-            peeringCost = null,
-            iconName = null,
-            iconForegroundColor = null,
-            iconBackgroundColor = null,
-        )
+            persistenceManager.persistAnnounce(
+                destinationHash = testDestinationHash,
+                peerName = "New Name",
+                publicKey = testPublicKey,
+                appData = testAppData,
+                hops = 3,
+                timestamp = System.currentTimeMillis(),
+                nodeType = "LXMF_PEER",
+                receivingInterface = null,
+                receivingInterfaceType = null,
+                aspect = null,
+                stampCost = null,
+                stampCostFlexibility = null,
+                peeringCost = null,
+                iconName = null,
+                iconForegroundColor = null,
+                iconBackgroundColor = null,
+            )
 
-        testScope.advanceUntilIdle()
+            testScope.advanceUntilIdle()
 
-        coVerify {
-            announceDao.upsertAnnounce(match { entity ->
-                entity.iconName == "home" &&
-                    entity.iconForegroundColor == "#FFFFFF" &&
-                    entity.iconBackgroundColor == "#000000"
-            })
+            coVerify {
+                announceDao.upsertAnnounce(
+                    match { entity ->
+                        entity.isFavorite && entity.peerName == "New Name"
+                    },
+                )
+            }
         }
-    }
 
     @Test
-    fun `persistAnnounce updates icon appearance when provided`() = runTest {
-        val existingAnnounce = AnnounceEntity(
-            destinationHash = testDestinationHash,
-            peerName = "Test Peer",
-            publicKey = testPublicKey,
-            appData = null,
-            hops = 1,
-            lastSeenTimestamp = System.currentTimeMillis(),
-            nodeType = "LXMF_PEER",
-            receivingInterface = "BLE",
-            iconName = "home",
-            iconForegroundColor = "#FFFFFF",
-            iconBackgroundColor = "#000000",
-        )
+    fun `persistAnnounce preserves existing icon appearance when not provided`() =
+        runTest {
+            val existingAnnounce =
+                AnnounceEntity(
+                    destinationHash = testDestinationHash,
+                    peerName = "Test Peer",
+                    publicKey = testPublicKey,
+                    appData = null,
+                    hops = 1,
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                    nodeType = "LXMF_PEER",
+                    receivingInterface = "BLE",
+                    iconName = "home",
+                    iconForegroundColor = "#FFFFFF",
+                    iconBackgroundColor = "#000000",
+                )
 
-        coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
-        coEvery { announceDao.upsertAnnounce(any()) } just Runs
+            coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
+            coEvery { announceDao.upsertAnnounce(any()) } just Runs
 
-        persistenceManager.persistAnnounce(
-            destinationHash = testDestinationHash,
-            peerName = "Test Peer",
-            publicKey = testPublicKey,
-            appData = null,
-            hops = 2,
-            timestamp = System.currentTimeMillis(),
-            nodeType = "LXMF_PEER",
-            receivingInterface = null,
-            receivingInterfaceType = null,
-            aspect = null,
-            stampCost = null,
-            stampCostFlexibility = null,
-            peeringCost = null,
-            iconName = "work",
-            iconForegroundColor = "#FF0000",
-            iconBackgroundColor = "#00FF00",
-        )
+            persistenceManager.persistAnnounce(
+                destinationHash = testDestinationHash,
+                peerName = "Test Peer",
+                publicKey = testPublicKey,
+                appData = null,
+                hops = 2,
+                timestamp = System.currentTimeMillis(),
+                nodeType = "LXMF_PEER",
+                receivingInterface = null,
+                receivingInterfaceType = null,
+                aspect = null,
+                stampCost = null,
+                stampCostFlexibility = null,
+                peeringCost = null,
+                iconName = null,
+                iconForegroundColor = null,
+                iconBackgroundColor = null,
+            )
 
-        testScope.advanceUntilIdle()
+            testScope.advanceUntilIdle()
 
-        coVerify {
-            announceDao.upsertAnnounce(match { entity ->
-                entity.iconName == "work" &&
-                    entity.iconForegroundColor == "#FF0000" &&
-                    entity.iconBackgroundColor == "#00FF00"
-            })
+            coVerify {
+                announceDao.upsertAnnounce(
+                    match { entity ->
+                        entity.iconName == "home" &&
+                            entity.iconForegroundColor == "#FFFFFF" &&
+                            entity.iconBackgroundColor == "#000000"
+                    },
+                )
+            }
         }
-    }
 
     @Test
-    fun `persistAnnounce handles database exception gracefully`() = runTest {
-        coEvery { announceDao.getAnnounce(any()) } throws RuntimeException("Database error")
+    fun `persistAnnounce updates icon appearance when provided`() =
+        runTest {
+            val existingAnnounce =
+                AnnounceEntity(
+                    destinationHash = testDestinationHash,
+                    peerName = "Test Peer",
+                    publicKey = testPublicKey,
+                    appData = null,
+                    hops = 1,
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                    nodeType = "LXMF_PEER",
+                    receivingInterface = "BLE",
+                    iconName = "home",
+                    iconForegroundColor = "#FFFFFF",
+                    iconBackgroundColor = "#000000",
+                )
 
-        // Should not throw
-        persistenceManager.persistAnnounce(
-            destinationHash = testDestinationHash,
-            peerName = "Test Peer",
-            publicKey = testPublicKey,
-            appData = null,
-            hops = 1,
-            timestamp = System.currentTimeMillis(),
-            nodeType = "LXMF_PEER",
-            receivingInterface = null,
-            receivingInterfaceType = null,
-            aspect = null,
-            stampCost = null,
-            stampCostFlexibility = null,
-            peeringCost = null,
-            iconName = null,
-            iconForegroundColor = null,
-            iconBackgroundColor = null,
-        )
+            coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
+            coEvery { announceDao.upsertAnnounce(any()) } just Runs
 
-        testScope.advanceUntilIdle()
+            persistenceManager.persistAnnounce(
+                destinationHash = testDestinationHash,
+                peerName = "Test Peer",
+                publicKey = testPublicKey,
+                appData = null,
+                hops = 2,
+                timestamp = System.currentTimeMillis(),
+                nodeType = "LXMF_PEER",
+                receivingInterface = null,
+                receivingInterfaceType = null,
+                aspect = null,
+                stampCost = null,
+                stampCostFlexibility = null,
+                peeringCost = null,
+                iconName = "work",
+                iconForegroundColor = "#FF0000",
+                iconBackgroundColor = "#00FF00",
+            )
 
-        // Verify exception was handled (no crash)
-    }
+            testScope.advanceUntilIdle()
+
+            coVerify {
+                announceDao.upsertAnnounce(
+                    match { entity ->
+                        entity.iconName == "work" &&
+                            entity.iconForegroundColor == "#FF0000" &&
+                            entity.iconBackgroundColor == "#00FF00"
+                    },
+                )
+            }
+        }
+
+    @Test
+    fun `persistAnnounce handles database exception gracefully`() =
+        runTest {
+            coEvery { announceDao.getAnnounce(any()) } throws RuntimeException("Database error")
+
+            // Should not throw
+            persistenceManager.persistAnnounce(
+                destinationHash = testDestinationHash,
+                peerName = "Test Peer",
+                publicKey = testPublicKey,
+                appData = null,
+                hops = 1,
+                timestamp = System.currentTimeMillis(),
+                nodeType = "LXMF_PEER",
+                receivingInterface = null,
+                receivingInterfaceType = null,
+                aspect = null,
+                stampCost = null,
+                stampCostFlexibility = null,
+                peeringCost = null,
+                iconName = null,
+                iconForegroundColor = null,
+                iconBackgroundColor = null,
+            )
+
+            testScope.advanceUntilIdle()
+
+            // Verify exception was handled (no crash)
+        }
 
     // ========== persistPeerIdentity() Tests ==========
 
     @Test
-    fun `persistPeerIdentity saves peer identity to database`() = runTest {
-        coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
+    fun `persistPeerIdentity saves peer identity to database`() =
+        runTest {
+            coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
 
-        persistenceManager.persistPeerIdentity(testDestinationHash, testPublicKey)
+            persistenceManager.persistPeerIdentity(testDestinationHash, testPublicKey)
 
-        testScope.advanceUntilIdle()
+            testScope.advanceUntilIdle()
 
-        coVerify { peerIdentityDao.insertPeerIdentity(any()) }
-    }
+            coVerify { peerIdentityDao.insertPeerIdentity(any()) }
+        }
 
     @Test
-    fun `persistPeerIdentity handles exception gracefully`() = runTest {
-        coEvery { peerIdentityDao.insertPeerIdentity(any()) } throws RuntimeException("Insert error")
+    fun `persistPeerIdentity handles exception gracefully`() =
+        runTest {
+            coEvery { peerIdentityDao.insertPeerIdentity(any()) } throws RuntimeException("Insert error")
 
-        // Should not throw
-        persistenceManager.persistPeerIdentity(testDestinationHash, testPublicKey)
+            // Should not throw
+            persistenceManager.persistPeerIdentity(testDestinationHash, testPublicKey)
 
-        testScope.advanceUntilIdle()
-    }
+            testScope.advanceUntilIdle()
+        }
 
     // ========== persistMessage() Tests ==========
 
     @Test
-    fun `persistMessage saves new message to database`() = runTest {
-        val activeIdentity = LocalIdentityEntity(
-            identityHash = testIdentityHash,
-            displayName = "Test",
-            destinationHash = "dest_hash",
-            filePath = "/test/path",
-            createdTimestamp = System.currentTimeMillis(),
-            lastUsedTimestamp = System.currentTimeMillis(),
-            isActive = true,
-        )
+    fun `persistMessage saves new message to database`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
 
-        coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
-        coEvery { messageDao.getMessageById(any(), any()) } returns null
-        coEvery { conversationDao.getConversation(any(), any()) } returns null
-        coEvery { conversationDao.insertConversation(any()) } just Runs
-        coEvery { messageDao.insertMessage(any()) } just Runs
-        coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation(any(), any()) } returns null
+            coEvery { conversationDao.insertConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(any()) } just Runs
+            coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
 
-        persistenceManager.persistMessage(
-            messageHash = "test_message_hash",
-            content = "Hello, world!",
-            sourceHash = "sender_hash",
-            timestamp = System.currentTimeMillis(),
-            fieldsJson = null,
-            publicKey = testPublicKey,
-            replyToMessageId = null,
-            deliveryMethod = "direct",
-        )
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello, world!",
+                sourceHash = "sender_hash",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = testPublicKey,
+                replyToMessageId = null,
+                deliveryMethod = "direct",
+            )
 
-        testScope.advanceUntilIdle()
+            testScope.advanceUntilIdle()
 
-        coVerify { messageDao.insertMessage(any()) }
-        coVerify { conversationDao.insertConversation(any()) }
-    }
-
-    @Test
-    fun `persistMessage updates existing conversation`() = runTest {
-        val activeIdentity = LocalIdentityEntity(
-            identityHash = testIdentityHash,
-            displayName = "Test",
-            destinationHash = "dest_hash",
-            filePath = "/test/path",
-            createdTimestamp = System.currentTimeMillis(),
-            lastUsedTimestamp = System.currentTimeMillis(),
-            isActive = true,
-        )
-
-        val existingConversation = ConversationEntity(
-            peerHash = "sender_hash",
-            identityHash = testIdentityHash,
-            peerName = "Sender",
-            peerPublicKey = null,
-            lastMessage = "Previous message",
-            lastMessageTimestamp = System.currentTimeMillis() - 10000,
-            unreadCount = 2,
-            lastSeenTimestamp = 0,
-        )
-
-        coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
-        coEvery { messageDao.getMessageById(any(), any()) } returns null
-        coEvery { conversationDao.getConversation("sender_hash", testIdentityHash) } returns existingConversation
-        coEvery { conversationDao.updateConversation(any()) } just Runs
-        coEvery { messageDao.insertMessage(any()) } just Runs
-        coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
-
-        persistenceManager.persistMessage(
-            messageHash = "test_message_hash",
-            content = "New message",
-            sourceHash = "sender_hash",
-            timestamp = System.currentTimeMillis(),
-            fieldsJson = null,
-            publicKey = testPublicKey,
-            replyToMessageId = null,
-            deliveryMethod = null,
-        )
-
-        testScope.advanceUntilIdle()
-
-        coVerify {
-            conversationDao.updateConversation(match { conv ->
-                conv.unreadCount == 3 && conv.lastMessage == "New message"
-            })
+            coVerify { messageDao.insertMessage(any()) }
+            coVerify { conversationDao.insertConversation(any()) }
         }
-    }
 
     @Test
-    fun `persistMessage skips duplicate message`() = runTest {
-        val activeIdentity = LocalIdentityEntity(
-            identityHash = testIdentityHash,
-            displayName = "Test",
-            destinationHash = "dest_hash",
-            filePath = "/test/path",
-            createdTimestamp = System.currentTimeMillis(),
-            lastUsedTimestamp = System.currentTimeMillis(),
-            isActive = true,
-        )
+    fun `persistMessage updates existing conversation`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
 
-        val existingMessage = MessageEntity(
-            id = "test_message_hash",
-            conversationHash = "sender_hash",
-            identityHash = testIdentityHash,
-            content = "Existing message",
-            timestamp = System.currentTimeMillis(),
-            isFromMe = false,
-            status = "delivered",
-            isRead = false,
-            fieldsJson = null,
-        )
+            val existingConversation =
+                ConversationEntity(
+                    peerHash = "sender_hash",
+                    identityHash = testIdentityHash,
+                    peerName = "Sender",
+                    peerPublicKey = null,
+                    lastMessage = "Previous message",
+                    lastMessageTimestamp = System.currentTimeMillis() - 10000,
+                    unreadCount = 2,
+                    lastSeenTimestamp = 0,
+                )
 
-        coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
-        coEvery { messageDao.getMessageById("test_message_hash", testIdentityHash) } returns existingMessage
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation("sender_hash", testIdentityHash) } returns existingConversation
+            coEvery { conversationDao.updateConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(any()) } just Runs
+            coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
 
-        persistenceManager.persistMessage(
-            messageHash = "test_message_hash",
-            content = "Hello",
-            sourceHash = "sender_hash",
-            timestamp = System.currentTimeMillis(),
-            fieldsJson = null,
-            publicKey = null,
-            replyToMessageId = null,
-            deliveryMethod = null,
-        )
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "New message",
+                sourceHash = "sender_hash",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = testPublicKey,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
 
-        testScope.advanceUntilIdle()
+            testScope.advanceUntilIdle()
 
-        // Should NOT insert new message (duplicate)
-        coVerify(exactly = 0) { messageDao.insertMessage(any()) }
-    }
-
-    @Test
-    fun `persistMessage skips when no active identity`() = runTest {
-        coEvery { localIdentityDao.getActiveIdentitySync() } returns null
-
-        persistenceManager.persistMessage(
-            messageHash = "test_message_hash",
-            content = "Hello",
-            sourceHash = "sender_hash",
-            timestamp = System.currentTimeMillis(),
-            fieldsJson = null,
-            publicKey = null,
-            replyToMessageId = null,
-            deliveryMethod = null,
-        )
-
-        testScope.advanceUntilIdle()
-
-        // Should NOT attempt to insert message
-        coVerify(exactly = 0) { messageDao.insertMessage(any()) }
-    }
-
-    @Test
-    fun `persistMessage stores peer public key when provided`() = runTest {
-        val activeIdentity = LocalIdentityEntity(
-            identityHash = testIdentityHash,
-            displayName = "Test",
-            destinationHash = "dest_hash",
-            filePath = "/test/path",
-            createdTimestamp = System.currentTimeMillis(),
-            lastUsedTimestamp = System.currentTimeMillis(),
-            isActive = true,
-        )
-
-        coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
-        coEvery { messageDao.getMessageById(any(), any()) } returns null
-        coEvery { conversationDao.getConversation(any(), any()) } returns null
-        coEvery { conversationDao.insertConversation(any()) } just Runs
-        coEvery { messageDao.insertMessage(any()) } just Runs
-        coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
-
-        persistenceManager.persistMessage(
-            messageHash = "test_message_hash",
-            content = "Hello",
-            sourceHash = "sender_hash",
-            timestamp = System.currentTimeMillis(),
-            fieldsJson = null,
-            publicKey = testPublicKey,
-            replyToMessageId = null,
-            deliveryMethod = null,
-        )
-
-        testScope.advanceUntilIdle()
-
-        coVerify { peerIdentityDao.insertPeerIdentity(any()) }
-    }
-
-    @Test
-    fun `persistMessage does not store peer identity when no public key`() = runTest {
-        val activeIdentity = LocalIdentityEntity(
-            identityHash = testIdentityHash,
-            displayName = "Test",
-            destinationHash = "dest_hash",
-            filePath = "/test/path",
-            createdTimestamp = System.currentTimeMillis(),
-            lastUsedTimestamp = System.currentTimeMillis(),
-            isActive = true,
-        )
-
-        coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
-        coEvery { messageDao.getMessageById(any(), any()) } returns null
-        coEvery { conversationDao.getConversation(any(), any()) } returns null
-        coEvery { conversationDao.insertConversation(any()) } just Runs
-        coEvery { messageDao.insertMessage(any()) } just Runs
-
-        persistenceManager.persistMessage(
-            messageHash = "test_message_hash",
-            content = "Hello",
-            sourceHash = "sender_hash",
-            timestamp = System.currentTimeMillis(),
-            fieldsJson = null,
-            publicKey = null,
-            replyToMessageId = null,
-            deliveryMethod = null,
-        )
-
-        testScope.advanceUntilIdle()
-
-        coVerify(exactly = 0) { peerIdentityDao.insertPeerIdentity(any()) }
-    }
-
-    @Test
-    fun `persistMessage handles exception gracefully`() = runTest {
-        coEvery { localIdentityDao.getActiveIdentitySync() } throws RuntimeException("Database error")
-
-        // Should not throw
-        persistenceManager.persistMessage(
-            messageHash = "test_message_hash",
-            content = "Hello",
-            sourceHash = "sender_hash",
-            timestamp = System.currentTimeMillis(),
-            fieldsJson = null,
-            publicKey = null,
-            replyToMessageId = null,
-            deliveryMethod = null,
-        )
-
-        testScope.advanceUntilIdle()
-    }
-
-    @Test
-    fun `persistMessage creates new conversation with formatted peer name`() = runTest {
-        val activeIdentity = LocalIdentityEntity(
-            identityHash = testIdentityHash,
-            displayName = "Test",
-            destinationHash = "dest_hash",
-            filePath = "/test/path",
-            createdTimestamp = System.currentTimeMillis(),
-            lastUsedTimestamp = System.currentTimeMillis(),
-            isActive = true,
-        )
-
-        coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
-        coEvery { messageDao.getMessageById(any(), any()) } returns null
-        coEvery { conversationDao.getConversation(any(), any()) } returns null
-        coEvery { conversationDao.insertConversation(any()) } just Runs
-        coEvery { messageDao.insertMessage(any()) } just Runs
-
-        persistenceManager.persistMessage(
-            messageHash = "test_message_hash",
-            content = "Hello",
-            sourceHash = "abcdef12345678",
-            timestamp = System.currentTimeMillis(),
-            fieldsJson = null,
-            publicKey = null,
-            replyToMessageId = null,
-            deliveryMethod = null,
-        )
-
-        testScope.advanceUntilIdle()
-
-        coVerify {
-            conversationDao.insertConversation(match { conv ->
-                conv.peerName == "Peer ABCDEF12"
-            })
+            coVerify {
+                conversationDao.updateConversation(
+                    match { conv ->
+                        conv.unreadCount == 3 && conv.lastMessage == "New message"
+                    },
+                )
+            }
         }
-    }
+
+    @Test
+    fun `persistMessage skips duplicate message`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            val existingMessage =
+                MessageEntity(
+                    id = "test_message_hash",
+                    conversationHash = "sender_hash",
+                    identityHash = testIdentityHash,
+                    content = "Existing message",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = false,
+                    status = "delivered",
+                    isRead = false,
+                    fieldsJson = null,
+                )
+
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById("test_message_hash", testIdentityHash) } returns existingMessage
+
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello",
+                sourceHash = "sender_hash",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            testScope.advanceUntilIdle()
+
+            // Should NOT insert new message (duplicate)
+            coVerify(exactly = 0) { messageDao.insertMessage(any()) }
+        }
+
+    @Test
+    fun `persistMessage skips when no active identity`() =
+        runTest {
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns null
+
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello",
+                sourceHash = "sender_hash",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            testScope.advanceUntilIdle()
+
+            // Should NOT attempt to insert message
+            coVerify(exactly = 0) { messageDao.insertMessage(any()) }
+        }
+
+    @Test
+    fun `persistMessage stores peer public key when provided`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation(any(), any()) } returns null
+            coEvery { conversationDao.insertConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(any()) } just Runs
+            coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
+
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello",
+                sourceHash = "sender_hash",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = testPublicKey,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            testScope.advanceUntilIdle()
+
+            coVerify { peerIdentityDao.insertPeerIdentity(any()) }
+        }
+
+    @Test
+    fun `persistMessage does not store peer identity when no public key`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation(any(), any()) } returns null
+            coEvery { conversationDao.insertConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(any()) } just Runs
+
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello",
+                sourceHash = "sender_hash",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            testScope.advanceUntilIdle()
+
+            coVerify(exactly = 0) { peerIdentityDao.insertPeerIdentity(any()) }
+        }
+
+    @Test
+    fun `persistMessage handles exception gracefully`() =
+        runTest {
+            coEvery { localIdentityDao.getActiveIdentitySync() } throws RuntimeException("Database error")
+
+            // Should not throw
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello",
+                sourceHash = "sender_hash",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            testScope.advanceUntilIdle()
+        }
+
+    @Test
+    fun `persistMessage creates new conversation with formatted peer name`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation(any(), any()) } returns null
+            coEvery { conversationDao.insertConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(any()) } just Runs
+
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello",
+                sourceHash = "abcdef12345678",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            testScope.advanceUntilIdle()
+
+            coVerify {
+                conversationDao.insertConversation(
+                    match { conv ->
+                        conv.peerName == "Peer ABCDEF12"
+                    },
+                )
+            }
+        }
 
     // ========== announceExists() Tests ==========
 
     @Test
-    fun `announceExists returns true when announce exists`() = runTest {
-        coEvery { announceDao.announceExists(testDestinationHash) } returns true
+    fun `announceExists returns true when announce exists`() =
+        runTest {
+            coEvery { announceDao.announceExists(testDestinationHash) } returns true
 
-        val result = persistenceManager.announceExists(testDestinationHash)
+            val result = persistenceManager.announceExists(testDestinationHash)
 
-        assertTrue(result)
-    }
-
-    @Test
-    fun `announceExists returns false when announce does not exist`() = runTest {
-        coEvery { announceDao.announceExists(testDestinationHash) } returns false
-
-        val result = persistenceManager.announceExists(testDestinationHash)
-
-        assertFalse(result)
-    }
+            assertTrue(result)
+        }
 
     @Test
-    fun `announceExists returns false on exception`() = runTest {
-        coEvery { announceDao.announceExists(any()) } throws RuntimeException("Database error")
+    fun `announceExists returns false when announce does not exist`() =
+        runTest {
+            coEvery { announceDao.announceExists(testDestinationHash) } returns false
 
-        val result = persistenceManager.announceExists(testDestinationHash)
+            val result = persistenceManager.announceExists(testDestinationHash)
 
-        assertFalse(result)
-    }
+            assertFalse(result)
+        }
+
+    @Test
+    fun `announceExists returns false on exception`() =
+        runTest {
+            coEvery { announceDao.announceExists(any()) } throws RuntimeException("Database error")
+
+            val result = persistenceManager.announceExists(testDestinationHash)
+
+            assertFalse(result)
+        }
 
     // ========== messageExists() Tests ==========
 
     @Test
-    fun `messageExists returns true when message exists`() = runTest {
-        val activeIdentity = LocalIdentityEntity(
-            identityHash = testIdentityHash,
-            displayName = "Test",
-            destinationHash = "dest_hash",
-            filePath = "/test/path",
-            createdTimestamp = System.currentTimeMillis(),
-            lastUsedTimestamp = System.currentTimeMillis(),
-            isActive = true,
-        )
+    fun `messageExists returns true when message exists`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
 
-        val existingMessage = MessageEntity(
-            id = "test_message_hash",
-            conversationHash = "sender_hash",
-            identityHash = testIdentityHash,
-            content = "Test",
-            timestamp = System.currentTimeMillis(),
-            isFromMe = false,
-            status = "delivered",
-            isRead = false,
-        )
+            val existingMessage =
+                MessageEntity(
+                    id = "test_message_hash",
+                    conversationHash = "sender_hash",
+                    identityHash = testIdentityHash,
+                    content = "Test",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = false,
+                    status = "delivered",
+                    isRead = false,
+                )
 
-        coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
-        coEvery { messageDao.getMessageById("test_message_hash", testIdentityHash) } returns existingMessage
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById("test_message_hash", testIdentityHash) } returns existingMessage
 
-        val result = persistenceManager.messageExists("test_message_hash")
+            val result = persistenceManager.messageExists("test_message_hash")
 
-        assertTrue(result)
-    }
-
-    @Test
-    fun `messageExists returns false when message does not exist`() = runTest {
-        val activeIdentity = LocalIdentityEntity(
-            identityHash = testIdentityHash,
-            displayName = "Test",
-            destinationHash = "dest_hash",
-            filePath = "/test/path",
-            createdTimestamp = System.currentTimeMillis(),
-            lastUsedTimestamp = System.currentTimeMillis(),
-            isActive = true,
-        )
-
-        coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
-        coEvery { messageDao.getMessageById(any(), any()) } returns null
-
-        val result = persistenceManager.messageExists("test_message_hash")
-
-        assertFalse(result)
-    }
+            assertTrue(result)
+        }
 
     @Test
-    fun `messageExists returns false when no active identity`() = runTest {
-        coEvery { localIdentityDao.getActiveIdentitySync() } returns null
+    fun `messageExists returns false when message does not exist`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
 
-        val result = persistenceManager.messageExists("test_message_hash")
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
 
-        assertFalse(result)
-    }
+            val result = persistenceManager.messageExists("test_message_hash")
+
+            assertFalse(result)
+        }
 
     @Test
-    fun `messageExists returns false on exception`() = runTest {
-        coEvery { localIdentityDao.getActiveIdentitySync() } throws RuntimeException("Database error")
+    fun `messageExists returns false when no active identity`() =
+        runTest {
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns null
 
-        val result = persistenceManager.messageExists("test_message_hash")
+            val result = persistenceManager.messageExists("test_message_hash")
 
-        assertFalse(result)
-    }
+            assertFalse(result)
+        }
+
+    @Test
+    fun `messageExists returns false on exception`() =
+        runTest {
+            coEvery { localIdentityDao.getActiveIdentitySync() } throws RuntimeException("Database error")
+
+            val result = persistenceManager.messageExists("test_message_hash")
+
+            assertFalse(result)
+        }
 
     // ========== close() Tests ==========
 

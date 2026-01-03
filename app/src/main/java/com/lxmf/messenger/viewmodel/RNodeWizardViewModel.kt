@@ -1863,9 +1863,10 @@ class RNodeWizardViewModel
                         val originalInterface =
                             interfaceRepository.getInterfaceById(state.editingInterfaceId).first()
                         originalInterface?.name?.let { originalName ->
-                            existingNames = existingNames.filter {
-                                !it.equals(originalName, ignoreCase = true)
-                            }
+                            existingNames =
+                                existingNames.filter {
+                                    !it.equals(originalName, ignoreCase = true)
+                                }
                         }
                     }
 

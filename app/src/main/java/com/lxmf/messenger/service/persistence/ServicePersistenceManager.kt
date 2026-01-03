@@ -11,6 +11,7 @@ import com.lxmf.messenger.service.di.ServiceDatabaseProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.security.MessageDigest
 
 /**
  * Manages database persistence from the service process.
@@ -35,6 +36,7 @@ class ServicePersistenceManager(
     }
 
     private val announceDao by lazy { database.announceDao() }
+    private val contactDao by lazy { database.contactDao() }
     private val messageDao by lazy { database.messageDao() }
     private val conversationDao by lazy { database.conversationDao() }
     private val localIdentityDao by lazy { database.localIdentityDao() }
@@ -344,6 +346,89 @@ class ServicePersistenceManager(
             Log.w(TAG, "Failed to parse pending notification ${notification.id}: ${e.message}")
             null
         }
+    }
+
+    /**
+     * Look up display name for a peer with priority:
+     * 1. Contact's custom nickname (user-set)
+     * 2. Announce peer name (from network)
+     * 3. null (caller should use formatted hash as fallback)
+     */
+    suspend fun lookupDisplayName(destinationHash: String): String? {
+        return try {
+            Log.d(TAG, "Looking up display name for: $destinationHash")
+
+            // Get active identity for contact lookup
+            val activeIdentity = localIdentityDao.getActiveIdentitySync()
+            Log.d(TAG, "Active identity: ${activeIdentity?.identityHash?.take(16)}")
+
+            // Check contact for custom nickname first (by destination hash)
+            if (activeIdentity != null) {
+                val contact = contactDao.getContact(destinationHash, activeIdentity.identityHash)
+                Log.d(TAG, "Contact lookup: ${contact?.customNickname ?: "not found"}")
+                if (!contact?.customNickname.isNullOrBlank()) {
+                    return contact!!.customNickname
+                }
+            }
+
+            // Check announce for peer name (by destination hash)
+            val announce = announceDao.getAnnounce(destinationHash)
+            Log.d(TAG, "Announce lookup: ${announce?.peerName ?: "not found"}")
+            if (!announce?.peerName.isNullOrBlank()) {
+                return announce!!.peerName
+            }
+
+            // For LXST calls, the hash might be the identity hash, not the destination hash.
+            // Try to find an announce by matching identity hash (computed from public key).
+            Log.d(TAG, "Trying identity hash lookup...")
+            val announceByIdentity = findAnnounceByIdentityHash(destinationHash)
+            if (announceByIdentity != null && !announceByIdentity.peerName.isNullOrBlank()) {
+                Log.d(TAG, "Found by identity hash: ${announceByIdentity.peerName}")
+                return announceByIdentity.peerName
+            }
+
+            Log.d(TAG, "No display name found for $destinationHash")
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error looking up display name for $destinationHash", e)
+            null
+        }
+    }
+
+    /**
+     * Find an announce by identity hash.
+     * Computes identity hash from each announce's public key and compares.
+     * Identity hash = first 16 bytes of SHA256(publicKey) as hex.
+     */
+    private suspend fun findAnnounceByIdentityHash(identityHash: String): AnnounceEntity? {
+        return try {
+            val allAnnounces = announceDao.getAllAnnouncesSync()
+            Log.d(TAG, "Searching ${allAnnounces.size} announces for identity hash $identityHash")
+            for (announce in allAnnounces) {
+                val computedHash = computeIdentityHash(announce.publicKey)
+                Log.d(TAG, "  Announce ${announce.peerName}: computed=$computedHash, match=${computedHash.equals(identityHash, ignoreCase = true)}")
+                if (computedHash.equals(identityHash, ignoreCase = true)) {
+                    Log.d(TAG, "  -> MATCHED!")
+                    return announce
+                }
+            }
+            Log.d(TAG, "No announce matched identity hash $identityHash")
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error finding announce by identity hash", e)
+            null
+        }
+    }
+
+    /**
+     * Compute identity hash from public key.
+     * In Reticulum: identity_hash = first 16 bytes of SHA256(public_key) as hex.
+     */
+    private fun computeIdentityHash(publicKey: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hash = digest.digest(publicKey)
+        // Take first 16 bytes and convert to hex
+        return hash.take(16).joinToString("") { "%02x".format(it) }
     }
 
     /**

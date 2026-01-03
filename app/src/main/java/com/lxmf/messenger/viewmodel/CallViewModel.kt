@@ -3,6 +3,7 @@ package com.lxmf.messenger.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.reticulum.call.bridge.CallBridge
 import com.lxmf.messenger.reticulum.call.bridge.CallState
@@ -31,6 +32,7 @@ class CallViewModel
     @Inject
     constructor(
         private val contactRepository: ContactRepository,
+        private val announceRepository: AnnounceRepository,
         private val protocol: ReticulumProtocol,
     ) : ViewModel() {
         companion object {
@@ -97,10 +99,40 @@ class CallViewModel
             }
         }
 
+        /**
+         * Resolve display name for a peer with priority:
+         * 1. Contact's custom nickname (user-set)
+         * 2. Announce peer name (from network) - by destination hash
+         * 3. Announce peer name (from network) - by identity hash (for LXST calls)
+         * 4. Formatted identity hash (fallback)
+         */
         private suspend fun resolvePeerName(identityHash: String) {
             try {
+                // Check contact for custom nickname first
                 val contact = contactRepository.getContact(identityHash)
-                _peerName.value = contact?.customNickname ?: formatIdentityHash(identityHash)
+                if (!contact?.customNickname.isNullOrBlank()) {
+                    _peerName.value = contact!!.customNickname
+                    return
+                }
+
+                // Check announce for peer name by destination hash
+                val announce = announceRepository.getAnnounce(identityHash)
+                if (!announce?.peerName.isNullOrBlank()) {
+                    _peerName.value = announce!!.peerName
+                    return
+                }
+
+                // For LXST calls, the hash might be an identity hash rather than destination hash
+                // (different aspects produce different destination hashes for the same identity)
+                val announceByIdentity = announceRepository.findByIdentityHash(identityHash)
+                if (!announceByIdentity?.peerName.isNullOrBlank()) {
+                    Log.d(TAG, "Found peer name via identity hash: ${announceByIdentity!!.peerName}")
+                    _peerName.value = announceByIdentity.peerName
+                    return
+                }
+
+                // Fallback to formatted hash
+                _peerName.value = formatIdentityHash(identityHash)
             } catch (e: Exception) {
                 Log.e(TAG, "Error resolving peer name", e)
                 _peerName.value = formatIdentityHash(identityHash)

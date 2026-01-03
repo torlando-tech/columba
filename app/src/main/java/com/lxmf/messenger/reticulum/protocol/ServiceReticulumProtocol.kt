@@ -188,6 +188,14 @@ class ServiceReticulumProtocol(
         )
     val reactionReceivedFlow: SharedFlow<String> = _reactionReceivedFlow.asSharedFlow()
 
+    // Propagation sync state changes (for real-time sync progress)
+    private val _propagationStateFlow =
+        MutableSharedFlow<PropagationState>(
+            replay = 1,
+            extraBufferCapacity = 1,
+        )
+    val propagationStateFlow: SharedFlow<PropagationState> = _propagationStateFlow.asSharedFlow()
+
     /**
      * Handler for alternative relay requests from the service.
      * Set by ColumbaApplication to provide PropagationNodeManager integration.
@@ -493,6 +501,22 @@ class ServiceReticulumProtocol(
                     _reactionReceivedFlow.tryEmit(reactionJson)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling reaction received callback", e)
+                }
+            }
+
+            override fun onPropagationStateChanged(stateJson: String) {
+                try {
+                    Log.d(TAG, "Propagation state changed: $stateJson")
+                    val json = JSONObject(stateJson)
+                    val state = PropagationState(
+                        state = json.optInt("state", 0),
+                        stateName = json.optString("state_name", "unknown"),
+                        progress = json.optDouble("progress", 0.0).toFloat(),
+                        messagesReceived = json.optInt("messages_received", 0),
+                    )
+                    _propagationStateFlow.tryEmit(state)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling propagation state callback", e)
                 }
             }
         }

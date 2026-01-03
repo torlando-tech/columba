@@ -40,6 +40,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,7 +66,9 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.repository.Conversation
+import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
 import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
 import com.lxmf.messenger.ui.components.StarToggleButton
@@ -84,11 +87,16 @@ fun ChatsScreen(
     val conversations by viewModel.conversations.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
+    val syncProgress by viewModel.syncProgress.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
 
     // Delete dialog state (context menu state is now per-card)
     var selectedConversation by remember { mutableStateOf<Conversation?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    // Sync status bottom sheet state
+    var showSyncStatusSheet by remember { mutableStateOf(false) }
+    val syncStatusSheetState = rememberModalBottomSheetState()
 
     // Context for Toast notifications
     val context = LocalContext.current
@@ -98,9 +106,14 @@ fun ChatsScreen(
         viewModel.manualSyncResult.collect { result ->
             val message =
                 when (result) {
-                    is SyncResult.Success -> "Sync complete"
+                    is SyncResult.Success -> if (result.messagesReceived > 0) {
+                        "Sync complete: ${result.messagesReceived} new messages"
+                    } else {
+                        "Sync complete"
+                    }
                     is SyncResult.Error -> "Sync failed: ${result.message}"
                     is SyncResult.NoRelay -> "No relay configured"
+                    is SyncResult.Timeout -> "Sync timed out"
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -117,9 +130,15 @@ fun ChatsScreen(
                 onSearchToggle = { isSearching = !isSearching },
                 searchPlaceholder = "Search conversations...",
                 additionalActions = {
+                    // Sync button - shows spinner during sync, tapping opens status sheet
                     IconButton(
-                        onClick = { viewModel.syncFromPropagationNode() },
-                        enabled = !isSyncing,
+                        onClick = {
+                            if (isSyncing) {
+                                showSyncStatusSheet = true
+                            } else {
+                                viewModel.syncFromPropagationNode()
+                            }
+                        },
                     ) {
                         if (isSyncing) {
                             CircularProgressIndicator(
@@ -244,6 +263,15 @@ fun ChatsScreen(
                 onDismiss = {
                     showDeleteDialog = false
                 },
+            )
+        }
+
+        // Sync status bottom sheet - shows real-time propagation sync progress
+        if (showSyncStatusSheet) {
+            SyncStatusBottomSheet(
+                syncProgress = syncProgress,
+                onDismiss = { showSyncStatusSheet = false },
+                sheetState = syncStatusSheetState,
             )
         }
     }

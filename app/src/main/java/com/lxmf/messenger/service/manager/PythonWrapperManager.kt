@@ -338,6 +338,21 @@ class PythonWrapperManager(
     }
 
     /**
+     * Set propagation state callback.
+     * Called by Python when LXMF propagation sync state changes.
+     */
+    fun setPropagationStateCallback(callback: (String) -> Unit) {
+        withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("set_propagation_state_callback", callback)
+                Log.d(TAG, "Propagation state callback registered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set propagation state callback: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
      * Set native Kotlin stamp generator callback.
      *
      * This bypasses Python multiprocessing-based stamp generation which fails on Android

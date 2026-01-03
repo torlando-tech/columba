@@ -299,6 +299,11 @@ class ReticulumWrapper:
         # Used to bypass Python multiprocessing issues on Android
         self.kotlin_stamp_generator_callback = None
 
+        # Propagation sync state callback (for real-time sync progress updates)
+        # Invoked when LXMF propagation state changes (idle, receiving, complete, etc.)
+        self.kotlin_propagation_state_callback = None
+        self._last_propagation_state = None  # For change detection
+
         # Service heartbeat tracking (Sideband-inspired process monitoring)
         # Python updates timestamp every second; Kotlin monitors for stale heartbeats
         # If heartbeat is stale > 10 seconds, Kotlin should restart the service
@@ -533,6 +538,24 @@ class ReticulumWrapper:
         except Exception as e:
             log_error("ReticulumWrapper", "set_stamp_generator_callback",
                      f"Failed to register stamp generator: {e}")
+
+    def set_propagation_state_callback(self, callback):
+        """
+        Set callback for propagation sync state changes.
+
+        This callback is invoked whenever the LXMF propagation state changes
+        (e.g., idle -> path_requested -> receiving -> complete).
+        Used by Kotlin to show real-time sync progress.
+
+        Callback signature: callback(state_json: str) -> None
+        state_json contains: {"state": int, "state_name": str, "progress": float, "messages_received": int}
+
+        Args:
+            callback: PyObject callable from Kotlin (passed via Chaquopy)
+        """
+        self.kotlin_propagation_state_callback = callback
+        log_info("ReticulumWrapper", "set_propagation_state_callback",
+                "Propagation state callback registered")
 
     def _clear_stale_ble_paths(self):
         """
@@ -3920,16 +3943,74 @@ class ReticulumWrapper:
             log_info("ReticulumWrapper", "_start_heartbeat_thread",
                     "Started service heartbeat thread (1s interval)")
 
+    def _get_propagation_state_name(self, state: int) -> str:
+        """Map LXMF propagation state integer to human-readable name."""
+        state_names = {
+            0: "idle",
+            1: "path_requested",
+            2: "link_establishing",
+            3: "link_established",
+            4: "request_sent",
+            5: "receiving",
+            7: "complete",
+            0xf0: "no_path",
+            0xf1: "link_failed",
+            0xf2: "transfer_failed",
+            0xf3: "no_identity_rcvd",
+            0xf4: "no_access",
+        }
+        return state_names.get(state, f"unknown_{state}")
+
+    def _check_propagation_state_change(self):
+        """
+        Check if LXMF propagation state changed and notify Kotlin if so.
+        Called from heartbeat loop at higher frequency during active sync.
+        """
+        if not self.router or not self.kotlin_propagation_state_callback:
+            return
+
+        try:
+            current_state = self.router.propagation_transfer_state
+            if current_state != self._last_propagation_state:
+                self._last_propagation_state = current_state
+
+                progress = getattr(self.router, 'propagation_transfer_progress', 0.0) or 0.0
+                messages_received = getattr(self.router, 'propagation_transfer_last_result', 0) or 0
+
+                state_info = {
+                    "state": current_state,
+                    "state_name": self._get_propagation_state_name(current_state),
+                    "progress": progress,
+                    "messages_received": messages_received
+                }
+                self.kotlin_propagation_state_callback(json.dumps(state_info))
+                log_debug("ReticulumWrapper", "_check_propagation_state_change",
+                         f"Propagation state changed: {state_info['state_name']} ({current_state})")
+        except Exception as e:
+            log_error("ReticulumWrapper", "_check_propagation_state_change", f"Error: {e}")
+
     def _heartbeat_loop(self):
         """
-        Background loop that updates the heartbeat timestamp every second.
-        Runs while self.initialized is True. Kotlin monitors this timestamp
-        and will restart the service if it becomes stale (> 10 seconds old).
+        Background loop that updates the heartbeat timestamp.
+        Also monitors propagation state changes for real-time sync progress.
+        Uses faster interval (100ms) during active sync, slower (1s) when idle.
         """
         log_debug("ReticulumWrapper", "_heartbeat_loop", "Heartbeat loop started")
         while self.initialized:
             self._heartbeat_timestamp = time.time()
-            time.sleep(1)
+
+            # Check propagation state changes (for real-time sync progress)
+            self._check_propagation_state_change()
+
+            # Use faster interval during active sync (100ms), slower when idle (1s)
+            if (self.router and
+                self._last_propagation_state is not None and
+                self._last_propagation_state not in (0, 7, 0xf0, 0xf1, 0xf2, 0xf3, 0xf4)):
+                # Active sync in progress - check more frequently
+                time.sleep(0.1)
+            else:
+                # Idle or complete - normal heartbeat interval
+                time.sleep(1)
         log_debug("ReticulumWrapper", "_heartbeat_loop", "Heartbeat loop exiting (not initialized)")
 
     def get_heartbeat(self) -> float:

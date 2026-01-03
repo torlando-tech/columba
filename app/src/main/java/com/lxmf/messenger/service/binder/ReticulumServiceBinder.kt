@@ -19,6 +19,7 @@ import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
+import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import com.lxmf.messenger.service.manager.RoutingManager
 import com.lxmf.messenger.service.manager.ServiceNotificationManager
@@ -1074,19 +1075,36 @@ class ReticulumServiceBinder(
 
                 // Register listeners for IPC notification to UI process
                 val callBridge = com.lxmf.messenger.reticulum.call.bridge.CallBridge.getInstance()
+                val callNotificationHelper = CallNotificationHelper(context)
+
                 callBridge.setIncomingCallListener { identityHash ->
+                    // Show full-screen incoming call notification
+                    // This wakes the device and shows UI even when app is in background
+                    // Note: callerName is null - notification helper formats the hash as display name
+                    callNotificationHelper.showIncomingCallNotification(identityHash, null)
+                    Log.i(TAG, "📞 Showing incoming call notification for ${identityHash.take(16)}...")
+
+                    // Also broadcast to UI process
                     val callJson = org.json.JSONObject().apply {
                         put("caller_hash", identityHash)
                     }.toString()
                     broadcaster.broadcastIncomingCall(callJson)
                 }
                 callBridge.setCallEndedListener { identityHash ->
+                    // Cancel incoming call notification when call ends
+                    callNotificationHelper.cancelIncomingCallNotification()
+
                     val callJson = org.json.JSONObject().apply {
                         put("caller_hash", identityHash ?: "")
                     }.toString()
                     broadcaster.broadcastCallEnded(callJson)
                 }
                 callBridge.setCallStateChangedListener { state, identityHash ->
+                    // Cancel incoming notification when call becomes active (answered)
+                    if (state == "active") {
+                        callNotificationHelper.cancelIncomingCallNotification()
+                    }
+
                     val stateJson = org.json.JSONObject().apply {
                         put("state", state)
                         put("remote_identity", identityHash ?: "")

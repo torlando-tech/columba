@@ -62,6 +62,7 @@ import com.lxmf.messenger.viewmodel.CallViewModel
 fun VoiceCallScreen(
     destinationHash: String,
     onEndCall: () -> Unit,
+    autoAnswer: Boolean = false,
     viewModel: CallViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -94,10 +95,18 @@ fun VoiceCallScreen(
             }
         }
 
-    // Request permission and initiate call when screen opens
-    LaunchedEffect(destinationHash) {
-        android.util.Log.w("VoiceCallScreen", "📞 VoiceCallScreen opened! destHash=${destinationHash.take(16)}...")
+    // Request permission and initiate/answer call when screen opens
+    LaunchedEffect(destinationHash, autoAnswer) {
+        android.util.Log.w("VoiceCallScreen", "📞 VoiceCallScreen opened! destHash=${destinationHash.take(16)}..., autoAnswer=$autoAnswer")
         android.util.Log.w("VoiceCallScreen", "📞 Current callState=$callState, hasAudioPermission=$hasAudioPermission")
+
+        // Auto-answer incoming call from notification
+        if (autoAnswer && (callState is CallState.Incoming || callState is CallState.Ringing)) {
+            android.util.Log.w("VoiceCallScreen", "📞 Auto-answering incoming call...")
+            viewModel.answerCall()
+            return@LaunchedEffect
+        }
+
         if (callState is CallState.Idle) {
             if (hasAudioPermission) {
                 android.util.Log.w("VoiceCallScreen", "📞 Permission already granted, calling initiateCall()...")

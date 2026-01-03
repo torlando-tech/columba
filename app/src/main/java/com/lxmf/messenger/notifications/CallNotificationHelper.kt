@@ -113,7 +113,7 @@ class CallNotificationHelper
                     action = ACTION_OPEN_CALL
                     putExtra(EXTRA_IDENTITY_HASH, identityHash)
                     putExtra(EXTRA_CALLER_NAME, displayName)
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 }
 
             val fullScreenPendingIntent =
@@ -121,21 +121,23 @@ class CallNotificationHelper
                     context,
                     0,
                     fullScreenIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
-            // Answer action
+            // Answer action - use Activity intent directly for reliability
+            // Use SINGLE_TOP to reuse existing activity via onNewIntent instead of recreating
             val answerIntent =
-                Intent(context, CallActionReceiver::class.java).apply {
+                Intent(context, MainActivity::class.java).apply {
                     action = ACTION_ANSWER_CALL
                     putExtra(EXTRA_IDENTITY_HASH, identityHash)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 }
             val answerPendingIntent =
-                PendingIntent.getBroadcast(
+                PendingIntent.getActivity(
                     context,
                     1,
                     answerIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
             // Decline action
@@ -210,7 +212,7 @@ class CallNotificationHelper
                     context,
                     3,
                     openIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
             // End call action

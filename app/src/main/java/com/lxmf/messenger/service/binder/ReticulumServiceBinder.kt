@@ -21,6 +21,7 @@ import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
+import com.lxmf.messenger.service.persistence.ServicePersistenceManager
 import com.lxmf.messenger.service.manager.RoutingManager
 import com.lxmf.messenger.service.manager.ServiceNotificationManager
 import com.lxmf.messenger.service.state.ServiceState
@@ -57,6 +58,7 @@ class ReticulumServiceBinder(
     private val networkChangeManager: NetworkChangeManager,
     private val notificationManager: ServiceNotificationManager,
     private val bleCoordinator: BleCoordinator,
+    private val persistenceManager: ServicePersistenceManager,
     private val scope: CoroutineScope,
     private val onInitialized: () -> Unit,
     private val onShutdown: () -> Unit,
@@ -1078,17 +1080,22 @@ class ReticulumServiceBinder(
                 val callNotificationHelper = CallNotificationHelper(context)
 
                 callBridge.setIncomingCallListener { identityHash ->
-                    // Show full-screen incoming call notification
-                    // This wakes the device and shows UI even when app is in background
-                    // Note: callerName is null - notification helper formats the hash as display name
-                    callNotificationHelper.showIncomingCallNotification(identityHash, null)
-                    Log.i(TAG, "📞 Showing incoming call notification for ${identityHash.take(16)}...")
+                    // Look up display name and show notification
+                    scope.launch {
+                        // Get display name from contact nickname or announce
+                        val callerName = persistenceManager.lookupDisplayName(identityHash)
+                        Log.i(TAG, "📞 Incoming call from ${identityHash.take(16)}... (name: $callerName)")
 
-                    // Also broadcast to UI process
-                    val callJson = org.json.JSONObject().apply {
-                        put("caller_hash", identityHash)
-                    }.toString()
-                    broadcaster.broadcastIncomingCall(callJson)
+                        // Show full-screen incoming call notification
+                        // This wakes the device and shows UI even when app is in background
+                        callNotificationHelper.showIncomingCallNotification(identityHash, callerName)
+
+                        // Also broadcast to UI process
+                        val callJson = org.json.JSONObject().apply {
+                            put("caller_hash", identityHash)
+                        }.toString()
+                        broadcaster.broadcastIncomingCall(callJson)
+                    }
                 }
                 callBridge.setCallEndedListener { identityHash ->
                     // Cancel incoming call notification when call ends

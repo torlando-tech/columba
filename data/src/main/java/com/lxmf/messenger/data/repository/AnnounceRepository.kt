@@ -8,6 +8,7 @@ import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -194,6 +195,38 @@ class AnnounceRepository
          */
         suspend fun getAnnounce(destinationHash: String): Announce? {
             return announceDao.getAnnounce(destinationHash)?.toAnnounce()
+        }
+
+        /**
+         * Find an announce by identity hash.
+         * This is useful for LXST voice calls where we receive the caller's identity hash
+         * rather than their destination hash (which differs by aspect).
+         *
+         * Identity hash = first 16 bytes of SHA256(publicKey) as hex.
+         *
+         * @param identityHash The 32-character hex identity hash to search for
+         * @return The matching announce, or null if not found
+         */
+        suspend fun findByIdentityHash(identityHash: String): Announce? {
+            val allAnnounces = announceDao.getAllAnnouncesSync()
+            for (entity in allAnnounces) {
+                val computedHash = computeIdentityHash(entity.publicKey)
+                if (computedHash.equals(identityHash, ignoreCase = true)) {
+                    return entity.toAnnounce()
+                }
+            }
+            return null
+        }
+
+        /**
+         * Compute identity hash from public key.
+         * In Reticulum: identity_hash = first 16 bytes of SHA256(public_key) as hex.
+         */
+        private fun computeIdentityHash(publicKey: ByteArray): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val hash = digest.digest(publicKey)
+            // Take first 16 bytes and convert to hex
+            return hash.take(16).joinToString("") { "%02x".format(it) }
         }
 
         /**

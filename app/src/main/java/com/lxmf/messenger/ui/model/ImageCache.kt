@@ -42,10 +42,12 @@ object ImageCache {
 
     /**
      * Check if an image is already cached.
+     * Uses snapshot() to avoid affecting hit/miss statistics.
+     *
      * @param messageId The unique message identifier (hash)
      * @return true if the image is in cache
      */
-    fun contains(messageId: String): Boolean = cache.get(messageId) != null
+    fun contains(messageId: String): Boolean = cache.snapshot()?.containsKey(messageId) == true
 
     /**
      * Clear all cached images.

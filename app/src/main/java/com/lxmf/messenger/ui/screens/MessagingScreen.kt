@@ -11,6 +11,14 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.content.MediaType
+import androidx.compose.foundation.content.contentReceiver
+import androidx.compose.foundation.content.hasMediaType
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -101,6 +109,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
@@ -129,8 +138,12 @@ import com.lxmf.messenger.ui.components.SwipeableMessageBubble
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.lxmf.messenger.util.AnimatedImageLoader
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
+import com.lxmf.messenger.util.ImageUtils
 import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.ValidationConstants
@@ -162,6 +175,7 @@ fun MessagingScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val selectedImageData by viewModel.selectedImageData.collectAsStateWithLifecycle()
     val selectedImageFormat by viewModel.selectedImageFormat.collectAsStateWithLifecycle()
+    val selectedImageIsAnimated by viewModel.selectedImageIsAnimated.collectAsStateWithLifecycle()
     val isProcessingImage by viewModel.isProcessingImage.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val isContactSaved by viewModel.isContactSaved.collectAsStateWithLifecycle()
@@ -173,6 +187,8 @@ fun MessagingScreen(
 
     // Observe loaded image IDs to trigger recomposition when images become available
     val loadedImageIds by viewModel.loadedImageIds.collectAsStateWithLifecycle()
+    // Map of decoded images (includes raw bytes for animated GIFs)
+    val decodedImages by viewModel.decodedImages.collectAsStateWithLifecycle()
 
     // Location sharing state
     val locationSharingState by viewModel.locationSharingState.collectAsStateWithLifecycle()
@@ -245,7 +261,7 @@ fun MessagingScreen(
         }
     }
 
-    // Image picker launcher
+    // Image picker launcher - uses compressImagePreservingAnimation to preserve GIF animation
     val imageLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent(),
@@ -254,11 +270,15 @@ fun MessagingScreen(
                 viewModel.setProcessingImage(true)
                 scope.launch(Dispatchers.IO) {
                     try {
-                        val compressed = com.lxmf.messenger.util.ImageUtils.compressImage(context, it)
+                        val compressed = ImageUtils.compressImagePreservingAnimation(context, it)
                         withContext(Dispatchers.Main) {
                             viewModel.setProcessingImage(false)
                             if (compressed != null) {
-                                viewModel.selectImage(compressed.data, compressed.format)
+                                viewModel.selectImage(
+                                    compressed.data,
+                                    compressed.format,
+                                    compressed.isAnimated,
+                                )
                             }
                         }
                     } catch (e: Exception) {
@@ -600,9 +620,10 @@ fun MessagingScreen(
                                         }
                                     }
 
-                                    // Get cached image if it was loaded after initial render
-                                    val cachedImage =
-                                        if (message.decodedImage == null && loadedImageIds.contains(message.id)) {
+                                    // Get decoded image result (includes animated GIF data)
+                                    val decodedResult = decodedImages[message.id]
+                                    val cachedImage = decodedResult?.bitmap
+                                        ?: if (message.decodedImage == null && loadedImageIds.contains(message.id)) {
                                             com.lxmf.messenger.ui.model.ImageCache.get(message.id)
                                         } else {
                                             message.decodedImage
@@ -611,10 +632,12 @@ fun MessagingScreen(
                                     // Get cached reply preview if it was loaded after initial render
                                     val cachedReplyPreview = replyPreviewCache[message.id]
 
-                                    // Create updated message with cached image and reply preview
+                                    // Create updated message with cached image, animated data, and reply preview
                                     val displayMessage =
                                         message.copy(
                                             decodedImage = cachedImage ?: message.decodedImage,
+                                            imageData = decodedResult?.rawBytes,
+                                            isAnimatedImage = decodedResult?.isAnimated ?: false,
                                             replyPreview = cachedReplyPreview ?: message.replyPreview,
                                         )
 
@@ -680,8 +703,12 @@ fun MessagingScreen(
                     messageText = messageText,
                     onMessageTextChange = { messageText = it },
                     selectedImageData = selectedImageData,
+                    selectedImageIsAnimated = selectedImageIsAnimated,
                     isProcessingImage = isProcessingImage,
                     onImageAttachmentClick = { imageLauncher.launch("image/*") },
+                    onImageContentReceived = { data, format, isAnimated ->
+                        viewModel.selectImage(data, format, isAnimated)
+                    },
                     onClearImage = { viewModel.clearSelectedImage() },
                     selectedFileAttachments = selectedFileAttachments,
                     totalAttachmentSize = totalAttachmentSize,
@@ -947,159 +974,302 @@ fun MessageBubble(
         label = "bubble_scale",
     )
 
+    val context = LocalContext.current
+    var showFullscreenImage by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
     ) {
-        Box {
-            Surface(
-                shape =
-                    RoundedCornerShape(
-                        topStart = 20.dp,
-                        topEnd = 20.dp,
-                        bottomStart = if (isFromMe) 20.dp else 4.dp,
-                        bottomEnd = if (isFromMe) 4.dp else 20.dp,
-                    ),
-                color =
-                    if (isFromMe) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    },
-                shadowElevation = 1.dp,
-                modifier =
-                    Modifier
-                        .widthIn(max = 300.dp)
-                        .drawWithCache {
-                            val width = this.size.width.toInt()
-                            val height = this.size.height.toInt()
-                            onDrawWithContent {
-                                graphicsLayer.record(size = androidx.compose.ui.unit.IntSize(width, height)) {
-                                    this@onDrawWithContent.drawContent()
-                                }
-                                drawContent()
+        if (message.isMediaOnlyMessage) {
+            // GIF-only message: render large GIF without bubble, like Signal
+            Box(
+                modifier = Modifier
+                    .widthIn(max = 280.dp)
+                    .drawWithCache {
+                        val width = this.size.width.toInt()
+                        val height = this.size.height.toInt()
+                        onDrawWithContent {
+                            graphicsLayer.record(size = androidx.compose.ui.unit.IntSize(width, height)) {
+                                this@onDrawWithContent.drawContent()
                             }
+                            drawContent()
                         }
-                        .onGloballyPositioned { coordinates ->
-                            bubbleX = coordinates.positionInRoot().x
-                            bubbleY = coordinates.positionInRoot().y
-                            bubbleWidth = coordinates.size.width
-                            bubbleHeight = coordinates.size.height
-                        }
-                        .scale(scale) // Apply scale animation after bitmap capture
-                        .combinedClickable(
-                            onClick = {},
-                            onLongClick = {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                scope.launch {
-                                    val bitmap = graphicsLayer.toImageBitmap()
-                                    onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
-                                }
-                            },
-                            indication = null, // Disable ripple - we use scale animation instead
-                            interactionSource = interactionSource,
-                        ),
+                    }
+                    .onGloballyPositioned { coordinates ->
+                        bubbleX = coordinates.positionInRoot().x
+                        bubbleY = coordinates.positionInRoot().y
+                        bubbleWidth = coordinates.size.width
+                        bubbleHeight = coordinates.size.height
+                    }
+                    .scale(scale)
+                    .combinedClickable(
+                        onClick = { showFullscreenImage = true },
+                        onLongClick = {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            scope.launch {
+                                val bitmap = graphicsLayer.toImageBitmap()
+                                onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
+                            }
+                        },
+                        indication = null,
+                        interactionSource = interactionSource,
+                    ),
             ) {
-                // PERFORMANCE: Use pre-decoded image from MessageUi to avoid expensive
-                // decoding during composition (critical for smooth scrolling)
-                val imageBitmap = message.decodedImage
-                var showFullscreenImage by remember { mutableStateOf(false) }
+                // Large GIF without bubble background
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(message.imageData)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = AnimatedImageLoader.getInstance(context),
+                    contentDescription = "Animated GIF",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.FillWidth,
+                )
 
-                Column(
-                    modifier =
-                        Modifier.padding(
-                            horizontal = 16.dp,
-                            vertical = 10.dp,
-                        ),
+                // Timestamp overlay at bottom-right corner
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
-                    // Display reply preview if this message is a reply
-                    message.replyPreview?.let { replyPreview ->
-                        ReplyPreviewBubble(
-                            replyPreview = replyPreview,
-                            isFromMe = isFromMe,
-                            onClick = { onReplyPreviewClick(replyPreview.messageId) },
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                    // Display image attachment if present (LXMF field 6 = IMAGE)
-                    imageBitmap?.let { bitmap ->
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = "Image attachment",
-                            modifier =
-                                Modifier
-                                    .widthIn(max = 268.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { showFullscreenImage = true },
-                            contentScale = ContentScale.FillWidth,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                    // Fullscreen image dialog
-                    if (showFullscreenImage && imageBitmap != null) {
-                        FullscreenImageDialog(
-                            bitmap = imageBitmap,
-                            onDismiss = { showFullscreenImage = false },
-                        )
-                    }
-
-                    // Display file attachments if present (LXMF field 5 = FILE_ATTACHMENTS)
-                    if (message.hasFileAttachments) {
-                        message.fileAttachments.forEach { fileAttachment ->
-                            FileAttachmentCard(
-                                attachment = fileAttachment,
-                                onTap = {
-                                    onFileAttachmentTap(
-                                        message.id,
-                                        fileAttachment.index,
-                                        fileAttachment.filename,
-                                    )
-                                },
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-
-                    Text(
-                        text = message.content,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color =
-                            if (isFromMe) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = formatTimestamp(message.timestamp),
                             style = MaterialTheme.typography.labelSmall,
-                            color =
-                                if (isFromMe) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
+                            color = Color.White,
                         )
                         if (isFromMe) {
                             Text(
-                                text =
-                                    when (message.status) {
-                                        "pending" -> "○" // Hollow circle - message created, waiting to send
-                                        "sent", "retrying_propagated", "propagated" -> "✓" // Single check - transmitted/retrying/stored on relay
-                                        "delivered" -> "✓✓" // Double check - delivered and acknowledged by recipient
-                                        "failed" -> "!" // Exclamation - delivery failed
-                                        else -> ""
-                                    },
+                                text = when (message.status) {
+                                    "pending" -> "○"
+                                    "sent", "retrying_propagated", "propagated" -> "✓"
+                                    "delivered" -> "✓✓"
+                                    "failed" -> "!"
+                                    else -> ""
+                                },
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                color = Color.White,
                             )
+                        }
+                    }
+                }
+            }
+
+            // Fullscreen dialog for GIF-only messages
+            if (showFullscreenImage && message.imageData != null) {
+                FullscreenAnimatedImageDialog(
+                    imageData = message.imageData,
+                    onDismiss = { showFullscreenImage = false },
+                )
+            }
+        } else {
+            // Regular message with bubble
+            Box {
+                Surface(
+                    shape =
+                        RoundedCornerShape(
+                            topStart = 20.dp,
+                            topEnd = 20.dp,
+                            bottomStart = if (isFromMe) 20.dp else 4.dp,
+                            bottomEnd = if (isFromMe) 4.dp else 20.dp,
+                        ),
+                    color =
+                        if (isFromMe) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                    shadowElevation = 1.dp,
+                    modifier =
+                        Modifier
+                            .widthIn(max = 300.dp)
+                            .drawWithCache {
+                                val width = this.size.width.toInt()
+                                val height = this.size.height.toInt()
+                                onDrawWithContent {
+                                    graphicsLayer.record(size = androidx.compose.ui.unit.IntSize(width, height)) {
+                                        this@onDrawWithContent.drawContent()
+                                    }
+                                    drawContent()
+                                }
+                            }
+                            .onGloballyPositioned { coordinates ->
+                                bubbleX = coordinates.positionInRoot().x
+                                bubbleY = coordinates.positionInRoot().y
+                                bubbleWidth = coordinates.size.width
+                                bubbleHeight = coordinates.size.height
+                            }
+                            .scale(scale) // Apply scale animation after bitmap capture
+                            .combinedClickable(
+                                onClick = {},
+                                onLongClick = {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    scope.launch {
+                                        val bitmap = graphicsLayer.toImageBitmap()
+                                        onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
+                                    }
+                                },
+                                indication = null, // Disable ripple - we use scale animation instead
+                                interactionSource = interactionSource,
+                            ),
+                ) {
+                    // PERFORMANCE: Use pre-decoded image from MessageUi to avoid expensive
+                    // decoding during composition (critical for smooth scrolling)
+                    val imageBitmap = message.decodedImage
+                    val imageData = message.imageData
+                    val isAnimated = message.isAnimatedImage
+
+                    Column(
+                        modifier =
+                            Modifier.padding(
+                                horizontal = 16.dp,
+                                vertical = 10.dp,
+                            ),
+                    ) {
+                        // Display reply preview if this message is a reply
+                        message.replyPreview?.let { replyPreview ->
+                            ReplyPreviewBubble(
+                                replyPreview = replyPreview,
+                                isFromMe = isFromMe,
+                                onClick = { onReplyPreviewClick(replyPreview.messageId) },
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        // Display image attachment if present (LXMF field 6 = IMAGE)
+                        // Use Coil AsyncImage for animated GIFs, static Image for regular images
+                        if (isAnimated && imageData != null) {
+                            // Animated GIF - use Coil for animated rendering
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(imageData)
+                                    .crossfade(true)
+                                    .build(),
+                                imageLoader = AnimatedImageLoader.getInstance(context),
+                                contentDescription = "Animated image attachment",
+                                modifier =
+                                    Modifier
+                                        .widthIn(max = 268.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { showFullscreenImage = true },
+                                contentScale = ContentScale.FillWidth,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        } else if (imageBitmap != null) {
+                            // Static image - use pre-decoded bitmap for efficiency
+                            Image(
+                                bitmap = imageBitmap,
+                                contentDescription = "Image attachment",
+                                modifier =
+                                    Modifier
+                                        .widthIn(max = 268.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { showFullscreenImage = true },
+                                contentScale = ContentScale.FillWidth,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        } else if (message.hasImageAttachment) {
+                            // Image is loading - show placeholder
+                            Box(
+                                modifier = Modifier
+                                    .size(100.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        // Fullscreen image dialog - show when clicked and image is available
+                        val hasDisplayableImage = imageBitmap != null || (isAnimated && imageData != null)
+                        if (showFullscreenImage && hasDisplayableImage) {
+                            if (isAnimated && imageData != null) {
+                                // For animated GIFs, show fullscreen with Coil
+                                FullscreenAnimatedImageDialog(
+                                    imageData = imageData,
+                                    onDismiss = { showFullscreenImage = false },
+                                )
+                            } else if (imageBitmap != null) {
+                                FullscreenImageDialog(
+                                    bitmap = imageBitmap,
+                                    onDismiss = { showFullscreenImage = false },
+                                )
+                            }
+                        }
+
+                        // Display file attachments if present (LXMF field 5 = FILE_ATTACHMENTS)
+                        if (message.hasFileAttachments) {
+                            message.fileAttachments.forEach { fileAttachment ->
+                                FileAttachmentCard(
+                                    attachment = fileAttachment,
+                                    onTap = {
+                                        onFileAttachmentTap(
+                                            message.id,
+                                            fileAttachment.index,
+                                            fileAttachment.filename,
+                                        )
+                                    },
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+
+                        Text(
+                            text = message.content,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color =
+                                if (isFromMe) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = formatTimestamp(message.timestamp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color =
+                                    if (isFromMe) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                            )
+                            if (isFromMe) {
+                                Text(
+                                    text =
+                                        when (message.status) {
+                                            "pending" -> "○" // Hollow circle - message created, waiting to send
+                                            "sent", "retrying_propagated", "propagated" -> "✓" // Single check - transmitted/retrying/stored on relay
+                                            "delivered" -> "✓✓" // Double check - delivered and acknowledged by recipient
+                                            "failed" -> "!" // Exclamation - delivery failed
+                                            else -> ""
+                                        },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                )
+                            }
                         }
                     }
                 }
@@ -1193,13 +1363,16 @@ fun MessageContextMenu(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun MessageInputBar(
     modifier: Modifier = Modifier,
     messageText: String,
     onMessageTextChange: (String) -> Unit,
     selectedImageData: ByteArray? = null,
+    selectedImageIsAnimated: Boolean = false,
     isProcessingImage: Boolean = false,
     onImageAttachmentClick: () -> Unit = {},
+    onImageContentReceived: (ByteArray, String, Boolean) -> Unit = { _, _, _ -> },
     onClearImage: () -> Unit = {},
     selectedFileAttachments: List<FileAttachment> = emptyList(),
     totalAttachmentSize: Int = 0,
@@ -1208,6 +1381,26 @@ fun MessageInputBar(
     onRemoveFileAttachment: (Int) -> Unit = {},
     onSendClick: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val textFieldState = rememberTextFieldState(messageText)
+
+    // Sync external messageText changes to textFieldState
+    LaunchedEffect(messageText) {
+        if (textFieldState.text.toString() != messageText) {
+            textFieldState.edit {
+                replace(0, length, messageText)
+            }
+        }
+    }
+
+    // Sync textFieldState changes to external onMessageTextChange
+    LaunchedEffect(textFieldState.text) {
+        val newText = textFieldState.text.toString()
+        if (newText != messageText && newText.length <= ValidationConstants.MAX_MESSAGE_LENGTH) {
+            onMessageTextChange(newText)
+        }
+    }
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.surface,
@@ -1233,25 +1426,47 @@ fun MessageInputBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    val bitmap =
-                        remember(selectedImageData) {
-                            BitmapFactory.decodeByteArray(selectedImageData, 0, selectedImageData.size)?.asImageBitmap()
-                        }
-
-                    bitmap?.let { imageBitmap ->
-                        Image(
-                            bitmap = imageBitmap,
-                            contentDescription = "Selected image",
+                    if (selectedImageIsAnimated) {
+                        // Animated GIF - use Coil for preview
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(selectedImageData)
+                                .crossfade(true)
+                                .build(),
+                            imageLoader = AnimatedImageLoader.getInstance(context),
+                            contentDescription = "Selected animated image",
                             modifier =
                                 Modifier
                                     .size(80.dp)
                                     .clip(RoundedCornerShape(8.dp)),
                             contentScale = ContentScale.Crop,
                         )
+                    } else {
+                        // Static image - use decoded bitmap
+                        val bitmap =
+                            remember(selectedImageData) {
+                                BitmapFactory.decodeByteArray(selectedImageData, 0, selectedImageData.size)
+                                    ?.asImageBitmap()
+                            }
+                        bitmap?.let { imageBitmap ->
+                            Image(
+                                bitmap = imageBitmap,
+                                contentDescription = "Selected image",
+                                modifier =
+                                    Modifier
+                                        .size(80.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
                     }
 
                     Text(
-                        text = "Image attached (${selectedImageData.size / 1024} KB)",
+                        text = if (selectedImageIsAnimated) {
+                            "GIF attached (${selectedImageData.size / 1024} KB)"
+                        } else {
+                            "Image attached (${selectedImageData.size / 1024} KB)"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
@@ -1265,6 +1480,21 @@ fun MessageInputBar(
                 }
             }
 
+            // Character count display
+            val remaining = ValidationConstants.MAX_MESSAGE_LENGTH - messageText.length
+            if (remaining < 100) {
+                Text(
+                    text = "$remaining characters remaining",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (remaining < 20) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+
             Row(
                 modifier =
                     Modifier
@@ -1273,58 +1503,77 @@ fun MessageInputBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedTextField(
-                    value = messageText,
-                    onValueChange = { newText ->
-                        // VALIDATION: Enforce maximum message length
-                        if (newText.length <= ValidationConstants.MAX_MESSAGE_LENGTH) {
-                            onMessageTextChange(newText)
-                        }
-                    },
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp, max = 120.dp),
-                    placeholder = {
-                        Text(
-                            text = "Type a message...",
-                            style = MaterialTheme.typography.bodyLarge,
+                // BasicTextField with contentReceiver for keyboard GIFs and clipboard paste
+                val isError = messageText.length >= ValidationConstants.MAX_MESSAGE_LENGTH - 20
+                val borderColor = when {
+                    isError -> MaterialTheme.colorScheme.error
+                    else -> Color.Transparent
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp, max = 120.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surfaceContainerHighest,
+                            RoundedCornerShape(24.dp),
                         )
-                    },
-                    supportingText =
-                        if (ValidationConstants.MAX_MESSAGE_LENGTH - messageText.length < 100) {
-                            {
-                                // VALIDATION: Show character counter when approaching limit
-                                val remaining = ValidationConstants.MAX_MESSAGE_LENGTH - messageText.length
-                                Text(
-                                    text = "$remaining characters remaining",
-                                    color =
-                                        if (remaining < 20) {
-                                            MaterialTheme.colorScheme.error
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                )
+                        .border(1.dp, borderColor, RoundedCornerShape(24.dp))
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    BasicTextField(
+                        state = textFieldState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .contentReceiver { transferableContent ->
+                                // Check if content contains images
+                                if (!transferableContent.hasMediaType(MediaType.Image)) {
+                                    return@contentReceiver transferableContent
+                                }
+
+                                // Process image content from keyboard or clipboard
+                                val clipData = transferableContent.clipEntry.clipData
+                                for (i in 0 until clipData.itemCount) {
+                                    val item = clipData.getItemAt(i)
+                                    val uri = item.uri
+                                    if (uri != null) {
+                                        scope.launch(Dispatchers.IO) {
+                                            val result = ImageUtils.compressImagePreservingAnimation(
+                                                context,
+                                                uri,
+                                            )
+                                            result?.let { compressed ->
+                                                withContext(Dispatchers.Main) {
+                                                    onImageContentReceived(
+                                                        compressed.data,
+                                                        compressed.format,
+                                                        compressed.isAnimated,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                null // Content consumed
+                            },
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
+                        decorator = { innerTextField ->
+                            Box {
+                                if (textFieldState.text.isEmpty()) {
+                                    Text(
+                                        text = "Type a message...",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                innerTextField()
                             }
-                        } else {
-                            null
                         },
-                    isError = messageText.length >= ValidationConstants.MAX_MESSAGE_LENGTH - 20,
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    shape = RoundedCornerShape(24.dp),
-                    keyboardOptions =
-                        KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Sentences,
-                            imeAction = ImeAction.Default,
-                        ),
-                    colors =
-                        OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                            unfocusedBorderColor = Color.Transparent,
-                        ),
-                )
+                    )
+                }
 
                 // Image attachment button
                 IconButton(
@@ -1480,6 +1729,62 @@ private fun FullscreenImageDialog(
             Image(
                 bitmap = bitmap,
                 contentDescription = "Fullscreen image",
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offsetX,
+                            translationY = offsetY,
+                        ),
+                contentScale = ContentScale.Fit,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FullscreenAnimatedImageDialog(
+    imageData: ByteArray,
+    onDismiss: () -> Unit,
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+    val context = LocalContext.current
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .clickable { onDismiss() }
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            scale = (scale * zoom).coerceIn(1f, 5f)
+                            if (scale > 1f) {
+                                offsetX += pan.x
+                                offsetY += pan.y
+                            } else {
+                                offsetX = 0f
+                                offsetY = 0f
+                            }
+                        }
+                    },
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(imageData)
+                    .crossfade(true)
+                    .build(),
+                imageLoader = AnimatedImageLoader.getInstance(context),
+                contentDescription = "Fullscreen animated image",
                 modifier =
                     Modifier
                         .fillMaxSize()

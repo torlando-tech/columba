@@ -817,9 +817,29 @@ fun ReactionModeOverlay(
     val density = androidx.compose.ui.platform.LocalDensity.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
 
-    // Calculate target position (center of screen vertically)
-    val screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() }
-    val targetY = (screenHeight / 2) - (messageHeight / 2)
+    // Calculate screen dimensions and UI element sizes in pixels
+    val layoutDimensions = OverlayLayoutDimensions(
+        screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() },
+        emojiBarHeight = with(density) { 56.dp.toPx() },
+        emojiBarGap = with(density) { 76.dp.toPx() },
+        actionButtonsHeight = with(density) { 56.dp.toPx() },
+        actionButtonsGap = with(density) { 12.dp.toPx() },
+        topPadding = with(density) { 48.dp.toPx() },
+        bottomPadding = with(density) { 48.dp.toPx() },
+    )
+
+    // Calculate scale factor for large messages to ensure they fit on screen
+    val messageScale = calculateMessageScaleForOverlay(
+        messageHeight = messageHeight,
+        dimensions = layoutDimensions,
+    )
+
+    // Scaled message dimensions
+    val scaledMessageHeight = (messageHeight * messageScale).toInt()
+    val scaledMessageWidth = (messageWidth * messageScale).toInt()
+
+    // Calculate target position (center of screen vertically) using scaled height
+    val targetY = (layoutDimensions.screenHeight / 2) - (scaledMessageHeight / 2)
 
     // Signal-style positioning: align based on message side, not message position
     // Left-aligned messages (received): UI elements at left margin
@@ -933,8 +953,18 @@ fun ReactionModeOverlay(
 
             // Message snapshot with animation
             messageBitmap?.let { bitmap ->
-                val messageWidthDp = with(density) { messageWidth.toDp() }
-                val messageHeightDp = with(density) { messageHeight.toDp() }
+                // Use scaled dimensions for large messages
+                val displayWidthDp = with(density) { scaledMessageWidth.toDp() }
+                val displayHeightDp = with(density) { scaledMessageHeight.toDp() }
+
+                // Calculate X offset to keep message aligned (adjust for width change due to scaling)
+                val scaledMessageX = if (isFromMe) {
+                    // For sent messages (right-aligned), adjust X to keep right edge aligned
+                    messageX + (messageWidth - scaledMessageWidth)
+                } else {
+                    // For received messages (left-aligned), keep X the same
+                    messageX
+                }
 
                 // Message snapshot - keep at full opacity during animation
                 Image(
@@ -942,9 +972,9 @@ fun ReactionModeOverlay(
                     contentDescription = "Selected message",
                     modifier =
                         Modifier
-                            .size(width = messageWidthDp, height = messageHeightDp)
+                            .size(width = displayWidthDp, height = displayHeightDp)
                             .offset {
-                                IntOffset(messageX.toInt(), animatedOffsetY.value.toInt())
+                                IntOffset(scaledMessageX.toInt(), animatedOffsetY.value.toInt())
                             }
                             .alpha(1f) // Don't fade out with AnimatedVisibility
                             .clip(
@@ -979,7 +1009,7 @@ fun ReactionModeOverlay(
                     )
                 }
 
-                // Action buttons below message
+                // Action buttons below message (using scaled height)
                 Box(
                     modifier =
                         Modifier
@@ -987,7 +1017,7 @@ fun ReactionModeOverlay(
                             .offset {
                                 IntOffset(
                                     x = 0,
-                                    y = (animatedOffsetY.value + messageHeight + with(density) { 12.dp.toPx() }).toInt(),
+                                    y = (animatedOffsetY.value + scaledMessageHeight + with(density) { 12.dp.toPx() }).toInt(),
                                 )
                             },
                 ) {

@@ -46,23 +46,44 @@ jobs:
           ./gradlew :app:assembleRelease --no-daemon --stacktrace
           echo "✓ Release APK built successfully"
 
-      - name: Rename APK with version
+      - name: Extract signing certificate fingerprints
+        id: cert
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          VERSION=${{ steps.version.outputs.version }}
-          cp app/build/outputs/apk/release/app-release.apk \
-             columba-${VERSION}.apk
+          CERT_INFO=$(keytool -list -v -keystore app/build/keystore/release.keystore \
+            -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD")
+          SHA256=$(echo "$CERT_INFO" | grep "SHA256:" | awk '{print $2}')
+          SHA1=$(echo "$CERT_INFO" | grep "SHA1:" | awk '{print $2}')
+          if [ -z "$SHA256" ] || [ -z "$SHA1" ]; then
+            echo "::error::Failed to extract certificate fingerprints"
+            exit 1
+          fi
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "sha1=$SHA1" >> $GITHUB_OUTPUT
+          echo "✓ Extracted certificate fingerprints"
+
+      - name: Rename APK with version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "columba-${VERSION}.apk"
           echo "✓ Renamed APK to columba-${VERSION}.apk"
 
       - name: Generate SHA256 checksum
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          sha256sum columba-${{ steps.version.outputs.version }}.apk > \
-            columba-${{ steps.version.outputs.version }}.apk.sha256
+          sha256sum "columba-${VERSION}.apk" > "columba-${VERSION}.apk.sha256"
           echo "✓ Generated SHA256 checksum"
 
       - name: Read SHA256 checksum
         id: sha256
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          SHA256=$(cat columba-${{ steps.version.outputs.version }}.apk.sha256)
+          SHA256=$(cat "columba-${VERSION}.apk.sha256")
           echo "checksum=$SHA256" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
@@ -79,6 +100,15 @@ jobs:
 
             ### Installation
             Download the APK below and install on your Android device.
+
+            ### Verification
+            See [SECURITY.md](https://github.com/torlando-tech/columba/blob/main/SECURITY.md) for verification instructions.
+
+            **Signing Certificate Fingerprints:**
+            ```
+            SHA-256: ${{ steps.cert.outputs.sha256 }}
+            SHA-1:   ${{ steps.cert.outputs.sha1 }}
+            ```
 
             **SHA256 Checksum:**
             ```

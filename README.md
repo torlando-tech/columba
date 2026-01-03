@@ -22,7 +22,7 @@ Built with a native Android interface and Material Design 3, Columba brings mesh
 
 ## Getting Started
 
-Download the latest release from [Releases](https://github.com/torlando-tech/columba/releases) and install on your Android device.
+Download the latest release from [Releases](https://github.com/torlando-tech/columba/releases) and install on your Android device. See [SECURITY.md](./SECURITY.md) for APK verification instructions.
 
 <a href="https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/torlando-tech/columba"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" height="60" alt="Get it on Obtainium"></a>
 

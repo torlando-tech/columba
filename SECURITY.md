@@ -40,7 +40,7 @@ Do not install. Delete the APK and download only from [GitHub Releases](https://
 
 ## Reporting Vulnerabilities
 
-Report security issues via [GitHub Issues](https://github.com/torlando-tech/columba/issues) with the "security" label. Include steps to reproduce and potential impact. We aim to respond within 48 hours.
+Report security issues via [GitHub Issues](https://github.com/torlando-tech/columba/issues) with the "security" label. Include steps to reproduce and potential impact.
 
 ## Supported Versions
 

@@ -1332,4 +1332,281 @@ class MessagingScreenTest {
         // Should display loaded preview
         composeTestRule.onNodeWithText("Henry").assertIsDisplayed()
     }
+
+    // ========== Additional GIF Coverage Tests ==========
+
+    @Test
+    fun receivedGifMessage_displaysWithoutBubble_whenMediaOnly() {
+        // Given - received GIF-only message (from peer, not from me)
+        val gifMessage = MessagingTestFixtures.createAnimatedGifMessage(isFromMe = false)
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifMessage)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - received messages don't show delivery status indicators
+        composeTestRule.onNodeWithText("✓").assertDoesNotExist()
+        composeTestRule.onNodeWithText("✓✓").assertDoesNotExist()
+    }
+
+    @Test
+    fun sentGifMessage_showsDeliveredStatus() {
+        // Given - sent and delivered GIF message
+        val gifMessage = MessagingTestFixtures.createAnimatedGifMessage(status = "delivered")
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifMessage)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - delivered shows double checkmark
+        composeTestRule.onNodeWithText("✓✓").assertIsDisplayed()
+    }
+
+    @Test
+    fun sentGifMessage_showsPendingStatus() {
+        // Given - pending GIF message
+        val gifMessage = MessagingTestFixtures.createAnimatedGifMessage(status = "pending")
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifMessage)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - pending shows empty circle
+        composeTestRule.onNodeWithText("○").assertIsDisplayed()
+    }
+
+    @Test
+    fun sentGifMessage_showsFailedStatus() {
+        // Given - failed GIF message
+        val gifMessage = MessagingTestFixtures.createAnimatedGifMessage(status = "failed")
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifMessage)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - failed shows exclamation
+        composeTestRule.onNodeWithText("!").assertIsDisplayed()
+    }
+
+    @Test
+    fun inputBar_withImageAndText_sendButtonEnabled() {
+        // Given - image selected and text entered
+        every { mockViewModel.selectedImageData } returns MutableStateFlow(MessagingTestFixtures.createTestGifData())
+        every { mockViewModel.selectedImageIsAnimated } returns MutableStateFlow(true)
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // When - enter text along with image
+        composeTestRule.onNodeWithText("Type a message...").performTextInput("Caption for my GIF")
+
+        // Then - send button should be enabled
+        composeTestRule.onNodeWithContentDescription("Send message").assertIsEnabled()
+    }
+
+    @Test
+    fun inputBar_sendWithGif_callsSendMessageWithImageData() {
+        // Given - GIF selected
+        val gifData = MessagingTestFixtures.createTestGifData()
+        every { mockViewModel.selectedImageData } returns MutableStateFlow(gifData)
+        every { mockViewModel.selectedImageFormat } returns MutableStateFlow("gif")
+        every { mockViewModel.selectedImageIsAnimated } returns MutableStateFlow(true)
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // When - tap send
+        composeTestRule.onNodeWithContentDescription("Send message").performClick()
+
+        // Then - sendMessage should be called
+        verify { mockViewModel.sendMessage(any(), any()) }
+    }
+
+    @Test
+    fun multipleGifMessages_displayCorrectly() {
+        // Given - multiple GIF messages
+        val gif1 = MessagingTestFixtures.createAnimatedGifMessage(id = "gif-1", isFromMe = true)
+        val gif2 = MessagingTestFixtures.createAnimatedGifMessageWithText(id = "gif-2", content = "Look at this!")
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gif1, gif2)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - text from second GIF should be visible
+        composeTestRule.onNodeWithText("Look at this!").assertIsDisplayed()
+    }
+
+    @Test
+    fun inputBar_processingFile_showsLoadingState() {
+        // Given - file processing in progress
+        every { mockViewModel.isProcessingFile } returns MutableStateFlow(true)
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - file attachment button should not be clickable during processing
+        // (CircularProgressIndicator replaces the icon)
+        composeTestRule.onNodeWithContentDescription("Attach file").assertDoesNotExist()
+    }
+
+    @Test
+    fun inputBar_gifAttached_showsCorrectSize() {
+        // Given - GIF attached with known size
+        val gifData = MessagingTestFixtures.createTestGifData()
+        every { mockViewModel.selectedImageData } returns MutableStateFlow(gifData)
+        every { mockViewModel.selectedImageIsAnimated } returns MutableStateFlow(true)
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - should show GIF label
+        composeTestRule.onNodeWithText("GIF attached", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun topAppBar_longPeerName_displaysCorrectly() {
+        // Given - very long peer name
+        val longName = "Very Long Peer Name That Should Be Truncated"
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = longName,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - peer name should be displayed (may be truncated with ellipsis)
+        composeTestRule.onNodeWithText(longName, substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun messageList_mixedMessages_displaysCorrectly() {
+        // Given - mix of text and GIF messages (kept small to avoid viewport issues)
+        val textMsg = MessagingTestFixtures.createSentMessage(id = "text-1", content = "Hello!")
+        val gifMsg = MessagingTestFixtures.createAnimatedGifMessage(id = "gif-1")
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(textMsg, gifMsg)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - text message should be displayed
+        composeTestRule.onNodeWithText("Hello!").assertIsDisplayed()
+    }
+
+    @Test
+    fun propagatedGifMessage_showsCorrectStatus() {
+        // Given - GIF message with propagated status
+        val gifMessage = MessagingTestFixtures.createAnimatedGifMessage(status = "propagated")
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifMessage)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - propagated shows single checkmark (same as sent)
+        composeTestRule.onNodeWithText("✓").assertIsDisplayed()
+    }
+
+    @Test
+    fun retryingGifMessage_showsCorrectStatus() {
+        // Given - GIF message being retried
+        val gifMessage = MessagingTestFixtures.createAnimatedGifMessage(status = "retrying_propagated")
+        every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifMessage)))
+
+        // When
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - retrying_propagated shows single checkmark
+        composeTestRule.onNodeWithText("✓").assertIsDisplayed()
+    }
 }

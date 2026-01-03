@@ -16,6 +16,7 @@ import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.model.ImageCache
 import com.lxmf.messenger.ui.model.LocationSharingState
@@ -160,6 +161,9 @@ class MessagingViewModel
 
         // Manual sync result events for Snackbar notifications
         val manualSyncResult: SharedFlow<SyncResult> = propagationNodeManager.manualSyncResult
+
+        // Real-time sync progress for status UI
+        val syncProgress: StateFlow<SyncProgress> = propagationNodeManager.syncProgress
 
         // Track which images have been decoded - used to trigger recomposition
         // when images become available. The UI observes this to know when to re-check the cache.

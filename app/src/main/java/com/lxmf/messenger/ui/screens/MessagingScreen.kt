@@ -122,6 +122,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
+import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.FileAttachmentCard
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
@@ -135,6 +136,7 @@ import com.lxmf.messenger.ui.components.ReplyInputBar
 import com.lxmf.messenger.ui.components.ReplyPreviewBubble
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SwipeableMessageBubble
+import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
@@ -178,7 +180,10 @@ fun MessagingScreen(
     val selectedImageIsAnimated by viewModel.selectedImageIsAnimated.collectAsStateWithLifecycle()
     val isProcessingImage by viewModel.isProcessingImage.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val syncProgress by viewModel.syncProgress.collectAsStateWithLifecycle()
     val isContactSaved by viewModel.isContactSaved.collectAsStateWithLifecycle()
+    var showSyncStatusSheet by remember { mutableStateOf(false) }
+    val syncStatusSheetState = rememberModalBottomSheetState()
 
     // File attachment state
     val selectedFileAttachments by viewModel.selectedFileAttachments.collectAsStateWithLifecycle()
@@ -233,9 +238,14 @@ fun MessagingScreen(
         viewModel.manualSyncResult.collect { result ->
             val message =
                 when (result) {
-                    is SyncResult.Success -> "Sync complete"
+                    is SyncResult.Success -> if (result.messagesReceived > 0) {
+                        "Sync complete: ${result.messagesReceived} new messages"
+                    } else {
+                        "Sync complete"
+                    }
                     is SyncResult.Error -> "Sync failed: ${result.message}"
                     is SyncResult.NoRelay -> "No relay configured"
+                    is SyncResult.Timeout -> "Sync timed out"
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -522,10 +532,15 @@ fun MessagingScreen(
                         onClick = { viewModel.toggleContact() },
                     )
 
-                    // Sync button
+                    // Sync button - shows spinner during sync, tapping opens status sheet
                     IconButton(
-                        onClick = { viewModel.syncFromPropagationNode() },
-                        enabled = !isSyncing,
+                        onClick = {
+                            if (isSyncing) {
+                                showSyncStatusSheet = true
+                            } else {
+                                viewModel.syncFromPropagationNode()
+                            }
+                        },
                     ) {
                         if (isSyncing) {
                             CircularProgressIndicator(
@@ -899,6 +914,15 @@ fun MessagingScreen(
                     Text("Cancel")
                 }
             },
+        )
+    }
+
+    // Sync status bottom sheet - shows real-time propagation sync progress
+    if (showSyncStatusSheet) {
+        SyncStatusBottomSheet(
+            syncProgress = syncProgress,
+            onDismiss = { showSyncStatusSheet = false },
+            sheetState = syncStatusSheetState,
         )
     }
 }

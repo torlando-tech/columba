@@ -903,6 +903,16 @@ class ReticulumServiceBinder(
             Log.w(TAG, "Failed to set reaction received callback: ${e.message}", e)
         }
 
+        // Setup propagation state callback for real-time sync progress
+        try {
+            wrapperManager.setPropagationStateCallback { stateJson ->
+                Log.d(TAG, "Propagation state changed: ${stateJson.take(100)}")
+                broadcaster.broadcastPropagationStateChange(stateJson)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set propagation state callback: ${e.message}", e)
+        }
+
         // Setup native stamp generator (bypasses Python multiprocessing issues)
         try {
             val stampGenerator = StampGenerator()

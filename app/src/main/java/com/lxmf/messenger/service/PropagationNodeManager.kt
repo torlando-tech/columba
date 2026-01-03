@@ -7,9 +7,13 @@ import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
+import com.lxmf.messenger.reticulum.protocol.PropagationState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -30,11 +34,28 @@ import javax.inject.Singleton
  * Result of a manual sync operation.
  */
 sealed class SyncResult {
-    data object Success : SyncResult()
+    /** Sync completed successfully */
+    data class Success(val messagesReceived: Int) : SyncResult()
 
-    data class Error(val message: String) : SyncResult()
+    /** Sync failed with an error */
+    data class Error(val message: String, val errorCode: Int? = null) : SyncResult()
 
+    /** No relay is configured */
     data object NoRelay : SyncResult()
+
+    /** Sync timed out */
+    data object Timeout : SyncResult()
+}
+
+/**
+ * Progress of sync operation for UI updates.
+ */
+sealed class SyncProgress {
+    data object Idle : SyncProgress()
+
+    data object Starting : SyncProgress()
+
+    data class InProgress(val stateName: String, val progress: Float) : SyncProgress()
 }
 
 /**
@@ -179,9 +200,17 @@ class PropagationNodeManager
         private val _manualSyncResult = MutableSharedFlow<SyncResult>()
         val manualSyncResult: SharedFlow<SyncResult> = _manualSyncResult.asSharedFlow()
 
+        // Sync progress for UI updates (loading spinner, status page)
+        private val _syncProgress = MutableStateFlow<SyncProgress>(SyncProgress.Idle)
+        val syncProgress: StateFlow<SyncProgress> = _syncProgress.asStateFlow()
+
+        // Timeout for sync operation (5 minutes for large transfers)
+        private val syncTimeoutMs = 5 * 60 * 1000L
+
         private var announceObserverJob: Job? = null
         private var syncJob: Job? = null
         private var settingsObserverJob: Job? = null
+        private var propagationStateObserverJob: Job? = null
 
         private var relayObserverJob: Job? = null
 
@@ -238,6 +267,12 @@ class PropagationNodeManager
                     }
                 }
 
+            // Observe propagation state changes for real-time sync progress
+            propagationStateObserverJob =
+                scope.launch {
+                    observePropagationStateChanges()
+                }
+
             // Start periodic sync with propagation node
             startPeriodicSync()
         }
@@ -264,6 +299,85 @@ class PropagationNodeManager
         }
 
         /**
+         * Observe propagation state changes from ServiceReticulumProtocol.
+         * Updates syncProgress flow for UI and handles completion/error states.
+         */
+        private suspend fun observePropagationStateChanges() {
+            val serviceProtocol = reticulumProtocol as? ServiceReticulumProtocol ?: return
+
+            serviceProtocol.propagationStateFlow.collect { state ->
+                Log.d(TAG, "Propagation state update: ${state.stateName} (${state.state})")
+
+                when (state.state) {
+                    PropagationState.STATE_IDLE -> {
+                        // Only update to Idle if we're not in a sync cycle
+                        if (!_isSyncing.value) {
+                            _syncProgress.value = SyncProgress.Idle
+                        }
+                    }
+                    PropagationState.STATE_PATH_REQUESTED,
+                    PropagationState.STATE_LINK_ESTABLISHING,
+                    PropagationState.STATE_LINK_ESTABLISHED,
+                    PropagationState.STATE_REQUEST_SENT,
+                    -> {
+                        _syncProgress.value = SyncProgress.InProgress(state.stateName, state.progress)
+                    }
+                    PropagationState.STATE_RECEIVING -> {
+                        _syncProgress.value = SyncProgress.InProgress("Downloading", state.progress)
+                    }
+                    PropagationState.STATE_COMPLETE -> {
+                        handleSyncComplete(state.messagesReceived)
+                    }
+                    else -> {
+                        // Error states (0xf0 - 0xf4)
+                        if (state.state >= 0xf0) {
+                            handleSyncError(state)
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * Handle successful sync completion.
+         */
+        private suspend fun handleSyncComplete(messagesReceived: Int) {
+            if (_isSyncing.value) {
+                Log.d(TAG, "Sync complete: $messagesReceived messages received")
+                _isSyncing.value = false
+                _syncProgress.value = SyncProgress.Idle
+
+                // Update last sync timestamp
+                val timestamp = System.currentTimeMillis()
+                _lastSyncTimestamp.value = timestamp
+                settingsRepository.saveLastSyncTimestamp(timestamp)
+
+                // Emit result for UI
+                _manualSyncResult.emit(SyncResult.Success(messagesReceived))
+            }
+        }
+
+        /**
+         * Handle sync error states.
+         */
+        private suspend fun handleSyncError(state: PropagationState) {
+            if (_isSyncing.value) {
+                val errorMsg = when (state.state) {
+                    0xf0 -> "No path to relay"
+                    0xf1 -> "Connection failed"
+                    0xf2 -> "Transfer failed"
+                    0xf3 -> "Identity not received"
+                    0xf4 -> "Access denied"
+                    else -> "Unknown error (${state.state})"
+                }
+                Log.w(TAG, "Sync error: $errorMsg")
+                _isSyncing.value = false
+                _syncProgress.value = SyncProgress.Idle
+                _manualSyncResult.emit(SyncResult.Error(errorMsg, state.state))
+            }
+        }
+
+        /**
          * Stop the manager.
          */
         fun stop() {
@@ -272,10 +386,12 @@ class PropagationNodeManager
             announceObserverJob?.cancel()
             syncJob?.cancel()
             settingsObserverJob?.cancel()
+            propagationStateObserverJob?.cancel()
             relayObserverJob = null
             announceObserverJob = null
             syncJob = null
             settingsObserverJob = null
+            propagationStateObserverJob = null
         }
 
         /**
@@ -570,8 +686,11 @@ class PropagationNodeManager
         }
 
         /**
-         * Sync messages from the propagation node.
+         * Sync messages from the propagation node (periodic/automatic sync).
          * This requests any waiting messages from the configured propagation node.
+         *
+         * The actual completion is handled by observePropagationStateChanges() which
+         * monitors LXMF propagation states.
          */
         suspend fun syncWithPropagationNode() {
             // Don't sync if network is not ready (e.g., during shutdown)
@@ -592,31 +711,35 @@ class PropagationNodeManager
                 return
             }
 
-            Log.d(TAG, "📡 Syncing with propagation node: ${relay.displayName}")
+            Log.d(TAG, "📡 Periodic sync with propagation node: ${relay.displayName}")
             _isSyncing.value = true
+            _syncProgress.value = SyncProgress.Starting
 
             try {
                 val result = reticulumProtocol.requestMessagesFromPropagationNode()
                 result.onSuccess { state ->
-                    Log.d(TAG, "Propagation sync started: state=${state.stateName}")
-                    // Update last sync timestamp
-                    val timestamp = System.currentTimeMillis()
-                    _lastSyncTimestamp.value = timestamp
-                    settingsRepository.saveLastSyncTimestamp(timestamp)
+                    Log.d(TAG, "Periodic sync initiated: state=${state.stateName}")
+                    // Don't emit result or update timestamp here - let the observer handle it
                 }.onFailure { error ->
-                    Log.w(TAG, "Propagation sync failed: ${error.message}")
+                    Log.w(TAG, "Periodic sync request failed: ${error.message}")
+                    _isSyncing.value = false
+                    _syncProgress.value = SyncProgress.Idle
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error requesting messages from propagation node", e)
-            } finally {
                 _isSyncing.value = false
+                _syncProgress.value = SyncProgress.Idle
             }
+            // Note: _isSyncing is not reset on success - propagation state observer handles it
         }
 
         /**
          * Manually trigger a sync with the propagation node.
          * Useful for pull-to-refresh or when user explicitly wants to check for messages.
          * Emits result to manualSyncResult SharedFlow for UI notification.
+         *
+         * The actual completion is handled by observePropagationStateChanges() which
+         * monitors LXMF propagation states and emits success/error when complete.
          */
         suspend fun triggerSync() {
             // Wait for relay state to be loaded from database
@@ -638,25 +761,40 @@ class PropagationNodeManager
 
             Log.d(TAG, "📡 Manual sync with propagation node: ${relay.displayName}")
             _isSyncing.value = true
+            _syncProgress.value = SyncProgress.Starting
+
+            // Start timeout watchdog
+            val timeoutJob = scope.launch {
+                delay(syncTimeoutMs)
+                if (_isSyncing.value) {
+                    Log.w(TAG, "Sync timed out after ${syncTimeoutMs / 1000} seconds")
+                    _isSyncing.value = false
+                    _syncProgress.value = SyncProgress.Idle
+                    _manualSyncResult.emit(SyncResult.Timeout)
+                }
+            }
 
             try {
                 val result = reticulumProtocol.requestMessagesFromPropagationNode()
-                result.onSuccess { state ->
-                    Log.d(TAG, "Manual sync started: state=${state.stateName}")
-                    // Update last sync timestamp
-                    val timestamp = System.currentTimeMillis()
-                    _lastSyncTimestamp.value = timestamp
-                    settingsRepository.saveLastSyncTimestamp(timestamp)
-                    _manualSyncResult.emit(SyncResult.Success)
+                result.onSuccess { propState ->
+                    Log.d(TAG, "Manual sync initiated: state=${propState.stateName}")
+                    // Don't emit success here - wait for propagation state observer
+                    // to see PR_COMPLETE state
                 }.onFailure { error ->
-                    Log.w(TAG, "Manual sync failed: ${error.message}")
+                    Log.w(TAG, "Manual sync request failed: ${error.message}")
+                    timeoutJob.cancel()
+                    _isSyncing.value = false
+                    _syncProgress.value = SyncProgress.Idle
                     _manualSyncResult.emit(SyncResult.Error(error.message ?: "Unknown error"))
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error during manual sync", e)
-                _manualSyncResult.emit(SyncResult.Error(e.message ?: "Unknown error"))
-            } finally {
+                timeoutJob.cancel()
                 _isSyncing.value = false
+                _syncProgress.value = SyncProgress.Idle
+                _manualSyncResult.emit(SyncResult.Error(e.message ?: "Unknown error"))
             }
+            // Note: We don't cancel timeoutJob on success path - it will be handled
+            // by handleSyncComplete() or handleSyncError() which set _isSyncing = false
         }
     }

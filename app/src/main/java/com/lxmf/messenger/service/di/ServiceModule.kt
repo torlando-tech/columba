@@ -157,6 +157,7 @@ object ServiceModule {
             networkChangeManager = managers.networkChangeManager,
             notificationManager = managers.notificationManager,
             bleCoordinator = managers.bleCoordinator,
+            persistenceManager = managers.persistenceManager,
             scope = scope,
             onInitialized = onInitialized,
             onShutdown = onShutdown,

@@ -83,4 +83,27 @@ interface IReticulumServiceCallback {
      *        {"reaction_to": "msg_id", "emoji": "👍", "sender": "sender_hash", "source_hash": "...", "timestamp": ...}
      */
     void onReactionReceived(String reactionJson);
+
+    // ==================== VOICE CALLS (LXST) ====================
+
+    /**
+     * Called when an incoming voice call is received.
+     * @param callJson JSON string with caller info:
+     *        {"caller_hash": "...", "caller_name": "..."}
+     */
+    void onIncomingCall(String callJson);
+
+    /**
+     * Called when voice call state changes.
+     * @param stateJson JSON string with call state:
+     *        {"state": "ringing/established/ended/busy/rejected", "remote_identity": "...", "is_muted": false}
+     */
+    void onCallStateChanged(String stateJson);
+
+    /**
+     * Called when a voice call ends.
+     * @param callJson JSON string with call info:
+     *        {"caller_hash": "..."}
+     */
+    void onCallEnded(String callJson);
 }

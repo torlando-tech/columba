@@ -5,8 +5,10 @@ import android.util.Log
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.lxmf.messenger.crypto.StampGenerator
+import com.lxmf.messenger.reticulum.audio.bridge.KotlinAudioBridge
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge
+import com.lxmf.messenger.reticulum.call.bridge.CallBridge
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -335,6 +337,49 @@ class PythonWrapperManager(
                 Log.w(TAG, "Failed to set reaction received callback: ${e.message}", e)
             }
         }
+    }
+
+    /**
+     * Setup LXST CallManager for voice calls.
+     *
+     * Sets up the audio bridge, call bridge, and initializes the Python CallManager.
+     * Must be called after Reticulum is initialized.
+     *
+     * @return true if call manager was initialized successfully
+     */
+    fun setupCallManager(): Boolean {
+        return withWrapper { wrapper ->
+            try {
+                // Get audio bridge singleton
+                val audioBridge = KotlinAudioBridge.getInstance(context)
+                wrapper.callAttr("set_audio_bridge", audioBridge)
+                Log.d(TAG, "Audio bridge set in Python wrapper")
+
+                // Get call bridge singleton
+                val callBridge = CallBridge.getInstance()
+                wrapper.callAttr("set_call_bridge", callBridge)
+                Log.d(TAG, "Call bridge set in Python wrapper")
+
+                // Initialize the call manager
+                val result = wrapper.callAttr("initialize_call_manager")
+
+                @Suppress("UNCHECKED_CAST")
+                val resultDict = result?.asMap() as? Map<PyObject, PyObject>
+                val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false
+
+                if (success) {
+                    Log.i(TAG, "📞 CallManager initialized successfully")
+                    true
+                } else {
+                    val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"
+                    Log.e(TAG, "Failed to initialize CallManager: $error")
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting up CallManager: ${e.message}", e)
+                false
+            }
+        } ?: false
     }
 
     /**

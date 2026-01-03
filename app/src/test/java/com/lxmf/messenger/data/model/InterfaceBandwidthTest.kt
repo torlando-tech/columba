@@ -29,10 +29,11 @@ class InterfaceBandwidthTest {
 
     @Test
     fun `calculateRNodeBandwidth returns reasonable values for SF7 500kHz`() {
-        val bandwidth = InterfaceBandwidth.calculateRNodeBandwidth(
-            spreadingFactor = 7,
-            bandwidthHz = 500000,
-        )
+        val bandwidth =
+            InterfaceBandwidth.calculateRNodeBandwidth(
+                spreadingFactor = 7,
+                bandwidthHz = 500000,
+            )
         // Should be in the ballpark of 5000 bps
         assertTrue("SF7/500kHz should be > 1000 bps", bandwidth > 1000)
         assertTrue("SF7/500kHz should be < 50000 bps", bandwidth < 50000)
@@ -40,10 +41,11 @@ class InterfaceBandwidthTest {
 
     @Test
     fun `calculateRNodeBandwidth returns reasonable values for SF12 125kHz`() {
-        val bandwidth = InterfaceBandwidth.calculateRNodeBandwidth(
-            spreadingFactor = 12,
-            bandwidthHz = 125000,
-        )
+        val bandwidth =
+            InterfaceBandwidth.calculateRNodeBandwidth(
+                spreadingFactor = 12,
+                bandwidthHz = 125000,
+            )
         // Should be in the ballpark of 50-200 bps
         assertTrue("SF12/125kHz should be >= minimum", bandwidth >= InterfaceBandwidth.RNODE_SF12_125KHZ_BPS)
         assertTrue("SF12/125kHz should be < 500 bps", bandwidth < 500)

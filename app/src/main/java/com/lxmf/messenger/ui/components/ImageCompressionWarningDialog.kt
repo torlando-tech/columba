@@ -61,8 +61,9 @@ fun ImageCompressionWarningDialog(
             ) {
                 // Size information
                 Text(
-                    text = "This image (${formatBytes(warning.compressedSizeBytes)}) exceeds " +
-                        "the target size (${formatBytes(warning.targetSizeBytes)}) for your network.",
+                    text =
+                        "This image (${formatBytes(warning.compressedSizeBytes)}) exceeds " +
+                            "the target size (${formatBytes(warning.targetSizeBytes)}) for your network.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -74,9 +75,10 @@ fun ImageCompressionWarningDialog(
                     shape = MaterialTheme.shapes.small,
                 ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         DetailRow(
@@ -93,8 +95,9 @@ fun ImageCompressionWarningDialog(
 
                 // Advisory text
                 Text(
-                    text = "Sending large images over slow networks may take a long time " +
-                        "and could fail if the connection is interrupted.",
+                    text =
+                        "Sending large images over slow networks may take a long time " +
+                            "and could fail if the connection is interrupted.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -137,11 +140,12 @@ private fun DetailRow(
             text = value,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = if (highlight) FontWeight.Bold else FontWeight.Normal,
-            color = if (highlight) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
+            color =
+                if (highlight) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
         )
     }
 }

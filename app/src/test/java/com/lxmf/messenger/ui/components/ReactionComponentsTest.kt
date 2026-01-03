@@ -561,4 +561,110 @@ class ReactionComponentsTest {
         val expectedEmojis = listOf("👍", "❤️", "😂", "😮", "😢", "😡")
         assertEquals(expectedEmojis, REACTION_EMOJIS)
     }
+
+    // ========== calculateMessageScaleForOverlay TESTS ==========
+
+    // Common UI dimensions for tests (in pixels, simulating a typical phone at 3x density)
+    private val testDimensions = OverlayLayoutDimensions(
+        screenHeight = 2400f, // ~800dp at 3x density
+        emojiBarHeight = 168f, // 56dp at 3x density
+        emojiBarGap = 228f, // 76dp at 3x density
+        actionButtonsHeight = 168f, // 56dp at 3x density
+        actionButtonsGap = 36f, // 12dp at 3x density
+        topPadding = 144f, // 48dp at 3x density
+        bottomPadding = 144f, // 48dp at 3x density
+    )
+
+    @Test
+    fun `calculateMessageScaleForOverlay returns 1f for small message that fits on screen`() {
+        val scale = calculateMessageScaleForOverlay(
+            messageHeight = 300, // Small message
+            dimensions = testDimensions,
+        )
+
+        assertEquals(1f, scale, 0.001f)
+    }
+
+    @Test
+    fun `calculateMessageScaleForOverlay returns scale less than 1 for large message`() {
+        // Available height = 2400 - 144 - 144 = 2112
+        // UI elements = 168 + 228 + 36 + 168 = 600
+        // Max message height = 2112 - 600 = 1512
+        // For a 2000px message, scale should be 1512/2000 = 0.756
+        val scale = calculateMessageScaleForOverlay(
+            messageHeight = 2000, // Large message
+            dimensions = testDimensions,
+        )
+
+        assertTrue("Scale should be less than 1 for large message", scale < 1f)
+        assertTrue("Scale should be greater than minScale", scale >= 0.3f)
+        assertEquals(0.756f, scale, 0.01f)
+    }
+
+    @Test
+    fun `calculateMessageScaleForOverlay respects minimum scale for very large message`() {
+        val scale = calculateMessageScaleForOverlay(
+            messageHeight = 10000, // Very large message
+            dimensions = testDimensions,
+        )
+
+        assertEquals("Scale should be clamped to minScale", 0.3f, scale, 0.001f)
+    }
+
+    @Test
+    fun `calculateMessageScaleForOverlay returns 1f for zero height message`() {
+        val scale = calculateMessageScaleForOverlay(
+            messageHeight = 0,
+            dimensions = testDimensions,
+        )
+
+        assertEquals(1f, scale, 0.001f)
+    }
+
+    @Test
+    fun `calculateMessageScaleForOverlay returns 1f for negative height message`() {
+        val scale = calculateMessageScaleForOverlay(
+            messageHeight = -100,
+            dimensions = testDimensions,
+        )
+
+        assertEquals(1f, scale, 0.001f)
+    }
+
+    @Test
+    fun `calculateMessageScaleForOverlay with custom minScale`() {
+        val customMinScale = 0.5f
+        val scale = calculateMessageScaleForOverlay(
+            messageHeight = 10000, // Very large message
+            dimensions = testDimensions,
+            minScale = customMinScale,
+        )
+
+        assertEquals("Scale should be clamped to custom minScale", customMinScale, scale, 0.001f)
+    }
+
+    @Test
+    fun `calculateMessageScaleForOverlay with message exactly at boundary`() {
+        // Available height = 2400 - 144 - 144 = 2112
+        // UI elements = 168 + 228 + 36 + 168 = 600
+        // Max message height = 2112 - 600 = 1512
+        val scale = calculateMessageScaleForOverlay(
+            messageHeight = 1512, // Exactly fits
+            dimensions = testDimensions,
+        )
+
+        assertEquals("Message that exactly fits should have scale 1", 1f, scale, 0.001f)
+    }
+
+    @Test
+    fun `calculateMessageScaleForOverlay with small screen`() {
+        val smallScreenDimensions = testDimensions.copy(screenHeight = 1200f)
+        val scale = calculateMessageScaleForOverlay(
+            messageHeight = 800,
+            dimensions = smallScreenDimensions,
+        )
+
+        assertTrue("Scale should be less than 1 on small screen", scale < 1f)
+        assertTrue("Scale should be greater than minScale", scale >= 0.3f)
+    }
 }

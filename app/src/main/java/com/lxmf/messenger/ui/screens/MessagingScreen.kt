@@ -100,6 +100,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
@@ -112,6 +113,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -344,6 +346,9 @@ fun MessagingScreen(
 
     // Clipboard for copy functionality
     val clipboardManager = LocalClipboardManager.current
+
+    // Keyboard controller for dismissing keyboard when entering reaction mode
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     // Track IME (keyboard) visibility
     val density = LocalDensity.current
@@ -675,6 +680,8 @@ fun MessagingScreen(
                                             },
                                             onReact = { emoji -> viewModel.sendReaction(message.id, emoji) },
                                             onLongPress = { msgId, fromMe, failed, bitmap, x, y, width, height ->
+                                                // Dismiss keyboard before entering reaction mode
+                                                keyboardController?.hide()
                                                 viewModel.enterReactionMode(msgId, index, fromMe, failed, bitmap, x, y, width, height)
                                             },
                                         )
@@ -1558,6 +1565,10 @@ fun MessageInputBar(
                             },
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
                             color = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
                         ),
                         lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
                         decorator = { innerTextField ->

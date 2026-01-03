@@ -48,6 +48,24 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease --stacktrace
 
+      - name: Extract signing certificate fingerprints
+        id: cert
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          CERT_INFO=$(keytool -list -v -keystore app/build/keystore/release.keystore \
+            -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD")
+          SHA256=$(echo "$CERT_INFO" | grep "SHA256:" | awk '{print $2}')
+          SHA1=$(echo "$CERT_INFO" | grep "SHA1:" | awk '{print $2}')
+          if [ -z "$SHA256" ] || [ -z "$SHA1" ]; then
+            echo "::error::Failed to extract certificate fingerprints"
+            exit 1
+          fi
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "sha1=$SHA1" >> $GITHUB_OUTPUT
+          echo "✓ Extracted certificate fingerprints"
+
       - name: Get branch name
         id: branch
         run: echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
@@ -83,17 +101,34 @@ jobs:
           echo "name=$(basename $APK_PATH)" >> $GITHUB_OUTPUT
 
       - name: Rename APK
+        env:
+          APK_PATH: ${{ steps.apk.outputs.path }}
         run: |
-          cp ${{ steps.apk.outputs.path }} columba.apk
+          cp "$APK_PATH" columba.apk
           echo "✓ Renamed APK to columba.apk"
+
+      - name: Generate SHA256 checksum
+        run: |
+          sha256sum columba.apk > columba.apk.sha256
+          echo "✓ Generated SHA256 checksum"
+
+      - name: Read SHA256 checksum
+        id: sha256
+        run: |
+          SHA256=$(cat columba.apk.sha256)
+          echo "checksum=$SHA256" >> $GITHUB_OUTPUT
 
       - name: Determine release name
         id: release_name
+        env:
+          INPUT_NAME: ${{ github.event.inputs.release_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA: ${{ steps.sha.outputs.sha }}
         run: |
-          if [ -n "${{ github.event.inputs.release_name }}" ]; then
-            echo "name=${{ github.event.inputs.release_name }}" >> $GITHUB_OUTPUT
+          if [ -n "$INPUT_NAME" ]; then
+            echo "name=$INPUT_NAME" >> $GITHUB_OUTPUT
           else
-            echo "name=Pre-Release v${{ steps.version.outputs.version }} (${{ steps.sha.outputs.sha }})" >> $GITHUB_OUTPUT
+            echo "name=Pre-Release v${VERSION} (${SHA})" >> $GITHUB_OUTPUT
           fi
 
       - name: Create Pre-Release
@@ -117,11 +152,27 @@ jobs:
 
             ${{ github.event.inputs.release_notes }}
 
+            ### Verification
+            See [SECURITY.md](https://github.com/torlando-tech/columba/blob/main/SECURITY.md) for verification instructions.
+
+            **Signing Certificate Fingerprints:**
+            ```
+            SHA-256: ${{ steps.cert.outputs.sha256 }}
+            SHA-1:   ${{ steps.cert.outputs.sha1 }}
+            ```
+
+            **SHA256 Checksum:**
+            ```
+            ${{ steps.sha256.outputs.checksum }}
+            ```
+
             ### Installation
             Download the APK below and install it on your Android device.
 
             **Note:** You may need to enable "Install from Unknown Sources" in your device settings.
-          files: columba.apk
+          files: |
+            columba.apk
+            columba.apk.sha256
           draft: false
           prerelease: true
           token: ${{ secrets.GITHUB_TOKEN }}

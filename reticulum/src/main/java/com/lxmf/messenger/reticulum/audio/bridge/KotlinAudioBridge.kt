@@ -105,9 +105,8 @@ class KotlinAudioBridge(
     private var recordFrameSize = 960 // 20ms at 48kHz
 
     // Audio routing
-    // Default to SPEAKER for testing - earpiece may have issues on some Android 16 devices
     @Volatile
-    private var speakerphoneOn = true  // Default to speaker for debugging Android 16 issue
+    private var speakerphoneOn = false  // Default to earpiece
 
     @Volatile
     private var microphoneMuted = false

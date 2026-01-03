@@ -193,12 +193,13 @@ object ImageUtils {
     ): CompressedImage? {
         return try {
             // Read raw bytes from URI
-            val rawBytes = context.contentResolver.openInputStream(uri)?.use { input ->
-                input.readBytes()
-            } ?: run {
-                Log.e(TAG, "Failed to read bytes from URI")
-                return null
-            }
+            val rawBytes =
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes()
+                } ?: run {
+                    Log.e(TAG, "Failed to read bytes from URI")
+                    return null
+                }
 
             // Check if it's an animated GIF
             if (isAnimatedGif(rawBytes)) {

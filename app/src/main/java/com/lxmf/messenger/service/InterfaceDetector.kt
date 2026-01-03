@@ -76,8 +76,9 @@ class InterfaceDetector
                 return "No interfaces"
             }
 
-            val slowestInterface = interfaces.minByOrNull { getInterfaceBandwidth(it) }
-                ?: return "Unknown"
+            val slowestInterface =
+                interfaces.minByOrNull { getInterfaceBandwidth(it) }
+                    ?: return "Unknown"
 
             return getInterfaceDescription(slowestInterface)
         }

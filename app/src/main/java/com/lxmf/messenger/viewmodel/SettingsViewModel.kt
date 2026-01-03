@@ -5,12 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.data.repository.IdentityRepository
-import com.lxmf.messenger.repository.SettingsRepository
-import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.AvailableRelaysState
+import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.AppTheme

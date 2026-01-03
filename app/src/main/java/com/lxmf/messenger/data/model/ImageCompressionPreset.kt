@@ -67,7 +67,6 @@ enum class ImageCompressionPreset(
         /**
          * Parse a preset from its name, falling back to DEFAULT if not found.
          */
-        fun fromName(name: String): ImageCompressionPreset =
-            entries.find { it.name == name } ?: DEFAULT
+        fun fromName(name: String): ImageCompressionPreset = entries.find { it.name == name } ?: DEFAULT
     }
 }

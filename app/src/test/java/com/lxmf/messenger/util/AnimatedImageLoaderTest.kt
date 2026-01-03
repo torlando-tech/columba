@@ -1,7 +1,6 @@
 package com.lxmf.messenger.util
 
 import android.app.Application
-import android.os.Build
 import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
@@ -93,14 +92,15 @@ class AnimatedImageLoaderTest {
         val loaders = mutableListOf<Any?>()
 
         // Simulate concurrent access
-        val threads = (1..10).map {
-            Thread {
-                val loader = AnimatedImageLoader.getInstance(context)
-                synchronized(loaders) {
-                    loaders.add(loader)
+        val threads =
+            (1..10).map {
+                Thread {
+                    val loader = AnimatedImageLoader.getInstance(context)
+                    synchronized(loaders) {
+                        loaders.add(loader)
+                    }
                 }
             }
-        }
 
         threads.forEach { it.start() }
         threads.forEach { it.join() }

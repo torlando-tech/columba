@@ -35,8 +35,8 @@ class ImageUtilsTest {
     }
 
     @Test
-    fun `SUPPORTED_IMAGE_FORMATS has exactly 4 formats`() {
-        assertEquals(4, ImageUtils.SUPPORTED_IMAGE_FORMATS.size)
+    fun `SUPPORTED_IMAGE_FORMATS has exactly 5 formats`() {
+        assertEquals(5, ImageUtils.SUPPORTED_IMAGE_FORMATS.size)
     }
 
     // ========== isImageFormatSupported Tests ==========
@@ -102,8 +102,8 @@ class ImageUtilsTest {
     }
 
     @Test
-    fun `isImageFormatSupported returns false for gif`() {
-        assertFalse(ImageUtils.isImageFormatSupported("gif"))
+    fun `isImageFormatSupported returns true for gif`() {
+        assertTrue(ImageUtils.isImageFormatSupported("gif"))
     }
 
     @Test

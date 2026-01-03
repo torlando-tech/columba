@@ -1444,6 +1444,8 @@ class SettingsViewModelTest {
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
+                    interfaceDetector = interfaceDetector,
+                    interfaceRepository = interfaceRepository,
                 )
 
             viewModel.state.test {
@@ -1486,6 +1488,8 @@ class SettingsViewModelTest {
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
+                    interfaceDetector = interfaceDetector,
+                    interfaceRepository = interfaceRepository,
                 )
 
             viewModel.state.test {

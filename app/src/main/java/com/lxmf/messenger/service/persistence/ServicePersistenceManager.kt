@@ -69,27 +69,28 @@ class ServicePersistenceManager(
                 // Preserve favorite status and existing icon appearance if announce already exists
                 val existing = announceDao.getAnnounce(destinationHash)
 
-                val entity = AnnounceEntity(
-                    destinationHash = destinationHash,
-                    peerName = peerName,
-                    publicKey = publicKey,
-                    appData = appData,
-                    hops = hops,
-                    lastSeenTimestamp = timestamp,
-                    nodeType = nodeType,
-                    receivingInterface = receivingInterface,
-                    receivingInterfaceType = receivingInterfaceType,
-                    aspect = aspect,
-                    isFavorite = existing?.isFavorite ?: false,
-                    favoritedTimestamp = existing?.favoritedTimestamp,
-                    stampCost = stampCost,
-                    stampCostFlexibility = stampCostFlexibility,
-                    peeringCost = peeringCost,
-                    // Prefer new icon appearance if provided, otherwise preserve existing
-                    iconName = iconName ?: existing?.iconName,
-                    iconForegroundColor = iconForegroundColor ?: existing?.iconForegroundColor,
-                    iconBackgroundColor = iconBackgroundColor ?: existing?.iconBackgroundColor,
-                )
+                val entity =
+                    AnnounceEntity(
+                        destinationHash = destinationHash,
+                        peerName = peerName,
+                        publicKey = publicKey,
+                        appData = appData,
+                        hops = hops,
+                        lastSeenTimestamp = timestamp,
+                        nodeType = nodeType,
+                        receivingInterface = receivingInterface,
+                        receivingInterfaceType = receivingInterfaceType,
+                        aspect = aspect,
+                        isFavorite = existing?.isFavorite ?: false,
+                        favoritedTimestamp = existing?.favoritedTimestamp,
+                        stampCost = stampCost,
+                        stampCostFlexibility = stampCostFlexibility,
+                        peeringCost = peeringCost,
+                        // Prefer new icon appearance if provided, otherwise preserve existing
+                        iconName = iconName ?: existing?.iconName,
+                        iconForegroundColor = iconForegroundColor ?: existing?.iconForegroundColor,
+                        iconBackgroundColor = iconBackgroundColor ?: existing?.iconBackgroundColor,
+                    )
 
                 announceDao.upsertAnnounce(entity)
                 Log.d(TAG, "Service persisted announce: $peerName ($destinationHash)")
@@ -109,11 +110,12 @@ class ServicePersistenceManager(
     ) {
         scope.launch {
             try {
-                val entity = PeerIdentityEntity(
-                    peerHash = peerHash,
-                    publicKey = publicKey,
-                    lastSeenTimestamp = System.currentTimeMillis(),
-                )
+                val entity =
+                    PeerIdentityEntity(
+                        peerHash = peerHash,
+                        publicKey = publicKey,
+                        lastSeenTimestamp = System.currentTimeMillis(),
+                    )
                 peerIdentityDao.insertPeerIdentity(entity)
                 Log.d(TAG, "Service persisted peer identity: $peerHash")
             } catch (e: Exception) {
@@ -156,53 +158,58 @@ class ServicePersistenceManager(
                 }
 
                 // Create/update conversation
-                val existingConversation = conversationDao.getConversation(
-                    sourceHash,
-                    activeIdentity.identityHash,
-                )
+                val existingConversation =
+                    conversationDao.getConversation(
+                        sourceHash,
+                        activeIdentity.identityHash,
+                    )
 
                 // Get peer name from existing conversation or use formatted hash
-                val peerName = existingConversation?.peerName
-                    ?: "Peer ${sourceHash.take(8).uppercase()}"
+                val peerName =
+                    existingConversation?.peerName
+                        ?: "Peer ${sourceHash.take(8).uppercase()}"
 
                 // Insert/update conversation
                 if (existingConversation != null) {
-                    val updated = existingConversation.copy(
-                        lastMessage = content.take(100),
-                        lastMessageTimestamp = timestamp,
-                        unreadCount = existingConversation.unreadCount + 1,
-                        peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
-                    )
+                    val updated =
+                        existingConversation.copy(
+                            lastMessage = content.take(100),
+                            lastMessageTimestamp = timestamp,
+                            unreadCount = existingConversation.unreadCount + 1,
+                            peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
+                        )
                     conversationDao.updateConversation(updated)
                 } else {
-                    val newConversation = ConversationEntity(
-                        peerHash = sourceHash,
-                        identityHash = activeIdentity.identityHash,
-                        peerName = peerName,
-                        peerPublicKey = publicKey,
-                        lastMessage = content.take(100),
-                        lastMessageTimestamp = timestamp,
-                        unreadCount = 1,
-                        lastSeenTimestamp = 0,
-                    )
+                    val newConversation =
+                        ConversationEntity(
+                            peerHash = sourceHash,
+                            identityHash = activeIdentity.identityHash,
+                            peerName = peerName,
+                            peerPublicKey = publicKey,
+                            lastMessage = content.take(100),
+                            lastMessageTimestamp = timestamp,
+                            unreadCount = 1,
+                            lastSeenTimestamp = 0,
+                        )
                     conversationDao.insertConversation(newConversation)
                 }
 
                 // Insert message
-                val messageEntity = MessageEntity(
-                    id = messageHash,
-                    conversationHash = sourceHash,
-                    identityHash = activeIdentity.identityHash,
-                    content = content,
-                    timestamp = timestamp,
-                    isFromMe = false,
-                    status = "delivered",
-                    isRead = false,
-                    fieldsJson = fieldsJson,
-                    replyToMessageId = replyToMessageId,
-                    deliveryMethod = deliveryMethod,
-                    errorMessage = null,
-                )
+                val messageEntity =
+                    MessageEntity(
+                        id = messageHash,
+                        conversationHash = sourceHash,
+                        identityHash = activeIdentity.identityHash,
+                        content = content,
+                        timestamp = timestamp,
+                        isFromMe = false,
+                        status = "delivered",
+                        isRead = false,
+                        fieldsJson = fieldsJson,
+                        replyToMessageId = replyToMessageId,
+                        deliveryMethod = deliveryMethod,
+                        errorMessage = null,
+                    )
                 messageDao.insertMessage(messageEntity)
 
                 // Store peer public key if available

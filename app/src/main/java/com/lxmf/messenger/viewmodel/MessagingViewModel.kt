@@ -12,26 +12,25 @@ import androidx.paging.map
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.repository.SettingsRepository
-import com.lxmf.messenger.service.InterfaceDetector
-import com.lxmf.messenger.util.ImageUtils
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.ui.model.DecodedImageResult
 import com.lxmf.messenger.ui.model.ImageCache
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.ui.model.SharingDuration
-import com.lxmf.messenger.ui.model.DecodedImageResult
-import com.lxmf.messenger.ui.model.decodeAndCacheImage
 import com.lxmf.messenger.ui.model.decodeImageWithAnimation
 import com.lxmf.messenger.ui.model.loadFileAttachmentData
 import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
 import com.lxmf.messenger.ui.model.toMessageUi
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
+import com.lxmf.messenger.util.ImageUtils
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -63,7 +62,7 @@ import com.lxmf.messenger.reticulum.model.Message as ReticulumMessage
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
-@Suppress("TooManyFunctions", "LargeClass") // ViewModel handles multiple UI operations
+@Suppress("TooManyFunctions", "LargeClass", "LongParameterList") // ViewModel handles multiple UI operations
 class MessagingViewModel
     @Inject
     constructor(
@@ -1226,10 +1225,11 @@ class MessagingViewModel
                         // Image exceeds target - show warning with ETA
                         val bandwidth = interfaceDetector.getSlowestInterfaceBandwidth()
                         val interfaceDesc = interfaceDetector.getSlowestInterfaceDescription()
-                        val transferTime = ImageUtils.calculateTransferTime(
-                            result.compressedImage.data.size.toLong(),
-                            bandwidth,
-                        )
+                        val transferTime =
+                            ImageUtils.calculateTransferTime(
+                                result.compressedImage.data.size.toLong(),
+                                bandwidth,
+                            )
 
                         Log.d(
                             TAG,

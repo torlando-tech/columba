@@ -12,7 +12,6 @@ import androidx.compose.ui.test.performTextInput
 import androidx.paging.PagingData
 import com.lxmf.messenger.test.MessagingTestFixtures
 import com.lxmf.messenger.test.RegisterComponentActivityRule
-import com.lxmf.messenger.ui.model.DecodedImageResult
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.ReplyPreviewUi
 import com.lxmf.messenger.viewmodel.ContactToggleResult
@@ -1203,11 +1202,12 @@ class MessagingScreenTest {
     @Test
     fun animatedGifMessage_asReply_displaysInBubble() {
         // Given - GIF as a reply (not media-only due to reply context)
-        val replyPreview = ReplyPreviewUi(
-            messageId = "original-msg",
-            senderName = "Alice",
-            contentPreview = "Original message",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "original-msg",
+                senderName = "Alice",
+                contentPreview = "Original message",
+            )
         val gifReply = MessagingTestFixtures.createAnimatedGifReplyMessage(replyPreview = replyPreview)
         every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifReply)))
         every { mockViewModel.replyPreviewCache } returns MutableStateFlow(mapOf(gifReply.id to replyPreview))

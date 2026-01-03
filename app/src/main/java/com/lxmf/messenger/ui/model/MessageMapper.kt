@@ -243,11 +243,12 @@ fun decodeImageWithAnimation(
             DecodedImageResult(rawBytes, null, isAnimated = true)
         } else {
             // Static image - decode to bitmap and cache
-            val bitmap = ImageCache.get(messageId) ?: run {
-                val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)?.asImageBitmap()
-                decoded?.let { ImageCache.put(messageId, it) }
-                decoded
-            }
+            val bitmap =
+                ImageCache.get(messageId) ?: run {
+                    val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)?.asImageBitmap()
+                    decoded?.let { ImageCache.put(messageId, it) }
+                    decoded
+                }
             Log.d(TAG, "Decoded static image for message ${messageId.take(8)}... (${rawBytes.size} bytes)")
             DecodedImageResult(rawBytes, bitmap, isAnimated = false)
         }
@@ -273,14 +274,15 @@ private fun extractImageBytes(fieldsJson: String?): ByteArray? {
         val fields = JSONObject(fieldsJson)
         val field6 = fields.opt("6") ?: return null
 
-        val hexImageData: String = when {
-            field6 is JSONObject && field6.has(FILE_REF_KEY) -> {
-                val filePath = field6.getString(FILE_REF_KEY)
-                loadAttachmentFromDisk(filePath) ?: return null
+        val hexImageData: String =
+            when {
+                field6 is JSONObject && field6.has(FILE_REF_KEY) -> {
+                    val filePath = field6.getString(FILE_REF_KEY)
+                    loadAttachmentFromDisk(filePath) ?: return null
+                }
+                field6 is String && field6.isNotEmpty() -> field6
+                else -> return null
             }
-            field6 is String && field6.isNotEmpty() -> field6
-            else -> return null
-        }
 
         hexStringToByteArray(hexImageData)
     } catch (e: Exception) {

@@ -575,9 +575,9 @@ class ImageUtilsTest {
     }
 
     @Test
-    fun `isImageFormatSupported returns false for gif`() {
-        // GIF is not in SUPPORTED_IMAGE_FORMATS
-        assertFalse(ImageUtils.isImageFormatSupported("gif"))
+    fun `isImageFormatSupported returns true for gif`() {
+        // GIF is now supported for animated images
+        assertTrue(ImageUtils.isImageFormatSupported("gif"))
     }
 
     @Test
@@ -628,6 +628,7 @@ class ImageUtilsTest {
         assertTrue(ImageUtils.SUPPORTED_IMAGE_FORMATS.contains("jpeg"))
         assertTrue(ImageUtils.SUPPORTED_IMAGE_FORMATS.contains("png"))
         assertTrue(ImageUtils.SUPPORTED_IMAGE_FORMATS.contains("webp"))
-        assertEquals(4, ImageUtils.SUPPORTED_IMAGE_FORMATS.size)
+        assertTrue(ImageUtils.SUPPORTED_IMAGE_FORMATS.contains("gif"))
+        assertEquals(5, ImageUtils.SUPPORTED_IMAGE_FORMATS.size)
     }
 }

@@ -110,6 +110,63 @@ jobs:
               body: `## ❌ Threading Architecture Audit Failed\n\n<details><summary>View Audit Report</summary>\n\n\`\`\`\n${report}\n\`\`\`\n\n</details>\n\nPlease fix the dispatcher violations before merging.`
             });
 
+  proguard-verification:
+    name: Verify ProGuard Rules (Python-Kotlin Bridge)
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python build dependencies
+        run: pip install build
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build release APK
+        run: ./gradlew :app:assembleRelease --stacktrace --max-workers=2
+        env:
+          # Use debug signing for CI verification (no release keystore needed)
+          RELEASE_STORE_FILE: ""
+          RELEASE_STORE_PASSWORD: ""
+          RELEASE_KEY_ALIAS: ""
+          RELEASE_KEY_PASSWORD: ""
+
+      - name: Verify Python-Kotlin bridge methods are not obfuscated
+        run: |
+          # Find the release APK
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: No release APK found!"
+            exit 1
+          fi
+          # Run dynamic verification script that extracts methods from Python source
+          python scripts/verify_proguard_bridge.py "$APK_PATH"
+
+      - name: Upload R8 mapping file
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r8-mapping
+          path: app/build/outputs/mapping/release/mapping.txt
+          retention-days: 30
+
   unit-tests:
     name: Unit Tests
     needs: [lint, validate-wrapper]

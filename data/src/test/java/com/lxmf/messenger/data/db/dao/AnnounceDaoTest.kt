@@ -50,6 +50,7 @@ class AnnounceDaoTest {
         nodeType: String = "PEER",
         hops: Int = 1,
         lastSeenTimestamp: Long = System.currentTimeMillis(),
+        stampCostFlexibility: Int? = null,
     ) = AnnounceEntity(
         destinationHash = destinationHash,
         peerName = peerName,
@@ -67,9 +68,9 @@ class AnnounceDaoTest {
             },
         isFavorite = false,
         favoritedTimestamp = null,
-        stampCost = null,
-        stampCostFlexibility = null,
-        peeringCost = null,
+        stampCost = if (stampCostFlexibility != null) 16 else null,
+        stampCostFlexibility = stampCostFlexibility,
+        peeringCost = if (stampCostFlexibility != null) 18 else null,
     )
 
     // ========== getTopPropagationNodes Tests ==========
@@ -90,8 +91,8 @@ class AnnounceDaoTest {
             // Given - mix of node types
             dao.upsertAnnounce(createTestAnnounce(destinationHash = "peer1", nodeType = "PEER", hops = 1))
             dao.upsertAnnounce(createTestAnnounce(destinationHash = "node1", nodeType = "NODE", hops = 1))
-            dao.upsertAnnounce(createTestAnnounce(destinationHash = "prop1", nodeType = "PROPAGATION_NODE", hops = 1))
-            dao.upsertAnnounce(createTestAnnounce(destinationHash = "prop2", nodeType = "PROPAGATION_NODE", hops = 2))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "prop1", nodeType = "PROPAGATION_NODE", hops = 1, stampCostFlexibility = 3))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "prop2", nodeType = "PROPAGATION_NODE", hops = 2, stampCostFlexibility = 3))
             dao.upsertAnnounce(createTestAnnounce(destinationHash = "peer2", nodeType = "PEER", hops = 3))
 
             // When/Then
@@ -105,13 +106,14 @@ class AnnounceDaoTest {
     @Test
     fun getTopPropagationNodes_respectsLimit() =
         runTest {
-            // Given - 5 propagation nodes
+            // Given - 5 propagation nodes with modern LXMF format
             repeat(5) { i ->
                 dao.upsertAnnounce(
                     createTestAnnounce(
                         destinationHash = "prop$i",
                         nodeType = "PROPAGATION_NODE",
                         hops = i,
+                        stampCostFlexibility = 3,
                     ),
                 )
             }
@@ -126,15 +128,15 @@ class AnnounceDaoTest {
     @Test
     fun getTopPropagationNodes_orderedByHopsAscending() =
         runTest {
-            // Given - propagation nodes with different hop counts
+            // Given - propagation nodes with different hop counts (modern LXMF format)
             dao.upsertAnnounce(
-                createTestAnnounce(destinationHash = "far", nodeType = "PROPAGATION_NODE", hops = 5),
+                createTestAnnounce(destinationHash = "far", nodeType = "PROPAGATION_NODE", hops = 5, stampCostFlexibility = 3),
             )
             dao.upsertAnnounce(
-                createTestAnnounce(destinationHash = "near", nodeType = "PROPAGATION_NODE", hops = 1),
+                createTestAnnounce(destinationHash = "near", nodeType = "PROPAGATION_NODE", hops = 1, stampCostFlexibility = 3),
             )
             dao.upsertAnnounce(
-                createTestAnnounce(destinationHash = "mid", nodeType = "PROPAGATION_NODE", hops = 3),
+                createTestAnnounce(destinationHash = "mid", nodeType = "PROPAGATION_NODE", hops = 3, stampCostFlexibility = 3),
             )
 
             // When/Then
@@ -155,9 +157,9 @@ class AnnounceDaoTest {
                 // Initially empty
                 assertEquals(0, awaitItem().size)
 
-                // Add a propagation node
+                // Add a propagation node with modern LXMF format
                 dao.upsertAnnounce(
-                    createTestAnnounce(destinationHash = "new_prop", nodeType = "PROPAGATION_NODE"),
+                    createTestAnnounce(destinationHash = "new_prop", nodeType = "PROPAGATION_NODE", stampCostFlexibility = 3),
                 )
 
                 // Should emit update
@@ -170,9 +172,9 @@ class AnnounceDaoTest {
     @Test
     fun getTopPropagationNodes_notAffectedByNonPropagationNodeInsert() =
         runTest {
-            // Given - one propagation node exists
+            // Given - one propagation node exists with modern LXMF format
             dao.upsertAnnounce(
-                createTestAnnounce(destinationHash = "prop1", nodeType = "PROPAGATION_NODE"),
+                createTestAnnounce(destinationHash = "prop1", nodeType = "PROPAGATION_NODE", stampCostFlexibility = 3),
             )
 
             dao.getTopPropagationNodes(10).test {
@@ -190,6 +192,75 @@ class AnnounceDaoTest {
                 // If it does emit, verify the result still only contains propagation nodes.
                 // We can't control Room's emission behavior, so we accept either case.
                 cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getTopPropagationNodes_excludesDeprecatedNodes() =
+        runTest {
+            // Given - mix of modern and deprecated propagation nodes
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "modern1", nodeType = "PROPAGATION_NODE", hops = 1, stampCostFlexibility = 3),
+            )
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "deprecated1", nodeType = "PROPAGATION_NODE", hops = 1), // null stampCostFlexibility
+            )
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "modern2", nodeType = "PROPAGATION_NODE", hops = 2, stampCostFlexibility = 3),
+            )
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "deprecated2", nodeType = "PROPAGATION_NODE", hops = 2), // null stampCostFlexibility
+            )
+
+            // When/Then - only modern nodes should be returned
+            dao.getTopPropagationNodes(10).test {
+                val nodes = awaitItem()
+                assertEquals(2, nodes.size)
+                assertTrue(nodes.all { it.stampCostFlexibility != null })
+                assertTrue(nodes.any { it.destinationHash == "modern1" })
+                assertTrue(nodes.any { it.destinationHash == "modern2" })
+            }
+        }
+
+    @Test
+    fun getAnnouncesByTypes_excludesDeprecatedPropagationNodes() =
+        runTest {
+            // Given - mix of modern propagation nodes, deprecated propagation nodes, and peers
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "modern_prop", nodeType = "PROPAGATION_NODE", stampCostFlexibility = 3),
+            )
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "deprecated_prop", nodeType = "PROPAGATION_NODE"), // null stampCostFlexibility
+            )
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "peer1", nodeType = "PEER"),
+            )
+
+            // When filtering for PROPAGATION_NODE only
+            dao.getAnnouncesByTypes(listOf("PROPAGATION_NODE")).test {
+                val nodes = awaitItem()
+                // Only modern propagation node should be returned
+                assertEquals(1, nodes.size)
+                assertEquals("modern_prop", nodes[0].destinationHash)
+            }
+        }
+
+    @Test
+    fun getAnnouncesByTypes_allowsPeersWithNullStampCostFlexibility() =
+        runTest {
+            // Given - peers (which don't have stamp cost fields)
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "peer1", nodeType = "PEER"),
+            )
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "peer2", nodeType = "PEER"),
+            )
+
+            // When filtering for PEER
+            dao.getAnnouncesByTypes(listOf("PEER")).test {
+                val nodes = awaitItem()
+                // Both peers should be returned (null stampCostFlexibility is fine for non-propagation nodes)
+                assertEquals(2, nodes.size)
             }
         }
 

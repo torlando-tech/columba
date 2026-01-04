@@ -931,6 +931,9 @@ class ReticulumServiceBinder(
         try {
             wrapperManager.setPropagationStateCallback { stateJson ->
                 Log.d(TAG, "Propagation state changed: ${stateJson.take(100)}")
+                // Update foreground notification with sync progress
+                notificationManager.updateSyncProgress(stateJson)
+                // Broadcast to app process for UI updates
                 broadcaster.broadcastPropagationStateChange(stateJson)
             }
         } catch (e: Exception) {

@@ -72,6 +72,12 @@
 # These classes bridge between Kotlin and Python
 -keep class com.lxmf.messenger.reticulum.protocol.** { *; }
 
+# ===== Kotlin-Python Bridge =====
+# KotlinReticulumBridge is called from Python via Chaquopy
+# Python expects specific method names (notifyAnnounceReceived, etc.) that must not be obfuscated
+-keep class com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge { *; }
+-keepclassmembers class com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge { *; }
+
 # ===== BLE Bridge =====
 # KotlinBLEBridge is called from Python via Chaquopy
 # Python expects specific method names that must not be obfuscated

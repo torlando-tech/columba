@@ -110,6 +110,127 @@ jobs:
               body: `## ❌ Threading Architecture Audit Failed\n\n<details><summary>View Audit Report</summary>\n\n\`\`\`\n${report}\n\`\`\`\n\n</details>\n\nPlease fix the dispatcher violations before merging.`
             });
 
+  proguard-verification:
+    name: Verify ProGuard Rules (Python-Kotlin Bridge)
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python build dependencies
+        run: pip install build
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build release APK
+        run: ./gradlew :app:assembleRelease --stacktrace --max-workers=2
+        env:
+          # Use debug signing for CI verification (no release keystore needed)
+          RELEASE_STORE_FILE: ""
+          RELEASE_STORE_PASSWORD: ""
+          RELEASE_KEY_ALIAS: ""
+          RELEASE_KEY_PASSWORD: ""
+
+      - name: Verify Python-Kotlin bridge methods are not obfuscated
+        run: |
+          echo "=== ProGuard/R8 Verification ==="
+          echo "Checking that Python-Kotlin bridge methods are preserved..."
+
+          # Find the release APK
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: No release APK found!"
+            exit 1
+          fi
+          echo "Found APK: $APK_PATH"
+
+          # Extract DEX files
+          mkdir -p /tmp/apk-extract
+          unzip -q "$APK_PATH" -d /tmp/apk-extract
+
+          # Critical methods that Python calls via Chaquopy reflection
+          # If these are obfuscated, the app will fail at runtime
+          CRITICAL_METHODS=(
+            "notifyAnnounceReceived"
+            "notifyMessageReceived"
+            "notifyDeliveryStatus"
+            "notifyReactionReceived"
+          )
+
+          # Critical classes that Python instantiates or calls
+          CRITICAL_CLASSES=(
+            "KotlinReticulumBridge"
+            "KotlinBLEBridge"
+            "KotlinRNodeBridge"
+          )
+
+          FAILED=0
+
+          echo ""
+          echo "Checking critical methods..."
+          for method in "${CRITICAL_METHODS[@]}"; do
+            if grep -r "$method" /tmp/apk-extract/*.dex > /dev/null 2>&1; then
+              echo "  ✓ $method - FOUND (not obfuscated)"
+            else
+              echo "  ✗ $method - NOT FOUND (likely obfuscated!)"
+              FAILED=1
+            fi
+          done
+
+          echo ""
+          echo "Checking critical classes..."
+          for class in "${CRITICAL_CLASSES[@]}"; do
+            if grep -r "$class" /tmp/apk-extract/*.dex > /dev/null 2>&1; then
+              echo "  ✓ $class - FOUND (not obfuscated)"
+            else
+              echo "  ✗ $class - NOT FOUND (likely obfuscated!)"
+              FAILED=1
+            fi
+          done
+
+          echo ""
+          if [ $FAILED -eq 1 ]; then
+            echo "=== VERIFICATION FAILED ==="
+            echo "Some Python-Kotlin bridge methods/classes appear to be obfuscated!"
+            echo "This will cause runtime failures when Python tries to call Kotlin code."
+            echo ""
+            echo "Fix: Add the missing classes/methods to app/proguard-rules.pro"
+            echo "Example:"
+            echo "  -keep class com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge { *; }"
+            exit 1
+          else
+            echo "=== VERIFICATION PASSED ==="
+            echo "All Python-Kotlin bridge methods are preserved."
+          fi
+
+          # Cleanup
+          rm -rf /tmp/apk-extract
+
+      - name: Upload R8 mapping file
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r8-mapping
+          path: app/build/outputs/mapping/release/mapping.txt
+          retention-days: 30
+
   unit-tests:
     name: Unit Tests
     needs: [lint, validate-wrapper]

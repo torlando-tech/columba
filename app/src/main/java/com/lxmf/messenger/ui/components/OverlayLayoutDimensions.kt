@@ -44,8 +44,9 @@ fun calculateMessageScaleForOverlay(
     if (messageHeight <= 0) return 1f
 
     val availableHeight = dimensions.screenHeight - dimensions.topPadding - dimensions.bottomPadding
-    val uiElementsHeight = dimensions.emojiBarHeight + dimensions.emojiBarGap +
-        dimensions.actionButtonsGap + dimensions.actionButtonsHeight
+    val uiElementsHeight =
+        dimensions.emojiBarHeight + dimensions.emojiBarGap +
+            dimensions.actionButtonsGap + dimensions.actionButtonsHeight
     val totalHeightNeeded = uiElementsHeight + messageHeight
 
     return if (totalHeightNeeded > availableHeight) {

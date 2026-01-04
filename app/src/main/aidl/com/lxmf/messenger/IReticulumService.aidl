@@ -333,14 +333,17 @@ interface IReticulumService {
      * @param tryPropagationOnFail If true and direct fails, retry via propagation
      * @param imageData Optional image data bytes (null if none)
      * @param imageFormat Optional image format string (e.g., "jpg", "png", null if none)
-     * @param fileAttachments Optional map of filename -> file bytes (null if none)
+     * @param fileAttachments Optional map of filename -> file bytes for small files (null if none)
+     * @param fileAttachmentPaths Optional map of filename -> file path for large files (null if none)
+     *                            Large files are written to temp files to bypass Binder IPC size limits.
+     *                            Python will read from disk and delete the temp files after sending.
      * @param replyToMessageId Optional message ID being replied to (stored in LXMF field 16)
      * @param iconName Optional icon name for FIELD_ICON_APPEARANCE (Sideband/MeshChat interop)
      * @param iconFgColor Optional icon foreground color hex string (3 bytes RGB, e.g., "FFFFFF")
      * @param iconBgColor Optional icon background color hex string (3 bytes RGB, e.g., "1E88E5")
      * @return JSON string with result: {"success": true, "message_hash": "...", "delivery_method": "..."}
      */
-    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat, in Map fileAttachments, String replyToMessageId, String iconName, String iconFgColor, String iconBgColor);
+    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat, in Map fileAttachments, in Map fileAttachmentPaths, String replyToMessageId, String iconName, String iconFgColor, String iconBgColor);
 
     /**
      * Provide an alternative relay for message retry.
@@ -348,6 +351,17 @@ interface IReticulumService {
      * @param relayHash 16-byte destination hash of alternative relay, or null if none available
      */
     void provideAlternativeRelay(in byte[] relayHash);
+
+    // ==================== MESSAGE SIZE LIMITS ====================
+
+    /**
+     * Set the incoming message size limit.
+     * This controls the maximum size of LXMF messages that can be received.
+     * Messages exceeding this limit will be rejected by the LXMF router.
+     *
+     * @param limitKb Size limit in KB (e.g., 1024 for 1MB, 131072 for 128MB "unlimited")
+     */
+    void setIncomingMessageSizeLimit(int limitKb);
 
     // ==================== LOCATION TELEMETRY ====================
 

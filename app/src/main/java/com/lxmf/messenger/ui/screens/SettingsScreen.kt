@@ -208,6 +208,9 @@ fun SettingsScreen(
                     onIntervalChange = { viewModel.setRetrievalIntervalSeconds(it) },
                     onSyncNow = { viewModel.syncNow() },
                     onViewMoreRelays = { onNavigateToAnnounces("PROPAGATION_NODE") },
+                    // Incoming message size limit
+                    incomingMessageSizeLimitKb = state.incomingMessageSizeLimitKb,
+                    onIncomingMessageSizeLimitChange = { viewModel.setIncomingMessageSizeLimit(it) },
                 )
 
                 ThemeSelectionCard(

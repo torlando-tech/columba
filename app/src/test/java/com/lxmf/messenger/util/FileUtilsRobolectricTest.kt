@@ -63,26 +63,6 @@ class FileUtilsRobolectricTest {
     }
 
     @Test
-    fun `readFileFromUri returns null when file exceeds size limit`() {
-        // Create data larger than MAX_SINGLE_FILE_SIZE
-        val largeData = ByteArray(FileUtils.MAX_SINGLE_FILE_SIZE + 1)
-        val testUri = mockk<Uri>()
-        val mockCursor = mockk<Cursor>(relaxed = true)
-
-        every { mockContentResolver.query(testUri, null, null, null, null) } returns mockCursor
-        every { mockCursor.moveToFirst() } returns true
-        every { mockCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME) } returns 0
-        every { mockCursor.getString(0) } returns "large_file.bin"
-
-        every { mockContentResolver.openInputStream(testUri) } returns ByteArrayInputStream(largeData)
-        every { mockContentResolver.getType(testUri) } returns "application/octet-stream"
-
-        val result = FileUtils.readFileFromUri(mockContext, testUri)
-
-        assertNull(result)
-    }
-
-    @Test
     fun `readFileFromUri handles empty file`() {
         val testUri = mockk<Uri>()
         val mockCursor = mockk<Cursor>(relaxed = true)

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.ui.graphics.vector.ImageVector
+import java.io.File
 import java.util.Locale
 
 /**
@@ -25,22 +26,104 @@ object FileUtils {
 
     /**
      * Maximum total size for all file attachments combined.
-     * Same limit as images for mesh network efficiency.
+     * No practical limit - large files will be delivered via propagation node.
      */
-    const val MAX_TOTAL_ATTACHMENT_SIZE = 512 * 1024 // 512KB
+    const val MAX_TOTAL_ATTACHMENT_SIZE = Int.MAX_VALUE
 
     /**
      * Maximum size for a single file attachment.
+     * No practical limit - large files will be delivered via propagation node.
      */
-    const val MAX_SINGLE_FILE_SIZE = 512 * 1024 // 512KB
+    const val MAX_SINGLE_FILE_SIZE = Int.MAX_VALUE
+
+    /**
+     * Result of attempting to read a file attachment.
+     */
+    sealed class FileReadResult {
+        data class Success(val attachment: FileAttachment) : FileReadResult()
+
+        data class FileTooLarge(val actualSize: Long, val maxSize: Int) : FileReadResult()
+
+        data class Error(val message: String) : FileReadResult()
+    }
+
+    /**
+     * Get the size of a file from a content URI without reading the entire file.
+     */
+    fun getFileSize(
+        context: Context,
+        uri: Uri,
+    ): Long {
+        return try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                pfd.statSize
+            } ?: -1
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not determine file size for: $uri", e)
+            -1
+        }
+    }
+
+    /**
+     * Read file data from a content URI with detailed result.
+     *
+     * @param context Android context for ContentResolver access
+     * @param uri The content URI of the file to read
+     * @return FileReadResult indicating success, file too large, or error
+     */
+    fun readFileFromUriWithResult(
+        context: Context,
+        uri: Uri,
+    ): FileReadResult {
+        return try {
+            val contentResolver = context.contentResolver
+
+            // Check file size first without reading the entire file
+            val fileSize = getFileSize(context, uri)
+            if (fileSize > MAX_SINGLE_FILE_SIZE) {
+                return FileReadResult.FileTooLarge(fileSize, MAX_SINGLE_FILE_SIZE)
+            }
+
+            // Get filename
+            val filename = getFilename(context, uri) ?: "unknown"
+
+            // Get MIME type
+            val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+
+            // Read data
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+                val data = inputStream.readBytes()
+
+                if (data.size > MAX_SINGLE_FILE_SIZE) {
+                    return FileReadResult.FileTooLarge(data.size.toLong(), MAX_SINGLE_FILE_SIZE)
+                }
+
+                FileReadResult.Success(
+                    FileAttachment(
+                        filename = filename,
+                        data = data,
+                        mimeType = mimeType,
+                        sizeBytes = data.size,
+                    ),
+                )
+            } ?: FileReadResult.Error("Could not open file")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read file from URI: $uri", e)
+            FileReadResult.Error(e.message ?: "Unknown error")
+        }
+    }
 
     /**
      * Read file data from a content URI.
      *
+     * File attachments have no size limit - they are sent uncompressed.
+     * For large files, users should be aware that transmission over mesh
+     * networks may be slow or unreliable.
+     *
      * @param context Android context for ContentResolver access
      * @param uri The content URI of the file to read
      * @return FileAttachment containing the file data and metadata, or null if the file
-     *         couldn't be read or exceeds size limits
+     *         couldn't be read
      */
     fun readFileFromUri(
         context: Context,
@@ -58,11 +141,6 @@ object FileUtils {
             // Read data
             contentResolver.openInputStream(uri)?.use { inputStream ->
                 val data = inputStream.readBytes()
-
-                if (data.size > MAX_SINGLE_FILE_SIZE) {
-                    Log.w(TAG, "File too large: ${data.size} bytes (max: $MAX_SINGLE_FILE_SIZE)")
-                    return null
-                }
 
                 FileAttachment(
                     filename = filename,
@@ -218,5 +296,68 @@ object FileUtils {
         newFileSize: Int,
     ): Boolean {
         return (currentTotal + newFileSize) > MAX_TOTAL_ATTACHMENT_SIZE
+    }
+
+    /**
+     * Threshold for file-based transfer via temp files.
+     * Files larger than this are written to disk and passed via path to avoid
+     * Android Binder IPC transaction size limits (~1MB).
+     */
+    const val FILE_TRANSFER_THRESHOLD = 500 * 1024 // 500KB
+
+    private const val TEMP_ATTACHMENTS_DIR = "attachments"
+
+    /**
+     * Write file data to a temporary file for large file transfer.
+     *
+     * Used to bypass Android Binder IPC size limits by passing file paths
+     * instead of raw bytes through AIDL.
+     *
+     * @param context Android context for accessing cache directory
+     * @param filename Original filename (used as suffix for temp file)
+     * @param data File data to write
+     * @return The temporary file containing the data
+     */
+    fun writeTempAttachment(
+        context: Context,
+        filename: String,
+        data: ByteArray,
+    ): File {
+        val tempDir = File(context.cacheDir, TEMP_ATTACHMENTS_DIR)
+        if (!tempDir.exists()) {
+            tempDir.mkdirs()
+        }
+        // Use timestamp prefix to ensure uniqueness
+        val safeFilename = filename.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val tempFile = File(tempDir, "${System.currentTimeMillis()}_$safeFilename")
+        tempFile.writeBytes(data)
+        Log.d(TAG, "Wrote temp attachment: ${tempFile.absolutePath} (${data.size} bytes)")
+        return tempFile
+    }
+
+    /**
+     * Clean up old temporary attachment files.
+     *
+     * Call this periodically to remove any orphaned temp files that weren't
+     * cleaned up by Python after sending.
+     *
+     * @param context Android context for accessing cache directory
+     * @param maxAgeMs Maximum age in milliseconds before files are deleted (default: 1 hour)
+     */
+    fun cleanupTempAttachments(
+        context: Context,
+        maxAgeMs: Long = 60 * 60 * 1000,
+    ) {
+        val tempDir = File(context.cacheDir, TEMP_ATTACHMENTS_DIR)
+        if (!tempDir.exists()) return
+
+        val cutoffTime = System.currentTimeMillis() - maxAgeMs
+        tempDir.listFiles()?.forEach { file ->
+            if (file.lastModified() < cutoffTime) {
+                if (file.delete()) {
+                    Log.d(TAG, "Cleaned up old temp attachment: ${file.name}")
+                }
+            }
+        }
     }
 }

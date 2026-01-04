@@ -17,7 +17,6 @@ import com.lxmf.messenger.service.ActiveConversationManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.util.FileAttachment
-import com.lxmf.messenger.util.FileUtils
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -224,7 +223,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -269,7 +268,7 @@ class MessagingViewModelTest {
 
             // Setup: Mock failed LXMF send
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.failure(Exception("Network error"))
 
             coEvery {
@@ -307,7 +306,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -400,7 +399,7 @@ class MessagingViewModelTest {
             // This avoids crashes when LXMF router isn't ready yet
             // Send a message to trigger identity loading
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(MessageReceipt(ByteArray(32), 3000L, testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()))
 
             coEvery {
@@ -465,7 +464,7 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Verify: sendLxmfMessageWithMethod was NOT called
-            coVerify(exactly = 0) { failingProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any()) }
+            coVerify(exactly = 0) { failingProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
 
             // Verify: saveMessage was NOT called
             coVerify(exactly = 0) { failingRepository.saveMessage(any(), any(), any(), any()) }
@@ -524,7 +523,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved to database
@@ -549,7 +548,7 @@ class MessagingViewModelTest {
 
             // Verify: No protocol call made
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Verify: No save to database
@@ -573,7 +572,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved
@@ -597,7 +596,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved
@@ -624,7 +623,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved
@@ -647,7 +646,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -699,7 +698,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -716,7 +715,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol was called (message is valid)
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message was saved
@@ -740,7 +739,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -756,7 +755,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol was called
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message was saved
@@ -786,7 +785,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -806,10 +805,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Assert: Protocol was called with image data
+            // Note: Empty content is replaced with single space for Sideband compatibility
             coVerify(exactly = 1) {
                 reticulumProtocol.sendLxmfMessageWithMethod(
                     destinationHash = any(),
-                    content = "", // Empty content is OK with image
+                    content = " ", // Single space for Sideband compatibility
                     sourceIdentity = testIdentity,
                     deliveryMethod = any(),
                     tryPropagationOnFail = any(),
@@ -838,7 +838,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -859,6 +859,11 @@ class MessagingViewModelTest {
             // Send message
             viewModel.sendMessage(testPeerHash, "Test with image")
             advanceUntilIdle()
+
+            // Verify protocol was called
+            coVerify(exactly = 1) {
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            }
 
             // Assert: Image was cleared after successful send
             assertEquals(null, viewModel.selectedImageData.value)
@@ -1657,85 +1662,6 @@ class MessagingViewModelTest {
         }
 
     @Test
-    fun `addFileAttachment rejects file exceeding total size limit`() =
-        runTest {
-            val viewModel = createTestViewModel()
-            advanceUntilIdle()
-
-            // Collect error events BEFORE any operations
-            var errorMessage: String? = null
-            val job =
-                launch(UnconfinedTestDispatcher(testScheduler)) {
-                    viewModel.fileAttachmentError.collect { errorMessage = it }
-                }
-
-            // First add a file that's close to the limit (but under single file limit)
-            val attachment1 =
-                FileAttachment(
-                    filename = "large.pdf",
-                    data = ByteArray(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 1000),
-                    mimeType = "application/pdf",
-                    sizeBytes = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 1000,
-                )
-            viewModel.addFileAttachment(attachment1)
-            advanceUntilIdle()
-
-            assertEquals(1, viewModel.selectedFileAttachments.value.size)
-
-            // Try to add another file that would exceed the limit
-            val attachment2 =
-                FileAttachment(
-                    filename = "small.txt",
-                    data = ByteArray(2000),
-                    mimeType = "text/plain",
-                    sizeBytes = 2000,
-                )
-            viewModel.addFileAttachment(attachment2)
-            advanceUntilIdle()
-
-            // Second file should be rejected
-            assertEquals(1, viewModel.selectedFileAttachments.value.size)
-            assertTrue(
-                "Expected error message containing 'File too large', got: $errorMessage",
-                errorMessage?.contains("File too large") == true,
-            )
-
-            job.cancel()
-        }
-
-    @Test
-    fun `addFileAttachment rejects single file exceeding max single file size`() =
-        runTest {
-            val viewModel = createTestViewModel()
-            advanceUntilIdle()
-
-            var errorMessage: String? = null
-            val job =
-                launch(UnconfinedTestDispatcher(testScheduler)) {
-                    viewModel.fileAttachmentError.collect { errorMessage = it }
-                }
-
-            // Try to add a file larger than MAX_SINGLE_FILE_SIZE
-            val largeAttachment =
-                FileAttachment(
-                    filename = "huge.bin",
-                    data = ByteArray(FileUtils.MAX_SINGLE_FILE_SIZE + 1),
-                    mimeType = "application/octet-stream",
-                    sizeBytes = FileUtils.MAX_SINGLE_FILE_SIZE + 1,
-                )
-            viewModel.addFileAttachment(largeAttachment)
-            advanceUntilIdle()
-
-            assertEquals(0, viewModel.selectedFileAttachments.value.size)
-            assertTrue(
-                "Expected error message containing 'File too large', got: $errorMessage",
-                errorMessage?.contains("File too large") == true,
-            )
-
-            job.cancel()
-        }
-
-    @Test
     fun `removeFileAttachment removes file at index`() =
         runTest {
             val viewModel = createTestViewModel()
@@ -1879,7 +1805,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -1899,10 +1825,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Protocol should be called with file attachments
+            // Note: Empty content is replaced with single space for Sideband compatibility
             coVerify(exactly = 1) {
                 reticulumProtocol.sendLxmfMessageWithMethod(
                     destinationHash = any(),
-                    content = "",
+                    content = " ", // Single space for Sideband compatibility
                     sourceIdentity = testIdentity,
                     deliveryMethod = any(),
                     tryPropagationOnFail = any(),
@@ -1927,7 +1854,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -1947,6 +1874,11 @@ class MessagingViewModelTest {
             // Send message
             viewModel.sendMessage(testPeerHash, "Test with file")
             advanceUntilIdle()
+
+            // Verify protocol was called
+            coVerify(exactly = 1) {
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            }
 
             // File attachments should be cleared after successful send
             assertEquals(0, viewModel.selectedFileAttachments.value.size)
@@ -2589,7 +2521,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
@@ -2645,7 +2577,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
@@ -2675,6 +2607,11 @@ class MessagingViewModelTest {
             viewModel.sendMessage(testPeerHash, "This is my reply")
             advanceUntilIdle()
 
+            // Verify protocol was called
+            coVerify(exactly = 1) {
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            }
+
             // Assert: Pending reply was cleared after successful send
             assertNull(viewModel.pendingReplyTo.value)
         }
@@ -2694,7 +2631,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any())
+                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs

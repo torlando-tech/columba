@@ -8,7 +8,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.util.FileAttachment
-import com.lxmf.messenger.util.FileUtils
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -108,7 +107,7 @@ class FileAttachmentPreviewRowTest {
             )
         }
 
-        composeTestRule.onNodeWithText("100.0 KB / 512.0 KB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Total: 100.0 KB").assertIsDisplayed()
     }
 
     @Test
@@ -123,11 +122,11 @@ class FileAttachmentPreviewRowTest {
             )
         }
 
-        composeTestRule.onNodeWithText("512 B / 512.0 KB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Total: 512 B").assertIsDisplayed()
     }
 
     @Test
-    fun `total size indicator shows correct max size`() {
+    fun `total size indicator shows correct size`() {
         val attachments = listOf(createAttachment(sizeBytes = 1024))
 
         composeTestRule.setContent {
@@ -138,17 +137,13 @@ class FileAttachmentPreviewRowTest {
             )
         }
 
-        // Verify max size is displayed (512 KB)
-        val expectedMax = FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)
-        composeTestRule.onNodeWithText("1.0 KB / $expectedMax").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Total: 1.0 KB").assertIsDisplayed()
     }
 
-    // ========== Size Limit Visual Feedback Tests ==========
-
     @Test
-    fun `normal state below 80 percent limit`() {
-        // 50% of limit = 256 KB
-        val totalSize = (FileUtils.MAX_TOTAL_ATTACHMENT_SIZE * 0.5).toInt()
+    fun `displays total size for large files`() {
+        // 1 MB file
+        val totalSize = 1024 * 1024
         val attachments = listOf(createAttachment(sizeBytes = totalSize))
 
         composeTestRule.setContent {
@@ -159,67 +154,7 @@ class FileAttachmentPreviewRowTest {
             )
         }
 
-        // Should display without error styling (just verify it renders)
-        composeTestRule.onNodeWithText(
-            "${FileUtils.formatFileSize(totalSize)} / ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
-        ).assertIsDisplayed()
-    }
-
-    @Test
-    fun `near limit state at 80 percent`() {
-        // 80% of limit = 409.6 KB
-        val totalSize = (FileUtils.MAX_TOTAL_ATTACHMENT_SIZE * 0.8).toInt()
-        val attachments = listOf(createAttachment(sizeBytes = totalSize))
-
-        composeTestRule.setContent {
-            FileAttachmentPreviewRow(
-                attachments = attachments,
-                totalSizeBytes = totalSize,
-                onRemove = {},
-            )
-        }
-
-        // Should display (visual styling change is verified by existence)
-        composeTestRule.onNodeWithText(
-            "${FileUtils.formatFileSize(totalSize)} / ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
-        ).assertIsDisplayed()
-    }
-
-    @Test
-    fun `at limit state at 100 percent`() {
-        val totalSize = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE
-        val attachments = listOf(createAttachment(sizeBytes = totalSize))
-
-        composeTestRule.setContent {
-            FileAttachmentPreviewRow(
-                attachments = attachments,
-                totalSizeBytes = totalSize,
-                onRemove = {},
-            )
-        }
-
-        // Should display with error styling
-        composeTestRule.onNodeWithText("512.0 KB / 512.0 KB").assertIsDisplayed()
-    }
-
-    @Test
-    fun `over limit state above 100 percent`() {
-        // 110% of limit
-        val totalSize = (FileUtils.MAX_TOTAL_ATTACHMENT_SIZE * 1.1).toInt()
-        val attachments = listOf(createAttachment(sizeBytes = totalSize))
-
-        composeTestRule.setContent {
-            FileAttachmentPreviewRow(
-                attachments = attachments,
-                totalSizeBytes = totalSize,
-                onRemove = {},
-            )
-        }
-
-        // Should still display (with error styling)
-        composeTestRule.onNodeWithText(
-            "${FileUtils.formatFileSize(totalSize)} / ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
-        ).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Total: 1.0 MB").assertIsDisplayed()
     }
 
     // ========== Remove Button Tests ==========
@@ -365,7 +300,7 @@ class FileAttachmentPreviewRowTest {
         }
 
         // Should display total size indicator even with no attachments
-        composeTestRule.onNodeWithText("0 B / 512.0 KB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Total: 0 B").assertIsDisplayed()
     }
 
     @Test
@@ -475,7 +410,7 @@ class FileAttachmentPreviewRowTest {
         composeTestRule.onNodeWithText("report.pdf").assertIsDisplayed()
         composeTestRule.onNodeWithText("75.0 KB").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Remove report.pdf").assertIsDisplayed()
-        composeTestRule.onNodeWithText("75.0 KB / 512.0 KB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Total: 75.0 KB").assertIsDisplayed()
 
         // Verify remove works
         composeTestRule.onNodeWithContentDescription("Remove report.pdf").performClick()

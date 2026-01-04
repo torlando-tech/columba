@@ -187,6 +187,14 @@ class CallbackBroadcaster {
     }
 
     /**
+     * Broadcast propagation state change to all registered callbacks.
+     * Called when LXMF propagation sync state changes (idle, receiving, complete, etc.).
+     */
+    fun broadcastPropagationStateChange(stateJson: String) {
+        broadcast { it.onPropagationStateChanged(stateJson) }
+    }
+
+    /**
      * Thread-safe broadcast helper.
      * Ensures only one broadcast happens at a time (RemoteCallbackList is not re-entrant).
      */

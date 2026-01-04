@@ -11,13 +11,13 @@ import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
 import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
+import com.lxmf.messenger.service.manager.EventHandler
 import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
-import com.lxmf.messenger.service.manager.EventHandler
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import com.lxmf.messenger.service.manager.RoutingManager
@@ -650,6 +650,7 @@ class ReticulumServiceBinder(
         imageData: ByteArray?,
         imageFormat: String?,
         fileAttachments: Map<*, *>?,
+        fileAttachmentPaths: Map<*, *>?,
         replyToMessageId: String?,
         iconName: String?,
         iconFgColor: String?,
@@ -663,6 +664,13 @@ class ReticulumServiceBinder(
                         listOf(filename as String, bytes as ByteArray)
                     }
 
+                // Convert Map<String, String> to List of (filename, path) pairs for Python
+                // These are large files written to temp files to bypass Binder IPC limits
+                val fileAttachmentPathsList =
+                    fileAttachmentPaths?.map { (filename, path) ->
+                        listOf(filename as String, path as String)
+                    }
+
                 val result =
                     wrapper.callAttr(
                         "send_lxmf_message_with_method",
@@ -674,6 +682,7 @@ class ReticulumServiceBinder(
                         imageData,
                         imageFormat,
                         fileAttachmentsList,
+                        fileAttachmentPathsList,
                         replyToMessageId,
                         iconName,
                         iconFgColor,
@@ -698,6 +707,21 @@ class ReticulumServiceBinder(
             wrapperManager.provideAlternativeRelay(relayHash)
         } catch (e: Exception) {
             Log.e(TAG, "Error providing alternative relay", e)
+        }
+    }
+
+    // ===========================================
+    // Message Size Limits
+    // ===========================================
+
+    override fun setIncomingMessageSizeLimit(limitKb: Int) {
+        try {
+            Log.d(TAG, "Setting incoming message size limit to ${limitKb}KB")
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("set_incoming_message_size_limit", limitKb)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting incoming message size limit", e)
         }
     }
 
@@ -901,6 +925,19 @@ class ReticulumServiceBinder(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set reaction received callback: ${e.message}", e)
+        }
+
+        // Setup propagation state callback for real-time sync progress
+        try {
+            wrapperManager.setPropagationStateCallback { stateJson ->
+                Log.d(TAG, "Propagation state changed: ${stateJson.take(100)}")
+                // Update foreground notification with sync progress
+                notificationManager.updateSyncProgress(stateJson)
+                // Broadcast to app process for UI updates
+                broadcaster.broadcastPropagationStateChange(stateJson)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set propagation state callback: ${e.message}", e)
         }
 
         // Setup native stamp generator (bypasses Python multiprocessing issues)

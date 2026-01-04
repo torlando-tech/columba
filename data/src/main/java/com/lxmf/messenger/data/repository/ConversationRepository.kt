@@ -13,11 +13,14 @@ import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.model.EnrichedConversation
+import com.lxmf.messenger.data.storage.AttachmentStorageManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -68,6 +71,7 @@ class ConversationRepository
         private val messageDao: MessageDao,
         private val peerIdentityDao: PeerIdentityDao,
         private val localIdentityDao: LocalIdentityDao,
+        private val attachmentStorage: AttachmentStorageManager,
     ) {
         /**
          * Get all conversations for the active identity, sorted by most recent activity.
@@ -253,6 +257,9 @@ class ConversationRepository
             // Only insert if message doesn't already exist - prevents LXMF replay from
             // overwriting imported messages with new timestamps (fixes ordering bug)
             if (!messageExists) {
+                // Extract large attachments to disk to avoid SQLite CursorWindow limit (~2MB)
+                val processedFieldsJson = extractLargeAttachments(message.id, message.fieldsJson)
+
                 val messageEntity =
                     MessageEntity(
                         id = message.id,
@@ -263,12 +270,22 @@ class ConversationRepository
                         isFromMe = message.isFromMe,
                         status = message.status,
                         isRead = message.isFromMe, // Our own messages are always "read"
-                        fieldsJson = message.fieldsJson, // LXMF fields (attachments, images, etc.)
+                        fieldsJson = processedFieldsJson, // LXMF fields with large attachments extracted
                         deliveryMethod = message.deliveryMethod,
                         errorMessage = message.errorMessage,
                         replyToMessageId = message.replyToMessageId, // Reply reference
                     )
                 messageDao.insertMessage(messageEntity)
+
+                // Check if this message has file attachments and should supersede a pending notification
+                if (!message.isFromMe && message.fieldsJson != null) {
+                    supersedePendingFileNotifications(
+                        peerHash,
+                        identityHash,
+                        message.id,
+                        message.fieldsJson,
+                    )
+                }
             }
         }
 
@@ -583,6 +600,291 @@ class ConversationRepository
             } catch (e: Exception) {
                 null
             }
+        }
+
+        /**
+         * Check if an incoming message with file attachments should supersede
+         * a pending file notification, and mark it as superseded if so.
+         *
+         * Matches notifications by original_message_id (the hash of the file message).
+         * This is the most reliable match since the message ID is unique.
+         */
+        @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
+        private suspend fun supersedePendingFileNotifications(
+            peerHash: String,
+            identityHash: String,
+            incomingMessageId: String,
+            incomingFieldsJson: String,
+        ) {
+            try {
+                // Check if incoming message has file attachments (field 5)
+                if (!hasFileAttachments(incomingFieldsJson, incomingMessageId)) return
+
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "Checking for pending notifications to supersede for message $incomingMessageId",
+                )
+
+                // Find pending notifications in this conversation
+                val pendingNotifications = messageDao.findPendingFileNotifications(peerHash, identityHash)
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "supersede: Found ${pendingNotifications.size} pending notifications",
+                )
+                if (pendingNotifications.isEmpty()) return
+
+                // Find matching notification using functional approach
+                val match =
+                    pendingNotifications.firstNotNullOfOrNull { notification ->
+                        tryParseNotificationMatch(notification, incomingMessageId)
+                    }
+
+                if (match != null) {
+                    val (notification, notificationJson, field16) = match
+                    android.util.Log.d(
+                        "ConversationRepository",
+                        "Superseding pending notification ${notification.id} for message $incomingMessageId",
+                    )
+
+                    // Mark as superseded by adding "superseded": true to field 16
+                    field16.put("superseded", true)
+                    notificationJson.put("16", field16)
+
+                    messageDao.updateMessageFieldsJson(
+                        notification.id,
+                        identityHash,
+                        notificationJson.toString(),
+                    )
+                }
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "ConversationRepository",
+                    "Error checking for pending notifications to supersede: ${e.message}",
+                )
+            }
+        }
+
+        /** Check if incoming message has file attachments (field 5). */
+        private fun hasFileAttachments(
+            incomingFieldsJson: String,
+            incomingMessageId: String,
+        ): Boolean {
+            val incomingJson = JSONObject(incomingFieldsJson)
+            val field5 = incomingJson.optJSONArray("5")
+            if (field5 == null) {
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "supersede: No field 5 array in incoming message $incomingMessageId",
+                )
+                return false
+            }
+            if (field5.length() == 0) {
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "supersede: Empty field 5 array in incoming message $incomingMessageId",
+                )
+                return false
+            }
+            return true
+        }
+
+        /**
+         * Try to parse a notification and check if it matches the incoming message ID.
+         * Returns a Triple of (notification, json, field16) if matched, null otherwise.
+         */
+        @Suppress("SwallowedException", "TooGenericExceptionCaught")
+        private fun tryParseNotificationMatch(
+            notification: MessageEntity,
+            incomingMessageId: String,
+        ): Triple<MessageEntity, JSONObject, JSONObject>? {
+            return try {
+                val notificationFieldsJson = notification.fieldsJson ?: return null
+                val notificationJson = JSONObject(notificationFieldsJson)
+                val field16 = notificationJson.optJSONObject("16")
+                val pendingInfo = field16?.optJSONObject("pending_file_notification")
+                val originalMessageId = pendingInfo?.optString("original_message_id", "") ?: ""
+
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "supersede: Comparing incoming=$incomingMessageId vs original=$originalMessageId",
+                )
+
+                if (field16 != null && originalMessageId.isNotEmpty() && originalMessageId == incomingMessageId) {
+                    Triple(notification, notificationJson, field16)
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "ConversationRepository",
+                    "Failed to parse pending notification ${notification.id}: ${e.message}",
+                )
+                null
+            }
+        }
+
+        /**
+         * Extract large attachments from fieldsJson and save to disk.
+         *
+         * If the total fieldsJson size exceeds the threshold, large fields are saved to disk
+         * and replaced with file references. This prevents SQLite CursorWindow overflow
+         * when loading messages (~2MB row limit).
+         *
+         * @param messageId Message identifier for storage path
+         * @param fieldsJson Original fields JSON string
+         * @return Modified fields JSON with file references for large attachments, or original if no extraction needed
+         */
+        @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
+        private fun extractLargeAttachments(
+            messageId: String,
+            fieldsJson: String?,
+        ): String? {
+            if (fieldsJson == null) return null
+
+            val totalSize = fieldsJson.length
+            if (totalSize < AttachmentStorageManager.SIZE_THRESHOLD) {
+                return fieldsJson // No extraction needed
+            }
+
+            android.util.Log.d(
+                "ConversationRepository",
+                "Fields size ($totalSize chars) exceeds threshold, extracting large attachments for message $messageId",
+            )
+
+            return try {
+                val fields = JSONObject(fieldsJson)
+                val modifiedFields = JSONObject()
+                val keys = fields.keys()
+
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val value = fields.opt(key)
+
+                    // Special handling for field 5 (file attachments array)
+                    // Extract each file's data separately, keep metadata inline
+                    if (key == "5" && value is JSONArray) {
+                        val extractedArray = extractFileAttachmentsForSent(messageId, value)
+                        modifiedFields.put("5", extractedArray)
+                        continue
+                    }
+
+                    // Get string representation of value for size check
+                    val valueStr = value?.toString() ?: ""
+
+                    if (valueStr.length > AttachmentStorageManager.SIZE_THRESHOLD) {
+                        // Save large field to disk
+                        val filePath = attachmentStorage.saveAttachment(messageId, key, valueStr)
+                        if (filePath != null) {
+                            // Replace with file reference
+                            val refObj =
+                                JSONObject().apply {
+                                    put(AttachmentStorageManager.FILE_REF_KEY, filePath)
+                                }
+                            modifiedFields.put(key, refObj)
+                            android.util.Log.i(
+                                "ConversationRepository",
+                                "Extracted field '$key' (${valueStr.length} chars) to disk: $filePath",
+                            )
+                        } else {
+                            // Save failed, keep original (may still fail at load, but at least try)
+                            modifiedFields.put(key, value)
+                            android.util.Log.w(
+                                "ConversationRepository",
+                                "Failed to extract field '$key', keeping inline",
+                            )
+                        }
+                    } else {
+                        // Keep small fields inline
+                        modifiedFields.put(key, value)
+                    }
+                }
+
+                val newSize = modifiedFields.toString().length
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "Fields size reduced from $totalSize to $newSize chars",
+                )
+                modifiedFields.toString()
+            } catch (e: Exception) {
+                android.util.Log.e("ConversationRepository", "Error extracting attachments", e)
+                fieldsJson // Return original on error
+            }
+        }
+
+        /**
+         * Extract file attachment data to disk for sent messages, keeping metadata inline.
+         *
+         * Input format: [{"filename": "doc.pdf", "size": 12345, "data": "hex..."}, ...]
+         * Output format: [{"filename": "doc.pdf", "size": 12345, "_data_ref": "/path/to/file"}, ...]
+         *
+         * This matches the format used by EventHandler for received messages, ensuring
+         * consistent handling in MessageMapper.
+         *
+         * @param messageId Message identifier for storage path
+         * @param attachments Original file attachments array
+         * @return Modified array with data extracted to disk
+         */
+        @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
+        private fun extractFileAttachmentsForSent(
+            messageId: String,
+            attachments: JSONArray,
+        ): JSONArray {
+            val result = JSONArray()
+
+            for (i in 0 until attachments.length()) {
+                try {
+                    val attachment = attachments.getJSONObject(i)
+                    val filename = attachment.optString("filename", "unknown")
+                    val size = attachment.optInt("size", 0)
+                    val data = attachment.optString("data", "")
+
+                    val modifiedAttachment =
+                        JSONObject().apply {
+                            put("filename", filename)
+                            put("size", size)
+                        }
+
+                    // Extract data to disk if present and non-empty
+                    if (data.isNotEmpty()) {
+                        val filePath =
+                            attachmentStorage.saveAttachment(
+                                messageId,
+                                "5_$i", // Unique key per file: "5_0", "5_1", etc.
+                                data,
+                            )
+                        if (filePath != null) {
+                            modifiedAttachment.put("_data_ref", filePath)
+                            android.util.Log.d(
+                                "ConversationRepository",
+                                "Extracted sent file '$filename' data to: $filePath",
+                            )
+                        } else {
+                            // Keep data inline if save failed
+                            modifiedAttachment.put("data", data)
+                            android.util.Log.w(
+                                "ConversationRepository",
+                                "Failed to extract sent file '$filename', keeping inline",
+                            )
+                        }
+                    }
+
+                    result.put(modifiedAttachment)
+                } catch (e: Exception) {
+                    android.util.Log.w(
+                        "ConversationRepository",
+                        "Failed to process sent file attachment at index $i",
+                        e,
+                    )
+                    // Keep original attachment if processing fails
+                    result.put(attachments.opt(i))
+                }
+            }
+
+            android.util.Log.i(
+                "ConversationRepository",
+                "Extracted ${attachments.length()} sent file attachment(s) to disk",
+            )
+            return result
         }
 
         companion object {

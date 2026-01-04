@@ -13,7 +13,9 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.lxmf.messenger.MainActivity
 import com.lxmf.messenger.R
+import com.lxmf.messenger.reticulum.protocol.PropagationState
 import com.lxmf.messenger.service.state.ServiceState
+import org.json.JSONObject
 
 /**
  * Manages foreground service notification for ReticulumService.
@@ -35,6 +37,13 @@ class ServiceNotificationManager(
     private val notificationManager: NotificationManager by lazy {
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     }
+
+    // Track current sync state for notification updates
+    private var currentSyncState: Int = PropagationState.STATE_IDLE
+
+    @Suppress("unused")
+    private var currentSyncProgress: Float = 0f
+    private var lastNetworkStatus: String = "READY"
 
     /**
      * Create notification channel for Android O+.
@@ -89,7 +98,99 @@ class ServiceNotificationManager(
      * @param networkStatus Current status: "SHUTDOWN", "INITIALIZING", "READY", or "ERROR:message"
      */
     fun updateNotification(networkStatus: String) {
+        lastNetworkStatus = networkStatus
+        // If we're actively syncing, don't override with network status
+        if (currentSyncState in PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED) {
+            return
+        }
         notificationManager.notify(NOTIFICATION_ID, createNotification(networkStatus))
+    }
+
+    /**
+     * Update notification with propagation sync progress.
+     *
+     * @param stateJson JSON from Python: {"state": int, "state_name": str, "progress": float, ...}
+     */
+    @Suppress("SwallowedException", "TooGenericExceptionCaught")
+    fun updateSyncProgress(stateJson: String) {
+        try {
+            val json = JSONObject(stateJson)
+            val state = json.optInt("state", PropagationState.STATE_IDLE)
+            val stateName = json.optString("state_name", "idle")
+            val progress = json.optDouble("progress", 0.0).toFloat()
+
+            currentSyncState = state
+            currentSyncProgress = progress
+
+            // Only show sync notification for active sync states
+            if (state in PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED) {
+                val notification = createSyncNotification(stateName, progress)
+                notificationManager.notify(NOTIFICATION_ID, notification)
+            } else if (state == PropagationState.STATE_COMPLETE || state == PropagationState.STATE_IDLE) {
+                // Sync complete or idle - restore normal notification
+                currentSyncState = PropagationState.STATE_IDLE
+                notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse sync progress: ${e.message}")
+        }
+    }
+
+    /**
+     * Create notification showing sync progress.
+     */
+    private fun createSyncNotification(
+        stateName: String,
+        progress: Float,
+    ): Notification {
+        val pendingIntent = createContentIntent()
+        val (title, subtitle) = getSyncStatusTexts(stateName, progress)
+
+        val builder =
+            NotificationCompat.Builder(context, CHANNEL_ID)
+                .setContentTitle(title)
+                .setContentText(subtitle)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentIntent(pendingIntent)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+
+        // Add progress bar for receiving state
+        if (stateName.lowercase() == "receiving" && progress > 0f) {
+            builder.setProgress(100, (progress * 100).toInt(), false)
+        } else {
+            // Indeterminate progress for other sync states
+            builder.setProgress(0, 0, true)
+        }
+
+        return builder.build()
+    }
+
+    /**
+     * Get status texts for sync notification.
+     */
+    private fun getSyncStatusTexts(
+        stateName: String,
+        progress: Float,
+    ): Pair<String, String> {
+        val title = "Syncing with relay..."
+        val subtitle =
+            when (stateName.lowercase()) {
+                "path_requested" -> "Discovering network path..."
+                "link_establishing" -> "Establishing connection..."
+                "link_established" -> "Connected, preparing request..."
+                "request_sent" -> "Requesting messages..."
+                "receiving" ->
+                    if (progress > 0f) {
+                        "Downloading: ${(progress * 100).toInt()}%"
+                    } else {
+                        "Downloading messages..."
+                    }
+                "response_received" -> "Processing response..."
+                else -> "Processing..."
+            }
+        return Pair(title, subtitle)
     }
 
     /**

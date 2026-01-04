@@ -204,11 +204,6 @@ class FileUtilsTest {
         assertEquals(512 * 1024, FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)
     }
 
-    @Test
-    fun `MAX_SINGLE_FILE_SIZE is 512KB`() {
-        assertEquals(512 * 1024, FileUtils.MAX_SINGLE_FILE_SIZE)
-    }
-
     // ========== Additional getMimeTypeFromFilename Tests ==========
 
     @Test

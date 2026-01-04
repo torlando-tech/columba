@@ -7,6 +7,7 @@ import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +37,9 @@ class ChatsViewModel
 
         // Manual sync result events for Snackbar notifications
         val manualSyncResult: SharedFlow<SyncResult> = propagationNodeManager.manualSyncResult
+
+        // Sync progress for UI display
+        val syncProgress: StateFlow<SyncProgress> = propagationNodeManager.syncProgress
 
         // Cache for contact saved state flows to prevent flickering on recomposition
         private val contactSavedCache = ConcurrentHashMap<String, StateFlow<Boolean>>()

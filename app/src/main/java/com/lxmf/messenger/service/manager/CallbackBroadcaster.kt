@@ -187,6 +187,33 @@ class CallbackBroadcaster {
     }
 
     /**
+     * Broadcast incoming call to all registered callbacks.
+     * Called when an LXST voice call is received.
+     */
+    fun broadcastIncomingCall(callJson: String) {
+        Log.d(TAG, "Broadcasting incoming call: ${callJson.take(50)}...")
+        broadcast { it.onIncomingCall(callJson) }
+    }
+
+    /**
+     * Broadcast call state change to all registered callbacks.
+     * Called when call state changes (ringing, established, ended, etc.).
+     */
+    fun broadcastCallStateChanged(stateJson: String) {
+        Log.d(TAG, "Broadcasting call state changed: ${stateJson.take(50)}...")
+        broadcast { it.onCallStateChanged(stateJson) }
+    }
+
+    /**
+     * Broadcast call ended to all registered callbacks.
+     * Called when an LXST voice call ends.
+     */
+    fun broadcastCallEnded(callJson: String) {
+        Log.d(TAG, "Broadcasting call ended: ${callJson.take(50)}...")
+        broadcast { it.onCallEnded(callJson) }
+    }
+
+    /**
      * Thread-safe broadcast helper.
      * Ensures only one broadcast happens at a time (RemoteCallbackList is not re-entrant).
      */

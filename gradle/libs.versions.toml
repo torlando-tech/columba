@@ -85,6 +85,7 @@ mockk-android = { module = "io.mockk:mockk-android", version = "1.14.7" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.1" }
 arch-core-testing = { module = "androidx.arch.core:core-testing", version = "2.2.0" }
 robolectric = { module = "org.robolectric:robolectric", version = "4.16" }
+test-core = { module = "androidx.test:core", version = "1.6.1" }
 junit-android = { module = "androidx.test.ext:junit", version = "1.2.1" }
 espresso = { module = "androidx.test.espresso:espresso-core", version = "3.6.1" }
 test-orchestrator = { module = "androidx.test:orchestrator", version = "1.4.2" }

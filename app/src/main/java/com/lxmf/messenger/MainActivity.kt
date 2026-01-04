@@ -3,6 +3,7 @@ package com.lxmf.messenger
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import com.lxmf.messenger.notifications.CallNotificationHelper
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -58,6 +59,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
+import com.lxmf.messenger.reticulum.call.bridge.CallBridge
+import com.lxmf.messenger.reticulum.call.bridge.CallState
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
 import com.lxmf.messenger.ui.screens.AnnounceDetailScreen
@@ -78,6 +81,8 @@ import com.lxmf.messenger.ui.screens.QrScannerScreen
 import com.lxmf.messenger.ui.screens.SettingsScreen
 import com.lxmf.messenger.ui.screens.ThemeEditorScreen
 import com.lxmf.messenger.ui.screens.ThemeManagementScreen
+import com.lxmf.messenger.ui.screens.VoiceCallScreen
+import com.lxmf.messenger.ui.screens.IncomingCallScreen
 import com.lxmf.messenger.ui.screens.WelcomeScreen
 import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
@@ -139,6 +144,8 @@ class MainActivity : ComponentActivity() {
     private fun processIntent(intent: Intent?) {
         if (intent == null) return
 
+        Log.w(TAG, "📞 processIntent() - action=${intent.action}, extras=${intent.extras?.keySet()}")
+
         when (intent.action) {
             NotificationHelper.ACTION_OPEN_ANNOUNCE -> {
                 val destinationHash = intent.getStringExtra(NotificationHelper.EXTRA_DESTINATION_HASH)
@@ -164,6 +171,28 @@ class MainActivity : ComponentActivity() {
                     pendingNavigation.value = PendingNavigation.AddContact(lxmaUrl)
                 }
             }
+            CallNotificationHelper.ACTION_OPEN_CALL -> {
+                // Handle incoming call notification tap
+                val identityHash = intent.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH)
+                if (identityHash != null) {
+                    Log.d(TAG, "Opening incoming call screen for: ${identityHash.take(16)}...")
+                    pendingNavigation.value = PendingNavigation.IncomingCall(identityHash)
+                }
+            }
+            CallNotificationHelper.ACTION_ANSWER_CALL -> {
+                // Handle answer from notification - go directly to voice call and auto-answer
+                val identityHash = intent.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH)
+                Log.w(TAG, "📞 ACTION_ANSWER_CALL received! identityHash=$identityHash")
+                if (identityHash != null) {
+                    Log.w(TAG, "📞 Setting pendingNavigation to AnswerCall($identityHash)")
+                    // Cancel the incoming call notification
+                    CallNotificationHelper(this).cancelIncomingCallNotification()
+                    pendingNavigation.value = PendingNavigation.AnswerCall(identityHash)
+                    Log.w(TAG, "📞 pendingNavigation.value is now: ${pendingNavigation.value}")
+                } else {
+                    Log.e(TAG, "📞 identityHash is NULL! Cannot navigate to call")
+                }
+            }
         }
     }
 }
@@ -177,6 +206,10 @@ sealed class PendingNavigation {
     data class Conversation(val destinationHash: String, val peerName: String) : PendingNavigation()
 
     data class AddContact(val lxmaUrl: String) : PendingNavigation()
+
+    data class IncomingCall(val identityHash: String) : PendingNavigation()
+
+    data class AnswerCall(val identityHash: String) : PendingNavigation()
 }
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
@@ -201,6 +234,9 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
     val context = LocalContext.current
     val navController = rememberNavController()
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    // Track if we're currently navigating to answer a call (prevents race with callState observer)
+    var isAnsweringCall by remember { mutableStateOf(false) }
 
     // Access SettingsViewModel to get theme preference
     val settingsViewModel: com.lxmf.messenger.viewmodel.SettingsViewModel =
@@ -300,6 +336,25 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                     pendingContactAdd = navigation.lxmaUrl
                     Log.d("ColumbaNavigation", "Navigated to contacts for deep link: ${navigation.lxmaUrl}")
                 }
+                is PendingNavigation.IncomingCall -> {
+                    // Navigate to incoming call screen
+                    val encodedHash = Uri.encode(navigation.identityHash)
+                    navController.navigate("incoming_call/$encodedHash")
+                    Log.d("ColumbaNavigation", "Navigated to incoming call: ${navigation.identityHash.take(16)}...")
+                }
+                is PendingNavigation.AnswerCall -> {
+                    // Set flag to prevent callState observer from overriding navigation
+                    isAnsweringCall = true
+                    // Navigate to voice call screen with auto-answer flag
+                    val encodedHash = Uri.encode(navigation.identityHash)
+                    val route = "voice_call/$encodedHash?autoAnswer=true"
+                    Log.w("ColumbaNavigation", "📞 AnswerCall handler - navigating to $route")
+                    Log.w("ColumbaNavigation", "📞 Current backstack: ${navController.currentBackStackEntry?.destination?.route}")
+                    navController.navigate(route) {
+                        launchSingleTop = true
+                    }
+                    Log.w("ColumbaNavigation", "📞 After navigation, current: ${navController.currentBackStackEntry?.destination?.route}")
+                }
             }
             // Clear the pending navigation after handling
             pendingNavigation.value = null
@@ -388,6 +443,35 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
             }
     }
 
+    // Observe CallBridge state for incoming calls and navigate to IncomingCallScreen
+    val callBridge = remember { CallBridge.getInstance() }
+    val callState by callBridge.callState.collectAsState()
+
+    LaunchedEffect(callState) {
+        when (val state = callState) {
+            is CallState.Incoming -> {
+                val identityHash = state.identityHash
+                Log.i("MainActivity", "📞 Incoming call detected, currentRoute=$currentRoute, isAnsweringCall=$isAnsweringCall")
+                val encodedHash = Uri.encode(identityHash)
+                // Only navigate if not already on a call screen and not answering from notification
+                val isOnCallScreen = currentRoute?.startsWith("incoming_call/") == true ||
+                    currentRoute?.startsWith("voice_call/") == true
+                if (!isOnCallScreen && !isAnsweringCall) {
+                    Log.i("MainActivity", "📞 Navigating to IncomingCallScreen: $identityHash")
+                    navController.navigate("incoming_call/$encodedHash")
+                } else {
+                    Log.i("MainActivity", "📞 Skipping navigation (onCallScreen=$isOnCallScreen, isAnsweringCall=$isAnsweringCall)")
+                }
+            }
+            else -> {
+                // Reset the answering flag when call state changes from Incoming
+                if (isAnsweringCall) {
+                    isAnsweringCall = false
+                }
+            }
+        }
+    }
+
     // Screens that should hide the bottom navigation bar
     val hideBottomNavScreens =
         listOf(
@@ -404,6 +488,8 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
             "message_detail/",
             "theme_editor",
             "rnode_wizard",
+            "voice_call/",
+            "incoming_call/",
         )
     val shouldShowBottomNav =
         currentRoute != null &&
@@ -786,6 +872,10 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                                 val encodedId = Uri.encode(messageId)
                                 navController.navigate("message_detail/$encodedId")
                             },
+                            onVoiceCall = {
+                                val encodedHash = Uri.encode(destinationHash)
+                                navController.navigate("voice_call/$encodedHash")
+                            },
                         )
                     }
 
@@ -831,6 +921,51 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                                 val encodedName = Uri.encode(peerName)
                                 navController.navigate("messaging/$encodedHash/$encodedName")
                             },
+                        )
+                    }
+
+                    // Voice Call Screen (outgoing/active call)
+                    composable(
+                        route = "voice_call/{destinationHash}?autoAnswer={autoAnswer}",
+                        arguments =
+                            listOf(
+                                navArgument("destinationHash") { type = NavType.StringType },
+                                navArgument("autoAnswer") {
+                                    type = NavType.BoolType
+                                    defaultValue = false
+                                },
+                            ),
+                    ) { backStackEntry ->
+                        val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
+                        val autoAnswer = backStackEntry.arguments?.getBoolean("autoAnswer") ?: false
+
+                        VoiceCallScreen(
+                            destinationHash = destinationHash,
+                            onEndCall = { navController.popBackStack() },
+                            autoAnswer = autoAnswer,
+                        )
+                    }
+
+                    // Incoming Call Screen
+                    composable(
+                        route = "incoming_call/{identityHash}",
+                        arguments =
+                            listOf(
+                                navArgument("identityHash") { type = NavType.StringType },
+                            ),
+                    ) { backStackEntry ->
+                        val identityHash = backStackEntry.arguments?.getString("identityHash").orEmpty()
+
+                        IncomingCallScreen(
+                            identityHash = identityHash,
+                            onCallAnswered = {
+                                // Navigate to voice call screen when answered
+                                val encodedHash = Uri.encode(identityHash)
+                                navController.navigate("voice_call/$encodedHash") {
+                                    popUpTo("incoming_call/$identityHash") { inclusive = true }
+                                }
+                            },
+                            onCallDeclined = { navController.popBackStack() },
                         )
                     }
                 }

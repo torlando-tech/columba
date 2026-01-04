@@ -19,7 +19,9 @@ import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.EventHandler
 import com.lxmf.messenger.service.manager.PythonWrapperManager
+import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
+import com.lxmf.messenger.service.persistence.ServicePersistenceManager
 import com.lxmf.messenger.service.manager.RoutingManager
 import com.lxmf.messenger.service.manager.ServiceNotificationManager
 import com.lxmf.messenger.service.state.ServiceState
@@ -56,6 +58,7 @@ class ReticulumServiceBinder(
     private val networkChangeManager: NetworkChangeManager,
     private val notificationManager: ServiceNotificationManager,
     private val bleCoordinator: BleCoordinator,
+    private val persistenceManager: ServicePersistenceManager,
     private val scope: CoroutineScope,
     private val onInitialized: () -> Unit,
     private val onShutdown: () -> Unit,
@@ -911,6 +914,63 @@ class ReticulumServiceBinder(
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set stamp generator callback: ${e.message}", e)
         }
+
+        // Setup LXST CallManager for voice calls
+        try {
+            val callManagerInitialized = wrapperManager.setupCallManager()
+            if (callManagerInitialized) {
+                Log.i(TAG, "📞 LXST voice call support enabled")
+
+                // Register listeners for IPC notification to UI process
+                val callBridge = com.lxmf.messenger.reticulum.call.bridge.CallBridge.getInstance()
+                val callNotificationHelper = CallNotificationHelper(context)
+
+                callBridge.setIncomingCallListener { identityHash ->
+                    // Look up display name and show notification
+                    scope.launch {
+                        // Get display name from contact nickname or announce
+                        val callerName = persistenceManager.lookupDisplayName(identityHash)
+                        Log.i(TAG, "📞 Incoming call from ${identityHash.take(16)}... (name: $callerName)")
+
+                        // Show full-screen incoming call notification
+                        // This wakes the device and shows UI even when app is in background
+                        callNotificationHelper.showIncomingCallNotification(identityHash, callerName)
+
+                        // Also broadcast to UI process
+                        val callJson = org.json.JSONObject().apply {
+                            put("caller_hash", identityHash)
+                        }.toString()
+                        broadcaster.broadcastIncomingCall(callJson)
+                    }
+                }
+                callBridge.setCallEndedListener { identityHash ->
+                    // Cancel incoming call notification when call ends
+                    callNotificationHelper.cancelIncomingCallNotification()
+
+                    val callJson = org.json.JSONObject().apply {
+                        put("caller_hash", identityHash ?: "")
+                    }.toString()
+                    broadcaster.broadcastCallEnded(callJson)
+                }
+                callBridge.setCallStateChangedListener { state, identityHash ->
+                    // Cancel incoming notification when call becomes active (answered)
+                    if (state == "active") {
+                        callNotificationHelper.cancelIncomingCallNotification()
+                    }
+
+                    val stateJson = org.json.JSONObject().apply {
+                        put("state", state)
+                        put("remote_identity", identityHash ?: "")
+                    }.toString()
+                    broadcaster.broadcastCallStateChanged(stateJson)
+                }
+                Log.d(TAG, "📞 Call IPC listeners registered")
+            } else {
+                Log.w(TAG, "📞 LXST voice call support not available")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to setup CallManager: ${e.message}", e)
+        }
     }
 
     internal fun announceLxmfDestination() {
@@ -939,6 +999,106 @@ class ReticulumServiceBinder(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error announcing LXMF destination", e)
+        }
+    }
+
+    // ===========================================
+    // Voice Call Methods (LXST)
+    // ===========================================
+
+    override fun initiateCall(destHash: String): String {
+        return try {
+            Log.i(TAG, "📞 Initiating call to ${destHash.take(16)}...")
+            wrapperManager.withWrapper { wrapper ->
+                val callManager = wrapper.callAttr("get_call_manager")
+                if (callManager == null) {
+                    """{"success": false, "error": "CallManager not initialized"}"""
+                } else {
+                    val result = callManager.callAttr("call", destHash)
+                    result?.toString() ?: """{"success": false, "error": "No result"}"""
+                }
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error initiating call", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun answerCall(): String {
+        return try {
+            Log.i(TAG, "📞 Answering call")
+            wrapperManager.withWrapper { wrapper ->
+                val callManager = wrapper.callAttr("get_call_manager")
+                if (callManager == null) {
+                    """{"success": false, "error": "CallManager not initialized"}"""
+                } else {
+                    val result = callManager.callAttr("answer")
+                    val success = result?.toBoolean() ?: false
+                    """{"success": $success}"""
+                }
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error answering call", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun hangupCall() {
+        try {
+            Log.i(TAG, "📞 Hanging up call")
+            wrapperManager.withWrapper { wrapper ->
+                val callManager = wrapper.callAttr("get_call_manager")
+                callManager?.callAttr("hangup")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error hanging up call", e)
+        }
+    }
+
+    override fun setCallMuted(muted: Boolean) {
+        try {
+            Log.i(TAG, "📞 setCallMuted($muted) - calling Python mute_microphone")
+            wrapperManager.withWrapper { wrapper ->
+                val callManager = wrapper.callAttr("get_call_manager")
+                if (callManager != null) {
+                    Log.i(TAG, "📞 Calling callManager.mute_microphone($muted)")
+                    callManager.callAttr("mute_microphone", muted)
+                    Log.i(TAG, "📞 mute_microphone call completed")
+                } else {
+                    Log.w(TAG, "📞 WARNING: get_call_manager returned null!")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting call mute", e)
+        }
+    }
+
+    override fun setCallSpeaker(speakerOn: Boolean) {
+        try {
+            Log.d(TAG, "📞 Setting call speaker: $speakerOn")
+            wrapperManager.withWrapper { wrapper ->
+                val callManager = wrapper.callAttr("get_call_manager")
+                callManager?.callAttr("set_speaker", speakerOn)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting call speaker", e)
+        }
+    }
+
+    override fun getCallState(): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                val callManager = wrapper.callAttr("get_call_manager")
+                if (callManager == null) {
+                    """{"status": "unavailable", "is_active": false, "is_muted": false}"""
+                } else {
+                    val result = callManager.callAttr("get_call_state")
+                    result?.toString() ?: """{"status": "unknown", "is_active": false, "is_muted": false}"""
+                }
+            } ?: """{"status": "unavailable", "is_active": false, "is_muted": false}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting call state", e)
+            """{"status": "error", "is_active": false, "is_muted": false, "error": "${e.message}"}"""
         }
     }
 }

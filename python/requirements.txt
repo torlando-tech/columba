@@ -13,3 +13,10 @@ cryptography>=42.0.0
 
 # msgpack for Sideband-compatible telemetry format
 u-msgpack-python
+
+# LXST for voice calls over Reticulum (forked for Chaquopy compatibility)
+# The fork makes pycodec2 optional - Codec2 profiles disabled, Opus works fine
+lxst @ git+https://github.com/torlando-tech/LXST.git@chaquopy-compat
+
+# numpy is required by LXST for audio processing
+numpy

@@ -334,6 +334,10 @@ class EventHandler(
                     }
                 }
 
+            // Check if message has file attachments BEFORE extraction (for supersede matching)
+            // Field 5 is the LXMF file attachments field
+            val hasFileAttachments = fieldsJson?.optJSONArray("5")?.let { it.length() > 0 } ?: false
+
             // Check if fields contain large attachments that need to be saved to disk
             // to avoid AIDL TransactionTooLargeException (~1MB limit)
             fieldsJson = extractLargeAttachments(messageHash, fieldsJson)
@@ -357,6 +361,7 @@ class EventHandler(
                     publicKey = publicKey,
                     replyToMessageId = replyToMessageId,
                     deliveryMethod = deliveryMethod,
+                    hasFileAttachments = hasFileAttachments,
                 )
                 Log.d(TAG, "Message persisted to database: $messageHash from $sourceHashHex")
             }

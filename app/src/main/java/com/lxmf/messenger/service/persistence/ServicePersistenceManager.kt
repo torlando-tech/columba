@@ -10,6 +10,7 @@ import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.service.di.ServiceDatabaseProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 /**
  * Manages database persistence from the service process.
@@ -138,6 +139,7 @@ class ServicePersistenceManager(
         publicKey: ByteArray?,
         replyToMessageId: String?,
         deliveryMethod: String?,
+        hasFileAttachments: Boolean = false,
     ) {
         scope.launch {
             try {
@@ -205,6 +207,15 @@ class ServicePersistenceManager(
                 )
                 messageDao.insertMessage(messageEntity)
 
+                // Check if this message has file attachments and should supersede a pending notification
+                if (hasFileAttachments) {
+                    supersedePendingFileNotifications(
+                        sourceHash,
+                        activeIdentity.identityHash,
+                        messageHash,
+                    )
+                }
+
                 // Store peer public key if available
                 if (publicKey != null) {
                     persistPeerIdentity(sourceHash, publicKey)
@@ -243,6 +254,63 @@ class ServicePersistenceManager(
         } catch (e: Exception) {
             Log.e(TAG, "Error checking message existence: $messageHash", e)
             false
+        }
+    }
+
+    /**
+     * Check if an incoming message with file attachments should supersede
+     * a pending file notification, and mark it as superseded if so.
+     *
+     * Matches notifications by original_message_id (the hash of the file message).
+     * Called only when hasFileAttachments=true, so we don't need to check fieldsJson.
+     */
+    @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
+    private suspend fun supersedePendingFileNotifications(
+        peerHash: String,
+        identityHash: String,
+        incomingMessageId: String,
+    ) {
+        try {
+            Log.d(TAG, "Checking for pending notifications to supersede for message $incomingMessageId")
+
+            // Find pending notifications in this conversation
+            val pendingNotifications = messageDao.findPendingFileNotifications(peerHash, identityHash)
+            Log.d(TAG, "supersede: Found ${pendingNotifications.size} pending notifications")
+            if (pendingNotifications.isEmpty()) return
+
+            for (notification in pendingNotifications) {
+                val notificationFieldsJson = notification.fieldsJson ?: continue
+                try {
+                    val notificationJson = JSONObject(notificationFieldsJson)
+                    val field16 = notificationJson.optJSONObject("16") ?: continue
+                    val pendingInfo = field16.optJSONObject("pending_file_notification") ?: continue
+
+                    val originalMessageId = pendingInfo.optString("original_message_id", "")
+
+                    Log.d(TAG, "supersede: Comparing incoming=$incomingMessageId vs original=$originalMessageId")
+
+                    // Match by original_message_id (the hash of the file message)
+                    if (originalMessageId.isNotEmpty() && originalMessageId == incomingMessageId) {
+                        Log.d(TAG, "Superseding pending notification ${notification.id} for message $incomingMessageId")
+
+                        // Mark as superseded by adding "superseded": true to field 16
+                        field16.put("superseded", true)
+                        notificationJson.put("16", field16)
+
+                        messageDao.updateMessageFieldsJson(
+                            notification.id,
+                            identityHash,
+                            notificationJson.toString(),
+                        )
+                        // Found the matching notification, no need to continue
+                        return
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse pending notification ${notification.id}: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error checking for pending notifications to supersede: ${e.message}")
         }
     }
 

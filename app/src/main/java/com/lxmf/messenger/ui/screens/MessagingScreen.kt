@@ -56,6 +56,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
@@ -83,6 +84,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -312,10 +314,28 @@ fun MessagingScreen(
             uris.forEach { uri ->
                 viewModel.setProcessingFile(true)
                 scope.launch(Dispatchers.IO) {
-                    val attachment = FileUtils.readFileFromUri(context, uri)
+                    val result = FileUtils.readFileFromUriWithResult(context, uri)
                     withContext(Dispatchers.Main) {
-                        if (attachment != null) {
-                            viewModel.addFileAttachment(attachment)
+                        when (result) {
+                            is FileUtils.FileReadResult.Success -> {
+                                viewModel.addFileAttachment(result.attachment)
+                            }
+                            is FileUtils.FileReadResult.FileTooLarge -> {
+                                val maxSizeKb = result.maxSize / 1024
+                                val actualSizeKb = result.actualSize / 1024
+                                Toast.makeText(
+                                    context,
+                                    "File too large (${actualSizeKb}KB). Max size is ${maxSizeKb}KB.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                            is FileUtils.FileReadResult.Error -> {
+                                Toast.makeText(
+                                    context,
+                                    "Failed to attach file: ${result.message}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         }
                         viewModel.setProcessingFile(false)
                     }
@@ -679,6 +699,7 @@ fun MessagingScreen(
                                             isFromMe = displayMessage.isFromMe,
                                             clipboardManager = clipboardManager,
                                             myIdentityHash = myIdentityHash,
+                                            peerName = peerName,
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
@@ -695,6 +716,9 @@ fun MessagingScreen(
                                                 }
                                             },
                                             onReact = { emoji -> viewModel.sendReaction(message.id, emoji) },
+                                            onFetchPendingFile = { fileSizeBytes ->
+                                                viewModel.fetchPendingFile(fileSizeBytes)
+                                            },
                                             onLongPress = { msgId, fromMe, failed, bitmap, x, y, width, height ->
                                                 // Dismiss keyboard before entering reaction mode
                                                 keyboardController?.hide()
@@ -943,12 +967,14 @@ fun MessageBubble(
     isFromMe: Boolean,
     clipboardManager: androidx.compose.ui.platform.ClipboardManager,
     myIdentityHash: String? = null,
+    peerName: String = "",
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
     onReply: () -> Unit = {},
     onReplyPreviewClick: (replyToMessageId: String) -> Unit = {},
     onReact: (emoji: String) -> Unit = {},
+    onFetchPendingFile: (fileSizeBytes: Long) -> Unit = {},
     onLongPress: (
         messageId: String,
         isFromMe: Boolean,
@@ -1013,6 +1039,23 @@ fun MessageBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
     ) {
+        // Handle pending file notifications (system messages for files arriving via relay)
+        if (message.isPendingFileNotification) {
+            if (message.isSuperseded) {
+                // Notification superseded by actual file arrival - don't render
+                return
+            }
+            // Render notification bubble
+            message.pendingFileInfo?.let { info ->
+                PendingFileNotificationBubble(
+                    pendingFileInfo = info,
+                    peerName = peerName,
+                    onClick = { onFetchPendingFile(info.totalSize) },
+                )
+            }
+            return
+        }
+
         if (message.isMediaOnlyMessage) {
             // GIF-only message: render large GIF without bubble, like Signal
             Box(
@@ -1833,5 +1876,90 @@ private fun FullscreenAnimatedImageDialog(
                 contentScale = ContentScale.Fit,
             )
         }
+    }
+}
+
+/**
+ * System message bubble for pending file notifications.
+ *
+ * Displayed when a sender's file message fell back to propagation,
+ * notifying the recipient that a file is arriving via relay.
+ *
+ * This is styled as a centered, muted system message rather than a
+ * regular chat bubble.
+ *
+ * @param pendingFileInfo Info about the pending file(s)
+ */
+@Suppress("FunctionNaming")
+@Composable
+fun PendingFileNotificationBubble(
+    pendingFileInfo: com.lxmf.messenger.ui.model.PendingFileInfo,
+    peerName: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+            modifier = Modifier
+                .widthIn(max = 300.dp)
+                .clickable(onClick = onClick),
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CloudDownload,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Column {
+                    Text(
+                        text = "$peerName sent a large file",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = "${pendingFileInfo.filename} (${formatFileSize(pendingFileInfo.totalSize)})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (pendingFileInfo.fileCount > 1) {
+                        Text(
+                            text = "+${pendingFileInfo.fileCount - 1} more file${if (pendingFileInfo.fileCount > 2) "s" else ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Tap to fetch from relay",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Format file size in human-readable format.
+ */
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        bytes < 1024 * 1024 * 1024 -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+        else -> String.format(java.util.Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
     }
 }

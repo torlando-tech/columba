@@ -112,6 +112,49 @@ data class MessageUi(
             content.isBlank() &&
             !hasFileAttachments &&
             replyPreview == null
+
+    /**
+     * Whether this message is a pending file notification.
+     *
+     * These are lightweight messages sent when a file message falls back to propagation,
+     * notifying the recipient that a file is coming via relay.
+     */
+    val isPendingFileNotification: Boolean
+        get() = fieldsJson?.contains("pending_file_notification") == true
+
+    /**
+     * Whether this notification has been superseded by the actual file arrival.
+     *
+     * When the file message arrives, the notification is marked as superseded
+     * and should no longer be displayed.
+     */
+    val isSuperseded: Boolean
+        get() = fieldsJson?.contains("\"superseded\":true") == true
+
+    /**
+     * Extract pending file info if this is a notification message.
+     *
+     * Parses the pending_file_notification from Field 16 to get file details.
+     * Returns null if not a pending file notification or parsing fails.
+     */
+    @Suppress("SwallowedException") // JSON parse failures expected, return null
+    val pendingFileInfo: PendingFileInfo?
+        get() {
+            if (!isPendingFileNotification || fieldsJson == null) return null
+            return try {
+                val json = org.json.JSONObject(fieldsJson)
+                val field16 = json.optJSONObject("16") ?: return null
+                val notification = field16.optJSONObject("pending_file_notification") ?: return null
+                PendingFileInfo(
+                    originalMessageId = notification.optString("original_message_id", ""),
+                    filename = notification.optString("filename", "file"),
+                    fileCount = notification.optInt("file_count", 1),
+                    totalSize = notification.optLong("total_size", 0),
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
 }
 
 /**
@@ -172,4 +215,23 @@ data class ReactionUi(
     val emoji: String,
     val senderHashes: List<String>,
     val count: Int = senderHashes.size,
+)
+
+/**
+ * UI representation of a pending file notification.
+ *
+ * This is displayed when a sender's file message fell back to propagation,
+ * notifying the recipient that a file is arriving via relay.
+ *
+ * @property originalMessageId The hash of the original file message
+ * @property filename The first filename being sent
+ * @property fileCount Total number of files in the attachment
+ * @property totalSize Total size of all attachments in bytes
+ */
+@Immutable
+data class PendingFileInfo(
+    val originalMessageId: String,
+    val filename: String,
+    val fileCount: Int,
+    val totalSize: Long,
 )

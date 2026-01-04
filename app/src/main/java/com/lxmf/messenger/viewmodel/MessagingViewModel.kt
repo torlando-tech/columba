@@ -13,6 +13,7 @@ import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
+import com.lxmf.messenger.reticulum.protocol.PropagationState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -45,6 +46,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -158,6 +161,7 @@ class MessagingViewModel
 
         // Sync state from PropagationNodeManager
         val isSyncing: StateFlow<Boolean> = propagationNodeManager.isSyncing
+        val currentRelay = propagationNodeManager.currentRelay
 
         // Manual sync result events for Snackbar notifications
         val manualSyncResult: SharedFlow<SyncResult> = propagationNodeManager.manualSyncResult
@@ -963,26 +967,6 @@ class MessagingViewModel
         fun addFileAttachment(attachment: FileAttachment) {
             viewModelScope.launch {
                 val currentFiles = _selectedFileAttachments.value
-                val currentTotal = currentFiles.sumOf { it.sizeBytes }
-
-                // Check if adding this file would exceed the limit
-                if (FileUtils.wouldExceedSizeLimit(currentTotal, attachment.sizeBytes)) {
-                    Log.w(TAG, "File attachment rejected: would exceed size limit")
-                    _fileAttachmentError.emit(
-                        "File too large. Total attachments cannot exceed ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
-                    )
-                    return@launch
-                }
-
-                // Check single file size
-                if (attachment.sizeBytes > FileUtils.MAX_SINGLE_FILE_SIZE) {
-                    Log.w(TAG, "File attachment rejected: exceeds single file size limit")
-                    _fileAttachmentError.emit(
-                        "File too large. Maximum size is ${FileUtils.formatFileSize(FileUtils.MAX_SINGLE_FILE_SIZE)}",
-                    )
-                    return@launch
-                }
-
                 _selectedFileAttachments.value = currentFiles + attachment
                 Log.d(TAG, "Added file attachment: ${attachment.filename} (${attachment.sizeBytes} bytes)")
             }
@@ -1236,6 +1220,62 @@ class MessagingViewModel
                     Log.d(TAG, "Manual sync triggered from MessagingScreen")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error triggering manual sync", e)
+                }
+            }
+        }
+
+        /**
+         * Fetch a pending file by temporarily increasing the size limit and triggering a sync.
+         *
+         * Called when user taps a pending file notification bubble.
+         * Temporarily increases the incoming message size limit to accommodate the file,
+         * triggers a sync to fetch it from the relay, then reverts to the original limit
+         * after a timeout to allow the download to complete.
+         *
+         * @param fileSizeBytes The size of the pending file in bytes
+         */
+        fun fetchPendingFile(fileSizeBytes: Long) {
+            viewModelScope.launch {
+                try {
+                    // Get the current (original) limit to restore after timeout
+                    val originalLimitKb = settingsRepository.getIncomingMessageSizeLimitKb()
+
+                    // Calculate new limit: file size + 10% buffer, rounded up to nearest 512KB
+                    val fileSizeKb = (fileSizeBytes / 1024).toInt()
+                    val withBuffer = (fileSizeKb * 1.1).toInt()
+                    val roundedUp = ((withBuffer + 511) / 512) * 512 // Round up to nearest 512KB
+                    val newLimitKb = roundedUp.coerceAtLeast(fileSizeKb + 512) // At least 512KB more than file
+
+                    Log.d(TAG, "Temporarily increasing incoming size limit from ${originalLimitKb}KB to ${newLimitKb}KB for ${fileSizeKb}KB file")
+
+                    // Update Python layer temporarily (don't persist to DataStore)
+                    if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
+                        reticulumProtocol.setIncomingMessageSizeLimit(newLimitKb)
+                        Log.d(TAG, "Python layer updated with temporary size limit")
+                    }
+
+                    // Trigger sync to fetch the file (silent = no toast, keep syncing state for spinner)
+                    propagationNodeManager.triggerSync(silent = true, keepSyncingState = true)
+                    Log.d(TAG, "Sync triggered to fetch pending file")
+
+                    // Wait for file to download (timeout based on file size)
+                    // Allow ~100KB/s transfer rate minimum, plus 60 seconds buffer
+                    // Clamped to 60-300 seconds (1-5 minutes)
+                    val timeoutSeconds = ((fileSizeKb / 100) + 60).coerceIn(60, 300)
+                    Log.d(TAG, "Waiting ${timeoutSeconds}s for file download before reverting limit")
+
+                    kotlinx.coroutines.delay(timeoutSeconds * 1000L)
+
+                    Log.d(TAG, "Timeout reached, reverting size limit to ${originalLimitKb}KB")
+                    if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
+                        reticulumProtocol.setIncomingMessageSizeLimit(originalLimitKb)
+                    }
+
+                    // Reset syncing state now that we're done
+                    propagationNodeManager.setSyncingState(false)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error fetching pending file", e)
+                    propagationNodeManager.setSyncingState(false)
                 }
             }
         }

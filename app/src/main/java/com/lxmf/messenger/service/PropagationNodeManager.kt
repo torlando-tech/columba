@@ -204,6 +204,9 @@ class PropagationNodeManager
         private val _syncProgress = MutableStateFlow<SyncProgress>(SyncProgress.Idle)
         val syncProgress: StateFlow<SyncProgress> = _syncProgress.asStateFlow()
 
+        // Track whether current sync was manually triggered (for toast display)
+        private var _isManualSync = false
+
         // Timeout for sync operation (5 minutes for large transfers)
         private val syncTimeoutMs = 5 * 60 * 1000L
 
@@ -343,7 +346,7 @@ class PropagationNodeManager
          */
         private suspend fun handleSyncComplete(messagesReceived: Int) {
             if (_isSyncing.value) {
-                Log.d(TAG, "Sync complete: $messagesReceived messages received")
+                Log.d(TAG, "Sync complete: $messagesReceived messages received (manual=$_isManualSync)")
                 _isSyncing.value = false
                 _syncProgress.value = SyncProgress.Idle
 
@@ -352,8 +355,11 @@ class PropagationNodeManager
                 _lastSyncTimestamp.value = timestamp
                 settingsRepository.saveLastSyncTimestamp(timestamp)
 
-                // Emit result for UI
-                _manualSyncResult.emit(SyncResult.Success(messagesReceived))
+                // Emit result for UI only if manually triggered
+                if (_isManualSync) {
+                    _manualSyncResult.emit(SyncResult.Success(messagesReceived))
+                    _isManualSync = false
+                }
             }
         }
 
@@ -370,10 +376,15 @@ class PropagationNodeManager
                     0xf4 -> "Access denied"
                     else -> "Unknown error (${state.state})"
                 }
-                Log.w(TAG, "Sync error: $errorMsg")
+                Log.w(TAG, "Sync error: $errorMsg (manual=$_isManualSync)")
                 _isSyncing.value = false
                 _syncProgress.value = SyncProgress.Idle
-                _manualSyncResult.emit(SyncResult.Error(errorMsg, state.state))
+
+                // Emit error for UI only if manually triggered
+                if (_isManualSync) {
+                    _manualSyncResult.emit(SyncResult.Error(errorMsg, state.state))
+                    _isManualSync = false
+                }
             }
         }
 
@@ -715,6 +726,15 @@ class PropagationNodeManager
             _isSyncing.value = true
             _syncProgress.value = SyncProgress.Starting
 
+            // Start timeout watchdog to prevent indefinite sync state
+            val timeoutJob = scope.launch {
+                kotlinx.coroutines.delay(syncTimeoutMs)
+                if (_isSyncing.value) {
+                    Log.w(TAG, "Sync timed out after ${syncTimeoutMs / 1000} seconds")
+                    _isSyncing.value = false
+                }
+            }
+
             try {
                 val result = reticulumProtocol.requestMessagesFromPropagationNode()
                 result.onSuccess { state ->
@@ -722,11 +742,13 @@ class PropagationNodeManager
                     // Don't emit result or update timestamp here - let the observer handle it
                 }.onFailure { error ->
                     Log.w(TAG, "Periodic sync request failed: ${error.message}")
+                    timeoutJob.cancel()
                     _isSyncing.value = false
                     _syncProgress.value = SyncProgress.Idle
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error requesting messages from propagation node", e)
+                timeoutJob.cancel()
                 _isSyncing.value = false
                 _syncProgress.value = SyncProgress.Idle
             }
@@ -736,12 +758,16 @@ class PropagationNodeManager
         /**
          * Manually trigger a sync with the propagation node.
          * Useful for pull-to-refresh or when user explicitly wants to check for messages.
-         * Emits result to manualSyncResult SharedFlow for UI notification.
+         * Emits result to manualSyncResult SharedFlow for UI notification (unless silent).
          *
          * The actual completion is handled by observePropagationStateChanges() which
          * monitors LXMF propagation states and emits success/error when complete.
+         *
+         * @param silent If true, does not emit to manualSyncResult (no toast shown)
+         * @param keepSyncingState If true, does not reset isSyncing to false when done
+         *        (caller is responsible for calling setSyncingState(false) later)
          */
-        suspend fun triggerSync() {
+        suspend fun triggerSync(silent: Boolean = false, keepSyncingState: Boolean = false) {
             // Wait for relay state to be loaded from database
             // This prevents race conditions where sync is triggered before DB query completes
             val state = currentRelayState.first { it is RelayLoadState.Loaded }
@@ -749,7 +775,7 @@ class PropagationNodeManager
 
             if (relay == null) {
                 Log.d(TAG, "No relay configured, cannot sync")
-                _manualSyncResult.emit(SyncResult.NoRelay)
+                if (!silent) _manualSyncResult.emit(SyncResult.NoRelay)
                 return
             }
 
@@ -759,8 +785,9 @@ class PropagationNodeManager
                 return
             }
 
-            Log.d(TAG, "📡 Manual sync with propagation node: ${relay.displayName}")
+            Log.d(TAG, "📡 Manual sync with propagation node: ${relay.displayName} (silent=$silent)")
             _isSyncing.value = true
+            _isManualSync = !silent  // Track for toast display on completion
             _syncProgress.value = SyncProgress.Starting
 
             // Start timeout watchdog
@@ -770,7 +797,10 @@ class PropagationNodeManager
                     Log.w(TAG, "Sync timed out after ${syncTimeoutMs / 1000} seconds")
                     _isSyncing.value = false
                     _syncProgress.value = SyncProgress.Idle
-                    _manualSyncResult.emit(SyncResult.Timeout)
+                    if (_isManualSync) {
+                        _manualSyncResult.emit(SyncResult.Timeout)
+                        _isManualSync = false
+                    }
                 }
             }
 
@@ -779,22 +809,42 @@ class PropagationNodeManager
                 result.onSuccess { propState ->
                     Log.d(TAG, "Manual sync initiated: state=${propState.stateName}")
                     // Don't emit success here - wait for propagation state observer
-                    // to see PR_COMPLETE state
+                    // to see PR_COMPLETE state (unless keepSyncingState is true,
+                    // in which case caller manages the state via timeout)
                 }.onFailure { error ->
                     Log.w(TAG, "Manual sync request failed: ${error.message}")
                     timeoutJob.cancel()
-                    _isSyncing.value = false
-                    _syncProgress.value = SyncProgress.Idle
-                    _manualSyncResult.emit(SyncResult.Error(error.message ?: "Unknown error"))
+                    if (!keepSyncingState) {
+                        _isSyncing.value = false
+                        _syncProgress.value = SyncProgress.Idle
+                    }
+                    if (_isManualSync) {
+                        _manualSyncResult.emit(SyncResult.Error(error.message ?: "Unknown error"))
+                        _isManualSync = false
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error during manual sync", e)
                 timeoutJob.cancel()
-                _isSyncing.value = false
-                _syncProgress.value = SyncProgress.Idle
-                _manualSyncResult.emit(SyncResult.Error(e.message ?: "Unknown error"))
+                if (!keepSyncingState) {
+                    _isSyncing.value = false
+                    _syncProgress.value = SyncProgress.Idle
+                }
+                if (_isManualSync) {
+                    _manualSyncResult.emit(SyncResult.Error(e.message ?: "Unknown error"))
+                    _isManualSync = false
+                }
             }
             // Note: We don't cancel timeoutJob on success path - it will be handled
             // by handleSyncComplete() or handleSyncError() which set _isSyncing = false
+            // (unless keepSyncingState is true, in which case caller manages state)
+        }
+
+        /**
+         * Manually set the syncing state.
+         * Used by callers that use keepSyncingState=true to reset the state when done.
+         */
+        fun setSyncingState(syncing: Boolean) {
+            _isSyncing.value = syncing
         }
     }

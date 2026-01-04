@@ -107,7 +107,7 @@ fun MessageDeliveryRetrievalCard(
     var manualHashInput by remember { mutableStateOf("") }
     var manualNicknameInput by remember { mutableStateOf("") }
 
-    val presetIntervals = listOf(30, 60, 120, 300)
+    val presetIntervals = listOf(300, 600, 1800, 3600) // 5min, 10min, 30min, 1h
 
     Card(
         modifier = Modifier.fillMaxWidth(),

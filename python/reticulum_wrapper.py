@@ -295,6 +295,11 @@ class ReticulumWrapper:
         self._pending_relay_fallback_messages = {}  # {msg_hash_hex: lxmf_message} - waiting for alternative
         self._max_relay_retries = 3  # Maximum number of alternative relays to try
 
+        # Pending file notifications - sent only after propagation succeeds
+        # When direct delivery fails for file attachments and we fall back to propagation,
+        # we track the message here. The notification is sent only when propagation succeeds.
+        self._pending_file_notifications = {}  # {msg_hash_hex: lxmf_message}
+
         # Native stamp generator callback (Kotlin)
         # Used to bypass Python multiprocessing issues on Android
         self.kotlin_stamp_generator_callback = None
@@ -303,6 +308,7 @@ class ReticulumWrapper:
         # Invoked when LXMF propagation state changes (idle, receiving, complete, etc.)
         self.kotlin_propagation_state_callback = None
         self._last_propagation_state = None  # For change detection
+        self._last_propagation_progress = 0.0  # For progress change detection during transfers
 
         # Service heartbeat tracking (Sideband-inspired process monitoring)
         # Python updates timestamp every second; Kotlin monitors for stale heartbeats
@@ -1439,7 +1445,8 @@ class ReticulumWrapper:
                 storagepath=self.storage_path,
                 identity=default_identity,
                 autopeer=True,
-                delivery_limit=incoming_message_limit_kb
+                delivery_limit=incoming_message_limit_kb,
+                propagation_limit=incoming_message_limit_kb
             )
             log_info("ReticulumWrapper", "initialize", "LXMF router created")
 
@@ -1689,7 +1696,13 @@ class ReticulumWrapper:
             # Notify Kotlin immediately via bridge (event-driven announce delivery)
             if self.kotlin_reticulum_bridge:
                 try:
-                    self.kotlin_reticulum_bridge.notifyAnnounceReceived()
+                    # Defensive check: ensure bridge is still valid
+                    if not hasattr(self.kotlin_reticulum_bridge, 'notifyAnnounceReceived'):
+                        log_error("ReticulumWrapper", "_announce_handler",
+                                  f"Bridge object corrupted: {type(self.kotlin_reticulum_bridge)} = {self.kotlin_reticulum_bridge}")
+                        self.kotlin_reticulum_bridge = None
+                    else:
+                        self.kotlin_reticulum_bridge.notifyAnnounceReceived()
                 except Exception as e:
                     log_error("ReticulumWrapper", "_announce_handler",
                               f"Kotlin announce notification failed: {e}")
@@ -2890,8 +2903,9 @@ class ReticulumWrapper:
         """
         Set the incoming message size limit.
 
-        This controls the maximum size of LXMF messages that can be received.
-        Messages exceeding this limit will be rejected by the LXMF router.
+        This controls the maximum size of LXMF messages that can be received,
+        both for direct delivery and propagation node transfers. Both limits
+        are kept in sync for simplicity.
 
         Args:
             limit_kb: Size limit in KB (e.g., 1024 for 1MB, 131072 for 128MB "unlimited")
@@ -2903,9 +2917,11 @@ class ReticulumWrapper:
             if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
                 return {"success": False, "error": "LXMF not initialized"}
 
+            # Set both limits to keep direct and propagation transfers in sync
             self.router.delivery_per_transfer_limit = limit_kb
+            self.router.propagation_per_transfer_limit = limit_kb
             log_info("ReticulumWrapper", "set_incoming_message_size_limit",
-                     f"Set incoming message limit to {limit_kb}KB")
+                     f"Set incoming message limit to {limit_kb}KB (delivery and propagation)")
 
             return {"success": True}
         except Exception as e:
@@ -3019,6 +3035,13 @@ class ReticulumWrapper:
 
             log_info("ReticulumWrapper", "request_messages_from_propagation_node",
                     f"📡 Requesting up to {max_messages} messages from propagation node {self.active_propagation_node.hex()[:16]}...")
+
+            # Reset last propagation state and progress to force callback on any change.
+            # This is critical: if heartbeat loop is in 1-second idle mode, we might miss
+            # fast state transitions. By resetting to None/0, we ensure the next state
+            # (including COMPLETE) will be detected as a change and trigger the callback.
+            self._last_propagation_state = None
+            self._last_propagation_progress = 0.0
 
             # Request messages from the propagation node
             self.router.request_messages_from_propagation_node(identity, max_messages=max_messages)
@@ -3536,6 +3559,14 @@ class ReticulumWrapper:
                 log_info("ReticulumWrapper", "_on_message_delivered",
                         f"📤 Message {msg_hash[:16]}... PROPAGATED (stored on relay)")
 
+                # If this message was tracked for pending file notification, send it now
+                # The notification tells the recipient to sync with the relay to get the file
+                if msg_hash in self._pending_file_notifications:
+                    tracked_message = self._pending_file_notifications.pop(msg_hash)
+                    log_info("ReticulumWrapper", "_on_message_delivered",
+                            f"📬 Sending pending file notification now that propagation confirmed")
+                    self._send_pending_file_notification(tracked_message)
+
             # Remove from opportunistic tracking (if it was being tracked)
             if msg_hash in self._opportunistic_messages:
                 del self._opportunistic_messages[msg_hash]
@@ -3626,6 +3657,13 @@ class ReticulumWrapper:
 
                 # Re-submit to router (will go through pending_deferred_stamps for stamp generation)
                 self.router.handle_outbound(lxmf_message)
+
+                # If message has file attachments, track it for notification AFTER propagation succeeds
+                # We don't send the notification immediately - wait until the relay confirms receipt
+                if hasattr(lxmf_message, 'fields') and lxmf_message.fields and 5 in lxmf_message.fields:
+                    self._pending_file_notifications[msg_hash] = lxmf_message
+                    log_debug("ReticulumWrapper", "_on_message_failed",
+                             f"Tracking {msg_hash[:16]}... for pending file notification after propagation")
 
                 # Notify Kotlin of retry (status = "retrying_propagated")
                 if self.kotlin_delivery_status_callback:
@@ -3737,6 +3775,115 @@ class ReticulumWrapper:
         else:
             log_warning("ReticulumWrapper", "_fail_message_permanently",
                        "No Kotlin callback registered - failure status not reported")
+
+    def _extract_file_summary(self, lxmf_message) -> dict:
+        """
+        Extract summary of file attachments from an LXMF message.
+
+        Args:
+            lxmf_message: LXMF.LXMessage with fields
+
+        Returns:
+            Dict with first_filename, file_count, total_size, or None if no attachments
+        """
+        try:
+            if not hasattr(lxmf_message, 'fields') or not lxmf_message.fields:
+                return None
+
+            # Field 5 = FILE_ATTACHMENTS: list of [filename, bytes] tuples
+            if 5 not in lxmf_message.fields:
+                return None
+
+            attachments = lxmf_message.fields[5]
+            if not attachments or not isinstance(attachments, list):
+                return None
+
+            first_filename = "file"
+            file_count = 0
+            total_size = 0
+
+            for attachment in attachments:
+                if isinstance(attachment, (list, tuple)) and len(attachment) >= 2:
+                    filename = str(attachment[0]) if attachment[0] else "file"
+                    data = attachment[1]
+                    size = len(data) if isinstance(data, (bytes, bytearray)) else 0
+
+                    if file_count == 0:
+                        first_filename = filename
+
+                    file_count += 1
+                    total_size += size
+
+            if file_count == 0:
+                return None
+
+            return {
+                'first_filename': first_filename,
+                'file_count': file_count,
+                'total_size': total_size
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "_extract_file_summary",
+                     f"Error extracting file summary: {e}")
+            return None
+
+    def _send_pending_file_notification(self, lxmf_message):
+        """
+        Send a lightweight notification to recipient that a file is coming via propagation.
+
+        This is called when direct delivery fails and we fall back to propagation for a
+        message with file attachments. The notification lets the recipient know they
+        need to sync with the relay to receive the file.
+
+        Args:
+            lxmf_message: The original LXMF.LXMessage being retried via propagation
+        """
+        try:
+            # Extract file summary
+            file_summary = self._extract_file_summary(lxmf_message)
+            if not file_summary:
+                log_debug("ReticulumWrapper", "_send_pending_file_notification",
+                         "No file attachments found, skipping notification")
+                return
+
+            msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
+
+            # Build notification with Field 16 (APP_EXTENSIONS_FIELD)
+            import json
+            notification_data = {
+                "pending_file_notification": {
+                    "original_message_id": msg_hash,
+                    "filename": file_summary['first_filename'],
+                    "file_count": file_summary['file_count'],
+                    "total_size": file_summary['total_size'],
+                    "timestamp": int(time.time() * 1000)
+                }
+            }
+            fields = {16: notification_data}
+
+            # Create notification message - use OPPORTUNISTIC for fast delivery
+            notification_msg = LXMF.LXMessage(
+                destination=lxmf_message.destination,
+                source=lxmf_message.source,
+                content=b"",  # Empty content - notification only
+                title="",
+                fields=fields
+            )
+            notification_msg.desired_method = LXMF.LXMessage.OPPORTUNISTIC
+
+            # Submit to router
+            self.router.handle_outbound(notification_msg)
+
+            log_info("ReticulumWrapper", "_send_pending_file_notification",
+                    f"📤 Sent pending file notification for {msg_hash[:16]}... "
+                    f"({file_summary['file_count']} files, {file_summary['total_size']} bytes)")
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "_send_pending_file_notification",
+                     f"Error sending notification: {e}")
+            import traceback
+            traceback.print_exc()
 
     def on_alternative_relay_received(self, relay_hash):
         """
@@ -3963,19 +4110,31 @@ class ReticulumWrapper:
 
     def _check_propagation_state_change(self):
         """
-        Check if LXMF propagation state changed and notify Kotlin if so.
+        Check if LXMF propagation state or progress changed and notify Kotlin if so.
         Called from heartbeat loop at higher frequency during active sync.
+
+        Fires callback when:
+        - State changes (idle → receiving → complete, etc.)
+        - Progress changes by more than 1% during active transfer (state 5 = RECEIVING)
         """
         if not self.router or not self.kotlin_propagation_state_callback:
             return
 
         try:
             current_state = self.router.propagation_transfer_state
-            if current_state != self._last_propagation_state:
-                self._last_propagation_state = current_state
+            progress = getattr(self.router, 'propagation_transfer_progress', 0.0) or 0.0
+            messages_received = getattr(self.router, 'propagation_transfer_last_result', 0) or 0
 
-                progress = getattr(self.router, 'propagation_transfer_progress', 0.0) or 0.0
-                messages_received = getattr(self.router, 'propagation_transfer_last_result', 0) or 0
+            # Determine if we should send a callback:
+            # 1. State changed
+            # 2. Progress changed by more than 1% during active receiving (state 5)
+            state_changed = current_state != self._last_propagation_state
+            progress_changed = (current_state == 5 and  # STATE_RECEIVING
+                              abs(progress - self._last_propagation_progress) >= 0.01)
+
+            if state_changed or progress_changed:
+                self._last_propagation_state = current_state
+                self._last_propagation_progress = progress
 
                 state_info = {
                     "state": current_state,
@@ -3984,8 +4143,13 @@ class ReticulumWrapper:
                     "messages_received": messages_received
                 }
                 self.kotlin_propagation_state_callback(json.dumps(state_info))
-                log_debug("ReticulumWrapper", "_check_propagation_state_change",
-                         f"Propagation state changed: {state_info['state_name']} ({current_state})")
+
+                if state_changed:
+                    log_debug("ReticulumWrapper", "_check_propagation_state_change",
+                             f"Propagation state changed: {state_info['state_name']} ({current_state})")
+                else:
+                    log_debug("ReticulumWrapper", "_check_propagation_state_change",
+                             f"Propagation progress: {progress:.1%}")
         except Exception as e:
             log_error("ReticulumWrapper", "_check_propagation_state_change", f"Error: {e}")
 

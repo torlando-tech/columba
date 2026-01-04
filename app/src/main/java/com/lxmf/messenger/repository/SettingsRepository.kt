@@ -731,7 +731,7 @@ class SettingsRepository
         val retrievalIntervalSecondsFlow: Flow<Int> =
             context.dataStore.data
                 .map { preferences ->
-                    preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 30
+                    preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 300
                 }
                 .distinctUntilChanged()
 
@@ -740,14 +740,14 @@ class SettingsRepository
          */
         suspend fun getRetrievalIntervalSeconds(): Int {
             return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 30
+                preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 300
             }.first()
         }
 
         /**
          * Save the retrieval interval in seconds.
          *
-         * @param seconds The interval in seconds (30, 60, 120, or 300)
+         * @param seconds The interval in seconds (300, 600, 1800, or 3600)
          */
         suspend fun saveRetrievalIntervalSeconds(seconds: Int) {
             context.dataStore.edit { preferences ->

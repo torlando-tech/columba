@@ -57,8 +57,8 @@ fun Message.toMessageUi(): MessageUi {
         hasImageAttachment = hasImage,
         fileAttachments = fileAttachmentsList,
         hasFileAttachments = hasFiles,
-        // Include fieldsJson if there's an uncached image OR file attachments (needed for async loading)
-        fieldsJson = if ((hasImage && cachedImage == null) || hasFiles) fieldsJson else null,
+        // Include fieldsJson if there's an uncached image, file attachments, or pending file notification
+        fieldsJson = if ((hasImage && cachedImage == null) || hasFiles || hasPendingFileNotification(fieldsJson)) fieldsJson else null,
         deliveryMethod = deliveryMethod,
         errorMessage = errorMessage,
         replyToMessageId = replyId,
@@ -380,6 +380,16 @@ private fun hasFileAttachmentsField(fieldsJson: String?): Boolean {
     } catch (e: Exception) {
         false
     }
+}
+
+/**
+ * Check if the message has a pending file notification in field 16.
+ * This indicates the sender's file is coming via propagation relay.
+ */
+@Suppress("SwallowedException") // Invalid JSON is expected to fail silently here
+private fun hasPendingFileNotification(fieldsJson: String?): Boolean {
+    if (fieldsJson == null) return false
+    return fieldsJson.contains("pending_file_notification")
 }
 
 /**

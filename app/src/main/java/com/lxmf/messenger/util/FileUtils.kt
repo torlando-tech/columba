@@ -26,14 +26,87 @@ object FileUtils {
 
     /**
      * Maximum total size for all file attachments combined.
-     * Same limit as images for mesh network efficiency.
+     * No practical limit - large files will be delivered via propagation node.
      */
-    const val MAX_TOTAL_ATTACHMENT_SIZE = 512 * 1024 // 512KB
+    const val MAX_TOTAL_ATTACHMENT_SIZE = Int.MAX_VALUE
 
     /**
      * Maximum size for a single file attachment.
+     * No practical limit - large files will be delivered via propagation node.
      */
-    const val MAX_SINGLE_FILE_SIZE = 512 * 1024 // 512KB
+    const val MAX_SINGLE_FILE_SIZE = Int.MAX_VALUE
+
+    /**
+     * Result of attempting to read a file attachment.
+     */
+    sealed class FileReadResult {
+        data class Success(val attachment: FileAttachment) : FileReadResult()
+        data class FileTooLarge(val actualSize: Long, val maxSize: Int) : FileReadResult()
+        data class Error(val message: String) : FileReadResult()
+    }
+
+    /**
+     * Get the size of a file from a content URI without reading the entire file.
+     */
+    fun getFileSize(context: Context, uri: Uri): Long {
+        return try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                pfd.statSize
+            } ?: -1
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not determine file size for: $uri", e)
+            -1
+        }
+    }
+
+    /**
+     * Read file data from a content URI with detailed result.
+     *
+     * @param context Android context for ContentResolver access
+     * @param uri The content URI of the file to read
+     * @return FileReadResult indicating success, file too large, or error
+     */
+    fun readFileFromUriWithResult(
+        context: Context,
+        uri: Uri,
+    ): FileReadResult {
+        return try {
+            val contentResolver = context.contentResolver
+
+            // Check file size first without reading the entire file
+            val fileSize = getFileSize(context, uri)
+            if (fileSize > MAX_SINGLE_FILE_SIZE) {
+                return FileReadResult.FileTooLarge(fileSize, MAX_SINGLE_FILE_SIZE)
+            }
+
+            // Get filename
+            val filename = getFilename(context, uri) ?: "unknown"
+
+            // Get MIME type
+            val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+
+            // Read data
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+                val data = inputStream.readBytes()
+
+                if (data.size > MAX_SINGLE_FILE_SIZE) {
+                    return FileReadResult.FileTooLarge(data.size.toLong(), MAX_SINGLE_FILE_SIZE)
+                }
+
+                FileReadResult.Success(
+                    FileAttachment(
+                        filename = filename,
+                        data = data,
+                        mimeType = mimeType,
+                        sizeBytes = data.size,
+                    )
+                )
+            } ?: FileReadResult.Error("Could not open file")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read file from URI: $uri", e)
+            FileReadResult.Error(e.message ?: "Unknown error")
+        }
+    }
 
     /**
      * Read file data from a content URI.

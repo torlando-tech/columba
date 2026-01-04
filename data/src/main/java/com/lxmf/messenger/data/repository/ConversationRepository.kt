@@ -275,6 +275,16 @@ class ConversationRepository
                         replyToMessageId = message.replyToMessageId, // Reply reference
                     )
                 messageDao.insertMessage(messageEntity)
+
+                // Check if this message has file attachments and should supersede a pending notification
+                if (!message.isFromMe && message.fieldsJson != null) {
+                    supersedePendingFileNotifications(
+                        peerHash,
+                        identityHash,
+                        message.id,
+                        message.fieldsJson,
+                    )
+                }
             }
         }
 
@@ -588,6 +598,100 @@ class ConversationRepository
                 firstAttachment.optString(0).takeIf { it.isNotEmpty() }
             } catch (e: Exception) {
                 null
+            }
+        }
+
+        /**
+         * Check if an incoming message with file attachments should supersede
+         * a pending file notification, and mark it as superseded if so.
+         *
+         * Matches notifications by original_message_id (the hash of the file message).
+         * This is the most reliable match since the message ID is unique.
+         */
+        @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
+        private suspend fun supersedePendingFileNotifications(
+            peerHash: String,
+            identityHash: String,
+            incomingMessageId: String,
+            incomingFieldsJson: String,
+        ) {
+            try {
+                // Check if incoming message has file attachments (field 5)
+                val incomingJson = JSONObject(incomingFieldsJson)
+                val field5 = incomingJson.optJSONArray("5")
+                if (field5 == null) {
+                    android.util.Log.d(
+                        "ConversationRepository",
+                        "supersede: No field 5 array in incoming message $incomingMessageId",
+                    )
+                    return
+                }
+                if (field5.length() == 0) {
+                    android.util.Log.d(
+                        "ConversationRepository",
+                        "supersede: Empty field 5 array in incoming message $incomingMessageId",
+                    )
+                    return
+                }
+
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "Checking for pending notifications to supersede for message $incomingMessageId",
+                )
+
+                // Find pending notifications in this conversation
+                val pendingNotifications = messageDao.findPendingFileNotifications(peerHash, identityHash)
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "supersede: Found ${pendingNotifications.size} pending notifications",
+                )
+                if (pendingNotifications.isEmpty()) return
+
+                for (notification in pendingNotifications) {
+                    val notificationFieldsJson = notification.fieldsJson ?: continue
+                    try {
+                        val notificationJson = JSONObject(notificationFieldsJson)
+                        val field16 = notificationJson.optJSONObject("16") ?: continue
+                        val pendingInfo = field16.optJSONObject("pending_file_notification") ?: continue
+
+                        val originalMessageId = pendingInfo.optString("original_message_id", "")
+
+                        android.util.Log.d(
+                            "ConversationRepository",
+                            "supersede: Comparing incoming=$incomingMessageId vs original=$originalMessageId",
+                        )
+
+                        // Match by original_message_id (the hash of the file message)
+                        if (originalMessageId.isNotEmpty() && originalMessageId == incomingMessageId) {
+                            android.util.Log.d(
+                                "ConversationRepository",
+                                "Superseding pending notification ${notification.id} for message $incomingMessageId",
+                            )
+
+                            // Mark as superseded by adding "superseded": true to field 16
+                            field16.put("superseded", true)
+                            notificationJson.put("16", field16)
+
+                            messageDao.updateMessageFieldsJson(
+                                notification.id,
+                                identityHash,
+                                notificationJson.toString(),
+                            )
+                            // Found the matching notification, no need to continue
+                            return
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w(
+                            "ConversationRepository",
+                            "Failed to parse pending notification ${notification.id}: ${e.message}",
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "ConversationRepository",
+                    "Error checking for pending notifications to supersede: ${e.message}",
+                )
             }
         }
 

@@ -13,24 +13,21 @@ import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
-import com.lxmf.messenger.reticulum.protocol.PropagationState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.ui.model.DecodedImageResult
 import com.lxmf.messenger.ui.model.ImageCache
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.ui.model.SharingDuration
-import com.lxmf.messenger.ui.model.DecodedImageResult
-import com.lxmf.messenger.ui.model.decodeAndCacheImage
 import com.lxmf.messenger.ui.model.decodeImageWithAnimation
 import com.lxmf.messenger.ui.model.loadFileAttachmentData
 import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
 import com.lxmf.messenger.ui.model.toMessageUi
 import com.lxmf.messenger.util.FileAttachment
-import com.lxmf.messenger.util.FileUtils
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,14 +43,12 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.dropWhile
-import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1275,12 +1270,13 @@ class MessagingViewModel
                     Log.d(TAG, "Waiting up to ${timeoutMs / 1000}s for sync to complete")
 
                     // Wait for isSyncing to become false (sync complete or failed)
-                    val syncCompleted = withTimeoutOrNull(timeoutMs) {
-                        // Wait for isSyncing to go true first (sync started), then wait for it to go false
-                        propagationNodeManager.isSyncing.first { it } // Wait for sync to start
-                        propagationNodeManager.isSyncing.first { !it } // Wait for sync to end
-                        true
-                    }
+                    val syncCompleted =
+                        withTimeoutOrNull(timeoutMs) {
+                            // Wait for isSyncing to go true first (sync started), then wait for it to go false
+                            propagationNodeManager.isSyncing.first { it } // Wait for sync to start
+                            propagationNodeManager.isSyncing.first { !it } // Wait for sync to end
+                            true
+                        }
 
                     if (syncCompleted == true) {
                         Log.d(TAG, "Sync completed, reverting size limit to ${originalLimitKb}KB")

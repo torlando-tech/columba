@@ -9,18 +9,18 @@ import com.lxmf.messenger.data.db.dao.ConversationDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
-import com.lxmf.messenger.data.storage.AttachmentStorageManager
-import org.json.JSONArray
-import org.json.JSONObject
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.model.EnrichedConversation
+import com.lxmf.messenger.data.storage.AttachmentStorageManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -618,22 +618,7 @@ class ConversationRepository
         ) {
             try {
                 // Check if incoming message has file attachments (field 5)
-                val incomingJson = JSONObject(incomingFieldsJson)
-                val field5 = incomingJson.optJSONArray("5")
-                if (field5 == null) {
-                    android.util.Log.d(
-                        "ConversationRepository",
-                        "supersede: No field 5 array in incoming message $incomingMessageId",
-                    )
-                    return
-                }
-                if (field5.length() == 0) {
-                    android.util.Log.d(
-                        "ConversationRepository",
-                        "supersede: Empty field 5 array in incoming message $incomingMessageId",
-                    )
-                    return
-                }
+                if (!hasFileAttachments(incomingFieldsJson, incomingMessageId)) return
 
                 android.util.Log.d(
                     "ConversationRepository",
@@ -648,51 +633,93 @@ class ConversationRepository
                 )
                 if (pendingNotifications.isEmpty()) return
 
-                for (notification in pendingNotifications) {
-                    val notificationFieldsJson = notification.fieldsJson ?: continue
-                    try {
-                        val notificationJson = JSONObject(notificationFieldsJson)
-                        val field16 = notificationJson.optJSONObject("16") ?: continue
-                        val pendingInfo = field16.optJSONObject("pending_file_notification") ?: continue
-
-                        val originalMessageId = pendingInfo.optString("original_message_id", "")
-
-                        android.util.Log.d(
-                            "ConversationRepository",
-                            "supersede: Comparing incoming=$incomingMessageId vs original=$originalMessageId",
-                        )
-
-                        // Match by original_message_id (the hash of the file message)
-                        if (originalMessageId.isNotEmpty() && originalMessageId == incomingMessageId) {
-                            android.util.Log.d(
-                                "ConversationRepository",
-                                "Superseding pending notification ${notification.id} for message $incomingMessageId",
-                            )
-
-                            // Mark as superseded by adding "superseded": true to field 16
-                            field16.put("superseded", true)
-                            notificationJson.put("16", field16)
-
-                            messageDao.updateMessageFieldsJson(
-                                notification.id,
-                                identityHash,
-                                notificationJson.toString(),
-                            )
-                            // Found the matching notification, no need to continue
-                            return
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.w(
-                            "ConversationRepository",
-                            "Failed to parse pending notification ${notification.id}: ${e.message}",
-                        )
+                // Find matching notification using functional approach
+                val match =
+                    pendingNotifications.firstNotNullOfOrNull { notification ->
+                        tryParseNotificationMatch(notification, incomingMessageId)
                     }
+
+                if (match != null) {
+                    val (notification, notificationJson, field16) = match
+                    android.util.Log.d(
+                        "ConversationRepository",
+                        "Superseding pending notification ${notification.id} for message $incomingMessageId",
+                    )
+
+                    // Mark as superseded by adding "superseded": true to field 16
+                    field16.put("superseded", true)
+                    notificationJson.put("16", field16)
+
+                    messageDao.updateMessageFieldsJson(
+                        notification.id,
+                        identityHash,
+                        notificationJson.toString(),
+                    )
                 }
             } catch (e: Exception) {
                 android.util.Log.w(
                     "ConversationRepository",
                     "Error checking for pending notifications to supersede: ${e.message}",
                 )
+            }
+        }
+
+        /** Check if incoming message has file attachments (field 5). */
+        private fun hasFileAttachments(
+            incomingFieldsJson: String,
+            incomingMessageId: String,
+        ): Boolean {
+            val incomingJson = JSONObject(incomingFieldsJson)
+            val field5 = incomingJson.optJSONArray("5")
+            if (field5 == null) {
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "supersede: No field 5 array in incoming message $incomingMessageId",
+                )
+                return false
+            }
+            if (field5.length() == 0) {
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "supersede: Empty field 5 array in incoming message $incomingMessageId",
+                )
+                return false
+            }
+            return true
+        }
+
+        /**
+         * Try to parse a notification and check if it matches the incoming message ID.
+         * Returns a Triple of (notification, json, field16) if matched, null otherwise.
+         */
+        @Suppress("SwallowedException", "TooGenericExceptionCaught")
+        private fun tryParseNotificationMatch(
+            notification: MessageEntity,
+            incomingMessageId: String,
+        ): Triple<MessageEntity, JSONObject, JSONObject>? {
+            return try {
+                val notificationFieldsJson = notification.fieldsJson ?: return null
+                val notificationJson = JSONObject(notificationFieldsJson)
+                val field16 = notificationJson.optJSONObject("16")
+                val pendingInfo = field16?.optJSONObject("pending_file_notification")
+                val originalMessageId = pendingInfo?.optString("original_message_id", "") ?: ""
+
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "supersede: Comparing incoming=$incomingMessageId vs original=$originalMessageId",
+                )
+
+                if (field16 != null && originalMessageId.isNotEmpty() && originalMessageId == incomingMessageId) {
+                    Triple(notification, notificationJson, field16)
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "ConversationRepository",
+                    "Failed to parse pending notification ${notification.id}: ${e.message}",
+                )
+                null
             }
         }
 
@@ -811,18 +838,20 @@ class ConversationRepository
                     val size = attachment.optInt("size", 0)
                     val data = attachment.optString("data", "")
 
-                    val modifiedAttachment = JSONObject().apply {
-                        put("filename", filename)
-                        put("size", size)
-                    }
+                    val modifiedAttachment =
+                        JSONObject().apply {
+                            put("filename", filename)
+                            put("size", size)
+                        }
 
                     // Extract data to disk if present and non-empty
                     if (data.isNotEmpty()) {
-                        val filePath = attachmentStorage.saveAttachment(
-                            messageId,
-                            "5_$i", // Unique key per file: "5_0", "5_1", etc.
-                            data,
-                        )
+                        val filePath =
+                            attachmentStorage.saveAttachment(
+                                messageId,
+                                "5_$i", // Unique key per file: "5_0", "5_1", etc.
+                                data,
+                            )
                         if (filePath != null) {
                             modifiedAttachment.put("_data_ref", filePath)
                             android.util.Log.d(

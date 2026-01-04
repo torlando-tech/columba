@@ -40,13 +40,13 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -66,12 +66,11 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.repository.Conversation
-import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
-import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
 import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
 import com.lxmf.messenger.ui.components.StarToggleButton
+import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
 import com.lxmf.messenger.viewmodel.ChatsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -106,11 +105,12 @@ fun ChatsScreen(
         viewModel.manualSyncResult.collect { result ->
             val message =
                 when (result) {
-                    is SyncResult.Success -> if (result.messagesReceived > 0) {
-                        "Sync complete: ${result.messagesReceived} new messages"
-                    } else {
-                        "Sync complete"
-                    }
+                    is SyncResult.Success ->
+                        if (result.messagesReceived > 0) {
+                            "Sync complete: ${result.messagesReceived} new messages"
+                        } else {
+                            "Sync complete"
+                        }
                     is SyncResult.Error -> "Sync failed: ${result.message}"
                     is SyncResult.NoRelay -> "No relay configured"
                     is SyncResult.Timeout -> "Sync timed out"

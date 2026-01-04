@@ -3,7 +3,6 @@ package com.lxmf.messenger.service.manager
 import android.util.Log
 import com.chaquo.python.PyObject
 import com.lxmf.messenger.data.model.InterfaceType
-import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.NodeTypeDetector
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import com.lxmf.messenger.service.persistence.ServicePersistenceManager
@@ -239,9 +238,10 @@ class EventHandler(
             val nodeType = NodeTypeDetector.detectNodeType(appData, aspect)
 
             // Determine display name (prefer parsed name, fall back to identity hash)
-            val peerName = displayName
-                ?: appData?.let { String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 } }
-                ?: "Peer ${destinationHashHex.take(8).uppercase()}"
+            val peerName =
+                displayName
+                    ?: appData?.let { String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 } }
+                    ?: "Peer ${destinationHashHex.take(8).uppercase()}"
 
             // Persist to database first (survives app process death)
             if (persistenceManager != null && publicKey != null) {
@@ -480,18 +480,20 @@ class EventHandler(
                 val size = attachment.optInt("size", 0)
                 val data = attachment.optString("data", "")
 
-                val modifiedAttachment = JSONObject().apply {
-                    put("filename", filename)
-                    put("size", size)
-                }
+                val modifiedAttachment =
+                    JSONObject().apply {
+                        put("filename", filename)
+                        put("size", size)
+                    }
 
                 // Extract data to disk if present
                 if (data.isNotEmpty()) {
-                    val filePath = attachmentStorage?.saveAttachment(
-                        messageHash,
-                        "5_$i", // Unique key per file: "5_0", "5_1", etc.
-                        data,
-                    )
+                    val filePath =
+                        attachmentStorage?.saveAttachment(
+                            messageHash,
+                            "5_$i", // Unique key per file: "5_0", "5_1", etc.
+                            data,
+                        )
                     if (filePath != null) {
                         modifiedAttachment.put("_data_ref", filePath)
                         Log.d(TAG, "Extracted file '$filename' data to: $filePath")

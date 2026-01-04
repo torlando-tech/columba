@@ -13,7 +13,6 @@ import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -368,14 +367,15 @@ class PropagationNodeManager
          */
         private suspend fun handleSyncError(state: PropagationState) {
             if (_isSyncing.value) {
-                val errorMsg = when (state.state) {
-                    0xf0 -> "No path to relay"
-                    0xf1 -> "Connection failed"
-                    0xf2 -> "Transfer failed"
-                    0xf3 -> "Identity not received"
-                    0xf4 -> "Access denied"
-                    else -> "Unknown error (${state.state})"
-                }
+                val errorMsg =
+                    when (state.state) {
+                        0xf0 -> "No path to relay"
+                        0xf1 -> "Connection failed"
+                        0xf2 -> "Transfer failed"
+                        0xf3 -> "Identity not received"
+                        0xf4 -> "Access denied"
+                        else -> "Unknown error (${state.state})"
+                    }
                 Log.w(TAG, "Sync error: $errorMsg (manual=$_isManualSync)")
                 _isSyncing.value = false
                 _syncProgress.value = SyncProgress.Idle
@@ -727,13 +727,14 @@ class PropagationNodeManager
             _syncProgress.value = SyncProgress.Starting
 
             // Start timeout watchdog to prevent indefinite sync state
-            val timeoutJob = scope.launch {
-                kotlinx.coroutines.delay(syncTimeoutMs)
-                if (_isSyncing.value) {
-                    Log.w(TAG, "Sync timed out after ${syncTimeoutMs / 1000} seconds")
-                    _isSyncing.value = false
+            val timeoutJob =
+                scope.launch {
+                    kotlinx.coroutines.delay(syncTimeoutMs)
+                    if (_isSyncing.value) {
+                        Log.w(TAG, "Sync timed out after ${syncTimeoutMs / 1000} seconds")
+                        _isSyncing.value = false
+                    }
                 }
-            }
 
             try {
                 val result = reticulumProtocol.requestMessagesFromPropagationNode()
@@ -767,7 +768,10 @@ class PropagationNodeManager
          * @param keepSyncingState If true, does not reset isSyncing to false when done
          *        (caller is responsible for calling setSyncingState(false) later)
          */
-        suspend fun triggerSync(silent: Boolean = false, keepSyncingState: Boolean = false) {
+        suspend fun triggerSync(
+            silent: Boolean = false,
+            keepSyncingState: Boolean = false,
+        ) {
             // Wait for relay state to be loaded from database
             // This prevents race conditions where sync is triggered before DB query completes
             val state = currentRelayState.first { it is RelayLoadState.Loaded }
@@ -787,22 +791,23 @@ class PropagationNodeManager
 
             Log.d(TAG, "📡 Manual sync with propagation node: ${relay.displayName} (silent=$silent)")
             _isSyncing.value = true
-            _isManualSync = !silent  // Track for toast display on completion
+            _isManualSync = !silent // Track for toast display on completion
             _syncProgress.value = SyncProgress.Starting
 
             // Start timeout watchdog
-            val timeoutJob = scope.launch {
-                delay(syncTimeoutMs)
-                if (_isSyncing.value) {
-                    Log.w(TAG, "Sync timed out after ${syncTimeoutMs / 1000} seconds")
-                    _isSyncing.value = false
-                    _syncProgress.value = SyncProgress.Idle
-                    if (_isManualSync) {
-                        _manualSyncResult.emit(SyncResult.Timeout)
-                        _isManualSync = false
+            val timeoutJob =
+                scope.launch {
+                    delay(syncTimeoutMs)
+                    if (_isSyncing.value) {
+                        Log.w(TAG, "Sync timed out after ${syncTimeoutMs / 1000} seconds")
+                        _isSyncing.value = false
+                        _syncProgress.value = SyncProgress.Idle
+                        if (_isManualSync) {
+                            _manualSyncResult.emit(SyncResult.Timeout)
+                            _isManualSync = false
+                        }
                     }
                 }
-            }
 
             try {
                 val result = reticulumProtocol.requestMessagesFromPropagationNode()

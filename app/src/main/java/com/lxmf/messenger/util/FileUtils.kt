@@ -4,9 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
-import java.io.File
 import androidx.compose.material.icons.Icons
-import java.util.Locale
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FolderZip
@@ -14,6 +12,8 @@ import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.ui.graphics.vector.ImageVector
+import java.io.File
+import java.util.Locale
 
 /**
  * Utilities for handling file attachments in LXMF messages.
@@ -41,14 +41,19 @@ object FileUtils {
      */
     sealed class FileReadResult {
         data class Success(val attachment: FileAttachment) : FileReadResult()
+
         data class FileTooLarge(val actualSize: Long, val maxSize: Int) : FileReadResult()
+
         data class Error(val message: String) : FileReadResult()
     }
 
     /**
      * Get the size of a file from a content URI without reading the entire file.
      */
-    fun getFileSize(context: Context, uri: Uri): Long {
+    fun getFileSize(
+        context: Context,
+        uri: Uri,
+    ): Long {
         return try {
             context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
                 pfd.statSize
@@ -99,7 +104,7 @@ object FileUtils {
                         data = data,
                         mimeType = mimeType,
                         sizeBytes = data.size,
-                    )
+                    ),
                 )
             } ?: FileReadResult.Error("Could not open file")
         } catch (e: Exception) {

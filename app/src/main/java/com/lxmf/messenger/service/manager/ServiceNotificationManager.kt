@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.lxmf.messenger.MainActivity
 import com.lxmf.messenger.R
+import com.lxmf.messenger.reticulum.protocol.PropagationState
 import com.lxmf.messenger.service.state.ServiceState
 import org.json.JSONObject
 
@@ -31,16 +32,6 @@ class ServiceNotificationManager(
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "reticulum_service"
         const val CHANNEL_NAME = "Reticulum Network Service"
-
-        // Propagation state constants (matching Python LXMF states)
-        private const val STATE_IDLE = 0
-        private const val STATE_PATH_REQUESTED = 1
-        private const val STATE_LINK_ESTABLISHING = 2
-        private const val STATE_LINK_ESTABLISHED = 3
-        private const val STATE_REQUEST_SENT = 4
-        private const val STATE_RECEIVING = 5
-        // State 6 is reserved/unused
-        private const val STATE_COMPLETE = 7
     }
 
     private val notificationManager: NotificationManager by lazy {
@@ -48,7 +39,8 @@ class ServiceNotificationManager(
     }
 
     // Track current sync state for notification updates
-    private var currentSyncState: Int = STATE_IDLE
+    private var currentSyncState: Int = PropagationState.STATE_IDLE
+
     @Suppress("unused")
     private var currentSyncProgress: Float = 0f
     private var lastNetworkStatus: String = "READY"
@@ -108,7 +100,7 @@ class ServiceNotificationManager(
     fun updateNotification(networkStatus: String) {
         lastNetworkStatus = networkStatus
         // If we're actively syncing, don't override with network status
-        if (currentSyncState in STATE_PATH_REQUESTED..STATE_RECEIVING) {
+        if (currentSyncState in PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED) {
             return
         }
         notificationManager.notify(NOTIFICATION_ID, createNotification(networkStatus))
@@ -123,7 +115,7 @@ class ServiceNotificationManager(
     fun updateSyncProgress(stateJson: String) {
         try {
             val json = JSONObject(stateJson)
-            val state = json.optInt("state", STATE_IDLE)
+            val state = json.optInt("state", PropagationState.STATE_IDLE)
             val stateName = json.optString("state_name", "idle")
             val progress = json.optDouble("progress", 0.0).toFloat()
 
@@ -131,12 +123,12 @@ class ServiceNotificationManager(
             currentSyncProgress = progress
 
             // Only show sync notification for active sync states
-            if (state in STATE_PATH_REQUESTED..STATE_RECEIVING) {
+            if (state in PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED) {
                 val notification = createSyncNotification(stateName, progress)
                 notificationManager.notify(NOTIFICATION_ID, notification)
-            } else if (state == STATE_COMPLETE || state == STATE_IDLE) {
+            } else if (state == PropagationState.STATE_COMPLETE || state == PropagationState.STATE_IDLE) {
                 // Sync complete or idle - restore normal notification
-                currentSyncState = STATE_IDLE
+                currentSyncState = PropagationState.STATE_IDLE
                 notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
             }
         } catch (e: Exception) {
@@ -147,18 +139,22 @@ class ServiceNotificationManager(
     /**
      * Create notification showing sync progress.
      */
-    private fun createSyncNotification(stateName: String, progress: Float): Notification {
+    private fun createSyncNotification(
+        stateName: String,
+        progress: Float,
+    ): Notification {
         val pendingIntent = createContentIntent()
         val (title, subtitle) = getSyncStatusTexts(stateName, progress)
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle(title)
-            .setContentText(subtitle)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+        val builder =
+            NotificationCompat.Builder(context, CHANNEL_ID)
+                .setContentTitle(title)
+                .setContentText(subtitle)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentIntent(pendingIntent)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_PROGRESS)
 
         // Add progress bar for receiving state
         if (stateName.lowercase() == "receiving" && progress > 0f) {
@@ -174,20 +170,26 @@ class ServiceNotificationManager(
     /**
      * Get status texts for sync notification.
      */
-    private fun getSyncStatusTexts(stateName: String, progress: Float): Pair<String, String> {
+    private fun getSyncStatusTexts(
+        stateName: String,
+        progress: Float,
+    ): Pair<String, String> {
         val title = "Syncing with relay..."
-        val subtitle = when (stateName.lowercase()) {
-            "path_requested" -> "Discovering network path..."
-            "link_establishing" -> "Establishing connection..."
-            "link_established" -> "Connected, preparing request..."
-            "request_sent" -> "Requesting messages..."
-            "receiving" -> if (progress > 0f) {
-                "Downloading: ${(progress * 100).toInt()}%"
-            } else {
-                "Downloading messages..."
+        val subtitle =
+            when (stateName.lowercase()) {
+                "path_requested" -> "Discovering network path..."
+                "link_establishing" -> "Establishing connection..."
+                "link_established" -> "Connected, preparing request..."
+                "request_sent" -> "Requesting messages..."
+                "receiving" ->
+                    if (progress > 0f) {
+                        "Downloading: ${(progress * 100).toInt()}%"
+                    } else {
+                        "Downloading messages..."
+                    }
+                "response_received" -> "Processing response..."
+                else -> "Processing..."
             }
-            else -> "Processing..."
-        }
         return Pair(title, subtitle)
     }
 

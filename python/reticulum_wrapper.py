@@ -3083,15 +3083,21 @@ class ReticulumWrapper:
             # in the last completed transfer
             last_result = getattr(self.router, 'propagation_transfer_last_result', None) or 0
 
-            # Map state to human-readable string
+            # Map state to human-readable string using LXMF constants
             state_names = {
-                0: "idle",
-                1: "path_requested",
-                2: "link_establishing",
-                3: "link_established",
-                4: "request_sent",
-                5: "receiving",
-                7: "complete"
+                LXMF.LXMRouter.PR_IDLE: "idle",
+                LXMF.LXMRouter.PR_PATH_REQUESTED: "path_requested",
+                LXMF.LXMRouter.PR_LINK_ESTABLISHING: "link_establishing",
+                LXMF.LXMRouter.PR_LINK_ESTABLISHED: "link_established",
+                LXMF.LXMRouter.PR_REQUEST_SENT: "request_sent",
+                LXMF.LXMRouter.PR_RECEIVING: "receiving",
+                LXMF.LXMRouter.PR_RESPONSE_RECEIVED: "response_received",
+                LXMF.LXMRouter.PR_COMPLETE: "complete",
+                LXMF.LXMRouter.PR_NO_PATH: "no_path",
+                LXMF.LXMRouter.PR_LINK_FAILED: "link_failed",
+                LXMF.LXMRouter.PR_TRANSFER_FAILED: "transfer_failed",
+                LXMF.LXMRouter.PR_NO_IDENTITY_RCVD: "no_identity_rcvd",
+                LXMF.LXMRouter.PR_NO_ACCESS: "no_access",
             }
             state_name = state_names.get(state, f"unknown_{state}")
 
@@ -4093,18 +4099,19 @@ class ReticulumWrapper:
     def _get_propagation_state_name(self, state: int) -> str:
         """Map LXMF propagation state integer to human-readable name."""
         state_names = {
-            0: "idle",
-            1: "path_requested",
-            2: "link_establishing",
-            3: "link_established",
-            4: "request_sent",
-            5: "receiving",
-            7: "complete",
-            0xf0: "no_path",
-            0xf1: "link_failed",
-            0xf2: "transfer_failed",
-            0xf3: "no_identity_rcvd",
-            0xf4: "no_access",
+            LXMF.LXMRouter.PR_IDLE: "idle",
+            LXMF.LXMRouter.PR_PATH_REQUESTED: "path_requested",
+            LXMF.LXMRouter.PR_LINK_ESTABLISHING: "link_establishing",
+            LXMF.LXMRouter.PR_LINK_ESTABLISHED: "link_established",
+            LXMF.LXMRouter.PR_REQUEST_SENT: "request_sent",
+            LXMF.LXMRouter.PR_RECEIVING: "receiving",
+            LXMF.LXMRouter.PR_RESPONSE_RECEIVED: "response_received",
+            LXMF.LXMRouter.PR_COMPLETE: "complete",
+            LXMF.LXMRouter.PR_NO_PATH: "no_path",
+            LXMF.LXMRouter.PR_LINK_FAILED: "link_failed",
+            LXMF.LXMRouter.PR_TRANSFER_FAILED: "transfer_failed",
+            LXMF.LXMRouter.PR_NO_IDENTITY_RCVD: "no_identity_rcvd",
+            LXMF.LXMRouter.PR_NO_ACCESS: "no_access",
         }
         return state_names.get(state, f"unknown_{state}")
 

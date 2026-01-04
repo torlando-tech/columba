@@ -146,141 +146,149 @@ class SettingsViewModelIncomingMessageLimitTest {
     // ========== Initial State Tests ==========
 
     @Test
-    fun `initial state has default incoming message size limit`() = runTest {
-        // Given - Default flow value of 1024 KB
-        incomingMessageSizeLimitKbFlow.value = 1024
+    fun `initial state has default incoming message size limit`() =
+        runTest {
+            // Given - Default flow value of 1024 KB
+            incomingMessageSizeLimitKbFlow.value = 1024
 
-        // When
-        viewModel = createViewModel()
-        advanceUntilIdle()
+            // When
+            viewModel = createViewModel()
+            advanceUntilIdle()
 
-        // Then - State should have default value (1024 KB)
-        assertEquals(1024, viewModel.state.value.incomingMessageSizeLimitKb)
-    }
+            // Then - State should have default value (1024 KB)
+            assertEquals(1024, viewModel.state.value.incomingMessageSizeLimitKb)
+        }
 
     // ========== Set Limit Tests ==========
 
     @Test
-    fun `setIncomingMessageSizeLimit saves to repository`() = runTest {
-        // Given
-        viewModel = createViewModel()
-        advanceUntilIdle()
+    fun `setIncomingMessageSizeLimit saves to repository`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
 
-        // When
-        viewModel.setIncomingMessageSizeLimit(10240) // 10MB
+            // When
+            viewModel.setIncomingMessageSizeLimit(10240) // 10MB
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Then
-        coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(10240) }
-    }
-
-    @Test
-    fun `setIncomingMessageSizeLimit calls protocol to apply at runtime`() = runTest {
-        // Given
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        // When
-        viewModel.setIncomingMessageSizeLimit(25600) // 25MB
-
-        advanceUntilIdle()
-
-        // Then
-        verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(25600) }
-    }
+            // Then
+            coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(10240) }
+        }
 
     @Test
-    fun `setIncomingMessageSizeLimit with 1MB limit`() = runTest {
-        // Given
-        viewModel = createViewModel()
-        advanceUntilIdle()
+    fun `setIncomingMessageSizeLimit calls protocol to apply at runtime`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
 
-        // When
-        viewModel.setIncomingMessageSizeLimit(1024)
+            // When
+            viewModel.setIncomingMessageSizeLimit(25600) // 25MB
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Then
-        coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(1024) }
-        verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(1024) }
-    }
-
-    @Test
-    fun `setIncomingMessageSizeLimit with 5MB limit`() = runTest {
-        // Given
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        // When
-        viewModel.setIncomingMessageSizeLimit(5120)
-
-        advanceUntilIdle()
-
-        // Then
-        coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(5120) }
-        verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(5120) }
-    }
+            // Then
+            verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(25600) }
+        }
 
     @Test
-    fun `setIncomingMessageSizeLimit with unlimited 128MB`() = runTest {
-        // Given
-        viewModel = createViewModel()
-        advanceUntilIdle()
+    fun `setIncomingMessageSizeLimit with 1MB limit`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
 
-        // When
-        viewModel.setIncomingMessageSizeLimit(131072)
+            // When
+            viewModel.setIncomingMessageSizeLimit(1024)
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Then
-        coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(131072) }
-        verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(131072) }
-    }
+            // Then
+            coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(1024) }
+            verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(1024) }
+        }
+
+    @Test
+    fun `setIncomingMessageSizeLimit with 5MB limit`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setIncomingMessageSizeLimit(5120)
+
+            advanceUntilIdle()
+
+            // Then
+            coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(5120) }
+            verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(5120) }
+        }
+
+    @Test
+    fun `setIncomingMessageSizeLimit with unlimited 128MB`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setIncomingMessageSizeLimit(131072)
+
+            advanceUntilIdle()
+
+            // Then
+            coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(131072) }
+            verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(131072) }
+        }
 
     // ========== State Update Tests ==========
 
     @Test
-    fun `state updates when incoming message size limit flow emits new value`() = runTest {
-        // Given
-        incomingMessageSizeLimitKbFlow.value = 1024
-        viewModel = createViewModel()
-        advanceUntilIdle()
+    fun `state updates when incoming message size limit flow emits new value`() =
+        runTest {
+            // Given
+            incomingMessageSizeLimitKbFlow.value = 1024
+            viewModel = createViewModel()
+            advanceUntilIdle()
 
-        assertEquals(1024, viewModel.state.value.incomingMessageSizeLimitKb)
+            assertEquals(1024, viewModel.state.value.incomingMessageSizeLimitKb)
 
-        // When - Repository emits new value
-        incomingMessageSizeLimitKbFlow.value = 10240
+            // When - Repository emits new value
+            incomingMessageSizeLimitKbFlow.value = 10240
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Then
-        assertEquals(10240, viewModel.state.value.incomingMessageSizeLimitKb)
-    }
+            // Then
+            assertEquals(10240, viewModel.state.value.incomingMessageSizeLimitKb)
+        }
 
     @Test
-    fun `state updates to different limit values`() = runTest {
-        // Given - Start with default
-        incomingMessageSizeLimitKbFlow.value = 1024
-        viewModel = createViewModel()
-        advanceUntilIdle()
+    fun `state updates to different limit values`() =
+        runTest {
+            // Given - Start with default
+            incomingMessageSizeLimitKbFlow.value = 1024
+            viewModel = createViewModel()
+            advanceUntilIdle()
 
-        assertEquals(1024, viewModel.state.value.incomingMessageSizeLimitKb)
+            assertEquals(1024, viewModel.state.value.incomingMessageSizeLimitKb)
 
-        // When - Change to 5MB
-        incomingMessageSizeLimitKbFlow.value = 5120
+            // When - Change to 5MB
+            incomingMessageSizeLimitKbFlow.value = 5120
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Then
-        assertEquals(5120, viewModel.state.value.incomingMessageSizeLimitKb)
+            // Then
+            assertEquals(5120, viewModel.state.value.incomingMessageSizeLimitKb)
 
-        // When - Change to unlimited (128MB)
-        incomingMessageSizeLimitKbFlow.value = 131072
+            // When - Change to unlimited (128MB)
+            incomingMessageSizeLimitKbFlow.value = 131072
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Then
-        assertEquals(131072, viewModel.state.value.incomingMessageSizeLimitKb)
-    }
+            // Then
+            assertEquals(131072, viewModel.state.value.incomingMessageSizeLimitKb)
+        }
 }

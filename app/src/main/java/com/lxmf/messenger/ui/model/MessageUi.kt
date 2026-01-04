@@ -107,11 +107,12 @@ data class MessageUi(
      * similar to how Signal displays media-only messages.
      */
     val isMediaOnlyMessage: Boolean
-        get() = isAnimatedImage &&
-            imageData != null &&
-            content.isBlank() &&
-            !hasFileAttachments &&
-            replyPreview == null
+        get() =
+            isAnimatedImage &&
+                imageData != null &&
+                content.isBlank() &&
+                !hasFileAttachments &&
+                replyPreview == null
 
     /**
      * Whether this message is a pending file notification.

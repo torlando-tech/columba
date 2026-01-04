@@ -8,7 +8,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.util.FileAttachment
-import com.lxmf.messenger.util.FileUtils
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule

@@ -11,17 +11,13 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.content.MediaType
 import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.content.hasMediaType
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.input.TextFieldLineLimits
-import androidx.compose.foundation.text.input.TextFieldState
-import androidx.compose.foundation.text.input.rememberTextFieldState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
@@ -48,7 +44,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
@@ -63,13 +62,11 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -77,15 +74,13 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -120,7 +115,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -128,6 +122,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.FileAttachmentCard
@@ -146,8 +142,6 @@ import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.lxmf.messenger.util.AnimatedImageLoader
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
@@ -245,11 +239,12 @@ fun MessagingScreen(
         viewModel.manualSyncResult.collect { result ->
             val message =
                 when (result) {
-                    is SyncResult.Success -> if (result.messagesReceived > 0) {
-                        "Sync complete: ${result.messagesReceived} new messages"
-                    } else {
-                        "Sync complete"
-                    }
+                    is SyncResult.Success ->
+                        if (result.messagesReceived > 0) {
+                            "Sync complete: ${result.messagesReceived} new messages"
+                        } else {
+                            "Sync complete"
+                        }
                     is SyncResult.Error -> "Sync failed: ${result.message}"
                     is SyncResult.NoRelay -> "No relay configured"
                     is SyncResult.Timeout -> "Sync timed out"
@@ -328,14 +323,14 @@ fun MessagingScreen(
                                 Toast.makeText(
                                     context,
                                     "File too large (${actualSizeKb}KB). Max size is ${maxSizeKb}KB.",
-                                    Toast.LENGTH_LONG
+                                    Toast.LENGTH_LONG,
                                 ).show()
                             }
                             is FileUtils.FileReadResult.Error -> {
                                 Toast.makeText(
                                     context,
                                     "Failed to attach file: ${result.message}",
-                                    Toast.LENGTH_SHORT
+                                    Toast.LENGTH_SHORT,
                                 ).show()
                             }
                         }
@@ -665,12 +660,13 @@ fun MessagingScreen(
 
                                     // Get decoded image result (includes animated GIF data)
                                     val decodedResult = decodedImages[message.id]
-                                    val cachedImage = decodedResult?.bitmap
-                                        ?: if (message.decodedImage == null && loadedImageIds.contains(message.id)) {
-                                            com.lxmf.messenger.ui.model.ImageCache.get(message.id)
-                                        } else {
-                                            message.decodedImage
-                                        }
+                                    val cachedImage =
+                                        decodedResult?.bitmap
+                                            ?: if (message.decodedImage == null && loadedImageIds.contains(message.id)) {
+                                                com.lxmf.messenger.ui.model.ImageCache.get(message.id)
+                                            } else {
+                                                message.decodedImage
+                                            }
 
                                     // Get cached reply preview if it was loaded after initial render
                                     val cachedReplyPreview = replyPreviewCache[message.id]
@@ -1065,62 +1061,66 @@ fun MessageBubble(
         if (message.isMediaOnlyMessage) {
             // GIF-only message: render large GIF without bubble, like Signal
             Box(
-                modifier = Modifier
-                    .widthIn(max = 280.dp)
-                    .drawWithCache {
-                        val width = this.size.width.toInt()
-                        val height = this.size.height.toInt()
-                        onDrawWithContent {
-                            graphicsLayer.record(size = androidx.compose.ui.unit.IntSize(width, height)) {
-                                this@onDrawWithContent.drawContent()
+                modifier =
+                    Modifier
+                        .widthIn(max = 280.dp)
+                        .drawWithCache {
+                            val width = this.size.width.toInt()
+                            val height = this.size.height.toInt()
+                            onDrawWithContent {
+                                graphicsLayer.record(size = androidx.compose.ui.unit.IntSize(width, height)) {
+                                    this@onDrawWithContent.drawContent()
+                                }
+                                drawContent()
                             }
-                            drawContent()
                         }
-                    }
-                    .onGloballyPositioned { coordinates ->
-                        bubbleX = coordinates.positionInRoot().x
-                        bubbleY = coordinates.positionInRoot().y
-                        bubbleWidth = coordinates.size.width
-                        bubbleHeight = coordinates.size.height
-                    }
-                    .scale(scale)
-                    .combinedClickable(
-                        onClick = { showFullscreenImage = true },
-                        onLongClick = {
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            scope.launch {
-                                val bitmap = graphicsLayer.toImageBitmap()
-                                onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
-                            }
-                        },
-                        indication = null,
-                        interactionSource = interactionSource,
-                    ),
+                        .onGloballyPositioned { coordinates ->
+                            bubbleX = coordinates.positionInRoot().x
+                            bubbleY = coordinates.positionInRoot().y
+                            bubbleWidth = coordinates.size.width
+                            bubbleHeight = coordinates.size.height
+                        }
+                        .scale(scale)
+                        .combinedClickable(
+                            onClick = { showFullscreenImage = true },
+                            onLongClick = {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                scope.launch {
+                                    val bitmap = graphicsLayer.toImageBitmap()
+                                    onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
+                                }
+                            },
+                            indication = null,
+                            interactionSource = interactionSource,
+                        ),
             ) {
                 // Large GIF without bubble background
                 AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(message.imageData)
-                        .crossfade(true)
-                        .build(),
+                    model =
+                        ImageRequest.Builder(context)
+                            .data(message.imageData)
+                            .crossfade(true)
+                            .build(),
                     imageLoader = AnimatedImageLoader.getInstance(context),
                     contentDescription = "Animated GIF",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp)),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp)),
                     contentScale = ContentScale.FillWidth,
                 )
 
                 // Timestamp overlay at bottom-right corner
                 Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                        .background(
-                            color = Color.Black.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(8.dp),
-                        )
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .background(
+                                color = Color.Black.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(8.dp),
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1133,13 +1133,14 @@ fun MessageBubble(
                         )
                         if (isFromMe) {
                             Text(
-                                text = when (message.status) {
-                                    "pending" -> "○"
-                                    "sent", "retrying_propagated", "propagated" -> "✓"
-                                    "delivered" -> "✓✓"
-                                    "failed" -> "!"
-                                    else -> ""
-                                },
+                                text =
+                                    when (message.status) {
+                                        "pending" -> "○"
+                                        "sent", "retrying_propagated", "propagated" -> "✓"
+                                        "delivered" -> "✓✓"
+                                        "failed" -> "!"
+                                        else -> ""
+                                    },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                             )
@@ -1234,10 +1235,11 @@ fun MessageBubble(
                         if (isAnimated && imageData != null) {
                             // Animated GIF - use Coil for animated rendering
                             AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(imageData)
-                                    .crossfade(true)
-                                    .build(),
+                                model =
+                                    ImageRequest.Builder(context)
+                                        .data(imageData)
+                                        .crossfade(true)
+                                        .build(),
                                 imageLoader = AnimatedImageLoader.getInstance(context),
                                 contentDescription = "Animated image attachment",
                                 modifier =
@@ -1264,10 +1266,11 @@ fun MessageBubble(
                         } else if (message.hasImageAttachment) {
                             // Image is loading - show placeholder
                             Box(
-                                modifier = Modifier
-                                    .size(100.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                modifier =
+                                    Modifier
+                                        .size(100.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 CircularProgressIndicator(
@@ -1511,10 +1514,11 @@ fun MessageInputBar(
                     if (selectedImageIsAnimated) {
                         // Animated GIF - use Coil for preview
                         AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(selectedImageData)
-                                .crossfade(true)
-                                .build(),
+                            model =
+                                ImageRequest.Builder(context)
+                                    .data(selectedImageData)
+                                    .crossfade(true)
+                                    .build(),
                             imageLoader = AnimatedImageLoader.getInstance(context),
                             contentDescription = "Selected animated image",
                             modifier =
@@ -1544,11 +1548,12 @@ fun MessageInputBar(
                     }
 
                     Text(
-                        text = if (selectedImageIsAnimated) {
-                            "GIF attached (${selectedImageData.size / 1024} KB)"
-                        } else {
-                            "Image attached (${selectedImageData.size / 1024} KB)"
-                        },
+                        text =
+                            if (selectedImageIsAnimated) {
+                                "GIF attached (${selectedImageData.size / 1024} KB)"
+                            } else {
+                                "Image attached (${selectedImageData.size / 1024} KB)"
+                            },
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
@@ -1568,11 +1573,12 @@ fun MessageInputBar(
                 Text(
                     text = "$remaining characters remaining",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (remaining < 20) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color =
+                        if (remaining < 20) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -1587,64 +1593,70 @@ fun MessageInputBar(
             ) {
                 // BasicTextField with contentReceiver for keyboard GIFs and clipboard paste
                 val isError = messageText.length >= ValidationConstants.MAX_MESSAGE_LENGTH - 20
-                val borderColor = when {
-                    isError -> MaterialTheme.colorScheme.error
-                    else -> Color.Transparent
-                }
+                val borderColor =
+                    when {
+                        isError -> MaterialTheme.colorScheme.error
+                        else -> Color.Transparent
+                    }
 
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp, max = 120.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainerHighest,
-                            RoundedCornerShape(24.dp),
-                        )
-                        .border(1.dp, borderColor, RoundedCornerShape(24.dp))
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp, max = 120.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainerHighest,
+                                RoundedCornerShape(24.dp),
+                            )
+                            .border(1.dp, borderColor, RoundedCornerShape(24.dp))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
                     BasicTextField(
                         state = textFieldState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .contentReceiver { transferableContent ->
-                                // Check if content contains images
-                                if (!transferableContent.hasMediaType(MediaType.Image)) {
-                                    return@contentReceiver transferableContent
-                                }
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .contentReceiver { transferableContent ->
+                                    // Check if content contains images
+                                    if (!transferableContent.hasMediaType(MediaType.Image)) {
+                                        return@contentReceiver transferableContent
+                                    }
 
-                                // Process image content from keyboard or clipboard
-                                val clipData = transferableContent.clipEntry.clipData
-                                for (i in 0 until clipData.itemCount) {
-                                    val item = clipData.getItemAt(i)
-                                    val uri = item.uri
-                                    if (uri != null) {
-                                        scope.launch(Dispatchers.IO) {
-                                            val result = ImageUtils.compressImagePreservingAnimation(
-                                                context,
-                                                uri,
-                                            )
-                                            result?.let { compressed ->
-                                                withContext(Dispatchers.Main) {
-                                                    onImageContentReceived(
-                                                        compressed.data,
-                                                        compressed.format,
-                                                        compressed.isAnimated,
+                                    // Process image content from keyboard or clipboard
+                                    val clipData = transferableContent.clipEntry.clipData
+                                    for (i in 0 until clipData.itemCount) {
+                                        val item = clipData.getItemAt(i)
+                                        val uri = item.uri
+                                        if (uri != null) {
+                                            scope.launch(Dispatchers.IO) {
+                                                val result =
+                                                    ImageUtils.compressImagePreservingAnimation(
+                                                        context,
+                                                        uri,
                                                     )
+                                                result?.let { compressed ->
+                                                    withContext(Dispatchers.Main) {
+                                                        onImageContentReceived(
+                                                            compressed.data,
+                                                            compressed.format,
+                                                            compressed.isAnimated,
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                }
-                                null // Content consumed
-                            },
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = MaterialTheme.colorScheme.onSurface,
-                        ),
+                                    null // Content consumed
+                                },
+                        textStyle =
+                            MaterialTheme.typography.bodyLarge.copy(
+                                color = MaterialTheme.colorScheme.onSurface,
+                            ),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Sentences,
-                        ),
+                        keyboardOptions =
+                            KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Sentences,
+                            ),
                         lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
                         decorator = { innerTextField ->
                             Box {
@@ -1873,10 +1885,11 @@ private fun FullscreenAnimatedImageDialog(
             contentAlignment = Alignment.Center,
         ) {
             AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(imageData)
-                    .crossfade(true)
-                    .build(),
+                model =
+                    ImageRequest.Builder(context)
+                        .data(imageData)
+                        .crossfade(true)
+                        .build(),
                 imageLoader = AnimatedImageLoader.getInstance(context),
                 contentDescription = "Fullscreen animated image",
                 modifier =
@@ -1917,17 +1930,19 @@ fun PendingFileNotificationBubble(
     val isSyncing = syncProgress !is SyncProgress.Idle
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
-            modifier = Modifier
-                .widthIn(max = 300.dp)
-                .then(if (!isSyncing) Modifier.clickable(onClick = onClick) else Modifier),
+            modifier =
+                Modifier
+                    .widthIn(max = 300.dp)
+                    .then(if (!isSyncing) Modifier.clickable(onClick = onClick) else Modifier),
         ) {
             Column(
                 modifier = Modifier.padding(12.dp),
@@ -1971,11 +1986,12 @@ fun PendingFileNotificationBubble(
                         Text(
                             text = getSyncStatusText(syncProgress),
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (isSyncing) {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            },
+                            color =
+                                if (isSyncing) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
                         )
                     }
                 }
@@ -1999,18 +2015,20 @@ private fun getSyncStatusText(syncProgress: SyncProgress): String =
     when (syncProgress) {
         is SyncProgress.Idle -> "Tap to fetch from relay"
         is SyncProgress.Starting -> "Connecting to relay..."
-        is SyncProgress.InProgress -> when (syncProgress.stateName.lowercase()) {
-            "path_requested" -> "Discovering network path..."
-            "link_establishing" -> "Establishing connection..."
-            "link_established" -> "Connected, preparing..."
-            "request_sent" -> "Requesting messages..."
-            "receiving", "downloading" -> if (syncProgress.progress > 0f) {
-                "Downloading: ${(syncProgress.progress * 100).toInt()}%"
-            } else {
-                "Downloading..."
+        is SyncProgress.InProgress ->
+            when (syncProgress.stateName.lowercase()) {
+                "path_requested" -> "Discovering network path..."
+                "link_establishing" -> "Establishing connection..."
+                "link_established" -> "Connected, preparing..."
+                "request_sent" -> "Requesting messages..."
+                "receiving", "downloading" ->
+                    if (syncProgress.progress > 0f) {
+                        "Downloading: ${(syncProgress.progress * 100).toInt()}%"
+                    } else {
+                        "Downloading..."
+                    }
+                else -> "Processing..."
             }
-            else -> "Processing..."
-        }
     }
 
 /**

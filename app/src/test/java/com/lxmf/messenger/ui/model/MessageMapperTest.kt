@@ -1559,10 +1559,11 @@ class MessageMapperTest {
 
     @Test
     fun `decodeImageWithAnimation returns null for nonexistent file reference`() {
-        val result = decodeImageWithAnimation(
-            "test-id",
-            """{"6": {"_file_ref": "/nonexistent/path/to/file.dat"}}""",
-        )
+        val result =
+            decodeImageWithAnimation(
+                "test-id",
+                """{"6": {"_file_ref": "/nonexistent/path/to/file.dat"}}""",
+            )
         assertNull(result)
     }
 
@@ -1727,42 +1728,82 @@ class MessageMapperTest {
         output.addAll("GIF89a".toByteArray(Charsets.US_ASCII).toList())
 
         // Logical Screen Descriptor
-        output.add(0x01); output.add(0x00) // Width
-        output.add(0x01); output.add(0x00) // Height
+        output.add(0x01)
+        output.add(0x00) // Width
+        output.add(0x01)
+        output.add(0x00) // Height
         output.add(0x00) // Packed field
         output.add(0x00) // Background color
         output.add(0x00) // Pixel aspect ratio
 
         // NETSCAPE2.0 Application Extension
-        output.add(0x21); output.add(0xFF.toByte()); output.add(0x0B)
+        output.add(0x21)
+        output.add(0xFF.toByte())
+        output.add(0x0B)
         output.addAll("NETSCAPE2.0".toByteArray(Charsets.US_ASCII).toList())
-        output.add(0x03); output.add(0x01); output.add(0x00); output.add(0x00); output.add(0x00)
+        output.add(0x03)
+        output.add(0x01)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
 
         // Frame 1 - Graphic Control Extension
-        output.add(0x21); output.add(0xF9.toByte()); output.add(0x04)
-        output.add(0x00); output.add(0x0A); output.add(0x00); output.add(0x00); output.add(0x00)
+        output.add(0x21)
+        output.add(0xF9.toByte())
+        output.add(0x04)
+        output.add(0x00)
+        output.add(0x0A)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
 
         // Frame 1 - Image Descriptor
         output.add(0x2C)
-        output.add(0x00); output.add(0x00); output.add(0x00); output.add(0x00)
-        output.add(0x01); output.add(0x00); output.add(0x01); output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x01)
+        output.add(0x00)
+        output.add(0x01)
+        output.add(0x00)
         output.add(0x00)
 
         // Frame 1 - Image Data
-        output.add(0x02); output.add(0x02); output.add(0x44); output.add(0x01); output.add(0x00)
+        output.add(0x02)
+        output.add(0x02)
+        output.add(0x44)
+        output.add(0x01)
+        output.add(0x00)
 
         // Frame 2 - Graphic Control Extension
-        output.add(0x21); output.add(0xF9.toByte()); output.add(0x04)
-        output.add(0x00); output.add(0x0A); output.add(0x00); output.add(0x00); output.add(0x00)
+        output.add(0x21)
+        output.add(0xF9.toByte())
+        output.add(0x04)
+        output.add(0x00)
+        output.add(0x0A)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
 
         // Frame 2 - Image Descriptor
         output.add(0x2C)
-        output.add(0x00); output.add(0x00); output.add(0x00); output.add(0x00)
-        output.add(0x01); output.add(0x00); output.add(0x01); output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x01)
+        output.add(0x00)
+        output.add(0x01)
+        output.add(0x00)
         output.add(0x00)
 
         // Frame 2 - Image Data
-        output.add(0x02); output.add(0x02); output.add(0x44); output.add(0x01); output.add(0x00)
+        output.add(0x02)
+        output.add(0x02)
+        output.add(0x44)
+        output.add(0x01)
+        output.add(0x00)
 
         // Trailer
         output.add(0x3B)
@@ -1780,22 +1821,31 @@ class MessageMapperTest {
         output.addAll("GIF89a".toByteArray(Charsets.US_ASCII).toList())
 
         // Logical Screen Descriptor
-        output.add(0x01); output.add(0x00) // Width = 1
-        output.add(0x01); output.add(0x00) // Height = 1
+        output.add(0x01)
+        output.add(0x00) // Width = 1
+        output.add(0x01)
+        output.add(0x00) // Height = 1
         output.add(0x00) // Packed field (no global color table)
         output.add(0x00) // Background color
         output.add(0x00) // Pixel aspect ratio
 
         // Single frame - Image Descriptor (no graphic control extension)
         output.add(0x2C)
-        output.add(0x00); output.add(0x00); output.add(0x00); output.add(0x00) // position
-        output.add(0x01); output.add(0x00); output.add(0x01); output.add(0x00) // size
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00) // position
+        output.add(0x01)
+        output.add(0x00)
+        output.add(0x01)
+        output.add(0x00) // size
         output.add(0x00) // packed field
 
         // Image Data (minimal LZW)
         output.add(0x02) // LZW minimum code size
         output.add(0x02) // Sub-block size
-        output.add(0x44); output.add(0x01) // LZW data
+        output.add(0x44)
+        output.add(0x01) // LZW data
         output.add(0x00) // Block terminator
 
         // Trailer

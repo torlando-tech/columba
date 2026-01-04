@@ -19,10 +19,10 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -1361,12 +1361,13 @@ class PropagationNodeManagerTest {
             testScheduler.runCurrent()
 
             // Simulate propagation state callback with PR_COMPLETE (state 7)
-            val completeState = PropagationState(
-                state = 7,
-                stateName = "complete",
-                progress = 1.0f,
-                messagesReceived = 0,
-            )
+            val completeState =
+                PropagationState(
+                    state = 7,
+                    stateName = "complete",
+                    progress = 1.0f,
+                    messagesReceived = 0,
+                )
             propagationStateFlow.emit(completeState)
             testScheduler.runCurrent()
 
@@ -1529,12 +1530,13 @@ class PropagationNodeManagerTest {
                 testScheduler.runCurrent()
 
                 // Simulate propagation state callback with PR_COMPLETE (state 7)
-                val completeState = PropagationState(
-                    state = 7,
-                    stateName = "complete",
-                    progress = 1.0f,
-                    messagesReceived = 3,
-                )
+                val completeState =
+                    PropagationState(
+                        state = 7,
+                        stateName = "complete",
+                        progress = 1.0f,
+                        messagesReceived = 3,
+                    )
                 propagationStateFlow.emit(completeState)
                 testScheduler.runCurrent()
 
@@ -1627,12 +1629,13 @@ class PropagationNodeManagerTest {
             testScheduler.runCurrent()
 
             // Simulate propagation state callback with PR_COMPLETE (state 7)
-            val completeState = PropagationState(
-                state = 7,
-                stateName = "complete",
-                progress = 1.0f,
-                messagesReceived = 0,
-            )
+            val completeState =
+                PropagationState(
+                    state = 7,
+                    stateName = "complete",
+                    progress = 1.0f,
+                    messagesReceived = 0,
+                )
             propagationStateFlow.emit(completeState)
             testScheduler.runCurrent()
 

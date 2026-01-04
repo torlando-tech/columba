@@ -17,7 +17,6 @@ import com.lxmf.messenger.service.ActiveConversationManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.util.FileAttachment
-import com.lxmf.messenger.util.FileUtils
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

@@ -508,12 +508,13 @@ class ServiceReticulumProtocol(
                 try {
                     Log.d(TAG, "Propagation state changed: $stateJson")
                     val json = JSONObject(stateJson)
-                    val state = PropagationState(
-                        state = json.optInt("state", 0),
-                        stateName = json.optString("state_name", "unknown"),
-                        progress = json.optDouble("progress", 0.0).toFloat(),
-                        messagesReceived = json.optInt("messages_received", 0),
-                    )
+                    val state =
+                        PropagationState(
+                            state = json.optInt("state", 0),
+                            stateName = json.optString("state_name", "unknown"),
+                            progress = json.optDouble("progress", 0.0).toFloat(),
+                            messagesReceived = json.optInt("messages_received", 0),
+                        )
                     _propagationStateFlow.tryEmit(state)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling propagation state callback", e)
@@ -1905,9 +1906,10 @@ class ServiceReticulumProtocol(
                     smallAttachments[filename] = bytes
                 } else {
                     // Write large file to temp on IO thread and pass path
-                    val tempFile = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        FileUtils.writeTempAttachment(context, filename, bytes)
-                    }
+                    val tempFile =
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            FileUtils.writeTempAttachment(context, filename, bytes)
+                        }
                     largeAttachmentPaths[filename] = tempFile.absolutePath
                     Log.d(TAG, "Large attachment '$filename' (${bytes.size} bytes) written to temp file")
                 }

@@ -11,13 +11,13 @@ import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
 import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
+import com.lxmf.messenger.service.manager.EventHandler
 import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
-import com.lxmf.messenger.service.manager.EventHandler
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import com.lxmf.messenger.service.manager.RoutingManager

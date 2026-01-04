@@ -179,9 +179,10 @@ object ImageUtils {
     ): CompressionResult? {
         return try {
             // Get original file size
-            val originalSize = context.contentResolver.openInputStream(uri)?.use {
-                it.available()
-            } ?: 0
+            val originalSize =
+                context.contentResolver.openInputStream(uri)?.use {
+                    it.available()
+                } ?: 0
 
             // Load bitmap from URI
             val bitmap =
@@ -196,12 +197,13 @@ object ImageUtils {
 
             // Compress to WebP with progressive quality reduction
             // WebP provides better compression and strips EXIF metadata for Sideband interop
-            val webpFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                Bitmap.CompressFormat.WEBP_LOSSY
-            } else {
-                @Suppress("DEPRECATION")
-                Bitmap.CompressFormat.WEBP
-            }
+            val webpFormat =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    Bitmap.CompressFormat.WEBP_LOSSY
+                } else {
+                    @Suppress("DEPRECATION")
+                    Bitmap.CompressFormat.WEBP
+                }
 
             var quality = 90
             var compressed: ByteArray
@@ -277,12 +279,13 @@ object ImageUtils {
     ): CompressedImage? {
         return try {
             // Read raw bytes from URI
-            val rawBytes = context.contentResolver.openInputStream(uri)?.use { input ->
-                input.readBytes()
-            } ?: run {
-                Log.e(TAG, "Failed to read bytes from URI")
-                return null
-            }
+            val rawBytes =
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes()
+                } ?: run {
+                    Log.e(TAG, "Failed to read bytes from URI")
+                    return null
+                }
 
             // Check if it's an animated GIF
             if (isAnimatedGif(rawBytes)) {

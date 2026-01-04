@@ -69,6 +69,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -700,6 +701,7 @@ fun MessagingScreen(
                                             clipboardManager = clipboardManager,
                                             myIdentityHash = myIdentityHash,
                                             peerName = peerName,
+                                            syncProgress = syncProgress,
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
@@ -968,6 +970,7 @@ fun MessageBubble(
     clipboardManager: androidx.compose.ui.platform.ClipboardManager,
     myIdentityHash: String? = null,
     peerName: String = "",
+    syncProgress: SyncProgress = SyncProgress.Idle,
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
@@ -1045,11 +1048,12 @@ fun MessageBubble(
                 // Notification superseded by actual file arrival - don't render
                 return
             }
-            // Render notification bubble
+            // Render notification bubble with sync progress
             message.pendingFileInfo?.let { info ->
                 PendingFileNotificationBubble(
                     pendingFileInfo = info,
                     peerName = peerName,
+                    syncProgress = syncProgress,
                     onClick = { onFetchPendingFile(info.totalSize) },
                 )
             }
@@ -1895,9 +1899,12 @@ private fun FullscreenAnimatedImageDialog(
 fun PendingFileNotificationBubble(
     pendingFileInfo: com.lxmf.messenger.ui.model.PendingFileInfo,
     peerName: String,
+    syncProgress: SyncProgress,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isSyncing = syncProgress !is SyncProgress.Idle
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -1909,48 +1916,91 @@ fun PendingFileNotificationBubble(
             color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
             modifier = Modifier
                 .widthIn(max = 300.dp)
-                .clickable(onClick = onClick),
+                .then(if (!isSyncing) Modifier.clickable(onClick = onClick) else Modifier),
         ) {
-            Row(
+            Column(
                 modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Default.CloudDownload,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Column {
-                    Text(
-                        text = "$peerName sent a large file",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = "${pendingFileInfo.filename} (${formatFileSize(pendingFileInfo.totalSize)})",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (pendingFileInfo.fileCount > 1) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (isSyncing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Column {
                         Text(
-                            text = "+${pendingFileInfo.fileCount - 1} more file${if (pendingFileInfo.fileCount > 2) "s" else ""}",
+                            text = if (isSyncing) "Fetching file..." else "$peerName sent a large file",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = "${pendingFileInfo.filename} (${formatFileSize(pendingFileInfo.totalSize)})",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (!isSyncing && pendingFileInfo.fileCount > 1) {
+                            Text(
+                                text = "+${pendingFileInfo.fileCount - 1} more file${if (pendingFileInfo.fileCount > 2) "s" else ""}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = getSyncStatusText(syncProgress),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isSyncing) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
+                        )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Tap to fetch from relay",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                }
+                // Show progress bar when downloading
+                if (syncProgress is SyncProgress.InProgress && syncProgress.progress > 0f) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { syncProgress.progress },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
         }
     }
 }
+
+/**
+ * Get status text for pending file notification based on sync progress.
+ */
+private fun getSyncStatusText(syncProgress: SyncProgress): String =
+    when (syncProgress) {
+        is SyncProgress.Idle -> "Tap to fetch from relay"
+        is SyncProgress.Starting -> "Connecting to relay..."
+        is SyncProgress.InProgress -> when (syncProgress.stateName.lowercase()) {
+            "path_requested" -> "Discovering network path..."
+            "link_establishing" -> "Establishing connection..."
+            "link_established" -> "Connected, preparing..."
+            "request_sent" -> "Requesting messages..."
+            "receiving", "downloading" -> if (syncProgress.progress > 0f) {
+                "Downloading: ${(syncProgress.progress * 100).toInt()}%"
+            } else {
+                "Downloading..."
+            }
+            else -> "Processing..."
+        }
+    }
 
 /**
  * Format file size in human-readable format.

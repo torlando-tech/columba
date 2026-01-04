@@ -195,6 +195,7 @@ fun MessagingScreen(
     val selectedFileAttachments by viewModel.selectedFileAttachments.collectAsStateWithLifecycle()
     val totalAttachmentSize by viewModel.totalAttachmentSize.collectAsStateWithLifecycle()
     val isProcessingFile by viewModel.isProcessingFile.collectAsStateWithLifecycle()
+    val isSending by viewModel.isSending.collectAsStateWithLifecycle()
 
     // Observe loaded image IDs to trigger recomposition when images become available
     val loadedImageIds by viewModel.loadedImageIds.collectAsStateWithLifecycle()
@@ -770,6 +771,7 @@ fun MessagingScreen(
                             messageText = ""
                         }
                     },
+                    isSending = isSending,
                 )
             }
         }
@@ -1459,6 +1461,7 @@ fun MessageInputBar(
     onFileAttachmentClick: () -> Unit = {},
     onRemoveFileAttachment: (Int) -> Unit = {},
     onSendClick: () -> Unit,
+    isSending: Boolean = false,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1706,7 +1709,7 @@ fun MessageInputBar(
 
                 FilledIconButton(
                     onClick = onSendClick,
-                    enabled = messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty(),
+                    enabled = !isSending && (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()),
                     modifier = Modifier.size(48.dp),
                     shape = CircleShape,
                     colors =
@@ -1717,10 +1720,18 @@ fun MessageInputBar(
                             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         ),
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send message",
-                    )
+                    if (isSending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send message",
+                        )
+                    }
                 }
             }
         }

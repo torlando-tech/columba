@@ -53,9 +53,11 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
@@ -144,6 +146,10 @@ class MessagingViewModel
 
         private val _isProcessingFile = MutableStateFlow(false)
         val isProcessingFile: StateFlow<Boolean> = _isProcessingFile.asStateFlow()
+
+        // Track when a message is being sent to prevent double-sends
+        private val _isSending = MutableStateFlow(false)
+        val isSending: StateFlow<Boolean> = _isSending.asStateFlow()
 
         // Computed total size of all attachments (images + files)
         val totalAttachmentSize: StateFlow<Int> =
@@ -802,6 +808,7 @@ class MessagingViewModel
             content: String,
         ) {
             viewModelScope.launch {
+                _isSending.value = true
                 try {
                     val imageData = _selectedImageData.value
                     val imageFormat = _selectedImageFormat.value
@@ -873,6 +880,8 @@ class MessagingViewModel
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sending message", e)
+                } finally {
+                    _isSending.value = false
                 }
             }
         }
@@ -1230,15 +1239,16 @@ class MessagingViewModel
          * Called when user taps a pending file notification bubble.
          * Temporarily increases the incoming message size limit to accommodate the file,
          * triggers a sync to fetch it from the relay, then reverts to the original limit
-         * after a timeout to allow the download to complete.
+         * when sync completes (success or failure) or times out.
          *
          * @param fileSizeBytes The size of the pending file in bytes
          */
         fun fetchPendingFile(fileSizeBytes: Long) {
             viewModelScope.launch {
+                var originalLimitKb: Int? = null
                 try {
-                    // Get the current (original) limit to restore after timeout
-                    val originalLimitKb = settingsRepository.getIncomingMessageSizeLimitKb()
+                    // Get the current (original) limit to restore after sync completes
+                    originalLimitKb = settingsRepository.getIncomingMessageSizeLimitKb()
 
                     // Calculate new limit: file size + 10% buffer, rounded up to nearest 512KB
                     val fileSizeKb = (fileSizeBytes / 1024).toInt()
@@ -1254,28 +1264,39 @@ class MessagingViewModel
                         Log.d(TAG, "Python layer updated with temporary size limit")
                     }
 
-                    // Trigger sync to fetch the file (silent = no toast, keep syncing state for spinner)
-                    propagationNodeManager.triggerSync(silent = true, keepSyncingState = true)
+                    // Trigger sync to fetch the file (silent = no toast)
+                    // Don't use keepSyncingState so isSyncing properly reflects sync completion/failure
+                    propagationNodeManager.triggerSync(silent = true)
                     Log.d(TAG, "Sync triggered to fetch pending file")
 
-                    // Wait for file to download (timeout based on file size)
-                    // Allow ~100KB/s transfer rate minimum, plus 60 seconds buffer
-                    // Clamped to 60-300 seconds (1-5 minutes)
-                    val timeoutSeconds = ((fileSizeKb / 100) + 60).coerceIn(60, 300)
-                    Log.d(TAG, "Waiting ${timeoutSeconds}s for file download before reverting limit")
+                    // Wait for sync to complete (isSyncing goes false) or timeout
+                    // Timeout based on file size: ~100KB/s transfer rate + 60s buffer, clamped to 60-300s
+                    val timeoutMs = ((fileSizeKb / 100) + 60).coerceIn(60, 300) * 1000L
+                    Log.d(TAG, "Waiting up to ${timeoutMs / 1000}s for sync to complete")
 
-                    kotlinx.coroutines.delay(timeoutSeconds * 1000L)
-
-                    Log.d(TAG, "Timeout reached, reverting size limit to ${originalLimitKb}KB")
-                    if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                        reticulumProtocol.setIncomingMessageSizeLimit(originalLimitKb)
+                    // Wait for isSyncing to become false (sync complete or failed)
+                    val syncCompleted = withTimeoutOrNull(timeoutMs) {
+                        // Wait for isSyncing to go true first (sync started), then wait for it to go false
+                        propagationNodeManager.isSyncing.first { it } // Wait for sync to start
+                        propagationNodeManager.isSyncing.first { !it } // Wait for sync to end
+                        true
                     }
 
-                    // Reset syncing state now that we're done
-                    propagationNodeManager.setSyncingState(false)
+                    if (syncCompleted == true) {
+                        Log.d(TAG, "Sync completed, reverting size limit to ${originalLimitKb}KB")
+                    } else {
+                        Log.d(TAG, "Sync timed out, reverting size limit to ${originalLimitKb}KB")
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error fetching pending file", e)
-                    propagationNodeManager.setSyncingState(false)
+                } finally {
+                    // Always revert the size limit when done
+                    if (originalLimitKb != null) {
+                        if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
+                            reticulumProtocol.setIncomingMessageSizeLimit(originalLimitKb)
+                            Log.d(TAG, "Size limit reverted to ${originalLimitKb}KB")
+                        }
+                    }
                 }
             }
         }

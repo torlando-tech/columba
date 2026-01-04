@@ -3890,6 +3890,19 @@ class ReticulumWrapper:
                 # Re-submit to router (will go through pending_deferred_stamps for stamp generation)
                 self.router.handle_outbound(lxmf_message)
 
+                # Check if propagation succeeded immediately (state = SENT)
+                # LXMF doesn't reliably call delivery callback for propagated messages,
+                # so we detect success here and emit 'propagated' status
+                try:
+                    if hasattr(lxmf_message, 'state') and lxmf_message.state == LXMF.LXMessage.SENT:
+                        log_info("ReticulumWrapper", "_on_message_failed",
+                                f"✅ Propagation retry succeeded immediately for {msg_hash[:16]}...")
+                        self._on_message_sent(lxmf_message)
+                        return  # Propagation confirmed, don't need to report as retrying
+                except Exception as e:
+                    log_debug("ReticulumWrapper", "_on_message_failed",
+                             f"Could not check propagation state: {e}")
+
                 # If message has file attachments, track it for notification AFTER propagation succeeds
                 # We don't send the notification immediately - wait until the relay confirms receipt
                 if hasattr(lxmf_message, 'fields') and lxmf_message.fields and 5 in lxmf_message.fields:
@@ -4208,6 +4221,10 @@ class ReticulumWrapper:
         This means the message was successfully transmitted to the network,
         but delivery proof has not yet been received.
 
+        For PROPAGATED messages, SENT state means the relay confirmed receipt.
+        LXMF doesn't reliably call the delivery callback for propagated messages,
+        so we detect propagation success here and emit 'propagated' status.
+
         Note: This is NOT a callback from LXMF (no such callback exists).
         We check the message state directly after handle_outbound().
 
@@ -4216,13 +4233,29 @@ class ReticulumWrapper:
         """
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
-            log_info("ReticulumWrapper", "_on_message_sent",
-                    f"📤 Message {msg_hash[:16]}... SENT to network!")
+
+            # For PROPAGATED messages, SENT state means relay stored the message
+            # LXMF doesn't reliably call delivery callback for relay acceptance
+            if hasattr(lxmf_message, 'desired_method') and lxmf_message.desired_method == LXMF.LXMessage.PROPAGATED:
+                status = 'propagated'
+                log_info("ReticulumWrapper", "_on_message_sent",
+                        f"📤 Message {msg_hash[:16]}... PROPAGATED (stored on relay)")
+
+                # Send pending file notification if tracked (for fallback propagation with attachments)
+                if msg_hash in self._pending_file_notifications:
+                    tracked_message = self._pending_file_notifications.pop(msg_hash)
+                    log_info("ReticulumWrapper", "_on_message_sent",
+                            f"📬 Sending pending file notification now that propagation confirmed")
+                    self._send_pending_file_notification(tracked_message)
+            else:
+                status = 'sent'
+                log_info("ReticulumWrapper", "_on_message_sent",
+                        f"📤 Message {msg_hash[:16]}... SENT to network!")
 
             # Create status event for Kotlin
             status_event = {
                 'message_hash': msg_hash,
-                'status': 'sent',
+                'status': status,
                 'timestamp': int(time.time() * 1000)
             }
 

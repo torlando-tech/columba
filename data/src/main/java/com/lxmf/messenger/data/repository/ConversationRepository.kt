@@ -10,6 +10,7 @@ import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.storage.AttachmentStorageManager
+import org.json.JSONArray
 import org.json.JSONObject
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
@@ -732,6 +733,14 @@ class ConversationRepository
                     val key = keys.next()
                     val value = fields.opt(key)
 
+                    // Special handling for field 5 (file attachments array)
+                    // Extract each file's data separately, keep metadata inline
+                    if (key == "5" && value is JSONArray) {
+                        val extractedArray = extractFileAttachmentsForSent(messageId, value)
+                        modifiedFields.put("5", extractedArray)
+                        continue
+                    }
+
                     // Get string representation of value for size check
                     val valueStr = value?.toString() ?: ""
 
@@ -773,6 +782,80 @@ class ConversationRepository
                 android.util.Log.e("ConversationRepository", "Error extracting attachments", e)
                 fieldsJson // Return original on error
             }
+        }
+
+        /**
+         * Extract file attachment data to disk for sent messages, keeping metadata inline.
+         *
+         * Input format: [{"filename": "doc.pdf", "size": 12345, "data": "hex..."}, ...]
+         * Output format: [{"filename": "doc.pdf", "size": 12345, "_data_ref": "/path/to/file"}, ...]
+         *
+         * This matches the format used by EventHandler for received messages, ensuring
+         * consistent handling in MessageMapper.
+         *
+         * @param messageId Message identifier for storage path
+         * @param attachments Original file attachments array
+         * @return Modified array with data extracted to disk
+         */
+        @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
+        private fun extractFileAttachmentsForSent(
+            messageId: String,
+            attachments: JSONArray,
+        ): JSONArray {
+            val result = JSONArray()
+
+            for (i in 0 until attachments.length()) {
+                try {
+                    val attachment = attachments.getJSONObject(i)
+                    val filename = attachment.optString("filename", "unknown")
+                    val size = attachment.optInt("size", 0)
+                    val data = attachment.optString("data", "")
+
+                    val modifiedAttachment = JSONObject().apply {
+                        put("filename", filename)
+                        put("size", size)
+                    }
+
+                    // Extract data to disk if present and non-empty
+                    if (data.isNotEmpty()) {
+                        val filePath = attachmentStorage.saveAttachment(
+                            messageId,
+                            "5_$i", // Unique key per file: "5_0", "5_1", etc.
+                            data,
+                        )
+                        if (filePath != null) {
+                            modifiedAttachment.put("_data_ref", filePath)
+                            android.util.Log.d(
+                                "ConversationRepository",
+                                "Extracted sent file '$filename' data to: $filePath",
+                            )
+                        } else {
+                            // Keep data inline if save failed
+                            modifiedAttachment.put("data", data)
+                            android.util.Log.w(
+                                "ConversationRepository",
+                                "Failed to extract sent file '$filename', keeping inline",
+                            )
+                        }
+                    }
+
+                    result.put(modifiedAttachment)
+                } catch (e: Exception) {
+                    android.util.Log.w(
+                        "ConversationRepository",
+                        "Failed to process sent file attachment at index $i",
+                        e,
+                    )
+                    // Keep original attachment if processing fails
+                    result.put(attachments.opt(i))
+                }
+            }
+
+            android.util.Log.i(
+                "ConversationRepository",
+                "Extracted ${attachments.length()} sent file attachment(s) to disk",
+            )
+            return result
         }
 
         companion object {

@@ -128,9 +128,12 @@ class ServicePersistenceManager(
      * Called from EventHandler.handleMessageEvent() in the service process.
      *
      * This includes identity scoping to ensure messages are saved to the correct identity.
+     *
+     * This is a suspend function that completes before returning, ensuring the message
+     * is fully persisted before sync completion is reported to the UI.
      */
     @Suppress("LongParameterList") // Parameters mirror MessageEntity fields for direct persistence
-    fun persistMessage(
+    suspend fun persistMessage(
         messageHash: String,
         content: String,
         sourceHash: String,
@@ -141,90 +144,88 @@ class ServicePersistenceManager(
         deliveryMethod: String?,
         hasFileAttachments: Boolean = false,
     ) {
-        scope.launch {
-            try {
-                // Get active identity to scope the message correctly
-                val activeIdentity = localIdentityDao.getActiveIdentitySync()
-                if (activeIdentity == null) {
-                    Log.w(TAG, "No active identity - cannot persist message")
-                    return@launch
-                }
+        try {
+            // Get active identity to scope the message correctly
+            val activeIdentity = localIdentityDao.getActiveIdentitySync()
+            if (activeIdentity == null) {
+                Log.w(TAG, "No active identity - cannot persist message")
+                return
+            }
 
-                // Check for duplicates (composite key is id + identityHash)
-                val existingMessage = messageDao.getMessageById(messageHash, activeIdentity.identityHash)
-                if (existingMessage != null) {
-                    Log.d(TAG, "Message already exists - skipping duplicate: $messageHash")
-                    return@launch
-                }
+            // Check for duplicates (composite key is id + identityHash)
+            val existingMessage = messageDao.getMessageById(messageHash, activeIdentity.identityHash)
+            if (existingMessage != null) {
+                Log.d(TAG, "Message already exists - skipping duplicate: $messageHash")
+                return
+            }
 
-                // Create/update conversation
-                val existingConversation = conversationDao.getConversation(
+            // Create/update conversation
+            val existingConversation = conversationDao.getConversation(
+                sourceHash,
+                activeIdentity.identityHash,
+            )
+
+            // Get peer name from existing conversation or use formatted hash
+            val peerName = existingConversation?.peerName
+                ?: "Peer ${sourceHash.take(8).uppercase()}"
+
+            // Insert/update conversation
+            if (existingConversation != null) {
+                val updated = existingConversation.copy(
+                    lastMessage = content.take(100),
+                    lastMessageTimestamp = timestamp,
+                    unreadCount = existingConversation.unreadCount + 1,
+                    peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
+                )
+                conversationDao.updateConversation(updated)
+            } else {
+                val newConversation = ConversationEntity(
+                    peerHash = sourceHash,
+                    identityHash = activeIdentity.identityHash,
+                    peerName = peerName,
+                    peerPublicKey = publicKey,
+                    lastMessage = content.take(100),
+                    lastMessageTimestamp = timestamp,
+                    unreadCount = 1,
+                    lastSeenTimestamp = 0,
+                )
+                conversationDao.insertConversation(newConversation)
+            }
+
+            // Insert message
+            val messageEntity = MessageEntity(
+                id = messageHash,
+                conversationHash = sourceHash,
+                identityHash = activeIdentity.identityHash,
+                content = content,
+                timestamp = timestamp,
+                isFromMe = false,
+                status = "delivered",
+                isRead = false,
+                fieldsJson = fieldsJson,
+                replyToMessageId = replyToMessageId,
+                deliveryMethod = deliveryMethod,
+                errorMessage = null,
+            )
+            messageDao.insertMessage(messageEntity)
+
+            // Check if this message has file attachments and should supersede a pending notification
+            if (hasFileAttachments) {
+                supersedePendingFileNotifications(
                     sourceHash,
                     activeIdentity.identityHash,
+                    messageHash,
                 )
-
-                // Get peer name from existing conversation or use formatted hash
-                val peerName = existingConversation?.peerName
-                    ?: "Peer ${sourceHash.take(8).uppercase()}"
-
-                // Insert/update conversation
-                if (existingConversation != null) {
-                    val updated = existingConversation.copy(
-                        lastMessage = content.take(100),
-                        lastMessageTimestamp = timestamp,
-                        unreadCount = existingConversation.unreadCount + 1,
-                        peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
-                    )
-                    conversationDao.updateConversation(updated)
-                } else {
-                    val newConversation = ConversationEntity(
-                        peerHash = sourceHash,
-                        identityHash = activeIdentity.identityHash,
-                        peerName = peerName,
-                        peerPublicKey = publicKey,
-                        lastMessage = content.take(100),
-                        lastMessageTimestamp = timestamp,
-                        unreadCount = 1,
-                        lastSeenTimestamp = 0,
-                    )
-                    conversationDao.insertConversation(newConversation)
-                }
-
-                // Insert message
-                val messageEntity = MessageEntity(
-                    id = messageHash,
-                    conversationHash = sourceHash,
-                    identityHash = activeIdentity.identityHash,
-                    content = content,
-                    timestamp = timestamp,
-                    isFromMe = false,
-                    status = "delivered",
-                    isRead = false,
-                    fieldsJson = fieldsJson,
-                    replyToMessageId = replyToMessageId,
-                    deliveryMethod = deliveryMethod,
-                    errorMessage = null,
-                )
-                messageDao.insertMessage(messageEntity)
-
-                // Check if this message has file attachments and should supersede a pending notification
-                if (hasFileAttachments) {
-                    supersedePendingFileNotifications(
-                        sourceHash,
-                        activeIdentity.identityHash,
-                        messageHash,
-                    )
-                }
-
-                // Store peer public key if available
-                if (publicKey != null) {
-                    persistPeerIdentity(sourceHash, publicKey)
-                }
-
-                Log.d(TAG, "Service persisted message from $sourceHash: ${content.take(30)}...")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error persisting message in service from $sourceHash", e)
             }
+
+            // Store peer public key if available
+            if (publicKey != null) {
+                persistPeerIdentity(sourceHash, publicKey)
+            }
+
+            Log.d(TAG, "Service persisted message from $sourceHash: ${content.take(30)}...")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting message in service from $sourceHash", e)
         }
     }
 

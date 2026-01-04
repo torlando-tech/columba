@@ -128,7 +128,14 @@ interface AnnounceDao {
      * Get announces filtered by node types.
      * Returns a Flow that emits updated lists whenever the database changes.
      */
-    @Query("SELECT * FROM announces WHERE nodeType IN (:nodeTypes) ORDER BY lastSeenTimestamp DESC")
+    @Query(
+        """
+        SELECT * FROM announces
+        WHERE nodeType IN (:nodeTypes)
+        AND (nodeType != 'PROPAGATION_NODE' OR stampCostFlexibility IS NOT NULL)
+        ORDER BY lastSeenTimestamp DESC
+        """,
+    )
     fun getAnnouncesByTypes(nodeTypes: List<String>): Flow<List<AnnounceEntity>>
 
     /**
@@ -143,6 +150,7 @@ interface AnnounceDao {
         """
         SELECT * FROM announces
         WHERE nodeType = 'PROPAGATION_NODE'
+        AND stampCostFlexibility IS NOT NULL
         ORDER BY hops ASC, lastSeenTimestamp DESC
         LIMIT :limit
     """,
@@ -178,7 +186,14 @@ interface AnnounceDao {
      * Get announces filtered by node types with pagination support.
      * Returns a PagingSource for use with Paging 3 library.
      */
-    @Query("SELECT * FROM announces WHERE nodeType IN (:nodeTypes) ORDER BY lastSeenTimestamp DESC")
+    @Query(
+        """
+        SELECT * FROM announces
+        WHERE nodeType IN (:nodeTypes)
+        AND (nodeType != 'PROPAGATION_NODE' OR stampCostFlexibility IS NOT NULL)
+        ORDER BY lastSeenTimestamp DESC
+        """,
+    )
     fun getAnnouncesByTypesPaged(nodeTypes: List<String>): PagingSource<Int, AnnounceEntity>
 
     /**

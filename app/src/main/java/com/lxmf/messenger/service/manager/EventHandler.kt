@@ -5,6 +5,7 @@ import com.chaquo.python.PyObject
 import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.NodeTypeDetector
+import com.lxmf.messenger.reticulum.util.AppDataParser
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import com.lxmf.messenger.service.persistence.ServicePersistenceManager
 import com.lxmf.messenger.service.state.ServiceState
@@ -242,6 +243,14 @@ class EventHandler(
                 ?: appData?.let { String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 } }
                 ?: "Peer ${destinationHashHex.take(8).uppercase()}"
 
+            // Extract transfer size limit for propagation nodes
+            val propagationTransferLimitKb = if (nodeType == NodeType.PROPAGATION_NODE) {
+                val metadata = AppDataParser.extractPropagationNodeMetadata(appData)
+                metadata.transferLimitKb
+            } else {
+                null
+            }
+
             // Persist to database first (survives app process death)
             if (persistenceManager != null && publicKey != null) {
                 persistenceManager.persistAnnounce(
@@ -261,6 +270,7 @@ class EventHandler(
                     iconName = null, // Icon appearance updated via message field 4
                     iconForegroundColor = null,
                     iconBackgroundColor = null,
+                    propagationTransferLimitKb = propagationTransferLimitKb,
                 )
 
                 // Also persist peer identity (public key)

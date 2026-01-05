@@ -110,6 +110,7 @@ class ServicePersistenceManagerTest {
             iconName = null,
             iconForegroundColor = null,
             iconBackgroundColor = null,
+            propagationTransferLimitKb = null,
         )
 
         testScope.advanceUntilIdle()
@@ -152,6 +153,7 @@ class ServicePersistenceManagerTest {
             iconName = null,
             iconForegroundColor = null,
             iconBackgroundColor = null,
+            propagationTransferLimitKb = null,
         )
 
         testScope.advanceUntilIdle()
@@ -199,6 +201,7 @@ class ServicePersistenceManagerTest {
             iconName = null,
             iconForegroundColor = null,
             iconBackgroundColor = null,
+            propagationTransferLimitKb = null,
         )
 
         testScope.advanceUntilIdle()
@@ -248,6 +251,7 @@ class ServicePersistenceManagerTest {
             iconName = "work",
             iconForegroundColor = "#FF0000",
             iconBackgroundColor = "#00FF00",
+            propagationTransferLimitKb = null,
         )
 
         testScope.advanceUntilIdle()
@@ -283,6 +287,7 @@ class ServicePersistenceManagerTest {
             iconName = null,
             iconForegroundColor = null,
             iconBackgroundColor = null,
+            propagationTransferLimitKb = null,
         )
 
         testScope.advanceUntilIdle()

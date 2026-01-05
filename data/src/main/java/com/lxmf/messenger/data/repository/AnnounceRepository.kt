@@ -33,6 +33,7 @@ data class Announce(
     val iconName: String? = null, // Icon name (e.g., Material icon name)
     val iconForegroundColor: String? = null, // Hex RGB e.g., "FFFFFF"
     val iconBackgroundColor: String? = null, // Hex RGB e.g., "1E88E5"
+    val propagationTransferLimitKb: Int? = null, // Per-message size limit for propagation nodes (in KB)
 ) {
     @Suppress("CyclomaticComplexMethod")
     override fun equals(other: Any?): Boolean {
@@ -63,6 +64,7 @@ data class Announce(
         if (iconName != other.iconName) return false
         if (iconForegroundColor != other.iconForegroundColor) return false
         if (iconBackgroundColor != other.iconBackgroundColor) return false
+        if (propagationTransferLimitKb != other.propagationTransferLimitKb) return false
 
         return true
     }
@@ -85,6 +87,7 @@ data class Announce(
         result = 31 * result + (iconName?.hashCode() ?: 0)
         result = 31 * result + (iconForegroundColor?.hashCode() ?: 0)
         result = 31 * result + (iconBackgroundColor?.hashCode() ?: 0)
+        result = 31 * result + (propagationTransferLimitKb?.hashCode() ?: 0)
         return result
     }
 }
@@ -225,6 +228,7 @@ class AnnounceRepository
             iconName: String? = null,
             iconForegroundColor: String? = null,
             iconBackgroundColor: String? = null,
+            propagationTransferLimitKb: Int? = null,
         ) {
             // Preserve favorite status and icon appearance if announce already exists
             val existing = announceDao.getAnnounce(destinationHash)
@@ -249,6 +253,7 @@ class AnnounceRepository
                     iconName = iconName ?: existing?.iconName,
                     iconForegroundColor = iconForegroundColor ?: existing?.iconForegroundColor,
                     iconBackgroundColor = iconBackgroundColor ?: existing?.iconBackgroundColor,
+                    propagationTransferLimitKb = propagationTransferLimitKb,
                 )
             announceDao.upsertAnnounce(entity)
         }
@@ -399,5 +404,6 @@ class AnnounceRepository
                 iconName = iconName,
                 iconForegroundColor = iconForegroundColor,
                 iconBackgroundColor = iconBackgroundColor,
+                propagationTransferLimitKb = propagationTransferLimitKb,
             )
     }

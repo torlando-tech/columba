@@ -218,6 +218,10 @@ class MigrationExporter
                     createdTimestamp = identity.createdTimestamp,
                     lastUsedTimestamp = identity.lastUsedTimestamp,
                     isActive = identity.isActive,
+                    // Profile icon data
+                    iconName = identity.iconName,
+                    iconForegroundColor = identity.iconForegroundColor,
+                    iconBackgroundColor = identity.iconBackgroundColor,
                 )
             }
         }
@@ -276,51 +280,10 @@ class MigrationExporter
         }
 
         private suspend fun exportSettings(): SettingsExport {
-            return SettingsExport(
-                notificationsEnabled = settingsRepository.notificationsEnabledFlow.first(),
-                notificationReceivedMessage =
-                    settingsRepository
-                        .notificationReceivedMessageFlow.first(),
-                notificationReceivedMessageFavorite =
-                    settingsRepository
-                        .notificationReceivedMessageFavoriteFlow.first(),
-                notificationHeardAnnounce =
-                    settingsRepository
-                        .notificationHeardAnnounceFlow.first(),
-                notificationBleConnected =
-                    settingsRepository
-                        .notificationBleConnectedFlow.first(),
-                notificationBleDisconnected =
-                    settingsRepository
-                        .notificationBleDisconnectedFlow.first(),
-                hasRequestedNotificationPermission =
-                    settingsRepository
-                        .hasRequestedNotificationPermissionFlow.first(),
-                autoAnnounceEnabled = settingsRepository.autoAnnounceEnabledFlow.first(),
-                autoAnnounceIntervalMinutes =
-                    settingsRepository
-                        .autoAnnounceIntervalMinutesFlow.first(),
-                lastAutoAnnounceTime = settingsRepository.lastAutoAnnounceTimeFlow.first(),
-                themePreference = settingsRepository.themePreferenceFlow.first().getIdentifier(),
-                preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first(),
-                rpcKey = settingsRepository.rpcKeyFlow.first(),
-                // Propagation node settings
-                defaultDeliveryMethod = settingsRepository.defaultDeliveryMethodFlow.first(),
-                tryPropagationOnFail = settingsRepository.tryPropagationOnFailFlow.first(),
-                manualPropagationNode = settingsRepository.manualPropagationNodeFlow.first(),
-                lastPropagationNode = settingsRepository.lastPropagationNodeFlow.first(),
-                autoSelectPropagationNode = settingsRepository.autoSelectPropagationNodeFlow.first(),
-                // Message retrieval settings
-                autoRetrieveEnabled = settingsRepository.autoRetrieveEnabledFlow.first(),
-                retrievalIntervalSeconds = settingsRepository.retrievalIntervalSecondsFlow.first(),
-                lastSyncTimestamp = settingsRepository.lastSyncTimestampFlow.first(),
-                // Transport node settings
-                transportNodeEnabled = settingsRepository.transportNodeEnabledFlow.first(),
-                // Location sharing settings
-                locationSharingEnabled = settingsRepository.locationSharingEnabledFlow.first(),
-                defaultSharingDuration = settingsRepository.defaultSharingDurationFlow.first(),
-                locationPrecisionRadius = settingsRepository.locationPrecisionRadiusFlow.first(),
-            )
+            // Automatic export of all DataStore preferences - includes any future settings automatically
+            val allPreferences = settingsRepository.exportAllPreferences()
+            Log.d(TAG, "Exported ${allPreferences.size} preference entries")
+            return SettingsExport(preferences = allPreferences)
         }
 
         private fun collectAttachments(): List<AttachmentRef> {

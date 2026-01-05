@@ -1,6 +1,7 @@
 package com.lxmf.messenger.repository
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
@@ -8,9 +9,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.lxmf.messenger.data.repository.CustomThemeRepository
 import com.lxmf.messenger.ui.theme.AppTheme
@@ -972,6 +975,82 @@ class SettingsRepository
 
             /** Maximum incoming message size limit: 128MB (effectively unlimited) */
             const val MAX_INCOMING_SIZE_LIMIT_KB = 131072
+        }
+
+        // Export/Import methods for migration
+
+        /**
+         * Export all preferences from DataStore for backup/migration.
+         * Returns a list of preference entries that can be serialized.
+         */
+        suspend fun exportAllPreferences(): List<com.lxmf.messenger.migration.PreferenceEntry> {
+            val preferences = context.dataStore.data.first()
+            val entries = mutableListOf<com.lxmf.messenger.migration.PreferenceEntry>()
+
+            preferences.asMap().forEach { (key, value) ->
+                val (type, stringValue) =
+                    when (value) {
+                        is Boolean -> "boolean" to value.toString()
+                        is Int -> "int" to value.toString()
+                        is Long -> "long" to value.toString()
+                        is Float -> "float" to value.toString()
+                        is String -> "string" to value
+                        is Set<*> -> "string_set" to (value as Set<String>).joinToString("\u001F") // Unit separator
+                        else -> return@forEach // Skip unknown types
+                    }
+
+                entries.add(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = key.name,
+                        type = type,
+                        value = stringValue,
+                    ),
+                )
+            }
+
+            return entries
+        }
+
+        /**
+         * Import preferences from a list of preference entries.
+         * Unknown keys are safely ignored for forward/backward compatibility.
+         */
+        suspend fun importAllPreferences(entries: List<com.lxmf.messenger.migration.PreferenceEntry>) {
+            context.dataStore.edit { prefs ->
+                entries.forEach { entry ->
+                    try {
+                        when (entry.type) {
+                            "boolean" -> {
+                                val key = booleanPreferencesKey(entry.key)
+                                prefs[key] = entry.value.toBoolean()
+                            }
+                            "int" -> {
+                                val key = intPreferencesKey(entry.key)
+                                prefs[key] = entry.value.toInt()
+                            }
+                            "long" -> {
+                                val key = longPreferencesKey(entry.key)
+                                prefs[key] = entry.value.toLong()
+                            }
+                            "float" -> {
+                                val key = floatPreferencesKey(entry.key)
+                                prefs[key] = entry.value.toFloat()
+                            }
+                            "string" -> {
+                                val key = stringPreferencesKey(entry.key)
+                                prefs[key] = entry.value
+                            }
+                            "string_set" -> {
+                                val key = stringSetPreferencesKey(entry.key)
+                                prefs[key] = entry.value.split("\u001F").toSet()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        // Ignore invalid entries - they may be from newer/older app versions
+                        Log.w("SettingsRepository", "Skipping invalid preference: ${entry.key}", e)
+                    }
+                }
+            }
         }
 
         // Custom theme methods (delegated to CustomThemeRepository)

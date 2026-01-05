@@ -139,19 +139,24 @@ interface AnnounceDao {
     fun getAnnouncesByTypes(nodeTypes: List<String>): Flow<List<AnnounceEntity>>
 
     /**
-     * Get top propagation nodes sorted by hop count (ascending), then by most recent.
+     * Get top propagation nodes sorted for optimal relay selection.
+     * Priority: fewer hops (better connectivity), higher transfer limit (larger messages),
+     * more recently seen (still active). Nodes with unknown limits sorted last.
      * Optimized query with LIMIT in SQL to avoid fetching all rows.
-     * Used for relay selection UI.
      *
      * @param limit Maximum number of nodes to return (default 10)
-     * @return Flow of propagation node announces sorted by nearest first, then most recent
+     * @return Flow of propagation node announces sorted by best candidates first
      */
     @Query(
         """
         SELECT * FROM announces
         WHERE nodeType = 'PROPAGATION_NODE'
         AND stampCostFlexibility IS NOT NULL
-        ORDER BY hops ASC, lastSeenTimestamp DESC
+        ORDER BY
+            hops ASC,
+            CASE WHEN propagationTransferLimitKb IS NULL THEN 1 ELSE 0 END,
+            propagationTransferLimitKb DESC,
+            lastSeenTimestamp DESC
         LIMIT :limit
     """,
     )

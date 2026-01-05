@@ -9,6 +9,7 @@ import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.SharingSession
 import com.lxmf.messenger.ui.model.SharingDuration
@@ -73,6 +74,7 @@ data class MapState(
     val userLocation: Location? = null,
     val hasLocationPermission: Boolean = false,
     val isPermissionCardDismissed: Boolean = false,
+    val hasUserDismissedPermissionSheet: Boolean = false,
     val contactMarkers: List<ContactMarker> = emptyList(),
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
@@ -98,6 +100,7 @@ class MapViewModel
         private val receivedLocationDao: ReceivedLocationDao,
         private val locationSharingManager: LocationSharingManager,
         private val announceDao: AnnounceDao,
+        private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MapViewModel"
@@ -130,6 +133,13 @@ class MapViewModel
                 )
 
         init {
+            // Collect location permission sheet dismissal state
+            viewModelScope.launch {
+                settingsRepository.hasDismissedLocationPermissionSheetFlow.collect { dismissed ->
+                    _state.update { it.copy(hasUserDismissedPermissionSheet = dismissed) }
+                }
+            }
+
             // Collect received locations and convert to markers
             // Combines with both contacts and announces for display name lookup
             // Uses unfiltered query - filtering for stale/expired done in ViewModel
@@ -268,6 +278,16 @@ class MapViewModel
         fun dismissPermissionCard() {
             _state.update { currentState ->
                 currentState.copy(isPermissionCardDismissed = true)
+            }
+        }
+
+        /**
+         * Dismiss the location permission bottom sheet for the current app session.
+         * The dismissal state persists until the app is relaunched.
+         */
+        fun dismissLocationPermissionSheet() {
+            viewModelScope.launch {
+                settingsRepository.markLocationPermissionSheetDismissed()
             }
         }
 

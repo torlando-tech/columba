@@ -81,10 +81,13 @@ import com.lxmf.messenger.ui.screens.ThemeManagementScreen
 import com.lxmf.messenger.ui.screens.WelcomeScreen
 import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.viewmodel.ContactsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
+import javax.inject.Inject
 
 /**
  * Main activity for the Columba LXMF Messenger application.
@@ -94,6 +97,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val TAG = "MainActivity"
     }
+
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
 
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
@@ -109,6 +115,14 @@ class MainActivity : ComponentActivity() {
 
         // Enable edge-to-edge mode for proper IME insets handling
         enableEdgeToEdge()
+
+        // Reset location permission sheet dismissal on fresh app launch
+        // This ensures users see the permission prompt again when the app is relaunched
+        if (savedInstanceState == null) {
+            lifecycleScope.launch {
+                settingsRepository.resetLocationPermissionSheetDismissal()
+            }
+        }
 
         // Process the intent that launched the activity
         processIntent(intent)

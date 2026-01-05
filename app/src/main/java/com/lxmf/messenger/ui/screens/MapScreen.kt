@@ -115,7 +115,9 @@ fun MapScreen(
     val state by viewModel.state.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
 
-    var showPermissionSheet by remember { mutableStateOf(false) }
+    // Show permission sheet only if permission not granted and user hasn't dismissed it
+    val showPermissionSheet = !state.hasLocationPermission &&
+                              !state.hasUserDismissedPermissionSheet
     var showShareLocationSheet by remember { mutableStateOf(false) }
     var selectedMarker by remember { mutableStateOf<ContactMarker?>(null) }
     val permissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -146,12 +148,11 @@ fun MapScreen(
     // Check permissions on first launch
     LaunchedEffect(Unit) {
         MapLibre.getInstance(context)
-        if (!LocationPermissionManager.hasPermission(context)) {
-            showPermissionSheet = true
-        } else {
+        if (LocationPermissionManager.hasPermission(context)) {
             viewModel.onPermissionResult(true)
             startLocationUpdates(fusedLocationClient, viewModel)
         }
+        // Permission sheet visibility is now managed by ViewModel state
     }
 
     // Track whether we've done the initial center on user location
@@ -534,8 +535,10 @@ fun MapScreen(
             SmallFloatingActionButton(
                 onClick = {
                     if (!state.hasLocationPermission) {
-                        // Show permission sheet if permission not granted
-                        showPermissionSheet = true
+                        // Request permission directly when user explicitly clicks My Location
+                        permissionLauncher.launch(
+                            LocationPermissionManager.getRequiredPermissions().toTypedArray(),
+                        )
                     } else {
                         state.userLocation?.let { location ->
                             mapLibreMap?.let { map ->
@@ -620,9 +623,9 @@ fun MapScreen(
     // Permission bottom sheet
     if (showPermissionSheet) {
         LocationPermissionBottomSheet(
-            onDismiss = { showPermissionSheet = false },
+            onDismiss = { viewModel.dismissLocationPermissionSheet() },
             onRequestPermissions = {
-                showPermissionSheet = false
+                viewModel.dismissLocationPermissionSheet()
                 permissionLauncher.launch(
                     LocationPermissionManager.getRequiredPermissions().toTypedArray(),
                 )

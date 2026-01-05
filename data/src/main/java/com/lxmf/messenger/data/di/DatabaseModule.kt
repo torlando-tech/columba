@@ -58,6 +58,7 @@ object DatabaseModule {
             MIGRATION_24_25,
             MIGRATION_25_26,
             MIGRATION_26_27,
+            MIGRATION_27_28,
         )
     }
 
@@ -1160,6 +1161,15 @@ object DatabaseModule {
                 database.execSQL("ALTER TABLE announces ADD COLUMN iconName TEXT DEFAULT NULL")
                 database.execSQL("ALTER TABLE announces ADD COLUMN iconForegroundColor TEXT DEFAULT NULL")
                 database.execSQL("ALTER TABLE announces ADD COLUMN iconBackgroundColor TEXT DEFAULT NULL")
+            }
+        }
+
+    // Migration from version 27 to 28: Add propagationTransferLimitKb to announces table
+    // Stores the per-message transfer limit (in KB) announced by propagation nodes
+    private val MIGRATION_27_28 =
+        object : Migration(27, 28) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE announces ADD COLUMN propagationTransferLimitKb INTEGER DEFAULT NULL")
             }
         }
 

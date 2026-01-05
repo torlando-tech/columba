@@ -42,6 +42,10 @@ data class IdentityExport(
     val createdTimestamp: Long,
     val lastUsedTimestamp: Long,
     val isActive: Boolean,
+    // Profile icon data (nullable for backward compatibility with older exports)
+    val iconName: String? = null,
+    val iconForegroundColor: String? = null,
+    val iconBackgroundColor: String? = null,
 )
 
 /**
@@ -202,6 +206,7 @@ data class CustomThemeExport(
 
 /**
  * Exported user settings.
+ * All settings added after initial version are nullable for backward compatibility.
  */
 @Serializable
 data class SettingsExport(
@@ -211,9 +216,13 @@ data class SettingsExport(
     val notificationHeardAnnounce: Boolean,
     val notificationBleConnected: Boolean,
     val notificationBleDisconnected: Boolean,
+    val hasRequestedNotificationPermission: Boolean? = null,
     val autoAnnounceEnabled: Boolean,
     val autoAnnounceIntervalMinutes: Int,
+    val lastAutoAnnounceTime: Long? = null,
     val themePreference: String,
+    val preferOwnInstance: Boolean? = null,
+    val rpcKey: String? = null,
     // Propagation node settings (nullable for backward compatibility with v5 imports)
     val defaultDeliveryMethod: String? = null,
     val tryPropagationOnFail: Boolean? = null,
@@ -223,6 +232,13 @@ data class SettingsExport(
     // Message retrieval settings
     val autoRetrieveEnabled: Boolean? = null,
     val retrievalIntervalSeconds: Int? = null,
+    val lastSyncTimestamp: Long? = null,
+    // Transport node settings
+    val transportNodeEnabled: Boolean? = null,
+    // Location sharing settings
+    val locationSharingEnabled: Boolean? = null,
+    val defaultSharingDuration: String? = null,
+    val locationPrecisionRadius: Int? = null,
 )
 
 /**

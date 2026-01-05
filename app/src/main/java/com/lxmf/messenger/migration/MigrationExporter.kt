@@ -293,11 +293,17 @@ class MigrationExporter
                 notificationBleDisconnected =
                     settingsRepository
                         .notificationBleDisconnectedFlow.first(),
+                hasRequestedNotificationPermission =
+                    settingsRepository
+                        .hasRequestedNotificationPermissionFlow.first(),
                 autoAnnounceEnabled = settingsRepository.autoAnnounceEnabledFlow.first(),
                 autoAnnounceIntervalMinutes =
                     settingsRepository
                         .autoAnnounceIntervalMinutesFlow.first(),
+                lastAutoAnnounceTime = settingsRepository.lastAutoAnnounceTimeFlow.first(),
                 themePreference = settingsRepository.themePreferenceFlow.first().getIdentifier(),
+                preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first(),
+                rpcKey = settingsRepository.rpcKeyFlow.first(),
                 // Propagation node settings
                 defaultDeliveryMethod = settingsRepository.defaultDeliveryMethodFlow.first(),
                 tryPropagationOnFail = settingsRepository.tryPropagationOnFailFlow.first(),
@@ -307,6 +313,13 @@ class MigrationExporter
                 // Message retrieval settings
                 autoRetrieveEnabled = settingsRepository.autoRetrieveEnabledFlow.first(),
                 retrievalIntervalSeconds = settingsRepository.retrievalIntervalSecondsFlow.first(),
+                lastSyncTimestamp = settingsRepository.lastSyncTimestampFlow.first(),
+                // Transport node settings
+                transportNodeEnabled = settingsRepository.transportNodeEnabledFlow.first(),
+                // Location sharing settings
+                locationSharingEnabled = settingsRepository.locationSharingEnabledFlow.first(),
+                defaultSharingDuration = settingsRepository.defaultSharingDurationFlow.first(),
+                locationPrecisionRadius = settingsRepository.locationPrecisionRadiusFlow.first(),
             )
         }
 

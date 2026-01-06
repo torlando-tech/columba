@@ -49,6 +49,9 @@ class SettingsRepository
             val NOTIFICATION_BLE_DISCONNECTED = booleanPreferencesKey("notification_ble_disconnected")
             val HAS_REQUESTED_NOTIFICATION_PERMISSION = booleanPreferencesKey("has_requested_notification_permission")
 
+            // Location permission preferences
+            val HAS_DISMISSED_LOCATION_PERMISSION_SHEET = booleanPreferencesKey("has_dismissed_location_permission_sheet")
+
             // Onboarding preferences
             val HAS_COMPLETED_ONBOARDING = booleanPreferencesKey("has_completed_onboarding")
 
@@ -244,6 +247,38 @@ class SettingsRepository
         suspend fun markNotificationPermissionRequested() {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.HAS_REQUESTED_NOTIFICATION_PERMISSION] = true
+            }
+        }
+
+        /**
+         * Flow tracking whether the user has dismissed the location permission bottom sheet.
+         * Defaults to false if not set.
+         * Resets on app cold start to show the sheet again in a new session.
+         */
+        val hasDismissedLocationPermissionSheetFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.HAS_DISMISSED_LOCATION_PERMISSION_SHEET] ?: false
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Mark that the user has dismissed the location permission bottom sheet.
+         * This prevents showing it again during the current app session.
+         */
+        suspend fun markLocationPermissionSheetDismissed() {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.HAS_DISMISSED_LOCATION_PERMISSION_SHEET] = true
+            }
+        }
+
+        /**
+         * Reset the location permission sheet dismissal state.
+         * Called on app cold start to show the sheet again in a new session.
+         */
+        suspend fun resetLocationPermissionSheetDismissal() {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.HAS_DISMISSED_LOCATION_PERMISSION_SHEET] = false
             }
         }
 

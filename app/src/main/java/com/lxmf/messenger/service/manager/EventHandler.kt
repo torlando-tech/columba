@@ -12,6 +12,7 @@ import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -239,9 +240,10 @@ class EventHandler(
             val nodeType = NodeTypeDetector.detectNodeType(appData, aspect)
 
             // Determine display name (prefer parsed name, fall back to identity hash)
-            val peerName = displayName
-                ?: appData?.let { String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 } }
-                ?: "Peer ${destinationHashHex.take(8).uppercase()}"
+            val peerName =
+                displayName
+                    ?: appData?.let { String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 } }
+                    ?: "Peer ${destinationHashHex.take(8).uppercase()}"
 
             // Extract transfer size limit for propagation nodes
             val propagationTransferLimitKb = if (nodeType == NodeType.PROPAGATION_NODE) {
@@ -318,8 +320,10 @@ class EventHandler(
      * Handle incoming message event.
      *
      * Persists to database first (survives app process death), then broadcasts for UI updates.
+     * This is a suspend function to ensure message persistence completes before sync
+     * completion is reported to the UI.
      */
-    private fun handleMessageEvent(event: PyObject) {
+    private suspend fun handleMessageEvent(event: PyObject) {
         try {
             val messageHash = event.getDictValue("message_hash")?.toString().orEmpty()
             val content = event.getDictValue("content")?.toString().orEmpty()
@@ -344,6 +348,10 @@ class EventHandler(
                     }
                 }
 
+            // Check if message has file attachments BEFORE extraction (for supersede matching)
+            // Field 5 is the LXMF file attachments field
+            val hasFileAttachments = fieldsJson?.optJSONArray("5")?.let { it.length() > 0 } ?: false
+
             // Check if fields contain large attachments that need to be saved to disk
             // to avoid AIDL TransactionTooLargeException (~1MB limit)
             fieldsJson = extractLargeAttachments(messageHash, fieldsJson)
@@ -367,6 +375,7 @@ class EventHandler(
                     publicKey = publicKey,
                     replyToMessageId = replyToMessageId,
                     deliveryMethod = deliveryMethod,
+                    hasFileAttachments = hasFileAttachments,
                 )
                 Log.d(TAG, "Message persisted to database: $messageHash from $sourceHashHex")
             }
@@ -418,6 +427,18 @@ class EventHandler(
 
         while (keys.hasNext()) {
             val key = keys.next()
+
+            // Special handling for field 5 (file attachments array)
+            // Extract each file's data separately, keep metadata inline
+            if (key == "5") {
+                val field5 = fields.optJSONArray("5")
+                if (field5 != null) {
+                    val extractedArray = extractFileAttachmentsData(messageHash, field5)
+                    modifiedFields.put("5", extractedArray)
+                    continue
+                }
+            }
+
             val value = fields.optString(key, "")
 
             if (value.length > AttachmentStorageManager.SIZE_THRESHOLD) {
@@ -445,5 +466,64 @@ class EventHandler(
         val newSize = modifiedFields.toString().length
         Log.d(TAG, "Fields size reduced from $totalSize to $newSize chars")
         return modifiedFields
+    }
+
+    /**
+     * Extract file attachment data to disk, keeping metadata inline.
+     *
+     * Input format: [{"filename": "doc.pdf", "size": 12345, "data": "hex..."}, ...]
+     * Output format: [{"filename": "doc.pdf", "size": 12345, "_data_ref": "/path/to/file"}, ...]
+     *
+     * @param messageHash Message identifier for storage path
+     * @param attachments Original file attachments array
+     * @return Modified array with data extracted to disk
+     */
+    private fun extractFileAttachmentsData(
+        messageHash: String,
+        attachments: JSONArray,
+    ): JSONArray {
+        val result = JSONArray()
+
+        for (i in 0 until attachments.length()) {
+            try {
+                val attachment = attachments.getJSONObject(i)
+                val filename = attachment.optString("filename", "unknown")
+                val size = attachment.optInt("size", 0)
+                val data = attachment.optString("data", "")
+
+                val modifiedAttachment =
+                    JSONObject().apply {
+                        put("filename", filename)
+                        put("size", size)
+                    }
+
+                // Extract data to disk if present
+                if (data.isNotEmpty()) {
+                    val filePath =
+                        attachmentStorage?.saveAttachment(
+                            messageHash,
+                            "5_$i", // Unique key per file: "5_0", "5_1", etc.
+                            data,
+                        )
+                    if (filePath != null) {
+                        modifiedAttachment.put("_data_ref", filePath)
+                        Log.d(TAG, "Extracted file '$filename' data to: $filePath")
+                    } else {
+                        // Keep data inline if save failed
+                        modifiedAttachment.put("data", data)
+                        Log.w(TAG, "Failed to extract file '$filename', keeping inline")
+                    }
+                }
+
+                result.put(modifiedAttachment)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to process file attachment at index $i", e)
+                // Keep original attachment if processing fails
+                result.put(attachments.opt(i))
+            }
+        }
+
+        Log.i(TAG, "Extracted ${attachments.length()} file attachment(s) to disk")
+        return result
     }
 }

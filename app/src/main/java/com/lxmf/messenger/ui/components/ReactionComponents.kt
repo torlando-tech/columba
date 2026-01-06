@@ -818,21 +818,23 @@ fun ReactionModeOverlay(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
 
     // Calculate screen dimensions and UI element sizes in pixels
-    val layoutDimensions = OverlayLayoutDimensions(
-        screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() },
-        emojiBarHeight = with(density) { 56.dp.toPx() },
-        emojiBarGap = with(density) { 76.dp.toPx() },
-        actionButtonsHeight = with(density) { 56.dp.toPx() },
-        actionButtonsGap = with(density) { 12.dp.toPx() },
-        topPadding = with(density) { 48.dp.toPx() },
-        bottomPadding = with(density) { 48.dp.toPx() },
-    )
+    val layoutDimensions =
+        OverlayLayoutDimensions(
+            screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() },
+            emojiBarHeight = with(density) { 56.dp.toPx() },
+            emojiBarGap = with(density) { 76.dp.toPx() },
+            actionButtonsHeight = with(density) { 56.dp.toPx() },
+            actionButtonsGap = with(density) { 12.dp.toPx() },
+            topPadding = with(density) { 48.dp.toPx() },
+            bottomPadding = with(density) { 48.dp.toPx() },
+        )
 
     // Calculate scale factor for large messages to ensure they fit on screen
-    val messageScale = calculateMessageScaleForOverlay(
-        messageHeight = messageHeight,
-        dimensions = layoutDimensions,
-    )
+    val messageScale =
+        calculateMessageScaleForOverlay(
+            messageHeight = messageHeight,
+            dimensions = layoutDimensions,
+        )
 
     // Scaled message dimensions
     val scaledMessageHeight = (messageHeight * messageScale).toInt()
@@ -958,13 +960,14 @@ fun ReactionModeOverlay(
                 val displayHeightDp = with(density) { scaledMessageHeight.toDp() }
 
                 // Calculate X offset to keep message aligned (adjust for width change due to scaling)
-                val scaledMessageX = if (isFromMe) {
-                    // For sent messages (right-aligned), adjust X to keep right edge aligned
-                    messageX + (messageWidth - scaledMessageWidth)
-                } else {
-                    // For received messages (left-aligned), keep X the same
-                    messageX
-                }
+                val scaledMessageX =
+                    if (isFromMe) {
+                        // For sent messages (right-aligned), adjust X to keep right edge aligned
+                        messageX + (messageWidth - scaledMessageWidth)
+                    } else {
+                        // For received messages (left-aligned), keep X the same
+                        messageX
+                    }
 
                 // Message snapshot - keep at full opacity during animation
                 Image(

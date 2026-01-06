@@ -31,6 +31,7 @@ import com.lxmf.messenger.reticulum.model.ReceivedPacket
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.service.manager.parseIdentityResultJson
+import com.lxmf.messenger.util.FileUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -186,6 +187,14 @@ class ServiceReticulumProtocol(
             extraBufferCapacity = 10,
         )
     val reactionReceivedFlow: SharedFlow<String> = _reactionReceivedFlow.asSharedFlow()
+
+    // Propagation sync state changes (for real-time sync progress)
+    private val _propagationStateFlow =
+        MutableSharedFlow<PropagationState>(
+            replay = 1,
+            extraBufferCapacity = 1,
+        )
+    val propagationStateFlow: SharedFlow<PropagationState> = _propagationStateFlow.asSharedFlow()
 
     /**
      * Handler for alternative relay requests from the service.
@@ -492,6 +501,23 @@ class ServiceReticulumProtocol(
                     _reactionReceivedFlow.tryEmit(reactionJson)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling reaction received callback", e)
+                }
+            }
+
+            override fun onPropagationStateChanged(stateJson: String) {
+                try {
+                    Log.d(TAG, "Propagation state changed: $stateJson")
+                    val json = JSONObject(stateJson)
+                    val state =
+                        PropagationState(
+                            state = json.optInt("state", 0),
+                            stateName = json.optString("state_name", "unknown"),
+                            progress = json.optDouble("progress", 0.0).toFloat(),
+                            messagesReceived = json.optInt("messages_received", 0),
+                        )
+                    _propagationStateFlow.tryEmit(state)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling propagation state callback", e)
                 }
             }
         }
@@ -1870,8 +1896,24 @@ class ServiceReticulumProtocol(
                     DeliveryMethod.PROPAGATED -> "propagated"
                 }
 
-            // Convert List<Pair<String, ByteArray>> to Map<String, ByteArray> for AIDL
-            val fileAttachmentsMap = fileAttachments?.associate { (filename, bytes) -> filename to bytes }
+            // Partition attachments into small (bytes via Binder) and large (file paths)
+            // This avoids Android Binder IPC transaction size limits (~1MB)
+            val smallAttachments = mutableMapOf<String, ByteArray>()
+            val largeAttachmentPaths = mutableMapOf<String, String>()
+
+            fileAttachments?.forEach { (filename, bytes) ->
+                if (bytes.size <= FileUtils.FILE_TRANSFER_THRESHOLD) {
+                    smallAttachments[filename] = bytes
+                } else {
+                    // Write large file to temp on IO thread and pass path
+                    val tempFile =
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            FileUtils.writeTempAttachment(context, filename, bytes)
+                        }
+                    largeAttachmentPaths[filename] = tempFile.absolutePath
+                    Log.d(TAG, "Large attachment '$filename' (${bytes.size} bytes) written to temp file")
+                }
+            }
 
             val resultJson =
                 service.sendLxmfMessageWithMethod(
@@ -1882,7 +1924,8 @@ class ServiceReticulumProtocol(
                     tryPropagationOnFail,
                     imageData,
                     imageFormat,
-                    fileAttachmentsMap,
+                    smallAttachments.ifEmpty { null },
+                    largeAttachmentPaths.ifEmpty { null },
                     replyToMessageId,
                     iconAppearance?.iconName,
                     iconAppearance?.foregroundColor,
@@ -1985,6 +2028,28 @@ class ServiceReticulumProtocol(
             )
         }
     }
+
+    // ==================== MESSAGE SIZE LIMITS ====================
+
+    /**
+     * Update the incoming message size limit at runtime.
+     * This controls the maximum size of LXMF messages that can be received.
+     * Messages exceeding this limit will be rejected by the LXMF router.
+     *
+     * @param limitKb Size limit in KB (e.g., 1024 for 1MB, 131072 for 128MB "unlimited")
+     */
+    fun setIncomingMessageSizeLimit(limitKb: Int) {
+        try {
+            service?.setIncomingMessageSizeLimit(limitKb)
+            Log.d(TAG, "Updated incoming message size limit to ${limitKb}KB")
+        } catch (e: RemoteException) {
+            Log.e(TAG, "Error setting incoming message size limit", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error setting incoming message size limit", e)
+        }
+    }
+
+    // ==================== BLE SUPPORT ====================
 
     /**
      * Get BLE connection details from the service.

@@ -96,3 +96,4 @@ release/.envrc
 .worktrees/
 python/ble_modules/BLEAgent.py
 python/ble_modules/BLEFragmentation.py
+.letta/

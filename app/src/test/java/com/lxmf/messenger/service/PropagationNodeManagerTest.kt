@@ -6,7 +6,8 @@ import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
-import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.PropagationState
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.test.TestFactories
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -18,8 +19,10 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -48,16 +51,18 @@ import kotlin.time.Duration.Companion.seconds
 @OptIn(ExperimentalCoroutinesApi::class)
 class PropagationNodeManagerTest {
     private val testDispatcher = StandardTestDispatcher()
+    private val testScheduler get() = testDispatcher.scheduler
     private lateinit var testScope: TestScope
 
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var contactRepository: ContactRepository
     private lateinit var announceRepository: AnnounceRepository
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var reticulumProtocol: ServiceReticulumProtocol
     private lateinit var manager: PropagationNodeManager
     private lateinit var myRelayFlow: MutableStateFlow<ContactEntity?>
     private lateinit var autoSelectFlow: MutableStateFlow<Boolean>
     private lateinit var networkStatusFlow: MutableStateFlow<NetworkStatus>
+    private lateinit var propagationStateFlow: MutableSharedFlow<PropagationState>
 
     private val testDestHash = TestFactories.TEST_DEST_HASH
     private val testDestHash2 = TestFactories.TEST_DEST_HASH_2
@@ -78,9 +83,13 @@ class PropagationNodeManagerTest {
         myRelayFlow = MutableStateFlow<ContactEntity?>(null)
         autoSelectFlow = MutableStateFlow(true)
         networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
+        propagationStateFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
 
         // Mock networkStatus flow
         every { reticulumProtocol.networkStatus } returns networkStatusFlow
+
+        // Mock propagationStateFlow for sync completion observation
+        every { reticulumProtocol.propagationStateFlow } returns propagationStateFlow
 
         // Default settings mocks
         coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
@@ -1325,6 +1334,9 @@ class PropagationNodeManagerTest {
                     isMyRelay = true,
                 )
 
+            // Start manager to observe propagation state changes
+            manager.start()
+
             // Wait for currentRelayState to become Loaded
             manager.currentRelayState.test(timeout = 5.seconds) {
                 var state = awaitItem()
@@ -1335,7 +1347,7 @@ class PropagationNodeManagerTest {
             }
 
             val mockSyncState =
-                com.lxmf.messenger.reticulum.protocol.PropagationState(
+                PropagationState(
                     state = 0,
                     stateName = "IDLE",
                     progress = 0.0f,
@@ -1345,11 +1357,25 @@ class PropagationNodeManagerTest {
                 Result.success(mockSyncState)
 
             // When
-            manager.syncWithPropagationNode()
-            advanceUntilIdle()
+            launch { manager.syncWithPropagationNode() }
+            testScheduler.runCurrent()
+
+            // Simulate propagation state callback with PR_COMPLETE (state 7)
+            val completeState =
+                PropagationState(
+                    state = 7,
+                    stateName = "complete",
+                    progress = 1.0f,
+                    messagesReceived = 0,
+                )
+            propagationStateFlow.emit(completeState)
+            testScheduler.runCurrent()
 
             // Then: Should save timestamp to settings repository
             coVerify { settingsRepository.saveLastSyncTimestamp(any()) }
+
+            // Stop manager to cancel observer
+            manager.stop()
         }
 
     @Test
@@ -1476,6 +1502,9 @@ class PropagationNodeManagerTest {
                     isMyRelay = true,
                 )
 
+            // Start manager to observe propagation state changes
+            manager.start()
+
             // Wait for currentRelayState to become Loaded
             manager.currentRelayState.test(timeout = 5.seconds) {
                 var state = awaitItem()
@@ -1486,7 +1515,7 @@ class PropagationNodeManagerTest {
             }
 
             val mockSyncState =
-                com.lxmf.messenger.reticulum.protocol.PropagationState(
+                PropagationState(
                     state = 0,
                     stateName = "IDLE",
                     progress = 0.0f,
@@ -1497,16 +1526,31 @@ class PropagationNodeManagerTest {
 
             // When: Trigger sync and collect result
             manager.manualSyncResult.test(timeout = 5.seconds) {
-                manager.triggerSync()
-                advanceUntilIdle()
+                launch { manager.triggerSync() }
+                testScheduler.runCurrent()
 
-                // Then: Should emit Success
+                // Simulate propagation state callback with PR_COMPLETE (state 7)
+                val completeState =
+                    PropagationState(
+                        state = 7,
+                        stateName = "complete",
+                        progress = 1.0f,
+                        messagesReceived = 3,
+                    )
+                propagationStateFlow.emit(completeState)
+                testScheduler.runCurrent()
+
+                // Then: Should emit Success with messages count
                 val result = awaitItem()
                 assert(result is SyncResult.Success) {
                     "Should emit Success on successful sync, got $result"
                 }
+                assertEquals(3, (result as SyncResult.Success).messagesReceived)
                 cancelAndConsumeRemainingEvents()
             }
+
+            // Stop manager to cancel observer
+            manager.stop()
         }
 
     @Test
@@ -1558,6 +1602,9 @@ class PropagationNodeManagerTest {
                     isMyRelay = true,
                 )
 
+            // Start manager to observe propagation state changes
+            manager.start()
+
             // Wait for currentRelayState to become Loaded
             manager.currentRelayState.test(timeout = 5.seconds) {
                 var state = awaitItem()
@@ -1568,7 +1615,7 @@ class PropagationNodeManagerTest {
             }
 
             val mockSyncState =
-                com.lxmf.messenger.reticulum.protocol.PropagationState(
+                PropagationState(
                     state = 0,
                     stateName = "IDLE",
                     progress = 0.0f,
@@ -1578,8 +1625,19 @@ class PropagationNodeManagerTest {
                 Result.success(mockSyncState)
 
             // When
-            manager.triggerSync()
-            advanceUntilIdle()
+            launch { manager.triggerSync() }
+            testScheduler.runCurrent()
+
+            // Simulate propagation state callback with PR_COMPLETE (state 7)
+            val completeState =
+                PropagationState(
+                    state = 7,
+                    stateName = "complete",
+                    progress = 1.0f,
+                    messagesReceived = 0,
+                )
+            propagationStateFlow.emit(completeState)
+            testScheduler.runCurrent()
 
             // Then: Should save timestamp to settings repository
             coVerify { settingsRepository.saveLastSyncTimestamp(any()) }
@@ -1588,6 +1646,9 @@ class PropagationNodeManagerTest {
             assert(manager.lastSyncTimestamp.value != null) {
                 "lastSyncTimestamp should be set after successful sync"
             }
+
+            // Stop manager to cancel observer
+            manager.stop()
         }
 
     // ========== RelayInfo Fallback Logic Tests (via currentRelay) ==========
@@ -2274,5 +2335,188 @@ class PropagationNodeManagerTest {
             }
 
             testManager.stop()
+        }
+
+    // ========== SyncProgress.Complete Tests ==========
+
+    @Test
+    fun `syncProgress is Complete when messagesReceived greater than zero`() =
+        runTest {
+            // Given: Relay is configured and manager started
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+            manager.start()
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            val mockSyncState =
+                PropagationState(
+                    state = 0,
+                    stateName = "IDLE",
+                    progress = 0.0f,
+                    messagesReceived = 0,
+                )
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.success(mockSyncState)
+
+            // When: Start sync and complete with messages received
+            manager.syncProgress.test(timeout = 5.seconds) {
+                // Skip initial state
+                awaitItem()
+
+                launch { manager.triggerSync() }
+                testScheduler.runCurrent()
+
+                // Simulate sync completion with messages received (PR_COMPLETE state = 7)
+                val completeState =
+                    PropagationState(
+                        state = 7,
+                        stateName = "complete",
+                        progress = 1.0f,
+                        messagesReceived = 5,
+                    )
+                propagationStateFlow.emit(completeState)
+                testScheduler.runCurrent()
+
+                // Then: syncProgress should be Complete
+                var progress = awaitItem()
+                // Skip Starting state if present
+                while (progress is SyncProgress.Starting || progress is SyncProgress.InProgress) {
+                    progress = awaitItem()
+                }
+                assertEquals(SyncProgress.Complete, progress)
+                cancelAndConsumeRemainingEvents()
+            }
+
+            manager.stop()
+        }
+
+    @Test
+    fun `syncProgress is Idle when messagesReceived is zero`() =
+        runTest {
+            // Given: Relay is configured and manager started
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+            manager.start()
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            val mockSyncState =
+                PropagationState(
+                    state = 0,
+                    stateName = "IDLE",
+                    progress = 0.0f,
+                    messagesReceived = 0,
+                )
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.success(mockSyncState)
+
+            // When: Start sync and complete with zero messages
+            manager.syncProgress.test(timeout = 5.seconds) {
+                // Skip initial state
+                awaitItem()
+
+                launch { manager.triggerSync() }
+                testScheduler.runCurrent()
+
+                // Simulate sync completion with NO messages received (PR_COMPLETE state = 7)
+                val completeState =
+                    PropagationState(
+                        state = 7,
+                        stateName = "complete",
+                        progress = 1.0f,
+                        messagesReceived = 0,
+                    )
+                propagationStateFlow.emit(completeState)
+                testScheduler.runCurrent()
+
+                // Then: syncProgress should go straight to Idle (not Complete)
+                var progress = awaitItem()
+                // Skip Starting state if present
+                while (progress is SyncProgress.Starting || progress is SyncProgress.InProgress) {
+                    progress = awaitItem()
+                }
+                assertEquals(SyncProgress.Idle, progress)
+                cancelAndConsumeRemainingEvents()
+            }
+
+            manager.stop()
+        }
+
+    @Test
+    fun `syncProgress Complete transitions to Idle after delay`() =
+        runTest {
+            // Given: Relay is configured and manager started
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+            manager.start()
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            val mockSyncState =
+                PropagationState(
+                    state = 0,
+                    stateName = "IDLE",
+                    progress = 0.0f,
+                    messagesReceived = 0,
+                )
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.success(mockSyncState)
+
+            // When: Start sync, complete with messages, then wait for delay
+            launch { manager.triggerSync() }
+            testScheduler.runCurrent()
+
+            // Simulate sync completion with messages (PR_COMPLETE state = 7)
+            val completeState =
+                PropagationState(
+                    state = 7,
+                    stateName = "complete",
+                    progress = 1.0f,
+                    messagesReceived = 3,
+                )
+            propagationStateFlow.emit(completeState)
+            testScheduler.runCurrent()
+
+            // Verify Complete state
+            assertEquals(SyncProgress.Complete, manager.syncProgress.value)
+
+            // Advance time past the 2 second delay
+            testScheduler.advanceTimeBy(2001)
+
+            // Then: syncProgress should transition to Idle
+            assertEquals(SyncProgress.Idle, manager.syncProgress.value)
+
+            manager.stop()
         }
 }

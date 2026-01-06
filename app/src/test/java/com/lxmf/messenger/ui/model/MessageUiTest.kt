@@ -25,115 +25,125 @@ class MessageUiTest {
         hasImageAttachment: Boolean = false,
         decodedImage: androidx.compose.ui.graphics.ImageBitmap? = null,
         reactions: List<ReactionUi> = emptyList(),
-    ): MessageUi = MessageUi(
-        id = id,
-        destinationHash = "dest-hash",
-        content = content,
-        timestamp = System.currentTimeMillis(),
-        isFromMe = true,
-        status = "sent",
-        isAnimatedImage = isAnimatedImage,
-        imageData = imageData,
-        hasFileAttachments = hasFileAttachments,
-        replyPreview = replyPreview,
-        hasImageAttachment = hasImageAttachment,
-        decodedImage = decodedImage,
-        reactions = reactions,
-    )
+    ): MessageUi =
+        MessageUi(
+            id = id,
+            destinationHash = "dest-hash",
+            content = content,
+            timestamp = System.currentTimeMillis(),
+            isFromMe = true,
+            status = "sent",
+            isAnimatedImage = isAnimatedImage,
+            imageData = imageData,
+            hasFileAttachments = hasFileAttachments,
+            replyPreview = replyPreview,
+            hasImageAttachment = hasImageAttachment,
+            decodedImage = decodedImage,
+            reactions = reactions,
+        )
 
     // ========== isMediaOnlyMessage Tests ==========
 
     @Test
     fun `isMediaOnlyMessage returns true for animated GIF with no text`() {
-        val message = createBaseMessage(
-            isAnimatedImage = true,
-            imageData = byteArrayOf(0x47, 0x49, 0x46), // GIF header bytes
-            content = "",
-        )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = true,
+                imageData = byteArrayOf(0x47, 0x49, 0x46), // GIF header bytes
+                content = "",
+            )
 
         assertTrue(message.isMediaOnlyMessage)
     }
 
     @Test
     fun `isMediaOnlyMessage returns true for animated GIF with whitespace-only content`() {
-        val message = createBaseMessage(
-            isAnimatedImage = true,
-            imageData = byteArrayOf(0x47, 0x49, 0x46),
-            content = "   \n\t  ",
-        )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = true,
+                imageData = byteArrayOf(0x47, 0x49, 0x46),
+                content = "   \n\t  ",
+            )
 
         assertTrue(message.isMediaOnlyMessage)
     }
 
     @Test
     fun `isMediaOnlyMessage returns false when imageData is null`() {
-        val message = createBaseMessage(
-            isAnimatedImage = true,
-            imageData = null,
-            content = "",
-        )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = true,
+                imageData = null,
+                content = "",
+            )
 
         assertFalse(message.isMediaOnlyMessage)
     }
 
     @Test
     fun `isMediaOnlyMessage returns false for non-animated image`() {
-        val message = createBaseMessage(
-            isAnimatedImage = false,
-            imageData = byteArrayOf(0xFF.toByte(), 0xD8.toByte()), // JPEG header
-            content = "",
-        )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = false,
+                imageData = byteArrayOf(0xFF.toByte(), 0xD8.toByte()), // JPEG header
+                content = "",
+            )
 
         assertFalse(message.isMediaOnlyMessage)
     }
 
     @Test
     fun `isMediaOnlyMessage returns false when message has text content`() {
-        val message = createBaseMessage(
-            isAnimatedImage = true,
-            imageData = byteArrayOf(0x47, 0x49, 0x46),
-            content = "Check out this GIF!",
-        )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = true,
+                imageData = byteArrayOf(0x47, 0x49, 0x46),
+                content = "Check out this GIF!",
+            )
 
         assertFalse(message.isMediaOnlyMessage)
     }
 
     @Test
     fun `isMediaOnlyMessage returns false when message has file attachments`() {
-        val message = createBaseMessage(
-            isAnimatedImage = true,
-            imageData = byteArrayOf(0x47, 0x49, 0x46),
-            content = "",
-            hasFileAttachments = true,
-        )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = true,
+                imageData = byteArrayOf(0x47, 0x49, 0x46),
+                content = "",
+                hasFileAttachments = true,
+            )
 
         assertFalse(message.isMediaOnlyMessage)
     }
 
     @Test
     fun `isMediaOnlyMessage returns false when message is a reply`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "original-msg-id",
-            senderName = "Alice",
-            contentPreview = "Original message...",
-        )
-        val message = createBaseMessage(
-            isAnimatedImage = true,
-            imageData = byteArrayOf(0x47, 0x49, 0x46),
-            content = "",
-            replyPreview = replyPreview,
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "original-msg-id",
+                senderName = "Alice",
+                contentPreview = "Original message...",
+            )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = true,
+                imageData = byteArrayOf(0x47, 0x49, 0x46),
+                content = "",
+                replyPreview = replyPreview,
+            )
 
         assertFalse(message.isMediaOnlyMessage)
     }
 
     @Test
     fun `isMediaOnlyMessage returns false for text-only message`() {
-        val message = createBaseMessage(
-            isAnimatedImage = false,
-            imageData = null,
-            content = "Hello, world!",
-        )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = false,
+                imageData = null,
+                content = "Hello, world!",
+            )
 
         assertFalse(message.isMediaOnlyMessage)
     }
@@ -141,36 +151,39 @@ class MessageUiTest {
     @Test
     fun `isMediaOnlyMessage returns false for static image with no text`() {
         // Static images (non-animated) should still use bubble
-        val message = createBaseMessage(
-            isAnimatedImage = false,
-            imageData = byteArrayOf(0xFF.toByte(), 0xD8.toByte()),
-            content = "",
-            hasImageAttachment = true,
-        )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = false,
+                imageData = byteArrayOf(0xFF.toByte(), 0xD8.toByte()),
+                content = "",
+                hasImageAttachment = true,
+            )
 
         assertFalse(message.isMediaOnlyMessage)
     }
 
     @Test
     fun `isMediaOnlyMessage returns false when all conditions are false`() {
-        val message = createBaseMessage(
-            isAnimatedImage = false,
-            imageData = null,
-            content = "Regular message",
-            hasFileAttachments = false,
-            replyPreview = null,
-        )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = false,
+                imageData = null,
+                content = "Regular message",
+                hasFileAttachments = false,
+                replyPreview = null,
+            )
 
         assertFalse(message.isMediaOnlyMessage)
     }
 
     @Test
     fun `isMediaOnlyMessage returns false for GIF with single character text`() {
-        val message = createBaseMessage(
-            isAnimatedImage = true,
-            imageData = byteArrayOf(0x47, 0x49, 0x46),
-            content = "!",
-        )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = true,
+                imageData = byteArrayOf(0x47, 0x49, 0x46),
+                content = "!",
+            )
 
         assertFalse(message.isMediaOnlyMessage)
     }
@@ -178,17 +191,19 @@ class MessageUiTest {
     @Test
     fun `isMediaOnlyMessage returns false for GIF reply with no text`() {
         // Even without text, a reply should show the bubble for context
-        val replyPreview = ReplyPreviewUi(
-            messageId = "parent-id",
-            senderName = "Bob",
-            contentPreview = "What do you think?",
-        )
-        val message = createBaseMessage(
-            isAnimatedImage = true,
-            imageData = byteArrayOf(0x47, 0x49, 0x46),
-            content = "",
-            replyPreview = replyPreview,
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "parent-id",
+                senderName = "Bob",
+                contentPreview = "What do you think?",
+            )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = true,
+                imageData = byteArrayOf(0x47, 0x49, 0x46),
+                content = "",
+                replyPreview = replyPreview,
+            )
 
         assertFalse(message.isMediaOnlyMessage)
     }
@@ -196,15 +211,17 @@ class MessageUiTest {
     @Test
     fun `isMediaOnlyMessage with reactions still returns true`() {
         // Reactions don't prevent media-only display
-        val reactions = listOf(
-            ReactionUi(emoji = "👍", senderHashes = listOf("hash1", "hash2")),
-        )
-        val message = createBaseMessage(
-            isAnimatedImage = true,
-            imageData = byteArrayOf(0x47, 0x49, 0x46),
-            content = "",
-            reactions = reactions,
-        )
+        val reactions =
+            listOf(
+                ReactionUi(emoji = "👍", senderHashes = listOf("hash1", "hash2")),
+            )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = true,
+                imageData = byteArrayOf(0x47, 0x49, 0x46),
+                content = "",
+                reactions = reactions,
+            )
 
         assertTrue(message.isMediaOnlyMessage)
     }
@@ -212,11 +229,12 @@ class MessageUiTest {
     @Test
     fun `isMediaOnlyMessage handles empty imageData array`() {
         // Empty byte array is still non-null, but this is an edge case
-        val message = createBaseMessage(
-            isAnimatedImage = true,
-            imageData = byteArrayOf(),
-            content = "",
-        )
+        val message =
+            createBaseMessage(
+                isAnimatedImage = true,
+                imageData = byteArrayOf(),
+                content = "",
+            )
 
         // Empty imageData is technically non-null, so this would be true
         // In practice, we wouldn't have isAnimatedImage=true with empty data
@@ -227,12 +245,13 @@ class MessageUiTest {
 
     @Test
     fun `FileAttachmentUi stores correct properties`() {
-        val attachment = FileAttachmentUi(
-            filename = "document.pdf",
-            sizeBytes = 1024,
-            mimeType = "application/pdf",
-            index = 0,
-        )
+        val attachment =
+            FileAttachmentUi(
+                filename = "document.pdf",
+                sizeBytes = 1024,
+                mimeType = "application/pdf",
+                index = 0,
+            )
 
         assertTrue(attachment.filename == "document.pdf")
         assertTrue(attachment.sizeBytes == 1024)
@@ -254,14 +273,15 @@ class MessageUiTest {
 
     @Test
     fun `ReplyPreviewUi stores correct properties`() {
-        val preview = ReplyPreviewUi(
-            messageId = "msg-123",
-            senderName = "Alice",
-            contentPreview = "Hello there...",
-            hasImage = true,
-            hasFileAttachment = false,
-            firstFileName = null,
-        )
+        val preview =
+            ReplyPreviewUi(
+                messageId = "msg-123",
+                senderName = "Alice",
+                contentPreview = "Hello there...",
+                hasImage = true,
+                hasFileAttachment = false,
+                firstFileName = null,
+            )
 
         assertTrue(preview.messageId == "msg-123")
         assertTrue(preview.senderName == "Alice")
@@ -272,11 +292,12 @@ class MessageUiTest {
 
     @Test
     fun `ReplyPreviewUi defaults are correct`() {
-        val preview = ReplyPreviewUi(
-            messageId = "msg-123",
-            senderName = "Bob",
-            contentPreview = "Test",
-        )
+        val preview =
+            ReplyPreviewUi(
+                messageId = "msg-123",
+                senderName = "Bob",
+                contentPreview = "Test",
+            )
 
         assertFalse(preview.hasImage)
         assertFalse(preview.hasFileAttachment)
@@ -285,13 +306,14 @@ class MessageUiTest {
 
     @Test
     fun `ReplyPreviewUi with file attachment`() {
-        val preview = ReplyPreviewUi(
-            messageId = "msg-456",
-            senderName = "Charlie",
-            contentPreview = "",
-            hasFileAttachment = true,
-            firstFileName = "report.pdf",
-        )
+        val preview =
+            ReplyPreviewUi(
+                messageId = "msg-456",
+                senderName = "Charlie",
+                contentPreview = "",
+                hasFileAttachment = true,
+                firstFileName = "report.pdf",
+            )
 
         assertTrue(preview.hasFileAttachment)
         assertTrue(preview.firstFileName == "report.pdf")
@@ -301,20 +323,22 @@ class MessageUiTest {
 
     @Test
     fun `ReactionUi count is derived from senderHashes size`() {
-        val reaction = ReactionUi(
-            emoji = "❤️",
-            senderHashes = listOf("hash1", "hash2", "hash3"),
-        )
+        val reaction =
+            ReactionUi(
+                emoji = "❤️",
+                senderHashes = listOf("hash1", "hash2", "hash3"),
+            )
 
         assertTrue(reaction.count == 3)
     }
 
     @Test
     fun `ReactionUi with single sender`() {
-        val reaction = ReactionUi(
-            emoji = "👍",
-            senderHashes = listOf("single-hash"),
-        )
+        val reaction =
+            ReactionUi(
+                emoji = "👍",
+                senderHashes = listOf("single-hash"),
+            )
 
         assertTrue(reaction.count == 1)
         assertTrue(reaction.emoji == "👍")
@@ -322,10 +346,11 @@ class MessageUiTest {
 
     @Test
     fun `ReactionUi with empty senderHashes`() {
-        val reaction = ReactionUi(
-            emoji = "😊",
-            senderHashes = emptyList(),
-        )
+        val reaction =
+            ReactionUi(
+                emoji = "😊",
+                senderHashes = emptyList(),
+            )
 
         assertTrue(reaction.count == 0)
     }
@@ -344,14 +369,15 @@ class MessageUiTest {
 
     @Test
     fun `MessageUi with all optional fields null`() {
-        val message = MessageUi(
-            id = "minimal-id",
-            destinationHash = "dest",
-            content = "Minimal message",
-            timestamp = 0L,
-            isFromMe = false,
-            status = "pending",
-        )
+        val message =
+            MessageUi(
+                id = "minimal-id",
+                destinationHash = "dest",
+                content = "Minimal message",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "pending",
+            )
 
         assertFalse(message.isMediaOnlyMessage)
         assertTrue(message.decodedImage == null)
@@ -379,29 +405,32 @@ class MessageUiTest {
 
     @Test
     fun `MessageUi with complex scenario - GIF with text and reply`() {
-        val replyPreview = ReplyPreviewUi(
-            messageId = "parent",
-            senderName = "You",
-            contentPreview = "Check this out",
-        )
-        val reactions = listOf(
-            ReactionUi("😂", listOf("h1", "h2")),
-            ReactionUi("❤️", listOf("h3")),
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "parent",
+                senderName = "You",
+                contentPreview = "Check this out",
+            )
+        val reactions =
+            listOf(
+                ReactionUi("😂", listOf("h1", "h2")),
+                ReactionUi("❤️", listOf("h3")),
+            )
 
-        val message = MessageUi(
-            id = "complex-msg",
-            destinationHash = "dest",
-            content = "LOL look at this!",
-            timestamp = System.currentTimeMillis(),
-            isFromMe = true,
-            status = "delivered",
-            isAnimatedImage = true,
-            imageData = byteArrayOf(0x47, 0x49, 0x46),
-            hasImageAttachment = true,
-            replyPreview = replyPreview,
-            reactions = reactions,
-        )
+        val message =
+            MessageUi(
+                id = "complex-msg",
+                destinationHash = "dest",
+                content = "LOL look at this!",
+                timestamp = System.currentTimeMillis(),
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(0x47, 0x49, 0x46),
+                hasImageAttachment = true,
+                replyPreview = replyPreview,
+                reactions = reactions,
+            )
 
         // Has text, so not media-only
         assertFalse(message.isMediaOnlyMessage)

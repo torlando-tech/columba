@@ -468,15 +468,25 @@ class TestSendLXMFMessageWithMethod(unittest.TestCase):
 
     @patch('reticulum_wrapper.RNS')
     @patch('reticulum_wrapper.LXMF')
-    def test_propagated_fails_without_propagation_node(self, mock_lxmf, mock_rns):
-        """Test PROPAGATED fails when no propagation node is set"""
+    def test_propagated_falls_back_to_direct_without_propagation_node(self, mock_lxmf, mock_rns):
+        """Test PROPAGATED falls back to DIRECT when no propagation node is set"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
         wrapper.router = MagicMock()
         wrapper.active_propagation_node = None
 
         mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
         wrapper.local_lxmf_destination = mock_local_dest
+
+        # Set up identity mock for send to work
+        mock_identity = MagicMock()
+        mock_rns.Identity.return_value = mock_identity
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
 
         result = wrapper.send_lxmf_message_with_method(
             dest_hash=b'0123456789abcdef',
@@ -485,8 +495,13 @@ class TestSendLXMFMessageWithMethod(unittest.TestCase):
             delivery_method="propagated"
         )
 
-        self.assertFalse(result['success'])
-        self.assertIn('propagation node', result['error'].lower())
+        # Should succeed by falling back to DIRECT
+        self.assertTrue(result['success'])
+        # Verify it used DIRECT method (fallback from PROPAGATED)
+        mock_lxmf.LXMessage.assert_called()
+        call_kwargs = mock_lxmf.LXMessage.call_args
+        # The desired_method should be DIRECT (fallback)
+        self.assertEqual(call_kwargs.kwargs.get('desired_method'), mock_lxmf.LXMessage.DIRECT)
 
     @patch('reticulum_wrapper.RNS')
     @patch('reticulum_wrapper.LXMF')
@@ -1077,6 +1092,8 @@ class TestDeliveryCallbacks(unittest.TestCase):
         # New attributes for relay fallback tracking (first attempt)
         mock_message.propagation_retry_attempted = False
         mock_message.tried_relays = []
+        # fields must be a dict (not Mock) for "5 in fields" check to work
+        mock_message.fields = {}
 
         wrapper._on_message_failed(mock_message)
 
@@ -1812,6 +1829,8 @@ class TestFileAttachments(unittest.TestCase):
     @patch('reticulum_wrapper.LXMF')
     def test_send_with_both_image_and_file_attachments(self, mock_lxmf, mock_rns):
         """Test sending with both image (field 6) and file attachments (field 5)"""
+        # Set the FIELD_IMAGE constant so it's used as the key instead of a MagicMock
+        mock_lxmf.FIELD_IMAGE = 6
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
         wrapper.router = MagicMock()

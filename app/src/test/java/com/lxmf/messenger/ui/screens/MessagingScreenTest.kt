@@ -12,7 +12,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.paging.PagingData
 import com.lxmf.messenger.test.MessagingTestFixtures
 import com.lxmf.messenger.test.RegisterComponentActivityRule
-import com.lxmf.messenger.ui.model.DecodedImageResult
+import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.ReplyPreviewUi
 import com.lxmf.messenger.viewmodel.ContactToggleResult
@@ -60,7 +60,9 @@ class MessagingScreenTest {
         every { mockViewModel.selectedImageFormat } returns MutableStateFlow(null)
         every { mockViewModel.isProcessingImage } returns MutableStateFlow(false)
         every { mockViewModel.isSyncing } returns MutableStateFlow(false)
+        every { mockViewModel.syncProgress } returns MutableStateFlow(SyncProgress.Idle)
         every { mockViewModel.isContactSaved } returns MutableStateFlow(false)
+        every { mockViewModel.isSending } returns MutableStateFlow(false)
         every { mockViewModel.manualSyncResult } returns MutableSharedFlow()
         every { mockViewModel.loadedImageIds } returns MutableStateFlow(emptySet())
         every { mockViewModel.contactToggleResult } returns MutableSharedFlow()
@@ -1201,11 +1203,12 @@ class MessagingScreenTest {
     @Test
     fun animatedGifMessage_asReply_displaysInBubble() {
         // Given - GIF as a reply (not media-only due to reply context)
-        val replyPreview = ReplyPreviewUi(
-            messageId = "original-msg",
-            senderName = "Alice",
-            contentPreview = "Original message",
-        )
+        val replyPreview =
+            ReplyPreviewUi(
+                messageId = "original-msg",
+                senderName = "Alice",
+                contentPreview = "Original message",
+            )
         val gifReply = MessagingTestFixtures.createAnimatedGifReplyMessage(replyPreview = replyPreview)
         every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(gifReply)))
         every { mockViewModel.replyPreviewCache } returns MutableStateFlow(mapOf(gifReply.id to replyPreview))

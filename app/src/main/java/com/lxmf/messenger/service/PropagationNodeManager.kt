@@ -55,6 +55,8 @@ sealed class SyncProgress {
     data object Starting : SyncProgress()
 
     data class InProgress(val stateName: String, val progress: Float) : SyncProgress()
+
+    data object Complete : SyncProgress()
 }
 
 /**
@@ -382,7 +384,23 @@ class PropagationNodeManager
             if (_isSyncing.value) {
                 Log.d(TAG, "Sync complete: $messagesReceived messages received (manual=$_isManualSync)")
                 _isSyncing.value = false
-                _syncProgress.value = SyncProgress.Idle
+
+                // Only show Complete if messages were actually downloaded
+                // Otherwise go straight to Idle (no "Download complete" for empty syncs)
+                if (messagesReceived > 0) {
+                    _syncProgress.value = SyncProgress.Complete
+
+                    // Delayed reset to Idle - gives Room time to propagate DB changes
+                    // so pending file notification doesn't flash "Tap to fetch" before disappearing
+                    scope.launch {
+                        delay(2000)
+                        if (_syncProgress.value == SyncProgress.Complete) {
+                            _syncProgress.value = SyncProgress.Idle
+                        }
+                    }
+                } else {
+                    _syncProgress.value = SyncProgress.Idle
+                }
 
                 // Update last sync timestamp
                 val timestamp = System.currentTimeMillis()

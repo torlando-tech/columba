@@ -42,16 +42,28 @@ sys.modules['LXMF'] = lxmf_mock
 # Now import after mocking
 import reticulum_wrapper
 
-# Also set the module-level LXMF variable in reticulum_wrapper
-# (it's initialized to None and only set during initialize() which we skip in tests)
-reticulum_wrapper.LXMF = lxmf_mock
+
+class PropagationTestBase(unittest.TestCase):
+    """Base class that sets up LXMF mock for propagation tests."""
+
+    def setUp(self):
+        # Save original LXMF value
+        self._original_lxmf = reticulum_wrapper.LXMF
+        # Set the module-level LXMF variable in reticulum_wrapper
+        # (it's initialized to None and only set during initialize() which we skip in tests)
+        reticulum_wrapper.LXMF = lxmf_mock
+
+    def tearDown(self):
+        # Restore original LXMF value
+        reticulum_wrapper.LXMF = self._original_lxmf
 
 
-class TestSetOutboundPropagationNode(unittest.TestCase):
+class TestSetOutboundPropagationNode(PropagationTestBase):
     """Test set_outbound_propagation_node method"""
 
     def setUp(self):
         """Set up test fixtures"""
+        super().setUp()
         import tempfile
         self.temp_dir = tempfile.mkdtemp()
         self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -154,11 +166,12 @@ class TestSetOutboundPropagationNode(unittest.TestCase):
         self.assertEqual(result['error'], "Router error")
 
 
-class TestGetOutboundPropagationNode(unittest.TestCase):
+class TestGetOutboundPropagationNode(PropagationTestBase):
     """Test get_outbound_propagation_node method"""
 
     def setUp(self):
         """Set up test fixtures"""
+        super().setUp()
         import tempfile
         self.temp_dir = tempfile.mkdtemp()
         self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -236,11 +249,12 @@ class TestGetOutboundPropagationNode(unittest.TestCase):
         self.assertIn('error', result)
 
 
-class TestRequestMessagesFromPropagationNode(unittest.TestCase):
+class TestRequestMessagesFromPropagationNode(PropagationTestBase):
     """Test request_messages_from_propagation_node method"""
 
     def setUp(self):
         """Set up test fixtures"""
+        super().setUp()
         import tempfile
         self.temp_dir = tempfile.mkdtemp()
         self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -399,11 +413,12 @@ class TestRequestMessagesFromPropagationNode(unittest.TestCase):
             self.assertEqual(result['state'], state)
 
 
-class TestGetPropagationState(unittest.TestCase):
+class TestGetPropagationState(PropagationTestBase):
     """Test get_propagation_state method"""
 
     def setUp(self):
         """Set up test fixtures"""
+        super().setUp()
         import tempfile
         self.temp_dir = tempfile.mkdtemp()
         self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -576,11 +591,12 @@ class TestGetPropagationState(unittest.TestCase):
         self.assertIn('error', result)
 
 
-class TestPropagationNodeIntegration(unittest.TestCase):
+class TestPropagationNodeIntegration(PropagationTestBase):
     """Integration tests for propagation node workflow"""
 
     def setUp(self):
         """Set up test fixtures"""
+        super().setUp()
         import tempfile
         self.temp_dir = tempfile.mkdtemp()
         self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)

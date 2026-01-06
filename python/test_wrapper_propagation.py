@@ -20,10 +20,31 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.modules['RNS'] = MagicMock()
 sys.modules['RNS.vendor'] = MagicMock()
 sys.modules['RNS.vendor.platformutils'] = MagicMock()
-sys.modules['LXMF'] = MagicMock()
+
+# Create LXMF mock with proper LXMRouter constants
+# These values must match the actual LXMF library constants
+lxmf_mock = MagicMock()
+lxmf_mock.LXMRouter.PR_IDLE = 0
+lxmf_mock.LXMRouter.PR_PATH_REQUESTED = 1
+lxmf_mock.LXMRouter.PR_LINK_ESTABLISHING = 2
+lxmf_mock.LXMRouter.PR_LINK_ESTABLISHED = 3
+lxmf_mock.LXMRouter.PR_REQUEST_SENT = 4
+lxmf_mock.LXMRouter.PR_RECEIVING = 5
+lxmf_mock.LXMRouter.PR_RESPONSE_RECEIVED = 6
+lxmf_mock.LXMRouter.PR_COMPLETE = 7
+lxmf_mock.LXMRouter.PR_NO_PATH = 8
+lxmf_mock.LXMRouter.PR_LINK_FAILED = 9
+lxmf_mock.LXMRouter.PR_TRANSFER_FAILED = 10
+lxmf_mock.LXMRouter.PR_NO_IDENTITY_RCVD = 11
+lxmf_mock.LXMRouter.PR_NO_ACCESS = 12
+sys.modules['LXMF'] = lxmf_mock
 
 # Now import after mocking
 import reticulum_wrapper
+
+# Also set the module-level LXMF variable in reticulum_wrapper
+# (it's initialized to None and only set during initialize() which we skip in tests)
+reticulum_wrapper.LXMF = lxmf_mock
 
 
 class TestSetOutboundPropagationNode(unittest.TestCase):

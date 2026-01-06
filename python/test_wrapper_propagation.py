@@ -702,6 +702,533 @@ class TestPropagationNodeIntegration(PropagationTestBase):
         self.assertEqual(result['errorCode'], 'NO_PROPAGATION_NODE')
 
 
+class TestSetIncomingMessageSizeLimit(PropagationTestBase):
+    """Test set_incoming_message_size_limit method"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        super().setUp()
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Enable Reticulum
+        reticulum_wrapper.RETICULUM_AVAILABLE = True
+
+        # Mock router
+        self.mock_router = Mock()
+        self.wrapper.router = self.mock_router
+        self.wrapper.initialized = True
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        super().tearDown()
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_set_size_limit_success(self):
+        """Test successfully setting incoming message size limit"""
+        result = self.wrapper.set_incoming_message_size_limit(1024)
+
+        # Verify success
+        self.assertTrue(result['success'])
+
+        # Verify both limits were set
+        self.assertEqual(self.mock_router.delivery_per_transfer_limit, 1024)
+        self.assertEqual(self.mock_router.propagation_per_transfer_limit, 1024)
+
+    def test_set_size_limit_large_value(self):
+        """Test setting large size limit (128MB for 'unlimited')"""
+        result = self.wrapper.set_incoming_message_size_limit(131072)
+
+        self.assertTrue(result['success'])
+        self.assertEqual(self.mock_router.delivery_per_transfer_limit, 131072)
+        self.assertEqual(self.mock_router.propagation_per_transfer_limit, 131072)
+
+    def test_set_size_limit_not_initialized(self):
+        """Test error when wrapper not initialized"""
+        self.wrapper.initialized = False
+
+        result = self.wrapper.set_incoming_message_size_limit(1024)
+
+        self.assertFalse(result['success'])
+        self.assertIn('error', result)
+        self.assertIn('not initialized', result['error'].lower())
+
+    def test_set_size_limit_no_router(self):
+        """Test error when router is not available"""
+        self.wrapper.router = None
+
+        result = self.wrapper.set_incoming_message_size_limit(1024)
+
+        self.assertFalse(result['success'])
+        self.assertIn('error', result)
+
+    def test_set_size_limit_reticulum_unavailable(self):
+        """Test error when Reticulum is not available"""
+        reticulum_wrapper.RETICULUM_AVAILABLE = False
+
+        result = self.wrapper.set_incoming_message_size_limit(1024)
+
+        self.assertFalse(result['success'])
+        self.assertIn('error', result)
+
+    def test_set_size_limit_router_exception(self):
+        """Test handling of router exceptions"""
+        # Make setting limit raise an exception
+        type(self.mock_router).delivery_per_transfer_limit = PropertyMock(
+            side_effect=Exception("Setting limit failed")
+        )
+
+        result = self.wrapper.set_incoming_message_size_limit(1024)
+
+        self.assertFalse(result['success'])
+        self.assertIn('error', result)
+
+
+class TestExtractFileSummary(PropagationTestBase):
+    """Test _extract_file_summary method"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        super().setUp()
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        super().tearDown()
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_extract_file_summary_single_file(self):
+        """Test extracting summary from message with single file attachment"""
+        mock_message = Mock()
+        mock_message.fields = {
+            5: [['document.pdf', b'PDF content here with more data']]
+        }
+
+        result = self.wrapper._extract_file_summary(mock_message)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['first_filename'], 'document.pdf')
+        self.assertEqual(result['file_count'], 1)
+        self.assertEqual(result['total_size'], 31)  # len(b'PDF content here with more data')
+
+    def test_extract_file_summary_multiple_files(self):
+        """Test extracting summary from message with multiple file attachments"""
+        mock_message = Mock()
+        mock_message.fields = {
+            5: [
+                ['file1.txt', b'First file content'],
+                ['file2.bin', b'\x00\x01\x02\x03'],
+                ['file3.pdf', b'PDF data']
+            ]
+        }
+
+        result = self.wrapper._extract_file_summary(mock_message)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['first_filename'], 'file1.txt')
+        self.assertEqual(result['file_count'], 3)
+        self.assertEqual(result['total_size'], 18 + 4 + 8)  # Sum of all file sizes
+
+    def test_extract_file_summary_tuple_format(self):
+        """Test extracting summary from message with tuple format attachments"""
+        mock_message = Mock()
+        mock_message.fields = {
+            5: [('image.jpg', b'\xff\xd8\xff\xe0\x00\x10JFIF')]
+        }
+
+        result = self.wrapper._extract_file_summary(mock_message)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['first_filename'], 'image.jpg')
+        self.assertEqual(result['file_count'], 1)
+
+    def test_extract_file_summary_no_fields(self):
+        """Test when message has no fields"""
+        mock_message = Mock()
+        mock_message.fields = None
+
+        result = self.wrapper._extract_file_summary(mock_message)
+
+        self.assertIsNone(result)
+
+    def test_extract_file_summary_no_file_field(self):
+        """Test when message has fields but no file attachments (field 5)"""
+        mock_message = Mock()
+        mock_message.fields = {6: ['jpg', b'image data']}  # Image field, not file field
+
+        result = self.wrapper._extract_file_summary(mock_message)
+
+        self.assertIsNone(result)
+
+    def test_extract_file_summary_empty_attachments(self):
+        """Test when file attachments list is empty"""
+        mock_message = Mock()
+        mock_message.fields = {5: []}
+
+        result = self.wrapper._extract_file_summary(mock_message)
+
+        self.assertIsNone(result)
+
+    def test_extract_file_summary_invalid_attachment_format(self):
+        """Test when attachments have invalid format"""
+        mock_message = Mock()
+        mock_message.fields = {
+            5: [
+                'invalid_string',  # Not a list/tuple
+                ['valid.txt', b'content'],  # Valid
+                [123],  # Too short
+            ]
+        }
+
+        result = self.wrapper._extract_file_summary(mock_message)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['file_count'], 1)  # Only the valid one counted
+
+    def test_extract_file_summary_none_filename(self):
+        """Test handling of None filename"""
+        mock_message = Mock()
+        mock_message.fields = {
+            5: [[None, b'content without name']]
+        }
+
+        result = self.wrapper._extract_file_summary(mock_message)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['first_filename'], 'file')  # Default fallback
+
+    def test_extract_file_summary_no_hasattr(self):
+        """Test when message doesn't have fields attribute"""
+        mock_message = Mock(spec=[])  # No attributes
+
+        result = self.wrapper._extract_file_summary(mock_message)
+
+        self.assertIsNone(result)
+
+
+class TestFailMessagePermanently(PropagationTestBase):
+    """Test _fail_message_permanently method"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        super().setUp()
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        super().tearDown()
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_fail_message_notifies_kotlin(self):
+        """Test that permanent failure notifies Kotlin callback"""
+        mock_callback = Mock()
+        self.wrapper.kotlin_delivery_status_callback = mock_callback
+
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+
+        self.wrapper._fail_message_permanently(mock_message, 'max_relay_retries_exceeded')
+
+        # Kotlin callback should be invoked
+        mock_callback.assert_called_once()
+        call_arg = mock_callback.call_args[0][0]
+
+        # Parse JSON
+        import json
+        status_event = json.loads(call_arg)
+        self.assertEqual(status_event['status'], 'failed')
+        self.assertEqual(status_event['reason'], 'max_relay_retries_exceeded')
+        self.assertEqual(status_event['message_hash'], mock_message.hash.hex())
+        self.assertIn('timestamp', status_event)
+
+    def test_fail_message_removes_from_pending(self):
+        """Test that permanent failure removes message from pending fallback"""
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+
+        # Add to pending
+        self.wrapper._pending_relay_fallback_messages[mock_message.hash.hex()] = mock_message
+
+        self.wrapper._fail_message_permanently(mock_message, 'no_relays_available')
+
+        # Should be removed from pending
+        self.assertNotIn(mock_message.hash.hex(), self.wrapper._pending_relay_fallback_messages)
+
+    def test_fail_message_no_callback(self):
+        """Test that permanent failure works without Kotlin callback"""
+        self.wrapper.kotlin_delivery_status_callback = None
+
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+
+        # Should not raise exception
+        self.wrapper._fail_message_permanently(mock_message, 'test_failure')
+
+    def test_fail_message_callback_exception(self):
+        """Test handling of exception in Kotlin callback"""
+        mock_callback = Mock(side_effect=Exception("Callback error"))
+        self.wrapper.kotlin_delivery_status_callback = mock_callback
+
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+
+        # Should not raise exception
+        self.wrapper._fail_message_permanently(mock_message, 'test_failure')
+
+
+class TestOnAlternativeRelayReceived(PropagationTestBase):
+    """Test on_alternative_relay_received method"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        super().setUp()
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Enable Reticulum
+        reticulum_wrapper.RETICULUM_AVAILABLE = True
+
+        # Mock router
+        self.mock_router = Mock()
+        self.wrapper.router = self.mock_router
+        self.wrapper.initialized = True
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        super().tearDown()
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_alternative_relay_no_pending_messages(self):
+        """Test when no pending messages for relay fallback"""
+        self.wrapper._pending_relay_fallback_messages = {}
+
+        # Should not crash
+        self.wrapper.on_alternative_relay_received(b'newrelay12345678')
+
+    def test_alternative_relay_none_fails_all(self):
+        """Test that None relay hash fails all pending messages"""
+        mock_callback = Mock()
+        self.wrapper.kotlin_delivery_status_callback = mock_callback
+
+        mock_message1 = Mock()
+        mock_message1.hash = b'message1hash1234'
+        mock_message2 = Mock()
+        mock_message2.hash = b'message2hash1234'
+
+        self.wrapper._pending_relay_fallback_messages = {
+            mock_message1.hash.hex(): mock_message1,
+            mock_message2.hash.hex(): mock_message2,
+        }
+
+        self.wrapper.on_alternative_relay_received(None)
+
+        # All pending should be cleared
+        self.assertEqual(len(self.wrapper._pending_relay_fallback_messages), 0)
+
+        # Callback should be called for each failed message
+        self.assertEqual(mock_callback.call_count, 2)
+
+    def test_alternative_relay_retries_with_new_relay(self):
+        """Test that alternative relay retries pending messages"""
+        mock_callback = Mock()
+        self.wrapper.kotlin_delivery_status_callback = mock_callback
+
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+        mock_message.tried_relays = []
+        mock_message.fields = {}
+
+        self.wrapper._pending_relay_fallback_messages = {
+            mock_message.hash.hex(): mock_message
+        }
+
+        new_relay = b'newrelay12345678'
+        self.wrapper.on_alternative_relay_received(new_relay)
+
+        # Active propagation node should be updated
+        self.assertEqual(self.wrapper.active_propagation_node, new_relay)
+
+        # Message should be resubmitted
+        self.mock_router.handle_outbound.assert_called_once_with(mock_message)
+
+        # Pending should be cleared
+        self.assertEqual(len(self.wrapper._pending_relay_fallback_messages), 0)
+
+        # Status callback should be invoked
+        mock_callback.assert_called()
+        call_arg = mock_callback.call_args[0][0]
+        import json
+        status = json.loads(call_arg)
+        self.assertEqual(status['status'], 'retrying_propagated')
+
+    def test_alternative_relay_converts_jarray(self):
+        """Test that jarray-like relay hash is converted to bytes"""
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+        mock_message.tried_relays = []
+        mock_message.fields = {}
+
+        self.wrapper._pending_relay_fallback_messages = {
+            mock_message.hash.hex(): mock_message
+        }
+
+        # Pass list instead of bytes (simulating jarray from Java)
+        relay_jarray = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                        0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10]
+
+        self.wrapper.on_alternative_relay_received(relay_jarray)
+
+        # Should be converted to bytes
+        self.assertIsInstance(self.wrapper.active_propagation_node, bytes)
+        self.assertEqual(self.wrapper.active_propagation_node, bytes(relay_jarray))
+
+    def test_alternative_relay_tracks_tried_relays(self):
+        """Test that tried relays are tracked on the message"""
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+        mock_message.tried_relays = [b'previousrelay123']
+        mock_message.fields = {}
+
+        self.wrapper._pending_relay_fallback_messages = {
+            mock_message.hash.hex(): mock_message
+        }
+
+        new_relay = b'newrelay12345678'
+        self.wrapper.on_alternative_relay_received(new_relay)
+
+        # New relay should be added to tried list
+        self.assertIn(new_relay, mock_message.tried_relays)
+        self.assertEqual(len(mock_message.tried_relays), 2)
+
+    def test_alternative_relay_resets_message_state(self):
+        """Test that message state is reset for fresh retry"""
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+        mock_message.tried_relays = []
+        mock_message.delivery_attempts = 5
+        mock_message.packed = b'old_packed'
+        mock_message.propagation_packed = b'old_prop_packed'
+        mock_message.propagation_stamp = 'old_stamp'
+        mock_message.fields = {}
+
+        self.wrapper._pending_relay_fallback_messages = {
+            mock_message.hash.hex(): mock_message
+        }
+
+        self.wrapper.on_alternative_relay_received(b'newrelay12345678')
+
+        # State should be reset
+        self.assertEqual(mock_message.delivery_attempts, 0)
+        self.assertIsNone(mock_message.packed)
+        self.assertIsNone(mock_message.propagation_packed)
+        self.assertIsNone(mock_message.propagation_stamp)
+        self.assertTrue(mock_message.defer_propagation_stamp)
+        self.assertEqual(mock_message.desired_method, lxmf_mock.LXMessage.PROPAGATED)
+
+    def test_alternative_relay_updates_router(self):
+        """Test that router propagation node is updated"""
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+        mock_message.tried_relays = []
+        mock_message.fields = {}
+
+        self.wrapper._pending_relay_fallback_messages = {
+            mock_message.hash.hex(): mock_message
+        }
+
+        new_relay = b'newrelay12345678'
+        self.wrapper.on_alternative_relay_received(new_relay)
+
+        # Router should be updated
+        self.mock_router.set_outbound_propagation_node.assert_called_once_with(new_relay)
+
+
+class TestSendPendingFileNotification(PropagationTestBase):
+    """Test _send_pending_file_notification method"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        super().setUp()
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Enable Reticulum
+        reticulum_wrapper.RETICULUM_AVAILABLE = True
+
+        # Mock router
+        self.mock_router = Mock()
+        self.wrapper.router = self.mock_router
+        self.wrapper.initialized = True
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        super().tearDown()
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_send_notification_for_file_message(self):
+        """Test sending notification for message with file attachments"""
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+        mock_message.destination = Mock()
+        mock_message.source = Mock()
+        mock_message.fields = {
+            5: [['document.pdf', b'PDF content']]
+        }
+
+        self.wrapper._send_pending_file_notification(mock_message)
+
+        # Router should have received a notification message
+        self.mock_router.handle_outbound.assert_called_once()
+        notification_msg = self.mock_router.handle_outbound.call_args[0][0]
+
+        # Verify it's an OPPORTUNISTIC message
+        self.assertEqual(notification_msg.desired_method, lxmf_mock.LXMessage.OPPORTUNISTIC)
+
+    def test_send_notification_skips_no_files(self):
+        """Test that notification is skipped when no file attachments"""
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+        mock_message.fields = None
+
+        self.wrapper._send_pending_file_notification(mock_message)
+
+        # Router should NOT have received any message
+        self.mock_router.handle_outbound.assert_not_called()
+
+    def test_send_notification_handles_exception(self):
+        """Test that exceptions in notification sending are handled"""
+        mock_message = Mock()
+        mock_message.hash = b'messagehash12345'
+        mock_message.destination = Mock()
+        mock_message.source = Mock()
+        mock_message.fields = {
+            5: [['file.txt', b'content']]
+        }
+
+        # Make handle_outbound raise
+        self.mock_router.handle_outbound.side_effect = Exception("Send failed")
+
+        # Should not raise exception
+        self.wrapper._send_pending_file_notification(mock_message)
+
+
 if __name__ == '__main__':
     # Run tests with verbose output
     unittest.main(verbosity=2)

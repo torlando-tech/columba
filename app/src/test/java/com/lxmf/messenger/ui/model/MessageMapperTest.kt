@@ -1854,4 +1854,482 @@ class MessageMapperTest {
 
         return output.toByteArray()
     }
+
+    // ========== MessageUi Computed Properties Tests ==========
+
+    @Test
+    fun `isMediaOnlyMessage returns true for animated GIF without text`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(1, 2, 3),
+                hasFileAttachments = false,
+            )
+
+        assertTrue(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns false when content is present`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "Hello!",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(1, 2, 3),
+            )
+
+        assertFalse(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns false when not animated`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = false,
+                imageData = byteArrayOf(1, 2, 3),
+            )
+
+        assertFalse(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns false when imageData is null`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = null,
+            )
+
+        assertFalse(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns false when has file attachments`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(1, 2, 3),
+                hasFileAttachments = true,
+            )
+
+        assertFalse(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns false when has reply preview`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(1, 2, 3),
+                replyPreview = ReplyPreviewUi(
+                    messageId = "original",
+                    senderName = "Alice",
+                    contentPreview = "Original message",
+                ),
+            )
+
+        assertFalse(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns true with blank content`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "   \n\t  ",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(1, 2, 3),
+            )
+
+        assertTrue(messageUi.isMediaOnlyMessage)
+    }
+
+    // ========== isPendingFileNotification Tests ==========
+
+    @Test
+    fun `isPendingFileNotification returns false when fieldsJson is null`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = null,
+            )
+
+        assertFalse(messageUi.isPendingFileNotification)
+    }
+
+    @Test
+    fun `isPendingFileNotification returns false when no notification in json`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"reply_to": "some_id"}}""",
+            )
+
+        assertFalse(messageUi.isPendingFileNotification)
+    }
+
+    @Test
+    fun `isPendingFileNotification returns true when notification present`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"pending_file_notification": {"original_message_id": "abc"}}}""",
+            )
+
+        assertTrue(messageUi.isPendingFileNotification)
+    }
+
+    // ========== isSuperseded Tests ==========
+
+    @Test
+    fun `isSuperseded returns false when fieldsJson is null`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = null,
+            )
+
+        assertFalse(messageUi.isSuperseded)
+    }
+
+    @Test
+    fun `isSuperseded returns false when superseded is not present`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"pending_file_notification": {}}}""",
+            )
+
+        assertFalse(messageUi.isSuperseded)
+    }
+
+    @Test
+    fun `isSuperseded returns true when superseded is true`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"superseded":true}}""",
+            )
+
+        assertTrue(messageUi.isSuperseded)
+    }
+
+    @Test
+    fun `isSuperseded returns false when superseded is false`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"superseded":false}}""",
+            )
+
+        assertFalse(messageUi.isSuperseded)
+    }
+
+    // ========== pendingFileInfo Tests ==========
+
+    @Test
+    fun `pendingFileInfo returns null when not a pending notification`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"reply_to": "id"}}""",
+            )
+
+        assertNull(messageUi.pendingFileInfo)
+    }
+
+    @Test
+    fun `pendingFileInfo returns null when fieldsJson is null`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = null,
+            )
+
+        assertNull(messageUi.pendingFileInfo)
+    }
+
+    @Test
+    fun `pendingFileInfo parses notification correctly`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"pending_file_notification": {"original_message_id": "abc123", "filename": "report.pdf", "file_count": 3, "total_size": 1048576}}}""",
+            )
+
+        val info = messageUi.pendingFileInfo
+        assertNotNull(info)
+        assertEquals("abc123", info!!.originalMessageId)
+        assertEquals("report.pdf", info.filename)
+        assertEquals(3, info.fileCount)
+        assertEquals(1048576L, info.totalSize)
+    }
+
+    @Test
+    fun `pendingFileInfo uses default values for missing fields`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"pending_file_notification": {}}}""",
+            )
+
+        val info = messageUi.pendingFileInfo
+        assertNotNull(info)
+        assertEquals("", info!!.originalMessageId)
+        assertEquals("file", info.filename)
+        assertEquals(1, info.fileCount)
+        assertEquals(0L, info.totalSize)
+    }
+
+    @Test
+    fun `pendingFileInfo returns null for malformed notification`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"pending_file_notification": "invalid"}}""",
+            )
+
+        assertNull(messageUi.pendingFileInfo)
+    }
+
+    @Test
+    fun `pendingFileInfo returns null when field 16 is missing`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"6": "image_hex"}""",
+            )
+
+        // Contains pending_file_notification string check fails
+        assertFalse(messageUi.isPendingFileNotification)
+        assertNull(messageUi.pendingFileInfo)
+    }
+
+    @Test
+    fun `pendingFileInfo returns null for invalid JSON`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = "pending_file_notification not valid json {{{",
+            )
+
+        // Contains the string but invalid JSON
+        assertTrue(messageUi.isPendingFileNotification)
+        assertNull(messageUi.pendingFileInfo)
+    }
+
+    // ========== ReactionUi Tests ==========
+
+    @Test
+    fun `ReactionUi count equals senderHashes size`() {
+        val reaction = ReactionUi(
+            emoji = "👍",
+            senderHashes = listOf("hash1", "hash2", "hash3"),
+        )
+
+        assertEquals(3, reaction.count)
+    }
+
+    @Test
+    fun `ReactionUi count is zero for empty senderHashes`() {
+        val reaction = ReactionUi(
+            emoji = "❤️",
+            senderHashes = emptyList(),
+        )
+
+        assertEquals(0, reaction.count)
+    }
+
+    // ========== parseReactionsFromField16 Tests ==========
+
+    @Test
+    fun `parseReactionsFromField16 returns empty list for null fieldsJson`() {
+        val result = parseReactionsFromField16(null)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseReactionsFromField16 returns empty list for missing field 16`() {
+        val result = parseReactionsFromField16("""{"6": "image"}""")
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseReactionsFromField16 returns empty list for missing reactions key`() {
+        val result = parseReactionsFromField16("""{"16": {"reply_to": "id"}}""")
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseReactionsFromField16 parses single reaction correctly`() {
+        val fieldsJson = """{"16": {"reactions": {"👍": ["sender1", "sender2"]}}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+
+        assertEquals(1, result.size)
+        assertEquals("👍", result[0].emoji)
+        assertEquals(listOf("sender1", "sender2"), result[0].senderHashes)
+        assertEquals(2, result[0].count)
+    }
+
+    @Test
+    fun `parseReactionsFromField16 parses multiple reactions correctly`() {
+        val fieldsJson = """{"16": {"reactions": {"👍": ["sender1"], "❤️": ["sender2", "sender3"]}}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+
+        assertEquals(2, result.size)
+        // Order may vary, so check both are present
+        val emojiSet = result.map { it.emoji }.toSet()
+        assertTrue(emojiSet.contains("👍"))
+        assertTrue(emojiSet.contains("❤️"))
+    }
+
+    @Test
+    fun `parseReactionsFromField16 skips empty sender arrays`() {
+        val fieldsJson = """{"16": {"reactions": {"👍": [], "❤️": ["sender1"]}}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+
+        assertEquals(1, result.size)
+        assertEquals("❤️", result[0].emoji)
+    }
+
+    @Test
+    fun `parseReactionsFromField16 skips empty sender strings`() {
+        val fieldsJson = """{"16": {"reactions": {"👍": ["", "sender1", ""]}}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+
+        assertEquals(1, result.size)
+        assertEquals("👍", result[0].emoji)
+        assertEquals(listOf("sender1"), result[0].senderHashes)
+    }
+
+    @Test
+    fun `parseReactionsFromField16 handles invalid JSON gracefully`() {
+        val result = parseReactionsFromField16("not valid json")
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseReactionsFromField16 handles reactions as wrong type`() {
+        val fieldsJson = """{"16": {"reactions": "not an object"}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseReactionsFromField16 skips null values in sender array`() {
+        val fieldsJson = """{"16": {"reactions": {"👍": [null, "sender1", null]}}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+
+        assertEquals(1, result.size)
+        assertEquals(listOf("sender1"), result[0].senderHashes)
+    }
 }

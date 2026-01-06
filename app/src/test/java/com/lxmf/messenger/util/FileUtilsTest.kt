@@ -261,4 +261,153 @@ class FileUtilsTest {
         // Test the "archive" substring match
         assertEquals(Icons.Default.FolderZip, FileUtils.getFileIconForMimeType("application/x-archive"))
     }
+
+    // ========== Additional formatFileSize Edge Case Tests ==========
+
+    @Test
+    fun `formatFileSize handles exactly 1KB boundary`() {
+        assertEquals("1.0 KB", FileUtils.formatFileSize(1024))
+    }
+
+    @Test
+    fun `formatFileSize handles exactly 1MB boundary`() {
+        assertEquals("1.0 MB", FileUtils.formatFileSize(1024 * 1024))
+    }
+
+    @Test
+    fun `formatFileSize handles large MB values`() {
+        assertEquals("100.0 MB", FileUtils.formatFileSize(100 * 1024 * 1024))
+        assertEquals("500.0 MB", FileUtils.formatFileSize(500 * 1024 * 1024))
+    }
+
+    @Test
+    fun `formatFileSize handles fractional KB correctly`() {
+        // 1500 bytes = 1.46484375 KB, should round to 1.5 KB
+        assertEquals("1.5 KB", FileUtils.formatFileSize(1500))
+    }
+
+    @Test
+    fun `formatFileSize handles fractional MB correctly`() {
+        // 1.5 MB in bytes
+        val oneAndHalfMB = (1.5 * 1024 * 1024).toInt()
+        assertEquals("1.5 MB", FileUtils.formatFileSize(oneAndHalfMB))
+    }
+
+    @Test
+    fun `formatFileSize uses US locale for decimal separator`() {
+        // Verify the decimal separator is always a period (US locale)
+        val result = FileUtils.formatFileSize(1536)
+        assertTrue(result.contains("."))
+        assertFalse(result.contains(","))
+    }
+
+    @Test
+    fun `formatFileSize handles very small byte values`() {
+        assertEquals("1 B", FileUtils.formatFileSize(1))
+        assertEquals("2 B", FileUtils.formatFileSize(2))
+        assertEquals("100 B", FileUtils.formatFileSize(100))
+    }
+
+    @Test
+    fun `formatFileSize handles max KB value before MB`() {
+        // Just under 1 MB (1024 * 1024 - 1)
+        val justUnderMB = (1024 * 1024) - 1
+        assertTrue(FileUtils.formatFileSize(justUnderMB).endsWith("KB"))
+    }
+
+    @Test
+    fun `formatFileSize handles rounding at KB boundary`() {
+        // Test rounding behavior at KB boundary
+        assertEquals("1023 B", FileUtils.formatFileSize(1023))
+        assertEquals("1.0 KB", FileUtils.formatFileSize(1024))
+    }
+
+    // ========== Additional Constants Tests ==========
+
+    @Test
+    fun `FILE_TRANSFER_THRESHOLD is 500KB`() {
+        assertEquals(500 * 1024, FileUtils.FILE_TRANSFER_THRESHOLD)
+    }
+
+    @Test
+    fun `MAX_SINGLE_FILE_SIZE is Int MAX_VALUE`() {
+        assertEquals(Int.MAX_VALUE, FileUtils.MAX_SINGLE_FILE_SIZE)
+    }
+
+    // ========== Additional getFileIconForMimeType Edge Case Tests ==========
+
+    @Test
+    fun `getFileIconForMimeType handles PDF with additional parameters`() {
+        // Some MIME types may have additional parameters
+        assertEquals(Icons.Default.PictureAsPdf, FileUtils.getFileIconForMimeType("application/pdf; charset=utf-8"))
+    }
+
+    @Test
+    fun `getFileIconForMimeType handles various text MIME types`() {
+        assertEquals(Icons.Default.Description, FileUtils.getFileIconForMimeType("text/markdown"))
+        assertEquals(Icons.Default.Description, FileUtils.getFileIconForMimeType("text/xml"))
+        assertEquals(Icons.Default.Description, FileUtils.getFileIconForMimeType("text/javascript"))
+    }
+
+    @Test
+    fun `getFileIconForMimeType handles all archive variants`() {
+        assertEquals(Icons.Default.FolderZip, FileUtils.getFileIconForMimeType("application/x-tar"))
+        assertEquals(Icons.Default.FolderZip, FileUtils.getFileIconForMimeType("application/x-compressed"))
+        assertEquals(Icons.Default.FolderZip, FileUtils.getFileIconForMimeType("application/x-gzip"))
+    }
+
+    @Test
+    fun `getFileIconForMimeType handles audio subtypes`() {
+        assertEquals(Icons.Default.AudioFile, FileUtils.getFileIconForMimeType("audio/aac"))
+        assertEquals(Icons.Default.AudioFile, FileUtils.getFileIconForMimeType("audio/midi"))
+        assertEquals(Icons.Default.AudioFile, FileUtils.getFileIconForMimeType("audio/x-wav"))
+    }
+
+    @Test
+    fun `getFileIconForMimeType handles video subtypes`() {
+        assertEquals(Icons.Default.VideoFile, FileUtils.getFileIconForMimeType("video/quicktime"))
+        assertEquals(Icons.Default.VideoFile, FileUtils.getFileIconForMimeType("video/mpeg"))
+        assertEquals(Icons.Default.VideoFile, FileUtils.getFileIconForMimeType("video/3gpp"))
+    }
+
+    // ========== Additional getMimeTypeFromFilename Edge Case Tests ==========
+
+    @Test
+    fun `getMimeTypeFromFilename handles filename with only extension`() {
+        assertEquals("application/pdf", FileUtils.getMimeTypeFromFilename(".pdf"))
+    }
+
+    @Test
+    fun `getMimeTypeFromFilename handles filename ending with dot`() {
+        // Filename ending in a dot has empty extension
+        assertEquals("application/octet-stream", FileUtils.getMimeTypeFromFilename("file."))
+    }
+
+    @Test
+    fun `getMimeTypeFromFilename handles filenames with spaces`() {
+        assertEquals("application/pdf", FileUtils.getMimeTypeFromFilename("my document.pdf"))
+        assertEquals("image/jpeg", FileUtils.getMimeTypeFromFilename("photo with spaces.jpg"))
+    }
+
+    @Test
+    fun `getMimeTypeFromFilename handles filenames with special characters`() {
+        assertEquals("application/zip", FileUtils.getMimeTypeFromFilename("archive-2024_01.zip"))
+        assertEquals("text/plain", FileUtils.getMimeTypeFromFilename("notes (copy).txt"))
+    }
+
+    // ========== Additional wouldExceedSizeLimit Tests ==========
+
+    @Test
+    fun `wouldExceedSizeLimit returns false for zero values`() {
+        assertFalse(FileUtils.wouldExceedSizeLimit(0, 0))
+    }
+
+    @Test
+    fun `wouldExceedSizeLimit handles typical use cases`() {
+        // Adding a 1MB file to empty list
+        assertFalse(FileUtils.wouldExceedSizeLimit(0, 1024 * 1024))
+
+        // Adding a small file to existing attachments
+        assertFalse(FileUtils.wouldExceedSizeLimit(5 * 1024 * 1024, 100))
+    }
 }

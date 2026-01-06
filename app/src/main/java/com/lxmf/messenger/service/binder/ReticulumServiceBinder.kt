@@ -236,6 +236,17 @@ class ReticulumServiceBinder(
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set delivery status callback before init: ${e.message}", e)
         }
+
+        // Setup native stamp generator BEFORE Python initialization
+        // This ensures native generator is used instead of Python's flaky multiprocessing
+        // (multiprocessing.Manager() hangs on Android, holding stamp_gen_lock forever)
+        try {
+            val stampGenerator = StampGenerator()
+            wrapperManager.setStampGeneratorCallback(stampGenerator)
+            Log.d(TAG, "Native Kotlin stamp generator registered (pre-init)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set stamp generator callback before init: ${e.message}", e)
+        }
     }
 
     override fun shutdown() {
@@ -940,14 +951,8 @@ class ReticulumServiceBinder(
             Log.w(TAG, "Failed to set propagation state callback: ${e.message}", e)
         }
 
-        // Setup native stamp generator (bypasses Python multiprocessing issues)
-        try {
-            val stampGenerator = StampGenerator()
-            wrapperManager.setStampGeneratorCallback(stampGenerator)
-            Log.d(TAG, "Native Kotlin stamp generator registered")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to set stamp generator callback: ${e.message}", e)
-        }
+        // Note: Native stamp generator is registered in setupPreInitializationBridges()
+        // to ensure it's available before any stamp generation can occur
     }
 
     internal fun announceLxmfDestination() {

@@ -221,6 +221,11 @@ class PropagationNodeManager
          * Call this when the Reticulum service becomes ready.
          */
         fun start() {
+            // Guard against multiple starts - jobs are already running
+            if (relayObserverJob != null) {
+                Log.d(TAG, "PropagationNodeManager already started, skipping")
+                return
+            }
             Log.d(TAG, "Starting PropagationNodeManager")
 
             // Debug: Log nodeType distribution on startup
@@ -289,15 +294,45 @@ class PropagationNodeManager
                 .map { it?.destinationHash }
                 .distinctUntilChanged()
                 .collect { destinationHash ->
+                    syncRelayToPython(destinationHash)
+                }
+        }
+
+        /**
+         * Sync relay to Python with retry logic.
+         * Python may not be initialized when PropagationNodeManager starts early,
+         * so we retry with backoff until successful.
+         */
+        private suspend fun syncRelayToPython(destinationHash: String?) {
+            val maxRetries = 10
+            val baseDelayMs = 500L
+
+            for (attempt in 1..maxRetries) {
+                val result = if (destinationHash != null) {
+                    val destHashBytes = destinationHash.hexToByteArray()
+                    reticulumProtocol.setOutboundPropagationNode(destHashBytes)
+                } else {
+                    reticulumProtocol.setOutboundPropagationNode(null)
+                }
+
+                if (result.isSuccess) {
                     if (destinationHash != null) {
-                        val destHashBytes = destinationHash.hexToByteArray()
-                        reticulumProtocol.setOutboundPropagationNode(destHashBytes)
                         Log.i(TAG, "Python layer synced with relay: $destinationHash")
                     } else {
-                        reticulumProtocol.setOutboundPropagationNode(null)
                         Log.i(TAG, "Python layer cleared - no relay configured")
                     }
+                    return
                 }
+
+                val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                if (attempt < maxRetries) {
+                    val delayMs = baseDelayMs * attempt
+                    Log.w(TAG, "Failed to sync relay to Python (attempt $attempt/$maxRetries): $error. Retrying in ${delayMs}ms...")
+                    kotlinx.coroutines.delay(delayMs)
+                } else {
+                    Log.e(TAG, "Failed to sync relay to Python after $maxRetries attempts: $error")
+                }
+            }
         }
 
         /**

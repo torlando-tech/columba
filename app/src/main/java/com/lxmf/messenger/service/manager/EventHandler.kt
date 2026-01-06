@@ -3,6 +3,7 @@ package com.lxmf.messenger.service.manager
 import android.util.Log
 import com.chaquo.python.PyObject
 import com.lxmf.messenger.data.model.InterfaceType
+import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.NodeTypeDetector
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import com.lxmf.messenger.service.persistence.ServicePersistenceManager

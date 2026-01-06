@@ -3176,9 +3176,12 @@ class ReticulumWrapper:
                                "OPPORTUNISTIC doesn't support attachments, falling back to DIRECT")
                     lxmf_method = LXMF.LXMessage.DIRECT
 
-            # Check if PROPAGATED requires a propagation node
+            # Check if PROPAGATED requires a propagation node - fall back to DIRECT if not available
+            # The message will retry via propagation when direct fails (if try_propagation_on_fail=True)
             if lxmf_method == LXMF.LXMessage.PROPAGATED and not self.active_propagation_node:
-                return {"success": False, "error": "PROPAGATED delivery requires a propagation node to be set"}
+                log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                           "No propagation node set, falling back to DIRECT (will retry via propagation later)")
+                lxmf_method = LXMF.LXMessage.DIRECT
 
             # Reconstruct source identity
             source_identity = RNS.Identity()
@@ -3388,6 +3391,14 @@ class ReticulumWrapper:
                          f"Tracking opportunistic message {msg_hash.hex()[:16]}... for timeout fallback")
                 # Ensure timer is running
                 self._start_opportunistic_timer()
+
+            # Track PROPAGATED messages with file attachments for pending notification
+            # When propagation succeeds, we'll send a lightweight notification to the recipient
+            if lxmf_method == LXMF.LXMessage.PROPAGATED and msg_hash:
+                if hasattr(lxmf_message, 'fields') and lxmf_message.fields and 5 in lxmf_message.fields:
+                    self._pending_file_notifications[msg_hash.hex()] = lxmf_message
+                    log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                             f"Tracking {msg_hash.hex()[:16]}... for pending file notification after propagation")
 
             # Map method back to string for return
             method_names = {

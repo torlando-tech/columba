@@ -185,48 +185,25 @@ class FileUtilsTempAttachmentTest {
     }
 
     // ========== wouldExceedSizeLimit Tests ==========
+    // Note: With MAX_TOTAL_ATTACHMENT_SIZE = Int.MAX_VALUE, the limit is effectively unlimited.
+    // Testing "exceeding" the limit would require integer overflow, so we only test normal cases.
 
     @Test
-    fun `wouldExceedSizeLimit returns true when exceeding limit`() {
-        val currentTotal = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 100
-        val newFileSize = 200
-
-        assertTrue(FileUtils.wouldExceedSizeLimit(currentTotal, newFileSize))
-    }
-
-    @Test
-    fun `wouldExceedSizeLimit returns false when within limit`() {
-        val currentTotal = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE / 2
-        val newFileSize = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE / 4
-
-        assertTrue(!FileUtils.wouldExceedSizeLimit(currentTotal, newFileSize))
-    }
-
-    @Test
-    fun `wouldExceedSizeLimit returns true when exactly at limit plus one`() {
-        val currentTotal = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE
-        val newFileSize = 1
-
-        assertTrue(FileUtils.wouldExceedSizeLimit(currentTotal, newFileSize))
-    }
-
-    @Test
-    fun `wouldExceedSizeLimit returns false when exactly at limit`() {
-        val currentTotal = 0
-        val newFileSize = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE
-
-        assertTrue(!FileUtils.wouldExceedSizeLimit(currentTotal, newFileSize))
+    fun `wouldExceedSizeLimit returns false for typical file sizes`() {
+        // With Int.MAX_VALUE limit, normal file sizes never exceed
+        assertTrue(!FileUtils.wouldExceedSizeLimit(0, 100 * 1024 * 1024)) // 100MB
+        assertTrue(!FileUtils.wouldExceedSizeLimit(500 * 1024 * 1024, 500 * 1024 * 1024)) // 1GB total
     }
 
     // ========== Size Constants Tests ==========
 
     @Test
-    fun `MAX_TOTAL_ATTACHMENT_SIZE is 512KB`() {
-        assertEquals(512 * 1024, FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)
+    fun `MAX_TOTAL_ATTACHMENT_SIZE is Int MAX_VALUE`() {
+        assertEquals(Int.MAX_VALUE, FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)
     }
 
     @Test
-    fun `MAX_SINGLE_FILE_SIZE is 512KB`() {
-        assertEquals(512 * 1024, FileUtils.MAX_SINGLE_FILE_SIZE)
+    fun `MAX_SINGLE_FILE_SIZE is Int MAX_VALUE`() {
+        assertEquals(Int.MAX_VALUE, FileUtils.MAX_SINGLE_FILE_SIZE)
     }
 }

@@ -686,66 +686,12 @@ class MigrationImporter
 
         /**
          * Import settings from legacy format (pre-automatic export).
-         * Maintains backward compatibility with exports from older app versions.
+         * Delegates to LegacySettingsImporter for backward compatibility with older exports.
          */
-        @Suppress("DEPRECATION")
         private suspend fun importLegacySettings(
             settings: SettingsExport,
             themeIdMap: Map<Long, Long>,
         ) {
-            settings.notificationsEnabled?.let { settingsRepository.saveNotificationsEnabled(it) }
-            settings.notificationReceivedMessage?.let { settingsRepository.saveNotificationReceivedMessage(it) }
-            settings.notificationReceivedMessageFavorite?.let {
-                settingsRepository.saveNotificationReceivedMessageFavorite(it)
-            }
-            settings.notificationHeardAnnounce?.let { settingsRepository.saveNotificationHeardAnnounce(it) }
-            settings.notificationBleConnected?.let { settingsRepository.saveNotificationBleConnected(it) }
-            settings.notificationBleDisconnected?.let { settingsRepository.saveNotificationBleDisconnected(it) }
-            settings.hasRequestedNotificationPermission?.let {
-                settingsRepository.markNotificationPermissionRequested()
-            }
-            settings.autoAnnounceEnabled?.let { settingsRepository.saveAutoAnnounceEnabled(it) }
-            settings.autoAnnounceIntervalMinutes?.let { settingsRepository.saveAutoAnnounceIntervalMinutes(it) }
-            settings.lastAutoAnnounceTime?.let { settingsRepository.saveLastAutoAnnounceTime(it) }
-
-            // Restore theme preference with ID remapping for custom themes
-            settings.themePreference?.let { themePreference ->
-                try {
-                    val remappedThemePref =
-                        if (themePreference.startsWith("custom:")) {
-                            val oldId = themePreference.removePrefix("custom:").toLongOrNull()
-                            if (oldId != null && themeIdMap.containsKey(oldId)) {
-                                "custom:${themeIdMap[oldId]}"
-                            } else {
-                                Log.w(TAG, "Custom theme ID $oldId not found in mapping, using default")
-                                null
-                            }
-                        } else {
-                            themePreference
-                        }
-
-                    if (remappedThemePref != null) {
-                        settingsRepository.saveThemePreferenceByIdentifier(remappedThemePref)
-                        Log.d(TAG, "Restored theme preference: $remappedThemePref")
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to restore theme preference: ${e.message}")
-                }
-            }
-
-            settings.preferOwnInstance?.let { settingsRepository.savePreferOwnInstance(it) }
-            settings.rpcKey?.let { settingsRepository.saveRpcKey(it) }
-            settings.defaultDeliveryMethod?.let { settingsRepository.saveDefaultDeliveryMethod(it) }
-            settings.tryPropagationOnFail?.let { settingsRepository.saveTryPropagationOnFail(it) }
-            settings.manualPropagationNode?.let { settingsRepository.saveManualPropagationNode(it) }
-            settings.lastPropagationNode?.let { settingsRepository.saveLastPropagationNode(it) }
-            settings.autoSelectPropagationNode?.let { settingsRepository.saveAutoSelectPropagationNode(it) }
-            settings.autoRetrieveEnabled?.let { settingsRepository.saveAutoRetrieveEnabled(it) }
-            settings.retrievalIntervalSeconds?.let { settingsRepository.saveRetrievalIntervalSeconds(it) }
-            settings.lastSyncTimestamp?.let { settingsRepository.saveLastSyncTimestamp(it) }
-            settings.transportNodeEnabled?.let { settingsRepository.saveTransportNodeEnabled(it) }
-            settings.locationSharingEnabled?.let { settingsRepository.saveLocationSharingEnabled(it) }
-            settings.defaultSharingDuration?.let { settingsRepository.saveDefaultSharingDuration(it) }
-            settings.locationPrecisionRadius?.let { settingsRepository.saveLocationPrecisionRadius(it) }
+            LegacySettingsImporter(settingsRepository).importAll(settings, themeIdMap)
         }
     }

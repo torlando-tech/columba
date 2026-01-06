@@ -64,6 +64,7 @@ class ServicePersistenceManager(
         iconName: String?,
         iconForegroundColor: String?,
         iconBackgroundColor: String?,
+        propagationTransferLimitKb: Int?,
     ) {
         scope.launch {
             try {
@@ -91,6 +92,7 @@ class ServicePersistenceManager(
                         iconName = iconName ?: existing?.iconName,
                         iconForegroundColor = iconForegroundColor ?: existing?.iconForegroundColor,
                         iconBackgroundColor = iconBackgroundColor ?: existing?.iconBackgroundColor,
+                        propagationTransferLimitKb = propagationTransferLimitKb,
                     )
 
                 announceDao.upsertAnnounce(entity)

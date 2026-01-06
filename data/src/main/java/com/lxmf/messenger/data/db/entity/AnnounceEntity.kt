@@ -32,6 +32,7 @@ data class AnnounceEntity(
     val iconName: String? = null,
     val iconForegroundColor: String? = null, // Hex RGB e.g., "FFFFFF"
     val iconBackgroundColor: String? = null, // Hex RGB e.g., "1E88E5"
+    val propagationTransferLimitKb: Int? = null, // Per-message size limit for propagation nodes (in KB)
 ) {
     @Suppress("CyclomaticComplexMethod") // Equals must compare all fields for correctness
     override fun equals(other: Any?): Boolean {
@@ -55,7 +56,8 @@ data class AnnounceEntity(
             peeringCost == other.peeringCost &&
             iconName == other.iconName &&
             iconForegroundColor == other.iconForegroundColor &&
-            iconBackgroundColor == other.iconBackgroundColor
+            iconBackgroundColor == other.iconBackgroundColor &&
+            propagationTransferLimitKb == other.propagationTransferLimitKb
     }
 
     private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean {
@@ -85,6 +87,7 @@ data class AnnounceEntity(
         result = 31 * result + (iconName?.hashCode() ?: 0)
         result = 31 * result + (iconForegroundColor?.hashCode() ?: 0)
         result = 31 * result + (iconBackgroundColor?.hashCode() ?: 0)
+        result = 31 * result + (propagationTransferLimitKb?.hashCode() ?: 0)
         return result
     }
 }

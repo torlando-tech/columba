@@ -509,7 +509,20 @@ class MigrationImporter
         private suspend fun importIdentity(identityExport: IdentityExport): Boolean {
             // Check if identity already exists
             if (database.localIdentityDao().identityExists(identityExport.identityHash)) {
-                Log.d(TAG, "Identity ${identityExport.identityHash} already exists, skipping")
+                Log.d(TAG, "Identity ${identityExport.identityHash} already exists, updating icon if present")
+                // Update icon fields for existing identity if they're present in the export
+                if (identityExport.iconName != null ||
+                    identityExport.iconForegroundColor != null ||
+                    identityExport.iconBackgroundColor != null
+                ) {
+                    database.localIdentityDao().updateIconAppearance(
+                        identityHash = identityExport.identityHash,
+                        iconName = identityExport.iconName,
+                        foregroundColor = identityExport.iconForegroundColor,
+                        backgroundColor = identityExport.iconBackgroundColor,
+                    )
+                    Log.d(TAG, "Updated icon for existing identity ${identityExport.identityHash}")
+                }
                 return false
             }
 
@@ -547,7 +560,7 @@ class MigrationImporter
                 Log.w(TAG, "Reticulum recovery failed, using direct insert", e)
             }
 
-            // Insert into database
+            // Insert into database with profile icon data
             val entity =
                 LocalIdentityEntity(
                     identityHash = identityExport.identityHash,
@@ -558,6 +571,10 @@ class MigrationImporter
                     createdTimestamp = identityExport.createdTimestamp,
                     lastUsedTimestamp = identityExport.lastUsedTimestamp,
                     isActive = identityExport.isActive,
+                    // Restore profile icon data (nullable for backward compatibility)
+                    iconName = identityExport.iconName,
+                    iconForegroundColor = identityExport.iconForegroundColor,
+                    iconBackgroundColor = identityExport.iconBackgroundColor,
                 )
             database.localIdentityDao().insert(entity)
 
@@ -619,24 +636,42 @@ class MigrationImporter
 
         /**
          * Import settings using SettingsRepository.
+         * Handles both new automatic format and legacy format for backward compatibility.
          * @param themeIdMap Maps old custom theme IDs to new IDs for theme preference restoration
          */
         private suspend fun importSettings(
             settings: SettingsExport,
             themeIdMap: Map<Long, Long>,
         ) {
-            settingsRepository.saveNotificationsEnabled(settings.notificationsEnabled)
-            settingsRepository.saveNotificationReceivedMessage(settings.notificationReceivedMessage)
-            settingsRepository.saveNotificationReceivedMessageFavorite(settings.notificationReceivedMessageFavorite)
-            settingsRepository.saveNotificationHeardAnnounce(settings.notificationHeardAnnounce)
-            settingsRepository.saveNotificationBleConnected(settings.notificationBleConnected)
-            settingsRepository.saveNotificationBleDisconnected(settings.notificationBleDisconnected)
-            settingsRepository.saveAutoAnnounceEnabled(settings.autoAnnounceEnabled)
-            settingsRepository.saveAutoAnnounceIntervalMinutes(settings.autoAnnounceIntervalMinutes)
+            // New format: Import all preferences automatically
+            if (settings.preferences.isNotEmpty()) {
+                Log.d(TAG, "Importing settings using automatic format (${settings.preferences.size} entries)")
+                settingsRepository.importAllPreferences(settings.preferences)
 
-            // Restore theme preference with ID remapping for custom themes
+                // Handle theme preference remapping for custom themes
+                val themePreferenceEntry = settings.preferences.find { it.key == "app_theme" }
+                if (themePreferenceEntry != null) {
+                    remapThemePreference(themePreferenceEntry.value, themeIdMap)
+                }
+            } else {
+                // Legacy format: Import manually from individual fields
+                Log.d(TAG, "Importing settings using legacy format (backward compatibility)")
+                importLegacySettings(settings, themeIdMap)
+            }
+
+            // Mark onboarding as completed since we're importing from another device
+            settingsRepository.markOnboardingCompleted()
+        }
+
+        /**
+         * Remap theme preference for custom themes after import.
+         * Custom theme IDs may have changed during import, so we need to update the preference.
+         */
+        private suspend fun remapThemePreference(
+            themePreference: String,
+            themeIdMap: Map<Long, Long>,
+        ) {
             try {
-                val themePreference = settings.themePreference
                 val remappedThemePref =
                     if (themePreference.startsWith("custom:")) {
                         // Extract old ID and map to new ID
@@ -652,27 +687,24 @@ class MigrationImporter
                         themePreference
                     }
 
-                if (remappedThemePref != null) {
+                if (remappedThemePref != null && remappedThemePref != themePreference) {
                     settingsRepository.saveThemePreferenceByIdentifier(remappedThemePref)
-                    Log.d(TAG, "Restored theme preference: $remappedThemePref")
+                    Log.d(TAG, "Remapped theme preference: $themePreference -> $remappedThemePref")
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to restore theme preference: ${e.message}")
-                // Non-fatal - continue with default theme
+                Log.w(TAG, "Failed to remap theme preference: ${e.message}")
+                // Non-fatal - continue with imported theme
             }
+        }
 
-            // Import propagation node settings (with null-safety for backward compatibility)
-            settings.defaultDeliveryMethod?.let { settingsRepository.saveDefaultDeliveryMethod(it) }
-            settings.tryPropagationOnFail?.let { settingsRepository.saveTryPropagationOnFail(it) }
-            settings.manualPropagationNode?.let { settingsRepository.saveManualPropagationNode(it) }
-            settings.lastPropagationNode?.let { settingsRepository.saveLastPropagationNode(it) }
-            settings.autoSelectPropagationNode?.let { settingsRepository.saveAutoSelectPropagationNode(it) }
-
-            // Import message retrieval settings
-            settings.autoRetrieveEnabled?.let { settingsRepository.saveAutoRetrieveEnabled(it) }
-            settings.retrievalIntervalSeconds?.let { settingsRepository.saveRetrievalIntervalSeconds(it) }
-
-            // Mark onboarding as completed since we're importing from another device
-            settingsRepository.markOnboardingCompleted()
+        /**
+         * Import settings from legacy format (pre-automatic export).
+         * Delegates to LegacySettingsImporter for backward compatibility with older exports.
+         */
+        private suspend fun importLegacySettings(
+            settings: SettingsExport,
+            themeIdMap: Map<Long, Long>,
+        ) {
+            LegacySettingsImporter(settingsRepository).importAll(settings, themeIdMap)
         }
     }

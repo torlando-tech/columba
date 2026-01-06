@@ -42,6 +42,10 @@ data class IdentityExport(
     val createdTimestamp: Long,
     val lastUsedTimestamp: Long,
     val isActive: Boolean,
+    // Profile icon data (nullable for backward compatibility with older exports)
+    val iconName: String? = null,
+    val iconForegroundColor: String? = null,
+    val iconBackgroundColor: String? = null,
 )
 
 /**
@@ -201,28 +205,76 @@ data class CustomThemeExport(
 )
 
 /**
+ * A single preference entry for serialization.
+ * Stores the key name, type identifier, and string-encoded value.
+ */
+@Serializable
+data class PreferenceEntry(
+    val key: String,
+    val type: String, // "boolean", "int", "long", "float", "string", "string_set"
+    val value: String, // String representation of the value
+)
+
+/**
  * Exported user settings.
+ * Uses automatic DataStore export - all preferences are captured automatically.
+ * New settings added to SettingsRepository will be included without code changes.
+ * Unknown preferences are safely ignored during import for backward/forward compatibility.
  */
 @Serializable
 data class SettingsExport(
-    val notificationsEnabled: Boolean,
-    val notificationReceivedMessage: Boolean,
-    val notificationReceivedMessageFavorite: Boolean,
-    val notificationHeardAnnounce: Boolean,
-    val notificationBleConnected: Boolean,
-    val notificationBleDisconnected: Boolean,
-    val autoAnnounceEnabled: Boolean,
-    val autoAnnounceIntervalMinutes: Int,
-    val themePreference: String,
-    // Propagation node settings (nullable for backward compatibility with v5 imports)
+    val preferences: List<PreferenceEntry> = emptyList(),
+    // Legacy fields for backward compatibility with v6 exports (will be deprecated)
+    @Deprecated("Use preferences list instead")
+    val notificationsEnabled: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val notificationReceivedMessage: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val notificationReceivedMessageFavorite: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val notificationHeardAnnounce: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val notificationBleConnected: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val notificationBleDisconnected: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val hasRequestedNotificationPermission: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val autoAnnounceEnabled: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val autoAnnounceIntervalMinutes: Int? = null,
+    @Deprecated("Use preferences list instead")
+    val lastAutoAnnounceTime: Long? = null,
+    @Deprecated("Use preferences list instead")
+    val themePreference: String? = null,
+    @Deprecated("Use preferences list instead")
+    val preferOwnInstance: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val rpcKey: String? = null,
+    @Deprecated("Use preferences list instead")
     val defaultDeliveryMethod: String? = null,
+    @Deprecated("Use preferences list instead")
     val tryPropagationOnFail: Boolean? = null,
+    @Deprecated("Use preferences list instead")
     val manualPropagationNode: String? = null,
+    @Deprecated("Use preferences list instead")
     val lastPropagationNode: String? = null,
+    @Deprecated("Use preferences list instead")
     val autoSelectPropagationNode: Boolean? = null,
-    // Message retrieval settings
+    @Deprecated("Use preferences list instead")
     val autoRetrieveEnabled: Boolean? = null,
+    @Deprecated("Use preferences list instead")
     val retrievalIntervalSeconds: Int? = null,
+    @Deprecated("Use preferences list instead")
+    val lastSyncTimestamp: Long? = null,
+    @Deprecated("Use preferences list instead")
+    val transportNodeEnabled: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val locationSharingEnabled: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val defaultSharingDuration: String? = null,
+    @Deprecated("Use preferences list instead")
+    val locationPrecisionRadius: Int? = null,
 )
 
 /**

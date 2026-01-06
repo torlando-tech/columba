@@ -509,7 +509,20 @@ class MigrationImporter
         private suspend fun importIdentity(identityExport: IdentityExport): Boolean {
             // Check if identity already exists
             if (database.localIdentityDao().identityExists(identityExport.identityHash)) {
-                Log.d(TAG, "Identity ${identityExport.identityHash} already exists, skipping")
+                Log.d(TAG, "Identity ${identityExport.identityHash} already exists, updating icon if present")
+                // Update icon fields for existing identity if they're present in the export
+                if (identityExport.iconName != null ||
+                    identityExport.iconForegroundColor != null ||
+                    identityExport.iconBackgroundColor != null
+                ) {
+                    database.localIdentityDao().updateIconAppearance(
+                        identityHash = identityExport.identityHash,
+                        iconName = identityExport.iconName,
+                        foregroundColor = identityExport.iconForegroundColor,
+                        backgroundColor = identityExport.iconBackgroundColor,
+                    )
+                    Log.d(TAG, "Updated icon for existing identity ${identityExport.identityHash}")
+                }
                 return false
             }
 

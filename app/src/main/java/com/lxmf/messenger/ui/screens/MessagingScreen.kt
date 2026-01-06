@@ -2029,6 +2029,7 @@ private fun getSyncStatusText(syncProgress: SyncProgress): String =
                     }
                 else -> "Processing..."
             }
+        is SyncProgress.Complete -> "Download complete"
     }
 
 /**

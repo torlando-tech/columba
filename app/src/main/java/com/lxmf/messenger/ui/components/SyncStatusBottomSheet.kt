@@ -132,6 +132,13 @@ fun SyncStatusBottomSheet(
                         )
                     }
                 }
+                is SyncProgress.Complete -> {
+                    SyncStateRow(
+                        icon = { Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary) },
+                        title = "Download complete",
+                        subtitle = "Messages received",
+                    )
+                }
             }
         }
     }

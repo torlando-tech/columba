@@ -238,6 +238,8 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
         ) { isGranted ->
             if (isGranted) {
                 Log.d("ColumbaNavigation", "Notification permission granted")
+                // Enable notifications in settings since permission was granted
+                notificationSettingsViewModel.toggleNotificationsEnabled(true)
             } else {
                 Log.d("ColumbaNavigation", "Notification permission denied")
                 // Disable notifications in settings since permission was denied

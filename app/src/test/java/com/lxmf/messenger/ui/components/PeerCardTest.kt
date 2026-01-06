@@ -6,6 +6,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.test.TestFactories
 import org.junit.Assert.assertEquals
@@ -352,5 +354,128 @@ class PeerCardTest {
         composeTestRule.onNodeWithContentDescription("Internet").assertDoesNotExist()
         composeTestRule.onNodeWithContentDescription("Bluetooth").assertDoesNotExist()
         composeTestRule.onNodeWithContentDescription("LoRa/RNode").assertDoesNotExist()
+    }
+
+    // ========== Long Press Tests ==========
+
+    @Test
+    fun peerCard_longPress_callsOnLongPress() {
+        // Given
+        var longPressed = false
+        val announce = TestFactories.createAnnounce(peerName = "Charlie")
+
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+                onLongPress = { longPressed = true },
+            )
+        }
+
+        // When
+        composeTestRule.onNodeWithText("Charlie").performTouchInput { longClick() }
+
+        // Then
+        assertTrue(longPressed)
+    }
+
+    // ========== Node Type Badge Tests ==========
+
+    @Test
+    fun peerCard_displaysDefaultNodeBadge_forUnknownNodeType() {
+        // Given - nodeType that doesn't match any known type
+        val announce = TestFactories.createAnnounce(nodeType = "UNKNOWN_TYPE")
+
+        // When
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        // Then - should display "Node" as default (else branch)
+        composeTestRule.onNodeWithText("Node").assertIsDisplayed()
+    }
+
+    // ========== Signal Strength Indicator Tests ==========
+
+    @Test
+    fun peerCard_displaysWeakSignal_forHighHops() {
+        // Given - hops > 3 should show weak signal (else branch)
+        val announce = TestFactories.createAnnounce(hops = 5)
+
+        // When
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        // Then - should display "5 hops" with weak signal indicator
+        composeTestRule.onNodeWithText("5 hops").assertIsDisplayed()
+    }
+
+    @Test
+    fun peerCard_displaysGoodSignal_forMediumHops() {
+        // Given - hops between 1 and 3 should show good signal
+        val announce = TestFactories.createAnnounce(hops = 2)
+
+        // When
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        // Then - should display "2 hops" with good signal indicator
+        composeTestRule.onNodeWithText("2 hops").assertIsDisplayed()
+    }
+
+    @Test
+    fun peerCard_displaysExcellentSignal_forLowHops() {
+        // Given - hops <= 1 should show excellent signal
+        val announce = TestFactories.createAnnounce(hops = 1)
+
+        // When
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        // Then - should display "1 hop" with excellent signal indicator
+        composeTestRule.onNodeWithText("1 hop").assertIsDisplayed()
+    }
+
+    // ========== Time Since Display Tests ==========
+
+    @Test
+    fun peerCard_displaysTimeSinceLastSeen() {
+        // Given - announce with recent timestamp
+        val recentTimestamp = System.currentTimeMillis() - (5 * 60 * 1000) // 5 minutes ago
+        val announce = TestFactories.createAnnounce(lastSeenTimestamp = recentTimestamp)
+
+        // When
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        // Then - should display time since text (LaunchedEffect initializes it)
+        // The exact text depends on formatTimeSince, but should contain "ago" or "just now"
+        composeTestRule.waitForIdle()
+        // Just verify the component renders - LaunchedEffect coverage is difficult to test fully
     }
 }

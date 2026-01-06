@@ -705,4 +705,82 @@ class SettingsRepositoryTest {
                 result in SettingsRepository.MIN_INCOMING_SIZE_LIMIT_KB..SettingsRepository.MAX_INCOMING_SIZE_LIMIT_KB,
             )
         }
+
+    // ========== Location Permission Sheet Flow Tests ==========
+
+    @Test
+    fun hasDismissedLocationPermissionSheetFlow_defaultsToFalse() =
+        runTest {
+            // Reset first to ensure clean state
+            repository.resetLocationPermissionSheetDismissal()
+
+            repository.hasDismissedLocationPermissionSheetFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                assertFalse(
+                    "Location permission sheet dismissal should default to false",
+                    initial,
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun markLocationPermissionSheetDismissed_setsToTrue() =
+        runTest {
+            // Reset first to ensure clean state
+            repository.resetLocationPermissionSheetDismissal()
+
+            repository.hasDismissedLocationPermissionSheetFlow.test(timeout = 5.seconds) {
+                // Initial should be false
+                assertFalse(awaitItem())
+
+                // Mark as dismissed - should emit true
+                repository.markLocationPermissionSheetDismissed()
+                assertTrue(awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun resetLocationPermissionSheetDismissal_setsToFalse() =
+        runTest {
+            // First mark as dismissed
+            repository.markLocationPermissionSheetDismissed()
+
+            repository.hasDismissedLocationPermissionSheetFlow.test(timeout = 5.seconds) {
+                // Initial should be true (from previous mark)
+                assertTrue(awaitItem())
+
+                // Reset - should emit false
+                repository.resetLocationPermissionSheetDismissal()
+                assertFalse(awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun hasDismissedLocationPermissionSheetFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.hasDismissedLocationPermissionSheetFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                if (!initial) {
+                    // Mark as dismissed - should emit
+                    repository.markLocationPermissionSheetDismissed()
+                    assertTrue(awaitItem())
+
+                    // Mark again - should NOT emit (already true)
+                    repository.markLocationPermissionSheetDismissed()
+                    expectNoEvents()
+                } else {
+                    // Already true, marking again should NOT emit
+                    repository.markLocationPermissionSheetDismissed()
+                    expectNoEvents()
+                }
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

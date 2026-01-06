@@ -11,6 +11,7 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.test.TestFactories
 import io.mockk.clearAllMocks
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -1063,6 +1064,62 @@ class MapViewModelTest {
                 assertNull(marker.iconForegroundColor)
                 assertNull(marker.iconBackgroundColor)
                 assertNull(marker.publicKey)
+            }
+        }
+
+    // ========== Location Permission Sheet Dismissal Tests ==========
+
+    @Test
+    fun `initial state has permission sheet not dismissed`() =
+        runTest {
+            every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns flowOf(false)
+            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository)
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.hasUserDismissedPermissionSheet)
+            }
+        }
+
+    @Test
+    fun `state reflects dismissed permission sheet from settings`() =
+        runTest {
+            every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns flowOf(true)
+            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository)
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.hasUserDismissedPermissionSheet)
+            }
+        }
+
+    @Test
+    fun `dismissLocationPermissionSheet calls settingsRepository`() =
+        runTest {
+            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository)
+
+            viewModel.dismissLocationPermissionSheet()
+
+            coVerify { settingsRepository.markLocationPermissionSheetDismissed() }
+        }
+
+    @Test
+    fun `state updates when permission sheet dismissal flow changes`() =
+        runTest {
+            val dismissalFlow = MutableStateFlow(false)
+            every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns dismissalFlow
+
+            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository)
+
+            viewModel.state.test {
+                // Initial state - not dismissed
+                val initial = awaitItem()
+                assertFalse(initial.hasUserDismissedPermissionSheet)
+
+                // Simulate dismissal
+                dismissalFlow.value = true
+                val updated = awaitItem()
+                assertTrue(updated.hasUserDismissedPermissionSheet)
             }
         }
 

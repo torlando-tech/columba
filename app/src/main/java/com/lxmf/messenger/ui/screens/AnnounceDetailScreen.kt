@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -305,6 +306,17 @@ fun AnnounceDetailScreen(
                         },
                 )
 
+                // Show transfer size limit for propagation nodes
+                val transferLimit = announceNonNull.propagationTransferLimitKb
+                if (announceNonNull.nodeType == "PROPAGATION_NODE" && transferLimit != null) {
+                    InfoCard(
+                        icon = Icons.Default.Storage,
+                        title = "Transfer Size Limit",
+                        content = formatSizeLimit(transferLimit),
+                        subtitle = "Maximum message size accepted by this relay",
+                    )
+                }
+
                 // Show interface information if available
                 announceNonNull.receivingInterface?.let { interfaceName ->
                     InfoCard(
@@ -570,4 +582,19 @@ private fun formatFullTimestamp(timestamp: Long): String {
     val date = java.util.Date(timestamp)
     val format = java.text.SimpleDateFormat("MMM dd, yyyy 'at' HH:mm:ss", java.util.Locale.getDefault())
     return format.format(date)
+}
+
+@Suppress("MagicNumber")
+private fun formatSizeLimit(sizeKb: Int): String {
+    return when {
+        sizeKb >= 1024 -> {
+            val sizeMb = sizeKb / 1024.0
+            if (sizeMb == sizeMb.toLong().toDouble()) {
+                "${sizeMb.toLong()} MB"
+            } else {
+                "%.1f MB".format(sizeMb)
+            }
+        }
+        else -> "$sizeKb KB"
+    }
 }

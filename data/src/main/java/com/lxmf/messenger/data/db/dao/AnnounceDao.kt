@@ -128,22 +128,35 @@ interface AnnounceDao {
      * Get announces filtered by node types.
      * Returns a Flow that emits updated lists whenever the database changes.
      */
-    @Query("SELECT * FROM announces WHERE nodeType IN (:nodeTypes) ORDER BY lastSeenTimestamp DESC")
+    @Query(
+        """
+        SELECT * FROM announces
+        WHERE nodeType IN (:nodeTypes)
+        AND (nodeType != 'PROPAGATION_NODE' OR stampCostFlexibility IS NOT NULL)
+        ORDER BY lastSeenTimestamp DESC
+        """,
+    )
     fun getAnnouncesByTypes(nodeTypes: List<String>): Flow<List<AnnounceEntity>>
 
     /**
-     * Get top propagation nodes sorted by hop count (ascending), then by most recent.
+     * Get top propagation nodes sorted for optimal relay selection.
+     * Priority: fewer hops (better connectivity), higher transfer limit (larger messages),
+     * more recently seen (still active). Nodes with unknown limits sorted last.
      * Optimized query with LIMIT in SQL to avoid fetching all rows.
-     * Used for relay selection UI.
      *
      * @param limit Maximum number of nodes to return (default 10)
-     * @return Flow of propagation node announces sorted by nearest first, then most recent
+     * @return Flow of propagation node announces sorted by best candidates first
      */
     @Query(
         """
         SELECT * FROM announces
         WHERE nodeType = 'PROPAGATION_NODE'
-        ORDER BY hops ASC, lastSeenTimestamp DESC
+        AND stampCostFlexibility IS NOT NULL
+        ORDER BY
+            hops ASC,
+            CASE WHEN propagationTransferLimitKb IS NULL THEN 1 ELSE 0 END,
+            propagationTransferLimitKb DESC,
+            lastSeenTimestamp DESC
         LIMIT :limit
     """,
     )
@@ -178,7 +191,14 @@ interface AnnounceDao {
      * Get announces filtered by node types with pagination support.
      * Returns a PagingSource for use with Paging 3 library.
      */
-    @Query("SELECT * FROM announces WHERE nodeType IN (:nodeTypes) ORDER BY lastSeenTimestamp DESC")
+    @Query(
+        """
+        SELECT * FROM announces
+        WHERE nodeType IN (:nodeTypes)
+        AND (nodeType != 'PROPAGATION_NODE' OR stampCostFlexibility IS NOT NULL)
+        ORDER BY lastSeenTimestamp DESC
+        """,
+    )
     fun getAnnouncesByTypesPaged(nodeTypes: List<String>): PagingSource<Int, AnnounceEntity>
 
     /**

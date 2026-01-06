@@ -24,6 +24,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
+import kotlin.io.path.createTempDirectory
 
 /**
  * Unit tests for IdentityRepository.
@@ -381,7 +382,7 @@ class IdentityRepositoryTest {
             val mockUri = mockk<Uri>()
 
             // Create a real temporary directory for this test
-            val tempCacheDir = createTempDir("test_cache")
+            val tempCacheDir = createTempDirectory("test_cache").toFile()
 
             every { mockContext.cacheDir } returns tempCacheDir
             every { mockContext.packageName } returns "com.lxmf.messenger"
@@ -510,7 +511,7 @@ class IdentityRepositoryTest {
     fun ensureIdentityFileExists_whenFileExists_returnsPath() =
         runTest {
             // Given - create real temp directory structure
-            val tempFilesDir = createTempDir("test_files")
+            val tempFilesDir = createTempDirectory("test_files").toFile()
             val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
             val identityHash = "abc123def456"
             val canonicalFile = File(reticulumDir, "identity_$identityHash")
@@ -549,7 +550,7 @@ class IdentityRepositoryTest {
     fun ensureIdentityFileExists_whenFileExistsButDbHasDifferentPath_updatesDb() =
         runTest {
             // Given - file exists at canonical path but DB has old path
-            val tempFilesDir = createTempDir("test_files")
+            val tempFilesDir = createTempDirectory("test_files").toFile()
             val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
             val identityHash = "abc123def456"
             val canonicalFile = File(reticulumDir, "identity_$identityHash")
@@ -590,7 +591,7 @@ class IdentityRepositoryTest {
     fun ensureIdentityFileExists_whenFileMissing_recoversFromKeyData() =
         runTest {
             // Given - no file exists but keyData is available
-            val tempFilesDir = createTempDir("test_files")
+            val tempFilesDir = createTempDirectory("test_files").toFile()
             val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
             val identityHash = "abc123def456"
             val canonicalFile = File(reticulumDir, "identity_$identityHash")
@@ -638,7 +639,7 @@ class IdentityRepositoryTest {
     fun ensureIdentityFileExists_whenFileMissingAndNoKeyData_returnsFailure() =
         runTest {
             // Given - no file and no keyData backup
-            val tempFilesDir = createTempDir("test_files")
+            val tempFilesDir = createTempDirectory("test_files").toFile()
             val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
 
             every { mockContext.filesDir } returns tempFilesDir
@@ -673,7 +674,7 @@ class IdentityRepositoryTest {
     fun ensureIdentityFileExists_whenFileMissingAndKeyDataWrongSize_returnsFailure() =
         runTest {
             // Given - keyData exists but is wrong size (not 64 bytes)
-            val tempFilesDir = createTempDir("test_files")
+            val tempFilesDir = createTempDirectory("test_files").toFile()
             val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
 
             every { mockContext.filesDir } returns tempFilesDir
@@ -708,7 +709,7 @@ class IdentityRepositoryTest {
     fun ensureIdentityFileExists_whenFileExistsButWrongSize_recoversFromKeyData() =
         runTest {
             // Given - file exists but is corrupted (wrong size)
-            val tempFilesDir = createTempDir("test_files")
+            val tempFilesDir = createTempDirectory("test_files").toFile()
             val reticulumDir = File(tempFilesDir, "reticulum").apply { mkdirs() }
             val identityHash = "abc123def456"
             val canonicalFile = File(reticulumDir, "identity_$identityHash")

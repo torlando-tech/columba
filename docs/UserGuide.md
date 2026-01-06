@@ -69,13 +69,7 @@ Open **Settings** in Columba.
 
 ### Network
 
-Leave defaults unless you know what you are doing:
-
-* Reticulum enabled
-* Local discovery enabled
-* Automatic routing enabled
-
-These defaults allow Columba to:
+Leave defaults unless you know what you are doing. The default settings allow Columba to:
 
 * Find peers automatically
 * Switch between Internet, Local Wi-Fi, or bluetooth
@@ -83,16 +77,16 @@ These defaults allow Columba to:
 ### Identity
 
 * Already created automatically
-* You should  set a display name using the wizard. if you skipped that step then you  can set your display name in the settings
+* You should set a display name using the wizard. If you skipped that step, you can set your display name in the settings
 
 ## Step 4 – Sending Your First Message
 
-### Using announces
-1. open **Announces**
-2. tap on the name of a contact
-3. tap start chat
+### Using Announces
+1. Open **Announces**
+2. Tap on the name of a contact
+3. Tap **Start Chat**
 
-### using chat
+### Using Chat
 1. Open **Chats**
 2. Choose **New Conversation**
 3. Add a contact by:
@@ -124,7 +118,7 @@ Examples:
 
 * Phones connected through bluetooth
 * Two phones on the same Wi-Fi network
-* Devices linked via LORA radio(Rnodes)
+* Devices linked via LoRa radio (RNodes)
 
 You do not need to change anything:
 
@@ -193,7 +187,7 @@ Reticulum was designed for:
 
 Together they provide:
 
-* Censure free, private messaging
+* Censorship-free, private messaging
 * Communication without infrastructure
 * Resilience during outages
 * Independence from telecom providers

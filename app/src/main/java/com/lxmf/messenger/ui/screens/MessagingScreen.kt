@@ -131,6 +131,7 @@ import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
 import com.lxmf.messenger.ui.components.FullEmojiPickerDialog
 import com.lxmf.messenger.ui.components.ImageCompressionWarningDialog
+import com.lxmf.messenger.ui.components.ImageQualitySelectionDialog
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.QuickShareLocationBottomSheet
 import com.lxmf.messenger.ui.components.ReactionDisplayRow
@@ -237,6 +238,12 @@ fun MessagingScreen(
 
     // Compression warning state
     val compressionWarning by viewModel.compressionWarning.collectAsStateWithLifecycle()
+
+    // Image quality selection dialog state
+    val qualitySelectionState by viewModel.qualitySelectionState.collectAsStateWithLifecycle()
+
+    // Link speed probe state for showing path info
+    val linkSpeedProbeState by viewModel.linkSpeedProbeState.collectAsStateWithLifecycle()
 
     // Observe manual sync results and show Toast
     LaunchedEffect(Unit) {
@@ -735,7 +742,10 @@ fun MessagingScreen(
                     selectedImageData = selectedImageData,
                     selectedImageIsAnimated = selectedImageIsAnimated,
                     isProcessingImage = isProcessingImage,
-                    onImageAttachmentClick = { imageLauncher.launch("image/*") },
+                    onImageAttachmentClick = {
+                        viewModel.startLinkSpeedProbe()
+                        imageLauncher.launch("image/*")
+                    },
                     onImageContentReceived = { data, format, isAnimated ->
                         viewModel.selectImage(data, format, isAnimated)
                     },
@@ -948,6 +958,17 @@ fun MessagingScreen(
             warning = warning,
             onDismiss = { viewModel.dismissCompressionWarning() },
             onConfirm = { viewModel.confirmSendLargeImage() },
+        )
+    }
+
+    // Image quality selection dialog
+    qualitySelectionState?.let { state ->
+        ImageQualitySelectionDialog(
+            recommendedPreset = state.recommendedPreset,
+            probeState = linkSpeedProbeState,
+            transferTimeEstimates = state.transferTimeEstimates,
+            onSelect = { preset -> viewModel.selectImageQuality(preset) },
+            onDismiss = { viewModel.dismissQualitySelection() },
         )
     }
 }

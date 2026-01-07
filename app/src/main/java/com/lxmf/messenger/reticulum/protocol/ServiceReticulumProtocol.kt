@@ -1503,6 +1503,7 @@ class ServiceReticulumProtocol(
     override suspend fun probeLinkSpeed(
         destinationHash: ByteArray,
         timeoutSeconds: Float,
+        deliveryMethod: String,
     ): LinkSpeedProbeResult {
         return try {
             val service = this.service ?: return LinkSpeedProbeResult(
@@ -1515,7 +1516,7 @@ class ServiceReticulumProtocol(
                 error = "Service not bound",
             )
 
-            val resultJson = service.probeLinkSpeed(destinationHash, timeoutSeconds)
+            val resultJson = service.probeLinkSpeed(destinationHash, timeoutSeconds, deliveryMethod)
             val result = JSONObject(resultJson)
 
             LinkSpeedProbeResult(
@@ -1525,6 +1526,7 @@ class ServiceReticulumProtocol(
                 rttSeconds = if (result.isNull("rtt_seconds")) null else result.optDouble("rtt_seconds"),
                 hops = if (result.isNull("hops")) null else result.optInt("hops"),
                 linkReused = result.optBoolean("link_reused", false),
+                nextHopBitrateBps = if (result.isNull("next_hop_bitrate_bps")) null else result.optLong("next_hop_bitrate_bps"),
                 error = result.optString("error").takeIf { it.isNotEmpty() },
             )
         } catch (e: Exception) {

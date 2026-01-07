@@ -1217,6 +1217,22 @@ class MessagingViewModel
                 // Determine recommended preset
                 val recommendedPreset = when (probeState) {
                     is LinkSpeedProbe.ProbeState.Complete -> probeState.recommendedPreset
+                    is LinkSpeedProbe.ProbeState.Failed -> {
+                        // Probe failed/timed out - still use path info from probe if available
+                        val lastProbeResult = linkSpeedProbe.probeState.value
+                        if (lastProbeResult is LinkSpeedProbe.ProbeState.Failed) {
+                            // Check if we got path info from the failed probe
+                            // by examining if there's a result we can use
+                            val savedPreset = settingsRepository.getImageCompressionPreset()
+                            if (savedPreset == ImageCompressionPreset.AUTO) {
+                                interfaceDetector.detectOptimalPreset()
+                            } else {
+                                savedPreset
+                            }
+                        } else {
+                            ImageCompressionPreset.MEDIUM
+                        }
+                    }
                     else -> {
                         // Fallback to interface-based detection if probe not ready
                         val savedPreset = settingsRepository.getImageCompressionPreset()

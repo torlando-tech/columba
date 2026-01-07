@@ -231,6 +231,7 @@ class MockReticulumProtocol : ReticulumProtocol {
     override suspend fun probeLinkSpeed(
         destinationHash: ByteArray,
         timeoutSeconds: Float,
+        deliveryMethod: String,
     ): LinkSpeedProbeResult {
         // Mock: Return simulated medium-speed link
         delay(500) // Simulate probe time

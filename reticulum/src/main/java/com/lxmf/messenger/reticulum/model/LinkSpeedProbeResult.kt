@@ -21,6 +21,7 @@ data class LinkSpeedProbeResult(
     val rttSeconds: Double?,
     val hops: Int?,
     val linkReused: Boolean,
+    val nextHopBitrateBps: Long? = null, // First hop interface bitrate (heuristic)
     val error: String? = null,
 ) {
     /**

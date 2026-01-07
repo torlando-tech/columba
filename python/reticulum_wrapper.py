@@ -2062,12 +2062,16 @@ class ReticulumWrapper:
             # Priority: FIELD_TELEMETRY (0x02) > FIELD_COLUMBA_META (0x70) > Legacy field 7
             is_location_only = False
 
-            if self.kotlin_location_received_callback and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
-                # Check if this is a location-only message (no text content or empty content)
-                content = lxmf_message.content
-                has_text_content = content and len(content.strip()) > 0 if isinstance(content, (str, bytes)) else False
+            # Check if message has text content (needed for empty message filtering)
+            content = lxmf_message.content
+            has_text_content = False
+            if content:
                 if isinstance(content, bytes):
                     has_text_content = len(content.strip()) > 0
+                elif isinstance(content, str):
+                    has_text_content = len(content.strip()) > 0
+
+            if self.kotlin_location_received_callback and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
 
                 location_event = None
                 telemetry_source = None
@@ -2207,6 +2211,23 @@ class ReticulumWrapper:
                 skip_reason = "location-only" if is_location_only else "reaction-only"
                 log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                          f"Skipping regular message processing for {skip_reason} message")
+                return
+            
+            # Skip truly empty messages (probe messages for link speed measurement)
+            # These have no text content and no meaningful fields (image, file, telemetry, etc.)
+            meaningful_fields = {
+                FIELD_TELEMETRY,           # 0x02 - Location/sensor data
+                LXMF.FIELD_FILE_ATTACHMENTS,  # 0x05
+                LXMF.FIELD_IMAGE,             # 0x06
+                LXMF.FIELD_AUDIO,             # 0x07
+            }
+            has_meaningful_fields = False
+            if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
+                has_meaningful_fields = any(f in lxmf_message.fields for f in meaningful_fields)
+            
+            if not has_text_content and not has_meaningful_fields:
+                log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                         f"Skipping empty probe message from {lxmf_message.source_hash.hex()[:16]}")
                 return
 
             # Add to pending_inbound queue (maintains backward compatibility with polling)
@@ -4913,17 +4934,18 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "get_hop_count", f"Error: {e}")
             return None
 
-    def probe_link_speed(self, dest_hash: bytes, timeout_seconds: float = 10.0) -> Dict:
+    def probe_link_speed(self, dest_hash: bytes, timeout_seconds: float = 10.0, 
+                         delivery_method: str = "direct") -> Dict:
         """
-        Probe the link speed to a destination by establishing a Link
-        and measuring the establishment rate.
+        Probe the link speed to a destination by checking existing links or
+        sending an empty LXMF message to establish one.
         
-        This provides an end-to-end measurement of the path speed, accounting
-        for all intermediate hops (including any slow LoRa links in the middle).
+        This provides link speed data for adaptive image compression.
         
         Args:
             dest_hash: Destination hash as bytes (16 bytes)
             timeout_seconds: How long to wait for link establishment (default 10s)
+            delivery_method: "direct" or "propagated" - affects which link to check/establish
             
         Returns:
             Dict with:
@@ -4933,6 +4955,7 @@ class ReticulumWrapper:
             - rtt_seconds: Round-trip time in seconds (or None)
             - hops: Number of hops to destination (or None)
             - link_reused: True if an existing active link was used
+            - delivery_method: "direct" or "propagated" - which method was used
         """
         if not RETICULUM_AVAILABLE or not self.router:
             return {
@@ -4941,35 +4964,68 @@ class ReticulumWrapper:
                 "expected_rate_bps": None,
                 "rtt_seconds": None,
                 "hops": None,
-                "link_reused": False
+                "link_reused": False,
+                "delivery_method": delivery_method
             }
         
         try:
+            # Convert jarray to bytes (Chaquopy passes Kotlin ByteArray as jarray)
+            dest_hash = bytes(dest_hash)
             dest_hash_hex = dest_hash.hex()
             log_info("ReticulumWrapper", "probe_link_speed", 
-                     f"Probing link speed to {dest_hash_hex[:16]}...")
+                     f"Probing link speed to {dest_hash_hex[:16]}... (method: {delivery_method})")
             
-            # Check if we already have an active direct link
+            # Helper to get link stats
+            def get_link_stats(link, reused: bool, method: str) -> Dict:
+                return {
+                    "status": "success",
+                    "establishment_rate_bps": link.get_establishment_rate(),
+                    "expected_rate_bps": link.get_expected_rate(),
+                    "rtt_seconds": link.rtt,
+                    "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
+                    "link_reused": reused,
+                    "delivery_method": method
+                }
+            
+            # 1. If propagated delivery, check/use propagation link
+            if delivery_method == "propagated":
+                if self.router.outbound_propagation_link is not None:
+                    link = self.router.outbound_propagation_link
+                    if link.status == RNS.Link.ACTIVE:
+                        log_info("ReticulumWrapper", "probe_link_speed",
+                                 f"Using existing propagation link")
+                        return get_link_stats(link, True, "propagated")
+                
+                # No active propagation link - return heuristics only
+                log_info("ReticulumWrapper", "probe_link_speed",
+                         f"No active propagation link, returning heuristics")
+                return {
+                    "status": "no_link",
+                    "establishment_rate_bps": None,
+                    "expected_rate_bps": None,
+                    "rtt_seconds": None,
+                    "hops": None,
+                    "link_reused": False,
+                    "delivery_method": "propagated"
+                }
+            
+            # 2. Check for existing active direct link
             if dest_hash in self.router.direct_links:
                 link = self.router.direct_links[dest_hash]
                 if link.status == RNS.Link.ACTIVE:
                     log_info("ReticulumWrapper", "probe_link_speed",
-                             f"Reusing existing active link to {dest_hash_hex[:16]}")
-                    return {
-                        "status": "success",
-                        "establishment_rate_bps": link.get_establishment_rate(),
-                        "expected_rate_bps": link.get_expected_rate(),
-                        "rtt_seconds": link.rtt,
-                        "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
-                        "link_reused": True
-                    }
+                             f"Reusing existing direct link to {dest_hash_hex[:16]}")
+                    return get_link_stats(link, True, "direct")
+            
+            # 3. No existing link - send empty LXMF message to establish one
+            log_info("ReticulumWrapper", "probe_link_speed",
+                     f"No existing link, sending probe message to {dest_hash_hex[:16]}...")
             
             # Check if path exists
             if not RNS.Transport.has_path(dest_hash):
                 log_info("ReticulumWrapper", "probe_link_speed",
                          f"No path to {dest_hash_hex[:16]}, requesting...")
                 RNS.Transport.request_path(dest_hash)
-                # Wait briefly for path response
                 path_wait_start = time.time()
                 while not RNS.Transport.has_path(dest_hash) and (time.time() - path_wait_start) < 5.0:
                     time.sleep(0.1)
@@ -4983,10 +5039,11 @@ class ReticulumWrapper:
                         "expected_rate_bps": None,
                         "rtt_seconds": None,
                         "hops": None,
-                        "link_reused": False
+                        "link_reused": False,
+                        "delivery_method": "direct"
                     }
             
-            # Get the identity for this destination
+            # Get identity
             identity = RNS.Identity.recall(dest_hash)
             if identity is None:
                 log_warning("ReticulumWrapper", "probe_link_speed",
@@ -4997,10 +5054,11 @@ class ReticulumWrapper:
                     "expected_rate_bps": None,
                     "rtt_seconds": None,
                     "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
-                    "link_reused": False
+                    "link_reused": False,
+                    "delivery_method": "direct"
                 }
             
-            # Create destination for LXMF delivery aspect
+            # Create destination and send empty probe message
             destination = RNS.Destination(
                 identity,
                 RNS.Destination.OUT,
@@ -5009,62 +5067,129 @@ class ReticulumWrapper:
                 "delivery"
             )
             
-            # Track link establishment
+            # Track probe completion
             probe_result = {
                 "status": "pending",
                 "establishment_rate_bps": None,
                 "expected_rate_bps": None,
                 "rtt_seconds": None,
                 "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
-                "link_reused": False
+                "link_reused": False,
+                "delivery_method": "direct"
             }
             probe_complete = threading.Event()
-            probe_link = [None]  # Use list to allow modification in nested function
             
-            def link_established(link):
+            def on_delivery(message):
+                # Message delivered - link should now be active
                 log_info("ReticulumWrapper", "probe_link_speed",
-                         f"✅ Probe link established to {dest_hash_hex[:16]}, "
-                         f"RTT: {link.rtt:.3f}s, Rate: {link.get_establishment_rate()} bps")
-                probe_result["status"] = "success"
-                probe_result["establishment_rate_bps"] = link.get_establishment_rate()
-                probe_result["expected_rate_bps"] = link.get_expected_rate()
-                probe_result["rtt_seconds"] = link.rtt
+                         f"✅ Probe message delivered to {dest_hash_hex[:16]}")
+                if dest_hash in self.router.direct_links:
+                    link = self.router.direct_links[dest_hash]
+                    if link.status == RNS.Link.ACTIVE:
+                        probe_result["status"] = "success"
+                        probe_result["establishment_rate_bps"] = link.get_establishment_rate()
+                        probe_result["expected_rate_bps"] = link.get_expected_rate()
+                        probe_result["rtt_seconds"] = link.rtt
+                        probe_result["delivery_method"] = "direct"
+                else:
+                    # Message delivered but no direct link - might have used opportunistic
+                    probe_result["status"] = "success"
+                    probe_result["delivery_method"] = "opportunistic"
                 probe_complete.set()
             
-            def link_closed(link):
-                if probe_result["status"] == "pending":
-                    log_warning("ReticulumWrapper", "probe_link_speed",
-                                f"Probe link closed before establishment")
+            def on_failed(message):
+                log_warning("ReticulumWrapper", "probe_link_speed",
+                            f"Probe message failed to {dest_hash_hex[:16]}")
+                # Check if it fell back to propagation
+                if self.router.outbound_propagation_link is not None:
+                    link = self.router.outbound_propagation_link
+                    if link.status == RNS.Link.ACTIVE:
+                        probe_result["status"] = "success"
+                        probe_result["establishment_rate_bps"] = link.get_establishment_rate()
+                        probe_result["expected_rate_bps"] = link.get_expected_rate()
+                        probe_result["rtt_seconds"] = link.rtt
+                        probe_result["delivery_method"] = "propagated"
+                else:
                     probe_result["status"] = "failed"
                 probe_complete.set()
             
-            # Establish the link
-            log_debug("ReticulumWrapper", "probe_link_speed",
-                      f"Establishing probe link to {dest_hash_hex[:16]}...")
-            link = RNS.Link(destination)
-            probe_link[0] = link
-            link.set_link_established_callback(link_established)
-            link.set_link_closed_callback(link_closed)
+            # Create and send empty probe message
+            probe_message = LXMF.LXMessage(
+                destination,
+                self.local_lxmf_destination,
+                b"",  # Empty content
+                desired_method=LXMF.LXMessage.DIRECT
+            )
+            probe_message.register_delivery_callback(on_delivery)
+            probe_message.register_failed_callback(on_failed)
             
-            # Wait for establishment with timeout
-            if probe_complete.wait(timeout=timeout_seconds):
-                # Probe completed (success or failure)
-                pass
-            else:
-                # Timeout
+            log_debug("ReticulumWrapper", "probe_link_speed",
+                      f"Probe message method={probe_message.method}, representation={probe_message.representation}")
+            
+            self.router.handle_outbound(probe_message)
+            
+            # Give router time to start processing the message
+            time.sleep(0.5)
+            
+            # Wait for completion, but also check for delivery
+            # Monitor message state for SENT/DELIVERED states
+            start_time = time.time()
+            last_state = None
+            while not probe_complete.is_set() and (time.time() - start_time) < timeout_seconds:
+                if probe_message.state != last_state:
+                    log_debug("ReticulumWrapper", "probe_link_speed",
+                              f"Probe message state: {probe_message.state} (progress: {probe_message.progress})")
+                    last_state = probe_message.state
+                
+                # LXMF States: GENERATING=0, OUTBOUND=1, SENDING=2, SENT=4, DELIVERED=8
+                # Check if message was sent or delivered
+                if probe_message.state == LXMF.LXMessage.DELIVERED:
+                    log_info("ReticulumWrapper", "probe_link_speed",
+                             f"✅ Probe message delivered to {dest_hash_hex[:16]}")
+                    # Check for direct link that was established
+                    if dest_hash in self.router.direct_links:
+                        link = self.router.direct_links[dest_hash]
+                        if link.status == RNS.Link.ACTIVE:
+                            probe_result["status"] = "success"
+                            probe_result["establishment_rate_bps"] = link.get_establishment_rate()
+                            probe_result["expected_rate_bps"] = link.get_expected_rate()
+                            probe_result["rtt_seconds"] = link.rtt
+                            probe_result["delivery_method"] = "direct"
+                            break
+                    # No direct link - use path info
+                    probe_result["status"] = "success"
+                    probe_result["delivery_method"] = "direct"
+                    if RNS.Transport.has_path(dest_hash):
+                        probe_result["hops"] = RNS.Transport.hops_to(dest_hash)
+                        next_hop_bitrate = RNS.Transport.next_hop_interface_bitrate(dest_hash)
+                        if next_hop_bitrate is not None:
+                            probe_result["next_hop_bitrate_bps"] = int(next_hop_bitrate)
+                    break
+                elif probe_message.state == LXMF.LXMessage.SENT:
+                    log_info("ReticulumWrapper", "probe_link_speed",
+                             f"✅ Probe message sent (single-packet) to {dest_hash_hex[:16]}")
+                    probe_result["status"] = "success"
+                    probe_result["delivery_method"] = "single_packet"
+                    # For single-packet, use next_hop_bitrate as the speed estimate
+                    if RNS.Transport.has_path(dest_hash):
+                        probe_result["hops"] = RNS.Transport.hops_to(dest_hash)
+                        next_hop_bitrate = RNS.Transport.next_hop_interface_bitrate(dest_hash)
+                        if next_hop_bitrate is not None:
+                            probe_result["next_hop_bitrate_bps"] = int(next_hop_bitrate)
+                    break
+                time.sleep(0.1)
+            
+            if probe_result["status"] == "pending":
                 log_warning("ReticulumWrapper", "probe_link_speed",
                             f"Probe timed out after {timeout_seconds}s")
                 probe_result["status"] = "timeout"
-            
-            # Teardown the probe link (we don't need to keep it open)
-            if probe_link[0] is not None:
-                try:
-                    probe_link[0].teardown()
-                    log_debug("ReticulumWrapper", "probe_link_speed",
-                              f"Probe link torn down")
-                except Exception as e:
-                    log_debug("ReticulumWrapper", "probe_link_speed",
-                              f"Error tearing down probe link: {e}")
+                
+                # Include path info for heuristics
+                if RNS.Transport.has_path(dest_hash):
+                    probe_result["hops"] = RNS.Transport.hops_to(dest_hash)
+                    next_hop_bitrate = RNS.Transport.next_hop_interface_bitrate(dest_hash)
+                    if next_hop_bitrate is not None:
+                        probe_result["next_hop_bitrate_bps"] = int(next_hop_bitrate)
             
             return probe_result
             
@@ -5079,7 +5204,8 @@ class ReticulumWrapper:
                 "expected_rate_bps": None,
                 "rtt_seconds": None,
                 "hops": None,
-                "link_reused": False
+                "link_reused": False,
+                "delivery_method": delivery_method
             }
 
     def get_debug_info(self) -> Dict:

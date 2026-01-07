@@ -64,10 +64,11 @@ class LinkSpeedProbe
                 val recommendedPreset: ImageCompressionPreset,
             ) : ProbeState()
 
-            /** Probe failed */
+            /** Probe failed but may have path info */
             data class Failed(
                 val reason: String,
                 val targetType: TargetType?,
+                val result: LinkSpeedProbeResult? = null,
             ) : ProbeState()
         }
 
@@ -126,7 +127,7 @@ class LinkSpeedProbe
                     }
 
                     // Perform the probe
-                    val result = reticulumProtocol.probeLinkSpeed(targetHashBytes, DEFAULT_TIMEOUT_SECONDS)
+                    val result = reticulumProtocol.probeLinkSpeed(targetHashBytes, DEFAULT_TIMEOUT_SECONDS, deliveryMethod)
 
                     if (result.isSuccess) {
                         val recommendedPreset = recommendPreset(result)
@@ -163,23 +164,37 @@ class LinkSpeedProbe
          * Recommend a compression preset based on measured link speed.
          */
         fun recommendPreset(result: LinkSpeedProbeResult): ImageCompressionPreset {
+            // First try the actual measured rate from link establishment
             val rateBps = result.bestRateBps
-
-            return when {
-                rateBps == null -> {
-                    // No rate available - use heuristics based on hop count
-                    val hops = result.hops
-                    when {
-                        hops == null -> ImageCompressionPreset.MEDIUM
-                        hops <= 1 -> ImageCompressionPreset.HIGH
-                        hops <= 3 -> ImageCompressionPreset.MEDIUM
-                        else -> ImageCompressionPreset.LOW
-                    }
+            if (rateBps != null) {
+                return when {
+                    rateBps < THRESHOLD_LOW_BPS -> ImageCompressionPreset.LOW
+                    rateBps < THRESHOLD_MEDIUM_BPS -> ImageCompressionPreset.MEDIUM
+                    rateBps < THRESHOLD_HIGH_BPS -> ImageCompressionPreset.HIGH
+                    else -> ImageCompressionPreset.ORIGINAL
                 }
-                rateBps < THRESHOLD_LOW_BPS -> ImageCompressionPreset.LOW
-                rateBps < THRESHOLD_MEDIUM_BPS -> ImageCompressionPreset.MEDIUM
-                rateBps < THRESHOLD_HIGH_BPS -> ImageCompressionPreset.HIGH
-                else -> ImageCompressionPreset.ORIGINAL
+            }
+
+            // Fall back to next hop interface bitrate (available even on timeout)
+            val nextHopBitrate = result.nextHopBitrateBps
+            if (nextHopBitrate != null) {
+                Log.d(TAG, "Using next hop bitrate for recommendation: $nextHopBitrate bps")
+                return when {
+                    nextHopBitrate < THRESHOLD_LOW_BPS -> ImageCompressionPreset.LOW
+                    nextHopBitrate < THRESHOLD_MEDIUM_BPS -> ImageCompressionPreset.MEDIUM
+                    nextHopBitrate < THRESHOLD_HIGH_BPS -> ImageCompressionPreset.HIGH
+                    else -> ImageCompressionPreset.ORIGINAL
+                }
+            }
+
+            // Final fallback: use hop count heuristics
+            val hops = result.hops
+            Log.d(TAG, "Using hop count heuristics for recommendation: $hops hops")
+            return when {
+                hops == null -> ImageCompressionPreset.MEDIUM
+                hops <= 1 -> ImageCompressionPreset.HIGH
+                hops <= 3 -> ImageCompressionPreset.MEDIUM
+                else -> ImageCompressionPreset.LOW
             }
         }
 

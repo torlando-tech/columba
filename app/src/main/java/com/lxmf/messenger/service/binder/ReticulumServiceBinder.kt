@@ -366,8 +366,8 @@ class ReticulumServiceBinder(
 
     override fun getPathTableHashes(): String = routingManager.getPathTableHashes()
 
-    override fun probeLinkSpeed(destHash: ByteArray, timeoutSeconds: Float): String =
-        routingManager.probeLinkSpeed(destHash, timeoutSeconds)
+    override fun probeLinkSpeed(destHash: ByteArray, timeoutSeconds: Float, deliveryMethod: String): String =
+        routingManager.probeLinkSpeed(destHash, timeoutSeconds, deliveryMethod)
 
     // ===========================================
     // Messaging Methods

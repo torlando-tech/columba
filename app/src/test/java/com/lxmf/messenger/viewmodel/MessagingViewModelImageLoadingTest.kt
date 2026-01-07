@@ -14,6 +14,7 @@ import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
 import com.lxmf.messenger.service.InterfaceDetector
+import com.lxmf.messenger.service.LinkSpeedProbe
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.ui.model.ImageCache
@@ -76,6 +77,7 @@ class MessagingViewModelImageLoadingTest {
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var identityRepository: IdentityRepository
     private lateinit var interfaceDetector: InterfaceDetector
+    private lateinit var linkSpeedProbe: LinkSpeedProbe
     private lateinit var viewModel: MessagingViewModel
 
     @Before
@@ -95,6 +97,10 @@ class MessagingViewModelImageLoadingTest {
         locationSharingManager = mockk(relaxed = true)
         identityRepository = mockk(relaxed = true)
         interfaceDetector = mockk(relaxed = true)
+        linkSpeedProbe = mockk(relaxed = true)
+
+        // Mock linkSpeedProbe state
+        every { linkSpeedProbe.probeState } returns MutableStateFlow(LinkSpeedProbe.ProbeState.Idle)
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
@@ -126,6 +132,7 @@ class MessagingViewModelImageLoadingTest {
                 locationSharingManager = locationSharingManager,
                 identityRepository = identityRepository,
                 interfaceDetector = interfaceDetector,
+                linkSpeedProbe = linkSpeedProbe,
             )
     }
 

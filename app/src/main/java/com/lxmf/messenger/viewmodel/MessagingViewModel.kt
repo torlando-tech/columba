@@ -16,6 +16,7 @@ import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceDetector
+import com.lxmf.messenger.service.LinkSpeedProbe
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.SyncProgress
@@ -79,6 +80,7 @@ class MessagingViewModel
         private val locationSharingManager: LocationSharingManager,
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         private val interfaceDetector: InterfaceDetector,
+        private val linkSpeedProbe: LinkSpeedProbe,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -168,6 +170,13 @@ class MessagingViewModel
         // Compression warning state for large images
         private val _compressionWarning = MutableStateFlow<CompressionWarning?>(null)
         val compressionWarning: StateFlow<CompressionWarning?> = _compressionWarning.asStateFlow()
+
+        // Image quality selection dialog state
+        private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
+        val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
+
+        // Expose link speed probe state for UI
+        val linkSpeedProbeState: StateFlow<LinkSpeedProbe.ProbeState> = linkSpeedProbe.probeState
 
         // Sync state from PropagationNodeManager
         val isSyncing: StateFlow<Boolean> = propagationNodeManager.isSyncing
@@ -1177,8 +1186,20 @@ class MessagingViewModel
         }
 
         /**
-         * Process an image with compression and check if it exceeds the target size.
-         * If it exceeds, shows a warning dialog. Otherwise, stores the image for sending.
+         * Start probing link speed to the current conversation recipient.
+         * Should be called when the attachment dialog opens to give time for probe completion.
+         */
+        fun startLinkSpeedProbe() {
+            val peerHash = _currentConversation.value ?: return
+            viewModelScope.launch {
+                Log.d(TAG, "Starting link speed probe for conversation $peerHash")
+                linkSpeedProbe.probe(peerHash)
+            }
+        }
+
+        /**
+         * Process an image by showing the quality selection dialog.
+         * The dialog shows recommended quality based on link speed probe results.
          *
          * @param context Android context for image processing
          * @param uri URI of the image to process
@@ -1188,68 +1209,97 @@ class MessagingViewModel
             uri: android.net.Uri,
         ) {
             viewModelScope.launch {
-                _isProcessingImage.value = true
-                try {
-                    // Get the effective preset
-                    val savedPreset = settingsRepository.getImageCompressionPreset()
-                    val effectivePreset =
+                Log.d(TAG, "Opening quality selection for image")
+
+                // Get the probe result for recommendations
+                val probeState = linkSpeedProbe.probeState.value
+
+                // Determine recommended preset
+                val recommendedPreset = when (probeState) {
+                    is LinkSpeedProbe.ProbeState.Complete -> probeState.recommendedPreset
+                    else -> {
+                        // Fallback to interface-based detection if probe not ready
+                        val savedPreset = settingsRepository.getImageCompressionPreset()
                         if (savedPreset == ImageCompressionPreset.AUTO) {
                             interfaceDetector.detectOptimalPreset()
                         } else {
                             savedPreset
                         }
+                    }
+                }
 
-                    Log.d(TAG, "Processing image with preset: ${effectivePreset.name}")
+                // Calculate transfer time estimates for each preset
+                val transferTimeEstimates = calculateTransferTimeEstimates(probeState)
 
-                    // Compress the image
-                    val result =
-                        withContext(Dispatchers.IO) {
-                            ImageUtils.compressImageWithPreset(context, uri, effectivePreset)
-                        }
+                // Show the quality selection dialog
+                _qualitySelectionState.value = QualitySelectionState(
+                    imageUri = uri,
+                    context = context,
+                    recommendedPreset = recommendedPreset,
+                    transferTimeEstimates = transferTimeEstimates,
+                )
+            }
+        }
+
+        /**
+         * Calculate transfer time estimates for each preset based on probe results.
+         */
+        private fun calculateTransferTimeEstimates(
+            probeState: LinkSpeedProbe.ProbeState,
+        ): Map<ImageCompressionPreset, String?> {
+            val probeResult = (probeState as? LinkSpeedProbe.ProbeState.Complete)?.result
+
+            return listOf(
+                ImageCompressionPreset.LOW,
+                ImageCompressionPreset.MEDIUM,
+                ImageCompressionPreset.HIGH,
+                ImageCompressionPreset.ORIGINAL,
+            ).associateWith { preset ->
+                if (probeResult != null) {
+                    linkSpeedProbe.estimateTransferTime(preset.targetSizeBytes, probeResult)
+                } else {
+                    null
+                }
+            }
+        }
+
+        /**
+         * User selected a quality preset - compress and attach the image.
+         */
+        fun selectImageQuality(preset: ImageCompressionPreset) {
+            val state = _qualitySelectionState.value ?: return
+            _qualitySelectionState.value = null
+
+            viewModelScope.launch {
+                _isProcessingImage.value = true
+                try {
+                    Log.d(TAG, "User selected quality: ${preset.name}")
+
+                    val result = withContext(Dispatchers.IO) {
+                        ImageUtils.compressImageWithPreset(state.context, state.imageUri, preset)
+                    }
 
                     if (result == null) {
                         Log.e(TAG, "Failed to compress image")
-                        _isProcessingImage.value = false
                         return@launch
                     }
 
-                    if (result.meetsTargetSize) {
-                        // Image fits within target - store for sending
-                        Log.d(TAG, "Image compressed to ${result.compressedImage.data.size} bytes, meets target")
-                        selectImage(result.compressedImage.data, result.compressedImage.format)
-                    } else {
-                        // Image exceeds target - show warning with ETA
-                        val bandwidth = interfaceDetector.getSlowestInterfaceBandwidth()
-                        val interfaceDesc = interfaceDetector.getSlowestInterfaceDescription()
-                        val transferTime =
-                            ImageUtils.calculateTransferTime(
-                                result.compressedImage.data.size.toLong(),
-                                bandwidth,
-                            )
-
-                        Log.d(
-                            TAG,
-                            "Image exceeds target: ${result.compressedImage.data.size} > ${result.targetSizeBytes}, " +
-                                "ETA: ${transferTime.formattedTime} via $interfaceDesc",
-                        )
-
-                        _compressionWarning.value =
-                            CompressionWarning(
-                                compressedSizeBytes = result.compressedImage.data.size.toLong(),
-                                targetSizeBytes = result.targetSizeBytes,
-                                estimatedTransferTime = transferTime.formattedTime,
-                                interfaceDescription = interfaceDesc,
-                                pendingImageData = result.compressedImage.data,
-                                pendingImageFormat = result.compressedImage.format,
-                                preset = effectivePreset,
-                            )
-                    }
+                    Log.d(TAG, "Image compressed to ${result.compressedImage.data.size} bytes")
+                    selectImage(result.compressedImage.data, result.compressedImage.format)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error processing image with compression", e)
+                    Log.e(TAG, "Error compressing image with selected quality", e)
                 } finally {
                     _isProcessingImage.value = false
                 }
             }
+        }
+
+        /**
+         * Dismiss the quality selection dialog without selecting.
+         */
+        fun dismissQualitySelection() {
+            Log.d(TAG, "Dismissing quality selection dialog")
+            _qualitySelectionState.value = null
         }
 
         /**
@@ -1814,3 +1864,18 @@ data class CompressionWarning(
         return result
     }
 }
+
+/**
+ * State for the image quality selection dialog.
+ *
+ * @property imageUri The URI of the image to be compressed
+ * @property context The Android context for image processing
+ * @property recommendedPreset The preset recommended based on link speed probe
+ * @property transferTimeEstimates Map of preset to estimated transfer time string
+ */
+data class QualitySelectionState(
+    val imageUri: Uri,
+    val context: Context,
+    val recommendedPreset: ImageCompressionPreset,
+    val transferTimeEstimates: Map<ImageCompressionPreset, String?>,
+)

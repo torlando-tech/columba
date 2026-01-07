@@ -15,6 +15,7 @@ import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
 import com.lxmf.messenger.service.InterfaceDetector
+import com.lxmf.messenger.service.LinkSpeedProbe
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.util.FileAttachment
@@ -67,6 +68,7 @@ class MessagingViewModelTest {
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var identityRepository: IdentityRepository
     private lateinit var interfaceDetector: InterfaceDetector
+    private lateinit var linkSpeedProbe: LinkSpeedProbe
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
     private val testPeerName = "Test Peer"
@@ -91,6 +93,10 @@ class MessagingViewModelTest {
         locationSharingManager = mockk(relaxed = true)
         identityRepository = mockk(relaxed = true)
         interfaceDetector = mockk(relaxed = true)
+        linkSpeedProbe = mockk(relaxed = true)
+
+        // Mock linkSpeedProbe state
+        every { linkSpeedProbe.probeState } returns MutableStateFlow(LinkSpeedProbe.ProbeState.Idle)
 
         // Mock identityRepository to return null by default (no icon set)
         coEvery { identityRepository.getActiveIdentitySync() } returns null
@@ -158,6 +164,7 @@ class MessagingViewModelTest {
             locationSharingManager,
             identityRepository,
             interfaceDetector,
+            linkSpeedProbe,
         )
 
     @Test
@@ -451,6 +458,8 @@ class MessagingViewModelTest {
             every { failingLocationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
 
             val failingInterfaceDetector = mockk<InterfaceDetector>(relaxed = true)
+            val failingLinkSpeedProbe = mockk<LinkSpeedProbe>(relaxed = true)
+            every { failingLinkSpeedProbe.probeState } returns MutableStateFlow(LinkSpeedProbe.ProbeState.Idle)
             val viewModelWithoutIdentity =
                 MessagingViewModel(
                     failingProtocol,
@@ -463,6 +472,7 @@ class MessagingViewModelTest {
                     failingLocationSharingManager,
                     identityRepository,
                     failingInterfaceDetector,
+                    failingLinkSpeedProbe,
                 )
 
             // Attempt to send message
@@ -912,6 +922,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 interfaceDetector,
+                linkSpeedProbe,
             )
             advanceUntilIdle()
 
@@ -974,6 +985,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 interfaceDetector,
+                linkSpeedProbe,
             )
             advanceUntilIdle()
 
@@ -1032,6 +1044,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 interfaceDetector,
+                linkSpeedProbe,
             )
             advanceUntilIdle()
 
@@ -1080,6 +1093,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 interfaceDetector,
+                linkSpeedProbe,
             )
             advanceUntilIdle()
 

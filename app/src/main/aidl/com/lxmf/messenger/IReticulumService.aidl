@@ -157,14 +157,15 @@ interface IReticulumService {
     String getPathTableHashes();
 
     /**
-     * Probe link speed to a destination by establishing a Link and measuring
-     * the establishment rate. Provides end-to-end path speed measurement.
+     * Probe link speed to a destination by checking existing links or sending
+     * an empty LXMF message to establish one.
      *
      * @param destHash Destination hash bytes
      * @param timeoutSeconds How long to wait for link establishment
+     * @param deliveryMethod "direct" or "propagated" - affects which link to check/establish
      * @return JSON string with probe result containing status, rates, RTT, hops
      */
-    String probeLinkSpeed(in byte[] destHash, float timeoutSeconds);
+    String probeLinkSpeed(in byte[] destHash, float timeoutSeconds, String deliveryMethod);
 
     /**
      * Get debug information.

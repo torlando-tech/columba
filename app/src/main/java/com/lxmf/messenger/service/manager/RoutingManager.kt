@@ -109,17 +109,18 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
     }
 
     /**
-     * Probe link speed to a destination by establishing a Link and measuring
-     * the establishment rate. This provides end-to-end path speed measurement.
+     * Probe link speed to a destination by checking existing links or sending
+     * an empty LXMF message to establish one.
      *
      * @param destHash Destination hash bytes
      * @param timeoutSeconds How long to wait for link establishment
+     * @param deliveryMethod "direct" or "propagated" - affects which link to check/establish
      * @return JSON string with probe result containing status, rates, RTT, hops
      */
-    fun probeLinkSpeed(destHash: ByteArray, timeoutSeconds: Float): String {
+    fun probeLinkSpeed(destHash: ByteArray, timeoutSeconds: Float, deliveryMethod: String): String {
         return wrapperManager.withWrapper { wrapper ->
             try {
-                val result = wrapper.callAttr("probe_link_speed", destHash, timeoutSeconds.toDouble())
+                val result = wrapper.callAttr("probe_link_speed", destHash, timeoutSeconds.toDouble(), deliveryMethod)
                 // Convert Python dict to JSON using getDictValue helper
                 JSONObject().apply {
                     put("status", result.getDictValue("status")?.toString() ?: "error")
@@ -153,6 +154,13 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
                     }
 
                     put("link_reused", result.getDictValue("link_reused")?.toBoolean() ?: false)
+
+                    result.getDictValue("next_hop_bitrate_bps")?.let {
+                        val str = it.toString()
+                        if (str != "None" && str.isNotEmpty()) {
+                            put("next_hop_bitrate_bps", str.toLongOrNull() ?: it.toLong())
+                        }
+                    }
 
                     result.getDictValue("error")?.let {
                         val str = it.toString()

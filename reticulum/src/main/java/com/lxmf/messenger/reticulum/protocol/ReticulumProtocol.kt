@@ -107,16 +107,18 @@ interface ReticulumProtocol {
     suspend fun getPathTableHashes(): List<String>
 
     /**
-     * Probe link speed to a destination by establishing a Link and measuring
-     * the establishment rate. This provides end-to-end path speed measurement.
+     * Probe link speed to a destination by checking existing links or sending
+     * an empty LXMF message to establish one.
      *
      * @param destinationHash The destination to probe (16 bytes)
      * @param timeoutSeconds How long to wait for link establishment (default 10s)
+     * @param deliveryMethod "direct" or "propagated" - affects which link to check/establish
      * @return LinkSpeedProbeResult with measured speeds or error status
      */
     suspend fun probeLinkSpeed(
         destinationHash: ByteArray,
         timeoutSeconds: Float = 10.0f,
+        deliveryMethod: String = "direct",
     ): LinkSpeedProbeResult
 
     // Announce handling

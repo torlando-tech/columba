@@ -4905,8 +4905,182 @@ class ReticulumWrapper:
         if not RETICULUM_AVAILABLE or not self.reticulum:
             return 3  # Mock value
 
-        # TODO: Implement hop count retrieval
-        return None
+        try:
+            if RNS.Transport.has_path(dest_hash):
+                return RNS.Transport.hops_to(dest_hash)
+            return None
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_hop_count", f"Error: {e}")
+            return None
+
+    def probe_link_speed(self, dest_hash: bytes, timeout_seconds: float = 10.0) -> Dict:
+        """
+        Probe the link speed to a destination by establishing a Link
+        and measuring the establishment rate.
+        
+        This provides an end-to-end measurement of the path speed, accounting
+        for all intermediate hops (including any slow LoRa links in the middle).
+        
+        Args:
+            dest_hash: Destination hash as bytes (16 bytes)
+            timeout_seconds: How long to wait for link establishment (default 10s)
+            
+        Returns:
+            Dict with:
+            - status: "success", "no_path", "no_identity", "timeout", or "error"
+            - establishment_rate_bps: Bits/sec from link handshake (or None)
+            - expected_rate_bps: Bits/sec from actual transfers (or None)
+            - rtt_seconds: Round-trip time in seconds (or None)
+            - hops: Number of hops to destination (or None)
+            - link_reused: True if an existing active link was used
+        """
+        if not RETICULUM_AVAILABLE or not self.router:
+            return {
+                "status": "not_initialized",
+                "establishment_rate_bps": None,
+                "expected_rate_bps": None,
+                "rtt_seconds": None,
+                "hops": None,
+                "link_reused": False
+            }
+        
+        try:
+            dest_hash_hex = dest_hash.hex()
+            log_info("ReticulumWrapper", "probe_link_speed", 
+                     f"Probing link speed to {dest_hash_hex[:16]}...")
+            
+            # Check if we already have an active direct link
+            if dest_hash in self.router.direct_links:
+                link = self.router.direct_links[dest_hash]
+                if link.status == RNS.Link.ACTIVE:
+                    log_info("ReticulumWrapper", "probe_link_speed",
+                             f"Reusing existing active link to {dest_hash_hex[:16]}")
+                    return {
+                        "status": "success",
+                        "establishment_rate_bps": link.get_establishment_rate(),
+                        "expected_rate_bps": link.get_expected_rate(),
+                        "rtt_seconds": link.rtt,
+                        "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
+                        "link_reused": True
+                    }
+            
+            # Check if path exists
+            if not RNS.Transport.has_path(dest_hash):
+                log_info("ReticulumWrapper", "probe_link_speed",
+                         f"No path to {dest_hash_hex[:16]}, requesting...")
+                RNS.Transport.request_path(dest_hash)
+                # Wait briefly for path response
+                path_wait_start = time.time()
+                while not RNS.Transport.has_path(dest_hash) and (time.time() - path_wait_start) < 5.0:
+                    time.sleep(0.1)
+                
+                if not RNS.Transport.has_path(dest_hash):
+                    log_warning("ReticulumWrapper", "probe_link_speed",
+                                f"No path available to {dest_hash_hex[:16]}")
+                    return {
+                        "status": "no_path",
+                        "establishment_rate_bps": None,
+                        "expected_rate_bps": None,
+                        "rtt_seconds": None,
+                        "hops": None,
+                        "link_reused": False
+                    }
+            
+            # Get the identity for this destination
+            identity = RNS.Identity.recall(dest_hash)
+            if identity is None:
+                log_warning("ReticulumWrapper", "probe_link_speed",
+                            f"No identity known for {dest_hash_hex[:16]}")
+                return {
+                    "status": "no_identity",
+                    "establishment_rate_bps": None,
+                    "expected_rate_bps": None,
+                    "rtt_seconds": None,
+                    "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
+                    "link_reused": False
+                }
+            
+            # Create destination for LXMF delivery aspect
+            destination = RNS.Destination(
+                identity,
+                RNS.Destination.OUT,
+                RNS.Destination.SINGLE,
+                "lxmf",
+                "delivery"
+            )
+            
+            # Track link establishment
+            probe_result = {
+                "status": "pending",
+                "establishment_rate_bps": None,
+                "expected_rate_bps": None,
+                "rtt_seconds": None,
+                "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
+                "link_reused": False
+            }
+            probe_complete = threading.Event()
+            probe_link = [None]  # Use list to allow modification in nested function
+            
+            def link_established(link):
+                log_info("ReticulumWrapper", "probe_link_speed",
+                         f"✅ Probe link established to {dest_hash_hex[:16]}, "
+                         f"RTT: {link.rtt:.3f}s, Rate: {link.get_establishment_rate()} bps")
+                probe_result["status"] = "success"
+                probe_result["establishment_rate_bps"] = link.get_establishment_rate()
+                probe_result["expected_rate_bps"] = link.get_expected_rate()
+                probe_result["rtt_seconds"] = link.rtt
+                probe_complete.set()
+            
+            def link_closed(link):
+                if probe_result["status"] == "pending":
+                    log_warning("ReticulumWrapper", "probe_link_speed",
+                                f"Probe link closed before establishment")
+                    probe_result["status"] = "failed"
+                probe_complete.set()
+            
+            # Establish the link
+            log_debug("ReticulumWrapper", "probe_link_speed",
+                      f"Establishing probe link to {dest_hash_hex[:16]}...")
+            link = RNS.Link(destination)
+            probe_link[0] = link
+            link.set_link_established_callback(link_established)
+            link.set_link_closed_callback(link_closed)
+            
+            # Wait for establishment with timeout
+            if probe_complete.wait(timeout=timeout_seconds):
+                # Probe completed (success or failure)
+                pass
+            else:
+                # Timeout
+                log_warning("ReticulumWrapper", "probe_link_speed",
+                            f"Probe timed out after {timeout_seconds}s")
+                probe_result["status"] = "timeout"
+            
+            # Teardown the probe link (we don't need to keep it open)
+            if probe_link[0] is not None:
+                try:
+                    probe_link[0].teardown()
+                    log_debug("ReticulumWrapper", "probe_link_speed",
+                              f"Probe link torn down")
+                except Exception as e:
+                    log_debug("ReticulumWrapper", "probe_link_speed",
+                              f"Error tearing down probe link: {e}")
+            
+            return probe_result
+            
+        except Exception as e:
+            log_error("ReticulumWrapper", "probe_link_speed", f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "status": "error",
+                "error": str(e),
+                "establishment_rate_bps": None,
+                "expected_rate_bps": None,
+                "rtt_seconds": None,
+                "hops": None,
+                "link_reused": False
+            }
 
     def get_debug_info(self) -> Dict:
         """

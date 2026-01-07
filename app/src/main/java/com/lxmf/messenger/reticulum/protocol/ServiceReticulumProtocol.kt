@@ -24,6 +24,7 @@ import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.reticulum.model.Link
 import com.lxmf.messenger.reticulum.model.LinkEvent
+import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.PacketReceipt
 import com.lxmf.messenger.reticulum.model.PacketType
@@ -1496,6 +1497,47 @@ class ServiceReticulumProtocol(
         } catch (e: Exception) {
             Log.e(TAG, "Error getting path table hashes", e)
             emptyList()
+        }
+    }
+
+    override suspend fun probeLinkSpeed(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float,
+    ): LinkSpeedProbeResult {
+        return try {
+            val service = this.service ?: return LinkSpeedProbeResult(
+                status = "not_bound",
+                establishmentRateBps = null,
+                expectedRateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+                error = "Service not bound",
+            )
+
+            val resultJson = service.probeLinkSpeed(destinationHash, timeoutSeconds)
+            val result = JSONObject(resultJson)
+
+            LinkSpeedProbeResult(
+                status = result.optString("status", "error"),
+                establishmentRateBps = if (result.isNull("establishment_rate_bps")) null else result.optLong("establishment_rate_bps"),
+                expectedRateBps = if (result.isNull("expected_rate_bps")) null else result.optLong("expected_rate_bps"),
+                rttSeconds = if (result.isNull("rtt_seconds")) null else result.optDouble("rtt_seconds"),
+                hops = if (result.isNull("hops")) null else result.optInt("hops"),
+                linkReused = result.optBoolean("link_reused", false),
+                error = result.optString("error").takeIf { it.isNotEmpty() },
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error probing link speed", e)
+            LinkSpeedProbeResult(
+                status = "error",
+                establishmentRateBps = null,
+                expectedRateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+                error = e.message,
+            )
         }
     }
 

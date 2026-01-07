@@ -157,6 +157,16 @@ interface IReticulumService {
     String getPathTableHashes();
 
     /**
+     * Probe link speed to a destination by establishing a Link and measuring
+     * the establishment rate. Provides end-to-end path speed measurement.
+     *
+     * @param destHash Destination hash bytes
+     * @param timeoutSeconds How long to wait for link establishment
+     * @return JSON string with probe result containing status, rates, RTT, hops
+     */
+    String probeLinkSpeed(in byte[] destHash, float timeoutSeconds);
+
+    /**
      * Get debug information.
      * @return JSON string with debug info
      */

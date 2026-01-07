@@ -488,5 +488,59 @@ class TestPathMethodsErrorHandling(unittest.TestCase):
         self.assertIsInstance(result, list)
 
 
+class TestProbeLinkSpeed(unittest.TestCase):
+    """Tests for the probe_link_speed method"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_probe_link_speed_not_initialized_returns_status(self):
+        """Test that probe_link_speed returns not_initialized when wrapper is not ready"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        # Don't initialize - reticulum is None
+
+        test_dest_hash = bytes.fromhex('0123456789abcdef0123456789abcdef')
+        result = wrapper.probe_link_speed(test_dest_hash)
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['status'], 'not_initialized')
+        self.assertIsNone(result['establishment_rate_bps'])
+        self.assertIsNone(result['hops'])
+        self.assertFalse(result['link_reused'])
+
+    def test_probe_link_speed_returns_correct_structure(self):
+        """Test that probe_link_speed returns all expected fields"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        # Don't initialize
+
+        test_dest_hash = bytes.fromhex('0123456789abcdef0123456789abcdef')
+        result = wrapper.probe_link_speed(test_dest_hash)
+
+        # Check all expected fields are present
+        expected_fields = ['status', 'establishment_rate_bps', 'expected_rate_bps',
+                          'rtt_seconds', 'hops', 'link_reused']
+        for field in expected_fields:
+            self.assertIn(field, result, f"Field '{field}' should be present in result")
+
+    def test_probe_link_speed_timeout_parameter(self):
+        """Test that probe_link_speed accepts custom timeout"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        test_dest_hash = bytes.fromhex('0123456789abcdef0123456789abcdef')
+        # Should not raise with custom timeout
+        result = wrapper.probe_link_speed(test_dest_hash, timeout_seconds=5.0)
+
+        self.assertIsInstance(result, dict)
+        self.assertIn('status', result)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

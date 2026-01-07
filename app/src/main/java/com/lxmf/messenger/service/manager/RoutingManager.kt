@@ -1,6 +1,7 @@
 package com.lxmf.messenger.service.manager
 
 import android.util.Log
+import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -104,6 +105,75 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
         } ?: run {
             Log.w(TAG, "getPathTableHashes called but wrapper is null")
             "[]"
+        }
+    }
+
+    /**
+     * Probe link speed to a destination by establishing a Link and measuring
+     * the establishment rate. This provides end-to-end path speed measurement.
+     *
+     * @param destHash Destination hash bytes
+     * @param timeoutSeconds How long to wait for link establishment
+     * @return JSON string with probe result containing status, rates, RTT, hops
+     */
+    fun probeLinkSpeed(destHash: ByteArray, timeoutSeconds: Float): String {
+        return wrapperManager.withWrapper { wrapper ->
+            try {
+                val result = wrapper.callAttr("probe_link_speed", destHash, timeoutSeconds.toDouble())
+                // Convert Python dict to JSON using getDictValue helper
+                JSONObject().apply {
+                    put("status", result.getDictValue("status")?.toString() ?: "error")
+
+                    result.getDictValue("establishment_rate_bps")?.let {
+                        val str = it.toString()
+                        if (str != "None" && str.isNotEmpty()) {
+                            put("establishment_rate_bps", str.toLongOrNull() ?: it.toLong())
+                        }
+                    }
+
+                    result.getDictValue("expected_rate_bps")?.let {
+                        val str = it.toString()
+                        if (str != "None" && str.isNotEmpty()) {
+                            put("expected_rate_bps", str.toLongOrNull() ?: it.toLong())
+                        }
+                    }
+
+                    result.getDictValue("rtt_seconds")?.let {
+                        val str = it.toString()
+                        if (str != "None" && str.isNotEmpty()) {
+                            put("rtt_seconds", str.toDoubleOrNull() ?: it.toDouble())
+                        }
+                    }
+
+                    result.getDictValue("hops")?.let {
+                        val str = it.toString()
+                        if (str != "None" && str.isNotEmpty()) {
+                            put("hops", str.toIntOrNull() ?: it.toInt())
+                        }
+                    }
+
+                    put("link_reused", result.getDictValue("link_reused")?.toBoolean() ?: false)
+
+                    result.getDictValue("error")?.let {
+                        val str = it.toString()
+                        if (str != "None" && str.isNotEmpty()) {
+                            put("error", str)
+                        }
+                    }
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error probing link speed", e)
+                JSONObject().apply {
+                    put("status", "error")
+                    put("error", e.message)
+                }.toString()
+            }
+        } ?: run {
+            Log.w(TAG, "probeLinkSpeed called but wrapper is null")
+            JSONObject().apply {
+                put("status", "not_initialized")
+                put("error", "Service not initialized")
+            }.toString()
         }
     }
 }

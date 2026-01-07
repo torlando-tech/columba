@@ -7,6 +7,7 @@ import com.lxmf.messenger.reticulum.model.Direction
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.model.Link
 import com.lxmf.messenger.reticulum.model.LinkEvent
+import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.PacketReceipt
 import com.lxmf.messenger.reticulum.model.PacketType
@@ -104,6 +105,19 @@ interface ReticulumProtocol {
     fun getHopCount(destinationHash: ByteArray): Int?
 
     suspend fun getPathTableHashes(): List<String>
+
+    /**
+     * Probe link speed to a destination by establishing a Link and measuring
+     * the establishment rate. This provides end-to-end path speed measurement.
+     *
+     * @param destinationHash The destination to probe (16 bytes)
+     * @param timeoutSeconds How long to wait for link establishment (default 10s)
+     * @return LinkSpeedProbeResult with measured speeds or error status
+     */
+    suspend fun probeLinkSpeed(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float = 10.0f,
+    ): LinkSpeedProbeResult
 
     // Announce handling
     fun observeAnnounces(): Flow<AnnounceEvent>

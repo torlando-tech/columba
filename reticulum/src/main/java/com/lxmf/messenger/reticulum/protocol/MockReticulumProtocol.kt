@@ -7,6 +7,7 @@ import com.lxmf.messenger.reticulum.model.Direction
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.model.Link
 import com.lxmf.messenger.reticulum.model.LinkEvent
+import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
 import com.lxmf.messenger.reticulum.model.LinkStatus
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.PacketReceipt
@@ -226,6 +227,22 @@ class MockReticulumProtocol : ReticulumProtocol {
     override fun getHopCount(destinationHash: ByteArray): Int = 3
 
     override suspend fun getPathTableHashes(): List<String> = emptyList()
+
+    override suspend fun probeLinkSpeed(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float,
+    ): LinkSpeedProbeResult {
+        // Mock: Return simulated medium-speed link
+        delay(500) // Simulate probe time
+        return LinkSpeedProbeResult(
+            status = "success",
+            establishmentRateBps = 50_000, // 50 kbps
+            expectedRateBps = null,
+            rttSeconds = 0.5,
+            hops = 3,
+            linkReused = false,
+        )
+    }
 
     override fun observeAnnounces(): Flow<AnnounceEvent> =
         flow {

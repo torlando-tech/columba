@@ -72,59 +72,6 @@ object ImageUtils {
     }
 
     /**
-     * Result of image compression with metadata about the compression process.
-     */
-    data class CompressionResult(
-        val data: ByteArray,
-        val format: String,
-        val originalSizeBytes: Int,
-        val compressedSizeBytes: Int,
-        val qualityUsed: Int,
-        val wasScaledDown: Boolean,
-        val exceedsSizeLimit: Boolean,
-    ) {
-        /** True if heavy compression was needed (quality below threshold) or size limit exceeded */
-        val needsUserConfirmation: Boolean
-            get() = qualityUsed < HEAVY_COMPRESSION_THRESHOLD || exceedsSizeLimit
-
-        /** Human-readable compression ratio (e.g., "75% smaller") */
-        val compressionRatioText: String
-            get() {
-                if (originalSizeBytes == 0) return "N/A"
-                val reduction = ((1 - compressedSizeBytes.toFloat() / originalSizeBytes) * 100).toInt()
-                return "$reduction% smaller"
-            }
-
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (javaClass != other?.javaClass) return false
-
-            other as CompressionResult
-
-            if (!data.contentEquals(other.data)) return false
-            if (format != other.format) return false
-            if (originalSizeBytes != other.originalSizeBytes) return false
-            if (compressedSizeBytes != other.compressedSizeBytes) return false
-            if (qualityUsed != other.qualityUsed) return false
-            if (wasScaledDown != other.wasScaledDown) return false
-            if (exceedsSizeLimit != other.exceedsSizeLimit) return false
-
-            return true
-        }
-
-        override fun hashCode(): Int {
-            var result = data.contentHashCode()
-            result = 31 * result + format.hashCode()
-            result = 31 * result + originalSizeBytes
-            result = 31 * result + compressedSizeBytes
-            result = 31 * result + qualityUsed
-            result = 31 * result + wasScaledDown.hashCode()
-            result = 31 * result + exceedsSizeLimit.hashCode()
-            return result
-        }
-    }
-
-    /**
      * Check if the given bytes represent an animated GIF.
      *
      * Checks for GIF89a header and looks for NETSCAPE application extension
@@ -192,13 +139,21 @@ object ImageUtils {
      * Compresses an image with detailed result information.
      * Use this when you need to check if heavy compression was applied.
      */
-    fun compressImageWithMetadata(
+    /**
+     * Compress an image to WebP format with quality reduction as needed.
+     *
+     * @param context Android context
+     * @param uri URI of the image to compress
+     * @param maxSizeBytes Maximum size in bytes (default 512KB)
+     * @return CompressedImage or null on failure
+     */
+    fun compressImage(
         context: Context,
         uri: Uri,
         maxSizeBytes: Int = MAX_IMAGE_SIZE_BYTES,
-    ): CompressionResult? {
+    ): CompressedImage? {
         return try {
-            // Get original file size
+            // Get original file size for logging
             val originalSize =
                 context.contentResolver.openInputStream(uri)?.use {
                     it.available()
@@ -251,32 +206,10 @@ object ImageUtils {
                     "(quality: $finalQuality, scaled: $wasScaledDown, exceeds: $exceedsSizeLimit)",
             )
 
-            CompressionResult(
-                data = compressed,
-                format = "webp",
-                originalSizeBytes = originalSize,
-                compressedSizeBytes = compressed.size,
-                qualityUsed = finalQuality,
-                wasScaledDown = wasScaledDown,
-                exceedsSizeLimit = exceedsSizeLimit,
-            )
+            CompressedImage(compressed, "webp")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to compress image", e)
             null
-        }
-    }
-
-    /**
-     * Simple compression that returns just the compressed data.
-     * Use [compressImageWithMetadata] if you need compression details.
-     */
-    fun compressImage(
-        context: Context,
-        uri: Uri,
-        maxSizeBytes: Int = MAX_IMAGE_SIZE_BYTES,
-    ): CompressedImage? {
-        return compressImageWithMetadata(context, uri, maxSizeBytes)?.let {
-            CompressedImage(it.data, it.format)
         }
     }
 

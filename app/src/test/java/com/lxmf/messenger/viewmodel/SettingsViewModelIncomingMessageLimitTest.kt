@@ -8,7 +8,10 @@ import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.AvailableRelaysState
+import com.lxmf.messenger.repository.InterfaceRepository
+import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -55,6 +58,8 @@ class SettingsViewModelIncomingMessageLimitTest {
     private lateinit var interfaceConfigManager: InterfaceConfigManager
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
+    private lateinit var interfaceDetector: InterfaceDetector
+    private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -86,6 +91,11 @@ class SettingsViewModelIncomingMessageLimitTest {
         interfaceConfigManager = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
+        interfaceDetector = mockk(relaxed = true)
+        interfaceRepository = mockk(relaxed = true)
+
+        // Mock interfaceRepository flows
+        every { interfaceRepository.enabledInterfaces } returns MutableStateFlow(emptyList<InterfaceConfig>())
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
@@ -107,6 +117,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.locationSharingEnabledFlow } returns MutableStateFlow(false)
         every { settingsRepository.defaultSharingDurationFlow } returns MutableStateFlow("ONE_HOUR")
         every { settingsRepository.locationPrecisionRadiusFlow } returns MutableStateFlow(0)
+        every { settingsRepository.imageCompressionPresetFlow } returns MutableStateFlow(com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO)
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 
         // Mock PropagationNodeManager flows (StateFlows)
@@ -140,6 +151,8 @@ class SettingsViewModelIncomingMessageLimitTest {
             interfaceConfigManager = interfaceConfigManager,
             propagationNodeManager = propagationNodeManager,
             locationSharingManager = locationSharingManager,
+            interfaceDetector = interfaceDetector,
+            interfaceRepository = interfaceRepository,
         )
     }
 

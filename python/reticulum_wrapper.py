@@ -3136,6 +3136,7 @@ class ReticulumWrapper:
     def send_lxmf_message_with_method(self, dest_hash: bytes, content: str, source_identity_private_key: bytes,
                                        delivery_method: str = "direct", try_propagation_on_fail: bool = True,
                                        image_data: bytes = None, image_format: str = None,
+                                       image_data_path: str = None,
                                        file_attachments: list = None, file_attachment_paths: list = None,
                                        reply_to_message_id: str = None,
                                        icon_name: str = None, icon_fg_color: str = None, icon_bg_color: str = None) -> Dict:
@@ -3148,8 +3149,10 @@ class ReticulumWrapper:
             source_identity_private_key: Private key of sender identity
             delivery_method: "opportunistic", "direct", or "propagated"
             try_propagation_on_fail: If True and direct fails, retry via propagation
-            image_data: Optional image data bytes
+            image_data: Optional image data bytes (for small images)
             image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
+            image_data_path: Optional file path for large images to bypass Binder IPC limits.
+                             File is read from disk and deleted after reading.
             file_attachments: Optional list of [filename, bytes] pairs for Field 5 (small files)
             file_attachment_paths: Optional list of [filename, path] pairs for large files
                                    Files are read from disk to bypass Android Binder IPC limits.
@@ -3192,7 +3195,7 @@ class ReticulumWrapper:
                     log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
                                f"Content too large for OPPORTUNISTIC ({len(content_bytes)} bytes > 295), falling back to DIRECT")
                     lxmf_method = LXMF.LXMessage.DIRECT
-                if image_data or file_attachments:
+                if image_data or image_data_path or file_attachments:
                     log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
                                "OPPORTUNISTIC doesn't support attachments, falling back to DIRECT")
                     lxmf_method = LXMF.LXMessage.DIRECT
@@ -3246,6 +3249,23 @@ class ReticulumWrapper:
                 "lxmf",
                 "delivery"
             )
+
+            # If image_data_path is provided, read from file (for large images bypassing Binder IPC)
+            if image_data_path and image_format:
+                try:
+                    with open(image_data_path, 'rb') as f:
+                        image_data = f.read()
+                    log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                             f"📎 Read large image from temp file: {len(image_data)} bytes")
+                    # Delete temp file after reading
+                    import os
+                    os.remove(image_data_path)
+                    log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                              f"Deleted temp image file: {image_data_path}")
+                except Exception as e:
+                    log_error("ReticulumWrapper", "send_lxmf_message_with_method",
+                              f"Failed to read image from temp file: {e}")
+                    return {"success": False, "error": f"Failed to read image file: {e}"}
 
             # Prepare fields if image or file attachments provided
             fields = None

@@ -1959,6 +1959,23 @@ class ServiceReticulumProtocol(
                 }
             }
 
+            // Handle large images by writing to temp file to bypass Binder IPC limits
+            var smallImageData: ByteArray? = null
+            var imageDataPath: String? = null
+            if (imageData != null) {
+                if (imageData.size <= FileUtils.FILE_TRANSFER_THRESHOLD) {
+                    smallImageData = imageData
+                } else {
+                    // Write large image to temp on IO thread and pass path
+                    val tempFile =
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            FileUtils.writeTempAttachment(context, "image.$imageFormat", imageData)
+                        }
+                    imageDataPath = tempFile.absolutePath
+                    Log.d(TAG, "Large image (${imageData.size} bytes) written to temp file")
+                }
+            }
+
             val resultJson =
                 service.sendLxmfMessageWithMethod(
                     destinationHash,
@@ -1966,8 +1983,9 @@ class ServiceReticulumProtocol(
                     privateKey,
                     methodString,
                     tryPropagationOnFail,
-                    imageData,
+                    smallImageData,
                     imageFormat,
+                    imageDataPath,
                     smallAttachments.ifEmpty { null },
                     largeAttachmentPaths.ifEmpty { null },
                     replyToMessageId,

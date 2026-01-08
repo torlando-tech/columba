@@ -282,6 +282,10 @@ object ImageUtils {
         uri: Uri,
         maxDimension: Int = MAX_PREVIEW_DIMENSION,
     ): Bitmap? {
+        // Always cap to MAX_PREVIEW_DIMENSION to prevent Canvas size crashes
+        // even if caller requests larger (e.g., ORIGINAL preset with Int.MAX_VALUE)
+        val effectiveMaxDimension = minOf(maxDimension, MAX_PREVIEW_DIMENSION)
+        
         return try {
             // First, get the image dimensions without loading
             val options = BitmapFactory.Options().apply {
@@ -291,10 +295,10 @@ object ImageUtils {
                 BitmapFactory.decodeStream(input, null, options)
             }
 
-            // Calculate sample size to fit within maxDimension
+            // Calculate sample size to fit within effectiveMaxDimension
             val imageWidth = options.outWidth
             val imageHeight = options.outHeight
-            val sampleSize = calculateSampleSize(imageWidth, imageHeight, maxDimension)
+            val sampleSize = calculateSampleSize(imageWidth, imageHeight, effectiveMaxDimension)
 
             if (sampleSize > 1) {
                 Log.d(TAG, "Subsampling image (${imageWidth}x$imageHeight) with sampleSize=$sampleSize")

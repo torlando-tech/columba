@@ -187,6 +187,7 @@ private fun QualityOption(
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -203,9 +204,10 @@ private fun QualityOption(
                         ) {
                             Text(
                                 text = "Recommended",
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimary,
+                                softWrap = false,
                             )
                         }
                     }

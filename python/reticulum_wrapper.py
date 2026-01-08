@@ -4975,6 +4975,15 @@ class ReticulumWrapper:
             log_info("ReticulumWrapper", "probe_link_speed", 
                      f"Probing link speed to {dest_hash_hex[:16]}... (method: {delivery_method})")
             
+            # Helper to find direct link (LXMF uses hex string keys)
+            def find_direct_link(dest_hash_bytes, dest_hash_hex_str):
+                """Find a direct link by checking both bytes and hex string keys."""
+                if dest_hash_bytes in self.router.direct_links:
+                    return self.router.direct_links[dest_hash_bytes]
+                if dest_hash_hex_str in self.router.direct_links:
+                    return self.router.direct_links[dest_hash_hex_str]
+                return None
+            
             # Helper to get link stats
             def get_link_stats(link, reused: bool, method: str) -> Dict:
                 return {
@@ -5010,12 +5019,19 @@ class ReticulumWrapper:
                 }
             
             # 2. Check for existing active direct link
-            if dest_hash in self.router.direct_links:
-                link = self.router.direct_links[dest_hash]
-                if link.status == RNS.Link.ACTIVE:
-                    log_info("ReticulumWrapper", "probe_link_speed",
-                             f"Reusing existing direct link to {dest_hash_hex[:16]}")
-                    return get_link_stats(link, True, "direct")
+            # Debug: log what's in direct_links
+            if self.router.direct_links:
+                log_debug("ReticulumWrapper", "probe_link_speed",
+                          f"direct_links keys: {[k.hex() if isinstance(k, bytes) else str(k) for k in self.router.direct_links.keys()]}")
+                log_debug("ReticulumWrapper", "probe_link_speed",
+                          f"Looking for: {dest_hash_hex}")
+            
+            # Check for existing active direct link
+            link = find_direct_link(dest_hash, dest_hash_hex)
+            if link is not None and link.status == RNS.Link.ACTIVE:
+                log_info("ReticulumWrapper", "probe_link_speed",
+                         f"Reusing existing direct link to {dest_hash_hex[:16]}")
+                return get_link_stats(link, True, "direct")
             
             # 3. No existing link - send empty LXMF message to establish one
             log_info("ReticulumWrapper", "probe_link_speed",
@@ -5083,14 +5099,13 @@ class ReticulumWrapper:
                 # Message delivered - link should now be active
                 log_info("ReticulumWrapper", "probe_link_speed",
                          f"✅ Probe message delivered to {dest_hash_hex[:16]}")
-                if dest_hash in self.router.direct_links:
-                    link = self.router.direct_links[dest_hash]
-                    if link.status == RNS.Link.ACTIVE:
-                        probe_result["status"] = "success"
-                        probe_result["establishment_rate_bps"] = link.get_establishment_rate()
-                        probe_result["expected_rate_bps"] = link.get_expected_rate()
-                        probe_result["rtt_seconds"] = link.rtt
-                        probe_result["delivery_method"] = "direct"
+                link = find_direct_link(dest_hash, dest_hash_hex)
+                if link is not None and link.status == RNS.Link.ACTIVE:
+                    probe_result["status"] = "success"
+                    probe_result["establishment_rate_bps"] = link.get_establishment_rate()
+                    probe_result["expected_rate_bps"] = link.get_expected_rate()
+                    probe_result["rtt_seconds"] = link.rtt
+                    probe_result["delivery_method"] = "direct"
                 else:
                     # Message delivered but no direct link - might have used opportunistic
                     probe_result["status"] = "success"
@@ -5147,9 +5162,8 @@ class ReticulumWrapper:
                     log_info("ReticulumWrapper", "probe_link_speed",
                              f"✅ Probe message delivered to {dest_hash_hex[:16]}")
                     # Check for direct link that was established
-                    if dest_hash in self.router.direct_links:
-                        link = self.router.direct_links[dest_hash]
-                        if link.status == RNS.Link.ACTIVE:
+                    link = find_direct_link(dest_hash, dest_hash_hex)
+                    if link is not None and link.status == RNS.Link.ACTIVE:
                             probe_result["status"] = "success"
                             probe_result["establishment_rate_bps"] = link.get_establishment_rate()
                             probe_result["expected_rate_bps"] = link.get_expected_rate()
@@ -5182,6 +5196,20 @@ class ReticulumWrapper:
             if probe_result["status"] == "pending":
                 log_warning("ReticulumWrapper", "probe_link_speed",
                             f"Probe timed out after {timeout_seconds}s")
+                
+                # Check if link was established during the timeout period
+                link = find_direct_link(dest_hash, dest_hash_hex)
+                if link is not None and link.status == RNS.Link.ACTIVE:
+                    log_info("ReticulumWrapper", "probe_link_speed",
+                             f"✅ Link established during probe (late), using it")
+                    probe_result["status"] = "success"
+                    probe_result["establishment_rate_bps"] = link.get_establishment_rate()
+                    probe_result["expected_rate_bps"] = link.get_expected_rate()
+                    probe_result["rtt_seconds"] = link.rtt
+                    probe_result["delivery_method"] = "direct"
+                    probe_result["link_reused"] = False
+                    return probe_result
+                
                 probe_result["status"] = "timeout"
                 
                 # Include path info for heuristics

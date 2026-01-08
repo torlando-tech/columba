@@ -128,14 +128,16 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
                     result.getDictValue("establishment_rate_bps")?.let {
                         val str = it.toString()
                         if (str != "None" && str.isNotEmpty()) {
-                            put("establishment_rate_bps", str.toLongOrNull() ?: it.toLong())
+                            // Python returns float, convert via Double to Long
+                            put("establishment_rate_bps", str.toDoubleOrNull()?.toLong() ?: it.toDouble().toLong())
                         }
                     }
 
                     result.getDictValue("expected_rate_bps")?.let {
                         val str = it.toString()
                         if (str != "None" && str.isNotEmpty()) {
-                            put("expected_rate_bps", str.toLongOrNull() ?: it.toLong())
+                            // Python returns float, convert via Double to Long
+                            put("expected_rate_bps", str.toDoubleOrNull()?.toLong() ?: it.toDouble().toLong())
                         }
                     }
 
@@ -158,7 +160,8 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
                     result.getDictValue("next_hop_bitrate_bps")?.let {
                         val str = it.toString()
                         if (str != "None" && str.isNotEmpty()) {
-                            put("next_hop_bitrate_bps", str.toLongOrNull() ?: it.toLong())
+                            // Python may return float, convert via Double to Long
+                            put("next_hop_bitrate_bps", str.toDoubleOrNull()?.toLong() ?: it.toDouble().toLong())
                         }
                     }
 

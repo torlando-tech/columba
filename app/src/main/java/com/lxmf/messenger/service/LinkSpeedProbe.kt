@@ -95,6 +95,9 @@ class LinkSpeedProbe
         suspend fun probe(recipientHash: String): LinkSpeedProbeResult? {
             return withContext(Dispatchers.IO) {
                 try {
+                    // Reset state before starting new probe
+                    _probeState.value = ProbeState.Idle
+                    
                     val deliveryMethod = settingsRepository.getDefaultDeliveryMethod()
                     Log.d(TAG, "Starting probe, delivery method: $deliveryMethod")
 

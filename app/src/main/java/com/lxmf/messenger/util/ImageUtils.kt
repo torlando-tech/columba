@@ -2,7 +2,10 @@ package com.lxmf.messenger.util
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -17,6 +20,7 @@ object ImageUtils {
     const val MAX_IMAGE_SIZE_BYTES = 512 * 1024 // 512KB for efficient mesh network transmission
     const val MAX_IMAGE_DIMENSION = 2048 // pixels
     const val HEAVY_COMPRESSION_THRESHOLD = 50 // Quality below this is considered "heavy"
+    private const val MAX_PREVIEW_DIMENSION = 4096 // Max for loading to avoid Canvas limits
     val SUPPORTED_IMAGE_FORMATS = setOf("jpg", "jpeg", "png", "webp", "gif")
 
     /**
@@ -159,14 +163,14 @@ object ImageUtils {
                     it.available()
                 } ?: 0
 
-            // Load bitmap from URI
+            // Load bitmap from URI with subsampling to avoid memory issues
             val bitmap =
-                loadBitmap(context, uri) ?: run {
+                loadBitmap(context, uri, MAX_IMAGE_DIMENSION) ?: run {
                     Log.e(TAG, "Failed to load bitmap from URI")
                     return null
                 }
 
-            // Scale down if dimensions exceed max
+            // Scale down to exact dimensions if needed (subsampling gives approximate size)
             val scaledBitmap = scaleDownIfNeeded(bitmap, MAX_IMAGE_DIMENSION)
             val wasScaledDown = scaledBitmap != bitmap
 
@@ -264,21 +268,106 @@ object ImageUtils {
         }
     }
 
+    /**
+     * Load a bitmap from URI, subsampling if needed to avoid memory issues.
+     * Also handles EXIF orientation to ensure correct rotation.
+     *
+     * @param context Android context
+     * @param uri Image URI
+     * @param maxDimension Maximum dimension to load (uses subsampling for larger images)
+     * @return Loaded bitmap with correct orientation, or null on failure
+     */
     private fun loadBitmap(
         context: Context,
         uri: Uri,
+        maxDimension: Int = MAX_PREVIEW_DIMENSION,
     ): Bitmap? {
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
-            } else {
-                @Suppress("DEPRECATION")
-                MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+            // First, get the image dimensions without loading
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
             }
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                BitmapFactory.decodeStream(input, null, options)
+            }
+
+            // Calculate sample size to fit within maxDimension
+            val imageWidth = options.outWidth
+            val imageHeight = options.outHeight
+            val sampleSize = calculateSampleSize(imageWidth, imageHeight, maxDimension)
+
+            if (sampleSize > 1) {
+                Log.d(TAG, "Subsampling image (${imageWidth}x$imageHeight) with sampleSize=$sampleSize")
+            }
+
+            // Read EXIF orientation before loading
+            val orientation = getExifOrientation(context, uri)
+
+            // Now load with subsampling
+            val loadOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+            }
+
+            val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
+                BitmapFactory.decodeStream(input, null, loadOptions)
+            } ?: return null
+
+            // Apply EXIF rotation if needed
+            applyExifOrientation(bitmap, orientation)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load bitmap", e)
             null
         }
+    }
+
+    /**
+     * Get EXIF orientation from image URI.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun getExifOrientation(context: Context, uri: Uri): Int {
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val exif = ExifInterface(input)
+                exif.getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL
+                )
+            } ?: ExifInterface.ORIENTATION_NORMAL
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read EXIF orientation", e)
+            ExifInterface.ORIENTATION_NORMAL
+        }
+    }
+
+    /**
+     * Apply EXIF orientation to bitmap, returning a new rotated bitmap if needed.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun applyExifOrientation(bitmap: Bitmap, orientation: Int): Bitmap {
+        val matrix = Matrix()
+        
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1f, 1f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.postRotate(90f)
+                matrix.preScale(-1f, 1f)
+            }
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.postRotate(270f)
+                matrix.preScale(-1f, 1f)
+            }
+            else -> return bitmap // No rotation needed
+        }
+
+        val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+        if (rotated != bitmap) {
+            bitmap.recycle()
+        }
+        return rotated
     }
 
     private fun scaleDownIfNeeded(
@@ -299,6 +388,33 @@ object ImageUtils {
 
         Log.d(TAG, "Scaling image from ${width}x$height to ${newWidth}x$newHeight")
         return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+    }
+
+    /**
+     * Calculate the sample size for BitmapFactory to subsample an image during loading.
+     * Uses powers of 2 as required by BitmapFactory.
+     *
+     * @param imageWidth Original image width in pixels
+     * @param imageHeight Original image height in pixels
+     * @param maxDimension Target maximum dimension
+     * @return Sample size (1, 2, 4, 8, etc.) for inSampleSize
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun calculateSampleSize(imageWidth: Int, imageHeight: Int, maxDimension: Int): Int {
+        var sampleSize = 1
+
+        if (imageWidth > maxDimension || imageHeight > maxDimension) {
+            val halfWidth = imageWidth / 2
+            val halfHeight = imageHeight / 2
+
+            while ((halfWidth / sampleSize) >= maxDimension ||
+                (halfHeight / sampleSize) >= maxDimension
+            ) {
+                sampleSize *= 2
+            }
+        }
+
+        return sampleSize
     }
 
     fun getImageFormat(
@@ -342,14 +458,14 @@ object ImageUtils {
             // Get original file size
             val originalSize = getFileSize(context, uri)
 
-            // Load bitmap from URI
+            // Load bitmap from URI with subsampling to avoid memory issues
             val bitmap =
-                loadBitmap(context, uri) ?: run {
+                loadBitmap(context, uri, preset.maxDimensionPx) ?: run {
                     Log.e(TAG, "Failed to load bitmap from URI")
                     return null
                 }
 
-            // Scale down if dimensions exceed preset's max
+            // Scale down to exact dimensions if needed (subsampling gives approximate size)
             val scaledBitmap = scaleDownIfNeeded(bitmap, preset.maxDimensionPx)
 
             // Compress to JPEG with progressive quality reduction

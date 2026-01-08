@@ -85,6 +85,9 @@ class MessagingScreenTest {
         every { mockViewModel.decodedImages } returns MutableStateFlow(emptyMap())
         // Compression warning mocks
         every { mockViewModel.compressionWarning } returns MutableStateFlow(null)
+        // Image quality selection mocks
+        every { mockViewModel.qualitySelectionState } returns MutableStateFlow(null)
+        every { mockViewModel.linkSpeedProbeState } returns MutableStateFlow(com.lxmf.messenger.service.LinkSpeedProbe.ProbeState.Idle)
     }
 
     // ========== Empty State Tests ==========

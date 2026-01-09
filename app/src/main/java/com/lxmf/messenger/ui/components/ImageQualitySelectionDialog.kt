@@ -190,6 +190,7 @@ private fun QualityOption(
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
+                // Row 1: Title + Recommended badge (full width)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -211,33 +212,35 @@ private fun QualityOption(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimary,
-                                softWrap = false,
                             )
                         }
                     }
                 }
 
-                Text(
-                    text = preset.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                // Row 2: Description + Transfer time
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = preset.description,
+                        modifier = Modifier.weight(1f, fill = false),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
 
-            // File size and transfer time estimate
-            val sizeAndTime =
-                buildString {
-                    append(formatFileSize(preset.targetSizeBytes))
-                    transferTime?.let { time ->
-                        append(" • ")
-                        append(time)
+                    // Transfer time estimate
+                    if (transferTime != null) {
+                        Text(
+                            text = transferTime,
+                            modifier = Modifier.padding(start = 8.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
-            Text(
-                text = sizeAndTime,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            }
         }
     }
 }
@@ -253,14 +256,3 @@ private fun formatBitrate(bps: Long): String {
     }
 }
 
-/**
- * Format file size in bytes to human-readable string.
- * Uses binary units (1024) to match preset definitions.
- */
-private fun formatFileSize(bytes: Long): String {
-    return when {
-        bytes >= 1_048_576 -> String.format(Locale.US, "%.0f MB", bytes / 1_048_576.0)
-        bytes >= 1_024 -> String.format(Locale.US, "%.0f KB", bytes / 1_024.0)
-        else -> "$bytes B"
-    }
-}

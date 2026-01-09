@@ -815,13 +815,14 @@ class SettingsRepositoryTest {
     @Test
     fun importAllPreferences_restoresBooleanSettings() =
         runTest {
-            val entries = listOf(
-                com.lxmf.messenger.migration.PreferenceEntry(
-                    key = "notifications_enabled",
-                    type = "boolean",
-                    value = "false",
-                ),
-            )
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "notifications_enabled",
+                        type = "boolean",
+                        value = "false",
+                    ),
+                )
 
             repository.importAllPreferences(entries)
             testDispatcher.scheduler.advanceUntilIdle()
@@ -833,13 +834,14 @@ class SettingsRepositoryTest {
     @Test
     fun importAllPreferences_restoresIntSettings() =
         runTest {
-            val entries = listOf(
-                com.lxmf.messenger.migration.PreferenceEntry(
-                    key = "auto_announce_interval_minutes",
-                    type = "int",
-                    value = "45",
-                ),
-            )
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "auto_announce_interval_minutes",
+                        type = "int",
+                        value = "45",
+                    ),
+                )
 
             repository.importAllPreferences(entries)
             testDispatcher.scheduler.advanceUntilIdle()
@@ -851,13 +853,14 @@ class SettingsRepositoryTest {
     @Test
     fun importAllPreferences_restoresLongSettings() =
         runTest {
-            val entries = listOf(
-                com.lxmf.messenger.migration.PreferenceEntry(
-                    key = "last_sync_timestamp",
-                    type = "long",
-                    value = "1700000000000",
-                ),
-            )
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "last_sync_timestamp",
+                        type = "long",
+                        value = "1700000000000",
+                    ),
+                )
 
             repository.importAllPreferences(entries)
             testDispatcher.scheduler.advanceUntilIdle()
@@ -869,13 +872,14 @@ class SettingsRepositoryTest {
     @Test
     fun importAllPreferences_restoresStringSettings() =
         runTest {
-            val entries = listOf(
-                com.lxmf.messenger.migration.PreferenceEntry(
-                    key = "default_delivery_method",
-                    type = "string",
-                    value = "PROPAGATED",
-                ),
-            )
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "default_delivery_method",
+                        type = "string",
+                        value = "PROPAGATED",
+                    ),
+                )
 
             repository.importAllPreferences(entries)
             testDispatcher.scheduler.advanceUntilIdle()
@@ -887,18 +891,19 @@ class SettingsRepositoryTest {
     @Test
     fun importAllPreferences_ignoresUnknownKeys() =
         runTest {
-            val entries = listOf(
-                com.lxmf.messenger.migration.PreferenceEntry(
-                    key = "unknown_future_setting",
-                    type = "boolean",
-                    value = "true",
-                ),
-                com.lxmf.messenger.migration.PreferenceEntry(
-                    key = "notifications_enabled",
-                    type = "boolean",
-                    value = "true",
-                ),
-            )
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "unknown_future_setting",
+                        type = "boolean",
+                        value = "true",
+                    ),
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "notifications_enabled",
+                        type = "boolean",
+                        value = "true",
+                    ),
+                )
 
             // Should not throw, should import known key
             repository.importAllPreferences(entries)
@@ -912,13 +917,14 @@ class SettingsRepositoryTest {
     @Test
     fun importAllPreferences_handlesInvalidValuesGracefully() =
         runTest {
-            val entries = listOf(
-                com.lxmf.messenger.migration.PreferenceEntry(
-                    key = "auto_announce_interval_minutes",
-                    type = "int",
-                    value = "not_a_number",
-                ),
-            )
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "auto_announce_interval_minutes",
+                        type = "int",
+                        value = "not_a_number",
+                    ),
+                )
 
             // Should not throw
             repository.importAllPreferences(entries)

@@ -145,7 +145,9 @@ fun NetworkCard(
                 )
             }
             Text(
-                text = "Forward traffic for the mesh network. When disabled, this device will only handle its own traffic and won't relay messages for other peers.",
+                text =
+                    "Forward traffic for the mesh network. When disabled, this device will only " +
+                        "handle its own traffic and won't relay messages for other peers.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

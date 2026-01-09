@@ -183,7 +183,8 @@ private fun QualityOption(
         ) {
             RadioButton(
                 selected = isSelected,
-                onClick = null, // Handled by selectable modifier
+                // Handled by selectable modifier
+                onClick = null,
             )
 
             Spacer(modifier = Modifier.width(12.dp))

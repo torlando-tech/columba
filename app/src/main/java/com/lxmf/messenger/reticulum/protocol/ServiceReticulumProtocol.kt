@@ -1229,7 +1229,8 @@ class ServiceReticulumProtocol(
                     Identity(
                         hash = hash,
                         publicKey = publicKey,
-                        privateKey = null, // We don't have the private key for recalled identities
+                        // We don't have the private key for recalled identities
+                        privateKey = null,
                     )
                 } else {
                     null

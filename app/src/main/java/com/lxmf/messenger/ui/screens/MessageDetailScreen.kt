@@ -244,7 +244,8 @@ private fun getStatusInfo(status: String): StatusInfo {
         "delivered" ->
             StatusInfo(
                 icon = Icons.Default.CheckCircle,
-                color = Color(0xFF4CAF50), // Green
+                // Green
+                color = Color(0xFF4CAF50),
                 text = "Delivered",
                 subtitle = "Message was successfully delivered to recipient",
             )

@@ -19,42 +19,51 @@ enum class ImageCompressionPreset(
     val minQuality: Int,
     val description: String,
 ) {
+    // 32KB target
     LOW(
         displayName = "Low",
         maxDimensionPx = 320,
-        targetSizeBytes = 32 * 1024L, // 32KB
+        targetSizeBytes = 32 * 1024L,
         initialQuality = 60,
         minQuality = 30,
         description = "32KB max - optimized for LoRa and BLE",
     ),
+
+    // 128KB target
     MEDIUM(
         displayName = "Medium",
         maxDimensionPx = 800,
-        targetSizeBytes = 128 * 1024L, // 128KB
+        targetSizeBytes = 128 * 1024L,
         initialQuality = 75,
         minQuality = 40,
         description = "128KB max - balanced for mixed networks",
     ),
+
+    // 512KB target
     HIGH(
         displayName = "High",
         maxDimensionPx = 2048,
-        targetSizeBytes = 512 * 1024L, // 512KB
+        targetSizeBytes = 512 * 1024L,
         initialQuality = 90,
         minQuality = 50,
         description = "512KB max - good quality for general use",
     ),
+
+    // 250MB target
     ORIGINAL(
         displayName = "Original",
         maxDimensionPx = Int.MAX_VALUE,
-        targetSizeBytes = 250 * 1024 * 1024L, // 250MB
+        targetSizeBytes = 250 * 1024 * 1024L,
         initialQuality = 95,
         minQuality = 90,
         description = "250MB max - minimal compression for fast networks",
     ),
+
+    // Default values (will be overridden by detection)
     AUTO(
         displayName = "Auto",
-        maxDimensionPx = 2048, // Default, will be overridden by detection
-        targetSizeBytes = 512 * 1024L, // Default, will be overridden by detection
+        maxDimensionPx = 2048,
+        targetSizeBytes = 512 * 1024L,
         initialQuality = 90,
         minQuality = 50,
         description = "Automatically select based on enabled interfaces",

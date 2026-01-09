@@ -68,7 +68,8 @@ abstract class InterfaceDatabase : RoomDatabase() {
                             arrayOf<Any>(
                                 "RNS Testnet BetweenTheBorders",
                                 "TCPClient",
-                                1, // true
+                                // enabled=true
+                                1,
                                 """{"target_host":"reticulum.betweentheborders.com","target_port":4242,"kiss_framing":false,"mode":"full"}""",
                                 3,
                             ),
@@ -194,7 +195,8 @@ abstract class InterfaceDatabase : RoomDatabase() {
                 arrayOf<Any>(
                     "Auto Discovery",
                     "AutoInterface",
-                    1, // true
+                    // enabled=true
+                    1,
                     """{"group_id":"","discovery_scope":"link","mode":"full"}""",
                     0,
                 ),
@@ -209,7 +211,8 @@ abstract class InterfaceDatabase : RoomDatabase() {
                 arrayOf<Any>(
                     "Bluetooth LE",
                     "AndroidBLE",
-                    1, // true
+                    // enabled=true
+                    1,
                     """{"device_name":"Reticulum-Android","max_connections":7,"mode":"full"}""",
                     1,
                 ),
@@ -224,7 +227,8 @@ abstract class InterfaceDatabase : RoomDatabase() {
                 arrayOf<Any>(
                     "Sideband Server",
                     "TCPClient",
-                    1, // true
+                    // enabled=true
+                    1,
                     """{"target_host":"sideband.connect.reticulum.network","target_port":4965,"kiss_framing":false,"mode":"full"}""",
                     2,
                 ),

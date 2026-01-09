@@ -159,7 +159,8 @@ fun IdentityManagerScreen(
         snackbarHost = {
             SnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = 80.dp), // Above bottom nav bar
+                // Above bottom nav bar
+                modifier = Modifier.padding(bottom = 80.dp),
             )
         },
     ) { paddingValues ->
@@ -360,7 +361,8 @@ private fun IdentityList(
                 start = 16.dp,
                 end = 16.dp,
                 top = 16.dp,
-                bottom = 160.dp, // Extra padding for FAB, bottom nav, and dropdown menu
+                // Extra padding for FAB, bottom nav, and dropdown menu
+                bottom = 160.dp,
             ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

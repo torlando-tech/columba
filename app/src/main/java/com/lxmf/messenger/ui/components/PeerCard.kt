@@ -121,9 +121,10 @@ fun PeerCard(
                     )
 
                     // Destination hash (abbreviated) - use remember to avoid recalculating
-                    val abbreviatedHash = remember(announce.destinationHash) {
-                        formatHashString(announce.destinationHash)
-                    }
+                    val abbreviatedHash =
+                        remember(announce.destinationHash) {
+                            formatHashString(announce.destinationHash)
+                        }
                     Text(
                         text = abbreviatedHash,
                         style = MaterialTheme.typography.bodySmall,
@@ -133,28 +134,29 @@ fun PeerCard(
 
                     // Time since last seen - update adaptively based on how recent it is
                     var timeSinceText by remember { mutableStateOf(formatTimeSince(announce.lastSeenTimestamp)) }
-                    
+
                     LaunchedEffect(announce.lastSeenTimestamp) {
                         // Update immediately when timestamp changes
                         timeSinceText = formatTimeSince(announce.lastSeenTimestamp)
-                        
+
                         // Adaptive update frequency: more frequent for recent times, less for old ones
                         while (true) {
                             val now = System.currentTimeMillis()
                             val ageMinutes = (now - announce.lastSeenTimestamp) / (60 * 1000)
-                            
+
                             // Update frequency based on age:
                             // - < 1 minute: every second (very fresh, shows seconds)
                             // - < 1 hour: every 30 seconds (fresh data)
                             // - < 24 hours: every minute (still relevant)
                             // - >= 24 hours: every 2 minutes (less critical)
-                            val delayMs = when {
-                                ageMinutes < 1 -> 1_000L        // 1 second
-                                ageMinutes < 60 -> 30_000L      // 30 seconds
-                                ageMinutes < 1440 -> 60_000L    // 1 minute
-                                else -> 120_000L                 // 2 minutes
-                            }
-                            
+                            val delayMs =
+                                when {
+                                    ageMinutes < 1 -> 1_000L // 1 second
+                                    ageMinutes < 60 -> 30_000L // 30 seconds
+                                    ageMinutes < 1440 -> 60_000L // 1 minute
+                                    else -> 120_000L // 2 minutes
+                                }
+
                             delay(delayMs)
                             timeSinceText = formatTimeSince(announce.lastSeenTimestamp)
                         }
@@ -219,13 +221,14 @@ fun SignalStrengthIndicator(
 ) {
     // Use remember to avoid recalculating on every recomposition
     val hopsKey = remember(hops) { hops }
-    val (strength, color, _) = remember(hopsKey) {
-        when {
-            hopsKey <= 1 -> Triple(3, MeshConnected, "Excellent")
-            hopsKey <= 3 -> Triple(2, MeshLimited, "Good")
-            else -> Triple(1, MeshOffline, "Weak")
+    val (strength, color, _) =
+        remember(hopsKey) {
+            when {
+                hopsKey <= 1 -> Triple(3, MeshConnected, "Excellent")
+                hopsKey <= 3 -> Triple(2, MeshLimited, "Good")
+                else -> Triple(1, MeshOffline, "Weak")
+            }
         }
-    }
 
     Column(
         modifier = modifier,

@@ -310,12 +310,13 @@ class PropagationNodeManager
             val baseDelayMs = 500L
 
             for (attempt in 1..maxRetries) {
-                val result = if (destinationHash != null) {
-                    val destHashBytes = destinationHash.hexToByteArray()
-                    reticulumProtocol.setOutboundPropagationNode(destHashBytes)
-                } else {
-                    reticulumProtocol.setOutboundPropagationNode(null)
-                }
+                val result =
+                    if (destinationHash != null) {
+                        val destHashBytes = destinationHash.hexToByteArray()
+                        reticulumProtocol.setOutboundPropagationNode(destHashBytes)
+                    } else {
+                        reticulumProtocol.setOutboundPropagationNode(null)
+                    }
 
                 if (result.isSuccess) {
                     if (destinationHash != null) {

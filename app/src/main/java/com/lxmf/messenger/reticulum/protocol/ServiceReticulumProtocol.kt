@@ -1506,15 +1506,16 @@ class ServiceReticulumProtocol(
         deliveryMethod: String,
     ): LinkSpeedProbeResult {
         return try {
-            val service = this.service ?: return LinkSpeedProbeResult(
-                status = "not_bound",
-                establishmentRateBps = null,
-                expectedRateBps = null,
-                rttSeconds = null,
-                hops = null,
-                linkReused = false,
-                error = "Service not bound",
-            )
+            val service =
+                this.service ?: return LinkSpeedProbeResult(
+                    status = "not_bound",
+                    establishmentRateBps = null,
+                    expectedRateBps = null,
+                    rttSeconds = null,
+                    hops = null,
+                    linkReused = false,
+                    error = "Service not bound",
+                )
 
             val resultJson = service.probeLinkSpeed(destinationHash, timeoutSeconds, deliveryMethod)
             val result = JSONObject(resultJson)
@@ -1548,44 +1549,55 @@ class ServiceReticulumProtocol(
     override suspend fun establishConversationLink(
         destinationHash: ByteArray,
         timeoutSeconds: Float,
-    ): Result<ConversationLinkResult> = runCatching {
-        val service = this.service ?: throw IllegalStateException("Service not bound")
+    ): Result<ConversationLinkResult> =
+        runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
 
-        val resultJson = service.establishLink(destinationHash, timeoutSeconds)
-        val result = JSONObject(resultJson)
+            val resultJson = service.establishLink(destinationHash, timeoutSeconds)
+            val result = JSONObject(resultJson)
 
-        ConversationLinkResult(
-            isActive = result.optBoolean("link_active", false),
-            establishmentRateBps = if (result.isNull("establishment_rate_bps")) null
-                else result.optLong("establishment_rate_bps"),
-            alreadyExisted = result.optBoolean("already_existed", false),
-            error = result.optString("error").takeIf { it.isNotEmpty() },
-        )
-    }
+            ConversationLinkResult(
+                isActive = result.optBoolean("link_active", false),
+                establishmentRateBps =
+                    if (result.isNull("establishment_rate_bps")) {
+                        null
+                    } else {
+                        result.optLong("establishment_rate_bps")
+                    },
+                alreadyExisted = result.optBoolean("already_existed", false),
+                error = result.optString("error").takeIf { it.isNotEmpty() },
+            )
+        }
 
-    override suspend fun closeConversationLink(destinationHash: ByteArray): Result<Boolean> = runCatching {
-        val service = this.service ?: throw IllegalStateException("Service not bound")
+    override suspend fun closeConversationLink(destinationHash: ByteArray): Result<Boolean> =
+        runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
 
-        val resultJson = service.closeLink(destinationHash)
-        val result = JSONObject(resultJson)
+            val resultJson = service.closeLink(destinationHash)
+            val result = JSONObject(resultJson)
 
-        result.optBoolean("was_active", false)
-    }
+            result.optBoolean("was_active", false)
+        }
 
     override suspend fun getConversationLinkStatus(destinationHash: ByteArray): ConversationLinkResult {
         return try {
-            val service = this.service ?: return ConversationLinkResult(
-                isActive = false,
-                error = "Service not bound",
-            )
+            val service =
+                this.service ?: return ConversationLinkResult(
+                    isActive = false,
+                    error = "Service not bound",
+                )
 
             val resultJson = service.getLinkStatus(destinationHash)
             val result = JSONObject(resultJson)
 
             ConversationLinkResult(
                 isActive = result.optBoolean("active", false),
-                establishmentRateBps = if (result.isNull("establishment_rate_bps")) null
-                    else result.optLong("establishment_rate_bps"),
+                establishmentRateBps =
+                    if (result.isNull("establishment_rate_bps")) {
+                        null
+                    } else {
+                        result.optLong("establishment_rate_bps")
+                    },
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error getting link status", e)

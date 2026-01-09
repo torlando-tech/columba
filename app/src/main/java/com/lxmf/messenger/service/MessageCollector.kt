@@ -270,10 +270,11 @@ class MessageCollector
                             // Exception: always update propagation nodes missing their transfer limit
                             val existingAnnounce = announceRepository.getAnnounce(peerHash)
                             val fiveSecondsAgo = System.currentTimeMillis() - 5000
-                            val needsTransferLimitUpdate = existingAnnounce != null &&
-                                existingAnnounce.nodeType == "PROPAGATION_NODE" &&
-                                existingAnnounce.propagationTransferLimitKb == null &&
-                                propagationTransferLimitKb != null
+                            val needsTransferLimitUpdate =
+                                existingAnnounce != null &&
+                                    existingAnnounce.nodeType == "PROPAGATION_NODE" &&
+                                    existingAnnounce.propagationTransferLimitKb == null &&
+                                    propagationTransferLimitKb != null
 
                             if (existingAnnounce != null &&
                                 existingAnnounce.lastSeenTimestamp > fiveSecondsAgo &&

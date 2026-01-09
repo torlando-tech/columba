@@ -31,7 +31,6 @@ import com.lxmf.messenger.ui.model.loadFileAttachmentData
 import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
 import com.lxmf.messenger.ui.model.toMessageUi
 import com.lxmf.messenger.util.FileAttachment
-import com.lxmf.messenger.util.FileUtils
 import com.lxmf.messenger.util.ImageUtils
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
@@ -1237,54 +1236,54 @@ class MessagingViewModel
                 val probeState = linkSpeedProbe.probeState.value
 
                 // Determine recommended preset
-                val recommendedPreset = when (probeState) {
-                    is LinkSpeedProbe.ProbeState.Complete -> probeState.recommendedPreset
-                    is LinkSpeedProbe.ProbeState.Failed -> {
-                        // Probe failed/timed out - still use path info from probe if available
-                        val lastProbeResult = linkSpeedProbe.probeState.value
-                        if (lastProbeResult is LinkSpeedProbe.ProbeState.Failed) {
-                            // Check if we got path info from the failed probe
-                            // by examining if there's a result we can use
+                val recommendedPreset =
+                    when (probeState) {
+                        is LinkSpeedProbe.ProbeState.Complete -> probeState.recommendedPreset
+                        is LinkSpeedProbe.ProbeState.Failed -> {
+                            // Probe failed/timed out - still use path info from probe if available
+                            val lastProbeResult = linkSpeedProbe.probeState.value
+                            if (lastProbeResult is LinkSpeedProbe.ProbeState.Failed) {
+                                // Check if we got path info from the failed probe
+                                // by examining if there's a result we can use
+                                val savedPreset = settingsRepository.getImageCompressionPreset()
+                                if (savedPreset == ImageCompressionPreset.AUTO) {
+                                    interfaceDetector.detectOptimalPreset()
+                                } else {
+                                    savedPreset
+                                }
+                            } else {
+                                ImageCompressionPreset.MEDIUM
+                            }
+                        }
+                        else -> {
+                            // Fallback to interface-based detection if probe not ready
                             val savedPreset = settingsRepository.getImageCompressionPreset()
                             if (savedPreset == ImageCompressionPreset.AUTO) {
                                 interfaceDetector.detectOptimalPreset()
                             } else {
                                 savedPreset
                             }
-                        } else {
-                            ImageCompressionPreset.MEDIUM
                         }
                     }
-                    else -> {
-                        // Fallback to interface-based detection if probe not ready
-                        val savedPreset = settingsRepository.getImageCompressionPreset()
-                        if (savedPreset == ImageCompressionPreset.AUTO) {
-                            interfaceDetector.detectOptimalPreset()
-                        } else {
-                            savedPreset
-                        }
-                    }
-                }
 
                 // Calculate transfer time estimates for each preset
                 val transferTimeEstimates = calculateTransferTimeEstimates(probeState)
 
                 // Show the quality selection dialog
-                _qualitySelectionState.value = QualitySelectionState(
-                    imageUri = uri,
-                    context = context,
-                    recommendedPreset = recommendedPreset,
-                    transferTimeEstimates = transferTimeEstimates,
-                )
+                _qualitySelectionState.value =
+                    QualitySelectionState(
+                        imageUri = uri,
+                        context = context,
+                        recommendedPreset = recommendedPreset,
+                        transferTimeEstimates = transferTimeEstimates,
+                    )
             }
         }
 
         /**
          * Calculate transfer time estimates for each preset based on probe results.
          */
-        private fun calculateTransferTimeEstimates(
-            probeState: LinkSpeedProbe.ProbeState,
-        ): Map<ImageCompressionPreset, String?> {
+        private fun calculateTransferTimeEstimates(probeState: LinkSpeedProbe.ProbeState): Map<ImageCompressionPreset, String?> {
             val probeResult = (probeState as? LinkSpeedProbe.ProbeState.Complete)?.result
 
             return listOf(
@@ -1313,9 +1312,10 @@ class MessagingViewModel
                 try {
                     Log.d(TAG, "User selected quality: ${preset.name}")
 
-                    val result = withContext(Dispatchers.IO) {
-                        ImageUtils.compressImageWithPreset(state.context, state.imageUri, preset)
-                    }
+                    val result =
+                        withContext(Dispatchers.IO) {
+                            ImageUtils.compressImageWithPreset(state.context, state.imageUri, preset)
+                        }
 
                     if (result == null) {
                         Log.e(TAG, "Failed to compress image")

@@ -10,9 +10,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.paging.PagingData
+import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.test.MessagingTestFixtures
 import com.lxmf.messenger.test.RegisterComponentActivityRule
-import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.ReplyPreviewUi
 import com.lxmf.messenger.viewmodel.ContactToggleResult

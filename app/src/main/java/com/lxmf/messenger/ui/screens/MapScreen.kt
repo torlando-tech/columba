@@ -116,8 +116,9 @@ fun MapScreen(
     val contacts by viewModel.contacts.collectAsState()
 
     // Show permission sheet only if permission not granted and user hasn't dismissed it
-    val showPermissionSheet = !state.hasLocationPermission &&
-                              !state.hasUserDismissedPermissionSheet
+    val showPermissionSheet =
+        !state.hasLocationPermission &&
+            !state.hasUserDismissedPermissionSheet
     var showShareLocationSheet by remember { mutableStateOf(false) }
     var selectedMarker by remember { mutableStateOf<ContactMarker?>(null) }
     val permissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)

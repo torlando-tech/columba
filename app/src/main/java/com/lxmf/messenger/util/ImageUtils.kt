@@ -3,12 +3,10 @@ package com.lxmf.messenger.util
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
-import android.provider.MediaStore
 import android.util.Log
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import java.io.ByteArrayOutputStream
@@ -144,6 +142,7 @@ object ImageUtils {
      * Compresses an image with detailed result information.
      * Use this when you need to check if heavy compression was applied.
      */
+
     /**
      * Compress an image to WebP format with quality reduction as needed.
      *
@@ -286,12 +285,13 @@ object ImageUtils {
         // Always cap to MAX_PREVIEW_DIMENSION to prevent Canvas size crashes
         // even if caller requests larger (e.g., ORIGINAL preset with Int.MAX_VALUE)
         val effectiveMaxDimension = minOf(maxDimension, MAX_PREVIEW_DIMENSION)
-        
+
         return try {
             // First, get the image dimensions without loading
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-            }
+            val options =
+                BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
             context.contentResolver.openInputStream(uri)?.use { input ->
                 BitmapFactory.decodeStream(input, null, options)
             }
@@ -309,13 +309,15 @@ object ImageUtils {
             val orientation = getExifOrientation(context, uri)
 
             // Now load with subsampling
-            val loadOptions = BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-            }
+            val loadOptions =
+                BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                }
 
-            val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
-                BitmapFactory.decodeStream(input, null, loadOptions)
-            } ?: return null
+            val bitmap =
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    BitmapFactory.decodeStream(input, null, loadOptions)
+                } ?: return null
 
             // Apply EXIF rotation if needed
             applyExifOrientation(bitmap, orientation)
@@ -329,13 +331,16 @@ object ImageUtils {
      * Get EXIF orientation from image URI.
      */
     @androidx.annotation.VisibleForTesting
-    internal fun getExifOrientation(context: Context, uri: Uri): Int {
+    internal fun getExifOrientation(
+        context: Context,
+        uri: Uri,
+    ): Int {
         return try {
             context.contentResolver.openInputStream(uri)?.use { input ->
                 val exif = ExifInterface(input)
                 exif.getAttributeInt(
                     ExifInterface.TAG_ORIENTATION,
-                    ExifInterface.ORIENTATION_NORMAL
+                    ExifInterface.ORIENTATION_NORMAL,
                 )
             } ?: ExifInterface.ORIENTATION_NORMAL
         } catch (e: Exception) {
@@ -348,9 +353,12 @@ object ImageUtils {
      * Apply EXIF orientation to bitmap, returning a new rotated bitmap if needed.
      */
     @androidx.annotation.VisibleForTesting
-    internal fun applyExifOrientation(bitmap: Bitmap, orientation: Int): Bitmap {
+    internal fun applyExifOrientation(
+        bitmap: Bitmap,
+        orientation: Int,
+    ): Bitmap {
         val matrix = Matrix()
-        
+
         when (orientation) {
             ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
             ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
@@ -405,7 +413,11 @@ object ImageUtils {
      * @return Sample size (1, 2, 4, 8, etc.) for inSampleSize
      */
     @androidx.annotation.VisibleForTesting
-    internal fun calculateSampleSize(imageWidth: Int, imageHeight: Int, maxDimension: Int): Int {
+    internal fun calculateSampleSize(
+        imageWidth: Int,
+        imageHeight: Int,
+        maxDimension: Int,
+    ): Int {
         var sampleSize = 1
 
         if (imageWidth > maxDimension || imageHeight > maxDimension) {

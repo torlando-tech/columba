@@ -168,7 +168,7 @@ class LinkSpeedProbe
                         result
                     } else {
                         Log.w(TAG, "Probe failed: ${result.status}")
-                        _probeState.value = ProbeState.Failed(result.status, targetType)
+                        _probeState.value = ProbeState.Failed(result.status, targetType, result)
                         // Return the result anyway - it has useful info like hop count
                         result
                     }

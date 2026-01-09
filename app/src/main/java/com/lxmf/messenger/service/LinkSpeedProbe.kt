@@ -30,6 +30,7 @@ class LinkSpeedProbe
         private val reticulumProtocol: ReticulumProtocol,
         private val settingsRepository: SettingsRepository,
         private val propagationNodeManager: PropagationNodeManager,
+        private val conversationLinkManager: ConversationLinkManager,
     ) {
         companion object {
             private const val TAG = "LinkSpeedProbe"
@@ -116,6 +117,23 @@ class LinkSpeedProbe
                             Log.d(TAG, "Probing direct recipient: ${recipientHash.take(16)}")
                             recipientHash to TargetType.DIRECT
                         }
+                    }
+
+                    // Check if ConversationLinkManager already has an active link with speed data
+                    val existingLinkState = conversationLinkManager.getLinkState(targetHash)
+                    if (existingLinkState?.isActive == true && existingLinkState.establishmentRateBps != null) {
+                        Log.d(TAG, "Using existing link from ConversationLinkManager: ${existingLinkState.establishmentRateBps} bps")
+                        val result = LinkSpeedProbeResult(
+                            status = "success",
+                            establishmentRateBps = existingLinkState.establishmentRateBps,
+                            expectedRateBps = null,
+                            rttSeconds = null,
+                            hops = null,
+                            linkReused = true,
+                        )
+                        val recommendedPreset = recommendPreset(result)
+                        _probeState.value = ProbeState.Complete(result, targetType, recommendedPreset)
+                        return@withContext result
                     }
 
                     _probeState.value = ProbeState.Probing(targetHash, targetType)

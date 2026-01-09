@@ -5051,10 +5051,11 @@ class ReticulumWrapper:
                         return get_link_stats(link, True, "propagated")
 
                 # No active propagation link - return heuristics only
+                # Use status="success" since heuristic data is valid for compression recommendations
                 log_info("ReticulumWrapper", "probe_link_speed",
                          f"No active propagation link, returning heuristics")
                 return {
-                    "status": "no_link",
+                    "status": "success",
                     "establishment_rate_bps": None,
                     "expected_rate_bps": None,
                     "rtt_seconds": None,

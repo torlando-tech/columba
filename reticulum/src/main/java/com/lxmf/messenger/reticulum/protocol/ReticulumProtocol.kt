@@ -121,6 +121,38 @@ interface ReticulumProtocol {
         deliveryMethod: String = "direct",
     ): LinkSpeedProbeResult
 
+    // ==================== Conversation Link Management ====================
+
+    /**
+     * Establish a link to a destination for real-time connectivity.
+     * Used to show "Online" status and enable instant link speed probing.
+     *
+     * @param destinationHash Destination hash bytes (16 bytes identity hash)
+     * @param timeoutSeconds How long to wait for link establishment
+     * @return Result containing ConversationLinkResult with link status and speed
+     */
+    suspend fun establishConversationLink(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float = 10.0f,
+    ): Result<ConversationLinkResult>
+
+    /**
+     * Close an active link to a destination.
+     * Called when conversation has been inactive for too long.
+     *
+     * @param destinationHash Destination hash bytes (16 bytes identity hash)
+     * @return Result indicating success and whether link was active
+     */
+    suspend fun closeConversationLink(destinationHash: ByteArray): Result<Boolean>
+
+    /**
+     * Check if a link is active to a destination.
+     *
+     * @param destinationHash Destination hash bytes (16 bytes identity hash)
+     * @return ConversationLinkResult with current link status
+     */
+    suspend fun getConversationLinkStatus(destinationHash: ByteArray): ConversationLinkResult
+
     // Announce handling
     fun observeAnnounces(): Flow<AnnounceEvent>
 
@@ -360,6 +392,20 @@ data class FailedInterface(
         }
     }
 }
+
+/**
+ * Result of conversation link operations.
+ */
+data class ConversationLinkResult(
+    /** Whether link is currently active */
+    val isActive: Boolean,
+    /** Link establishment rate in bits/sec (if active) */
+    val establishmentRateBps: Long? = null,
+    /** Whether the link already existed (for establish operations) */
+    val alreadyExisted: Boolean = false,
+    /** Error message if operation failed */
+    val error: String? = null,
+)
 
 /**
  * State of propagation node message sync/transfer.

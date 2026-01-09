@@ -245,6 +245,31 @@ class MockReticulumProtocol : ReticulumProtocol {
         )
     }
 
+    override suspend fun establishConversationLink(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float,
+    ): Result<ConversationLinkResult> {
+        // Mock: Simulate link establishment
+        delay(200)
+        return Result.success(
+            ConversationLinkResult(
+                isActive = true,
+                establishmentRateBps = 50_000, // 50 kbps
+                alreadyExisted = false,
+            ),
+        )
+    }
+
+    override suspend fun closeConversationLink(destinationHash: ByteArray): Result<Boolean> {
+        // Mock: Pretend link was closed
+        return Result.success(true)
+    }
+
+    override suspend fun getConversationLinkStatus(destinationHash: ByteArray): ConversationLinkResult {
+        // Mock: Return inactive link status
+        return ConversationLinkResult(isActive = false)
+    }
+
     override fun observeAnnounces(): Flow<AnnounceEvent> =
         flow {
             // Mock implementation - no announces

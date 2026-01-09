@@ -400,4 +400,33 @@ interface IReticulumService {
      * @return JSON string with result: {"success": true, "message_hash": "...", "timestamp": ...}
      */
     String sendReaction(in byte[] destHash, String targetMessageId, String emoji, in byte[] sourceIdentityPrivateKey);
+
+    // ==================== CONVERSATION LINK MANAGEMENT ====================
+
+    /**
+     * Establish a link to a destination for real-time connectivity.
+     * Used to show "Online" status and enable instant link speed probing.
+     *
+     * @param destHash Destination hash bytes (16 bytes)
+     * @param timeoutSeconds How long to wait for link establishment
+     * @return JSON string with result: {"success": true, "link_active": true, "establishment_rate_bps": ...}
+     */
+    String establishLink(in byte[] destHash, float timeoutSeconds);
+
+    /**
+     * Close an active link to a destination.
+     * Called when conversation has been inactive for too long.
+     *
+     * @param destHash Destination hash bytes (16 bytes)
+     * @return JSON string with result: {"success": true, "was_active": true}
+     */
+    String closeLink(in byte[] destHash);
+
+    /**
+     * Check if a link is active to a destination.
+     *
+     * @param destHash Destination hash bytes (16 bytes)
+     * @return JSON string with result: {"active": true, "establishment_rate_bps": ...}
+     */
+    String getLinkStatus(in byte[] destHash);
 }

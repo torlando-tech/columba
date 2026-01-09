@@ -798,6 +798,48 @@ class ReticulumServiceBinder(
     }
 
     // ===========================================
+    // Conversation Link Management
+    // ===========================================
+
+    override fun establishLink(destHash: ByteArray, timeoutSeconds: Float): String {
+        return try {
+            Log.d(TAG, "🔗 Establishing link to ${destHash.joinToString("") { "%02x".format(it) }.take(16)}...")
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("establish_link", destHash, timeoutSeconds)
+                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+            } ?: """{"success": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error establishing link", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun closeLink(destHash: ByteArray): String {
+        return try {
+            Log.d(TAG, "🔗 Closing link to ${destHash.joinToString("") { "%02x".format(it) }.take(16)}...")
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("close_link", destHash)
+                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+            } ?: """{"success": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing link", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun getLinkStatus(destHash: ByteArray): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("get_link_status", destHash)
+                result?.toString() ?: """{"active": false, "error": "No result from Python"}"""
+            } ?: """{"active": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting link status", e)
+            """{"active": false, "error": "${e.message}"}"""
+        }
+    }
+
+    // ===========================================
     // Event Broadcasting Helpers
     // ===========================================
 

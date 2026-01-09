@@ -81,6 +81,7 @@ class MessagingViewModel
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         private val interfaceDetector: InterfaceDetector,
         private val linkSpeedProbe: LinkSpeedProbe,
+        private val conversationLinkManager: com.lxmf.messenger.service.ConversationLinkManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -116,6 +117,22 @@ class MessagingViewModel
                 .flatMapLatest { peerHash ->
                     if (peerHash != null) {
                         announceRepository.getAnnounceFlow(peerHash)
+                    } else {
+                        flowOf(null)
+                    }
+                }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = null,
+                )
+
+        // Link state for current conversation - provides real-time connectivity status
+        val conversationLinkState: StateFlow<com.lxmf.messenger.service.ConversationLinkManager.LinkState?> =
+            _currentConversation
+                .flatMapLatest { peerHash ->
+                    if (peerHash != null) {
+                        conversationLinkManager.linkStates.map { states -> states[peerHash] }
                     } else {
                         flowOf(null)
                     }
@@ -792,6 +809,9 @@ class MessagingViewModel
             // Enable fast polling (1s) for active conversation
             reticulumProtocol.setConversationActive(true)
 
+            // Open link to peer for real-time connectivity status and speed probing
+            conversationLinkManager.openConversationLink(destinationHash)
+
             // Mark conversation as read when opening
             viewModelScope.launch {
                 try {
@@ -888,6 +908,8 @@ class MessagingViewModel
                         // Clear pending reply after successful send
                         handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId)
                         clearReplyTo()
+                        // Reset link inactivity timer
+                        conversationLinkManager.onMessageSent(destinationHash)
                     }.onFailure { error ->
                         handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
                     }

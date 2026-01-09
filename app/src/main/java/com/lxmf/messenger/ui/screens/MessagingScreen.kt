@@ -172,6 +172,7 @@ fun MessagingScreen(
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
     val announceInfo by viewModel.announceInfo.collectAsStateWithLifecycle()
+    val conversationLinkState by viewModel.conversationLinkState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     var messageText by remember { mutableStateOf("") }
 
@@ -472,11 +473,17 @@ fun MessagingScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        // Online status indicator - updates in real-time
+                        // Online status indicator - considers active link OR recent announce
                         val lastSeen = announceInfo?.lastSeenTimestamp
-                        if (lastSeen != null) {
-                            val isOnline = System.currentTimeMillis() - lastSeen < (5 * 60 * 1000L) // 5 minutes
+                        val hasActiveLink = conversationLinkState?.isActive == true
+                        val hasRecentAnnounce = lastSeen != null &&
+                            System.currentTimeMillis() - lastSeen < (5 * 60 * 1000L) // 5 minutes
+                        val isOnline = hasActiveLink || hasRecentAnnounce
+                        
+                        // Debug logging
+                        android.util.Log.d("MessagingScreen", "Online indicator: hasActiveLink=$hasActiveLink, hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState")
 
+                        if (lastSeen != null || hasActiveLink) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -488,7 +495,7 @@ fun MessagingScreen(
                                     modifier = Modifier.size(8.dp),
                                 )
                                 Text(
-                                    text = if (isOnline) "Online" else formatRelativeTime(lastSeen),
+                                    text = if (isOnline) "Online" else formatRelativeTime(lastSeen!!),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )

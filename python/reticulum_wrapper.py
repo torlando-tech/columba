@@ -5266,11 +5266,12 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "establish_link",
                      f"Transport.has_path({recipient_dest.hash.hex()[:16]}): {has_path}")
 
-            # Always request a fresh path to ensure route is current
-            # Even if we have a path, it might be stale
-            log_debug("ReticulumWrapper", "establish_link",
-                     f"Requesting fresh path to {recipient_dest.hash.hex()[:16]}...")
-            RNS.Transport.request_path(recipient_dest.hash)
+            # Only request path if we don't have one (avoid unnecessary network traffic)
+            # If the existing path is stale, link establishment will fail and we can retry
+            if not has_path:
+                log_debug("ReticulumWrapper", "establish_link",
+                         f"Requesting path to {recipient_dest.hash.hex()[:16]}...")
+                RNS.Transport.request_path(recipient_dest.hash)
 
             # Wait for path if we don't have one
             if not has_path:
@@ -5284,9 +5285,6 @@ class ReticulumWrapper:
                     log_warning("ReticulumWrapper", "establish_link",
                                f"No path available to {recipient_dest.hash.hex()[:16]}")
                     return {"success": False, "link_active": False, "error": "No path available"}
-            else:
-                # Give time for path refresh when we already have one
-                time.sleep(0.3)
             
             if not hashes_match:
                 log_warning("ReticulumWrapper", "establish_link",

@@ -5174,15 +5174,20 @@ class ReticulumWrapper:
             elif link is None and dest_hash_hex in self.router.backchannel_links:
                 link = self.router.backchannel_links[dest_hash_hex]
 
-            if link is not None and link.status == RNS.Link.ACTIVE:
-                log_info("ReticulumWrapper", "establish_link",
-                         f"Link already active to {dest_hash_hex[:16]} (existing)")
-                return {
-                    "success": True,
-                    "link_active": True,
-                    "establishment_rate_bps": link.get_establishment_rate(),
-                    "already_existed": True
-                }
+            if link is not None:
+                if link.status == RNS.Link.ACTIVE:
+                    log_info("ReticulumWrapper", "establish_link",
+                             f"Link already active to {dest_hash_hex[:16]} (existing)")
+                    return {
+                        "success": True,
+                        "link_active": True,
+                        "establishment_rate_bps": link.get_establishment_rate(),
+                        "already_existed": True
+                    }
+                else:
+                    # Clean up stale link before proceeding
+                    self.router.direct_links.pop(dest_hash, None)
+                    link = None
             
             # No existing link - try to establish one
             # The recipient's LXMF router will accept incoming links to lxmf.delivery
@@ -5312,36 +5317,39 @@ class ReticulumWrapper:
             self.router.direct_links[recipient_dest.hash] = link
             log_debug("ReticulumWrapper", "establish_link",
                      f"Stored link in router.direct_links with key {recipient_dest.hash.hex()[:16]}")
-            
+
             # Wait for link establishment with timeout
-            start_time = time.time()
-            while time.time() - start_time < timeout_seconds:
-                if link_established[0] or link.status == RNS.Link.ACTIVE:
-                    rate = link_rate[0] or link.get_establishment_rate()
-                    log_info("ReticulumWrapper", "establish_link",
-                             f"Link established to {dest_hash_hex[:16]} in {time.time() - start_time:.2f}s")
-                    return {
-                        "success": True,
-                        "link_active": True,
-                        "establishment_rate_bps": rate,
-                        "already_existed": False
-                    }
-                elif link.status == RNS.Link.CLOSED:
-                    # Clean up failed link from direct_links
-                    if recipient_dest.hash in self.router.direct_links:
-                        self.router.direct_links.pop(recipient_dest.hash)
-                    log_warning("ReticulumWrapper", "establish_link",
-                               f"Link closed during establishment to {dest_hash_hex[:16]}")
-                    return {"success": False, "link_active": False, "error": "Link closed"}
-                time.sleep(0.1)
-            
-            # Timeout - clean up and return failure
-            link.teardown()
-            if recipient_dest.hash in self.router.direct_links:
-                self.router.direct_links.pop(recipient_dest.hash)
-            log_info("ReticulumWrapper", "establish_link",
-                     f"Link establishment timed out to {dest_hash_hex[:16]} (peer may be offline)")
-            return {"success": False, "link_active": False, "error": "Timeout"}
+            # Use try/finally to ensure cleanup on all exit paths
+            try:
+                start_time = time.time()
+                while time.time() - start_time < timeout_seconds:
+                    if link_established[0] or link.status == RNS.Link.ACTIVE:
+                        rate = link_rate[0] or link.get_establishment_rate()
+                        log_info("ReticulumWrapper", "establish_link",
+                                 f"Link established to {dest_hash_hex[:16]} in {time.time() - start_time:.2f}s")
+                        return {
+                            "success": True,
+                            "link_active": True,
+                            "establishment_rate_bps": rate,
+                            "already_existed": False
+                        }
+                    elif link.status == RNS.Link.CLOSED:
+                        log_warning("ReticulumWrapper", "establish_link",
+                                   f"Link closed during establishment to {dest_hash_hex[:16]}")
+                        return {"success": False, "link_active": False, "error": "Link closed"}
+                    time.sleep(0.1)
+
+                # Timeout
+                link.teardown()
+                log_info("ReticulumWrapper", "establish_link",
+                         f"Link establishment timed out to {dest_hash_hex[:16]} (peer may be offline)")
+                return {"success": False, "link_active": False, "error": "Timeout"}
+            finally:
+                # Clean up failed/inactive links from direct_links
+                # Only remove if it's still our link (not replaced by concurrent call)
+                if link.status != RNS.Link.ACTIVE:
+                    if self.router.direct_links.get(recipient_dest.hash) is link:
+                        self.router.direct_links.pop(recipient_dest.hash, None)
             
         except Exception as e:
             # Clean up stored link if variables are in scope

@@ -225,13 +225,14 @@ private fun QualityOption(
             }
 
             // File size and transfer time estimate
-            val sizeAndTime = buildString {
-                append(formatFileSize(preset.targetSizeBytes))
-                transferTime?.let { time ->
-                    append(" • ")
-                    append(time)
+            val sizeAndTime =
+                buildString {
+                    append(formatFileSize(preset.targetSizeBytes))
+                    transferTime?.let { time ->
+                        append(" • ")
+                        append(time)
+                    }
                 }
-            }
             Text(
                 text = sizeAndTime,
                 style = MaterialTheme.typography.bodyMedium,

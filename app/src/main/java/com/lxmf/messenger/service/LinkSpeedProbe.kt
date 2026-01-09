@@ -2,10 +2,10 @@ package com.lxmf.messenger.service
 
 import android.util.Log
 import com.lxmf.messenger.data.model.ImageCompressionPreset
-import com.lxmf.messenger.util.HexUtils
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.util.HexUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -101,26 +101,10 @@ class LinkSpeedProbe
         suspend fun probe(recipientHash: String): LinkSpeedProbeResult? {
             return withContext(Dispatchers.IO) {
                 try {
-                    val deliveryMethod = settingsRepository.getDefaultDeliveryMethod()
-                    Log.d(TAG, "Starting probe, delivery method: $deliveryMethod")
-
-                    val (targetHash, targetType) =
-                        when (deliveryMethod) {
-                            "propagated" -> {
-                                val relay = propagationNodeManager.currentRelay.value
-                                if (relay == null) {
-                                    Log.w(TAG, "No propagation node selected, falling back to direct")
-                                    recipientHash to TargetType.DIRECT
-                                } else {
-                                    Log.d(TAG, "Probing propagation node: ${relay.destinationHash.take(16)}")
-                                    relay.destinationHash to TargetType.PROPAGATION_NODE
-                                }
-                            }
-                            else -> {
-                                Log.d(TAG, "Probing direct recipient: ${recipientHash.take(16)}")
-                                recipientHash to TargetType.DIRECT
-                            }
-                        }
+                    val target = determineProbeTarget(recipientHash)
+                    val targetHash = target.hash
+                    val targetType = target.type
+                    val deliveryMethod = target.deliveryMethod
 
                     // Check if ConversationLinkManager already has an active link with speed data
                     val existingLinkState = conversationLinkManager.getLinkState(targetHash)
@@ -141,16 +125,17 @@ class LinkSpeedProbe
                     }
 
                     // Atomically check and set probe state to prevent concurrent probes
-                    val existingProbeTarget = probeMutex.withLock {
-                        val currentState = _probeState.value
-                        if (currentState is ProbeState.Probing) {
-                            // Return the target hash of existing probe to wait for
-                            currentState.targetHash
-                        } else {
-                            _probeState.value = ProbeState.Probing(targetHash, targetType)
-                            null
+                    val existingProbeTarget =
+                        probeMutex.withLock {
+                            val currentState = _probeState.value
+                            if (currentState is ProbeState.Probing) {
+                                // Return the target hash of existing probe to wait for
+                                currentState.targetHash
+                            } else {
+                                _probeState.value = ProbeState.Probing(targetHash, targetType)
+                                null
+                            }
                         }
-                    }
 
                     // If probe already in progress, wait for it to complete
                     if (existingProbeTarget != null) {
@@ -205,6 +190,39 @@ class LinkSpeedProbe
          */
         fun reset() {
             _probeState.value = ProbeState.Idle
+        }
+
+        private data class ProbeTarget(
+            val hash: String,
+            val type: TargetType,
+            val deliveryMethod: String,
+        )
+
+        /**
+         * Determine the probe target based on delivery method.
+         */
+        private fun determineProbeTarget(recipientHash: String): ProbeTarget {
+            val deliveryMethod = settingsRepository.getDefaultDeliveryMethod()
+            Log.d(TAG, "Starting probe, delivery method: $deliveryMethod")
+
+            val (hash, type) =
+                when (deliveryMethod) {
+                    "propagated" -> {
+                        val relay = propagationNodeManager.currentRelay.value
+                        if (relay == null) {
+                            Log.w(TAG, "No propagation node selected, falling back to direct")
+                            recipientHash to TargetType.DIRECT
+                        } else {
+                            Log.d(TAG, "Probing propagation node: ${relay.destinationHash.take(16)}")
+                            relay.destinationHash to TargetType.PROPAGATION_NODE
+                        }
+                    }
+                    else -> {
+                        Log.d(TAG, "Probing direct recipient: ${recipientHash.take(16)}")
+                        recipientHash to TargetType.DIRECT
+                    }
+                }
+            return ProbeTarget(hash, type, deliveryMethod)
         }
 
         /**

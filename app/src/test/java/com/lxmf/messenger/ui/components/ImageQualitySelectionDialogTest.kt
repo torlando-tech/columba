@@ -2,14 +2,12 @@ package com.lxmf.messenger.ui.components
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsSelected
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.data.model.ImageCompressionPreset
-import com.lxmf.messenger.service.LinkSpeedProbe
 import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
+import com.lxmf.messenger.service.LinkSpeedProbe
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -123,12 +121,13 @@ class ImageQualitySelectionDialogTest {
 
     @Test
     fun dialog_displaysTransferTimeEstimates() {
-        val estimates = mapOf(
-            ImageCompressionPreset.LOW to "~5 sec",
-            ImageCompressionPreset.MEDIUM to "~30 sec",
-            ImageCompressionPreset.HIGH to "~2 min",
-            ImageCompressionPreset.ORIGINAL to "~10 min",
-        )
+        val estimates =
+            mapOf(
+                ImageCompressionPreset.LOW to "~5 sec",
+                ImageCompressionPreset.MEDIUM to "~30 sec",
+                ImageCompressionPreset.HIGH to "~2 min",
+                ImageCompressionPreset.ORIGINAL to "~10 min",
+            )
 
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
@@ -180,24 +179,26 @@ class ImageQualitySelectionDialogTest {
 
     @Test
     fun dialog_displaysHopsAndBitrate_whenProbeComplete() {
-        val result = LinkSpeedProbeResult(
-            status = "success",
-            establishmentRateBps = 10000L,
-            expectedRateBps = 12000L,
-            rttSeconds = 0.5,
-            hops = 3,
-            linkReused = true,
-            nextHopBitrateBps = 115200L,
-        )
+        val result =
+            LinkSpeedProbeResult(
+                status = "success",
+                establishmentRateBps = 10000L,
+                expectedRateBps = 12000L,
+                rttSeconds = 0.5,
+                hops = 3,
+                linkReused = true,
+                nextHopBitrateBps = 115200L,
+            )
 
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = LinkSpeedProbe.ProbeState.Complete(
-                    result = result,
-                    targetType = LinkSpeedProbe.TargetType.DIRECT,
-                    recommendedPreset = ImageCompressionPreset.MEDIUM,
-                ),
+                probeState =
+                    LinkSpeedProbe.ProbeState.Complete(
+                        result = result,
+                        targetType = LinkSpeedProbe.TargetType.DIRECT,
+                        recommendedPreset = ImageCompressionPreset.MEDIUM,
+                    ),
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
@@ -210,24 +211,26 @@ class ImageQualitySelectionDialogTest {
 
     @Test
     fun dialog_displaysViaRelay_whenPropagationNode() {
-        val result = LinkSpeedProbeResult(
-            status = "success",
-            establishmentRateBps = 5000L,
-            expectedRateBps = null,
-            rttSeconds = null,
-            hops = null,
-            linkReused = false,
-            nextHopBitrateBps = null,
-        )
+        val result =
+            LinkSpeedProbeResult(
+                status = "success",
+                establishmentRateBps = 5000L,
+                expectedRateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+                nextHopBitrateBps = null,
+            )
 
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.LOW,
-                probeState = LinkSpeedProbe.ProbeState.Complete(
-                    result = result,
-                    targetType = LinkSpeedProbe.TargetType.PROPAGATION_NODE,
-                    recommendedPreset = ImageCompressionPreset.LOW,
-                ),
+                probeState =
+                    LinkSpeedProbe.ProbeState.Complete(
+                        result = result,
+                        targetType = LinkSpeedProbe.TargetType.PROPAGATION_NODE,
+                        recommendedPreset = ImageCompressionPreset.LOW,
+                    ),
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},

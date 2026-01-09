@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:no-wildcard-imports")
+
 package com.lxmf.messenger.data.repository
 
 import android.content.Context
@@ -7,7 +9,7 @@ import app.cash.turbine.test
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
-import io.mockk.* // ktlint-disable no-wildcard-imports
+import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf

@@ -139,10 +139,11 @@ class ImageQualitySelectionDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("~5 sec").assertExists()
-        composeTestRule.onNodeWithText("~30 sec").assertExists()
-        composeTestRule.onNodeWithText("~2 min").assertExists()
-        composeTestRule.onNodeWithText("~10 min").assertExists()
+        // File size is now shown alongside transfer time (e.g., "32 KB • ~5 sec")
+        composeTestRule.onNodeWithText("32 KB • ~5 sec").assertExists()
+        composeTestRule.onNodeWithText("128 KB • ~30 sec").assertExists()
+        composeTestRule.onNodeWithText("512 KB • ~2 min").assertExists()
+        composeTestRule.onNodeWithText("25 MB • ~10 min").assertExists()
     }
 
     // ========== Path Info Section Tests ==========

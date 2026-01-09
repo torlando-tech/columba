@@ -201,7 +201,7 @@ class LinkSpeedProbe
         /**
          * Determine the probe target based on delivery method.
          */
-        private fun determineProbeTarget(recipientHash: String): ProbeTarget {
+        private suspend fun determineProbeTarget(recipientHash: String): ProbeTarget {
             val deliveryMethod = settingsRepository.getDefaultDeliveryMethod()
             Log.d(TAG, "Starting probe, delivery method: $deliveryMethod")
 

@@ -255,11 +255,12 @@ private fun formatBitrate(bps: Long): String {
 
 /**
  * Format file size in bytes to human-readable string.
+ * Uses binary units (1024) to match preset definitions.
  */
 private fun formatFileSize(bytes: Long): String {
     return when {
-        bytes >= 1_000_000 -> String.format(Locale.US, "%.0f MB", bytes / 1_000_000.0)
-        bytes >= 1_000 -> String.format(Locale.US, "%.0f KB", bytes / 1_000.0)
+        bytes >= 1_048_576 -> String.format(Locale.US, "%.0f MB", bytes / 1_048_576.0)
+        bytes >= 1_024 -> String.format(Locale.US, "%.0f KB", bytes / 1_024.0)
         else -> "$bytes B"
     }
 }

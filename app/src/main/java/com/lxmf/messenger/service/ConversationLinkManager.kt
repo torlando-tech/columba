@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -47,8 +48,9 @@ class ConversationLinkManager
 
         /**
          * Last message sent time per conversation (for inactivity tracking).
+         * Uses ConcurrentHashMap for thread-safe access from multiple coroutines.
          */
-        private val lastMessageSentTime = mutableMapOf<String, Long>()
+        private val lastMessageSentTime = ConcurrentHashMap<String, Long>()
 
         /**
          * Background job for checking inactive links.

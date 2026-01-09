@@ -282,6 +282,7 @@ object ImageUtils {
         // even if caller requests larger (e.g., ORIGINAL preset with Int.MAX_VALUE)
         val effectiveMaxDimension = minOf(maxDimension, MAX_PREVIEW_DIMENSION)
 
+        var loadedBitmap: Bitmap? = null
         return try {
             // First, get the image dimensions without loading
             val options =
@@ -310,16 +311,22 @@ object ImageUtils {
                     inSampleSize = sampleSize
                 }
 
-            val bitmap =
+            loadedBitmap =
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     BitmapFactory.decodeStream(input, null, loadOptions)
                 } ?: return null
 
             // Apply EXIF rotation if needed
-            applyExifOrientation(bitmap, orientation)
+            val result = applyExifOrientation(loadedBitmap, orientation)
+            // Clear reference - applyExifOrientation either returns same bitmap or recycles original
+            loadedBitmap = null
+            result
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load bitmap", e)
             null
+        } finally {
+            // Only recycle if we haven't successfully processed it
+            loadedBitmap?.recycle()
         }
     }
 

@@ -2,6 +2,7 @@ package com.lxmf.messenger.service
 
 import android.util.Log
 import com.lxmf.messenger.data.model.ImageCompressionPreset
+import com.lxmf.messenger.util.HexUtils
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
@@ -147,7 +148,7 @@ class LinkSpeedProbe
                     // Convert hex string to bytes
                     val targetHashBytes =
                         try {
-                            hexStringToBytes(targetHash)
+                            HexUtils.hexToBytes(targetHash)
                         } catch (e: Exception) {
                             Log.e(TAG, "Invalid target hash: $targetHash", e)
                             _probeState.value = ProbeState.Failed("Invalid destination hash", targetType)
@@ -259,17 +260,6 @@ class LinkSpeedProbe
                     val remainingMinutes = (totalSeconds % 3600) / 60
                     if (remainingMinutes > 0) "~${hours}h ${remainingMinutes}m" else "~${hours}h"
                 }
-            }
-        }
-
-        /**
-         * Convert hex string to byte array.
-         */
-        private fun hexStringToBytes(hex: String): ByteArray {
-            val cleanHex = hex.replace(" ", "").lowercase()
-            require(cleanHex.length % 2 == 0) { "Hex string must have even length" }
-            return ByteArray(cleanHex.length / 2) { i ->
-                cleanHex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
             }
         }
     }

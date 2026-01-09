@@ -2,6 +2,7 @@ package com.lxmf.messenger.service
 
 import android.util.Log
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.util.HexUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -90,7 +91,7 @@ class ConversationLinkManager
                 startInactivityChecker()
 
                 try {
-                    val destHashBytes = hexStringToBytes(destHashHex)
+                    val destHashBytes = HexUtils.hexToBytes(destHashHex)
                     val result =
                         reticulumProtocol.establishConversationLink(
                             destHashBytes,
@@ -153,7 +154,7 @@ class ConversationLinkManager
         fun closeConversationLink(destHashHex: String) {
             scope.launch {
                 try {
-                    val destHashBytes = hexStringToBytes(destHashHex)
+                    val destHashBytes = HexUtils.hexToBytes(destHashHex)
                     val result = reticulumProtocol.closeConversationLink(destHashBytes)
 
                     result.fold(
@@ -189,7 +190,7 @@ class ConversationLinkManager
          */
         suspend fun refreshLinkStatus(destHashHex: String): LinkState {
             return try {
-                val destHashBytes = hexStringToBytes(destHashHex)
+                val destHashBytes = HexUtils.hexToBytes(destHashHex)
                 val result = reticulumProtocol.getConversationLinkStatus(destHashBytes)
 
                 val state =
@@ -254,11 +255,4 @@ class ConversationLinkManager
             }
         }
 
-        private fun hexStringToBytes(hex: String): ByteArray {
-            val cleanHex = hex.replace(" ", "").lowercase()
-            require(cleanHex.length % 2 == 0) { "Hex string must have even length" }
-            return ByteArray(cleanHex.length / 2) { i ->
-                cleanHex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
-            }
-        }
     }

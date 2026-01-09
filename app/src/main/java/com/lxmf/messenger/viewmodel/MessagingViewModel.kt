@@ -183,10 +183,6 @@ class MessagingViewModel
         private val _fileAttachmentError = MutableSharedFlow<String>()
         val fileAttachmentError: SharedFlow<String> = _fileAttachmentError.asSharedFlow()
 
-        // Compression warning state for large images
-        private val _compressionWarning = MutableStateFlow<CompressionWarning?>(null)
-        val compressionWarning: StateFlow<CompressionWarning?> = _compressionWarning.asStateFlow()
-
         // Image quality selection dialog state
         private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
         val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
@@ -1341,24 +1337,6 @@ class MessagingViewModel
         }
 
         /**
-         * Dismiss the compression warning without sending.
-         */
-        fun dismissCompressionWarning() {
-            Log.d(TAG, "Dismissing compression warning")
-            _compressionWarning.value = null
-        }
-
-        /**
-         * Confirm sending the large image despite the warning.
-         */
-        fun confirmSendLargeImage() {
-            val warning = _compressionWarning.value ?: return
-            Log.d(TAG, "User confirmed sending large image (${warning.compressedSizeBytes} bytes)")
-            selectImage(warning.pendingImageData, warning.pendingImageFormat)
-            _compressionWarning.value = null
-        }
-
-        /**
          * Load an image attachment asynchronously.
          *
          * Called by the UI when a message has hasImageAttachment=true but decodedImage=null.
@@ -1872,35 +1850,6 @@ sealed class ContactToggleResult {
 
     /** Operation failed with the given message */
     data class Error(val message: String) : ContactToggleResult()
-}
-
-/**
- * Warning state when an image exceeds the target size for the detected network.
- */
-data class CompressionWarning(
-    val compressedSizeBytes: Long,
-    val targetSizeBytes: Long,
-    val estimatedTransferTime: String,
-    val interfaceDescription: String,
-    val pendingImageData: ByteArray,
-    val pendingImageFormat: String,
-    val preset: ImageCompressionPreset,
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-        other as CompressionWarning
-        return compressedSizeBytes == other.compressedSizeBytes &&
-            targetSizeBytes == other.targetSizeBytes &&
-            pendingImageData.contentEquals(other.pendingImageData)
-    }
-
-    override fun hashCode(): Int {
-        var result = compressedSizeBytes.hashCode()
-        result = 31 * result + targetSizeBytes.hashCode()
-        result = 31 * result + pendingImageData.contentHashCode()
-        return result
-    }
 }
 
 /**

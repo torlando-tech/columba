@@ -60,6 +60,7 @@ data class LinkSpeedProbeResult(
                 rttSeconds = (map["rtt_seconds"] as? Number)?.toDouble(),
                 hops = (map["hops"] as? Number)?.toInt(),
                 linkReused = map["link_reused"] as? Boolean ?: false,
+                nextHopBitrateBps = (map["next_hop_bitrate_bps"] as? Number)?.toLong(),
                 error = map["error"] as? String,
             )
         }

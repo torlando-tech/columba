@@ -130,7 +130,6 @@ import com.lxmf.messenger.ui.components.FileAttachmentCard
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
 import com.lxmf.messenger.ui.components.FullEmojiPickerDialog
-import com.lxmf.messenger.ui.components.ImageCompressionWarningDialog
 import com.lxmf.messenger.ui.components.ImageQualitySelectionDialog
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.QuickShareLocationBottomSheet
@@ -236,9 +235,6 @@ fun MessagingScreen(
 
     // Lifecycle-aware coroutine scope for image and file processing
     val scope = rememberCoroutineScope()
-
-    // Compression warning state
-    val compressionWarning by viewModel.compressionWarning.collectAsStateWithLifecycle()
 
     // Image quality selection dialog state
     val qualitySelectionState by viewModel.qualitySelectionState.collectAsStateWithLifecycle()
@@ -964,15 +960,6 @@ fun MessagingScreen(
             syncProgress = syncProgress,
             onDismiss = { showSyncStatusSheet = false },
             sheetState = syncStatusSheetState,
-        )
-    }
-
-    // Compression warning dialog
-    compressionWarning?.let { warning ->
-        ImageCompressionWarningDialog(
-            warning = warning,
-            onDismiss = { viewModel.dismissCompressionWarning() },
-            onConfirm = { viewModel.confirmSendLargeImage() },
         )
     }
 

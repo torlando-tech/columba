@@ -32,7 +32,7 @@ class ConversationLinkManager
     ) {
         companion object {
             private const val TAG = "ConversationLinkManager"
-            private const val INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes
+            private const val INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000L // 10 minutes
             private const val INACTIVITY_CHECK_INTERVAL_MS = 30 * 1000L // Check every 30 seconds
             private const val LINK_ESTABLISHMENT_TIMEOUT_SECONDS = 5.0f // Quick timeout - peer should respond fast if online
         }

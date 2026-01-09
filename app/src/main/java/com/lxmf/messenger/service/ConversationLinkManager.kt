@@ -216,16 +216,18 @@ class ConversationLinkManager
         }
 
         private fun startInactivityChecker() {
-            if (inactivityCheckJob?.isActive == true) return
+            synchronized(this) {
+                if (inactivityCheckJob?.isActive == true) return
 
-            inactivityCheckJob =
-                scope.launch {
-                    Log.d(TAG, "Starting inactivity checker")
-                    while (true) {
-                        delay(INACTIVITY_CHECK_INTERVAL_MS)
-                        checkInactiveLinks()
+                inactivityCheckJob =
+                    scope.launch {
+                        Log.d(TAG, "Starting inactivity checker")
+                        while (true) {
+                            delay(INACTIVITY_CHECK_INTERVAL_MS)
+                            checkInactiveLinks()
+                        }
                     }
-                }
+            }
         }
 
         private suspend fun checkInactiveLinks() {

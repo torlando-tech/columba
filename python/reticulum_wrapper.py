@@ -5246,16 +5246,15 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "establish_link",
                      f"Hashes match: {hashes_match}")
 
-            # Check again for existing link using created destination hash
-            # (handles case where input hash differs from created destination hash)
-            # Check both direct_links and backchannel_links
-            if not hashes_match:
-                link = None
-                if recipient_dest.hash in self.router.direct_links:
-                    link = self.router.direct_links[recipient_dest.hash]
-                elif recipient_dest.hash in self.router.backchannel_links:
-                    link = self.router.backchannel_links[recipient_dest.hash]
-                if link is not None and link.status == RNS.Link.ACTIVE:
+            # Always check for existing link using created destination hash
+            # (links are stored under recipient_dest.hash, which may differ from input dest_hash)
+            link = None
+            if recipient_dest.hash in self.router.direct_links:
+                link = self.router.direct_links[recipient_dest.hash]
+            elif recipient_dest.hash in self.router.backchannel_links:
+                link = self.router.backchannel_links[recipient_dest.hash]
+            if link is not None:
+                if link.status == RNS.Link.ACTIVE:
                     log_info("ReticulumWrapper", "establish_link",
                             f"Link already active (found via created hash) to {created_hash[:16]}")
                     return {
@@ -5264,6 +5263,11 @@ class ReticulumWrapper:
                         "establishment_rate_bps": link.get_establishment_rate(),
                         "already_existed": True
                     }
+                else:
+                    # Clean up stale link before proceeding
+                    self.router.direct_links.pop(recipient_dest.hash, None)
+                    self.router.backchannel_links.pop(recipient_dest.hash, None)
+                    link = None
 
             # Check if path exists to the created destination
             # Use recipient_dest.hash since that's where we'll create the link

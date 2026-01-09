@@ -49,14 +49,14 @@ enum class ImageCompressionPreset(
         description = "512KB max - good quality for general use",
     ),
 
-    // 250MB target
+    // 25MB target
     ORIGINAL(
         displayName = "Original",
         maxDimensionPx = Int.MAX_VALUE,
-        targetSizeBytes = 250 * 1024 * 1024L,
+        targetSizeBytes = 25 * 1024 * 1024L,
         initialQuality = 95,
         minQuality = 90,
-        description = "250MB max - minimal compression for fast networks",
+        description = "25MB max - minimal compression for fast networks",
     ),
 
     // Default values (will be overridden by detection)

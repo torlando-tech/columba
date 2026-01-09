@@ -7,15 +7,7 @@ import app.cash.turbine.test
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
-import io.mockk.Runs
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.just
-import io.mockk.match
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkAll
+import io.mockk.* // ktlint-disable no-wildcard-imports
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf

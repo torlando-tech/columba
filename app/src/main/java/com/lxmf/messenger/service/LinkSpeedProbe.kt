@@ -10,6 +10,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -45,6 +47,7 @@ class LinkSpeedProbe
 
         private val _probeState = MutableStateFlow<ProbeState>(ProbeState.Idle)
         val probeState: StateFlow<ProbeState> = _probeState.asStateFlow()
+        private val probeMutex = Mutex()
 
         /**
          * State of a link speed probe operation.
@@ -137,7 +140,7 @@ class LinkSpeedProbe
                     }
 
                     // Atomically check and set probe state to prevent concurrent probes
-                    synchronized(this@LinkSpeedProbe) {
+                    probeMutex.withLock {
                         val currentState = _probeState.value
                         if (currentState is ProbeState.Probing) {
                             Log.w(TAG, "Probe already in progress for ${currentState.targetHash.take(16)}, skipping")

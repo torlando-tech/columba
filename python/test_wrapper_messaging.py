@@ -1184,8 +1184,15 @@ class TestOnLXMFDelivery(unittest.TestCase):
         import tempfile
         self.temp_dir = tempfile.mkdtemp()
 
+        # Mock the global LXMF module which is None in test environment
+        self.mock_lxmf = Mock()
+        self.mock_lxmf.FIELD_FILE_ATTACHMENTS = 5
+        self.lxmf_patcher = patch.object(reticulum_wrapper, 'LXMF', self.mock_lxmf)
+        self.lxmf_patcher.start()
+
     def tearDown(self):
         """Clean up test fixtures"""
+        self.lxmf_patcher.stop()
         import shutil
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)

@@ -192,16 +192,20 @@ class TestGetHopCount(unittest.TestCase):
         self.assertEqual(result, 3, "get_hop_count should return 3 in mock mode")
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
-    def test_get_hop_count_returns_none_when_not_implemented(self):
-        """Test that get_hop_count returns None (TODO: implement actual hop count retrieval)"""
+    @patch('reticulum_wrapper.RNS')
+    def test_get_hop_count_returns_none_when_no_path(self, mock_rns):
+        """Test that get_hop_count returns None when no path exists"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.reticulum = Mock()
+
+        # Mock Transport.has_path to return False (no path to destination)
+        mock_rns.Transport.has_path.return_value = False
 
         test_dest_hash = b'test_destination_hash'
         result = wrapper.get_hop_count(test_dest_hash)
 
-        # Currently returns None as per TODO in implementation
-        self.assertIsNone(result, "get_hop_count should return None when not implemented")
+        # Should return None when no path exists
+        self.assertIsNone(result, "get_hop_count should return None when no path exists")
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
     def test_get_hop_count_returns_mock_when_reticulum_not_initialized(self):

@@ -403,7 +403,11 @@ object ImageUtils {
         val newHeight = (height * scale).toInt()
 
         Log.d(TAG, "Scaling image from ${width}x$height to ${newWidth}x$newHeight")
-        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+        val scaled = Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+        if (scaled != bitmap) {
+            bitmap.recycle()
+        }
+        return scaled
     }
 
     /**

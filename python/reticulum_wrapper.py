@@ -5344,6 +5344,16 @@ class ReticulumWrapper:
             return {"success": False, "link_active": False, "error": "Timeout"}
             
         except Exception as e:
+            # Clean up stored link if variables are in scope
+            try:
+                if recipient_dest and recipient_dest.hash in self.router.direct_links:
+                    try:
+                        link.teardown()
+                    except:
+                        pass
+                    self.router.direct_links.pop(recipient_dest.hash, None)
+            except NameError:
+                pass  # Variables not yet defined
             log_error("ReticulumWrapper", "establish_link", f"Error: {e}")
             return {"success": False, "link_active": False, "error": str(e)}
 

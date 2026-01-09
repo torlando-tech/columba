@@ -802,6 +802,9 @@ class MessagingViewModel
             // Enable fast polling (1s) for active conversation
             reticulumProtocol.setConversationActive(true)
 
+            // Reset probe state to avoid showing stale data from previous conversation
+            linkSpeedProbe.reset()
+
             // Open link to peer for real-time connectivity status and speed probing
             conversationLinkManager.openConversationLink(destinationHash)
 

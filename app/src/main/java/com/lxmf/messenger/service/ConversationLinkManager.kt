@@ -84,12 +84,6 @@ class ConversationLinkManager
                 // Mark as establishing
                 updateLinkState(destHashHex, LinkState(isActive = false, isEstablishing = true))
 
-                // Reset inactivity timer
-                lastMessageSentTime[destHashHex] = System.currentTimeMillis()
-
-                // Ensure inactivity checker is running
-                startInactivityChecker()
-
                 try {
                     val destHashBytes = HexUtils.hexToBytes(destHashHex)
                     val result =
@@ -113,6 +107,9 @@ class ConversationLinkManager
                                     isEstablishing = false,
                                 ),
                             )
+                            // Start inactivity timer only after successful establishment
+                            lastMessageSentTime[destHashHex] = System.currentTimeMillis()
+                            startInactivityChecker()
                         },
                         onFailure = { e ->
                             Log.w(TAG, "Failed to establish link to ${destHashHex.take(16)}: ${e.message}")

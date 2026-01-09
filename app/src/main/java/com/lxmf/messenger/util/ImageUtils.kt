@@ -139,12 +139,8 @@ object ImageUtils {
     }
 
     /**
-     * Compresses an image with detailed result information.
-     * Use this when you need to check if heavy compression was applied.
-     */
-
-    /**
      * Compress an image to WebP format with quality reduction as needed.
+     * Provides detailed result information to check if heavy compression was applied.
      *
      * @param context Android context
      * @param uri URI of the image to compress

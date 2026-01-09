@@ -41,7 +41,8 @@ class PendingFileNotificationBubbleTest {
             originalMessageId = "msg123",
             filename = "document.pdf",
             fileCount = 1,
-            totalSize = 1024 * 1024L, // 1 MB
+            // 1 MB
+            totalSize = 1024 * 1024L,
         )
 
     private val testPeerName = "Alice"
@@ -372,7 +373,8 @@ class PendingFileNotificationBubbleTest {
     fun `hides additional files text when fileCount is 1`() {
         composeTestRule.setContent {
             PendingFileNotificationBubble(
-                pendingFileInfo = testPendingFileInfo, // fileCount = 1
+                // fileCount = 1
+                pendingFileInfo = testPendingFileInfo,
                 peerName = testPeerName,
                 syncProgress = SyncProgress.Idle,
                 onClick = { clickCount++ },

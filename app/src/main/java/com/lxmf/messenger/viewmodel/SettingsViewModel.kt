@@ -85,11 +85,12 @@ data class SettingsState(
     val activeSharingSessions: List<com.lxmf.messenger.service.SharingSession> = emptyList(),
     val defaultSharingDuration: String = "ONE_HOUR",
     val locationPrecisionRadius: Int = 0,
-    // Incoming message size limit
-    val incomingMessageSizeLimitKb: Int = 1024, // Default 1MB
+    // Incoming message size limit (default 1MB)
+    val incomingMessageSizeLimitKb: Int = 1024,
     // Image compression state
     val imageCompressionPreset: ImageCompressionPreset = ImageCompressionPreset.AUTO,
-    val detectedCompressionPreset: ImageCompressionPreset? = null, // Optimal preset based on interfaces
+    /** Optimal preset based on interfaces */
+    val detectedCompressionPreset: ImageCompressionPreset? = null,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected

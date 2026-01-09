@@ -593,7 +593,8 @@ fun MessagingScreen(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .imePadding(), // Apply IME padding to container
+                        // Apply IME padding to container
+                        .imePadding(),
             ) {
                 Box(
                     modifier =
@@ -612,10 +613,12 @@ fun MessagingScreen(
                                     start = 16.dp,
                                     end = 16.dp,
                                     top = 16.dp,
-                                    bottom = 16.dp, // Space for input bar
+                                    // Space for input bar
+                                    bottom = 16.dp,
                                 ),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
-                            reverseLayout = true, // Messages anchored to bottom (industry standard)
+                            // Messages anchored to bottom (industry standard)
+                            reverseLayout = true,
                         ) {
                             // Paging3 infinite scroll: loads 30 messages initially,
                             // then loads more as user scrolls up
@@ -623,7 +626,8 @@ fun MessagingScreen(
                             items(
                                 count = pagingItems.itemCount,
                                 key = pagingItems.itemKey { message -> message.id },
-                                contentType = { "message" }, // All items are message bubbles
+                                // All items are message bubbles
+                                contentType = { "message" },
                             ) { index ->
                                 val message = pagingItems[index]
                                 if (message != null) {
@@ -1228,7 +1232,8 @@ fun MessageBubble(
                                         onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
                                     }
                                 },
-                                indication = null, // Disable ripple - we use scale animation instead
+                                // Disable ripple - we use scale animation instead
+                                indication = null,
                                 interactionSource = interactionSource,
                             ),
                 ) {

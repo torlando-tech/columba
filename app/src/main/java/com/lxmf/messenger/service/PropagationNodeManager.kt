@@ -137,7 +137,8 @@ class PropagationNodeManager
                     announce?.peerName
                         ?: contact.customNickname
                         ?: contact.destinationHash.take(12),
-                hops = announce?.hops ?: -1, // -1 = unknown
+                // -1 = unknown
+                hops = announce?.hops ?: -1,
                 isAutoSelected = isAutoSelect,
                 lastSeenTimestamp =
                     announce?.lastSeenTimestamp

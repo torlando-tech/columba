@@ -93,7 +93,8 @@ fun InterfaceConfigDialog(
                 // Interface Type Selector
                 InterfaceTypeSelector(
                     selectedType = configState.type,
-                    enabled = !isEditing, // Can't change type when editing
+                    // Can't change type when editing
+                    enabled = !isEditing,
                     onTypeChange = { onConfigUpdate(configState.copy(type = it)) },
                 )
 

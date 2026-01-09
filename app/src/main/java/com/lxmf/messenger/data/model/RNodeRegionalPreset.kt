@@ -21,7 +21,8 @@ data class DiscoveredRNode(
     val name: String,
     val address: String,
     val type: BluetoothType,
-    val rssi: Int?, // Signal strength (BLE only)
+    /** Signal strength (BLE only) */
+    val rssi: Int?,
     val isPaired: Boolean,
     val bluetoothDevice: BluetoothDevice? = null,
 )
@@ -32,14 +33,21 @@ data class DiscoveredRNode(
  */
 data class RNodeRegionalPreset(
     val id: String,
-    val countryCode: String, // ISO 3166-1 alpha-2 (e.g., "US", "DE")
+    /** ISO 3166-1 alpha-2 (e.g., "US", "DE") */
+    val countryCode: String,
     val countryName: String,
-    val cityOrRegion: String?, // null for country-wide default
-    val frequency: Long, // Center frequency in Hz
-    val bandwidth: Int, // Bandwidth in Hz
-    val spreadingFactor: Int, // LoRa SF (5-12)
-    val codingRate: Int, // LoRa CR (5-8)
-    val txPower: Int, // Transmission power in dBm
+    /** null for country-wide default */
+    val cityOrRegion: String?,
+    /** Center frequency in Hz */
+    val frequency: Long,
+    /** Bandwidth in Hz */
+    val bandwidth: Int,
+    /** LoRa SF (5-12) */
+    val spreadingFactor: Int,
+    /** LoRa CR (5-8) */
+    val codingRate: Int,
+    /** Transmission power in dBm */
+    val txPower: Int,
     val description: String,
 )
 

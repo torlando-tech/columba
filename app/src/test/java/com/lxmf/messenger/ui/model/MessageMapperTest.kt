@@ -723,7 +723,8 @@ class MessageMapperTest {
         val result =
             decodeAndCacheImage(
                 "odd-hex-test",
-                """{"6": "fff"}""", // 3 chars, not valid hex pair
+                // 3 chars, not valid hex pair
+                """{"6": "fff"}""",
             )
 
         // Result may be null or non-null depending on Robolectric's BitmapFactory
@@ -2144,7 +2145,9 @@ class MessageMapperTest {
                 timestamp = 0L,
                 isFromMe = false,
                 status = "delivered",
-                fieldsJson = """{"16": {"pending_file_notification": {"original_message_id": "abc123", "filename": "report.pdf", "file_count": 3, "total_size": 1048576}}}""",
+                fieldsJson =
+                    """{"16": {"pending_file_notification": {"original_message_id": "abc123", """ +
+                        """"filename": "report.pdf", "file_count": 3, "total_size": 1048576}}}""",
             )
 
         val info = messageUi.pendingFileInfo

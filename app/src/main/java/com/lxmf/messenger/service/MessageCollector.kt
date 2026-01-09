@@ -123,12 +123,15 @@ class MessageCollector
                         val dataMessage =
                             DataMessage(
                                 id = receivedMessage.messageHash,
-                                destinationHash = sourceHash, // From sender's perspective
+                                // From sender's perspective
+                                destinationHash = sourceHash,
                                 content = receivedMessage.content,
-                                timestamp = System.currentTimeMillis(), // Use local reception time for consistent ordering
+                                // Use local reception time for consistent ordering
+                                timestamp = System.currentTimeMillis(),
                                 isFromMe = false,
                                 status = "delivered",
-                                fieldsJson = receivedMessage.fieldsJson, // LXMF attachments
+                                // LXMF attachments
+                                fieldsJson = receivedMessage.fieldsJson,
                             )
 
                         // Get peer name from cache, existing conversation, or use formatted hash
@@ -182,7 +185,8 @@ class MessageCollector
                                 notificationHelper.notifyMessageReceived(
                                     destinationHash = sourceHash,
                                     peerName = peerName,
-                                    messagePreview = receivedMessage.content.take(100), // Truncate preview
+                                    // Truncate preview
+                                    messagePreview = receivedMessage.content.take(100),
                                     isFavorite = isFavorite,
                                 )
                                 Log.d(TAG, "Posted notification for message from $peerName (favorite: $isFavorite)")

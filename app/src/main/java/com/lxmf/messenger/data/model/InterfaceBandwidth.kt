@@ -10,6 +10,7 @@ import kotlin.math.roundToInt
  */
 object InterfaceBandwidth {
     // LoRa (RNode) bandwidth estimates
+
     /** Worst case: SF12, 125kHz - very slow but long range */
     const val RNODE_SF12_125KHZ_BPS = 50
 
@@ -20,10 +21,12 @@ object InterfaceBandwidth {
     const val RNODE_DEFAULT_BPS = 1_000
 
     // BLE bandwidth estimate
+
     /** AndroidBLE: ~1.8 KB/s sustained throughput with ATT overhead */
     const val ANDROID_BLE_BPS = 14_400
 
     // High-speed interface estimates (conservative)
+
     /** TCP Client: 1 Mbps minimum (conservative estimate) */
     const val TCP_CLIENT_BPS = 1_000_000
 

@@ -7,7 +7,15 @@ import app.cash.turbine.test
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
-import io.mockk.*
+import io.mockk.Runs
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.just
+import io.mockk.match
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -650,7 +658,8 @@ class IdentityRepositoryTest {
                     displayName = "Test",
                     destinationHash = "dest_hash",
                     filePath = "/missing/path",
-                    keyData = null, // No backup!
+                    // No backup!
+                    keyData = null,
                     createdTimestamp = 0L,
                     lastUsedTimestamp = 0L,
                     isActive = true,
@@ -685,7 +694,8 @@ class IdentityRepositoryTest {
                     displayName = "Test",
                     destinationHash = "dest_hash",
                     filePath = "/missing/path",
-                    keyData = ByteArray(32), // Wrong size - should be 64
+                    // Wrong size - should be 64
+                    keyData = ByteArray(32),
                     createdTimestamp = 0L,
                     lastUsedTimestamp = 0L,
                     isActive = true,

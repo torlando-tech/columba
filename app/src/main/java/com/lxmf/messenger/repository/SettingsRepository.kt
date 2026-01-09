@@ -36,6 +36,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
  * Repository for managing user settings using DataStore.
  * Currently handles display name persistence.
  */
+@Suppress("LargeClass") // Repository managing many user preferences
 @Singleton
 class SettingsRepository
     @Inject

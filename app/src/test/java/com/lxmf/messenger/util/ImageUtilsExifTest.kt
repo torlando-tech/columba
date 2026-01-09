@@ -19,10 +19,12 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class ImageUtilsExifTest {
-
     // ========== Helper functions ==========
 
-    private fun createTestBitmap(width: Int, height: Int): Bitmap {
+    private fun createTestBitmap(
+        width: Int,
+        height: Int,
+    ): Bitmap {
         return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
             eraseColor(Color.BLUE)
         }
@@ -58,10 +60,10 @@ class ImageUtilsExifTest {
     fun `ORIENTATION_NORMAL does not change dimensions`() {
         val original = createTestBitmap(200, 100)
         val result = ImageUtils.applyExifOrientation(original, ExifInterface.ORIENTATION_NORMAL)
-        
+
         assertEquals(200, result.width)
         assertEquals(100, result.height)
-        
+
         original.recycle()
         if (result != original) result.recycle()
     }
@@ -70,10 +72,10 @@ class ImageUtilsExifTest {
     fun `ORIENTATION_ROTATE_90 swaps width and height`() {
         val original = createTestBitmap(200, 100)
         val result = ImageUtils.applyExifOrientation(original, ExifInterface.ORIENTATION_ROTATE_90)
-        
+
         assertEquals(100, result.width)
         assertEquals(200, result.height)
-        
+
         original.recycle()
         result.recycle()
     }
@@ -82,10 +84,10 @@ class ImageUtilsExifTest {
     fun `ORIENTATION_ROTATE_180 preserves dimensions`() {
         val original = createTestBitmap(200, 100)
         val result = ImageUtils.applyExifOrientation(original, ExifInterface.ORIENTATION_ROTATE_180)
-        
+
         assertEquals(200, result.width)
         assertEquals(100, result.height)
-        
+
         original.recycle()
         result.recycle()
     }
@@ -94,10 +96,10 @@ class ImageUtilsExifTest {
     fun `ORIENTATION_ROTATE_270 swaps width and height`() {
         val original = createTestBitmap(200, 100)
         val result = ImageUtils.applyExifOrientation(original, ExifInterface.ORIENTATION_ROTATE_270)
-        
+
         assertEquals(100, result.width)
         assertEquals(200, result.height)
-        
+
         original.recycle()
         result.recycle()
     }
@@ -108,10 +110,10 @@ class ImageUtilsExifTest {
     fun `ORIENTATION_FLIP_HORIZONTAL preserves dimensions`() {
         val original = createTestBitmap(200, 100)
         val result = ImageUtils.applyExifOrientation(original, ExifInterface.ORIENTATION_FLIP_HORIZONTAL)
-        
+
         assertEquals(200, result.width)
         assertEquals(100, result.height)
-        
+
         original.recycle()
         result.recycle()
     }
@@ -120,10 +122,10 @@ class ImageUtilsExifTest {
     fun `ORIENTATION_FLIP_VERTICAL preserves dimensions`() {
         val original = createTestBitmap(200, 100)
         val result = ImageUtils.applyExifOrientation(original, ExifInterface.ORIENTATION_FLIP_VERTICAL)
-        
+
         assertEquals(200, result.width)
         assertEquals(100, result.height)
-        
+
         original.recycle()
         result.recycle()
     }
@@ -134,10 +136,10 @@ class ImageUtilsExifTest {
     fun `ORIENTATION_TRANSPOSE swaps width and height`() {
         val original = createTestBitmap(200, 100)
         val result = ImageUtils.applyExifOrientation(original, ExifInterface.ORIENTATION_TRANSPOSE)
-        
+
         assertEquals(100, result.width)
         assertEquals(200, result.height)
-        
+
         original.recycle()
         result.recycle()
     }
@@ -146,10 +148,10 @@ class ImageUtilsExifTest {
     fun `ORIENTATION_TRANSVERSE swaps width and height`() {
         val original = createTestBitmap(200, 100)
         val result = ImageUtils.applyExifOrientation(original, ExifInterface.ORIENTATION_TRANSVERSE)
-        
+
         assertEquals(100, result.width)
         assertEquals(200, result.height)
-        
+
         original.recycle()
         result.recycle()
     }
@@ -160,12 +162,12 @@ class ImageUtilsExifTest {
     fun `unknown orientation value returns original bitmap unchanged`() {
         val original = createTestBitmap(200, 100)
         val result = ImageUtils.applyExifOrientation(original, 999) // Invalid orientation
-        
+
         // Should return the same bitmap instance
         assertTrue(result === original)
         assertEquals(200, result.width)
         assertEquals(100, result.height)
-        
+
         original.recycle()
     }
 
@@ -173,9 +175,9 @@ class ImageUtilsExifTest {
     fun `ORIENTATION_UNDEFINED returns original bitmap unchanged`() {
         val original = createTestBitmap(200, 100)
         val result = ImageUtils.applyExifOrientation(original, ExifInterface.ORIENTATION_UNDEFINED)
-        
+
         assertTrue(result === original)
-        
+
         original.recycle()
     }
 
@@ -255,10 +257,10 @@ class ImageUtilsExifTest {
     fun `Matrix postRotate 90 creates correct transformation`() {
         val matrix = Matrix()
         matrix.postRotate(90f)
-        
+
         val values = FloatArray(9)
         matrix.getValues(values)
-        
+
         // After 90° rotation, MSCALE_X should be ~0 (cos 90)
         // The skew values depend on the rotation direction
         assertEquals(0f, values[Matrix.MSCALE_X], 0.001f)
@@ -270,10 +272,10 @@ class ImageUtilsExifTest {
     fun `Matrix preScale -1, 1 creates horizontal flip`() {
         val matrix = Matrix()
         matrix.preScale(-1f, 1f)
-        
+
         val values = FloatArray(9)
         matrix.getValues(values)
-        
+
         assertEquals(-1f, values[Matrix.MSCALE_X], 0.001f)
         assertEquals(1f, values[Matrix.MSCALE_Y], 0.001f)
     }

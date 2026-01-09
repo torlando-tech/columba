@@ -255,25 +255,28 @@ fun decodeImageWithAnimation(
             val bitmap =
                 ImageCache.get(messageId) ?: run {
                     // First pass: get dimensions
-                    val boundsOptions = BitmapFactory.Options().apply {
-                        inJustDecodeBounds = true
-                    }
+                    val boundsOptions =
+                        BitmapFactory.Options().apply {
+                            inJustDecodeBounds = true
+                        }
                     BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, boundsOptions)
-                    
+
                     // Calculate sample size for display (max 1024px for message bubbles)
                     val maxDisplayDimension = 1024
-                    val sampleSize = ImageUtils.calculateSampleSize(
-                        boundsOptions.outWidth,
-                        boundsOptions.outHeight,
-                        maxDisplayDimension
-                    )
-                    
+                    val sampleSize =
+                        ImageUtils.calculateSampleSize(
+                            boundsOptions.outWidth,
+                            boundsOptions.outHeight,
+                            maxDisplayDimension,
+                        )
+
                     // Second pass: decode with subsampling
-                    val decodeOptions = BitmapFactory.Options().apply {
-                        inSampleSize = sampleSize
-                    }
+                    val decodeOptions =
+                        BitmapFactory.Options().apply {
+                            inSampleSize = sampleSize
+                        }
                     val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOptions)?.asImageBitmap()
-                    
+
                     if (sampleSize > 1) {
                         Log.d(TAG, "Subsampled image for display: sampleSize=$sampleSize")
                     }

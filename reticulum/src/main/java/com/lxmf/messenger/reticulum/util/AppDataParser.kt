@@ -167,17 +167,16 @@ object AppDataParser {
         return findNameInMetadata(metadataValue.asMapValue().map())
     }
 
-    private fun findNameInMetadata(
-        metadataMap: Map<org.msgpack.value.Value, org.msgpack.value.Value>,
-    ): String? {
+    private fun findNameInMetadata(metadataMap: Map<org.msgpack.value.Value, org.msgpack.value.Value>): String? {
         val nameKeys = setOf("n", "name", "display_name")
 
-        val nameEntry = metadataMap.entries.firstOrNull { (k, v) ->
-            k.isStringValue &&
-                v.isStringValue &&
-                k.asStringValue().asString() in nameKeys &&
-                v.asStringValue().asString().isNotBlank()
-        }
+        val nameEntry =
+            metadataMap.entries.firstOrNull { (k, v) ->
+                k.isStringValue &&
+                    v.isStringValue &&
+                    k.asStringValue().asString() in nameKeys &&
+                    v.asStringValue().asString().isNotBlank()
+            }
 
         return nameEntry?.let {
             val name = it.value.asStringValue().asString()
@@ -186,7 +185,10 @@ object AppDataParser {
         }
     }
 
-    private fun logParseError(appData: ByteArray, e: Exception) {
+    private fun logParseError(
+        appData: ByteArray,
+        e: Exception,
+    ) {
         val preview = appData.take(20).joinToString(" ") { "%02x".format(it) }
         Log.d(TAG, "Failed to parse propagation node metadata: ${e.message}")
         Log.d(TAG, "Data preview (first 20 bytes): $preview")

@@ -98,39 +98,41 @@ class LinkSpeedProbe
                 try {
                     // Reset state before starting new probe
                     _probeState.value = ProbeState.Idle
-                    
+
                     val deliveryMethod = settingsRepository.getDefaultDeliveryMethod()
                     Log.d(TAG, "Starting probe, delivery method: $deliveryMethod")
 
-                    val (targetHash, targetType) = when (deliveryMethod) {
-                        "propagated" -> {
-                            val relay = propagationNodeManager.currentRelay.value
-                            if (relay == null) {
-                                Log.w(TAG, "No propagation node selected, falling back to direct")
+                    val (targetHash, targetType) =
+                        when (deliveryMethod) {
+                            "propagated" -> {
+                                val relay = propagationNodeManager.currentRelay.value
+                                if (relay == null) {
+                                    Log.w(TAG, "No propagation node selected, falling back to direct")
+                                    recipientHash to TargetType.DIRECT
+                                } else {
+                                    Log.d(TAG, "Probing propagation node: ${relay.destinationHash.take(16)}")
+                                    relay.destinationHash to TargetType.PROPAGATION_NODE
+                                }
+                            }
+                            else -> {
+                                Log.d(TAG, "Probing direct recipient: ${recipientHash.take(16)}")
                                 recipientHash to TargetType.DIRECT
-                            } else {
-                                Log.d(TAG, "Probing propagation node: ${relay.destinationHash.take(16)}")
-                                relay.destinationHash to TargetType.PROPAGATION_NODE
                             }
                         }
-                        else -> {
-                            Log.d(TAG, "Probing direct recipient: ${recipientHash.take(16)}")
-                            recipientHash to TargetType.DIRECT
-                        }
-                    }
 
                     // Check if ConversationLinkManager already has an active link with speed data
                     val existingLinkState = conversationLinkManager.getLinkState(targetHash)
                     if (existingLinkState?.isActive == true && existingLinkState.establishmentRateBps != null) {
                         Log.d(TAG, "Using existing link from ConversationLinkManager: ${existingLinkState.establishmentRateBps} bps")
-                        val result = LinkSpeedProbeResult(
-                            status = "success",
-                            establishmentRateBps = existingLinkState.establishmentRateBps,
-                            expectedRateBps = null,
-                            rttSeconds = null,
-                            hops = null,
-                            linkReused = true,
-                        )
+                        val result =
+                            LinkSpeedProbeResult(
+                                status = "success",
+                                establishmentRateBps = existingLinkState.establishmentRateBps,
+                                expectedRateBps = null,
+                                rttSeconds = null,
+                                hops = null,
+                                linkReused = true,
+                            )
                         val recommendedPreset = recommendPreset(result)
                         _probeState.value = ProbeState.Complete(result, targetType, recommendedPreset)
                         return@withContext result
@@ -139,13 +141,14 @@ class LinkSpeedProbe
                     _probeState.value = ProbeState.Probing(targetHash, targetType)
 
                     // Convert hex string to bytes
-                    val targetHashBytes = try {
-                        hexStringToBytes(targetHash)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Invalid target hash: $targetHash", e)
-                        _probeState.value = ProbeState.Failed("Invalid destination hash", targetType)
-                        return@withContext null
-                    }
+                    val targetHashBytes =
+                        try {
+                            hexStringToBytes(targetHash)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Invalid target hash: $targetHash", e)
+                            _probeState.value = ProbeState.Failed("Invalid destination hash", targetType)
+                            return@withContext null
+                        }
 
                     // Perform the probe
                     val result = reticulumProtocol.probeLinkSpeed(targetHashBytes, DEFAULT_TIMEOUT_SECONDS, deliveryMethod)

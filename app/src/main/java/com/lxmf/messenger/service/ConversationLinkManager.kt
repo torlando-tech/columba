@@ -1,7 +1,6 @@
 package com.lxmf.messenger.service
 
 import android.util.Log
-import com.lxmf.messenger.reticulum.protocol.ConversationLinkResult
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -92,10 +91,11 @@ class ConversationLinkManager
 
                 try {
                     val destHashBytes = hexStringToBytes(destHashHex)
-                    val result = reticulumProtocol.establishConversationLink(
-                        destHashBytes,
-                        LINK_ESTABLISHMENT_TIMEOUT_SECONDS,
-                    )
+                    val result =
+                        reticulumProtocol.establishConversationLink(
+                            destHashBytes,
+                            LINK_ESTABLISHMENT_TIMEOUT_SECONDS,
+                        )
 
                     result.fold(
                         onSuccess = { linkResult ->
@@ -192,10 +192,11 @@ class ConversationLinkManager
                 val destHashBytes = hexStringToBytes(destHashHex)
                 val result = reticulumProtocol.getConversationLinkStatus(destHashBytes)
 
-                val state = LinkState(
-                    isActive = result.isActive,
-                    establishmentRateBps = result.establishmentRateBps,
-                )
+                val state =
+                    LinkState(
+                        isActive = result.isActive,
+                        establishmentRateBps = result.establishmentRateBps,
+                    )
 
                 updateLinkState(destHashHex, state)
                 state
@@ -205,7 +206,10 @@ class ConversationLinkManager
             }
         }
 
-        private fun updateLinkState(destHashHex: String, state: LinkState) {
+        private fun updateLinkState(
+            destHashHex: String,
+            state: LinkState,
+        ) {
             _linkStates.value = _linkStates.value + (destHashHex to state)
             Log.d(TAG, "Updated linkStates: key=$destHashHex, active=${state.isActive}, mapSize=${_linkStates.value.size}")
         }
@@ -213,13 +217,14 @@ class ConversationLinkManager
         private fun startInactivityChecker() {
             if (inactivityCheckJob?.isActive == true) return
 
-            inactivityCheckJob = scope.launch {
-                Log.d(TAG, "Starting inactivity checker")
-                while (true) {
-                    delay(INACTIVITY_CHECK_INTERVAL_MS)
-                    checkInactiveLinks()
+            inactivityCheckJob =
+                scope.launch {
+                    Log.d(TAG, "Starting inactivity checker")
+                    while (true) {
+                        delay(INACTIVITY_CHECK_INTERVAL_MS)
+                        checkInactiveLinks()
+                    }
                 }
-            }
         }
 
         private suspend fun checkInactiveLinks() {

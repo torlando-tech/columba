@@ -116,7 +116,11 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
      * @param deliveryMethod "direct" or "propagated" - affects which link to check/establish
      * @return JSON string with probe result containing status, rates, RTT, hops
      */
-    fun probeLinkSpeed(destHash: ByteArray, timeoutSeconds: Float, deliveryMethod: String): String {
+    fun probeLinkSpeed(
+        destHash: ByteArray,
+        timeoutSeconds: Float,
+        deliveryMethod: String,
+    ): String {
         return wrapperManager.withWrapper { wrapper ->
             try {
                 val result = wrapper.callAttr("probe_link_speed", destHash, timeoutSeconds.toDouble(), deliveryMethod)
@@ -154,28 +158,44 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
     }
 
     /** Helper to extract Long value from Python dict if present and valid. */
-    private fun putLongIfPresent(json: JSONObject, result: com.chaquo.python.PyObject, key: String) {
+    private fun putLongIfPresent(
+        json: JSONObject,
+        result: com.chaquo.python.PyObject,
+        key: String,
+    ) {
         result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
             json.put(key, str.toDoubleOrNull()?.toLong() ?: 0L)
         }
     }
 
     /** Helper to extract Double value from Python dict if present and valid. */
-    private fun putDoubleIfPresent(json: JSONObject, result: com.chaquo.python.PyObject, key: String) {
+    private fun putDoubleIfPresent(
+        json: JSONObject,
+        result: com.chaquo.python.PyObject,
+        key: String,
+    ) {
         result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
             json.put(key, str.toDoubleOrNull() ?: 0.0)
         }
     }
 
     /** Helper to extract Int value from Python dict if present and valid. */
-    private fun putIntIfPresent(json: JSONObject, result: com.chaquo.python.PyObject, key: String) {
+    private fun putIntIfPresent(
+        json: JSONObject,
+        result: com.chaquo.python.PyObject,
+        key: String,
+    ) {
         result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
             json.put(key, str.toIntOrNull() ?: 0)
         }
     }
 
     /** Helper to extract String value from Python dict if present and valid. */
-    private fun putStringIfPresent(json: JSONObject, result: com.chaquo.python.PyObject, key: String) {
+    private fun putStringIfPresent(
+        json: JSONObject,
+        result: com.chaquo.python.PyObject,
+        key: String,
+    ) {
         result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
             json.put(key, str)
         }

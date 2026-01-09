@@ -43,21 +43,23 @@ fun Identicon(
     }
 
     // Generate colors from hash - use remember to avoid recalculating on every recomposition
-    val primaryColor = remember(hash) {
-        Color(
-            red = (hash[0].toInt() and 0xFF) / 255f,
-            green = (hash[1].toInt() and 0xFF) / 255f,
-            blue = (hash[2].toInt() and 0xFF) / 255f,
-        )
-    }
+    val primaryColor =
+        remember(hash) {
+            Color(
+                red = (hash[0].toInt() and 0xFF) / 255f,
+                green = (hash[1].toInt() and 0xFF) / 255f,
+                blue = (hash[2].toInt() and 0xFF) / 255f,
+            )
+        }
 
-    val secondaryColor = remember(hash) {
-        Color(
-            red = (hash[3].toInt() and 0xFF) / 255f,
-            green = (hash[4].toInt() and 0xFF) / 255f,
-            blue = (hash[5].toInt() and 0xFF) / 255f,
-        )
-    }
+    val secondaryColor =
+        remember(hash) {
+            Color(
+                red = (hash[3].toInt() and 0xFF) / 255f,
+                green = (hash[4].toInt() and 0xFF) / 255f,
+                blue = (hash[5].toInt() and 0xFF) / 255f,
+            )
+        }
 
     Box(
         modifier =

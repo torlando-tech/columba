@@ -246,12 +246,13 @@ class EventHandler(
                     ?: "Peer ${destinationHashHex.take(8).uppercase()}"
 
             // Extract transfer size limit for propagation nodes
-            val propagationTransferLimitKb = if (nodeType == NodeType.PROPAGATION_NODE) {
-                val metadata = AppDataParser.extractPropagationNodeMetadata(appData)
-                metadata.transferLimitKb
-            } else {
-                null
-            }
+            val propagationTransferLimitKb =
+                if (nodeType == NodeType.PROPAGATION_NODE) {
+                    val metadata = AppDataParser.extractPropagationNodeMetadata(appData)
+                    metadata.transferLimitKb
+                } else {
+                    null
+                }
 
             // Persist to database first (survives app process death)
             if (persistenceManager != null && publicKey != null) {

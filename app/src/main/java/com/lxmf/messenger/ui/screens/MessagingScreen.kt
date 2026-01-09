@@ -476,12 +476,16 @@ fun MessagingScreen(
                         // Online status indicator - considers active link OR recent announce
                         val lastSeen = announceInfo?.lastSeenTimestamp
                         val hasActiveLink = conversationLinkState?.isActive == true
-                        val hasRecentAnnounce = lastSeen != null &&
-                            System.currentTimeMillis() - lastSeen < (5 * 60 * 1000L) // 5 minutes
+                        val hasRecentAnnounce =
+                            lastSeen != null &&
+                                System.currentTimeMillis() - lastSeen < (5 * 60 * 1000L) // 5 minutes
                         val isOnline = hasActiveLink || hasRecentAnnounce
-                        
+
                         // Debug logging
-                        android.util.Log.d("MessagingScreen", "Online indicator: hasActiveLink=$hasActiveLink, hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState")
+                        android.util.Log.d(
+                            "MessagingScreen",
+                            "Online indicator: hasActiveLink=$hasActiveLink, hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState",
+                        )
 
                         if (lastSeen != null || hasActiveLink) {
                             Row(

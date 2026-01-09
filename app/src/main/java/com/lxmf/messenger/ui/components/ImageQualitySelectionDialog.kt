@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import java.util.Locale
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -30,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.service.LinkSpeedProbe
+import java.util.Locale
 
 /**
  * Dialog for selecting image quality/compression level before sending.
@@ -112,26 +112,27 @@ fun ImageQualitySelectionDialog(
 
 @Composable
 private fun PathInfoSection(probeState: LinkSpeedProbe.ProbeState?) {
-    val pathInfo = when (probeState) {
-        is LinkSpeedProbe.ProbeState.Complete -> {
-            buildString {
-                probeState.result.hops?.let { append("$it hops") }
+    val pathInfo =
+        when (probeState) {
+            is LinkSpeedProbe.ProbeState.Complete -> {
+                buildString {
+                    probeState.result.hops?.let { append("$it hops") }
 
-                probeState.result.bestRateBps?.let { rate ->
-                    if (isNotEmpty()) append(" • ")
-                    append(formatBitrate(rate))
-                }
+                    probeState.result.bestRateBps?.let { rate ->
+                        if (isNotEmpty()) append(" • ")
+                        append(formatBitrate(rate))
+                    }
 
-                if (probeState.targetType == LinkSpeedProbe.TargetType.PROPAGATION_NODE) {
-                    if (isNotEmpty()) append(" ")
-                    append("(via relay)")
+                    if (probeState.targetType == LinkSpeedProbe.TargetType.PROPAGATION_NODE) {
+                        if (isNotEmpty()) append(" ")
+                        append("(via relay)")
+                    }
                 }
             }
+            is LinkSpeedProbe.ProbeState.Probing -> "Measuring network speed..."
+            is LinkSpeedProbe.ProbeState.Failed -> "Network speed unknown"
+            else -> null
         }
-        is LinkSpeedProbe.ProbeState.Probing -> "Measuring network speed..."
-        is LinkSpeedProbe.ProbeState.Failed -> "Network speed unknown"
-        else -> null
-    }
 
     if (pathInfo != null) {
         Surface(
@@ -157,11 +158,12 @@ private fun QualityOption(
     transferTime: String?,
     onClick: () -> Unit,
 ) {
-    val backgroundColor = when {
-        isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        isRecommended -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f)
-        else -> Color.Transparent
-    }
+    val backgroundColor =
+        when {
+            isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            isRecommended -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f)
+            else -> Color.Transparent
+        }
 
     Surface(
         modifier =

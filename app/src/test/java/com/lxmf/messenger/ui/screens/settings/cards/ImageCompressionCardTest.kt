@@ -391,7 +391,7 @@ class ImageCompressionCardTest {
     }
 
     @Test
-    fun `ORIGINAL preset shows unlimited dimensions`() {
+    fun `ORIGINAL preset shows 8K max dimensions`() {
         composeTestRule.setContent {
             ImageCompressionCard(
                 selectedPreset = ImageCompressionPreset.ORIGINAL,
@@ -401,6 +401,6 @@ class ImageCompressionCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Max: unlimitedpx, 25 MB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Max: 8192px, 25 MB").assertIsDisplayed()
     }
 }

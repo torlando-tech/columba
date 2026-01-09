@@ -5186,8 +5186,11 @@ class ReticulumWrapper:
                         "already_existed": True
                     }
                 else:
-                    # Clean up stale link before proceeding
+                    # Clean up stale link from both dicts before proceeding
                     self.router.direct_links.pop(dest_hash, None)
+                    self.router.direct_links.pop(dest_hash_hex, None)
+                    self.router.backchannel_links.pop(dest_hash, None)
+                    self.router.backchannel_links.pop(dest_hash_hex, None)
                     link = None
             
             # No existing link - try to establish one

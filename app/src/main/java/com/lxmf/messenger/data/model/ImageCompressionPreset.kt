@@ -52,7 +52,7 @@ enum class ImageCompressionPreset(
     // 25MB target
     ORIGINAL(
         displayName = "Original",
-        maxDimensionPx = Int.MAX_VALUE,
+        maxDimensionPx = 8192, // 8K resolution - exceeds Android Canvas limit if higher
         targetSizeBytes = 25 * 1024 * 1024L,
         initialQuality = 95,
         minQuality = 90,

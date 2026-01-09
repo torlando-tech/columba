@@ -358,7 +358,7 @@ class ImageUtilsRobolectricTest {
     }
 
     @Test
-    fun `ORIGINAL preset has max int dimension`() {
-        assertEquals(Int.MAX_VALUE, ImageCompressionPreset.ORIGINAL.maxDimensionPx)
+    fun `ORIGINAL preset has 8K max dimension`() {
+        assertEquals(8192, ImageCompressionPreset.ORIGINAL.maxDimensionPx)
     }
 }

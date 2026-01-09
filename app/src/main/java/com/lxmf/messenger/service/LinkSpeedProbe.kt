@@ -320,6 +320,7 @@ class LinkSpeedProbe
          * Format transfer time in seconds to a human-readable string.
          */
         private fun formatTransferTime(seconds: Double): String {
+            if (seconds < 0) return "Unknown"
             val totalSeconds = seconds.toInt()
             return when {
                 totalSeconds < 1 -> "< 1s"

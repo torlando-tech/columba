@@ -96,8 +96,12 @@ class LinkSpeedProbe
         suspend fun probe(recipientHash: String): LinkSpeedProbeResult? {
             return withContext(Dispatchers.IO) {
                 try {
-                    // Reset state before starting new probe
-                    _probeState.value = ProbeState.Idle
+                    // Guard against concurrent probes - return early if already probing
+                    val currentState = _probeState.value
+                    if (currentState is ProbeState.Probing) {
+                        Log.w(TAG, "Probe already in progress for ${currentState.targetHash.take(16)}, skipping")
+                        return@withContext null
+                    }
 
                     val deliveryMethod = settingsRepository.getDefaultDeliveryMethod()
                     Log.d(TAG, "Starting probe, delivery method: $deliveryMethod")

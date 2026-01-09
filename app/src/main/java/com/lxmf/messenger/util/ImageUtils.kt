@@ -152,6 +152,8 @@ object ImageUtils {
         uri: Uri,
         maxSizeBytes: Int = MAX_IMAGE_SIZE_BYTES,
     ): CompressedImage? {
+        var bitmap: Bitmap? = null
+        var scaledBitmap: Bitmap? = null
         return try {
             // Get original file size for logging
             val originalSize =
@@ -160,15 +162,14 @@ object ImageUtils {
                 } ?: 0
 
             // Load bitmap from URI with subsampling to avoid memory issues
-            val bitmap =
+            bitmap =
                 loadBitmap(context, uri, MAX_IMAGE_DIMENSION) ?: run {
                     Log.e(TAG, "Failed to load bitmap from URI")
                     return null
                 }
 
             // Scale down to exact dimensions if needed (subsampling gives approximate size)
-            val scaledBitmap = scaleDownIfNeeded(bitmap, MAX_IMAGE_DIMENSION)
-            val wasScaledDown = scaledBitmap != bitmap
+            scaledBitmap = scaleDownIfNeeded(bitmap, MAX_IMAGE_DIMENSION)
 
             // Compress to WebP with progressive quality reduction
             // WebP provides better compression and strips EXIF metadata for Sideband interop
@@ -193,23 +194,22 @@ object ImageUtils {
             // Restore the actual quality used (loop decrements before exit check)
             val finalQuality = quality + 10
 
-            if (wasScaledDown) {
-                scaledBitmap.recycle()
-            }
-            bitmap.recycle()
-
             val exceedsSizeLimit = compressed.size > maxSizeBytes
 
             Log.d(
                 TAG,
                 "Compressed image: ${originalSize / 1024}KB -> ${compressed.size / 1024}KB " +
-                    "(quality: $finalQuality, scaled: $wasScaledDown, exceeds: $exceedsSizeLimit)",
+                    "(quality: $finalQuality, scaled: ${scaledBitmap != bitmap}, exceeds: $exceedsSizeLimit)",
             )
 
             CompressedImage(compressed, "webp")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to compress image", e)
             null
+        } finally {
+            // Always recycle bitmaps to prevent memory leaks
+            scaledBitmap?.takeIf { it != bitmap }?.recycle()
+            bitmap?.recycle()
         }
     }
 
@@ -467,19 +467,21 @@ object ImageUtils {
         uri: Uri,
         preset: ImageCompressionPreset,
     ): CompressionResult? {
+        var bitmap: Bitmap? = null
+        var scaledBitmap: Bitmap? = null
         return try {
             // Get original file size
             val originalSize = getFileSize(context, uri)
 
             // Load bitmap from URI with subsampling to avoid memory issues
-            val bitmap =
+            bitmap =
                 loadBitmap(context, uri, preset.maxDimensionPx) ?: run {
                     Log.e(TAG, "Failed to load bitmap from URI")
                     return null
                 }
 
             // Scale down to exact dimensions if needed (subsampling gives approximate size)
-            val scaledBitmap = scaleDownIfNeeded(bitmap, preset.maxDimensionPx)
+            scaledBitmap = scaleDownIfNeeded(bitmap, preset.maxDimensionPx)
 
             // Compress to JPEG with progressive quality reduction
             var quality = preset.initialQuality
@@ -491,11 +493,6 @@ object ImageUtils {
                 compressed = stream.toByteArray()
                 quality -= 10
             } while (compressed.size > preset.targetSizeBytes && quality >= preset.minQuality)
-
-            if (scaledBitmap != bitmap) {
-                scaledBitmap.recycle()
-            }
-            bitmap.recycle()
 
             val meetsTarget = compressed.size <= preset.targetSizeBytes
 
@@ -515,6 +512,10 @@ object ImageUtils {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to compress image with preset", e)
             null
+        } finally {
+            // Always recycle bitmaps to prevent memory leaks
+            scaledBitmap?.takeIf { it != bitmap }?.recycle()
+            bitmap?.recycle()
         }
     }
 

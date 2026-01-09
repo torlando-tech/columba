@@ -3167,7 +3167,7 @@ class ReticulumWrapper:
         """
         try:
             if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
-                return {"success": False, "error": "LXMF not initialized"}
+                return {"success": False, "error": "LXMF not initialized", "delivery_method": None}
 
             # Convert jarray to bytes if needed
             if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
@@ -3239,7 +3239,7 @@ class ReticulumWrapper:
                         break
 
                 if not recipient_identity:
-                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."}
+                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received.", "delivery_method": None}
 
             # Create destination
             recipient_lxmf_destination = RNS.Destination(
@@ -3252,20 +3252,26 @@ class ReticulumWrapper:
 
             # If image_data_path is provided, read from file (for large images bypassing Binder IPC)
             if image_data_path and image_format:
+                import os
                 try:
                     with open(image_data_path, 'rb') as f:
                         image_data = f.read()
                     log_info("ReticulumWrapper", "send_lxmf_message_with_method",
                              f"📎 Read large image from temp file: {len(image_data)} bytes")
-                    # Delete temp file after reading
-                    import os
-                    os.remove(image_data_path)
-                    log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
-                              f"Deleted temp image file: {image_data_path}")
                 except Exception as e:
                     log_error("ReticulumWrapper", "send_lxmf_message_with_method",
                               f"Failed to read image from temp file: {e}")
-                    return {"success": False, "error": f"Failed to read image file: {e}"}
+                    return {"success": False, "error": f"Failed to read image file: {e}", "delivery_method": None}
+                finally:
+                    # Always try to delete temp file (best effort cleanup)
+                    try:
+                        if os.path.exists(image_data_path):
+                            os.remove(image_data_path)
+                            log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                                      f"Deleted temp image file: {image_data_path}")
+                    except Exception as del_err:
+                        log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                                   f"Failed to delete temp image file: {del_err}")
 
             # Prepare fields if image or file attachments provided
             fields = None
@@ -3460,7 +3466,7 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "send_lxmf_message_with_method", f"❌ ERROR: {e}")
             import traceback
             traceback.print_exc()
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "delivery_method": None}
 
     def send_reaction(self, dest_hash: bytes, target_message_id: str, emoji: str,
                       source_identity_private_key: bytes) -> Dict:
@@ -4985,7 +4991,8 @@ class ReticulumWrapper:
                 "rtt_seconds": None,
                 "hops": None,
                 "link_reused": False,
-                "delivery_method": delivery_method
+                "delivery_method": delivery_method,
+                "next_hop_bitrate_bps": None
             }
 
         try:
@@ -5010,6 +5017,17 @@ class ReticulumWrapper:
                     return self.router.backchannel_links[dest_hash_hex_str]
                 return None
 
+            # Helper to get next hop interface bitrate
+            def get_next_hop_bitrate() -> int:
+                try:
+                    if RNS.Transport.has_path(dest_hash):
+                        next_hop_iface = RNS.Transport.next_hop_interface(dest_hash)
+                        if next_hop_iface and hasattr(next_hop_iface, 'bitrate'):
+                            return next_hop_iface.bitrate
+                except Exception:
+                    pass
+                return None
+
             # Helper to get link stats
             def get_link_stats(link, reused: bool, method: str) -> Dict:
                 return {
@@ -5019,7 +5037,8 @@ class ReticulumWrapper:
                     "rtt_seconds": link.rtt,
                     "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
                     "link_reused": reused,
-                    "delivery_method": method
+                    "delivery_method": method,
+                    "next_hop_bitrate_bps": get_next_hop_bitrate()
                 }
 
             # 1. If propagated delivery, check/use propagation link
@@ -5041,7 +5060,8 @@ class ReticulumWrapper:
                     "rtt_seconds": None,
                     "hops": None,
                     "link_reused": False,
-                    "delivery_method": "propagated"
+                    "delivery_method": "propagated",
+                    "next_hop_bitrate_bps": get_next_hop_bitrate()
                 }
 
             # 2. Check for existing active link (direct or backchannel)
@@ -5071,7 +5091,8 @@ class ReticulumWrapper:
                         "rtt_seconds": None,
                         "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
                         "link_reused": result.get("already_existed", False),
-                        "delivery_method": "direct"
+                        "delivery_method": "direct",
+                        "next_hop_bitrate_bps": get_next_hop_bitrate()
                     }
             else:
                 # Link establishment failed - map error to status
@@ -5092,7 +5113,8 @@ class ReticulumWrapper:
                     "rtt_seconds": None,
                     "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
                     "link_reused": False,
-                    "delivery_method": "direct"
+                    "delivery_method": "direct",
+                    "next_hop_bitrate_bps": get_next_hop_bitrate()
                 }
 
         except Exception as e:
@@ -5107,7 +5129,8 @@ class ReticulumWrapper:
                 "rtt_seconds": None,
                 "hops": None,
                 "link_reused": False,
-                "delivery_method": delivery_method
+                "delivery_method": delivery_method,
+                "next_hop_bitrate_bps": None
             }
 
     def establish_link(self, dest_hash: bytes, timeout_seconds: float = 10.0) -> Dict:

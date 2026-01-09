@@ -164,7 +164,7 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
         key: String,
     ) {
         result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
-            json.put(key, str.toDoubleOrNull()?.toLong() ?: 0L)
+            str.toDoubleOrNull()?.toLong()?.let { json.put(key, it) }
         }
     }
 
@@ -175,7 +175,7 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
         key: String,
     ) {
         result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
-            json.put(key, str.toDoubleOrNull() ?: 0.0)
+            str.toDoubleOrNull()?.let { json.put(key, it) }
         }
     }
 
@@ -186,7 +186,7 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
         key: String,
     ) {
         result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
-            json.put(key, str.toIntOrNull() ?: 0)
+            str.toIntOrNull()?.let { json.put(key, it) }
         }
     }
 

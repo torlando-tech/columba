@@ -137,15 +137,10 @@ class LinkSpeedProbe
                             }
                         }
 
-                    // If probe already in progress, wait for it to complete
+                    // If probe already in progress, handle based on whether it's same target
                     if (existingProbeTarget != null) {
-                        Log.d(TAG, "Probe already in progress for ${existingProbeTarget.take(16)}, waiting for result")
-                        val finalState = _probeState.first { it !is ProbeState.Probing }
-                        return@withContext when (finalState) {
-                            is ProbeState.Complete -> finalState.result
-                            is ProbeState.Failed -> finalState.result
-                            else -> null
-                        }
+                        val result = handleExistingProbe(existingProbeTarget, targetHash, targetType)
+                        if (result != null) return@withContext result
                     }
 
                     // Convert hex string to bytes
@@ -226,40 +221,83 @@ class LinkSpeedProbe
         }
 
         /**
+         * Handle case where a probe is already in progress.
+         * @return The result to return if same target (wait and reuse), or null if different target (continue with new probe)
+         */
+        private suspend fun handleExistingProbe(
+            existingTarget: String,
+            targetHash: String,
+            targetType: TargetType,
+        ): LinkSpeedProbeResult? {
+            return if (existingTarget == targetHash) {
+                // Same target - wait for existing probe and reuse result
+                Log.d(TAG, "Probe already in progress for same target ${existingTarget.take(16)}, waiting")
+                val finalState = _probeState.first { it !is ProbeState.Probing }
+                when (finalState) {
+                    is ProbeState.Complete -> finalState.result
+                    is ProbeState.Failed -> finalState.result
+                    else -> null
+                }
+            } else {
+                // Different target - wait for current probe to finish, then start ours
+                Log.d(TAG, "Probe in progress for different target, waiting for idle")
+                _probeState.first { it !is ProbeState.Probing }
+                probeMutex.withLock {
+                    _probeState.value = ProbeState.Probing(targetHash, targetType)
+                }
+                null // Continue with new probe
+            }
+        }
+
+        /**
+         * Convert a bitrate to a compression preset based on thresholds.
+         */
+        private fun presetFromBitrate(bps: Long): ImageCompressionPreset =
+            when {
+                bps < THRESHOLD_LOW_BPS -> ImageCompressionPreset.LOW
+                bps < THRESHOLD_MEDIUM_BPS -> ImageCompressionPreset.MEDIUM
+                bps < THRESHOLD_HIGH_BPS -> ImageCompressionPreset.HIGH
+                else -> ImageCompressionPreset.ORIGINAL
+            }
+
+        /**
          * Recommend a compression preset based on measured link speed.
          */
         fun recommendPreset(result: LinkSpeedProbeResult): ImageCompressionPreset {
+            Log.d(
+                TAG,
+                "recommendPreset: status=${result.status}, bestRate=${result.bestRateBps}, " +
+                    "nextHop=${result.nextHopBitrateBps}, hops=${result.hops}",
+            )
+
             // First try the actual measured rate from link establishment
-            val rateBps = result.bestRateBps
-            if (rateBps != null) {
-                return when {
-                    rateBps < THRESHOLD_LOW_BPS -> ImageCompressionPreset.LOW
-                    rateBps < THRESHOLD_MEDIUM_BPS -> ImageCompressionPreset.MEDIUM
-                    rateBps < THRESHOLD_HIGH_BPS -> ImageCompressionPreset.HIGH
-                    else -> ImageCompressionPreset.ORIGINAL
-                }
+            result.bestRateBps?.let { return presetFromBitrate(it) }
+
+            // Fall back to next hop interface bitrate (validate positive)
+            result.nextHopBitrateBps?.takeIf { it > 0 }?.let {
+                Log.d(TAG, "Using next hop bitrate for recommendation: $it bps")
+                return presetFromBitrate(it)
             }
 
-            // Fall back to next hop interface bitrate (available even on timeout)
-            val nextHopBitrate = result.nextHopBitrateBps
-            if (nextHopBitrate != null) {
-                Log.d(TAG, "Using next hop bitrate for recommendation: $nextHopBitrate bps")
-                return when {
-                    nextHopBitrate < THRESHOLD_LOW_BPS -> ImageCompressionPreset.LOW
-                    nextHopBitrate < THRESHOLD_MEDIUM_BPS -> ImageCompressionPreset.MEDIUM
-                    nextHopBitrate < THRESHOLD_HIGH_BPS -> ImageCompressionPreset.HIGH
-                    else -> ImageCompressionPreset.ORIGINAL
-                }
-            }
-
-            // Final fallback: use hop count heuristics
+            // Final fallback: use hop count heuristics or status-based default
             val hops = result.hops
-            Log.d(TAG, "Using hop count heuristics for recommendation: $hops hops")
             return when {
-                hops == null -> ImageCompressionPreset.MEDIUM
-                hops <= 1 -> ImageCompressionPreset.HIGH
-                hops <= 3 -> ImageCompressionPreset.MEDIUM
-                else -> ImageCompressionPreset.LOW
+                hops != null -> {
+                    Log.d(TAG, "Using hop count heuristics: $hops hops")
+                    when {
+                        hops <= 1 -> ImageCompressionPreset.HIGH
+                        hops <= 3 -> ImageCompressionPreset.MEDIUM
+                        else -> ImageCompressionPreset.LOW
+                    }
+                }
+                result.status == "no_path" -> {
+                    Log.d(TAG, "No path available, using LOW preset")
+                    ImageCompressionPreset.LOW
+                }
+                else -> {
+                    Log.d(TAG, "Unknown network state, using MEDIUM preset")
+                    ImageCompressionPreset.MEDIUM
+                }
             }
         }
 

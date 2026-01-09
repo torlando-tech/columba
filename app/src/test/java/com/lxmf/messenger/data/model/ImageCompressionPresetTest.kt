@@ -105,9 +105,9 @@ class ImageCompressionPresetTest {
     }
 
     @Test
-    fun `ORIGINAL preset has 250MB target`() {
+    fun `ORIGINAL preset has 25MB target`() {
         val preset = ImageCompressionPreset.ORIGINAL
-        assertEquals(250 * 1024 * 1024L, preset.targetSizeBytes)
+        assertEquals(25 * 1024 * 1024L, preset.targetSizeBytes)
     }
 
     @Test

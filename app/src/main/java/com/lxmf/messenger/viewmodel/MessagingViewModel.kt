@@ -15,7 +15,6 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.service.LinkSpeedProbe
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -78,7 +77,6 @@ class MessagingViewModel
         private val propagationNodeManager: PropagationNodeManager,
         private val locationSharingManager: LocationSharingManager,
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
-        private val interfaceDetector: InterfaceDetector,
         private val linkSpeedProbe: LinkSpeedProbe,
         private val conversationLinkManager: com.lxmf.messenger.service.ConversationLinkManager,
     ) : ViewModel() {
@@ -1235,27 +1233,11 @@ class MessagingViewModel
                 val recommendedPreset =
                     when (probeState) {
                         is LinkSpeedProbe.ProbeState.Complete -> probeState.recommendedPreset
-                        is LinkSpeedProbe.ProbeState.Failed -> {
-                            // Probe failed/timed out - still use path info from probe if available
-                            val lastProbeResult = linkSpeedProbe.probeState.value
-                            if (lastProbeResult is LinkSpeedProbe.ProbeState.Failed) {
-                                // Check if we got path info from the failed probe
-                                // by examining if there's a result we can use
-                                val savedPreset = settingsRepository.getImageCompressionPreset()
-                                if (savedPreset == ImageCompressionPreset.AUTO) {
-                                    interfaceDetector.detectOptimalPreset()
-                                } else {
-                                    savedPreset
-                                }
-                            } else {
-                                ImageCompressionPreset.MEDIUM
-                            }
-                        }
                         else -> {
-                            // Fallback to interface-based detection if probe not ready
+                            // Probe failed or not ready - use saved preset or default to MEDIUM
                             val savedPreset = settingsRepository.getImageCompressionPreset()
                             if (savedPreset == ImageCompressionPreset.AUTO) {
-                                interfaceDetector.detectOptimalPreset()
+                                ImageCompressionPreset.MEDIUM
                             } else {
                                 savedPreset
                             }

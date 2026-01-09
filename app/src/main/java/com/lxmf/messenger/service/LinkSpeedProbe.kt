@@ -97,13 +97,6 @@ class LinkSpeedProbe
         suspend fun probe(recipientHash: String): LinkSpeedProbeResult? {
             return withContext(Dispatchers.IO) {
                 try {
-                    // Guard against concurrent probes - return early if already probing
-                    val currentState = _probeState.value
-                    if (currentState is ProbeState.Probing) {
-                        Log.w(TAG, "Probe already in progress for ${currentState.targetHash.take(16)}, skipping")
-                        return@withContext null
-                    }
-
                     val deliveryMethod = settingsRepository.getDefaultDeliveryMethod()
                     Log.d(TAG, "Starting probe, delivery method: $deliveryMethod")
 
@@ -143,7 +136,15 @@ class LinkSpeedProbe
                         return@withContext result
                     }
 
-                    _probeState.value = ProbeState.Probing(targetHash, targetType)
+                    // Atomically check and set probe state to prevent concurrent probes
+                    synchronized(this@LinkSpeedProbe) {
+                        val currentState = _probeState.value
+                        if (currentState is ProbeState.Probing) {
+                            Log.w(TAG, "Probe already in progress for ${currentState.targetHash.take(16)}, skipping")
+                            return@withContext null
+                        }
+                        _probeState.value = ProbeState.Probing(targetHash, targetType)
+                    }
 
                     // Convert hex string to bytes
                     val targetHashBytes =

@@ -251,8 +251,10 @@ class ConversationLinkManager
             // Stop checker if no active links
             if (_linkStates.value.isEmpty()) {
                 Log.d(TAG, "No active links, stopping inactivity checker")
-                inactivityCheckJob?.cancel()
-                inactivityCheckJob = null
+                synchronized(this@ConversationLinkManager) {
+                    inactivityCheckJob?.cancel()
+                    inactivityCheckJob = null
+                }
             }
         }
 

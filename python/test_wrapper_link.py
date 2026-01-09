@@ -713,8 +713,8 @@ class TestProbeLinkSpeed(unittest.TestCase):
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
     @patch('reticulum_wrapper.RNS')
-    def test_probe_link_speed_propagated_no_link_returns_no_link(self, mock_rns):
-        """Test that probe_link_speed returns no_link when propagated but no propagation link"""
+    def test_probe_link_speed_propagated_no_link_returns_success_with_heuristics(self, mock_rns):
+        """Test that probe_link_speed returns success with heuristics when propagated but no propagation link"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
         mock_router = Mock()
@@ -728,7 +728,8 @@ class TestProbeLinkSpeed(unittest.TestCase):
         dest_hash = b'0123456789abcdef'
         result = wrapper.probe_link_speed(dest_hash, delivery_method="propagated")
 
-        self.assertEqual(result['status'], 'no_link')
+        # Returns success since heuristic data is still valid for compression recommendations
+        self.assertEqual(result['status'], 'success')
         self.assertEqual(result['delivery_method'], 'propagated')
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)

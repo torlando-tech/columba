@@ -5284,16 +5284,22 @@ class ReticulumWrapper:
             log_info("ReticulumWrapper", "establish_link", 
                      f"Establishing link to {dest_hash_hex[:16]}...")
             
-            # Check if link already exists
+            # Check if link already exists (in direct_links OR backchannel_links)
+            # Links are bidirectional, so either direction counts
             link = None
             if dest_hash in self.router.direct_links:
                 link = self.router.direct_links[dest_hash]
             elif dest_hash_hex in self.router.direct_links:
                 link = self.router.direct_links[dest_hash_hex]
-            
+            # Also check backchannel_links (incoming links from peer)
+            if link is None and dest_hash in self.router.backchannel_links:
+                link = self.router.backchannel_links[dest_hash]
+            elif link is None and dest_hash_hex in self.router.backchannel_links:
+                link = self.router.backchannel_links[dest_hash_hex]
+
             if link is not None and link.status == RNS.Link.ACTIVE:
-                log_info("ReticulumWrapper", "establish_link", 
-                         f"Link already active to {dest_hash_hex[:16]}")
+                log_info("ReticulumWrapper", "establish_link",
+                         f"Link already active to {dest_hash_hex[:16]} (existing)")
                 return {
                     "success": True,
                     "link_active": True,
@@ -5360,9 +5366,14 @@ class ReticulumWrapper:
 
             # Check again for existing link using created destination hash
             # (handles case where input hash differs from created destination hash)
-            if not hashes_match and recipient_dest.hash in self.router.direct_links:
-                link = self.router.direct_links[recipient_dest.hash]
-                if link.status == RNS.Link.ACTIVE:
+            # Check both direct_links and backchannel_links
+            if not hashes_match:
+                link = None
+                if recipient_dest.hash in self.router.direct_links:
+                    link = self.router.direct_links[recipient_dest.hash]
+                elif recipient_dest.hash in self.router.backchannel_links:
+                    link = self.router.backchannel_links[recipient_dest.hash]
+                if link is not None and link.status == RNS.Link.ACTIVE:
                     log_info("ReticulumWrapper", "establish_link",
                             f"Link already active (found via created hash) to {created_hash[:16]}")
                     return {
@@ -5378,12 +5389,14 @@ class ReticulumWrapper:
             log_debug("ReticulumWrapper", "establish_link",
                      f"Transport.has_path({recipient_dest.hash.hex()[:16]}): {has_path}")
 
-            # Request path if we don't have one
+            # Always request a fresh path to ensure route is current
+            # Even if we have a path, it might be stale
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Requesting fresh path to {recipient_dest.hash.hex()[:16]}...")
+            RNS.Transport.request_path(recipient_dest.hash)
+
+            # Wait for path if we don't have one
             if not has_path:
-                log_debug("ReticulumWrapper", "establish_link",
-                         f"No path to {recipient_dest.hash.hex()[:16]}, requesting...")
-                RNS.Transport.request_path(recipient_dest.hash)
-                # Wait for path response
                 for _ in range(10):
                     time.sleep(0.5)
                     if RNS.Transport.has_path(recipient_dest.hash):
@@ -5394,6 +5407,9 @@ class ReticulumWrapper:
                     log_warning("ReticulumWrapper", "establish_link",
                                f"No path available to {recipient_dest.hash.hex()[:16]}")
                     return {"success": False, "link_active": False, "error": "No path available"}
+            else:
+                # Give time for path refresh when we already have one
+                time.sleep(0.3)
             
             if not hashes_match:
                 log_warning("ReticulumWrapper", "establish_link",
@@ -5532,6 +5548,9 @@ class ReticulumWrapper:
         """
         Check if a link is active to a destination.
 
+        Checks both direct_links (outgoing) and backchannel_links (incoming).
+        A link is bidirectional, so either direction counts as "active".
+
         Args:
             dest_hash: Destination hash as bytes (16 bytes)
 
@@ -5547,12 +5566,20 @@ class ReticulumWrapper:
             dest_hash = bytes(dest_hash)
             dest_hash_hex = dest_hash.hex()
 
-            # Find link - try input hash first
-            link = None
-            if dest_hash in self.router.direct_links:
-                link = self.router.direct_links[dest_hash]
-            elif dest_hash_hex in self.router.direct_links:
-                link = self.router.direct_links[dest_hash_hex]
+            # Helper to find link in a dictionary
+            def find_link_in_dict(links_dict, hash_bytes, hash_hex):
+                if hash_bytes in links_dict:
+                    return links_dict[hash_bytes]
+                if hash_hex in links_dict:
+                    return links_dict[hash_hex]
+                return None
+
+            # Check direct_links (links we initiated)
+            link = find_link_in_dict(self.router.direct_links, dest_hash, dest_hash_hex)
+
+            # Check backchannel_links (links peer initiated to us)
+            if link is None:
+                link = find_link_in_dict(self.router.backchannel_links, dest_hash, dest_hash_hex)
 
             # If not found, try via created destination hash (handles mismatch case)
             if link is None:
@@ -5570,8 +5597,12 @@ class ReticulumWrapper:
                         "lxmf",
                         "delivery"
                     )
-                    if recipient_dest.hash in self.router.direct_links:
-                        link = self.router.direct_links[recipient_dest.hash]
+                    created_hash = recipient_dest.hash
+                    created_hex = created_hash.hex()
+                    # Check both dictionaries with created hash
+                    link = find_link_in_dict(self.router.direct_links, created_hash, created_hex)
+                    if link is None:
+                        link = find_link_in_dict(self.router.backchannel_links, created_hash, created_hex)
 
             if link is not None and link.status == RNS.Link.ACTIVE:
                 return {

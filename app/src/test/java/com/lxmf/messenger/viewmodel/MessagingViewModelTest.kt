@@ -15,7 +15,6 @@ import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
 import com.lxmf.messenger.service.ConversationLinkManager
-import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.service.LinkSpeedProbe
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -68,7 +67,6 @@ class MessagingViewModelTest {
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var identityRepository: IdentityRepository
-    private lateinit var interfaceDetector: InterfaceDetector
     private lateinit var linkSpeedProbe: LinkSpeedProbe
     private lateinit var conversationLinkManager: ConversationLinkManager
 
@@ -94,7 +92,6 @@ class MessagingViewModelTest {
         propagationNodeManager = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
         identityRepository = mockk(relaxed = true)
-        interfaceDetector = mockk(relaxed = true)
         linkSpeedProbe = mockk(relaxed = true)
         conversationLinkManager = mockk(relaxed = true)
 
@@ -169,7 +166,6 @@ class MessagingViewModelTest {
             propagationNodeManager,
             locationSharingManager,
             identityRepository,
-            interfaceDetector,
             linkSpeedProbe,
             conversationLinkManager,
         )
@@ -464,7 +460,6 @@ class MessagingViewModelTest {
             every { failingPropagationNodeManager.manualSyncResult } returns MutableSharedFlow()
             every { failingLocationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
 
-            val failingInterfaceDetector = mockk<InterfaceDetector>(relaxed = true)
             val failingLinkSpeedProbe = mockk<LinkSpeedProbe>(relaxed = true)
             every { failingLinkSpeedProbe.probeState } returns MutableStateFlow(LinkSpeedProbe.ProbeState.Idle)
             val failingConversationLinkManager = mockk<ConversationLinkManager>(relaxed = true)
@@ -480,7 +475,6 @@ class MessagingViewModelTest {
                     failingPropagationNodeManager,
                     failingLocationSharingManager,
                     identityRepository,
-                    failingInterfaceDetector,
                     failingLinkSpeedProbe,
                     failingConversationLinkManager,
                 )
@@ -931,7 +925,6 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
-                interfaceDetector,
                 linkSpeedProbe,
                 conversationLinkManager,
             )
@@ -995,7 +988,6 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
-                interfaceDetector,
                 linkSpeedProbe,
                 conversationLinkManager,
             )
@@ -1055,7 +1047,6 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
-                interfaceDetector,
                 linkSpeedProbe,
                 conversationLinkManager,
             )
@@ -1105,7 +1096,6 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
-                interfaceDetector,
                 linkSpeedProbe,
                 conversationLinkManager,
             )

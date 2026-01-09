@@ -139,7 +139,7 @@ class ImageCompressionCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("250MB max - minimal compression for fast networks").assertIsDisplayed()
+        composeTestRule.onNodeWithText("25MB max - minimal compression for fast networks").assertIsDisplayed()
     }
 
     // ========== Auto Mode Tests ==========

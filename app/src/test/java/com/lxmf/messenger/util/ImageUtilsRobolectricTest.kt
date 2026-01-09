@@ -154,8 +154,8 @@ class ImageUtilsRobolectricTest {
     }
 
     @Test
-    fun `ORIGINAL preset target size is 250MB`() {
-        assertEquals(250 * 1024 * 1024L, ImageCompressionPreset.ORIGINAL.targetSizeBytes)
+    fun `ORIGINAL preset target size is 25MB`() {
+        assertEquals(25 * 1024 * 1024L, ImageCompressionPreset.ORIGINAL.targetSizeBytes)
     }
 
     @Test

@@ -10,7 +10,6 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.AvailableRelaysState
-import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.AppTheme
@@ -104,7 +103,6 @@ class SettingsViewModel
         private val interfaceConfigManager: com.lxmf.messenger.service.InterfaceConfigManager,
         private val propagationNodeManager: PropagationNodeManager,
         private val locationSharingManager: com.lxmf.messenger.service.LocationSharingManager,
-        private val interfaceDetector: InterfaceDetector,
         private val interfaceRepository: InterfaceRepository,
     ) : ViewModel() {
         companion object {
@@ -1349,12 +1347,14 @@ class SettingsViewModel
         }
 
         /**
-         * Update the detected optimal preset based on current interfaces.
+         * Update the detected optimal preset.
+         * Since link speed probing now determines the preset at send time,
+         * we use MEDIUM as a reasonable default for display purposes.
          */
-        private suspend fun updateDetectedPreset() {
-            val detected = interfaceDetector.detectOptimalPreset()
+        private fun updateDetectedPreset() {
+            val detected = ImageCompressionPreset.MEDIUM
             _state.value = _state.value.copy(detectedCompressionPreset = detected)
-            Log.d(TAG, "Detected optimal compression preset: ${detected.name}")
+            Log.d(TAG, "Default compression preset: ${detected.name}")
         }
 
         /**

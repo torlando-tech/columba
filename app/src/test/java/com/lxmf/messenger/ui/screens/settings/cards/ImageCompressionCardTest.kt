@@ -401,6 +401,6 @@ class ImageCompressionCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Max: unlimitedpx, 250 MB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Max: unlimitedpx, 25 MB").assertIsDisplayed()
     }
 }

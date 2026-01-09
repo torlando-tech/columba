@@ -14,6 +14,7 @@ import com.lxmf.messenger.reticulum.protocol.DeliveryStatusUpdate
 import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
+import com.lxmf.messenger.service.ConversationLinkManager
 import com.lxmf.messenger.service.InterfaceDetector
 import com.lxmf.messenger.service.LinkSpeedProbe
 import com.lxmf.messenger.service.LocationSharingManager
@@ -69,6 +70,7 @@ class MessagingViewModelTest {
     private lateinit var identityRepository: IdentityRepository
     private lateinit var interfaceDetector: InterfaceDetector
     private lateinit var linkSpeedProbe: LinkSpeedProbe
+    private lateinit var conversationLinkManager: ConversationLinkManager
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
     private val testPeerName = "Test Peer"
@@ -94,6 +96,10 @@ class MessagingViewModelTest {
         identityRepository = mockk(relaxed = true)
         interfaceDetector = mockk(relaxed = true)
         linkSpeedProbe = mockk(relaxed = true)
+        conversationLinkManager = mockk(relaxed = true)
+
+        // Mock conversationLinkManager flows
+        every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
 
         // Mock linkSpeedProbe state
         every { linkSpeedProbe.probeState } returns MutableStateFlow(LinkSpeedProbe.ProbeState.Idle)
@@ -165,6 +171,7 @@ class MessagingViewModelTest {
             identityRepository,
             interfaceDetector,
             linkSpeedProbe,
+            conversationLinkManager,
         )
 
     @Test
@@ -460,6 +467,8 @@ class MessagingViewModelTest {
             val failingInterfaceDetector = mockk<InterfaceDetector>(relaxed = true)
             val failingLinkSpeedProbe = mockk<LinkSpeedProbe>(relaxed = true)
             every { failingLinkSpeedProbe.probeState } returns MutableStateFlow(LinkSpeedProbe.ProbeState.Idle)
+            val failingConversationLinkManager = mockk<ConversationLinkManager>(relaxed = true)
+            every { failingConversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
             val viewModelWithoutIdentity =
                 MessagingViewModel(
                     failingProtocol,
@@ -473,6 +482,7 @@ class MessagingViewModelTest {
                     identityRepository,
                     failingInterfaceDetector,
                     failingLinkSpeedProbe,
+                    failingConversationLinkManager,
                 )
 
             // Attempt to send message
@@ -923,6 +933,7 @@ class MessagingViewModelTest {
                 identityRepository,
                 interfaceDetector,
                 linkSpeedProbe,
+                conversationLinkManager,
             )
             advanceUntilIdle()
 
@@ -986,6 +997,7 @@ class MessagingViewModelTest {
                 identityRepository,
                 interfaceDetector,
                 linkSpeedProbe,
+                conversationLinkManager,
             )
             advanceUntilIdle()
 
@@ -1045,6 +1057,7 @@ class MessagingViewModelTest {
                 identityRepository,
                 interfaceDetector,
                 linkSpeedProbe,
+                conversationLinkManager,
             )
             advanceUntilIdle()
 
@@ -1094,6 +1107,7 @@ class MessagingViewModelTest {
                 identityRepository,
                 interfaceDetector,
                 linkSpeedProbe,
+                conversationLinkManager,
             )
             advanceUntilIdle()
 

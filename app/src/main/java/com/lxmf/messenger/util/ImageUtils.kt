@@ -14,6 +14,7 @@ import com.lxmf.messenger.data.model.ImageCompressionPreset
 import java.io.ByteArrayOutputStream
 import kotlin.math.max
 
+@Suppress("TooManyFunctions") // Utility object with cohesive image processing functions
 object ImageUtils {
     private const val TAG = "ImageUtils"
 

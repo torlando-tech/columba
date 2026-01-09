@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import java.util.Locale
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -237,8 +238,8 @@ private fun QualityOption(
  */
 private fun formatBitrate(bps: Long): String {
     return when {
-        bps >= 1_000_000 -> String.format("%.1f Mbps", bps / 1_000_000.0)
-        bps >= 1_000 -> String.format("%.1f kbps", bps / 1_000.0)
+        bps >= 1_000_000 -> String.format(Locale.US, "%.1f Mbps", bps / 1_000_000.0)
+        bps >= 1_000 -> String.format(Locale.US, "%.1f kbps", bps / 1_000.0)
         else -> "$bps bps"
     }
 }

@@ -109,8 +109,7 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
     }
 
     /**
-     * Probe link speed to a destination by checking existing links or sending
-     * an empty LXMF message to establish one.
+     * Probe link speed to a destination by establishing a link.
      *
      * @param destHash Destination hash bytes
      * @param timeoutSeconds How long to wait for link establishment
@@ -121,57 +120,7 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
         return wrapperManager.withWrapper { wrapper ->
             try {
                 val result = wrapper.callAttr("probe_link_speed", destHash, timeoutSeconds.toDouble(), deliveryMethod)
-                // Convert Python dict to JSON using getDictValue helper
-                JSONObject().apply {
-                    put("status", result.getDictValue("status")?.toString() ?: "error")
-
-                    result.getDictValue("establishment_rate_bps")?.let {
-                        val str = it.toString()
-                        if (str != "None" && str.isNotEmpty()) {
-                            // Python returns float, convert via Double to Long
-                            put("establishment_rate_bps", str.toDoubleOrNull()?.toLong() ?: it.toDouble().toLong())
-                        }
-                    }
-
-                    result.getDictValue("expected_rate_bps")?.let {
-                        val str = it.toString()
-                        if (str != "None" && str.isNotEmpty()) {
-                            // Python returns float, convert via Double to Long
-                            put("expected_rate_bps", str.toDoubleOrNull()?.toLong() ?: it.toDouble().toLong())
-                        }
-                    }
-
-                    result.getDictValue("rtt_seconds")?.let {
-                        val str = it.toString()
-                        if (str != "None" && str.isNotEmpty()) {
-                            put("rtt_seconds", str.toDoubleOrNull() ?: it.toDouble())
-                        }
-                    }
-
-                    result.getDictValue("hops")?.let {
-                        val str = it.toString()
-                        if (str != "None" && str.isNotEmpty()) {
-                            put("hops", str.toIntOrNull() ?: it.toInt())
-                        }
-                    }
-
-                    put("link_reused", result.getDictValue("link_reused")?.toBoolean() ?: false)
-
-                    result.getDictValue("next_hop_bitrate_bps")?.let {
-                        val str = it.toString()
-                        if (str != "None" && str.isNotEmpty()) {
-                            // Python may return float, convert via Double to Long
-                            put("next_hop_bitrate_bps", str.toDoubleOrNull()?.toLong() ?: it.toDouble().toLong())
-                        }
-                    }
-
-                    result.getDictValue("error")?.let {
-                        val str = it.toString()
-                        if (str != "None" && str.isNotEmpty()) {
-                            put("error", str)
-                        }
-                    }
-                }.toString()
+                buildProbeResultJson(result)
             } catch (e: Exception) {
                 Log.e(TAG, "Error probing link speed", e)
                 JSONObject().apply {
@@ -185,6 +134,50 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
                 put("status", "not_initialized")
                 put("error", "Service not initialized")
             }.toString()
+        }
+    }
+
+    /**
+     * Build JSON result from Python probe_link_speed dict response.
+     */
+    private fun buildProbeResultJson(result: com.chaquo.python.PyObject): String {
+        return JSONObject().apply {
+            put("status", result.getDictValue("status")?.toString() ?: "error")
+            putLongIfPresent(this, result, "establishment_rate_bps")
+            putLongIfPresent(this, result, "expected_rate_bps")
+            putDoubleIfPresent(this, result, "rtt_seconds")
+            putIntIfPresent(this, result, "hops")
+            put("link_reused", result.getDictValue("link_reused")?.toBoolean() ?: false)
+            putLongIfPresent(this, result, "next_hop_bitrate_bps")
+            putStringIfPresent(this, result, "error")
+        }.toString()
+    }
+
+    /** Helper to extract Long value from Python dict if present and valid. */
+    private fun putLongIfPresent(json: JSONObject, result: com.chaquo.python.PyObject, key: String) {
+        result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
+            json.put(key, str.toDoubleOrNull()?.toLong() ?: 0L)
+        }
+    }
+
+    /** Helper to extract Double value from Python dict if present and valid. */
+    private fun putDoubleIfPresent(json: JSONObject, result: com.chaquo.python.PyObject, key: String) {
+        result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
+            json.put(key, str.toDoubleOrNull() ?: 0.0)
+        }
+    }
+
+    /** Helper to extract Int value from Python dict if present and valid. */
+    private fun putIntIfPresent(json: JSONObject, result: com.chaquo.python.PyObject, key: String) {
+        result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
+            json.put(key, str.toIntOrNull() ?: 0)
+        }
+    }
+
+    /** Helper to extract String value from Python dict if present and valid. */
+    private fun putStringIfPresent(json: JSONObject, result: com.chaquo.python.PyObject, key: String) {
+        result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
+            json.put(key, str)
         }
     }
 }

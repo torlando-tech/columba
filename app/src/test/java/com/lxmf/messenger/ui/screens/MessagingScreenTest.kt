@@ -88,6 +88,8 @@ class MessagingScreenTest {
         // Image quality selection mocks
         every { mockViewModel.qualitySelectionState } returns MutableStateFlow(null)
         every { mockViewModel.linkSpeedProbeState } returns MutableStateFlow(com.lxmf.messenger.service.LinkSpeedProbe.ProbeState.Idle)
+        // Conversation link state mock
+        every { mockViewModel.conversationLinkState } returns MutableStateFlow(null)
     }
 
     // ========== Empty State Tests ==========

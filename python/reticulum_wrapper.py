@@ -5338,6 +5338,7 @@ class ReticulumWrapper:
                 time.sleep(0.1)
             
             # Timeout - clean up and return failure
+            link.teardown()
             if recipient_dest.hash in self.router.direct_links:
                 self.router.direct_links.pop(recipient_dest.hash)
             log_info("ReticulumWrapper", "establish_link",

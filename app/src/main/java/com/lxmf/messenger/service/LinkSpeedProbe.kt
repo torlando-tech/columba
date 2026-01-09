@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -140,13 +141,26 @@ class LinkSpeedProbe
                     }
 
                     // Atomically check and set probe state to prevent concurrent probes
-                    probeMutex.withLock {
+                    val existingProbeTarget = probeMutex.withLock {
                         val currentState = _probeState.value
                         if (currentState is ProbeState.Probing) {
-                            Log.w(TAG, "Probe already in progress for ${currentState.targetHash.take(16)}, skipping")
-                            return@withContext null
+                            // Return the target hash of existing probe to wait for
+                            currentState.targetHash
+                        } else {
+                            _probeState.value = ProbeState.Probing(targetHash, targetType)
+                            null
                         }
-                        _probeState.value = ProbeState.Probing(targetHash, targetType)
+                    }
+
+                    // If probe already in progress, wait for it to complete
+                    if (existingProbeTarget != null) {
+                        Log.d(TAG, "Probe already in progress for ${existingProbeTarget.take(16)}, waiting for result")
+                        val finalState = _probeState.first { it !is ProbeState.Probing }
+                        return@withContext when (finalState) {
+                            is ProbeState.Complete -> finalState.result
+                            is ProbeState.Failed -> finalState.result
+                            else -> null
+                        }
                     }
 
                     // Convert hex string to bytes

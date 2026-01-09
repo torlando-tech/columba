@@ -109,8 +109,11 @@ class ConversationLinkManager
                                     isEstablishing = false,
                                 ),
                             )
-                            // Start inactivity timer only after successful establishment
-                            lastMessageSentTime[destHashHex] = System.currentTimeMillis()
+                            // Start inactivity timer only for NEW link establishments
+                            // Reused links keep their existing timer to prevent indefinite keep-alive
+                            if (!linkResult.alreadyExisted) {
+                                lastMessageSentTime[destHashHex] = System.currentTimeMillis()
+                            }
                             startInactivityChecker()
                         },
                         onFailure = { e ->

@@ -224,14 +224,19 @@ private fun QualityOption(
                 )
             }
 
-            // Transfer time estimate
-            transferTime?.let { time ->
-                Text(
-                    text = time,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            // File size and transfer time estimate
+            val sizeAndTime = buildString {
+                append(formatFileSize(preset.targetSizeBytes))
+                transferTime?.let { time ->
+                    append(" • ")
+                    append(time)
+                }
             }
+            Text(
+                text = sizeAndTime,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -244,5 +249,16 @@ private fun formatBitrate(bps: Long): String {
         bps >= 1_000_000 -> String.format(Locale.US, "%.1f Mbps", bps / 1_000_000.0)
         bps >= 1_000 -> String.format(Locale.US, "%.1f kbps", bps / 1_000.0)
         else -> "$bps bps"
+    }
+}
+
+/**
+ * Format file size in bytes to human-readable string.
+ */
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes >= 1_000_000 -> String.format(Locale.US, "%.0f MB", bytes / 1_000_000.0)
+        bytes >= 1_000 -> String.format(Locale.US, "%.0f KB", bytes / 1_000.0)
+        else -> "$bytes B"
     }
 }

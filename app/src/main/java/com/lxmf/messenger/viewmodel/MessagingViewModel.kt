@@ -792,6 +792,13 @@ class MessagingViewModel
             destinationHash: String,
             peerName: String = "Unknown",
         ) {
+            // Close previous conversation link if switching to a different conversation
+            _currentConversation.value?.let { prevHash ->
+                if (prevHash != destinationHash) {
+                    conversationLinkManager.closeConversationLink(prevHash)
+                }
+            }
+
             // Set current conversation - this triggers the reactive Flow to load messages
             currentPeerName = peerName
             _currentConversation.value = destinationHash

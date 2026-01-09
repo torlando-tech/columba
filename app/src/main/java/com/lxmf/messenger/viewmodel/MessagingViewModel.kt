@@ -1557,6 +1557,9 @@ class MessagingViewModel
             // Phase 1 threading policy (zero runBlocking in production code).
             // See THREADING_REDESIGN_PLAN.md Phase 1.2
 
+            // Close conversation link to free resources immediately
+            _currentConversation.value?.let { conversationLinkManager.closeConversationLink(it) }
+
             // Clear active conversation (re-enables notifications)
             activeConversationManager.setActive(null)
 

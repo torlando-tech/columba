@@ -284,6 +284,10 @@ dependencies {
     implementation(libs.cameraX.lifecycle)
     implementation(libs.cameraX.view)
 
+    // Coil - Image loading with GIF animation support
+    implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
+
     // MessagePack - for LXMF stamp generation
     implementation("org.msgpack:msgpack-core:0.9.8")
 

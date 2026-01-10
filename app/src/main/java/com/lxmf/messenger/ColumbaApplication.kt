@@ -205,6 +205,11 @@ class ColumbaApplication : Application() {
                     }
                     android.util.Log.d("ColumbaApplication", "Successfully bound to ReticulumService")
 
+                    // Start PropagationNodeManager early so relay is synced to Python ASAP
+                    // This allows PROPAGATED sends to work before full initialization completes
+                    propagationNodeManager.start()
+                    android.util.Log.d("ColumbaApplication", "PropagationNodeManager started early (relay sync)")
+
                     // Check if service is already initialized (handle service process surviving app restart)
                     // Use timeout to prevent ANR if service is slow
                     val currentStatus =

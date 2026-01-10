@@ -203,6 +203,51 @@ class NotificationSettingsViewModelTest {
             coVerify { settingsRepository.markNotificationPermissionRequested() }
         }
 
+    // ========== Permission Grant Scenario Tests ==========
+
+    @Test
+    fun `permission granted scenario enables notifications`() =
+        runTest {
+            // Given - Simulates MainActivity's permission launcher callback when permission is granted
+            viewModel = createViewModel()
+
+            // When - Permission is granted (MainActivity.kt:239-242)
+            viewModel.toggleNotificationsEnabled(true)
+
+            // Then - Notifications should be enabled in repository
+            coVerify { settingsRepository.saveNotificationsEnabled(true) }
+        }
+
+    @Test
+    fun `permission denied scenario disables notifications`() =
+        runTest {
+            // Given - Simulates MainActivity's permission launcher callback when permission is denied
+            viewModel = createViewModel()
+
+            // When - Permission is denied (MainActivity.kt:244-246)
+            viewModel.toggleNotificationsEnabled(false)
+
+            // Then - Notifications should be disabled in repository
+            coVerify { settingsRepository.saveNotificationsEnabled(false) }
+        }
+
+    @Test
+    fun `permission grant properly initializes notification system`() =
+        runTest {
+            // Given - Simulates first launch where permission hasn't been requested yet
+            hasRequestedNotificationPermissionFlow.value = false
+            notificationsEnabledFlow.value = true // Default value
+            viewModel = createViewModel()
+
+            // When - User grants permission on first launch
+            viewModel.markNotificationPermissionRequested()
+            viewModel.toggleNotificationsEnabled(true)
+
+            // Then - Both repository methods should be called
+            coVerify { settingsRepository.markNotificationPermissionRequested() }
+            coVerify { settingsRepository.saveNotificationsEnabled(true) }
+        }
+
     // ========== State Update Tests ==========
 
     @Test

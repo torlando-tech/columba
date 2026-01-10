@@ -199,11 +199,13 @@ class BleStatusRepository
                             connectedAt = connectedAt,
                             firstSeen = firstSeen,
                             lastSeen = lastSeen,
-                            bytesReceived = 0, // Per-peer stats not yet implemented
+                            // Per-peer stats not yet implemented
+                            bytesReceived = 0,
                             bytesSent = 0,
                             packetsReceived = 0,
                             packetsSent = 0,
-                            successRate = 1.0, // Connection success rate tracking not yet implemented
+                            // Connection success rate tracking not yet implemented
+                            successRate = 1.0,
                         ),
                     )
                 }

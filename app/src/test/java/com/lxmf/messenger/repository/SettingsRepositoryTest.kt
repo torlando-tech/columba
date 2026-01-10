@@ -621,4 +621,344 @@ class SettingsRepositoryTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    // ========== Incoming Message Size Limit Tests ==========
+
+    @Test
+    fun incomingMessageSizeLimitKbFlow_defaultsTo1024() =
+        runTest {
+            repository.incomingMessageSizeLimitKbFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                // Default should be 1024 (1MB) or whatever was previously set
+                assertTrue("Limit should be at least minimum (512)", initial >= 512)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun incomingMessageSizeLimitKbFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.incomingMessageSizeLimitKbFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveIncomingMessageSizeLimitKb(initial)
+                expectNoEvents()
+
+                // Save different value - should emit
+                val newValue = if (initial == 5120) 10240 else 5120
+                repository.saveIncomingMessageSizeLimitKb(newValue)
+                assertEquals(newValue, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun saveIncomingMessageSizeLimitKb_clampsToMinimum() =
+        runTest {
+            // Try to save below minimum (512KB)
+            repository.saveIncomingMessageSizeLimitKb(100)
+
+            val result = repository.getIncomingMessageSizeLimitKb()
+            assertEquals(
+                "Should be clamped to minimum",
+                SettingsRepository.MIN_INCOMING_SIZE_LIMIT_KB,
+                result,
+            )
+        }
+
+    @Test
+    fun saveIncomingMessageSizeLimitKb_clampsToMaximum() =
+        runTest {
+            // Try to save above maximum (128MB)
+            repository.saveIncomingMessageSizeLimitKb(200000)
+
+            val result = repository.getIncomingMessageSizeLimitKb()
+            assertEquals(
+                "Should be clamped to maximum",
+                SettingsRepository.MAX_INCOMING_SIZE_LIMIT_KB,
+                result,
+            )
+        }
+
+    @Test
+    fun saveIncomingMessageSizeLimitKb_acceptsValidValues() =
+        runTest {
+            // Test several valid values
+            val validValues = listOf(1024, 5120, 10240, 25600, 131072)
+
+            for (value in validValues) {
+                repository.saveIncomingMessageSizeLimitKb(value)
+                val result = repository.getIncomingMessageSizeLimitKb()
+                assertEquals("Value $value should be saved as-is", value, result)
+            }
+        }
+
+    @Test
+    fun getIncomingMessageSizeLimitKb_returnsDefaultWhenNotSet() =
+        runTest {
+            // First call without any set should return default
+            val result = repository.getIncomingMessageSizeLimitKb()
+            assertTrue(
+                "Should return a value within valid range",
+                result in SettingsRepository.MIN_INCOMING_SIZE_LIMIT_KB..SettingsRepository.MAX_INCOMING_SIZE_LIMIT_KB,
+            )
+        }
+
+    // ========== Location Permission Sheet Flow Tests ==========
+
+    @Test
+    fun hasDismissedLocationPermissionSheetFlow_defaultsToFalse() =
+        runTest {
+            // Reset first to ensure clean state
+            repository.resetLocationPermissionSheetDismissal()
+
+            repository.hasDismissedLocationPermissionSheetFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                assertFalse(
+                    "Location permission sheet dismissal should default to false",
+                    initial,
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun markLocationPermissionSheetDismissed_setsToTrue() =
+        runTest {
+            // Reset first to ensure clean state
+            repository.resetLocationPermissionSheetDismissal()
+
+            repository.hasDismissedLocationPermissionSheetFlow.test(timeout = 5.seconds) {
+                // Initial should be false
+                assertFalse(awaitItem())
+
+                // Mark as dismissed - should emit true
+                repository.markLocationPermissionSheetDismissed()
+                assertTrue(awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun resetLocationPermissionSheetDismissal_setsToFalse() =
+        runTest {
+            // First mark as dismissed
+            repository.markLocationPermissionSheetDismissed()
+
+            repository.hasDismissedLocationPermissionSheetFlow.test(timeout = 5.seconds) {
+                // Initial should be true (from previous mark)
+                assertTrue(awaitItem())
+
+                // Reset - should emit false
+                repository.resetLocationPermissionSheetDismissal()
+                assertFalse(awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun hasDismissedLocationPermissionSheetFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.hasDismissedLocationPermissionSheetFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                if (!initial) {
+                    // Mark as dismissed - should emit
+                    repository.markLocationPermissionSheetDismissed()
+                    assertTrue(awaitItem())
+
+                    // Mark again - should NOT emit (already true)
+                    repository.markLocationPermissionSheetDismissed()
+                    expectNoEvents()
+                } else {
+                    // Already true, marking again should NOT emit
+                    repository.markLocationPermissionSheetDismissed()
+                    expectNoEvents()
+                }
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    // ========== Export/Import Tests ==========
+
+    @Test
+    fun exportAllPreferences_includesAllSavedSettings() =
+        runTest {
+            // Save some settings
+            repository.saveNotificationsEnabled(true)
+            repository.saveAutoAnnounceEnabled(false)
+            repository.saveAutoAnnounceIntervalMinutes(30)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Export
+            val entries = repository.exportAllPreferences()
+
+            // Verify entries contain our saved settings
+            val notificationsEntry = entries.find { it.key == "notifications_enabled" }
+            assertEquals("boolean", notificationsEntry?.type)
+            assertEquals("true", notificationsEntry?.value)
+
+            val autoAnnounceEntry = entries.find { it.key == "auto_announce_enabled" }
+            assertEquals("boolean", autoAnnounceEntry?.type)
+            assertEquals("false", autoAnnounceEntry?.value)
+
+            val intervalEntry = entries.find { it.key == "auto_announce_interval_minutes" }
+            assertEquals("int", intervalEntry?.type)
+            assertEquals("30", intervalEntry?.value)
+        }
+
+    @Test
+    fun importAllPreferences_restoresBooleanSettings() =
+        runTest {
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "notifications_enabled",
+                        type = "boolean",
+                        value = "false",
+                    ),
+                )
+
+            repository.importAllPreferences(entries)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val result = repository.notificationsEnabledFlow.first()
+            assertFalse(result)
+        }
+
+    @Test
+    fun importAllPreferences_restoresIntSettings() =
+        runTest {
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "auto_announce_interval_minutes",
+                        type = "int",
+                        value = "45",
+                    ),
+                )
+
+            repository.importAllPreferences(entries)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val result = repository.autoAnnounceIntervalMinutesFlow.first()
+            assertEquals(45, result)
+        }
+
+    @Test
+    fun importAllPreferences_restoresLongSettings() =
+        runTest {
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "last_sync_timestamp",
+                        type = "long",
+                        value = "1700000000000",
+                    ),
+                )
+
+            repository.importAllPreferences(entries)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val result = repository.lastSyncTimestampFlow.first()
+            assertEquals(1700000000000L, result)
+        }
+
+    @Test
+    fun importAllPreferences_restoresStringSettings() =
+        runTest {
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "default_delivery_method",
+                        type = "string",
+                        value = "PROPAGATED",
+                    ),
+                )
+
+            repository.importAllPreferences(entries)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val result = repository.defaultDeliveryMethodFlow.first()
+            assertEquals("PROPAGATED", result)
+        }
+
+    @Test
+    fun importAllPreferences_ignoresUnknownKeys() =
+        runTest {
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "unknown_future_setting",
+                        type = "boolean",
+                        value = "true",
+                    ),
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "notifications_enabled",
+                        type = "boolean",
+                        value = "true",
+                    ),
+                )
+
+            // Should not throw, should import known key
+            repository.importAllPreferences(entries)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Known key should be imported
+            val result = repository.notificationsEnabledFlow.first()
+            assertTrue(result)
+        }
+
+    @Test
+    fun importAllPreferences_handlesInvalidValuesGracefully() =
+        runTest {
+            val entries =
+                listOf(
+                    com.lxmf.messenger.migration.PreferenceEntry(
+                        key = "auto_announce_interval_minutes",
+                        type = "int",
+                        value = "not_a_number",
+                    ),
+                )
+
+            // Should not throw
+            repository.importAllPreferences(entries)
+            testDispatcher.scheduler.advanceUntilIdle()
+        }
+
+    @Test
+    fun exportImport_roundTrip_preservesSettings() =
+        runTest {
+            // Save some settings
+            repository.saveNotificationsEnabled(true)
+            repository.saveAutoAnnounceEnabled(true)
+            repository.saveAutoAnnounceIntervalMinutes(60)
+            repository.saveTransportNodeEnabled(true)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Export
+            val exported = repository.exportAllPreferences()
+
+            // Change settings
+            repository.saveNotificationsEnabled(false)
+            repository.saveAutoAnnounceEnabled(false)
+            repository.saveAutoAnnounceIntervalMinutes(5)
+            repository.saveTransportNodeEnabled(false)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Import exported settings
+            repository.importAllPreferences(exported)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Verify original values restored
+            assertTrue(repository.notificationsEnabledFlow.first())
+            assertTrue(repository.autoAnnounceEnabledFlow.first())
+            assertEquals(60, repository.autoAnnounceIntervalMinutesFlow.first())
+            assertTrue(repository.transportNodeEnabledFlow.first())
+        }
 }

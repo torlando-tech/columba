@@ -38,10 +38,15 @@ data class IdentityExport(
     val identityHash: String,
     val displayName: String,
     val destinationHash: String,
-    val keyData: String, // Base64 encoded 64-byte private key
+    /** Base64 encoded 64-byte private key */
+    val keyData: String,
     val createdTimestamp: Long,
     val lastUsedTimestamp: Long,
     val isActive: Boolean,
+    // Profile icon data (nullable for backward compatibility with older exports)
+    val iconName: String? = null,
+    val iconForegroundColor: String? = null,
+    val iconBackgroundColor: String? = null,
 )
 
 /**
@@ -52,7 +57,8 @@ data class ConversationExport(
     val peerHash: String,
     val identityHash: String,
     val peerName: String,
-    val peerPublicKey: String?, // Base64 encoded public key
+    /** Base64 encoded public key */
+    val peerPublicKey: String?,
     val lastMessage: String,
     val lastMessageTimestamp: Long,
     val unreadCount: Int,
@@ -82,7 +88,8 @@ data class MessageExport(
 data class ContactExport(
     val destinationHash: String,
     val identityHash: String,
-    val publicKey: String, // Base64 encoded public key
+    /** Base64 encoded public key */
+    val publicKey: String,
     val customNickname: String?,
     val notes: String?,
     val tags: String?,
@@ -99,8 +106,10 @@ data class ContactExport(
 data class AnnounceExport(
     val destinationHash: String,
     val peerName: String,
-    val publicKey: String, // Base64 encoded 64-byte public key
-    val appData: String?, // Base64 encoded
+    /** Base64 encoded 64-byte public key */
+    val publicKey: String,
+    /** Base64 encoded */
+    val appData: String?,
     val hops: Int,
     val lastSeenTimestamp: Long,
     val nodeType: String,
@@ -117,8 +126,10 @@ data class AnnounceExport(
  */
 @Serializable
 data class PeerIdentityExport(
-    val peerHash: String, // Identity hash (SHA256 of public key)
-    val publicKey: String, // Base64 encoded public key
+    /** Identity hash (SHA256 of public key) */
+    val peerHash: String,
+    /** Base64 encoded public key */
+    val publicKey: String,
     val lastSeenTimestamp: Long,
 )
 
@@ -201,28 +212,78 @@ data class CustomThemeExport(
 )
 
 /**
+ * A single preference entry for serialization.
+ * Stores the key name, type identifier, and string-encoded value.
+ */
+@Serializable
+data class PreferenceEntry(
+    val key: String,
+    /** "boolean", "int", "long", "float", "string", "string_set" */
+    val type: String,
+    /** String representation of the value */
+    val value: String,
+)
+
+/**
  * Exported user settings.
+ * Uses automatic DataStore export - all preferences are captured automatically.
+ * New settings added to SettingsRepository will be included without code changes.
+ * Unknown preferences are safely ignored during import for backward/forward compatibility.
  */
 @Serializable
 data class SettingsExport(
-    val notificationsEnabled: Boolean,
-    val notificationReceivedMessage: Boolean,
-    val notificationReceivedMessageFavorite: Boolean,
-    val notificationHeardAnnounce: Boolean,
-    val notificationBleConnected: Boolean,
-    val notificationBleDisconnected: Boolean,
-    val autoAnnounceEnabled: Boolean,
-    val autoAnnounceIntervalMinutes: Int,
-    val themePreference: String,
-    // Propagation node settings (nullable for backward compatibility with v5 imports)
+    val preferences: List<PreferenceEntry> = emptyList(),
+    // Legacy fields for backward compatibility with v6 exports (will be deprecated)
+    @Deprecated("Use preferences list instead")
+    val notificationsEnabled: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val notificationReceivedMessage: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val notificationReceivedMessageFavorite: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val notificationHeardAnnounce: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val notificationBleConnected: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val notificationBleDisconnected: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val hasRequestedNotificationPermission: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val autoAnnounceEnabled: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val autoAnnounceIntervalMinutes: Int? = null,
+    @Deprecated("Use preferences list instead")
+    val lastAutoAnnounceTime: Long? = null,
+    @Deprecated("Use preferences list instead")
+    val themePreference: String? = null,
+    @Deprecated("Use preferences list instead")
+    val preferOwnInstance: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val rpcKey: String? = null,
+    @Deprecated("Use preferences list instead")
     val defaultDeliveryMethod: String? = null,
+    @Deprecated("Use preferences list instead")
     val tryPropagationOnFail: Boolean? = null,
+    @Deprecated("Use preferences list instead")
     val manualPropagationNode: String? = null,
+    @Deprecated("Use preferences list instead")
     val lastPropagationNode: String? = null,
+    @Deprecated("Use preferences list instead")
     val autoSelectPropagationNode: Boolean? = null,
-    // Message retrieval settings
+    @Deprecated("Use preferences list instead")
     val autoRetrieveEnabled: Boolean? = null,
+    @Deprecated("Use preferences list instead")
     val retrievalIntervalSeconds: Int? = null,
+    @Deprecated("Use preferences list instead")
+    val lastSyncTimestamp: Long? = null,
+    @Deprecated("Use preferences list instead")
+    val transportNodeEnabled: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val locationSharingEnabled: Boolean? = null,
+    @Deprecated("Use preferences list instead")
+    val defaultSharingDuration: String? = null,
+    @Deprecated("Use preferences list instead")
+    val locationPrecisionRadius: Int? = null,
 )
 
 /**
@@ -232,7 +293,8 @@ data class SettingsExport(
 data class AttachmentRef(
     val messageId: String,
     val fieldKey: String,
-    val relativePath: String, // Path within attachments/ in the ZIP
+    /** Path within attachments/ in the ZIP */
+    val relativePath: String,
     val sizeBytes: Long,
 )
 
@@ -356,7 +418,8 @@ fun CustomThemeEntity.toExport(): CustomThemeExport =
  */
 fun CustomThemeExport.toEntity(): CustomThemeEntity =
     CustomThemeEntity(
-        id = 0, // New entity, will be auto-generated
+        // New entity, will be auto-generated
+        id = 0,
         name = name,
         description = description,
         baseTheme = baseTheme,

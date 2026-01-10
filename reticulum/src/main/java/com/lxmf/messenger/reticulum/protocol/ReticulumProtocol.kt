@@ -7,6 +7,7 @@ import com.lxmf.messenger.reticulum.model.Direction
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.model.Link
 import com.lxmf.messenger.reticulum.model.LinkEvent
+import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.PacketReceipt
 import com.lxmf.messenger.reticulum.model.PacketType
@@ -104,6 +105,53 @@ interface ReticulumProtocol {
     fun getHopCount(destinationHash: ByteArray): Int?
 
     suspend fun getPathTableHashes(): List<String>
+
+    /**
+     * Probe link speed to a destination by checking existing links or sending
+     * an empty LXMF message to establish one.
+     *
+     * @param destinationHash The destination to probe (16 bytes)
+     * @param timeoutSeconds How long to wait for link establishment (default 10s)
+     * @param deliveryMethod "direct" or "propagated" - affects which link to check/establish
+     * @return LinkSpeedProbeResult with measured speeds or error status
+     */
+    suspend fun probeLinkSpeed(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float = 10.0f,
+        deliveryMethod: String = "direct",
+    ): LinkSpeedProbeResult
+
+    // ==================== Conversation Link Management ====================
+
+    /**
+     * Establish a link to a destination for real-time connectivity.
+     * Used to show "Online" status and enable instant link speed probing.
+     *
+     * @param destinationHash Destination hash bytes (16 bytes identity hash)
+     * @param timeoutSeconds How long to wait for link establishment
+     * @return Result containing ConversationLinkResult with link status and speed
+     */
+    suspend fun establishConversationLink(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float = 10.0f,
+    ): Result<ConversationLinkResult>
+
+    /**
+     * Close an active link to a destination.
+     * Called when conversation has been inactive for too long.
+     *
+     * @param destinationHash Destination hash bytes (16 bytes identity hash)
+     * @return Result indicating success and whether link was active
+     */
+    suspend fun closeConversationLink(destinationHash: ByteArray): Result<Boolean>
+
+    /**
+     * Check if a link is active to a destination.
+     *
+     * @param destinationHash Destination hash bytes (16 bytes identity hash)
+     * @return ConversationLinkResult with current link status
+     */
+    suspend fun getConversationLinkStatus(destinationHash: ByteArray): ConversationLinkResult
 
     // Announce handling
     fun observeAnnounces(): Flow<AnnounceEvent>
@@ -346,6 +394,33 @@ data class FailedInterface(
 }
 
 /**
+ * Result of conversation link operations.
+ *
+ * Contains all metrics needed for connection quality assessment and
+ * image transfer time estimation.
+ */
+data class ConversationLinkResult(
+    /** Whether link is currently active */
+    val isActive: Boolean,
+    /** Link establishment rate in bits/sec (if active) */
+    val establishmentRateBps: Long? = null,
+    /** Actual measured throughput from prior transfers (most accurate) */
+    val expectedRateBps: Long? = null,
+    /** First hop interface bitrate (for fast links like WiFi) */
+    val nextHopBitrateBps: Long? = null,
+    /** Round-trip time in seconds */
+    val rttSeconds: Double? = null,
+    /** Number of hops to destination */
+    val hops: Int? = null,
+    /** Link MTU in bytes (higher = faster connection) */
+    val linkMtu: Int? = null,
+    /** Whether the link already existed (for establish operations) */
+    val alreadyExisted: Boolean = false,
+    /** Error message if operation failed */
+    val error: String? = null,
+)
+
+/**
  * State of propagation node message sync/transfer.
  */
 data class PropagationState(
@@ -359,13 +434,16 @@ data class PropagationState(
     val messagesReceived: Int,
 ) {
     companion object {
-        const val STATE_IDLE = 0
-        const val STATE_PATH_REQUESTED = 1
-        const val STATE_LINK_ESTABLISHING = 2
-        const val STATE_LINK_ESTABLISHED = 3
-        const val STATE_REQUEST_SENT = 4
-        const val STATE_RECEIVING = 5
-        const val STATE_COMPLETE = 7
+        // These constants mirror LXMF.LXMRouter.PR_* from Python LXMF library.
+        // Keep in sync with LXMF/LXMRouter.py propagation transfer states.
+        const val STATE_IDLE = 0 // PR_IDLE
+        const val STATE_PATH_REQUESTED = 1 // PR_PATH_REQUESTED
+        const val STATE_LINK_ESTABLISHING = 2 // PR_LINK_ESTABLISHING
+        const val STATE_LINK_ESTABLISHED = 3 // PR_LINK_ESTABLISHED
+        const val STATE_REQUEST_SENT = 4 // PR_REQUEST_SENT
+        const val STATE_RECEIVING = 5 // PR_RECEIVING
+        const val STATE_RESPONSE_RECEIVED = 6 // PR_RESPONSE_RECEIVED
+        const val STATE_COMPLETE = 7 // PR_COMPLETE
 
         val IDLE = PropagationState(STATE_IDLE, "idle", 0f, 0)
     }

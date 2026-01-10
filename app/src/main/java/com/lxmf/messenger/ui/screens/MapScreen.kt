@@ -115,7 +115,10 @@ fun MapScreen(
     val state by viewModel.state.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
 
-    var showPermissionSheet by remember { mutableStateOf(false) }
+    // Show permission sheet only if permission not granted and user hasn't dismissed it
+    val showPermissionSheet =
+        !state.hasLocationPermission &&
+            !state.hasUserDismissedPermissionSheet
     var showShareLocationSheet by remember { mutableStateOf(false) }
     var selectedMarker by remember { mutableStateOf<ContactMarker?>(null) }
     val permissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -146,12 +149,11 @@ fun MapScreen(
     // Check permissions on first launch
     LaunchedEffect(Unit) {
         MapLibre.getInstance(context)
-        if (!LocationPermissionManager.hasPermission(context)) {
-            showPermissionSheet = true
-        } else {
+        if (LocationPermissionManager.hasPermission(context)) {
             viewModel.onPermissionResult(true)
             startLocationUpdates(fusedLocationClient, viewModel)
         }
+        // Permission sheet visibility is now managed by ViewModel state
     }
 
     // Track whether we've done the initial center on user location
@@ -408,9 +410,9 @@ fun MapScreen(
                                 Expression.stop(18, Expression.product(Expression.get("approximateRadius"), Expression.literal(0.8))),
                             ),
                         ),
-                        // Semi-transparent fill
+                        // Semi-transparent fill (Orange)
                         PropertyFactory.circleColor(
-                            Expression.color(android.graphics.Color.parseColor("#FF5722")), // Orange
+                            Expression.color(android.graphics.Color.parseColor("#FF5722")),
                         ),
                         PropertyFactory.circleOpacity(
                             Expression.literal(0.15f),
@@ -419,8 +421,9 @@ fun MapScreen(
                         PropertyFactory.circleStrokeWidth(
                             Expression.literal(2f),
                         ),
+                        // Orange stroke
                         PropertyFactory.circleStrokeColor(
-                            Expression.color(android.graphics.Color.parseColor("#FF5722")), // Orange
+                            Expression.color(android.graphics.Color.parseColor("#FF5722")),
                         ),
                         PropertyFactory.circleStrokeOpacity(
                             Expression.literal(0.4f),
@@ -436,7 +439,8 @@ fun MapScreen(
                 style.addLayer(
                     SymbolLayer(layerId, sourceId).withProperties(
                         PropertyFactory.iconImage(Expression.get("imageId")),
-                        PropertyFactory.iconAnchor("top"), // Anchor at top (circle center)
+                        // Anchor at top (circle center)
+                        PropertyFactory.iconAnchor("top"),
                         PropertyFactory.iconAllowOverlap(true),
                         PropertyFactory.iconIgnorePlacement(true),
                         PropertyFactory.iconSize(1f),
@@ -450,7 +454,8 @@ fun MapScreen(
                                 Expression.literal(0.5f),
                                 Expression.literal(MarkerState.EXPIRED_GRACE_PERIOD.name),
                                 Expression.literal(0.4f),
-                                Expression.literal(1.0f), // Default
+                                // Default
+                                Expression.literal(1.0f),
                             ),
                         ),
                     ),
@@ -528,14 +533,17 @@ fun MapScreen(
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
                     .padding(16.dp)
-                    .padding(bottom = 80.dp), // Account for bottom navigation bar
+                    // Account for bottom navigation bar
+                    .padding(bottom = 80.dp),
         ) {
             // My Location button
             SmallFloatingActionButton(
                 onClick = {
                     if (!state.hasLocationPermission) {
-                        // Show permission sheet if permission not granted
-                        showPermissionSheet = true
+                        // Request permission directly when user explicitly clicks My Location
+                        permissionLauncher.launch(
+                            LocationPermissionManager.getRequiredPermissions().toTypedArray(),
+                        )
                     } else {
                         state.userLocation?.let { location ->
                             mapLibreMap?.let { map ->
@@ -599,7 +607,8 @@ fun MapScreen(
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
                         .padding(16.dp)
-                        .padding(bottom = 180.dp), // Above FABs and nav bar
+                        // Above FABs and nav bar
+                        .padding(bottom = 180.dp),
             )
         }
 
@@ -620,9 +629,9 @@ fun MapScreen(
     // Permission bottom sheet
     if (showPermissionSheet) {
         LocationPermissionBottomSheet(
-            onDismiss = { showPermissionSheet = false },
+            onDismiss = { viewModel.dismissLocationPermissionSheet() },
             onRequestPermissions = {
-                showPermissionSheet = false
+                viewModel.dismissLocationPermissionSheet()
                 permissionLauncher.launch(
                     LocationPermissionManager.getRequiredPermissions().toTypedArray(),
                 )
@@ -731,10 +740,11 @@ private fun startLocationUpdates(
     val locationRequest =
         LocationRequest.Builder(
             Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-            30_000L, // 30 seconds
+            // 30 seconds
+            30_000L,
         ).apply {
-            setMinUpdateIntervalMillis(15_000L) // 15 seconds
-            setMaxUpdateDelayMillis(60_000L) // 1 minute
+            setMinUpdateIntervalMillis(15_000L) // min interval
+            setMaxUpdateDelayMillis(60_000L) // max delay
         }.build()
 
     val locationCallback =

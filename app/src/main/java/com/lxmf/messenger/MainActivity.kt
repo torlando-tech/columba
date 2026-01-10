@@ -50,6 +50,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -57,6 +58,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lxmf.messenger.notifications.NotificationHelper
+import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
@@ -85,6 +87,7 @@ import com.lxmf.messenger.viewmodel.ContactsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Main activity for the Columba LXMF Messenger application.
@@ -94,6 +97,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val TAG = "MainActivity"
     }
+
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
 
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
@@ -109,6 +115,14 @@ class MainActivity : ComponentActivity() {
 
         // Enable edge-to-edge mode for proper IME insets handling
         enableEdgeToEdge()
+
+        // Reset location permission sheet dismissal on fresh app launch
+        // This ensures users see the permission prompt again when the app is relaunched
+        if (savedInstanceState == null) {
+            lifecycleScope.launch {
+                settingsRepository.resetLocationPermissionSheetDismissal()
+            }
+        }
 
         // Process the intent that launched the activity
         processIntent(intent)
@@ -238,6 +252,8 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
         ) { isGranted ->
             if (isGranted) {
                 Log.d("ColumbaNavigation", "Notification permission granted")
+                // Enable notifications in settings since permission was granted
+                notificationSettingsViewModel.toggleNotificationsEnabled(true)
             } else {
                 Log.d("ColumbaNavigation", "Notification permission denied")
                 // Disable notifications in settings since permission was denied

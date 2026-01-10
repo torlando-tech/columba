@@ -123,12 +123,15 @@ class MessageCollector
                         val dataMessage =
                             DataMessage(
                                 id = receivedMessage.messageHash,
-                                destinationHash = sourceHash, // From sender's perspective
+                                // From sender's perspective
+                                destinationHash = sourceHash,
                                 content = receivedMessage.content,
-                                timestamp = System.currentTimeMillis(), // Use local reception time for consistent ordering
+                                // Use local reception time for consistent ordering
+                                timestamp = System.currentTimeMillis(),
                                 isFromMe = false,
                                 status = "delivered",
-                                fieldsJson = receivedMessage.fieldsJson, // LXMF attachments
+                                // LXMF attachments
+                                fieldsJson = receivedMessage.fieldsJson,
                             )
 
                         // Get peer name from cache, existing conversation, or use formatted hash
@@ -182,7 +185,8 @@ class MessageCollector
                                 notificationHelper.notifyMessageReceived(
                                     destinationHash = sourceHash,
                                     peerName = peerName,
-                                    messagePreview = receivedMessage.content.take(100), // Truncate preview
+                                    // Truncate preview
+                                    messagePreview = receivedMessage.content.take(100),
                                     isFavorite = isFavorite,
                                 )
                                 Log.d(TAG, "Posted notification for message from $peerName (favorite: $isFavorite)")
@@ -254,11 +258,32 @@ class MessageCollector
                         // Note: ServicePersistenceManager may have already persisted this announce;
                         // saveAnnounce uses UPSERT, so re-saving is safe (just updates timestamp)
                         try {
+                            // For propagation nodes, extract transfer size limit from app_data
+                            val propagationTransferLimitKb =
+                                if (announce.nodeType.name == "PROPAGATION_NODE") {
+                                    val metadata =
+                                        com.lxmf.messenger.reticulum.util.AppDataParser
+                                            .extractPropagationNodeMetadata(appData)
+                                    metadata.transferLimitKb
+                                } else {
+                                    null
+                                }
+
                             // Check if announce already exists with recent timestamp (saved by service)
                             // If it exists and was updated within last 5 seconds, skip to avoid unnecessary write
+                            // Exception: always update propagation nodes missing their transfer limit
                             val existingAnnounce = announceRepository.getAnnounce(peerHash)
                             val fiveSecondsAgo = System.currentTimeMillis() - 5000
-                            if (existingAnnounce != null && existingAnnounce.lastSeenTimestamp > fiveSecondsAgo) {
+                            val needsTransferLimitUpdate =
+                                existingAnnounce != null &&
+                                    existingAnnounce.nodeType == "PROPAGATION_NODE" &&
+                                    existingAnnounce.propagationTransferLimitKb == null &&
+                                    propagationTransferLimitKb != null
+
+                            if (existingAnnounce != null &&
+                                existingAnnounce.lastSeenTimestamp > fiveSecondsAgo &&
+                                !needsTransferLimitUpdate
+                            ) {
                                 Log.d(TAG, "Announce already persisted by service: $peerName ($peerHash)")
                             } else {
                                 announceRepository.saveAnnounce(
@@ -275,8 +300,13 @@ class MessageCollector
                                     stampCost = announce.stampCost,
                                     stampCostFlexibility = announce.stampCostFlexibility,
                                     peeringCost = announce.peeringCost,
+                                    propagationTransferLimitKb = propagationTransferLimitKb,
                                 )
-                                Log.d(TAG, "Persisted announce to database (fallback): $peerName ($peerHash)")
+                                Log.d(
+                                    TAG,
+                                    "Persisted announce to database (fallback): $peerName ($peerHash)" +
+                                        if (propagationTransferLimitKb != null) " (transfer limit: ${propagationTransferLimitKb}KB)" else "",
+                                )
                             }
 
                             // Check if this announce resolves a pending contact

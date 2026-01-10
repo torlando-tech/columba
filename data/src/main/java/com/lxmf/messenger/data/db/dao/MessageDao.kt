@@ -194,6 +194,29 @@ interface MessageDao {
         messageId: String,
         identityHash: String,
     ): ReplyPreviewEntity?
+
+    /**
+     * Find pending file notification messages in a conversation.
+     * These are lightweight system messages sent when a file falls back to propagation,
+     * notifying the recipient that a file is coming via relay.
+     *
+     * Returns messages where fieldsJson contains "pending_file_notification" and
+     * does NOT contain "superseded":true (not yet dismissed).
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash
+        AND identityHash = :identityHash
+        AND fieldsJson LIKE '%pending_file_notification%'
+        AND fieldsJson NOT LIKE '%"superseded":true%'
+        ORDER BY timestamp DESC
+        """,
+    )
+    suspend fun findPendingFileNotifications(
+        peerHash: String,
+        identityHash: String,
+    ): List<MessageEntity>
 }
 
 /**

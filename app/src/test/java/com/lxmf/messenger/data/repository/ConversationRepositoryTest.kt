@@ -6,6 +6,7 @@ import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
+import com.lxmf.messenger.data.storage.AttachmentStorageManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -33,6 +34,7 @@ class ConversationRepositoryTest {
     private lateinit var mockConversationDao: ConversationDao
     private lateinit var mockLocalIdentityDao: LocalIdentityDao
     private lateinit var mockPeerIdentityDao: PeerIdentityDao
+    private lateinit var mockAttachmentStorage: AttachmentStorageManager
     private val testDispatcher = StandardTestDispatcher()
 
     private val testIdentityHash = "test_identity_hash"
@@ -57,6 +59,7 @@ class ConversationRepositoryTest {
         mockConversationDao = mockk(relaxed = true)
         mockLocalIdentityDao = mockk(relaxed = true)
         mockPeerIdentityDao = mockk(relaxed = true)
+        mockAttachmentStorage = mockk(relaxed = true)
 
         // Default: active identity exists
         every { mockLocalIdentityDao.getActiveIdentity() } returns flowOf(testIdentity)
@@ -68,6 +71,7 @@ class ConversationRepositoryTest {
                 conversationDao = mockConversationDao,
                 localIdentityDao = mockLocalIdentityDao,
                 peerIdentityDao = mockPeerIdentityDao,
+                attachmentStorage = mockAttachmentStorage,
             )
     }
 

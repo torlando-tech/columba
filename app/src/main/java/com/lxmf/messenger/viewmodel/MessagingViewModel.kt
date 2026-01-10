@@ -10,23 +10,28 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
 import com.lxmf.messenger.data.model.EnrichedContact
+import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.ConversationLinkManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.ui.model.DecodedImageResult
 import com.lxmf.messenger.ui.model.ImageCache
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.ui.model.SharingDuration
-import com.lxmf.messenger.ui.model.decodeAndCacheImage
+import com.lxmf.messenger.ui.model.decodeImageWithAnimation
 import com.lxmf.messenger.ui.model.loadFileAttachmentData
 import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
 import com.lxmf.messenger.ui.model.toMessageUi
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
+import com.lxmf.messenger.util.ImageUtils
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -42,6 +47,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -50,6 +56,7 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
@@ -58,7 +65,7 @@ import com.lxmf.messenger.reticulum.model.Message as ReticulumMessage
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
-@Suppress("TooManyFunctions", "LargeClass") // ViewModel handles multiple UI operations
+@Suppress("TooManyFunctions", "LargeClass", "LongParameterList") // ViewModel handles multiple UI operations
 class MessagingViewModel
     @Inject
     constructor(
@@ -71,6 +78,7 @@ class MessagingViewModel
         private val propagationNodeManager: PropagationNodeManager,
         private val locationSharingManager: LocationSharingManager,
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
+        private val conversationLinkManager: ConversationLinkManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -116,6 +124,22 @@ class MessagingViewModel
                     initialValue = null,
                 )
 
+        // Link state for current conversation - provides real-time connectivity status
+        val conversationLinkState: StateFlow<com.lxmf.messenger.service.ConversationLinkManager.LinkState?> =
+            _currentConversation
+                .flatMapLatest { peerHash ->
+                    if (peerHash != null) {
+                        conversationLinkManager.linkStates.map { states -> states[peerHash] }
+                    } else {
+                        flowOf(null)
+                    }
+                }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = null,
+                )
+
         // Source identity for sending messages (reuse the same one from DebugViewModel concept)
         private var sourceIdentity: Identity? = null
 
@@ -129,12 +153,19 @@ class MessagingViewModel
         private val _isProcessingImage = MutableStateFlow(false)
         val isProcessingImage: StateFlow<Boolean> = _isProcessingImage
 
+        private val _selectedImageIsAnimated = MutableStateFlow(false)
+        val selectedImageIsAnimated: StateFlow<Boolean> = _selectedImageIsAnimated.asStateFlow()
+
         // File attachment state (LXMF Field 5)
         private val _selectedFileAttachments = MutableStateFlow<List<FileAttachment>>(emptyList())
         val selectedFileAttachments: StateFlow<List<FileAttachment>> = _selectedFileAttachments.asStateFlow()
 
         private val _isProcessingFile = MutableStateFlow(false)
         val isProcessingFile: StateFlow<Boolean> = _isProcessingFile.asStateFlow()
+
+        // Track when a message is being sent to prevent double-sends
+        private val _isSending = MutableStateFlow(false)
+        val isSending: StateFlow<Boolean> = _isSending.asStateFlow()
 
         // Computed total size of all attachments (images + files)
         val totalAttachmentSize: StateFlow<Int> =
@@ -150,16 +181,37 @@ class MessagingViewModel
         private val _fileAttachmentError = MutableSharedFlow<String>()
         val fileAttachmentError: SharedFlow<String> = _fileAttachmentError.asSharedFlow()
 
+        // Image quality selection dialog state
+        private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
+        val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
+
+        // Expose current conversation's link state for UI
+        val currentLinkState: StateFlow<ConversationLinkManager.LinkState?> =
+            combine(
+                _currentConversation,
+                conversationLinkManager.linkStates,
+            ) { peerHash, linkStates ->
+                peerHash?.let { linkStates[it] }
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
         // Sync state from PropagationNodeManager
         val isSyncing: StateFlow<Boolean> = propagationNodeManager.isSyncing
+        val currentRelay = propagationNodeManager.currentRelay
 
         // Manual sync result events for Snackbar notifications
         val manualSyncResult: SharedFlow<SyncResult> = propagationNodeManager.manualSyncResult
+
+        // Real-time sync progress for status UI
+        val syncProgress: StateFlow<SyncProgress> = propagationNodeManager.syncProgress
 
         // Track which images have been decoded - used to trigger recomposition
         // when images become available. The UI observes this to know when to re-check the cache.
         private val _loadedImageIds = MutableStateFlow<Set<String>>(emptySet())
         val loadedImageIds: StateFlow<Set<String>> = _loadedImageIds.asStateFlow()
+
+        // Map of messageId -> decoded image result (for animated GIFs and raw bytes)
+        private val _decodedImages = MutableStateFlow<Map<String, DecodedImageResult>>(emptyMap())
+        val decodedImages: StateFlow<Map<String, DecodedImageResult>> = _decodedImages.asStateFlow()
 
         // Cache for loaded reply previews - maps message ID to its reply preview
         private val _replyPreviewCache = MutableStateFlow<Map<String, com.lxmf.messenger.ui.model.ReplyPreviewUi>>(emptyMap())
@@ -756,6 +808,9 @@ class MessagingViewModel
             // Enable fast polling (1s) for active conversation
             reticulumProtocol.setConversationActive(true)
 
+            // Open link to peer for real-time connectivity status and speed probing
+            conversationLinkManager.openConversationLink(destinationHash)
+
             // Mark conversation as read when opening
             viewModelScope.launch {
                 try {
@@ -785,6 +840,7 @@ class MessagingViewModel
             content: String,
         ) {
             viewModelScope.launch {
+                _isSending.value = true
                 try {
                     val imageData = _selectedImageData.value
                     val imageFormat = _selectedImageFormat.value
@@ -851,11 +907,15 @@ class MessagingViewModel
                         // Clear pending reply after successful send
                         handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId)
                         clearReplyTo()
+                        // Reset link inactivity timer
+                        conversationLinkManager.onMessageSent(destinationHash)
                     }.onFailure { error ->
                         handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sending message", e)
+                } finally {
+                    _isSending.value = false
                 }
             }
         }
@@ -917,16 +977,22 @@ class MessagingViewModel
         fun selectImage(
             imageData: ByteArray,
             imageFormat: String,
+            isAnimated: Boolean = false,
         ) {
-            Log.d(TAG, "Selected image: ${imageData.size} bytes, format=$imageFormat")
+            Log.d(
+                TAG,
+                "Selected image: ${imageData.size} bytes, format=$imageFormat, animated=$isAnimated",
+            )
             _selectedImageData.value = imageData
             _selectedImageFormat.value = imageFormat
+            _selectedImageIsAnimated.value = isAnimated
         }
 
         fun clearSelectedImage() {
             Log.d(TAG, "Clearing selected image")
             _selectedImageData.value = null
             _selectedImageFormat.value = null
+            _selectedImageIsAnimated.value = false
         }
 
         fun setProcessingImage(processing: Boolean) {
@@ -935,33 +1001,15 @@ class MessagingViewModel
 
         /**
          * Add a file attachment from its data.
-         * Validates size limit and adds to the list if valid.
+         *
+         * File attachments have no size limit - they are sent uncompressed.
+         * Large files may be slow or unreliable over mesh networks.
          *
          * @param attachment The file attachment to add
          */
         fun addFileAttachment(attachment: FileAttachment) {
             viewModelScope.launch {
                 val currentFiles = _selectedFileAttachments.value
-                val currentTotal = currentFiles.sumOf { it.sizeBytes }
-
-                // Check if adding this file would exceed the limit
-                if (FileUtils.wouldExceedSizeLimit(currentTotal, attachment.sizeBytes)) {
-                    Log.w(TAG, "File attachment rejected: would exceed size limit")
-                    _fileAttachmentError.emit(
-                        "File too large. Total attachments cannot exceed ${FileUtils.formatFileSize(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)}",
-                    )
-                    return@launch
-                }
-
-                // Check single file size
-                if (attachment.sizeBytes > FileUtils.MAX_SINGLE_FILE_SIZE) {
-                    Log.w(TAG, "File attachment rejected: exceeds single file size limit")
-                    _fileAttachmentError.emit(
-                        "File too large. Maximum size is ${FileUtils.formatFileSize(FileUtils.MAX_SINGLE_FILE_SIZE)}",
-                    )
-                    return@launch
-                }
-
                 _selectedFileAttachments.value = currentFiles + attachment
                 Log.d(TAG, "Added file attachment: ${attachment.filename} (${attachment.sizeBytes} bytes)")
             }
@@ -1159,6 +1207,120 @@ class MessagingViewModel
         }
 
         /**
+         * Process an image by showing the quality selection dialog.
+         * The dialog shows recommended quality based on link state.
+         *
+         * @param context Android context for image processing
+         * @param uri URI of the image to process
+         */
+        fun processImageWithCompression(
+            context: android.content.Context,
+            uri: android.net.Uri,
+        ) {
+            viewModelScope.launch {
+                Log.d(TAG, "Opening quality selection for image")
+
+                // Get the current link state for recommendations
+                val linkState = currentLinkState.value
+
+                // Determine recommended preset
+                val recommendedPreset =
+                    if (linkState != null && linkState.isActive) {
+                        linkState.recommendPreset()
+                    } else {
+                        // No active link - use saved preset or default to MEDIUM
+                        val savedPreset = settingsRepository.getImageCompressionPreset()
+                        if (savedPreset == ImageCompressionPreset.AUTO) {
+                            ImageCompressionPreset.MEDIUM
+                        } else {
+                            savedPreset
+                        }
+                    }
+
+                // Calculate transfer time estimates for each preset
+                val transferTimeEstimates = calculateTransferTimeEstimates(linkState, context, uri)
+
+                // Show the quality selection dialog
+                _qualitySelectionState.value =
+                    QualitySelectionState(
+                        imageUri = uri,
+                        context = context,
+                        recommendedPreset = recommendedPreset,
+                        transferTimeEstimates = transferTimeEstimates,
+                    )
+            }
+        }
+
+        /**
+         * Calculate transfer time estimates for each preset based on link state.
+         *
+         * For ORIGINAL preset, uses actual file size since it applies minimal compression.
+         * For other presets, uses the target size (worst-case estimate).
+         */
+        private fun calculateTransferTimeEstimates(
+            linkState: ConversationLinkManager.LinkState?,
+            context: Context,
+            imageUri: Uri,
+        ): Map<ImageCompressionPreset, String?> {
+            // Get actual file size for ORIGINAL preset (minimal compression)
+            val actualFileSize = FileUtils.getFileSize(context, imageUri)
+
+            return listOf(
+                ImageCompressionPreset.LOW,
+                ImageCompressionPreset.MEDIUM,
+                ImageCompressionPreset.HIGH,
+                ImageCompressionPreset.ORIGINAL,
+            ).associateWith { preset ->
+                val sizeBytes = if (preset == ImageCompressionPreset.ORIGINAL && actualFileSize > 0) {
+                    actualFileSize
+                } else {
+                    preset.targetSizeBytes
+                }
+                linkState?.estimateTransferTimeFormatted(sizeBytes)
+            }
+        }
+
+        /**
+         * User selected a quality preset - compress and attach the image.
+         */
+        fun selectImageQuality(preset: ImageCompressionPreset) {
+            val state = _qualitySelectionState.value ?: return
+            _qualitySelectionState.value = null
+
+            viewModelScope.launch {
+                _isProcessingImage.value = true
+                try {
+                    Log.d(TAG, "User selected quality: ${preset.name}")
+
+                    val result =
+                        withContext(Dispatchers.IO) {
+                            ImageUtils.compressImageWithPreset(state.context, state.imageUri, preset)
+                        }
+
+                    if (result == null) {
+                        Log.e(TAG, "Failed to compress image")
+                        return@launch
+                    }
+
+                    Log.d(TAG, "Image compressed to ${result.compressedImage.data.size} bytes")
+                    selectImage(result.compressedImage.data, result.compressedImage.format)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error compressing image with selected quality", e)
+                } finally {
+                    _isProcessingImage.value = false
+                }
+            }
+        }
+
+        /**
+         * Dismiss the quality selection dialog without selecting.
+         */
+        fun dismissQualitySelection() {
+            Log.d(TAG, "Dismissing quality selection dialog")
+            _qualitySelectionState.value = null
+        }
+
+        /**
          * Load an image attachment asynchronously.
          *
          * Called by the UI when a message has hasImageAttachment=true but decodedImage=null.
@@ -1172,23 +1334,32 @@ class MessagingViewModel
             messageId: String,
             fieldsJson: String?,
         ) {
-            // Skip if already loaded/loading
-            if (ImageCache.contains(messageId) || _loadedImageIds.value.contains(messageId)) {
+            // Skip if already loaded/loading or already in cache
+            if (_loadedImageIds.value.contains(messageId) ||
+                _decodedImages.value.containsKey(messageId) ||
+                ImageCache.contains(messageId)
+            ) {
                 return
             }
 
             viewModelScope.launch {
                 try {
-                    // Decode on IO thread
-                    val decoded =
+                    // Decode on IO thread with animation detection
+                    val result =
                         withContext(Dispatchers.IO) {
-                            decodeAndCacheImage(messageId, fieldsJson)
+                            decodeImageWithAnimation(messageId, fieldsJson)
                         }
 
-                    if (decoded != null) {
+                    if (result != null) {
+                        // Store the decoded result for animated images
+                        _decodedImages.update { it + (messageId to result) }
                         // Signal that this image is now available
                         _loadedImageIds.update { it + messageId }
-                        Log.d(TAG, "Image loaded async: ${messageId.take(8)}...")
+                        Log.d(
+                            TAG,
+                            "Image loaded async: ${messageId.take(8)}... " +
+                                "(animated=${result.isAnimated}, ${result.rawBytes.size} bytes)",
+                        )
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error loading image async: ${messageId.take(8)}...", e)
@@ -1206,6 +1377,75 @@ class MessagingViewModel
                     Log.d(TAG, "Manual sync triggered from MessagingScreen")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error triggering manual sync", e)
+                }
+            }
+        }
+
+        /**
+         * Fetch a pending file by temporarily increasing the size limit and triggering a sync.
+         *
+         * Called when user taps a pending file notification bubble.
+         * Temporarily increases the incoming message size limit to accommodate the file,
+         * triggers a sync to fetch it from the relay, then reverts to the original limit
+         * when sync completes (success or failure) or times out.
+         *
+         * @param fileSizeBytes The size of the pending file in bytes
+         */
+        fun fetchPendingFile(fileSizeBytes: Long) {
+            viewModelScope.launch {
+                var originalLimitKb: Int? = null
+                try {
+                    // Get the current (original) limit to restore after sync completes
+                    originalLimitKb = settingsRepository.getIncomingMessageSizeLimitKb()
+
+                    // Calculate new limit: file size + 10% buffer, rounded up to nearest 512KB
+                    val fileSizeKb = (fileSizeBytes / 1024).toInt()
+                    val withBuffer = (fileSizeKb * 1.1).toInt()
+                    val roundedUp = ((withBuffer + 511) / 512) * 512 // Round up to nearest 512KB
+                    val newLimitKb = roundedUp.coerceAtLeast(fileSizeKb + 512) // At least 512KB more than file
+
+                    Log.d(TAG, "Temporarily increasing incoming size limit from ${originalLimitKb}KB to ${newLimitKb}KB for ${fileSizeKb}KB file")
+
+                    // Update Python layer temporarily (don't persist to DataStore)
+                    if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
+                        reticulumProtocol.setIncomingMessageSizeLimit(newLimitKb)
+                        Log.d(TAG, "Python layer updated with temporary size limit")
+                    }
+
+                    // Trigger sync to fetch the file (silent = no toast)
+                    // Don't use keepSyncingState so isSyncing properly reflects sync completion/failure
+                    propagationNodeManager.triggerSync(silent = true)
+                    Log.d(TAG, "Sync triggered to fetch pending file")
+
+                    // Wait for sync to complete (isSyncing goes false) or timeout
+                    // Timeout based on file size: ~100KB/s transfer rate + 60s buffer, clamped to 60-300s
+                    val timeoutMs = ((fileSizeKb / 100) + 60).coerceIn(60, 300) * 1000L
+                    Log.d(TAG, "Waiting up to ${timeoutMs / 1000}s for sync to complete")
+
+                    // Wait for isSyncing to become false (sync complete or failed)
+                    val syncCompleted =
+                        withTimeoutOrNull(timeoutMs) {
+                            // Wait for isSyncing to go true first (sync started), then wait for it to go false
+                            propagationNodeManager.isSyncing.first { it } // Wait for sync to start
+                            propagationNodeManager.isSyncing.first { !it } // Wait for sync to end
+                            true
+                        }
+
+                    if (syncCompleted == true) {
+                        Log.d(TAG, "Sync completed, reverting size limit to ${originalLimitKb}KB")
+                    } else {
+                        Log.d(TAG, "Sync timed out, reverting size limit to ${originalLimitKb}KB")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error fetching pending file", e)
+                } finally {
+                    // Always revert the size limit when done
+                    if (originalLimitKb != null) {
+                        if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
+                            reticulumProtocol.setIncomingMessageSizeLimit(originalLimitKb)
+                            Log.d(TAG, "Size limit reverted to ${originalLimitKb}KB")
+                        }
+                    }
                 }
             }
         }
@@ -1319,6 +1559,9 @@ class MessagingViewModel
             // Phase 1 threading policy (zero runBlocking in production code).
             // See THREADING_REDESIGN_PLAN.md Phase 1.2
 
+            // Close conversation link to free resources immediately
+            _currentConversation.value?.let { conversationLinkManager.closeConversationLink(it) }
+
             // Clear active conversation (re-enables notifications)
             activeConversationManager.setActive(null)
 
@@ -1332,14 +1575,29 @@ class MessagingViewModel
 
 private const val HELPER_TAG = "MessagingViewModel"
 
-private fun validateAndSanitizeContent(
+/**
+ * Validates and sanitizes message content for sending.
+ *
+ * Important: When sending attachments (images or files) without text content,
+ * returns a single space " " instead of empty string. This is required for
+ * Sideband compatibility - Sideband's database save logic skips messages with
+ * empty content AND empty title, which would cause attachment-only messages
+ * to be silently dropped.
+ *
+ * @param content The raw message content
+ * @param imageData Optional image attachment data
+ * @param fileAttachments Optional file attachments
+ * @return Sanitized content string, or null if validation fails
+ */
+internal fun validateAndSanitizeContent(
     content: String,
     imageData: ByteArray?,
     fileAttachments: List<FileAttachment> = emptyList(),
 ): String? {
-    // Empty content is OK when sending attachments only
+    // Sideband requires non-empty content to save messages to its database.
+    // When sending attachments without text, use a single space (matching Sideband's behavior).
     if (content.trim().isEmpty() && (imageData != null || fileAttachments.isNotEmpty())) {
-        return ""
+        return " "
     }
     val validationResult = InputValidator.validateMessageContent(content)
     if (validationResult is ValidationResult.Error) {
@@ -1384,7 +1642,7 @@ private fun determineDeliveryMethod(
     }
 }
 
-private fun buildFieldsJson(
+private suspend fun buildFieldsJson(
     imageData: ByteArray?,
     imageFormat: String?,
     fileAttachments: List<FileAttachment> = emptyList(),
@@ -1399,55 +1657,74 @@ private fun buildFieldsJson(
 
     if (!hasAnyContent) return null
 
-    val json = org.json.JSONObject()
+    // Move CPU-intensive hex encoding to background thread
+    return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        val json = org.json.JSONObject()
 
-    // Add image field (Field 6)
-    if (hasImage && imageData != null) {
-        val hexImageData = imageData.joinToString("") { "%02x".format(it) }
-        json.put("6", hexImageData)
-    }
-
-    // Add file attachments field (Field 5)
-    if (hasFiles) {
-        val attachmentsArray = org.json.JSONArray()
-        for (attachment in fileAttachments) {
-            val attachmentObj = org.json.JSONObject()
-            attachmentObj.put("filename", attachment.filename)
-            attachmentObj.put("data", attachment.data.joinToString("") { "%02x".format(it) })
-            attachmentObj.put("size", attachment.sizeBytes)
-            attachmentsArray.put(attachmentObj)
-        }
-        json.put("5", attachmentsArray)
-    }
-
-    // Add app extensions field (Field 16) for replies, reactions, and future features
-    if (hasReply || hasReactions) {
-        val appExtensions = org.json.JSONObject()
-
-        // Add reply_to if present
-        if (hasReply) {
-            appExtensions.put("reply_to", replyToMessageId)
+        // Add image field (Field 6)
+        if (hasImage && imageData != null) {
+            val hexImageData = imageData.toHexString()
+            json.put("6", hexImageData)
         }
 
-        // Add reactions if present
-        // Format: {"reactions": {"👍": ["sender_hash1", "sender_hash2"], "❤️": ["sender_hash3"]}}
-        if (hasReactions && reactions != null) {
-            val reactionsObj = org.json.JSONObject()
-            for ((emoji, senderHashes) in reactions) {
-                val sendersArray = org.json.JSONArray()
-                for (hash in senderHashes) {
-                    sendersArray.put(hash)
-                }
-                reactionsObj.put(emoji, sendersArray)
+        // Add file attachments field (Field 5)
+        if (hasFiles) {
+            val attachmentsArray = org.json.JSONArray()
+            for (attachment in fileAttachments) {
+                val attachmentObj = org.json.JSONObject()
+                attachmentObj.put("filename", attachment.filename)
+                attachmentObj.put("data", attachment.data.toHexString())
+                attachmentObj.put("size", attachment.sizeBytes)
+                attachmentsArray.put(attachmentObj)
             }
-            appExtensions.put("reactions", reactionsObj)
+            json.put("5", attachmentsArray)
         }
 
-        json.put("16", appExtensions)
-    }
+        // Add app extensions field (Field 16) for replies, reactions, and future features
+        if (hasReply || hasReactions) {
+            val appExtensions = org.json.JSONObject()
 
-    return json.toString()
+            // Add reply_to if present
+            if (hasReply) {
+                appExtensions.put("reply_to", replyToMessageId)
+            }
+
+            // Add reactions if present
+            // Format: {"reactions": {"👍": ["sender_hash1", "sender_hash2"], "❤️": ["sender_hash3"]}}
+            if (hasReactions && reactions != null) {
+                val reactionsObj = org.json.JSONObject()
+                for ((emoji, senderHashes) in reactions) {
+                    val sendersArray = org.json.JSONArray()
+                    for (hash in senderHashes) {
+                        sendersArray.put(hash)
+                    }
+                    reactionsObj.put(emoji, sendersArray)
+                }
+                appExtensions.put("reactions", reactionsObj)
+            }
+
+            json.put("16", appExtensions)
+        }
+
+        json.toString()
+    }
 }
+
+/**
+ * Efficient hex string conversion for ByteArray.
+ * Uses a lookup table for O(n) performance instead of O(n * string allocation).
+ */
+private fun ByteArray.toHexString(): String {
+    val hexChars = CharArray(size * 2)
+    for (i in indices) {
+        val v = this[i].toInt() and 0xFF
+        hexChars[i * 2] = HEX_CHARS[v ushr 4]
+        hexChars[i * 2 + 1] = HEX_CHARS[v and 0x0F]
+    }
+    return String(hexChars)
+}
+
+private val HEX_CHARS = "0123456789abcdef".toCharArray()
 
 private fun resolveActualDestHash(
     receipt: com.lxmf.messenger.reticulum.protocol.MessageReceipt,
@@ -1561,3 +1838,18 @@ sealed class ContactToggleResult {
     /** Operation failed with the given message */
     data class Error(val message: String) : ContactToggleResult()
 }
+
+/**
+ * State for the image quality selection dialog.
+ *
+ * @property imageUri The URI of the image to be compressed
+ * @property context The Android context for image processing
+ * @property recommendedPreset The preset recommended based on link speed probe
+ * @property transferTimeEstimates Map of preset to estimated transfer time string
+ */
+data class QualitySelectionState(
+    val imageUri: Uri,
+    val context: Context,
+    val recommendedPreset: ImageCompressionPreset,
+    val transferTimeEstimates: Map<ImageCompressionPreset, String?>,
+)

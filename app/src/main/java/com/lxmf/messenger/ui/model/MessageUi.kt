@@ -39,6 +39,18 @@ data class MessageUi(
      */
     val hasImageAttachment: Boolean = false,
     /**
+     * Raw image bytes for animated GIF support.
+     * When isAnimatedImage is true, this contains the GIF bytes for Coil to render.
+     * For static images, decodedImage is used instead for efficiency.
+     */
+    val imageData: ByteArray? = null,
+    /**
+     * Indicates whether the image is animated (GIF).
+     * When true, imageData should be used with Coil for animated rendering.
+     * When false, decodedImage (static bitmap) should be used for efficiency.
+     */
+    val isAnimatedImage: Boolean = false,
+    /**
      * Raw LXMF fields JSON. Included when hasImageAttachment or hasFileAttachments is true
      * to enable async loading. Null for messages without attachments.
      */
@@ -80,7 +92,71 @@ data class MessageUi(
      * Parsed from LXMF Field 16 {"reactions": {"👍": ["sender1", "sender2"], ...}}.
      */
     val reactions: List<ReactionUi> = emptyList(),
-)
+) {
+    /**
+     * Whether this message should be displayed as a standalone media item without a bubble.
+     *
+     * Returns true when the message is:
+     * - An animated GIF (isAnimatedImage = true)
+     * - Has image data loaded (imageData != null)
+     * - Has no text content (content is blank)
+     * - Has no file attachments
+     * - Is not a reply to another message
+     *
+     * This allows GIF-only messages to be displayed large without a bubble background,
+     * similar to how Signal displays media-only messages.
+     */
+    val isMediaOnlyMessage: Boolean
+        get() =
+            isAnimatedImage &&
+                imageData != null &&
+                content.isBlank() &&
+                !hasFileAttachments &&
+                replyPreview == null
+
+    /**
+     * Whether this message is a pending file notification.
+     *
+     * These are lightweight messages sent when a file message falls back to propagation,
+     * notifying the recipient that a file is coming via relay.
+     */
+    val isPendingFileNotification: Boolean
+        get() = fieldsJson?.contains("pending_file_notification") == true
+
+    /**
+     * Whether this notification has been superseded by the actual file arrival.
+     *
+     * When the file message arrives, the notification is marked as superseded
+     * and should no longer be displayed.
+     */
+    val isSuperseded: Boolean
+        get() = fieldsJson?.contains("\"superseded\":true") == true
+
+    /**
+     * Extract pending file info if this is a notification message.
+     *
+     * Parses the pending_file_notification from Field 16 to get file details.
+     * Returns null if not a pending file notification or parsing fails.
+     */
+    @Suppress("SwallowedException") // JSON parse failures expected, return null
+    val pendingFileInfo: PendingFileInfo?
+        get() {
+            if (!isPendingFileNotification || fieldsJson == null) return null
+            return try {
+                val json = org.json.JSONObject(fieldsJson)
+                val field16 = json.optJSONObject("16") ?: return null
+                val notification = field16.optJSONObject("pending_file_notification") ?: return null
+                PendingFileInfo(
+                    originalMessageId = notification.optString("original_message_id", ""),
+                    filename = notification.optString("filename", "file"),
+                    fileCount = notification.optInt("file_count", 1),
+                    totalSize = notification.optLong("total_size", 0),
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
+}
 
 /**
  * UI representation of a file attachment.
@@ -140,4 +216,23 @@ data class ReactionUi(
     val emoji: String,
     val senderHashes: List<String>,
     val count: Int = senderHashes.size,
+)
+
+/**
+ * UI representation of a pending file notification.
+ *
+ * This is displayed when a sender's file message fell back to propagation,
+ * notifying the recipient that a file is arriving via relay.
+ *
+ * @property originalMessageId The hash of the original file message
+ * @property filename The first filename being sent
+ * @property fileCount Total number of files in the attachment
+ * @property totalSize Total size of all attachments in bytes
+ */
+@Immutable
+data class PendingFileInfo(
+    val originalMessageId: String,
+    val filename: String,
+    val fileCount: Int,
+    val totalSize: Long,
 )

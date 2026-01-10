@@ -299,7 +299,8 @@ fun BleConnectionStatusScreen(
                         // Connection cards
                         items(
                             items = state.connections,
-                            key = { it.currentMac }, // Use MAC address as key (always unique)
+                            // Use MAC address as key (always unique)
+                            key = { it.currentMac },
                         ) { connection ->
                             ConnectionCard(
                                 connection = connection,

@@ -39,6 +39,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
 import com.lxmf.messenger.ui.screens.settings.cards.DataMigrationCard
 import com.lxmf.messenger.ui.screens.settings.cards.IdentityCard
+import com.lxmf.messenger.ui.screens.settings.cards.ImageCompressionCard
 import com.lxmf.messenger.ui.screens.settings.cards.LocationSharingCard
 import com.lxmf.messenger.ui.screens.settings.cards.MessageDeliveryRetrievalCard
 import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
@@ -208,6 +209,18 @@ fun SettingsScreen(
                     onIntervalChange = { viewModel.setRetrievalIntervalSeconds(it) },
                     onSyncNow = { viewModel.syncNow() },
                     onViewMoreRelays = { onNavigateToAnnounces("PROPAGATION_NODE") },
+                    // Incoming message size limit
+                    incomingMessageSizeLimitKb = state.incomingMessageSizeLimitKb,
+                    onIncomingMessageSizeLimitChange = { viewModel.setIncomingMessageSizeLimit(it) },
+                )
+
+                ImageCompressionCard(
+                    selectedPreset = state.imageCompressionPreset,
+                    detectedPreset = state.detectedCompressionPreset,
+                    hasSlowInterface =
+                        state.detectedCompressionPreset ==
+                            com.lxmf.messenger.data.model.ImageCompressionPreset.LOW,
+                    onPresetChange = { viewModel.setImageCompressionPreset(it) },
                 )
 
                 ThemeSelectionCard(

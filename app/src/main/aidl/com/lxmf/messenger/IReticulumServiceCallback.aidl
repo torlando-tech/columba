@@ -83,4 +83,12 @@ interface IReticulumServiceCallback {
      *        {"reaction_to": "msg_id", "emoji": "👍", "sender": "sender_hash", "source_hash": "...", "timestamp": ...}
      */
     void onReactionReceived(String reactionJson);
+
+    /**
+     * Called when propagation sync state changes.
+     * Used for real-time sync progress display.
+     * @param stateJson JSON string with propagation state data:
+     *        {"state": 0-7 or 0xf0-0xf4, "state_name": "...", "progress": 0.0-1.0, "messages_received": N}
+     */
+    void onPropagationStateChanged(String stateJson);
 }

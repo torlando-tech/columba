@@ -90,6 +90,12 @@
 -keep class com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge { *; }
 -keepclassmembers class com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge { *; }
 
+# ===== Reticulum Bridge =====
+# KotlinReticulumBridge is called from Python via Chaquopy for event notifications
+# Python expects specific method names (notifyAnnounceReceived, etc.)
+-keep class com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge { *; }
+-keepclassmembers class com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge { *; }
+
 # ===== MessagePack Serialization =====
 # MessagePack uses reflection to load buffer implementations
 # Without these rules, LXMF message deserialization crashes

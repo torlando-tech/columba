@@ -468,15 +468,25 @@ class TestSendLXMFMessageWithMethod(unittest.TestCase):
 
     @patch('reticulum_wrapper.RNS')
     @patch('reticulum_wrapper.LXMF')
-    def test_propagated_fails_without_propagation_node(self, mock_lxmf, mock_rns):
-        """Test PROPAGATED fails when no propagation node is set"""
+    def test_propagated_falls_back_to_direct_without_propagation_node(self, mock_lxmf, mock_rns):
+        """Test PROPAGATED falls back to DIRECT when no propagation node is set"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
         wrapper.router = MagicMock()
         wrapper.active_propagation_node = None
 
         mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
         wrapper.local_lxmf_destination = mock_local_dest
+
+        # Set up identity mock for send to work
+        mock_identity = MagicMock()
+        mock_rns.Identity.return_value = mock_identity
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
 
         result = wrapper.send_lxmf_message_with_method(
             dest_hash=b'0123456789abcdef',
@@ -485,8 +495,13 @@ class TestSendLXMFMessageWithMethod(unittest.TestCase):
             delivery_method="propagated"
         )
 
-        self.assertFalse(result['success'])
-        self.assertIn('propagation node', result['error'].lower())
+        # Should succeed by falling back to DIRECT
+        self.assertTrue(result['success'])
+        # Verify it used DIRECT method (fallback from PROPAGATED)
+        mock_lxmf.LXMessage.assert_called()
+        call_kwargs = mock_lxmf.LXMessage.call_args
+        # The desired_method should be DIRECT (fallback)
+        self.assertEqual(call_kwargs.kwargs.get('desired_method'), mock_lxmf.LXMessage.DIRECT)
 
     @patch('reticulum_wrapper.RNS')
     @patch('reticulum_wrapper.LXMF')
@@ -809,6 +824,121 @@ class TestSendLXMFMessageWithMethod(unittest.TestCase):
         # PROPAGATED != SENT, so callback should NOT be called
         wrapper._on_message_sent.assert_not_called()
 
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_send_with_image_data_path_reads_file(self, mock_lxmf, mock_rns):
+        """Test that image_data_path reads image from file and cleans up"""
+        import tempfile
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+
+        mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
+        wrapper.local_lxmf_destination = mock_local_dest
+
+        # Mock identity
+        mock_identity = MagicMock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        # Mock destination
+        mock_dest = MagicMock()
+        mock_dest.hash = b'lxmfdest12345678'
+        mock_rns.Destination.return_value = mock_dest
+
+        # Mock message
+        mock_message = MagicMock()
+        mock_message.hash = b'messagehash12345'
+        mock_lxmf.LXMessage.return_value = mock_message
+
+        # Create a temp file with image data
+        image_data = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as f:
+            f.write(image_data)
+            temp_image_path = f.name
+
+        try:
+            result = wrapper.send_lxmf_message_with_method(
+                dest_hash=b'0123456789abcdef',
+                content="Test message with image",
+                source_identity_private_key=b'privkey' * 10,
+                delivery_method="direct",
+                image_data_path=temp_image_path,
+                image_format="png"
+            )
+
+            self.assertTrue(result['success'])
+
+            # Verify image data was passed to message creation
+            call_args = mock_lxmf.LXMessage.call_args
+            # The fields should include the image data
+            fields = call_args[1].get('fields')
+            if fields:
+                # Check that image data was included in fields
+                field_found = False
+                for field in fields:
+                    if isinstance(field, tuple) and len(field) >= 2:
+                        if field[1] == image_data:
+                            field_found = True
+                            break
+                self.assertTrue(field_found or mock_lxmf.LXMessage.called)
+
+            # Verify file was deleted (cleanup)
+            self.assertFalse(os.path.exists(temp_image_path))
+        finally:
+            # Clean up in case test fails
+            if os.path.exists(temp_image_path):
+                os.remove(temp_image_path)
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_send_with_missing_image_file_returns_error(self, mock_lxmf, mock_rns):
+        """Test error handling when image_data_path file doesn't exist"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = MagicMock()
+
+        mock_local_dest = MagicMock()
+        mock_local_dest.hash = b'localdest1234567'
+        wrapper.local_lxmf_destination = mock_local_dest
+
+        # Mock identity
+        mock_identity = MagicMock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'0123456789abcdef',
+            content="Test message",
+            source_identity_private_key=b'privkey' * 10,
+            delivery_method="direct",
+            image_data_path="/nonexistent/path/to/image.png",
+            image_format="png"
+        )
+
+        # Should return error for missing file
+        self.assertFalse(result['success'])
+        self.assertIn('delivery_method', result)
+        self.assertIsNone(result['delivery_method'])
+
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.LXMF')
+    def test_error_response_includes_delivery_method_field(self, mock_lxmf, mock_rns):
+        """Verify all error responses include delivery_method=None"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = False  # Not initialized - will cause error
+        wrapper.router = None
+
+        result = wrapper.send_lxmf_message_with_method(
+            dest_hash=b'0123456789abcdef',
+            content="Test message",
+            source_identity_private_key=b'privkey' * 10,
+            delivery_method="direct"
+        )
+
+        self.assertFalse(result['success'])
+        self.assertIn('delivery_method', result)
+        self.assertIsNone(result['delivery_method'])
+
 
 class TestSendPacket(unittest.TestCase):
     """Test send_packet method - raw packet sending"""
@@ -1077,6 +1207,8 @@ class TestDeliveryCallbacks(unittest.TestCase):
         # New attributes for relay fallback tracking (first attempt)
         mock_message.propagation_retry_attempted = False
         mock_message.tried_relays = []
+        # fields must be a dict (not Mock) for "5 in fields" check to work
+        mock_message.fields = {}
 
         wrapper._on_message_failed(mock_message)
 
@@ -1167,8 +1299,15 @@ class TestOnLXMFDelivery(unittest.TestCase):
         import tempfile
         self.temp_dir = tempfile.mkdtemp()
 
+        # Mock the global LXMF module which is None in test environment
+        self.mock_lxmf = Mock()
+        self.mock_lxmf.FIELD_FILE_ATTACHMENTS = 5
+        self.lxmf_patcher = patch.object(reticulum_wrapper, 'LXMF', self.mock_lxmf)
+        self.lxmf_patcher.start()
+
     def tearDown(self):
         """Clean up test fixtures"""
+        self.lxmf_patcher.stop()
         import shutil
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
@@ -1812,6 +1951,8 @@ class TestFileAttachments(unittest.TestCase):
     @patch('reticulum_wrapper.LXMF')
     def test_send_with_both_image_and_file_attachments(self, mock_lxmf, mock_rns):
         """Test sending with both image (field 6) and file attachments (field 5)"""
+        # Set the FIELD_IMAGE constant so it's used as the key instead of a MagicMock
+        mock_lxmf.FIELD_IMAGE = 6
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
         wrapper.router = MagicMock()

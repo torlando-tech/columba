@@ -324,4 +324,111 @@ object MessagingTestFixtures {
         replyToMessageId = replyToMessageId,
         replyPreview = null, // Not yet loaded
     )
+
+    // ========== Animated GIF Fixtures ==========
+
+    /**
+     * Creates a minimal valid GIF header as ByteArray for testing.
+     * This starts with GIF89a signature to be detected as animated.
+     */
+    fun createTestGifData(): ByteArray {
+        // Minimal GIF89a header - just enough to be detected as animated
+        return byteArrayOf(
+            0x47, 0x49, 0x46, 0x38, 0x39, 0x61, // "GIF89a"
+            0x01, 0x00, // width: 1
+            0x01, 0x00, // height: 1
+            0x00, // GCT flag, color resolution, sort flag, GCT size
+            0x00, // background color index
+            0x00, // pixel aspect ratio
+            0x2C, // Image separator
+            0x00, 0x00, 0x00, 0x00, // left, top position
+            0x01, 0x00, 0x01, 0x00, // width, height
+            0x00, // packed byte
+            0x02, // LZW minimum code size
+            0x02, 0x4C, 0x01, 0x00, // image data
+            0x3B, // trailer
+        )
+    }
+
+    /**
+     * Creates a GIF-only message (animated GIF with no text).
+     * This should trigger isMediaOnlyMessage = true for bubble-less rendering.
+     */
+    fun createAnimatedGifMessage(
+        id: String = "msg_gif_001",
+        destinationHash: String = Constants.TEST_DESTINATION_HASH,
+        content: String = "", // Empty content for media-only
+        timestamp: Long = System.currentTimeMillis(),
+        isFromMe: Boolean = true,
+        status: String? = null, // null means use default based on isFromMe
+        imageData: ByteArray = createTestGifData(),
+    ) = MessageUi(
+        id = id,
+        destinationHash = destinationHash,
+        content = content,
+        timestamp = timestamp,
+        isFromMe = isFromMe,
+        status = status ?: if (isFromMe) "sent" else "delivered",
+        decodedImage = null,
+        hasImageAttachment = true,
+        imageData = imageData,
+        isAnimatedImage = true,
+        deliveryMethod = if (isFromMe) "direct" else null,
+        errorMessage = null,
+    )
+
+    /**
+     * Creates a GIF message with text (not media-only).
+     * This should NOT trigger isMediaOnlyMessage since it has text content.
+     */
+    fun createAnimatedGifMessageWithText(
+        id: String = "msg_gif_with_text_001",
+        destinationHash: String = Constants.TEST_DESTINATION_HASH,
+        content: String = "Check out this GIF!",
+        timestamp: Long = System.currentTimeMillis(),
+        isFromMe: Boolean = true,
+        imageData: ByteArray = createTestGifData(),
+    ) = MessageUi(
+        id = id,
+        destinationHash = destinationHash,
+        content = content,
+        timestamp = timestamp,
+        isFromMe = isFromMe,
+        status = if (isFromMe) "sent" else "delivered",
+        decodedImage = null,
+        hasImageAttachment = true,
+        imageData = imageData,
+        isAnimatedImage = true,
+        deliveryMethod = if (isFromMe) "direct" else null,
+        errorMessage = null,
+    )
+
+    /**
+     * Creates a GIF reply message (not media-only due to reply context).
+     * This should NOT trigger isMediaOnlyMessage since it's a reply.
+     */
+    fun createAnimatedGifReplyMessage(
+        id: String = "msg_gif_reply_001",
+        destinationHash: String = Constants.TEST_DESTINATION_HASH,
+        content: String = "",
+        timestamp: Long = System.currentTimeMillis(),
+        isFromMe: Boolean = true,
+        replyPreview: ReplyPreviewUi,
+        imageData: ByteArray = createTestGifData(),
+    ) = MessageUi(
+        id = id,
+        destinationHash = destinationHash,
+        content = content,
+        timestamp = timestamp,
+        isFromMe = isFromMe,
+        status = if (isFromMe) "sent" else "delivered",
+        decodedImage = null,
+        hasImageAttachment = true,
+        imageData = imageData,
+        isAnimatedImage = true,
+        replyToMessageId = replyPreview.messageId,
+        replyPreview = replyPreview,
+        deliveryMethod = if (isFromMe) "direct" else null,
+        errorMessage = null,
+    )
 }

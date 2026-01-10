@@ -10,6 +10,7 @@ import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.service.di.ServiceDatabaseProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 /**
  * Manages database persistence from the service process.
@@ -63,33 +64,36 @@ class ServicePersistenceManager(
         iconName: String?,
         iconForegroundColor: String?,
         iconBackgroundColor: String?,
+        propagationTransferLimitKb: Int?,
     ) {
         scope.launch {
             try {
                 // Preserve favorite status and existing icon appearance if announce already exists
                 val existing = announceDao.getAnnounce(destinationHash)
 
-                val entity = AnnounceEntity(
-                    destinationHash = destinationHash,
-                    peerName = peerName,
-                    publicKey = publicKey,
-                    appData = appData,
-                    hops = hops,
-                    lastSeenTimestamp = timestamp,
-                    nodeType = nodeType,
-                    receivingInterface = receivingInterface,
-                    receivingInterfaceType = receivingInterfaceType,
-                    aspect = aspect,
-                    isFavorite = existing?.isFavorite ?: false,
-                    favoritedTimestamp = existing?.favoritedTimestamp,
-                    stampCost = stampCost,
-                    stampCostFlexibility = stampCostFlexibility,
-                    peeringCost = peeringCost,
-                    // Prefer new icon appearance if provided, otherwise preserve existing
-                    iconName = iconName ?: existing?.iconName,
-                    iconForegroundColor = iconForegroundColor ?: existing?.iconForegroundColor,
-                    iconBackgroundColor = iconBackgroundColor ?: existing?.iconBackgroundColor,
-                )
+                val entity =
+                    AnnounceEntity(
+                        destinationHash = destinationHash,
+                        peerName = peerName,
+                        publicKey = publicKey,
+                        appData = appData,
+                        hops = hops,
+                        lastSeenTimestamp = timestamp,
+                        nodeType = nodeType,
+                        receivingInterface = receivingInterface,
+                        receivingInterfaceType = receivingInterfaceType,
+                        aspect = aspect,
+                        isFavorite = existing?.isFavorite ?: false,
+                        favoritedTimestamp = existing?.favoritedTimestamp,
+                        stampCost = stampCost,
+                        stampCostFlexibility = stampCostFlexibility,
+                        peeringCost = peeringCost,
+                        // Prefer new icon appearance if provided, otherwise preserve existing
+                        iconName = iconName ?: existing?.iconName,
+                        iconForegroundColor = iconForegroundColor ?: existing?.iconForegroundColor,
+                        iconBackgroundColor = iconBackgroundColor ?: existing?.iconBackgroundColor,
+                        propagationTransferLimitKb = propagationTransferLimitKb,
+                    )
 
                 announceDao.upsertAnnounce(entity)
                 Log.d(TAG, "Service persisted announce: $peerName ($destinationHash)")
@@ -109,11 +113,12 @@ class ServicePersistenceManager(
     ) {
         scope.launch {
             try {
-                val entity = PeerIdentityEntity(
-                    peerHash = peerHash,
-                    publicKey = publicKey,
-                    lastSeenTimestamp = System.currentTimeMillis(),
-                )
+                val entity =
+                    PeerIdentityEntity(
+                        peerHash = peerHash,
+                        publicKey = publicKey,
+                        lastSeenTimestamp = System.currentTimeMillis(),
+                    )
                 peerIdentityDao.insertPeerIdentity(entity)
                 Log.d(TAG, "Service persisted peer identity: $peerHash")
             } catch (e: Exception) {
@@ -127,9 +132,12 @@ class ServicePersistenceManager(
      * Called from EventHandler.handleMessageEvent() in the service process.
      *
      * This includes identity scoping to ensure messages are saved to the correct identity.
+     *
+     * This is a suspend function that completes before returning, ensuring the message
+     * is fully persisted before sync completion is reported to the UI.
      */
     @Suppress("LongParameterList") // Parameters mirror MessageEntity fields for direct persistence
-    fun persistMessage(
+    suspend fun persistMessage(
         messageHash: String,
         content: String,
         sourceHash: String,
@@ -138,44 +146,48 @@ class ServicePersistenceManager(
         publicKey: ByteArray?,
         replyToMessageId: String?,
         deliveryMethod: String?,
+        hasFileAttachments: Boolean = false,
     ) {
-        scope.launch {
-            try {
-                // Get active identity to scope the message correctly
-                val activeIdentity = localIdentityDao.getActiveIdentitySync()
-                if (activeIdentity == null) {
-                    Log.w(TAG, "No active identity - cannot persist message")
-                    return@launch
-                }
+        try {
+            // Get active identity to scope the message correctly
+            val activeIdentity = localIdentityDao.getActiveIdentitySync()
+            if (activeIdentity == null) {
+                Log.w(TAG, "No active identity - cannot persist message")
+                return
+            }
 
-                // Check for duplicates (composite key is id + identityHash)
-                val existingMessage = messageDao.getMessageById(messageHash, activeIdentity.identityHash)
-                if (existingMessage != null) {
-                    Log.d(TAG, "Message already exists - skipping duplicate: $messageHash")
-                    return@launch
-                }
+            // Check for duplicates (composite key is id + identityHash)
+            val existingMessage = messageDao.getMessageById(messageHash, activeIdentity.identityHash)
+            if (existingMessage != null) {
+                Log.d(TAG, "Message already exists - skipping duplicate: $messageHash")
+                return
+            }
 
-                // Create/update conversation
-                val existingConversation = conversationDao.getConversation(
+            // Create/update conversation
+            val existingConversation =
+                conversationDao.getConversation(
                     sourceHash,
                     activeIdentity.identityHash,
                 )
 
-                // Get peer name from existing conversation or use formatted hash
-                val peerName = existingConversation?.peerName
+            // Get peer name from existing conversation or use formatted hash
+            val peerName =
+                existingConversation?.peerName
                     ?: "Peer ${sourceHash.take(8).uppercase()}"
 
-                // Insert/update conversation
-                if (existingConversation != null) {
-                    val updated = existingConversation.copy(
+            // Insert/update conversation
+            if (existingConversation != null) {
+                val updated =
+                    existingConversation.copy(
                         lastMessage = content.take(100),
                         lastMessageTimestamp = timestamp,
                         unreadCount = existingConversation.unreadCount + 1,
                         peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
                     )
-                    conversationDao.updateConversation(updated)
-                } else {
-                    val newConversation = ConversationEntity(
+                conversationDao.updateConversation(updated)
+            } else {
+                val newConversation =
+                    ConversationEntity(
                         peerHash = sourceHash,
                         identityHash = activeIdentity.identityHash,
                         peerName = peerName,
@@ -185,11 +197,12 @@ class ServicePersistenceManager(
                         unreadCount = 1,
                         lastSeenTimestamp = 0,
                     )
-                    conversationDao.insertConversation(newConversation)
-                }
+                conversationDao.insertConversation(newConversation)
+            }
 
-                // Insert message
-                val messageEntity = MessageEntity(
+            // Insert message
+            val messageEntity =
+                MessageEntity(
                     id = messageHash,
                     conversationHash = sourceHash,
                     identityHash = activeIdentity.identityHash,
@@ -203,17 +216,25 @@ class ServicePersistenceManager(
                     deliveryMethod = deliveryMethod,
                     errorMessage = null,
                 )
-                messageDao.insertMessage(messageEntity)
+            messageDao.insertMessage(messageEntity)
 
-                // Store peer public key if available
-                if (publicKey != null) {
-                    persistPeerIdentity(sourceHash, publicKey)
-                }
-
-                Log.d(TAG, "Service persisted message from $sourceHash: ${content.take(30)}...")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error persisting message in service from $sourceHash", e)
+            // Check if this message has file attachments and should supersede a pending notification
+            if (hasFileAttachments) {
+                supersedePendingFileNotifications(
+                    sourceHash,
+                    activeIdentity.identityHash,
+                    messageHash,
+                )
             }
+
+            // Store peer public key if available
+            if (publicKey != null) {
+                persistPeerIdentity(sourceHash, publicKey)
+            }
+
+            Log.d(TAG, "Service persisted message from $sourceHash: ${content.take(30)}...")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting message in service from $sourceHash", e)
         }
     }
 
@@ -243,6 +264,81 @@ class ServicePersistenceManager(
         } catch (e: Exception) {
             Log.e(TAG, "Error checking message existence: $messageHash", e)
             false
+        }
+    }
+
+    /**
+     * Check if an incoming message with file attachments should supersede
+     * a pending file notification, and mark it as superseded if so.
+     *
+     * Matches notifications by original_message_id (the hash of the file message).
+     * Called only when hasFileAttachments=true, so we don't need to check fieldsJson.
+     */
+    @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
+    private suspend fun supersedePendingFileNotifications(
+        peerHash: String,
+        identityHash: String,
+        incomingMessageId: String,
+    ) {
+        try {
+            Log.d(TAG, "Checking for pending notifications to supersede for message $incomingMessageId")
+
+            // Find pending notifications in this conversation
+            val pendingNotifications = messageDao.findPendingFileNotifications(peerHash, identityHash)
+            Log.d(TAG, "supersede: Found ${pendingNotifications.size} pending notifications")
+            if (pendingNotifications.isEmpty()) return
+
+            // Find matching notification using functional approach
+            val match =
+                pendingNotifications.firstNotNullOfOrNull { notification ->
+                    tryParseNotificationMatch(notification, incomingMessageId)
+                }
+
+            if (match != null) {
+                val (notification, notificationJson, field16) = match
+                Log.d(TAG, "Superseding pending notification ${notification.id} for message $incomingMessageId")
+
+                // Mark as superseded by adding "superseded": true to field 16
+                field16.put("superseded", true)
+                notificationJson.put("16", field16)
+
+                messageDao.updateMessageFieldsJson(
+                    notification.id,
+                    identityHash,
+                    notificationJson.toString(),
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error checking for pending notifications to supersede: ${e.message}")
+        }
+    }
+
+    /**
+     * Try to parse a notification and check if it matches the incoming message ID.
+     * Returns a Triple of (notification, json, field16) if matched, null otherwise.
+     */
+    @Suppress("SwallowedException", "TooGenericExceptionCaught")
+    private fun tryParseNotificationMatch(
+        notification: MessageEntity,
+        incomingMessageId: String,
+    ): Triple<MessageEntity, JSONObject, JSONObject>? {
+        return try {
+            val notificationFieldsJson = notification.fieldsJson ?: return null
+            val notificationJson = JSONObject(notificationFieldsJson)
+            val field16 = notificationJson.optJSONObject("16")
+            val pendingInfo = field16?.optJSONObject("pending_file_notification")
+            val originalMessageId = pendingInfo?.optString("original_message_id", "") ?: ""
+
+            Log.d(TAG, "supersede: Comparing incoming=$incomingMessageId vs original=$originalMessageId")
+
+            if (field16 != null && originalMessageId.isNotEmpty() && originalMessageId == incomingMessageId) {
+                Triple(notification, notificationJson, field16)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse pending notification ${notification.id}: ${e.message}")
+            null
         }
     }
 

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,9 +56,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -304,6 +305,17 @@ fun AnnounceDetailScreen(
                             else -> "Weak signal strength"
                         },
                 )
+
+                // Show transfer size limit for propagation nodes
+                val transferLimit = announceNonNull.propagationTransferLimitKb
+                if (announceNonNull.nodeType == "PROPAGATION_NODE" && transferLimit != null) {
+                    InfoCard(
+                        icon = Icons.Default.Storage,
+                        title = "Transfer Size Limit",
+                        content = formatSizeLimit(transferLimit),
+                        subtitle = "Maximum message size accepted by this relay",
+                    )
+                }
 
                 // Show interface information if available
                 announceNonNull.receivingInterface?.let { interfaceName ->
@@ -570,4 +582,19 @@ private fun formatFullTimestamp(timestamp: Long): String {
     val date = java.util.Date(timestamp)
     val format = java.text.SimpleDateFormat("MMM dd, yyyy 'at' HH:mm:ss", java.util.Locale.getDefault())
     return format.format(date)
+}
+
+@Suppress("MagicNumber")
+private fun formatSizeLimit(sizeKb: Int): String {
+    return when {
+        sizeKb >= 1024 -> {
+            val sizeMb = sizeKb / 1024.0
+            if (sizeMb == sizeMb.toLong().toDouble()) {
+                "${sizeMb.toLong()} MB"
+            } else {
+                "%.1f MB".format(sizeMb)
+            }
+        }
+        else -> "$sizeKb KB"
+    }
 }

@@ -295,9 +295,20 @@ class ReticulumWrapper:
         self._pending_relay_fallback_messages = {}  # {msg_hash_hex: lxmf_message} - waiting for alternative
         self._max_relay_retries = 3  # Maximum number of alternative relays to try
 
+        # Pending file notifications - sent only after propagation succeeds
+        # When direct delivery fails for file attachments and we fall back to propagation,
+        # we track the message here. The notification is sent only when propagation succeeds.
+        self._pending_file_notifications = {}  # {msg_hash_hex: lxmf_message}
+
         # Native stamp generator callback (Kotlin)
         # Used to bypass Python multiprocessing issues on Android
         self.kotlin_stamp_generator_callback = None
+
+        # Propagation sync state callback (for real-time sync progress updates)
+        # Invoked when LXMF propagation state changes (idle, receiving, complete, etc.)
+        self.kotlin_propagation_state_callback = None
+        self._last_propagation_state = None  # For change detection
+        self._last_propagation_progress = 0.0  # For progress change detection during transfers
 
         # Service heartbeat tracking (Sideband-inspired process monitoring)
         # Python updates timestamp every second; Kotlin monitors for stale heartbeats
@@ -533,6 +544,24 @@ class ReticulumWrapper:
         except Exception as e:
             log_error("ReticulumWrapper", "set_stamp_generator_callback",
                      f"Failed to register stamp generator: {e}")
+
+    def set_propagation_state_callback(self, callback):
+        """
+        Set callback for propagation sync state changes.
+
+        This callback is invoked whenever the LXMF propagation state changes
+        (e.g., idle -> path_requested -> receiving -> complete).
+        Used by Kotlin to show real-time sync progress.
+
+        Callback signature: callback(state_json: str) -> None
+        state_json contains: {"state": int, "state_name": str, "progress": float, "messages_received": int}
+
+        Args:
+            callback: PyObject callable from Kotlin (passed via Chaquopy)
+        """
+        self.kotlin_propagation_state_callback = callback
+        log_info("ReticulumWrapper", "set_propagation_state_callback",
+                "Propagation state callback registered")
 
     def _clear_stale_ble_paths(self):
         """
@@ -905,7 +934,12 @@ class ReticulumWrapper:
             traceback.print_exc()
             return False
 
-    def initialize(self, config_json: str, identity_file_path: Optional[str] = None) -> Dict:
+    def initialize(
+        self,
+        config_json: str,
+        identity_file_path: Optional[str] = None,
+        incoming_message_limit_kb: int = 1024
+    ) -> Dict:
         """
         Initialize Reticulum with the given configuration.
 
@@ -917,6 +951,8 @@ class ReticulumWrapper:
                 - allowAnonymous: bool
             identity_file_path: Optional path to a specific identity file to load.
                                If None, uses default_identity file (backward compatible).
+            incoming_message_limit_kb: Maximum incoming message size in KB (default 1024 = 1MB).
+                                       Set to 131072 (128MB) for effectively unlimited.
 
         Returns:
             Dict with 'success' and optional 'error' keys
@@ -1404,10 +1440,13 @@ class ReticulumWrapper:
 
             # Initialize LXMF router with the default identity
             log_info("ReticulumWrapper", "initialize", "Creating LXMF router with default identity")
+            log_info("ReticulumWrapper", "initialize", f"Incoming message limit: {incoming_message_limit_kb}KB")
             self.router = LXMF.LXMRouter(
                 storagepath=self.storage_path,
                 identity=default_identity,
-                autopeer=True
+                autopeer=True,
+                delivery_limit=incoming_message_limit_kb,
+                propagation_limit=incoming_message_limit_kb
             )
             log_info("ReticulumWrapper", "initialize", "LXMF router created")
 
@@ -1657,7 +1696,13 @@ class ReticulumWrapper:
             # Notify Kotlin immediately via bridge (event-driven announce delivery)
             if self.kotlin_reticulum_bridge:
                 try:
-                    self.kotlin_reticulum_bridge.notifyAnnounceReceived()
+                    # Defensive check: ensure bridge is still valid
+                    if not hasattr(self.kotlin_reticulum_bridge, 'notifyAnnounceReceived'):
+                        log_error("ReticulumWrapper", "_announce_handler",
+                                  f"Bridge object corrupted: {type(self.kotlin_reticulum_bridge)} = {self.kotlin_reticulum_bridge}")
+                        self.kotlin_reticulum_bridge = None
+                    else:
+                        self.kotlin_reticulum_bridge.notifyAnnounceReceived()
                 except Exception as e:
                     log_error("ReticulumWrapper", "_announce_handler",
                               f"Kotlin announce notification failed: {e}")
@@ -2017,12 +2062,16 @@ class ReticulumWrapper:
             # Priority: FIELD_TELEMETRY (0x02) > FIELD_COLUMBA_META (0x70) > Legacy field 7
             is_location_only = False
 
-            if self.kotlin_location_received_callback and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
-                # Check if this is a location-only message (no text content or empty content)
-                content = lxmf_message.content
-                has_text_content = content and len(content.strip()) > 0 if isinstance(content, (str, bytes)) else False
+            # Check if message has text content (needed for empty message filtering)
+            content = lxmf_message.content
+            has_text_content = False
+            if content:
                 if isinstance(content, bytes):
                     has_text_content = len(content.strip()) > 0
+                elif isinstance(content, str):
+                    has_text_content = len(content.strip()) > 0
+
+            if self.kotlin_location_received_callback and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
 
                 location_event = None
                 telemetry_source = None
@@ -2162,6 +2211,23 @@ class ReticulumWrapper:
                 skip_reason = "location-only" if is_location_only else "reaction-only"
                 log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                          f"Skipping regular message processing for {skip_reason} message")
+                return
+            
+            # Skip truly empty messages (probe messages for link speed measurement)
+            # These have no text content and no meaningful fields (image, file, telemetry, etc.)
+            meaningful_fields = {
+                FIELD_TELEMETRY,           # 0x02 - Location/sensor data
+                LXMF.FIELD_FILE_ATTACHMENTS,  # 0x05
+                LXMF.FIELD_IMAGE,             # 0x06
+                LXMF.FIELD_AUDIO,             # 0x07
+            }
+            has_meaningful_fields = False
+            if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
+                has_meaningful_fields = any(f in lxmf_message.fields for f in meaningful_fields)
+            
+            if not has_text_content and not has_meaningful_fields:
+                log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                         f"Skipping empty probe message from {lxmf_message.source_hash.hex()[:16]}")
                 return
 
             # Add to pending_inbound queue (maintains backward compatibility with polling)
@@ -2816,7 +2882,7 @@ class ReticulumWrapper:
                 log_debug("ReticulumWrapper", "send_location_telemetry",
                           f"Sending Sideband-compatible telemetry in FIELD_TELEMETRY (0x02)")
 
-            # Create LXMF message with location telemetry (empty content body for telemetry-only)
+            # Create LXMF message with location telemetry
             lxmf_message = LXMF.LXMessage(
                 destination=recipient_lxmf_destination,
                 source=self.local_lxmf_destination,
@@ -2848,6 +2914,39 @@ class ReticulumWrapper:
 
         except Exception as e:
             log_error("ReticulumWrapper", "send_location_telemetry", f"❌ ERROR sending location telemetry: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    # ==================== MESSAGE SIZE LIMITS ====================
+
+    def set_incoming_message_size_limit(self, limit_kb: int) -> Dict:
+        """
+        Set the incoming message size limit.
+
+        This controls the maximum size of LXMF messages that can be received,
+        both for direct delivery and propagation node transfers. Both limits
+        are kept in sync for simplicity.
+
+        Args:
+            limit_kb: Size limit in KB (e.g., 1024 for 1MB, 131072 for 128MB "unlimited")
+
+        Returns:
+            Dict with 'success' or 'error'
+        """
+        try:
+            if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
+                return {"success": False, "error": "LXMF not initialized"}
+
+            # Set both limits to keep direct and propagation transfers in sync
+            self.router.delivery_per_transfer_limit = limit_kb
+            self.router.propagation_per_transfer_limit = limit_kb
+            log_info("ReticulumWrapper", "set_incoming_message_size_limit",
+                     f"Set incoming message limit to {limit_kb}KB (delivery and propagation)")
+
+            return {"success": True}
+        except Exception as e:
+            log_error("ReticulumWrapper", "set_incoming_message_size_limit", f"Error: {e}")
             import traceback
             traceback.print_exc()
             return {"success": False, "error": str(e)}
@@ -2958,6 +3057,13 @@ class ReticulumWrapper:
             log_info("ReticulumWrapper", "request_messages_from_propagation_node",
                     f"📡 Requesting up to {max_messages} messages from propagation node {self.active_propagation_node.hex()[:16]}...")
 
+            # Reset last propagation state and progress to force callback on any change.
+            # This is critical: if heartbeat loop is in 1-second idle mode, we might miss
+            # fast state transitions. By resetting to None/0, we ensure the next state
+            # (including COMPLETE) will be detected as a change and trigger the callback.
+            self._last_propagation_state = None
+            self._last_propagation_progress = 0.0
+
             # Request messages from the propagation node
             self.router.request_messages_from_propagation_node(identity, max_messages=max_messages)
 
@@ -2998,15 +3104,21 @@ class ReticulumWrapper:
             # in the last completed transfer
             last_result = getattr(self.router, 'propagation_transfer_last_result', None) or 0
 
-            # Map state to human-readable string
+            # Map state to human-readable string using LXMF constants
             state_names = {
-                0: "idle",
-                1: "path_requested",
-                2: "link_establishing",
-                3: "link_established",
-                4: "request_sent",
-                5: "receiving",
-                7: "complete"
+                LXMF.LXMRouter.PR_IDLE: "idle",
+                LXMF.LXMRouter.PR_PATH_REQUESTED: "path_requested",
+                LXMF.LXMRouter.PR_LINK_ESTABLISHING: "link_establishing",
+                LXMF.LXMRouter.PR_LINK_ESTABLISHED: "link_established",
+                LXMF.LXMRouter.PR_REQUEST_SENT: "request_sent",
+                LXMF.LXMRouter.PR_RECEIVING: "receiving",
+                LXMF.LXMRouter.PR_RESPONSE_RECEIVED: "response_received",
+                LXMF.LXMRouter.PR_COMPLETE: "complete",
+                LXMF.LXMRouter.PR_NO_PATH: "no_path",
+                LXMF.LXMRouter.PR_LINK_FAILED: "link_failed",
+                LXMF.LXMRouter.PR_TRANSFER_FAILED: "transfer_failed",
+                LXMF.LXMRouter.PR_NO_IDENTITY_RCVD: "no_identity_rcvd",
+                LXMF.LXMRouter.PR_NO_ACCESS: "no_access",
             }
             state_name = state_names.get(state, f"unknown_{state}")
 
@@ -3024,7 +3136,9 @@ class ReticulumWrapper:
     def send_lxmf_message_with_method(self, dest_hash: bytes, content: str, source_identity_private_key: bytes,
                                        delivery_method: str = "direct", try_propagation_on_fail: bool = True,
                                        image_data: bytes = None, image_format: str = None,
-                                       file_attachments: list = None, reply_to_message_id: str = None,
+                                       image_data_path: str = None,
+                                       file_attachments: list = None, file_attachment_paths: list = None,
+                                       reply_to_message_id: str = None,
                                        icon_name: str = None, icon_fg_color: str = None, icon_bg_color: str = None) -> Dict:
         """
         Send an LXMF message with explicit delivery method.
@@ -3035,9 +3149,14 @@ class ReticulumWrapper:
             source_identity_private_key: Private key of sender identity
             delivery_method: "opportunistic", "direct", or "propagated"
             try_propagation_on_fail: If True and direct fails, retry via propagation
-            image_data: Optional image data bytes
+            image_data: Optional image data bytes (for small images)
             image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
-            file_attachments: Optional list of [filename, bytes] pairs for Field 5
+            image_data_path: Optional file path for large images to bypass Binder IPC limits.
+                             File is read from disk and deleted after reading.
+            file_attachments: Optional list of [filename, bytes] pairs for Field 5 (small files)
+            file_attachment_paths: Optional list of [filename, path] pairs for large files
+                                   Files are read from disk to bypass Android Binder IPC limits.
+                                   Temp files are deleted after reading.
             reply_to_message_id: Optional message ID being replied to (stored in Field 16)
             icon_name: Optional icon name for FIELD_ICON_APPEARANCE (Sideband/MeshChat interop)
             icon_fg_color: Optional foreground color hex string (3 bytes RGB)
@@ -3048,7 +3167,7 @@ class ReticulumWrapper:
         """
         try:
             if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
-                return {"success": False, "error": "LXMF not initialized"}
+                return {"success": False, "error": "LXMF not initialized", "delivery_method": None}
 
             # Convert jarray to bytes if needed
             if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
@@ -3076,14 +3195,17 @@ class ReticulumWrapper:
                     log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
                                f"Content too large for OPPORTUNISTIC ({len(content_bytes)} bytes > 295), falling back to DIRECT")
                     lxmf_method = LXMF.LXMessage.DIRECT
-                if image_data or file_attachments:
+                if image_data or image_data_path or file_attachments:
                     log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
                                "OPPORTUNISTIC doesn't support attachments, falling back to DIRECT")
                     lxmf_method = LXMF.LXMessage.DIRECT
 
-            # Check if PROPAGATED requires a propagation node
+            # Check if PROPAGATED requires a propagation node - fall back to DIRECT if not available
+            # The message will retry via propagation when direct fails (if try_propagation_on_fail=True)
             if lxmf_method == LXMF.LXMessage.PROPAGATED and not self.active_propagation_node:
-                return {"success": False, "error": "PROPAGATED delivery requires a propagation node to be set"}
+                log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                           "No propagation node set, falling back to DIRECT (will retry via propagation later)")
+                lxmf_method = LXMF.LXMessage.DIRECT
 
             # Reconstruct source identity
             source_identity = RNS.Identity()
@@ -3117,7 +3239,7 @@ class ReticulumWrapper:
                         break
 
                 if not recipient_identity:
-                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."}
+                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received.", "delivery_method": None}
 
             # Create destination
             recipient_lxmf_destination = RNS.Destination(
@@ -3128,26 +3250,51 @@ class ReticulumWrapper:
                 "delivery"
             )
 
+            # If image_data_path is provided, read from file (for large images bypassing Binder IPC)
+            if image_data_path and image_format:
+                import os
+                try:
+                    with open(image_data_path, 'rb') as f:
+                        image_data = f.read()
+                    log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                             f"📎 Read large image from temp file: {len(image_data)} bytes")
+                except Exception as e:
+                    log_error("ReticulumWrapper", "send_lxmf_message_with_method",
+                              f"Failed to read image from temp file: {e}")
+                    return {"success": False, "error": f"Failed to read image file: {e}", "delivery_method": None}
+                finally:
+                    # Always try to delete temp file (best effort cleanup)
+                    try:
+                        if os.path.exists(image_data_path):
+                            os.remove(image_data_path)
+                            log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                                      f"Deleted temp image file: {image_data_path}")
+                    except Exception as del_err:
+                        log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                                   f"Failed to delete temp image file: {del_err}")
+
             # Prepare fields if image or file attachments provided
             fields = None
             if image_data and image_format:
                 if hasattr(image_data, '__iter__') and not isinstance(image_data, (bytes, bytearray)):
                     image_data = bytes(image_data)
-                fields = {6: [image_format, image_data]}
+                fields = {LXMF.FIELD_IMAGE: [image_format, image_data]}
                 log_info("ReticulumWrapper", "send_lxmf_message_with_method",
-                        f"📎 Attaching image: {len(image_data)} bytes, format={image_format}")
+                        f"📎 Attaching image: {len(image_data)} bytes, format={image_format}, "
+                        f"field_key={LXMF.FIELD_IMAGE}, format_type={type(image_format).__name__}, "
+                        f"data_type={type(image_data).__name__}")
 
             # Add file attachments to Field 5 if provided
+            converted_attachments = []
+
+            # Process small file attachments (bytes passed via Binder)
             if file_attachments:
-                if fields is None:
-                    fields = {}
                 # Convert Java ArrayList to Python list if needed
                 if hasattr(file_attachments, 'toArray'):
                     file_attachments = list(file_attachments.toArray())
                 elif hasattr(file_attachments, '__iter__') and not isinstance(file_attachments, (list, tuple)):
                     file_attachments = list(file_attachments)
                 # Convert each attachment: [filename, bytes]
-                converted_attachments = []
                 for attachment in file_attachments:
                     # Convert Java List to Python list if needed
                     if hasattr(attachment, 'toArray'):
@@ -3161,11 +3308,52 @@ class ReticulumWrapper:
                         if hasattr(data, '__iter__') and not isinstance(data, (bytes, bytearray)):
                             data = bytes(data)
                         converted_attachments.append([filename, data])
-                if converted_attachments:
-                    fields[5] = converted_attachments
-                    total_size = sum(len(a[1]) for a in converted_attachments)
-                    log_info("ReticulumWrapper", "send_lxmf_message_with_method",
-                            f"📎 Attaching {len(converted_attachments)} file(s): {total_size} bytes total")
+
+            # Process large file attachments (read from disk paths)
+            # These files were written to temp by Kotlin to bypass Binder IPC limits
+            if file_attachment_paths:
+                # Convert Java ArrayList to Python list if needed
+                if hasattr(file_attachment_paths, 'toArray'):
+                    file_attachment_paths = list(file_attachment_paths.toArray())
+                elif hasattr(file_attachment_paths, '__iter__') and not isinstance(file_attachment_paths, (list, tuple)):
+                    file_attachment_paths = list(file_attachment_paths)
+
+                for path_info in file_attachment_paths:
+                    # Convert Java List to Python list if needed
+                    if hasattr(path_info, 'toArray'):
+                        path_info = list(path_info.toArray())
+                    elif hasattr(path_info, '__iter__') and not isinstance(path_info, (list, tuple)):
+                        path_info = list(path_info)
+
+                    if len(path_info) >= 2:
+                        filename = str(path_info[0])
+                        file_path = str(path_info[1])
+                        try:
+                            with open(file_path, 'rb') as f:
+                                data = f.read()
+                            converted_attachments.append([filename, data])
+                            log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                                    f"📎 Read large file from disk: {filename} ({len(data)} bytes)")
+                            # Delete the temp file after reading
+                            try:
+                                import os
+                                os.remove(file_path)
+                                log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                                        f"🗑️ Deleted temp file: {file_path}")
+                            except Exception as del_err:
+                                log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                                           f"Failed to delete temp file {file_path}: {del_err}")
+                        except Exception as read_err:
+                            log_error("ReticulumWrapper", "send_lxmf_message_with_method",
+                                     f"Failed to read file from {file_path}: {read_err}")
+
+            if converted_attachments:
+                if fields is None:
+                    fields = {}
+                fields[5] = converted_attachments
+                total_size = sum(len(a[1]) for a in converted_attachments)
+                log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                        f"📎 Attaching {len(converted_attachments)} file(s): {total_size} bytes total")
 
             # Add Field 16 (app extensions) for reply_to and future features
             # Field 16 is a dict that can contain: {"reply_to": "message_id", "reactions": {...}, etc.}
@@ -3251,6 +3439,14 @@ class ReticulumWrapper:
                 # Ensure timer is running
                 self._start_opportunistic_timer()
 
+            # Track PROPAGATED messages with file attachments for pending notification
+            # When propagation succeeds, we'll send a lightweight notification to the recipient
+            if lxmf_method == LXMF.LXMessage.PROPAGATED and msg_hash:
+                if hasattr(lxmf_message, 'fields') and lxmf_message.fields and 5 in lxmf_message.fields:
+                    self._pending_file_notifications[msg_hash.hex()] = lxmf_message
+                    log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                             f"Tracking {msg_hash.hex()[:16]}... for pending file notification after propagation")
+
             # Map method back to string for return
             method_names = {
                 LXMF.LXMessage.OPPORTUNISTIC: "opportunistic",
@@ -3270,7 +3466,7 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "send_lxmf_message_with_method", f"❌ ERROR: {e}")
             import traceback
             traceback.print_exc()
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "delivery_method": None}
 
     def send_reaction(self, dest_hash: bytes, target_message_id: str, emoji: str,
                       source_identity_private_key: bytes) -> Dict:
@@ -3363,7 +3559,7 @@ class ReticulumWrapper:
                      f"Field 16: {app_extensions}")
 
             # Reactions are small, use OPPORTUNISTIC for fast delivery
-            # Empty content since all data is in Field 16
+            # Empty content - Sideband doesn't support reactions anyway
             lxmf_message = LXMF.LXMessage(
                 destination=recipient_lxmf_destination,
                 source=self.local_lxmf_destination,
@@ -3426,6 +3622,14 @@ class ReticulumWrapper:
                 status = 'propagated'
                 log_info("ReticulumWrapper", "_on_message_delivered",
                         f"📤 Message {msg_hash[:16]}... PROPAGATED (stored on relay)")
+
+                # If this message was tracked for pending file notification, send it now
+                # The notification tells the recipient to sync with the relay to get the file
+                if msg_hash in self._pending_file_notifications:
+                    tracked_message = self._pending_file_notifications.pop(msg_hash)
+                    log_info("ReticulumWrapper", "_on_message_delivered",
+                            f"📬 Sending pending file notification now that propagation confirmed")
+                    self._send_pending_file_notification(tracked_message)
 
             # Remove from opportunistic tracking (if it was being tracked)
             if msg_hash in self._opportunistic_messages:
@@ -3517,6 +3721,13 @@ class ReticulumWrapper:
 
                 # Re-submit to router (will go through pending_deferred_stamps for stamp generation)
                 self.router.handle_outbound(lxmf_message)
+
+                # If message has file attachments, track it for notification AFTER propagation succeeds
+                # We don't send the notification immediately - wait until the relay confirms receipt
+                if hasattr(lxmf_message, 'fields') and lxmf_message.fields and 5 in lxmf_message.fields:
+                    self._pending_file_notifications[msg_hash] = lxmf_message
+                    log_debug("ReticulumWrapper", "_on_message_failed",
+                             f"Tracking {msg_hash[:16]}... for pending file notification after propagation")
 
                 # Notify Kotlin of retry (status = "retrying_propagated")
                 if self.kotlin_delivery_status_callback:
@@ -3628,6 +3839,115 @@ class ReticulumWrapper:
         else:
             log_warning("ReticulumWrapper", "_fail_message_permanently",
                        "No Kotlin callback registered - failure status not reported")
+
+    def _extract_file_summary(self, lxmf_message) -> dict:
+        """
+        Extract summary of file attachments from an LXMF message.
+
+        Args:
+            lxmf_message: LXMF.LXMessage with fields
+
+        Returns:
+            Dict with first_filename, file_count, total_size, or None if no attachments
+        """
+        try:
+            if not hasattr(lxmf_message, 'fields') or not lxmf_message.fields:
+                return None
+
+            # Field 5 = FILE_ATTACHMENTS: list of [filename, bytes] tuples
+            if 5 not in lxmf_message.fields:
+                return None
+
+            attachments = lxmf_message.fields[5]
+            if not attachments or not isinstance(attachments, list):
+                return None
+
+            first_filename = "file"
+            file_count = 0
+            total_size = 0
+
+            for attachment in attachments:
+                if isinstance(attachment, (list, tuple)) and len(attachment) >= 2:
+                    filename = str(attachment[0]) if attachment[0] else "file"
+                    data = attachment[1]
+                    size = len(data) if isinstance(data, (bytes, bytearray)) else 0
+
+                    if file_count == 0:
+                        first_filename = filename
+
+                    file_count += 1
+                    total_size += size
+
+            if file_count == 0:
+                return None
+
+            return {
+                'first_filename': first_filename,
+                'file_count': file_count,
+                'total_size': total_size
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "_extract_file_summary",
+                     f"Error extracting file summary: {e}")
+            return None
+
+    def _send_pending_file_notification(self, lxmf_message):
+        """
+        Send a lightweight notification to recipient that a file is coming via propagation.
+
+        This is called when direct delivery fails and we fall back to propagation for a
+        message with file attachments. The notification lets the recipient know they
+        need to sync with the relay to receive the file.
+
+        Args:
+            lxmf_message: The original LXMF.LXMessage being retried via propagation
+        """
+        try:
+            # Extract file summary
+            file_summary = self._extract_file_summary(lxmf_message)
+            if not file_summary:
+                log_debug("ReticulumWrapper", "_send_pending_file_notification",
+                         "No file attachments found, skipping notification")
+                return
+
+            msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
+
+            # Build notification with Field 16 (APP_EXTENSIONS_FIELD)
+            import json
+            notification_data = {
+                "pending_file_notification": {
+                    "original_message_id": msg_hash,
+                    "filename": file_summary['first_filename'],
+                    "file_count": file_summary['file_count'],
+                    "total_size": file_summary['total_size'],
+                    "timestamp": int(time.time() * 1000)
+                }
+            }
+            fields = {16: notification_data}
+
+            # Create notification message - use OPPORTUNISTIC for fast delivery
+            notification_msg = LXMF.LXMessage(
+                destination=lxmf_message.destination,
+                source=lxmf_message.source,
+                content=b"",  # Empty content - notification only
+                title="",
+                fields=fields
+            )
+            notification_msg.desired_method = LXMF.LXMessage.OPPORTUNISTIC
+
+            # Submit to router
+            self.router.handle_outbound(notification_msg)
+
+            log_info("ReticulumWrapper", "_send_pending_file_notification",
+                    f"📤 Sent pending file notification for {msg_hash[:16]}... "
+                    f"({file_summary['file_count']} files, {file_summary['total_size']} bytes)")
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "_send_pending_file_notification",
+                     f"Error sending notification: {e}")
+            import traceback
+            traceback.print_exc()
 
     def on_alternative_relay_received(self, relay_hash):
         """
@@ -3834,16 +4154,92 @@ class ReticulumWrapper:
             log_info("ReticulumWrapper", "_start_heartbeat_thread",
                     "Started service heartbeat thread (1s interval)")
 
+    def _get_propagation_state_name(self, state: int) -> str:
+        """Map LXMF propagation state integer to human-readable name."""
+        state_names = {
+            LXMF.LXMRouter.PR_IDLE: "idle",
+            LXMF.LXMRouter.PR_PATH_REQUESTED: "path_requested",
+            LXMF.LXMRouter.PR_LINK_ESTABLISHING: "link_establishing",
+            LXMF.LXMRouter.PR_LINK_ESTABLISHED: "link_established",
+            LXMF.LXMRouter.PR_REQUEST_SENT: "request_sent",
+            LXMF.LXMRouter.PR_RECEIVING: "receiving",
+            LXMF.LXMRouter.PR_RESPONSE_RECEIVED: "response_received",
+            LXMF.LXMRouter.PR_COMPLETE: "complete",
+            LXMF.LXMRouter.PR_NO_PATH: "no_path",
+            LXMF.LXMRouter.PR_LINK_FAILED: "link_failed",
+            LXMF.LXMRouter.PR_TRANSFER_FAILED: "transfer_failed",
+            LXMF.LXMRouter.PR_NO_IDENTITY_RCVD: "no_identity_rcvd",
+            LXMF.LXMRouter.PR_NO_ACCESS: "no_access",
+        }
+        return state_names.get(state, f"unknown_{state}")
+
+    def _check_propagation_state_change(self):
+        """
+        Check if LXMF propagation state or progress changed and notify Kotlin if so.
+        Called from heartbeat loop at higher frequency during active sync.
+
+        Fires callback when:
+        - State changes (idle → receiving → complete, etc.)
+        - Progress changes by more than 1% during active transfer (state 5 = RECEIVING)
+        """
+        if not self.router or not self.kotlin_propagation_state_callback:
+            return
+
+        try:
+            current_state = self.router.propagation_transfer_state
+            progress = getattr(self.router, 'propagation_transfer_progress', 0.0) or 0.0
+            messages_received = getattr(self.router, 'propagation_transfer_last_result', 0) or 0
+
+            # Determine if we should send a callback:
+            # 1. State changed
+            # 2. Progress changed by more than 1% during active receiving (state 5)
+            state_changed = current_state != self._last_propagation_state
+            progress_changed = (current_state == 5 and  # STATE_RECEIVING
+                              abs(progress - self._last_propagation_progress) >= 0.01)
+
+            if state_changed or progress_changed:
+                self._last_propagation_state = current_state
+                self._last_propagation_progress = progress
+
+                state_info = {
+                    "state": current_state,
+                    "state_name": self._get_propagation_state_name(current_state),
+                    "progress": progress,
+                    "messages_received": messages_received
+                }
+                self.kotlin_propagation_state_callback(json.dumps(state_info))
+
+                if state_changed:
+                    log_debug("ReticulumWrapper", "_check_propagation_state_change",
+                             f"Propagation state changed: {state_info['state_name']} ({current_state})")
+                else:
+                    log_debug("ReticulumWrapper", "_check_propagation_state_change",
+                             f"Propagation progress: {progress:.1%}")
+        except Exception as e:
+            log_error("ReticulumWrapper", "_check_propagation_state_change", f"Error: {e}")
+
     def _heartbeat_loop(self):
         """
-        Background loop that updates the heartbeat timestamp every second.
-        Runs while self.initialized is True. Kotlin monitors this timestamp
-        and will restart the service if it becomes stale (> 10 seconds old).
+        Background loop that updates the heartbeat timestamp.
+        Also monitors propagation state changes for real-time sync progress.
+        Uses faster interval (100ms) during active sync, slower (1s) when idle.
         """
         log_debug("ReticulumWrapper", "_heartbeat_loop", "Heartbeat loop started")
         while self.initialized:
             self._heartbeat_timestamp = time.time()
-            time.sleep(1)
+
+            # Check propagation state changes (for real-time sync progress)
+            self._check_propagation_state_change()
+
+            # Use faster interval during active sync (100ms), slower when idle (1s)
+            if (self.router and
+                self._last_propagation_state is not None and
+                self._last_propagation_state not in (0, 7, 0xf0, 0xf1, 0xf2, 0xf3, 0xf4)):
+                # Active sync in progress - check more frequently
+                time.sleep(0.1)
+            else:
+                # Idle or complete - normal heartbeat interval
+                time.sleep(1)
         log_debug("ReticulumWrapper", "_heartbeat_loop", "Heartbeat loop exiting (not initialized)")
 
     def get_heartbeat(self) -> float:
@@ -4556,8 +4952,693 @@ class ReticulumWrapper:
         if not RETICULUM_AVAILABLE or not self.reticulum:
             return 3  # Mock value
 
-        # TODO: Implement hop count retrieval
-        return None
+        try:
+            if RNS.Transport.has_path(dest_hash):
+                return RNS.Transport.hops_to(dest_hash)
+            return None
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_hop_count", f"Error: {e}")
+            return None
+
+    def probe_link_speed(self, dest_hash: bytes, timeout_seconds: float = 10.0,
+                         delivery_method: str = "direct") -> Dict:
+        """
+        Probe the link speed to a destination by checking existing links or
+        establishing one via establish_link().
+
+        This provides link speed data for adaptive image compression.
+
+        Args:
+            dest_hash: Destination hash as bytes (16 bytes)
+            timeout_seconds: How long to wait for link establishment (default 10s)
+            delivery_method: "direct" or "propagated" - affects which link to check/establish
+
+        Returns:
+            Dict with:
+            - status: "success", "no_path", "no_identity", "timeout", or "error"
+            - establishment_rate_bps: Bits/sec from link handshake (or None)
+            - expected_rate_bps: Bits/sec from actual transfers (or None)
+            - rtt_seconds: Round-trip time in seconds (or None)
+            - hops: Number of hops to destination (or None)
+            - link_reused: True if an existing active link was used
+            - delivery_method: "direct" or "propagated" - which method was used
+        """
+        if not RETICULUM_AVAILABLE or not self.router:
+            return {
+                "status": "not_initialized",
+                "establishment_rate_bps": None,
+                "expected_rate_bps": None,
+                "rtt_seconds": None,
+                "hops": None,
+                "link_reused": False,
+                "delivery_method": delivery_method,
+                "next_hop_bitrate_bps": None,
+                "link_mtu": None
+            }
+
+        try:
+            # Convert jarray to bytes (Chaquopy passes Kotlin ByteArray as jarray)
+            dest_hash = bytes(dest_hash)
+            dest_hash_hex = dest_hash.hex()
+            log_info("ReticulumWrapper", "probe_link_speed",
+                     f"Probing link speed to {dest_hash_hex[:16]}... (method: {delivery_method})")
+
+            # Helper to find link in both direct_links and backchannel_links
+            def find_link(dest_hash_bytes, dest_hash_hex_str):
+                """Find a link by checking direct_links and backchannel_links."""
+                # Check direct_links first
+                if dest_hash_bytes in self.router.direct_links:
+                    return self.router.direct_links[dest_hash_bytes]
+                if dest_hash_hex_str in self.router.direct_links:
+                    return self.router.direct_links[dest_hash_hex_str]
+                # Check backchannel_links (incoming links from peer)
+                if dest_hash_bytes in self.router.backchannel_links:
+                    return self.router.backchannel_links[dest_hash_bytes]
+                if dest_hash_hex_str in self.router.backchannel_links:
+                    return self.router.backchannel_links[dest_hash_hex_str]
+                return None
+
+            # Helper to get next hop interface bitrate
+            def get_next_hop_bitrate() -> int:
+                try:
+                    if RNS.Transport.has_path(dest_hash):
+                        next_hop_iface = RNS.Transport.next_hop_interface(dest_hash)
+                        if next_hop_iface and hasattr(next_hop_iface, 'bitrate'):
+                            return next_hop_iface.bitrate
+                except Exception:
+                    pass
+                return None
+
+            # Helper to get link stats
+            def get_link_stats(link, reused: bool, method: str) -> Dict:
+                return {
+                    "status": "success",
+                    "establishment_rate_bps": link.get_establishment_rate(),
+                    "expected_rate_bps": link.get_expected_rate(),
+                    "rtt_seconds": link.rtt,
+                    "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
+                    "link_reused": reused,
+                    "delivery_method": method,
+                    "next_hop_bitrate_bps": get_next_hop_bitrate(),
+                    "link_mtu": link.get_mtu() if hasattr(link, 'get_mtu') else None
+                }
+
+            # 1. If propagated delivery, check propagation link AND backchannel link
+            if delivery_method == "propagated":
+                # Check if there's a backchannel link with expected_rate from the recipient
+                # This tells us actual measured throughput from prior transfers with this peer
+                backchannel_expected_rate = None
+                backchannel_link = find_link(dest_hash, dest_hash_hex)
+                if backchannel_link is not None and backchannel_link.status == RNS.Link.ACTIVE:
+                    backchannel_expected_rate = backchannel_link.get_expected_rate()
+                    if backchannel_expected_rate:
+                        log_info("ReticulumWrapper", "probe_link_speed",
+                                 f"Found backchannel expected_rate: {backchannel_expected_rate} bps")
+
+                if self.router.outbound_propagation_link is not None:
+                    link = self.router.outbound_propagation_link
+                    if link.status == RNS.Link.ACTIVE:
+                        log_info("ReticulumWrapper", "probe_link_speed",
+                                 f"Using existing propagation link")
+                        stats = get_link_stats(link, True, "propagated")
+                        # Use backchannel expected_rate if available (more relevant for this peer)
+                        if backchannel_expected_rate:
+                            stats["expected_rate_bps"] = backchannel_expected_rate
+                        return stats
+
+                # No active propagation link - return heuristics only
+                # Use status="success" since heuristic data is valid for compression recommendations
+                log_info("ReticulumWrapper", "probe_link_speed",
+                         f"No active propagation link, returning heuristics")
+                return {
+                    "status": "success",
+                    "establishment_rate_bps": None,
+                    "expected_rate_bps": backchannel_expected_rate,  # Include if available
+                    "rtt_seconds": None,
+                    "hops": None,
+                    "link_reused": False,
+                    "delivery_method": "propagated",
+                    "next_hop_bitrate_bps": get_next_hop_bitrate(),
+                    "link_mtu": None
+                }
+
+            # 2. Check for existing active link (direct or backchannel)
+            link = find_link(dest_hash, dest_hash_hex)
+            if link is not None and link.status == RNS.Link.ACTIVE:
+                log_info("ReticulumWrapper", "probe_link_speed",
+                         f"Reusing existing link to {dest_hash_hex[:16]}")
+                return get_link_stats(link, True, "direct")
+
+            # 3. No existing link - use establish_link() to create one
+            log_info("ReticulumWrapper", "probe_link_speed",
+                     f"No existing link, establishing link to {dest_hash_hex[:16]}...")
+
+            result = self.establish_link(dest_hash, timeout_seconds)
+
+            if result.get("success"):
+                # Link established - get stats from the link
+                link = find_link(dest_hash, dest_hash_hex)
+                if link is not None and link.status == RNS.Link.ACTIVE:
+                    return get_link_stats(link, result.get("already_existed", False), "direct")
+                else:
+                    # Link reported success but we can't find it - return what we have
+                    return {
+                        "status": "success",
+                        "establishment_rate_bps": result.get("establishment_rate_bps"),
+                        "expected_rate_bps": None,
+                        "rtt_seconds": None,
+                        "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
+                        "link_reused": result.get("already_existed", False),
+                        "delivery_method": "direct",
+                        "next_hop_bitrate_bps": get_next_hop_bitrate(),
+                        "link_mtu": None
+                    }
+            else:
+                # Link establishment failed - check if we have heuristic data
+                hops = RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None
+                next_hop_bps = get_next_hop_bitrate()
+
+                # If we have useful heuristic data (hop count or next hop bitrate),
+                # return "success" so the UI can show recommendations based on that.
+                # Only return failure status when we have no useful info.
+                if hops is not None or next_hop_bps is not None:
+                    log_info("ReticulumWrapper", "probe_link_speed",
+                             f"Link failed but have heuristics: hops={hops}, next_hop_bps={next_hop_bps}")
+                    return {
+                        "status": "success",
+                        "establishment_rate_bps": None,
+                        "expected_rate_bps": None,
+                        "rtt_seconds": None,
+                        "hops": hops,
+                        "link_reused": False,
+                        "delivery_method": "direct",
+                        "next_hop_bitrate_bps": next_hop_bps,
+                        "link_mtu": None
+                    }
+
+                # No heuristic data - return actual failure status
+                error = result.get("error", "unknown")
+                if "Identity not known" in error:
+                    status = "no_identity"
+                elif "No path" in error:
+                    status = "no_path"
+                elif "Timeout" in error:
+                    status = "timeout"
+                else:
+                    status = "failed"
+
+                return {
+                    "status": status,
+                    "establishment_rate_bps": None,
+                    "expected_rate_bps": None,
+                    "rtt_seconds": None,
+                    "hops": None,
+                    "link_reused": False,
+                    "delivery_method": "direct",
+                    "next_hop_bitrate_bps": None,
+                    "link_mtu": None
+                }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "probe_link_speed", f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "status": "error",
+                "error": str(e),
+                "establishment_rate_bps": None,
+                "expected_rate_bps": None,
+                "rtt_seconds": None,
+                "hops": None,
+                "link_reused": False,
+                "delivery_method": delivery_method,
+                "next_hop_bitrate_bps": None,
+                "link_mtu": None
+            }
+
+    def establish_link(self, dest_hash: bytes, timeout_seconds: float = 10.0) -> Dict:
+        """
+        Establish a link to a destination for real-time connectivity.
+        
+        This is used to:
+        1. Show "Online" status when link is active
+        2. Enable instant link speed probing for transfer time estimates
+        
+        Args:
+            dest_hash: Destination hash as bytes (16 bytes)
+            timeout_seconds: How long to wait for link establishment
+            
+        Returns:
+            Dict with:
+            - success: True if link is now active
+            - link_active: True if link is active
+            - establishment_rate_bps: Link speed in bits/sec (if active)
+            - error: Error message (if failed)
+        """
+        if not RETICULUM_AVAILABLE or not self.router:
+            return {"success": False, "link_active": False, "error": "Not initialized"}
+        
+        try:
+            dest_hash = bytes(dest_hash)
+            dest_hash_hex = dest_hash.hex()
+            log_info("ReticulumWrapper", "establish_link", 
+                     f"Establishing link to {dest_hash_hex[:16]}...")
+            
+            # Check if link already exists (in direct_links OR backchannel_links)
+            # Links are bidirectional, so either direction counts
+            link = None
+            if dest_hash in self.router.direct_links:
+                link = self.router.direct_links[dest_hash]
+            elif dest_hash_hex in self.router.direct_links:
+                link = self.router.direct_links[dest_hash_hex]
+            # Also check backchannel_links (incoming links from peer)
+            if link is None and dest_hash in self.router.backchannel_links:
+                link = self.router.backchannel_links[dest_hash]
+            elif link is None and dest_hash_hex in self.router.backchannel_links:
+                link = self.router.backchannel_links[dest_hash_hex]
+
+            # Fallback: Check Transport.active_links for incoming links not yet in backchannel_links
+            if link is None and hasattr(RNS.Transport, 'active_links'):
+                for active_link in RNS.Transport.active_links:
+                    if active_link.status == RNS.Link.ACTIVE:
+                        try:
+                            remote_identity = active_link.get_remote_identity()
+                            if remote_identity:
+                                remote_dest = RNS.Destination(
+                                    remote_identity,
+                                    RNS.Destination.OUT,
+                                    RNS.Destination.SINGLE,
+                                    "lxmf",
+                                    "delivery"
+                                )
+                                if remote_dest.hash == dest_hash or remote_dest.hash.hex() == dest_hash_hex:
+                                    log_info("ReticulumWrapper", "establish_link",
+                                             f"Found existing incoming link via Transport.active_links")
+                                    link = active_link
+                                    break
+                        except Exception:
+                            pass
+
+            # Helper to get next hop interface bitrate
+            def get_next_hop_bitrate(hash_to_check) -> int:
+                try:
+                    if RNS.Transport.has_path(hash_to_check):
+                        next_hop_iface = RNS.Transport.next_hop_interface(hash_to_check)
+                        if next_hop_iface and hasattr(next_hop_iface, 'bitrate'):
+                            return next_hop_iface.bitrate
+                except Exception:
+                    pass
+                return None
+
+            # Helper to build full link stats response
+            def get_full_link_stats(link, already_existed: bool, hash_for_path) -> Dict:
+                return {
+                    "success": True,
+                    "link_active": True,
+                    "establishment_rate_bps": link.get_establishment_rate(),
+                    "expected_rate_bps": link.get_expected_rate(),
+                    "rtt_seconds": link.rtt,
+                    "hops": RNS.Transport.hops_to(hash_for_path) if RNS.Transport.has_path(hash_for_path) else None,
+                    "link_mtu": link.mtu if hasattr(link, 'mtu') else None,
+                    "next_hop_bitrate_bps": get_next_hop_bitrate(hash_for_path),
+                    "already_existed": already_existed
+                }
+
+            if link is not None:
+                if link.status == RNS.Link.ACTIVE:
+                    log_info("ReticulumWrapper", "establish_link",
+                             f"Link already active to {dest_hash_hex[:16]} (existing)")
+                    return get_full_link_stats(link, True, dest_hash)
+                else:
+                    # Clean up stale link from both dicts before proceeding
+                    self.router.direct_links.pop(dest_hash, None)
+                    self.router.direct_links.pop(dest_hash_hex, None)
+                    self.router.backchannel_links.pop(dest_hash, None)
+                    self.router.backchannel_links.pop(dest_hash_hex, None)
+                    link = None
+            
+            # No existing link - try to establish one
+            # The recipient's LXMF router will accept incoming links to lxmf.delivery
+            
+            # DEBUG: Log target hash
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Target dest_hash: {dest_hash_hex}")
+            
+            # Try to recall identity using multiple methods (matching send_lxmf_message pattern)
+            recipient_identity = None
+            try:
+                # Try as destination hash first (this is what LXMF uses)
+                recipient_identity = RNS.Identity.recall(dest_hash)
+                if recipient_identity:
+                    log_debug("ReticulumWrapper", "establish_link",
+                             "Recalled identity from destination hash")
+                else:
+                    # Try with from_identity_hash=True
+                    recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                    if recipient_identity:
+                        log_debug("ReticulumWrapper", "establish_link",
+                                 "Recalled identity from identity hash")
+            except Exception as e:
+                log_debug("ReticulumWrapper", "establish_link",
+                         f"Error recalling identity from Reticulum: {e}")
+
+            # Fallback to local cache
+            if not recipient_identity and dest_hash_hex in self.identities:
+                recipient_identity = self.identities[dest_hash_hex]
+                log_debug("ReticulumWrapper", "establish_link",
+                         "Retrieved identity from local cache")
+
+            if not recipient_identity:
+                log_warning("ReticulumWrapper", "establish_link",
+                           f"Cannot establish link - identity not known for {dest_hash_hex[:16]}")
+                return {"success": False, "link_active": False, "error": "Identity not known"}
+            
+            # DEBUG: Log recalled identity hash
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Recalled identity hash: {recipient_identity.hash.hex()}")
+            
+            # Create destination for link (same as LXMF uses for DIRECT delivery)
+            recipient_dest = RNS.Destination(
+                recipient_identity,
+                RNS.Destination.OUT,
+                RNS.Destination.SINGLE,
+                "lxmf",
+                "delivery"
+            )
+            
+            # DEBUG: Log created destination hash and compare
+            created_hash = recipient_dest.hash.hex()
+            hashes_match = recipient_dest.hash == dest_hash
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Created dest.hash: {created_hash}")
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Hashes match: {hashes_match}")
+
+            # Always check for existing link using created destination hash
+            # (links are stored under recipient_dest.hash, which may differ from input dest_hash)
+            link = None
+            if recipient_dest.hash in self.router.direct_links:
+                link = self.router.direct_links[recipient_dest.hash]
+            elif recipient_dest.hash in self.router.backchannel_links:
+                link = self.router.backchannel_links[recipient_dest.hash]
+            if link is not None:
+                if link.status == RNS.Link.ACTIVE:
+                    log_info("ReticulumWrapper", "establish_link",
+                            f"Link already active (found via created hash) to {created_hash[:16]}")
+                    return get_full_link_stats(link, True, recipient_dest.hash)
+                else:
+                    # Clean up stale link before proceeding
+                    self.router.direct_links.pop(recipient_dest.hash, None)
+                    self.router.backchannel_links.pop(recipient_dest.hash, None)
+                    link = None
+
+            # Check if path exists to the created destination
+            # Use recipient_dest.hash since that's where we'll create the link
+            has_path = RNS.Transport.has_path(recipient_dest.hash)
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Transport.has_path({recipient_dest.hash.hex()[:16]}): {has_path}")
+
+            # Only request path if we don't have one (avoid unnecessary network traffic)
+            # If the existing path is stale, link establishment will fail and we can retry
+            if not has_path:
+                log_debug("ReticulumWrapper", "establish_link",
+                         f"Requesting path to {recipient_dest.hash.hex()[:16]}...")
+                RNS.Transport.request_path(recipient_dest.hash)
+
+            # Wait for path if we don't have one
+            if not has_path:
+                for _ in range(10):
+                    time.sleep(0.5)
+                    if RNS.Transport.has_path(recipient_dest.hash):
+                        log_debug("ReticulumWrapper", "establish_link", "Path discovered")
+                        has_path = True
+                        break
+                if not has_path:
+                    log_warning("ReticulumWrapper", "establish_link",
+                               f"No path available to {recipient_dest.hash.hex()[:16]}")
+                    return {"success": False, "link_active": False, "error": "No path available"}
+            
+            if not hashes_match:
+                log_warning("ReticulumWrapper", "establish_link",
+                           f"HASH MISMATCH! Target={dest_hash_hex[:16]}, Created={created_hash[:16]}")
+            
+            # Establish link using RNS.Link - matching LXMF's exact approach
+            log_info("ReticulumWrapper", "establish_link",
+                     f"Establishing new link to {dest_hash_hex[:16]}...")
+            
+            # Create a flag to track establishment
+            link_established = [False]
+            link_rate = [None]
+            
+            def on_link_established(link):
+                log_info("ReticulumWrapper", "establish_link", 
+                         f"Link callback: link to {dest_hash_hex[:16]} established!")
+                link_established[0] = True
+                link_rate[0] = link.get_establishment_rate()
+            
+            # Create link with callback (like LXMF does)
+            link = RNS.Link(recipient_dest, established_callback=on_link_established)
+            
+            # Store in router.direct_links using created destination hash
+            # (LXMF uses lxmessage.get_destination().hash which is the created destination's hash)
+            self.router.direct_links[recipient_dest.hash] = link
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Stored link in router.direct_links with key {recipient_dest.hash.hex()[:16]}")
+
+            # Wait for link establishment with timeout
+            # Use try/finally to ensure cleanup on all exit paths
+            try:
+                start_time = time.time()
+                while time.time() - start_time < timeout_seconds:
+                    if link_established[0] or link.status == RNS.Link.ACTIVE:
+                        log_info("ReticulumWrapper", "establish_link",
+                                 f"Link established to {dest_hash_hex[:16]} in {time.time() - start_time:.2f}s")
+
+                        # Identify ourselves on the link so the remote peer's LXMRouter
+                        # adds this to their backchannel_links (via delivery_remote_identified callback)
+                        try:
+                            if self.router.identity:
+                                link.identify(self.router.identity)
+                                log_debug("ReticulumWrapper", "establish_link",
+                                         f"Identified ourselves on link to enable backchannel")
+                        except Exception as e:
+                            log_warning("ReticulumWrapper", "establish_link",
+                                       f"Failed to identify on link: {e}")
+
+                        return get_full_link_stats(link, False, recipient_dest.hash)
+                    elif link.status == RNS.Link.CLOSED:
+                        log_warning("ReticulumWrapper", "establish_link",
+                                   f"Link closed during establishment to {dest_hash_hex[:16]}")
+                        return {"success": False, "link_active": False, "error": "Link closed"}
+                    time.sleep(0.1)
+
+                # Timeout
+                link.teardown()
+                log_info("ReticulumWrapper", "establish_link",
+                         f"Link establishment timed out to {dest_hash_hex[:16]} (peer may be offline)")
+                return {"success": False, "link_active": False, "error": "Timeout"}
+            finally:
+                # Clean up failed/inactive links from direct_links
+                # Only remove if it's still our link (not replaced by concurrent call)
+                if link.status != RNS.Link.ACTIVE:
+                    if self.router.direct_links.get(recipient_dest.hash) is link:
+                        self.router.direct_links.pop(recipient_dest.hash, None)
+            
+        except Exception as e:
+            # Clean up stored link if variables are in scope
+            try:
+                if recipient_dest and recipient_dest.hash in self.router.direct_links:
+                    try:
+                        link.teardown()
+                    except:
+                        pass
+                    self.router.direct_links.pop(recipient_dest.hash, None)
+            except NameError:
+                pass  # Variables not yet defined
+            log_error("ReticulumWrapper", "establish_link", f"Error: {e}")
+            return {"success": False, "link_active": False, "error": str(e)}
+
+    def close_link(self, dest_hash: bytes) -> Dict:
+        """
+        Close an active link to a destination.
+
+        Called when conversation has been inactive for too long.
+
+        Args:
+            dest_hash: Destination hash as bytes (16 bytes)
+
+        Returns:
+            Dict with:
+            - success: True if link was closed or didn't exist
+            - was_active: True if link was active before closing
+        """
+        if not RETICULUM_AVAILABLE or not self.router:
+            return {"success": True, "was_active": False}
+
+        try:
+            dest_hash = bytes(dest_hash)
+            dest_hash_hex = dest_hash.hex()
+
+            # Find link - try input hash first
+            link = None
+            link_key = None
+            if dest_hash in self.router.direct_links:
+                link = self.router.direct_links[dest_hash]
+                link_key = dest_hash
+            elif dest_hash_hex in self.router.direct_links:
+                link = self.router.direct_links[dest_hash_hex]
+                link_key = dest_hash_hex
+
+            # If not found, try via created destination hash (handles mismatch case)
+            if link is None:
+                recipient_identity = RNS.Identity.recall(dest_hash)
+                if not recipient_identity:
+                    recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                if not recipient_identity and dest_hash_hex in self.identities:
+                    recipient_identity = self.identities[dest_hash_hex]
+
+                if recipient_identity:
+                    recipient_dest = RNS.Destination(
+                        recipient_identity,
+                        RNS.Destination.OUT,
+                        RNS.Destination.SINGLE,
+                        "lxmf",
+                        "delivery"
+                    )
+                    if recipient_dest.hash in self.router.direct_links:
+                        link = self.router.direct_links[recipient_dest.hash]
+                        link_key = recipient_dest.hash
+
+            if link is None:
+                log_debug("ReticulumWrapper", "close_link",
+                         f"No link found to {dest_hash_hex[:16]}")
+                return {"success": True, "was_active": False}
+
+            was_active = link.status == RNS.Link.ACTIVE
+
+            if was_active:
+                log_info("ReticulumWrapper", "close_link",
+                        f"Closing link to {dest_hash_hex[:16]}")
+                link.teardown()
+
+            # Remove from direct_links
+            if link_key and link_key in self.router.direct_links:
+                self.router.direct_links.pop(link_key)
+
+            return {"success": True, "was_active": was_active}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "close_link", f"Error: {e}")
+            return {"success": False, "was_active": False, "error": str(e)}
+
+    def get_link_status(self, dest_hash: bytes) -> Dict:
+        """
+        Check if a link is active to a destination.
+
+        Checks both direct_links (outgoing) and backchannel_links (incoming).
+        A link is bidirectional, so either direction counts as "active".
+
+        Args:
+            dest_hash: Destination hash as bytes (16 bytes)
+
+        Returns:
+            Dict with:
+            - active: True if link is currently active
+            - establishment_rate_bps: Link speed in bits/sec (if active)
+        """
+        if not RETICULUM_AVAILABLE or not self.router:
+            return {"active": False}
+
+        try:
+            dest_hash = bytes(dest_hash)
+            dest_hash_hex = dest_hash.hex()
+
+            # Helper to find link in a dictionary
+            def find_link_in_dict(links_dict, hash_bytes, hash_hex):
+                if hash_bytes in links_dict:
+                    return links_dict[hash_bytes]
+                if hash_hex in links_dict:
+                    return links_dict[hash_hex]
+                return None
+
+            # Check direct_links (links we initiated)
+            link = find_link_in_dict(self.router.direct_links, dest_hash, dest_hash_hex)
+
+            # Check backchannel_links (links peer initiated to us)
+            if link is None:
+                link = find_link_in_dict(self.router.backchannel_links, dest_hash, dest_hash_hex)
+
+            # Fallback: Check RNS.Transport.active_links for incoming links
+            # This is rarely needed since link.identify() populates backchannel_links
+            if link is None and hasattr(RNS.Transport, 'active_links'):
+                for active_link in RNS.Transport.active_links:
+                    if active_link.status == RNS.Link.ACTIVE:
+                        try:
+                            remote_identity = active_link.get_remote_identity()
+                            if remote_identity:
+                                remote_dest = RNS.Destination(
+                                    remote_identity,
+                                    RNS.Destination.OUT,
+                                    RNS.Destination.SINGLE,
+                                    "lxmf",
+                                    "delivery"
+                                )
+                                if remote_dest.hash == dest_hash or remote_dest.hash.hex() == dest_hash_hex:
+                                    link = active_link
+                                    break
+                        except Exception:
+                            pass
+
+            # If not found, try via created destination hash (handles mismatch case)
+            if link is None:
+                recipient_identity = RNS.Identity.recall(dest_hash)
+                if not recipient_identity:
+                    recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                if not recipient_identity and dest_hash_hex in self.identities:
+                    recipient_identity = self.identities[dest_hash_hex]
+
+                if recipient_identity:
+                    recipient_dest = RNS.Destination(
+                        recipient_identity,
+                        RNS.Destination.OUT,
+                        RNS.Destination.SINGLE,
+                        "lxmf",
+                        "delivery"
+                    )
+                    created_hash = recipient_dest.hash
+                    created_hex = created_hash.hex()
+                    # Check both dictionaries with created hash
+                    link = find_link_in_dict(self.router.direct_links, created_hash, created_hex)
+                    if link is None:
+                        link = find_link_in_dict(self.router.backchannel_links, created_hash, created_hex)
+
+            if link is not None and link.status == RNS.Link.ACTIVE:
+                # Helper to get next hop interface bitrate
+                def get_next_hop_bitrate(hash_to_check) -> int:
+                    try:
+                        if RNS.Transport.has_path(hash_to_check):
+                            next_hop_iface = RNS.Transport.next_hop_interface(hash_to_check)
+                            if next_hop_iface and hasattr(next_hop_iface, 'bitrate'):
+                                return next_hop_iface.bitrate
+                    except Exception:
+                        pass
+                    return None
+
+                return {
+                    "active": True,
+                    "establishment_rate_bps": link.get_establishment_rate(),
+                    "expected_rate_bps": link.get_expected_rate(),
+                    "rtt_seconds": link.rtt,
+                    "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
+                    "link_mtu": link.mtu if hasattr(link, 'mtu') else None,
+                    "next_hop_bitrate_bps": get_next_hop_bitrate(dest_hash),
+                }
+
+            return {"active": False}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_link_status", f"Error: {e}")
+            return {"active": False, "error": str(e)}
 
     def get_debug_info(self) -> Dict:
         """

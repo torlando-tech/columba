@@ -3,7 +3,9 @@ package com.lxmf.messenger.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.data.repository.IdentityRepository
+import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
@@ -82,6 +84,12 @@ data class SettingsState(
     val activeSharingSessions: List<com.lxmf.messenger.service.SharingSession> = emptyList(),
     val defaultSharingDuration: String = "ONE_HOUR",
     val locationPrecisionRadius: Int = 0,
+    // Incoming message size limit (default 1MB)
+    val incomingMessageSizeLimitKb: Int = 1024,
+    // Image compression state
+    val imageCompressionPreset: ImageCompressionPreset = ImageCompressionPreset.AUTO,
+    /** Optimal preset based on interfaces */
+    val detectedCompressionPreset: ImageCompressionPreset? = null,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -95,6 +103,7 @@ class SettingsViewModel
         private val interfaceConfigManager: com.lxmf.messenger.service.InterfaceConfigManager,
         private val propagationNodeManager: PropagationNodeManager,
         private val locationSharingManager: com.lxmf.messenger.service.LocationSharingManager,
+        private val interfaceRepository: InterfaceRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -130,6 +139,7 @@ class SettingsViewModel
             loadSettings()
             // Always load location sharing settings (not dependent on monitors)
             loadLocationSharingSettings()
+            loadImageCompressionSettings()
             // Always start sync state monitoring (no infinite loops, needed for UI)
             startSyncStateMonitor()
             if (enableMonitors) {
@@ -1207,6 +1217,11 @@ class SettingsViewModel
                     _state.update { it.copy(locationPrecisionRadius = radiusMeters) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.incomingMessageSizeLimitKbFlow.collect { limitKb ->
+                    _state.update { it.copy(incomingMessageSizeLimitKb = limitKb) }
+                }
+            }
         }
 
         /**
@@ -1278,6 +1293,98 @@ class SettingsViewModel
                 Log.d(TAG, "Location precision radius set to: ${radiusMeters}m")
                 // Send immediate update to all active sharing recipients with new precision
                 locationSharingManager.sendImmediateUpdate()
+            }
+        }
+
+        // Incoming message size limit methods
+
+        /**
+         * Set the incoming message size limit.
+         * This controls the maximum size of LXMF messages that can be received.
+         * Messages exceeding this limit will be rejected by the LXMF router.
+         *
+         * @param limitKb Size limit in KB (512 to 131072, representing 0.5MB to 128MB)
+         */
+        fun setIncomingMessageSizeLimit(limitKb: Int) {
+            viewModelScope.launch {
+                settingsRepository.saveIncomingMessageSizeLimitKb(limitKb)
+                Log.d(TAG, "Incoming message size limit set to: ${limitKb}KB")
+
+                // Apply the change at runtime via the protocol
+                if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
+                    reticulumProtocol.setIncomingMessageSizeLimit(limitKb)
+                }
+            }
+        }
+
+        // Image compression methods
+
+        /**
+         * Load image compression settings and start monitoring for changes.
+         */
+        private fun loadImageCompressionSettings() {
+            viewModelScope.launch {
+                // Load saved preset
+                settingsRepository.imageCompressionPresetFlow.collect { preset ->
+                    _state.value = _state.value.copy(imageCompressionPreset = preset)
+                    Log.d(TAG, "Image compression preset loaded: ${preset.name}")
+
+                    // Update detected preset when AUTO is selected
+                    if (preset == ImageCompressionPreset.AUTO) {
+                        updateDetectedPreset()
+                    }
+                }
+            }
+
+            // Also monitor interface changes to update detected preset
+            viewModelScope.launch {
+                interfaceRepository.enabledInterfaces.collect {
+                    if (_state.value.imageCompressionPreset == ImageCompressionPreset.AUTO) {
+                        updateDetectedPreset()
+                    }
+                }
+            }
+        }
+
+        /**
+         * Update the detected optimal preset.
+         * Since link speed probing now determines the preset at send time,
+         * we use MEDIUM as a reasonable default for display purposes.
+         */
+        private fun updateDetectedPreset() {
+            val detected = ImageCompressionPreset.MEDIUM
+            _state.value = _state.value.copy(detectedCompressionPreset = detected)
+            Log.d(TAG, "Default compression preset: ${detected.name}")
+        }
+
+        /**
+         * Set the image compression preset.
+         *
+         * @param preset The compression preset to use
+         */
+        fun setImageCompressionPreset(preset: ImageCompressionPreset) {
+            viewModelScope.launch {
+                settingsRepository.saveImageCompressionPreset(preset)
+                Log.d(TAG, "Image compression preset set to: ${preset.name}")
+
+                // Update detected preset if AUTO is selected
+                if (preset == ImageCompressionPreset.AUTO) {
+                    updateDetectedPreset()
+                } else {
+                    _state.value = _state.value.copy(detectedCompressionPreset = null)
+                }
+            }
+        }
+
+        /**
+         * Get the effective compression preset (resolves AUTO to detected).
+         */
+        fun getEffectiveCompressionPreset(): ImageCompressionPreset {
+            val current = _state.value.imageCompressionPreset
+            return if (current == ImageCompressionPreset.AUTO) {
+                _state.value.detectedCompressionPreset ?: ImageCompressionPreset.HIGH
+            } else {
+                current
             }
         }
     }

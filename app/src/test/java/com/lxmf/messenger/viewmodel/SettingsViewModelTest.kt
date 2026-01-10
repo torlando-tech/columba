@@ -4,6 +4,7 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.IdentityRepository
+import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
@@ -56,6 +57,7 @@ class SettingsViewModelTest {
     private lateinit var interfaceConfigManager: InterfaceConfigManager
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
+    private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -72,6 +74,8 @@ class SettingsViewModelTest {
     private val retrievalIntervalSecondsFlow = MutableStateFlow(30)
     private val transportNodeEnabledFlow = MutableStateFlow(true)
     private val defaultDeliveryMethodFlow = MutableStateFlow("direct")
+    private val imageCompressionPresetFlow =
+        MutableStateFlow(com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO)
 
     @Before
     fun setup() {
@@ -86,9 +90,13 @@ class SettingsViewModelTest {
         interfaceConfigManager = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
+        interfaceRepository = mockk(relaxed = true)
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
+
+        // Setup interface repository flow mock
+        every { interfaceRepository.enabledInterfaces } returns flowOf(emptyList())
 
         // Setup repository flow mocks
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
@@ -103,6 +111,7 @@ class SettingsViewModelTest {
         every { settingsRepository.retrievalIntervalSecondsFlow } returns retrievalIntervalSecondsFlow
         every { settingsRepository.transportNodeEnabledFlow } returns transportNodeEnabledFlow
         every { settingsRepository.defaultDeliveryMethodFlow } returns defaultDeliveryMethodFlow
+        every { settingsRepository.imageCompressionPresetFlow } returns imageCompressionPresetFlow
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 
         // Mock PropagationNodeManager flows (StateFlows)
@@ -136,6 +145,7 @@ class SettingsViewModelTest {
             interfaceConfigManager = interfaceConfigManager,
             propagationNodeManager = propagationNodeManager,
             locationSharingManager = locationSharingManager,
+            interfaceRepository = interfaceRepository,
         )
     }
 
@@ -1430,6 +1440,7 @@ class SettingsViewModelTest {
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
+                    interfaceRepository = interfaceRepository,
                 )
 
             viewModel.state.test {
@@ -1472,6 +1483,7 @@ class SettingsViewModelTest {
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
+                    interfaceRepository = interfaceRepository,
                 )
 
             viewModel.state.test {
@@ -2060,6 +2072,7 @@ class SettingsViewModelTest {
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
+                    interfaceRepository = interfaceRepository,
                 )
 
             // Wait for any potential async operations to settle
@@ -2099,6 +2112,7 @@ class SettingsViewModelTest {
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
+                    interfaceRepository = interfaceRepository,
                 )
 
             // The ViewModel should be created successfully with ServiceReticulumProtocol
@@ -2319,6 +2333,105 @@ class SettingsViewModelTest {
             // Verify update was attempted
             coVerify {
                 identityRepository.updateIconAppearance("abc123", "account", "FFFFFF", "1E88E5")
+            }
+        }
+
+    // endregion
+
+    // region Image Compression Tests
+
+    @Test
+    fun `initial state has AUTO image compression preset`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO,
+                    state.imageCompressionPreset,
+                )
+            }
+        }
+
+    @Test
+    fun `setImageCompressionPreset saves preset to repository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.LOW)
+
+            coVerify {
+                settingsRepository.saveImageCompressionPreset(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.LOW,
+                )
+            }
+        }
+
+    @Test
+    fun `setImageCompressionPreset to HIGH saves preset`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.HIGH)
+
+            coVerify {
+                settingsRepository.saveImageCompressionPreset(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.HIGH,
+                )
+            }
+        }
+
+    @Test
+    fun `setImageCompressionPreset to MEDIUM saves preset`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.MEDIUM)
+
+            coVerify {
+                settingsRepository.saveImageCompressionPreset(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.MEDIUM,
+                )
+            }
+        }
+
+    @Test
+    fun `setImageCompressionPreset to ORIGINAL saves preset`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.ORIGINAL)
+
+            coVerify {
+                settingsRepository.saveImageCompressionPreset(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.ORIGINAL,
+                )
+            }
+        }
+
+    @Test
+    fun `image compression preset flow updates state`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                // Initial state
+                val initial = awaitItem()
+                assertEquals(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO,
+                    initial.imageCompressionPreset,
+                )
+
+                // Change preset via flow
+                imageCompressionPresetFlow.value = com.lxmf.messenger.data.model.ImageCompressionPreset.MEDIUM
+
+                // State should update
+                val updated = awaitItem()
+                assertEquals(
+                    com.lxmf.messenger.data.model.ImageCompressionPreset.MEDIUM,
+                    updated.imageCompressionPreset,
+                )
             }
         }
 

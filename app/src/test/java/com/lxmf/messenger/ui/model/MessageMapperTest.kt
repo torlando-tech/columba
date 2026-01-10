@@ -723,7 +723,8 @@ class MessageMapperTest {
         val result =
             decodeAndCacheImage(
                 "odd-hex-test",
-                """{"6": "fff"}""", // 3 chars, not valid hex pair
+                // 3 chars, not valid hex pair
+                """{"6": "fff"}""",
             )
 
         // Result may be null or non-null depending on Robolectric's BitmapFactory
@@ -868,14 +869,17 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `toMessageUi sets hasFileAttachments true for file reference`() {
-        val fieldsJson = """{"5": {"_file_ref": "/data/attachments/file.dat"}}"""
+    fun `toMessageUi sets hasFileAttachments true for per-file data reference`() {
+        // New format: metadata inline with per-file _data_ref for file data
+        val fieldsJson = """{"5": [{"filename": "doc.pdf", "size": 1024, "_data_ref": "/data/attachments/doc.pdf.dat"}]}"""
         val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
 
         val result = message.toMessageUi()
 
         assertTrue(result.hasFileAttachments)
-        // File reference loading happens async - attachments may be empty if file doesn't exist
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals("doc.pdf", result.fileAttachments[0].filename)
+        assertEquals(1024, result.fileAttachments[0].sizeBytes)
     }
 
     @Test
@@ -1045,13 +1049,13 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `loadFileAttachmentData reads from file reference when file exists`() {
-        // Create a temp file with JSON array of attachments
-        val attachmentData = """[{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]"""
-        val tempFile = tempFolder.newFile("file_attachments.dat")
-        tempFile.writeText(attachmentData)
+    fun `loadFileAttachmentData reads from per-file data reference when file exists`() {
+        // Create a temp file with hex-encoded attachment data
+        val tempFile = tempFolder.newFile("test_attachment.dat")
+        tempFile.writeText("48656c6c6f") // "Hello" in hex
 
-        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        // New format: metadata inline with per-file _data_ref
+        val fieldsJson = """{"5": [{"filename": "test.txt", "size": 5, "_data_ref": "${tempFile.absolutePath}"}]}"""
         val result = loadFileAttachmentData(fieldsJson, 0)
 
         assertNotNull(result)
@@ -1059,15 +1063,15 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `loadFileAttachmentData returns null for nonexistent file reference`() {
-        val fieldsJson = """{"5": {"_file_ref": "/nonexistent/path/file.dat"}}"""
+    fun `loadFileAttachmentData returns null for nonexistent data reference`() {
+        val fieldsJson = """{"5": [{"filename": "test.txt", "size": 5, "_data_ref": "/nonexistent/path/file.dat"}]}"""
         val result = loadFileAttachmentData(fieldsJson, 0)
         assertNull(result)
     }
 
     @Test
-    fun `loadFileAttachmentData returns null for empty file reference path`() {
-        val fieldsJson = """{"5": {"_file_ref": ""}}"""
+    fun `loadFileAttachmentData returns null for empty data reference path`() {
+        val fieldsJson = """{"5": [{"filename": "test.txt", "size": 5, "_data_ref": ""}]}"""
         val result = loadFileAttachmentData(fieldsJson, 0)
         assertNull(result)
     }
@@ -1205,13 +1209,13 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `toMessageUi reads file attachments from disk file reference`() {
-        // Create temp file with attachment array
-        val attachmentData = """[{"filename": "disk_file.txt", "data": "446973", "size": 3}]"""
-        val tempFile = tempFolder.newFile("attachments_field5.dat")
-        tempFile.writeText(attachmentData)
+    fun `toMessageUi reads file attachments with per-file data references`() {
+        // Create temp file with hex-encoded attachment data
+        val tempFile = tempFolder.newFile("disk_file.dat")
+        tempFile.writeText("446973") // "Dis" in hex
 
-        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        // New format: metadata inline with per-file _data_ref
+        val fieldsJson = """{"5": [{"filename": "disk_file.txt", "size": 3, "_data_ref": "${tempFile.absolutePath}"}]}"""
         val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
 
         val result = message.toMessageUi()
@@ -1222,15 +1226,18 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `loadFileAttachmentData reads from disk file reference with multiple attachments`() {
-        val attachmentData = """[
-            {"filename": "a.txt", "data": "4141", "size": 2},
-            {"filename": "b.txt", "data": "4242", "size": 2}
-        ]"""
-        val tempFile = tempFolder.newFile("multi_attach.dat")
-        tempFile.writeText(attachmentData)
+    fun `loadFileAttachmentData reads from per-file data references with multiple attachments`() {
+        // Create temp files with hex-encoded data
+        val tempFileA = tempFolder.newFile("a.dat")
+        val tempFileB = tempFolder.newFile("b.dat")
+        tempFileA.writeText("4141") // "AA" in hex
+        tempFileB.writeText("4242") // "BB" in hex
 
-        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        // New format: each attachment has its own _data_ref
+        val fieldsJson = """{"5": [
+            {"filename": "a.txt", "size": 2, "_data_ref": "${tempFileA.absolutePath}"},
+            {"filename": "b.txt", "size": 2, "_data_ref": "${tempFileB.absolutePath}"}
+        ]}"""
 
         val resultA = loadFileAttachmentData(fieldsJson, 0)
         val resultB = loadFileAttachmentData(fieldsJson, 1)
@@ -1242,14 +1249,16 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `loadFileAttachmentData returns null for invalid JSON in file reference`() {
+    fun `loadFileAttachmentData handles invalid hex data in file reference gracefully`() {
         val tempFile = tempFolder.newFile("invalid.dat")
-        tempFile.writeText("not valid json [{{{")
+        // hexStringToByteArray doesn't validate hex - it returns garbage bytes for invalid input
+        tempFile.writeText("not valid hex [{{{")
 
-        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val fieldsJson = """{"5": [{"filename": "test.txt", "size": 5, "_data_ref": "${tempFile.absolutePath}"}]}"""
         val result = loadFileAttachmentData(fieldsJson, 0)
 
-        assertNull(result)
+        // Function returns a byte array (with garbage values) - doesn't validate hex
+        assertNotNull(result)
     }
 
     @Test
@@ -1278,19 +1287,18 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `toMessageUi handles file reference with malformed JSON in file`() {
-        val tempFile = tempFolder.newFile("malformed_attachments.dat")
-        tempFile.writeText("this is not json")
-
-        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+    fun `toMessageUi handles per-file data reference with missing file gracefully`() {
+        // New format: metadata inline with _data_ref pointing to nonexistent file
+        val fieldsJson = """{"5": [{"filename": "test.txt", "size": 5, "_data_ref": "/nonexistent/path/file.dat"}]}"""
         val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
 
         val result = message.toMessageUi()
 
-        // Should gracefully handle the error - hasFileAttachments is true because
-        // _file_ref exists, but parsing fails so list is empty
+        // hasFileAttachments is true because we have metadata in the array
+        // The file reference just means data loading will fail later
         assertTrue(result.hasFileAttachments)
-        assertTrue(result.fileAttachments.isEmpty())
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals("test.txt", result.fileAttachments[0].filename)
     }
 
     // ========== loadFileAttachmentMetadata() TESTS ==========
@@ -1398,12 +1406,9 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `loadFileAttachmentMetadata reads from file reference when file exists`() {
-        // Create a temporary file with JSON array of attachments
-        val tempFile = tempFolder.newFile("metadata_attachments.json")
-        tempFile.writeText("""[{"filename": "from_disk.pdf", "size": 9999, "data": "abc123"}]""")
-
-        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+    fun `loadFileAttachmentMetadata reads metadata from inline array with data reference`() {
+        // New format: metadata inline, file data on disk via _data_ref
+        val fieldsJson = """{"5": [{"filename": "from_disk.pdf", "size": 9999, "_data_ref": "/path/to/data.dat"}]}"""
         val result = loadFileAttachmentMetadata(fieldsJson, 0)
 
         assertNotNull(result)
@@ -1412,14 +1417,16 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `loadFileAttachmentMetadata returns null for file reference with nonexistent file`() {
+    fun `loadFileAttachmentMetadata returns null when field 5 is object not array`() {
+        // Old format is no longer supported
         val fieldsJson = """{"5": {"_file_ref": "/nonexistent/path/attachments.json"}}"""
         val result = loadFileAttachmentMetadata(fieldsJson, 0)
         assertNull(result)
     }
 
     @Test
-    fun `loadFileAttachmentMetadata returns null for empty file reference path`() {
+    fun `loadFileAttachmentMetadata returns null when field 5 is object with empty path`() {
+        // Old format is no longer supported
         val fieldsJson = """{"5": {"_file_ref": ""}}"""
         val result = loadFileAttachmentMetadata(fieldsJson, 0)
         assertNull(result)
@@ -1486,15 +1493,12 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `loadFileAttachmentMetadata reads from disk file with multiple attachments`() {
-        val attachmentData = """[
-            {"filename": "a.pdf", "size": 100},
-            {"filename": "b.txt", "size": 200}
-        ]"""
-        val tempFile = tempFolder.newFile("multi_metadata.dat")
-        tempFile.writeText(attachmentData)
-
-        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+    fun `loadFileAttachmentMetadata reads metadata from inline array with multiple attachments`() {
+        // New format: metadata inline with per-file data references
+        val fieldsJson = """{"5": [
+            {"filename": "a.pdf", "size": 100, "_data_ref": "/path/a.dat"},
+            {"filename": "b.txt", "size": 200, "_data_ref": "/path/b.dat"}
+        ]}"""
 
         val result0 = loadFileAttachmentMetadata(fieldsJson, 0)
         val result1 = loadFileAttachmentMetadata(fieldsJson, 1)
@@ -1509,13 +1513,829 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `loadFileAttachmentMetadata returns null for invalid JSON in file reference`() {
-        val tempFile = tempFolder.newFile("invalid_metadata.dat")
-        tempFile.writeText("not valid json [{{{")
-
-        val fieldsJson = """{"5": {"_file_ref": "${tempFile.absolutePath}"}}"""
+    fun `loadFileAttachmentMetadata returns null when field 5 object has invalid JSON path`() {
+        // Old format is no longer supported - objects in field 5 return null
+        val fieldsJson = """{"5": {"_file_ref": "/invalid/path.dat"}}"""
         val result = loadFileAttachmentMetadata(fieldsJson, 0)
 
         assertNull(result)
+    }
+
+    // ========== decodeImageWithAnimation() TESTS ==========
+
+    @Test
+    fun `decodeImageWithAnimation returns null for null fieldsJson`() {
+        val result = decodeImageWithAnimation("test-id", null)
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for empty fieldsJson`() {
+        val result = decodeImageWithAnimation("test-id", "")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for invalid JSON`() {
+        val result = decodeImageWithAnimation("test-id", "not valid json")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null when field 6 is missing`() {
+        val result = decodeImageWithAnimation("test-id", """{"1": "some text"}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for empty field 6`() {
+        val result = decodeImageWithAnimation("test-id", """{"6": ""}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for field 6 as number`() {
+        val result = decodeImageWithAnimation("test-id", """{"6": 12345}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for nonexistent file reference`() {
+        val result =
+            decodeImageWithAnimation(
+                "test-id",
+                """{"6": {"_file_ref": "/nonexistent/path/to/file.dat"}}""",
+            )
+        assertNull(result)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation detects animated GIF`() {
+        // Create animated GIF bytes
+        val animatedGifHex = createMinimalAnimatedGifHex()
+        val fieldsJson = """{"6": "$animatedGifHex"}"""
+
+        val result = decodeImageWithAnimation("animated-test", fieldsJson)
+
+        assertNotNull(result)
+        assertTrue(result!!.isAnimated)
+        assertNotNull(result.rawBytes)
+        // For animated GIFs, bitmap is not decoded (Coil handles it)
+        assertNull(result.bitmap)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation detects non-animated GIF as static`() {
+        // Non-animated GIF (GIF89a header only, no NETSCAPE extension, single frame)
+        val staticGif = createMinimalStaticGifBytes()
+        val staticGifHex = staticGif.joinToString("") { "%02x".format(it) }
+        val fieldsJson = """{"6": "$staticGifHex"}"""
+
+        val result = decodeImageWithAnimation("static-gif-test", fieldsJson)
+
+        assertNotNull(result)
+        assertFalse(result!!.isAnimated) // Single-frame GIF is not animated
+        assertNotNull(result.rawBytes)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation returns null for non-GIF header without decoding`() {
+        // PNG header bytes - will be extracted but may fail to decode as image
+        val pngHex = "89504e470d0a1a0a0000000d49484452"
+        val fieldsJson = """{"6": "$pngHex"}"""
+
+        // This tests that the function handles the bytes gracefully
+        // Result may be non-null (bytes extracted, not animated) or null (decode error)
+        // The important thing is it doesn't crash
+        val result = decodeImageWithAnimation("png-test", fieldsJson)
+
+        // If result is non-null, verify it's not detected as animated
+        result?.let {
+            assertFalse(it.isAnimated)
+            assertNotNull(it.rawBytes)
+        }
+    }
+
+    @Test
+    fun `decodeImageWithAnimation reads from file reference`() {
+        // Create animated GIF and save to temp file
+        val animatedGifHex = createMinimalAnimatedGifHex()
+        val tempFile = tempFolder.newFile("animated.dat")
+        tempFile.writeText(animatedGifHex)
+
+        val fieldsJson = """{"6": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = decodeImageWithAnimation("file-ref-test", fieldsJson)
+
+        assertNotNull(result)
+        assertTrue(result!!.isAnimated)
+        assertNotNull(result.rawBytes)
+    }
+
+    @Test
+    fun `decodeImageWithAnimation uses cached bitmap for static image`() {
+        val messageId = "cache-test-id"
+
+        // Ensure cache is empty
+        assertNull(ImageCache.get(messageId))
+
+        // Pre-populate cache with test bitmap
+        val testBitmap = createTestBitmap()
+        ImageCache.put(messageId, testBitmap)
+
+        // Use a static GIF (which won't be detected as animated)
+        val staticGif = createMinimalStaticGifBytes()
+        val staticGifHex = staticGif.joinToString("") { "%02x".format(it) }
+        val fieldsJson = """{"6": "$staticGifHex"}"""
+
+        val result = decodeImageWithAnimation(messageId, fieldsJson)
+
+        // Should return a result with the cached bitmap
+        assertNotNull(result)
+        assertFalse(result!!.isAnimated)
+        assertNotNull(result.rawBytes)
+        // The cached bitmap should be used
+        assertEquals(testBitmap, result.bitmap)
+    }
+
+    @Test
+    fun `DecodedImageResult equals returns true for identical data`() {
+        val bytes = byteArrayOf(0x01, 0x02, 0x03)
+        val result1 = DecodedImageResult(bytes.copyOf(), null, true)
+        val result2 = DecodedImageResult(bytes.copyOf(), null, true)
+        assertTrue(result1 == result2)
+    }
+
+    @Test
+    fun `DecodedImageResult equals returns false for different bytes`() {
+        val result1 = DecodedImageResult(byteArrayOf(0x01), null, true)
+        val result2 = DecodedImageResult(byteArrayOf(0x02), null, true)
+        assertFalse(result1 == result2)
+    }
+
+    @Test
+    fun `DecodedImageResult equals returns false for different isAnimated`() {
+        val bytes = byteArrayOf(0x01, 0x02, 0x03)
+        val result1 = DecodedImageResult(bytes.copyOf(), null, true)
+        val result2 = DecodedImageResult(bytes.copyOf(), null, false)
+        assertFalse(result1 == result2)
+    }
+
+    @Test
+    fun `DecodedImageResult hashCode is consistent for equal objects`() {
+        val bytes = byteArrayOf(0x01, 0x02, 0x03)
+        val result1 = DecodedImageResult(bytes.copyOf(), null, true)
+        val result2 = DecodedImageResult(bytes.copyOf(), null, true)
+        assertTrue(result1.hashCode() == result2.hashCode())
+    }
+
+    @Test
+    fun `toMessageUi sets isAnimatedImage to false by default`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = null))
+
+        val result = message.toMessageUi()
+
+        assertFalse(result.isAnimatedImage)
+        assertNull(result.imageData)
+    }
+
+    @Test
+    fun `toMessageUi handles message with image but no animation data`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"6": "ffd8ffe0"}"""))
+
+        val result = message.toMessageUi()
+
+        assertTrue(result.hasImageAttachment)
+        // isAnimatedImage and imageData are populated by ViewModel, not mapper
+        assertFalse(result.isAnimatedImage)
+        assertNull(result.imageData)
+    }
+
+    // ========== Helper Functions for Animation Tests ==========
+
+    /**
+     * Creates hex string for a minimal valid animated GIF.
+     */
+    private fun createMinimalAnimatedGifHex(): String {
+        val bytes = createMinimalAnimatedGifBytes()
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Creates a minimal valid animated GIF with 2 frames.
+     */
+    private fun createMinimalAnimatedGifBytes(): ByteArray {
+        val output = mutableListOf<Byte>()
+
+        // GIF89a header
+        output.addAll("GIF89a".toByteArray(Charsets.US_ASCII).toList())
+
+        // Logical Screen Descriptor
+        output.add(0x01)
+        output.add(0x00) // Width
+        output.add(0x01)
+        output.add(0x00) // Height
+        output.add(0x00) // Packed field
+        output.add(0x00) // Background color
+        output.add(0x00) // Pixel aspect ratio
+
+        // NETSCAPE2.0 Application Extension
+        output.add(0x21)
+        output.add(0xFF.toByte())
+        output.add(0x0B)
+        output.addAll("NETSCAPE2.0".toByteArray(Charsets.US_ASCII).toList())
+        output.add(0x03)
+        output.add(0x01)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+
+        // Frame 1 - Graphic Control Extension
+        output.add(0x21)
+        output.add(0xF9.toByte())
+        output.add(0x04)
+        output.add(0x00)
+        output.add(0x0A)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+
+        // Frame 1 - Image Descriptor
+        output.add(0x2C)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x01)
+        output.add(0x00)
+        output.add(0x01)
+        output.add(0x00)
+        output.add(0x00)
+
+        // Frame 1 - Image Data
+        output.add(0x02)
+        output.add(0x02)
+        output.add(0x44)
+        output.add(0x01)
+        output.add(0x00)
+
+        // Frame 2 - Graphic Control Extension
+        output.add(0x21)
+        output.add(0xF9.toByte())
+        output.add(0x04)
+        output.add(0x00)
+        output.add(0x0A)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+
+        // Frame 2 - Image Descriptor
+        output.add(0x2C)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x01)
+        output.add(0x00)
+        output.add(0x01)
+        output.add(0x00)
+        output.add(0x00)
+
+        // Frame 2 - Image Data
+        output.add(0x02)
+        output.add(0x02)
+        output.add(0x44)
+        output.add(0x01)
+        output.add(0x00)
+
+        // Trailer
+        output.add(0x3B)
+
+        return output.toByteArray()
+    }
+
+    /**
+     * Creates a minimal valid static GIF (single frame, no animation).
+     */
+    private fun createMinimalStaticGifBytes(): ByteArray {
+        val output = mutableListOf<Byte>()
+
+        // GIF89a header
+        output.addAll("GIF89a".toByteArray(Charsets.US_ASCII).toList())
+
+        // Logical Screen Descriptor
+        output.add(0x01)
+        output.add(0x00) // Width = 1
+        output.add(0x01)
+        output.add(0x00) // Height = 1
+        output.add(0x00) // Packed field (no global color table)
+        output.add(0x00) // Background color
+        output.add(0x00) // Pixel aspect ratio
+
+        // Single frame - Image Descriptor (no graphic control extension)
+        output.add(0x2C)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00)
+        output.add(0x00) // position
+        output.add(0x01)
+        output.add(0x00)
+        output.add(0x01)
+        output.add(0x00) // size
+        output.add(0x00) // packed field
+
+        // Image Data (minimal LZW)
+        output.add(0x02) // LZW minimum code size
+        output.add(0x02) // Sub-block size
+        output.add(0x44)
+        output.add(0x01) // LZW data
+        output.add(0x00) // Block terminator
+
+        // Trailer
+        output.add(0x3B)
+
+        return output.toByteArray()
+    }
+
+    // ========== MessageUi Computed Properties Tests ==========
+
+    @Test
+    fun `isMediaOnlyMessage returns true for animated GIF without text`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(1, 2, 3),
+                hasFileAttachments = false,
+            )
+
+        assertTrue(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns false when content is present`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "Hello!",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(1, 2, 3),
+            )
+
+        assertFalse(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns false when not animated`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = false,
+                imageData = byteArrayOf(1, 2, 3),
+            )
+
+        assertFalse(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns false when imageData is null`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = null,
+            )
+
+        assertFalse(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns false when has file attachments`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(1, 2, 3),
+                hasFileAttachments = true,
+            )
+
+        assertFalse(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns false when has reply preview`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(1, 2, 3),
+                replyPreview =
+                    ReplyPreviewUi(
+                        messageId = "original",
+                        senderName = "Alice",
+                        contentPreview = "Original message",
+                    ),
+            )
+
+        assertFalse(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns true with blank content`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "   \n\t  ",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(1, 2, 3),
+            )
+
+        assertTrue(messageUi.isMediaOnlyMessage)
+    }
+
+    // ========== isPendingFileNotification Tests ==========
+
+    @Test
+    fun `isPendingFileNotification returns false when fieldsJson is null`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = null,
+            )
+
+        assertFalse(messageUi.isPendingFileNotification)
+    }
+
+    @Test
+    fun `isPendingFileNotification returns false when no notification in json`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"reply_to": "some_id"}}""",
+            )
+
+        assertFalse(messageUi.isPendingFileNotification)
+    }
+
+    @Test
+    fun `isPendingFileNotification returns true when notification present`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"pending_file_notification": {"original_message_id": "abc"}}}""",
+            )
+
+        assertTrue(messageUi.isPendingFileNotification)
+    }
+
+    // ========== isSuperseded Tests ==========
+
+    @Test
+    fun `isSuperseded returns false when fieldsJson is null`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = null,
+            )
+
+        assertFalse(messageUi.isSuperseded)
+    }
+
+    @Test
+    fun `isSuperseded returns false when superseded is not present`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"pending_file_notification": {}}}""",
+            )
+
+        assertFalse(messageUi.isSuperseded)
+    }
+
+    @Test
+    fun `isSuperseded returns true when superseded is true`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"superseded":true}}""",
+            )
+
+        assertTrue(messageUi.isSuperseded)
+    }
+
+    @Test
+    fun `isSuperseded returns false when superseded is false`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"superseded":false}}""",
+            )
+
+        assertFalse(messageUi.isSuperseded)
+    }
+
+    // ========== pendingFileInfo Tests ==========
+
+    @Test
+    fun `pendingFileInfo returns null when not a pending notification`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"reply_to": "id"}}""",
+            )
+
+        assertNull(messageUi.pendingFileInfo)
+    }
+
+    @Test
+    fun `pendingFileInfo returns null when fieldsJson is null`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = null,
+            )
+
+        assertNull(messageUi.pendingFileInfo)
+    }
+
+    @Test
+    fun `pendingFileInfo parses notification correctly`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson =
+                    """{"16": {"pending_file_notification": {"original_message_id": "abc123", """ +
+                        """"filename": "report.pdf", "file_count": 3, "total_size": 1048576}}}""",
+            )
+
+        val info = messageUi.pendingFileInfo
+        assertNotNull(info)
+        assertEquals("abc123", info!!.originalMessageId)
+        assertEquals("report.pdf", info.filename)
+        assertEquals(3, info.fileCount)
+        assertEquals(1048576L, info.totalSize)
+    }
+
+    @Test
+    fun `pendingFileInfo uses default values for missing fields`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"pending_file_notification": {}}}""",
+            )
+
+        val info = messageUi.pendingFileInfo
+        assertNotNull(info)
+        assertEquals("", info!!.originalMessageId)
+        assertEquals("file", info.filename)
+        assertEquals(1, info.fileCount)
+        assertEquals(0L, info.totalSize)
+    }
+
+    @Test
+    fun `pendingFileInfo returns null for malformed notification`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"16": {"pending_file_notification": "invalid"}}""",
+            )
+
+        assertNull(messageUi.pendingFileInfo)
+    }
+
+    @Test
+    fun `pendingFileInfo returns null when field 16 is missing`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = """{"6": "image_hex"}""",
+            )
+
+        // Contains pending_file_notification string check fails
+        assertFalse(messageUi.isPendingFileNotification)
+        assertNull(messageUi.pendingFileInfo)
+    }
+
+    @Test
+    fun `pendingFileInfo returns null for invalid JSON`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = false,
+                status = "delivered",
+                fieldsJson = "pending_file_notification not valid json {{{",
+            )
+
+        // Contains the string but invalid JSON
+        assertTrue(messageUi.isPendingFileNotification)
+        assertNull(messageUi.pendingFileInfo)
+    }
+
+    // ========== ReactionUi Tests ==========
+
+    @Test
+    fun `ReactionUi count equals senderHashes size`() {
+        val reaction =
+            ReactionUi(
+                emoji = "👍",
+                senderHashes = listOf("hash1", "hash2", "hash3"),
+            )
+
+        assertEquals(3, reaction.count)
+    }
+
+    @Test
+    fun `ReactionUi count is zero for empty senderHashes`() {
+        val reaction =
+            ReactionUi(
+                emoji = "❤️",
+                senderHashes = emptyList(),
+            )
+
+        assertEquals(0, reaction.count)
+    }
+
+    // ========== parseReactionsFromField16 Tests ==========
+
+    @Test
+    fun `parseReactionsFromField16 returns empty list for null fieldsJson`() {
+        val result = parseReactionsFromField16(null)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseReactionsFromField16 returns empty list for missing field 16`() {
+        val result = parseReactionsFromField16("""{"6": "image"}""")
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseReactionsFromField16 returns empty list for missing reactions key`() {
+        val result = parseReactionsFromField16("""{"16": {"reply_to": "id"}}""")
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseReactionsFromField16 parses single reaction correctly`() {
+        val fieldsJson = """{"16": {"reactions": {"👍": ["sender1", "sender2"]}}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+
+        assertEquals(1, result.size)
+        assertEquals("👍", result[0].emoji)
+        assertEquals(listOf("sender1", "sender2"), result[0].senderHashes)
+        assertEquals(2, result[0].count)
+    }
+
+    @Test
+    fun `parseReactionsFromField16 parses multiple reactions correctly`() {
+        val fieldsJson = """{"16": {"reactions": {"👍": ["sender1"], "❤️": ["sender2", "sender3"]}}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+
+        assertEquals(2, result.size)
+        // Order may vary, so check both are present
+        val emojiSet = result.map { it.emoji }.toSet()
+        assertTrue(emojiSet.contains("👍"))
+        assertTrue(emojiSet.contains("❤️"))
+    }
+
+    @Test
+    fun `parseReactionsFromField16 skips empty sender arrays`() {
+        val fieldsJson = """{"16": {"reactions": {"👍": [], "❤️": ["sender1"]}}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+
+        assertEquals(1, result.size)
+        assertEquals("❤️", result[0].emoji)
+    }
+
+    @Test
+    fun `parseReactionsFromField16 skips empty sender strings`() {
+        val fieldsJson = """{"16": {"reactions": {"👍": ["", "sender1", ""]}}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+
+        assertEquals(1, result.size)
+        assertEquals("👍", result[0].emoji)
+        assertEquals(listOf("sender1"), result[0].senderHashes)
+    }
+
+    @Test
+    fun `parseReactionsFromField16 handles invalid JSON gracefully`() {
+        val result = parseReactionsFromField16("not valid json")
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseReactionsFromField16 handles reactions as wrong type`() {
+        val fieldsJson = """{"16": {"reactions": "not an object"}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseReactionsFromField16 skips null values in sender array`() {
+        val fieldsJson = """{"16": {"reactions": {"👍": [null, "sender1", null]}}}"""
+        val result = parseReactionsFromField16(fieldsJson)
+
+        assertEquals(1, result.size)
+        assertEquals(listOf("sender1"), result[0].senderHashes)
     }
 }

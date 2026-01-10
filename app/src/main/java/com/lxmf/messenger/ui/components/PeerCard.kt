@@ -26,6 +26,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,11 +49,13 @@ import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshLimited
 import com.lxmf.messenger.ui.theme.MeshOffline
 import com.lxmf.messenger.util.formatTimeSince
+import kotlinx.coroutines.delay
 
 /**
  * Shared peer card component used by both AnnounceStreamScreen and SavedPeersScreen.
  */
 @OptIn(ExperimentalFoundationApi::class)
+@androidx.compose.runtime.Stable
 @Composable
 fun PeerCard(
     announce: Announce,
@@ -113,15 +120,47 @@ fun PeerCard(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
 
-                    // Destination hash (abbreviated)
+                    // Destination hash (abbreviated) - use remember to avoid recalculating
+                    val abbreviatedHash =
+                        remember(announce.destinationHash) {
+                            formatHashString(announce.destinationHash)
+                        }
                     Text(
-                        text = formatHashString(announce.destinationHash),
+                        text = abbreviatedHash,
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
 
-                    // Time since last seen
+                    // Time since last seen - update adaptively based on how recent it is
+                    var timeSinceText by remember { mutableStateOf(formatTimeSince(announce.lastSeenTimestamp)) }
+
+                    LaunchedEffect(announce.lastSeenTimestamp) {
+                        // Update immediately when timestamp changes
+                        timeSinceText = formatTimeSince(announce.lastSeenTimestamp)
+
+                        // Adaptive update frequency: more frequent for recent times, less for old ones
+                        while (true) {
+                            val now = System.currentTimeMillis()
+                            val ageMinutes = (now - announce.lastSeenTimestamp) / (60 * 1000)
+
+                            // Update frequency based on age:
+                            // - < 1 minute: every second (very fresh, shows seconds)
+                            // - < 1 hour: every 30 seconds (fresh data)
+                            // - < 24 hours: every minute (still relevant)
+                            // - >= 24 hours: every 2 minutes (less critical)
+                            val delayMs =
+                                when {
+                                    ageMinutes < 1 -> 1_000L // 1 second
+                                    ageMinutes < 60 -> 30_000L // 30 seconds
+                                    ageMinutes < 1440 -> 60_000L // 1 minute
+                                    else -> 120_000L // 2 minutes
+                                }
+
+                            delay(delayMs)
+                            timeSinceText = formatTimeSince(announce.lastSeenTimestamp)
+                        }
+                    }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -133,7 +172,7 @@ fun PeerCard(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = formatTimeSince(announce.lastSeenTimestamp),
+                            text = timeSinceText,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -180,11 +219,15 @@ fun SignalStrengthIndicator(
     hops: Int,
     modifier: Modifier = Modifier,
 ) {
+    // Use remember to avoid recalculating on every recomposition
+    val hopsKey = remember(hops) { hops }
     val (strength, color, _) =
-        when {
-            hops <= 1 -> Triple(3, MeshConnected, "Excellent")
-            hops <= 3 -> Triple(2, MeshLimited, "Good")
-            else -> Triple(1, MeshOffline, "Weak")
+        remember(hopsKey) {
+            when {
+                hopsKey <= 1 -> Triple(3, MeshConnected, "Excellent")
+                hopsKey <= 3 -> Triple(2, MeshLimited, "Good")
+                else -> Triple(1, MeshOffline, "Weak")
+            }
         }
 
     Column(

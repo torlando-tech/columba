@@ -66,6 +66,13 @@ class ReticulumService : Service() {
                     if (::binder.isInitialized) {
                         try {
                             binder.announceLxmfDestination()
+                            // Signal main app's AutoAnnounceManager to reset its timer
+                            // This uses DataStore for cross-process communication
+                            serviceScope.launch {
+                                val now = System.currentTimeMillis()
+                                managers.settingsAccessor.saveNetworkChangeAnnounceTime(now)
+                                managers.settingsAccessor.saveLastAutoAnnounceTime(now)
+                            }
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to announce on network change", e)
                         }

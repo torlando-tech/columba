@@ -32,7 +32,7 @@ data class SettingsState(
     val isLoading: Boolean = true,
     val showSaveSuccess: Boolean = false,
     val autoAnnounceEnabled: Boolean = true,
-    val autoAnnounceIntervalMinutes: Int = 5,
+    val autoAnnounceIntervalHours: Int = 3,
     val lastAutoAnnounceTime: Long? = null,
     val isManualAnnouncing: Boolean = false,
     val showManualAnnounceSuccess: Boolean = false,
@@ -173,7 +173,7 @@ class SettingsViewModel
                     combine(
                         identityRepository.activeIdentity,
                         settingsRepository.autoAnnounceEnabledFlow,
-                        settingsRepository.autoAnnounceIntervalMinutesFlow,
+                        settingsRepository.autoAnnounceIntervalHoursFlow,
                         settingsRepository.lastAutoAnnounceTimeFlow,
                         settingsRepository.themePreferenceFlow,
                         customThemesFlow,
@@ -196,7 +196,7 @@ class SettingsViewModel
                         val autoAnnounceEnabled = flows[1] as Boolean
 
                         @Suppress("UNCHECKED_CAST")
-                        val intervalMinutes = flows[2] as Int
+                        val intervalHours = flows[2] as Int
 
                         @Suppress("UNCHECKED_CAST")
                         val lastAnnounceTime = flows[3] as Long?
@@ -241,7 +241,7 @@ class SettingsViewModel
                             isLoading = false,
                             showSaveSuccess = _state.value.showSaveSuccess,
                             autoAnnounceEnabled = autoAnnounceEnabled,
-                            autoAnnounceIntervalMinutes = intervalMinutes,
+                            autoAnnounceIntervalHours = intervalHours,
                             lastAutoAnnounceTime = lastAnnounceTime,
                             isManualAnnouncing = _state.value.isManualAnnouncing,
                             showManualAnnounceSuccess = _state.value.showManualAnnounceSuccess,
@@ -343,7 +343,7 @@ class SettingsViewModel
                             TAG,
                             "Settings updated: displayName=${newState.displayName}, " +
                                 "autoAnnounce=${newState.autoAnnounceEnabled}, " +
-                                "interval=${newState.autoAnnounceIntervalMinutes}min, " +
+                                "interval=${newState.autoAnnounceIntervalHours}h, " +
                                 "theme=${newState.selectedTheme}, " +
                                 "customThemes=${newState.customThemes.size}",
                         )
@@ -537,12 +537,12 @@ class SettingsViewModel
         }
 
         /**
-         * Update the auto-announce interval in minutes.
+         * Update the auto-announce interval in hours.
          */
-        fun setAnnounceInterval(minutes: Int) {
+        fun setAnnounceInterval(hours: Int) {
             viewModelScope.launch {
-                settingsRepository.saveAutoAnnounceIntervalMinutes(minutes)
-                Log.d(TAG, "Auto-announce interval set to $minutes minutes")
+                settingsRepository.saveAutoAnnounceIntervalHours(hours)
+                Log.d(TAG, "Auto-announce interval set to $hours hours")
             }
         }
 

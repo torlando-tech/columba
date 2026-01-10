@@ -107,7 +107,7 @@ fun MessageDeliveryRetrievalCard(
     var manualHashInput by remember { mutableStateOf("") }
     var manualNicknameInput by remember { mutableStateOf("") }
 
-    val presetIntervals = listOf(30, 60, 120, 300) // 30s, 60s, 2min, 5min (matches visible chips)
+    val presetIntervals = listOf(300, 600, 1800, 3600) // 5min, 10min, 30min, 1h (matches visible chips)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -420,28 +420,28 @@ fun MessageDeliveryRetrievalCard(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     IntervalChip(
-                        label = "30s",
-                        selected = retrievalIntervalSeconds == 30,
-                        enabled = autoRetrieveEnabled,
-                        onClick = { onIntervalChange(30) },
-                    )
-                    IntervalChip(
-                        label = "60s",
-                        selected = retrievalIntervalSeconds == 60,
-                        enabled = autoRetrieveEnabled,
-                        onClick = { onIntervalChange(60) },
-                    )
-                    IntervalChip(
-                        label = "2min",
-                        selected = retrievalIntervalSeconds == 120,
-                        enabled = autoRetrieveEnabled,
-                        onClick = { onIntervalChange(120) },
-                    )
-                    IntervalChip(
                         label = "5min",
                         selected = retrievalIntervalSeconds == 300,
                         enabled = autoRetrieveEnabled,
                         onClick = { onIntervalChange(300) },
+                    )
+                    IntervalChip(
+                        label = "10min",
+                        selected = retrievalIntervalSeconds == 600,
+                        enabled = autoRetrieveEnabled,
+                        onClick = { onIntervalChange(600) },
+                    )
+                    IntervalChip(
+                        label = "30min",
+                        selected = retrievalIntervalSeconds == 1800,
+                        enabled = autoRetrieveEnabled,
+                        onClick = { onIntervalChange(1800) },
+                    )
+                    IntervalChip(
+                        label = "1h",
+                        selected = retrievalIntervalSeconds == 3600,
+                        enabled = autoRetrieveEnabled,
+                        onClick = { onIntervalChange(3600) },
                     )
                     // Custom chip
                     FilterChip(
@@ -772,26 +772,26 @@ private fun CustomRetrievalIntervalDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Enter retrieval interval (10-600 seconds):",
+                    "Enter retrieval interval (60-7200 seconds):",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedTextField(
                     value = customIntervalInput,
                     onValueChange = {
-                        if (it.all { char -> char.isDigit() } && it.length <= 3) {
+                        if (it.all { char -> char.isDigit() } && it.length <= 4) {
                             onInputChange(it)
                         }
                     },
                     label = { Text("Seconds") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
-                    isError = customIntervalInput.toIntOrNull()?.let { it < 10 || it > 600 } ?: false,
+                    isError = customIntervalInput.toIntOrNull()?.let { it < 60 || it > 7200 } ?: false,
                     supportingText = {
                         val value = customIntervalInput.toIntOrNull()
                         when {
                             value == null && customIntervalInput.isNotEmpty() -> Text("Enter a valid number")
-                            value != null && value < 10 -> Text("Minimum is 10 seconds")
-                            value != null && value > 600 -> Text("Maximum is 600 seconds (10 min)")
+                            value != null && value < 60 -> Text("Minimum is 60 seconds (1 min)")
+                            value != null && value > 7200 -> Text("Maximum is 7200 seconds (2 hours)")
                             value != null -> Text("= ${formatIntervalDisplay(value)}")
                             else -> {}
                         }
@@ -803,11 +803,11 @@ private fun CustomRetrievalIntervalDialog(
             Button(
                 onClick = {
                     val value = customIntervalInput.toIntOrNull()
-                    if (value != null && value in 10..600) {
+                    if (value != null && value in 60..7200) {
                         onConfirm(value)
                     }
                 },
-                enabled = customIntervalInput.toIntOrNull()?.let { it in 10..600 } ?: false,
+                enabled = customIntervalInput.toIntOrNull()?.let { it in 60..7200 } ?: false,
             ) {
                 Text("Confirm")
             }

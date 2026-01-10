@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun AutoAnnounceCard(
     enabled: Boolean,
-    intervalMinutes: Int,
+    intervalHours: Int,
     lastAnnounceTime: Long?,
     isManualAnnouncing: Boolean,
     showManualAnnounceSuccess: Boolean,
@@ -60,7 +60,7 @@ fun AutoAnnounceCard(
     var showCustomDialog by remember { mutableStateOf(false) }
     var customIntervalInput by remember { mutableStateOf("") }
 
-    val presetIntervals = listOf(5, 10, 15, 30, 60)
+    val presetIntervals = listOf(1, 3, 6, 12)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -117,18 +117,18 @@ fun AutoAnnounceCard(
             // Interval selector (only shown when enabled)
             if (enabled) {
                 IntervalSelector(
-                    intervalMinutes = intervalMinutes,
+                    intervalHours = intervalHours,
                     presetIntervals = presetIntervals,
                     onIntervalChange = onIntervalChange,
                     onCustomClick = {
-                        customIntervalInput = intervalMinutes.toString()
+                        customIntervalInput = intervalHours.toString()
                         showCustomDialog = true
                     },
                 )
 
                 AnnounceStatus(
                     lastAnnounceTime = lastAnnounceTime,
-                    intervalMinutes = intervalMinutes,
+                    intervalHours = intervalHours,
                 )
 
                 ManualAnnounceSection(
@@ -158,14 +158,14 @@ fun AutoAnnounceCard(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun IntervalSelector(
-    intervalMinutes: Int,
+    intervalHours: Int,
     presetIntervals: List<Int>,
     onIntervalChange: (Int) -> Unit,
     onCustomClick: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = "Announce Interval: $intervalMinutes minute${if (intervalMinutes != 1) "s" else ""}",
+            text = "Announce Interval: $intervalHours hour${if (intervalHours != 1) "s" else ""}",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,
@@ -178,9 +178,9 @@ private fun IntervalSelector(
         ) {
             presetIntervals.forEach { preset ->
                 FilterChip(
-                    selected = intervalMinutes == preset,
+                    selected = intervalHours == preset,
                     onClick = { onIntervalChange(preset) },
-                    label = { Text("${preset}min") },
+                    label = { Text("${preset}h") },
                     colors =
                         FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
@@ -189,14 +189,14 @@ private fun IntervalSelector(
                 )
             }
             FilterChip(
-                selected = !presetIntervals.contains(intervalMinutes),
+                selected = !presetIntervals.contains(intervalHours),
                 onClick = onCustomClick,
                 label = {
                     Text(
-                        if (presetIntervals.contains(intervalMinutes)) {
+                        if (presetIntervals.contains(intervalHours)) {
                             "Custom"
                         } else {
-                            "Custom (${intervalMinutes}min)"
+                            "Custom (${intervalHours}h)"
                         },
                     )
                 },
@@ -213,44 +213,52 @@ private fun IntervalSelector(
 @Composable
 private fun AnnounceStatus(
     lastAnnounceTime: Long?,
-    intervalMinutes: Int,
+    intervalHours: Int,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (lastAnnounceTime != null) {
             val timeSinceLastAnnounce = System.currentTimeMillis() - lastAnnounceTime
-            val minutesAgo = (timeSinceLastAnnounce / 60000).toInt()
-            val secondsAgo = ((timeSinceLastAnnounce % 60000) / 1000).toInt()
+            val hoursAgo = (timeSinceLastAnnounce / 3600000).toInt()
+            val minutesAgo = ((timeSinceLastAnnounce % 3600000) / 60000).toInt()
 
             Text(
                 text =
-                    if (minutesAgo > 0) {
-                        "Last announce: ${minutesAgo}m ${secondsAgo}s ago"
+                    if (hoursAgo > 0) {
+                        "Last announce: ${hoursAgo}h ${minutesAgo}m ago"
+                    } else if (minutesAgo > 0) {
+                        "Last announce: ${minutesAgo}m ago"
                     } else {
-                        "Last announce: ${secondsAgo}s ago"
+                        "Last announce: just now"
                     },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            val nextAnnounceIn = (intervalMinutes * 60000) - timeSinceLastAnnounce
-            if (nextAnnounceIn > 0) {
-                val minutesRemaining = (nextAnnounceIn / 60000).toInt()
-                val secondsRemaining = ((nextAnnounceIn % 60000) / 1000).toInt()
+            // Calculate range accounting for ±1 hour randomization (clamped to 1-12h)
+            val minIntervalHours = (intervalHours - 1).coerceAtLeast(1)
+            val maxIntervalHours = (intervalHours + 1).coerceAtMost(12)
+            val minNextAnnounceIn = (minIntervalHours * 3600000L) - timeSinceLastAnnounce
+            val maxNextAnnounceIn = (maxIntervalHours * 3600000L) - timeSinceLastAnnounce
 
+            if (maxNextAnnounceIn <= 0) {
                 Text(
-                    text =
-                        if (minutesRemaining > 0) {
-                            "Next announce in: ${minutesRemaining}m ${secondsRemaining}s"
-                        } else {
-                            "Next announce in: ${secondsRemaining}s"
-                        },
+                    text = "Next announce: soon",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.secondary,
                     fontWeight = FontWeight.Medium,
                 )
             } else {
+                val minHoursRemaining = (minNextAnnounceIn / 3600000).toInt().coerceAtLeast(0)
+                val maxHoursRemaining = (maxNextAnnounceIn / 3600000).toInt()
+
+                val displayText = when {
+                    minHoursRemaining == maxHoursRemaining -> "Next announce in: ~${maxHoursRemaining}h"
+                    minNextAnnounceIn <= 0 -> "Next announce in: <${maxHoursRemaining + 1}h"
+                    else -> "Next announce in: ${minHoursRemaining}-${maxHoursRemaining + 1}h"
+                }
+
                 Text(
-                    text = "Next announce: due now",
+                    text = displayText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.secondary,
                     fontWeight = FontWeight.Medium,
@@ -371,7 +379,7 @@ private fun CustomIntervalDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Enter announce interval (1-60 minutes):",
+                    "Enter announce interval (1-12 hours):",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedTextField(
@@ -381,13 +389,13 @@ private fun CustomIntervalDialog(
                             onInputChange(it)
                         }
                     },
-                    label = { Text("Minutes") },
+                    label = { Text("Hours") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
-                    isError = customIntervalInput.toIntOrNull()?.let { it < 1 || it > 60 } ?: false,
+                    isError = customIntervalInput.toIntOrNull()?.let { it < 1 || it > 12 } ?: false,
                     supportingText = {
-                        if (customIntervalInput.toIntOrNull()?.let { it < 1 || it > 60 } == true) {
-                            Text("Value must be between 1 and 60")
+                        if (customIntervalInput.toIntOrNull()?.let { it < 1 || it > 12 } == true) {
+                            Text("Value must be between 1 and 12")
                         }
                     },
                 )
@@ -397,11 +405,11 @@ private fun CustomIntervalDialog(
             Button(
                 onClick = {
                     val value = customIntervalInput.toIntOrNull()
-                    if (value != null && value in 1..60) {
+                    if (value != null && value in 1..12) {
                         onConfirm(value)
                     }
                 },
-                enabled = customIntervalInput.toIntOrNull()?.let { it in 1..60 } ?: false,
+                enabled = customIntervalInput.toIntOrNull()?.let { it in 1..12 } ?: false,
             ) {
                 Text("Confirm")
             }

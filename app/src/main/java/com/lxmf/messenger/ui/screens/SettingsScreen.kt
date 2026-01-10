@@ -160,7 +160,7 @@ fun SettingsScreen(
 
                 AutoAnnounceCard(
                     enabled = state.autoAnnounceEnabled,
-                    intervalMinutes = state.autoAnnounceIntervalMinutes,
+                    intervalHours = state.autoAnnounceIntervalHours,
                     lastAnnounceTime = state.lastAutoAnnounceTime,
                     isManualAnnouncing = state.isManualAnnouncing,
                     showManualAnnounceSuccess = state.showManualAnnounceSuccess,

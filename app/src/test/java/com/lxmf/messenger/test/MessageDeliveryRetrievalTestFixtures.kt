@@ -8,12 +8,12 @@ object MessageDeliveryRetrievalTestFixtures {
         const val RELAY_NAME_DEFAULT = "TestRelay01"
         const val RELAY_NAME_LONG = "VeryLongRelayNameForEdgeCaseTesting"
         const val DEFAULT_HOPS = 2
-        const val DEFAULT_INTERVAL_SECONDS = 60
-        const val CUSTOM_INTERVAL_VALID = 45
-        const val CUSTOM_INTERVAL_MIN = 10
-        const val CUSTOM_INTERVAL_MAX = 600
-        const val CUSTOM_INTERVAL_BELOW_MIN = 5
-        const val CUSTOM_INTERVAL_ABOVE_MAX = 700
+        const val DEFAULT_INTERVAL_SECONDS = 300 // 5 min - first preset
+        const val CUSTOM_INTERVAL_VALID = 450 // 7.5 min - not a preset
+        const val CUSTOM_INTERVAL_MIN = 60
+        const val CUSTOM_INTERVAL_MAX = 7200
+        const val CUSTOM_INTERVAL_BELOW_MIN = 30
+        const val CUSTOM_INTERVAL_ABOVE_MAX = 8000
     }
 
     /**
@@ -76,13 +76,15 @@ object MessageDeliveryRetrievalTestFixtures {
 
     fun tryPropagationEnabledState() = CardConfig(tryPropagationOnFail = true)
 
-    fun interval30sState() = CardConfig(retrievalIntervalSeconds = 30)
+    fun interval300sState() = CardConfig(retrievalIntervalSeconds = 300) // 5min - first preset
 
-    fun interval120sState() = CardConfig(retrievalIntervalSeconds = 120)
+    fun interval600sState() = CardConfig(retrievalIntervalSeconds = 600) // 10min - second preset
 
-    fun interval300sState() = CardConfig(retrievalIntervalSeconds = 300)
+    fun interval1800sState() = CardConfig(retrievalIntervalSeconds = 1800) // 30min - third preset
 
-    fun mixedIntervalState() = CardConfig(retrievalIntervalSeconds = 90) // 1m 30s
+    fun interval3600sState() = CardConfig(retrievalIntervalSeconds = 3600) // 1h - fourth preset
+
+    fun mixedIntervalState() = CardConfig(retrievalIntervalSeconds = 900) // 15min - not a preset
 
     // ========== Size Limit State Factories ==========
 

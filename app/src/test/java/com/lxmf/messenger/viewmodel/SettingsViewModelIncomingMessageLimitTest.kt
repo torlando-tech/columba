@@ -63,7 +63,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private val isSharedInstanceFlow = MutableStateFlow(false)
     private val rpcKeyFlow = MutableStateFlow<String?>(null)
     private val autoAnnounceEnabledFlow = MutableStateFlow(true)
-    private val autoAnnounceIntervalMinutesFlow = MutableStateFlow(5)
+    private val autoAnnounceIntervalHoursFlow = MutableStateFlow(3)
     private val lastAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
     private val themePreferenceFlow = MutableStateFlow(PresetTheme.VIBRANT)
     private val activeIdentityFlow = MutableStateFlow<LocalIdentityEntity?>(null)
@@ -96,7 +96,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.isSharedInstanceFlow } returns isSharedInstanceFlow
         every { settingsRepository.rpcKeyFlow } returns rpcKeyFlow
         every { settingsRepository.autoAnnounceEnabledFlow } returns autoAnnounceEnabledFlow
-        every { settingsRepository.autoAnnounceIntervalMinutesFlow } returns autoAnnounceIntervalMinutesFlow
+        every { settingsRepository.autoAnnounceIntervalHoursFlow } returns autoAnnounceIntervalHoursFlow
         every { settingsRepository.lastAutoAnnounceTimeFlow } returns lastAutoAnnounceTimeFlow
         every { settingsRepository.themePreferenceFlow } returns themePreferenceFlow
         every { settingsRepository.getAllCustomThemes() } returns flowOf(emptyList())

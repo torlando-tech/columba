@@ -5217,16 +5217,13 @@ class ReticulumWrapper:
             elif link is None and dest_hash_hex in self.router.backchannel_links:
                 link = self.router.backchannel_links[dest_hash_hex]
 
-            # Check RNS.Transport.active_links for incoming links
-            # This catches links the peer established to us before backchannel_links is populated
+            # Fallback: Check Transport.active_links for incoming links not yet in backchannel_links
             if link is None and hasattr(RNS.Transport, 'active_links'):
                 for active_link in RNS.Transport.active_links:
                     if active_link.status == RNS.Link.ACTIVE:
                         try:
                             remote_identity = active_link.get_remote_identity()
                             if remote_identity:
-                                # Create destination from remote identity to get destination hash
-                                # (identity hash != destination hash - destination hash includes aspect)
                                 remote_dest = RNS.Destination(
                                     remote_identity,
                                     RNS.Destination.OUT,
@@ -5234,8 +5231,7 @@ class ReticulumWrapper:
                                     "lxmf",
                                     "delivery"
                                 )
-                                remote_dest_hash = remote_dest.hash
-                                if remote_dest_hash == dest_hash or remote_dest_hash.hex() == dest_hash_hex:
+                                if remote_dest.hash == dest_hash or remote_dest.hash.hex() == dest_hash_hex:
                                     log_info("ReticulumWrapper", "establish_link",
                                              f"Found existing incoming link via Transport.active_links")
                                     link = active_link
@@ -5572,38 +5568,14 @@ class ReticulumWrapper:
             if link is None:
                 link = find_link_in_dict(self.router.backchannel_links, dest_hash, dest_hash_hex)
 
-            # Check RNS.Transport.active_links for incoming links
-            # This catches links before they're added to backchannel_links
+            # Fallback: Check RNS.Transport.active_links for incoming links
+            # This is rarely needed since link.identify() populates backchannel_links
             if link is None and hasattr(RNS.Transport, 'active_links'):
-                log_debug("ReticulumWrapper", "get_link_status",
-                         f"Checking Transport.active_links ({len(RNS.Transport.active_links)} links) for {dest_hash_hex[:16]}")
-                # Log ALL links for debugging
-                for i, al in enumerate(RNS.Transport.active_links):
-                    status_name = {0: "PENDING", 1: "HANDSHAKE", 2: "ACTIVE", 3: "STALE", 4: "CLOSED"}.get(al.status, f"UNKNOWN({al.status})")
-                    log_debug("ReticulumWrapper", "get_link_status",
-                             f"  Link[{i}]: status={status_name}, dest={al.destination.hash.hex()[:16] if al.destination else 'None'}")
                 for active_link in RNS.Transport.active_links:
                     if active_link.status == RNS.Link.ACTIVE:
-                        # Check if link is from the peer we're looking for
                         try:
-                            # Try get_remote_identity first
                             remote_identity = active_link.get_remote_identity()
-                            log_debug("ReticulumWrapper", "get_link_status",
-                                     f"  get_remote_identity() returned: {remote_identity}")
-
-                            # If that's None, try peer_pub_bytes to get identity
-                            if remote_identity is None and hasattr(active_link, 'peer_pub_bytes') and active_link.peer_pub_bytes:
-                                log_debug("ReticulumWrapper", "get_link_status",
-                                         f"  Trying to create identity from peer_pub_bytes ({len(active_link.peer_pub_bytes)} bytes)")
-                                # Create identity from public key bytes
-                                remote_identity = RNS.Identity(create_keys=False)
-                                remote_identity.load_public_key(active_link.peer_pub_bytes)
-                                log_debug("ReticulumWrapper", "get_link_status",
-                                         f"  Created identity from peer_pub_bytes: {remote_identity.hash.hex()[:16]}")
-
                             if remote_identity:
-                                remote_identity_hash = remote_identity.hash
-                                # Create destination from remote identity to get destination hash
                                 remote_dest = RNS.Destination(
                                     remote_identity,
                                     RNS.Destination.OUT,
@@ -5611,20 +5583,11 @@ class ReticulumWrapper:
                                     "lxmf",
                                     "delivery"
                                 )
-                                remote_dest_hash = remote_dest.hash
-                                log_debug("ReticulumWrapper", "get_link_status",
-                                         f"  Active link from identity {remote_identity_hash.hex()[:16]} -> dest {remote_dest_hash.hex()[:16]}")
-                                # Compare destination hashes (not identity hashes)
-                                if remote_dest_hash == dest_hash or remote_dest_hash.hex() == dest_hash_hex:
-                                    log_debug("ReticulumWrapper", "get_link_status",
-                                             f"Found incoming link via Transport.active_links!")
+                                if remote_dest.hash == dest_hash or remote_dest.hash.hex() == dest_hash_hex:
                                     link = active_link
                                     break
-                        except Exception as e:
-                            log_debug("ReticulumWrapper", "get_link_status",
-                                     f"  Error checking active_link: {e}")
-                            import traceback
-                            traceback.print_exc()
+                        except Exception:
+                            pass
 
             # If not found, try via created destination hash (handles mismatch case)
             if link is None:

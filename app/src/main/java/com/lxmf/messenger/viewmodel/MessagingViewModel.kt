@@ -30,6 +30,7 @@ import com.lxmf.messenger.ui.model.loadFileAttachmentData
 import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
 import com.lxmf.messenger.ui.model.toMessageUi
 import com.lxmf.messenger.util.FileAttachment
+import com.lxmf.messenger.util.FileUtils
 import com.lxmf.messenger.util.ImageUtils
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
@@ -1237,7 +1238,7 @@ class MessagingViewModel
                     }
 
                 // Calculate transfer time estimates for each preset
-                val transferTimeEstimates = calculateTransferTimeEstimates(linkState)
+                val transferTimeEstimates = calculateTransferTimeEstimates(linkState, context, uri)
 
                 // Show the quality selection dialog
                 _qualitySelectionState.value =
@@ -1252,15 +1253,30 @@ class MessagingViewModel
 
         /**
          * Calculate transfer time estimates for each preset based on link state.
+         *
+         * For ORIGINAL preset, uses actual file size since it applies minimal compression.
+         * For other presets, uses the target size (worst-case estimate).
          */
-        private fun calculateTransferTimeEstimates(linkState: ConversationLinkManager.LinkState?): Map<ImageCompressionPreset, String?> {
+        private fun calculateTransferTimeEstimates(
+            linkState: ConversationLinkManager.LinkState?,
+            context: Context,
+            imageUri: Uri,
+        ): Map<ImageCompressionPreset, String?> {
+            // Get actual file size for ORIGINAL preset (minimal compression)
+            val actualFileSize = FileUtils.getFileSize(context, imageUri)
+
             return listOf(
                 ImageCompressionPreset.LOW,
                 ImageCompressionPreset.MEDIUM,
                 ImageCompressionPreset.HIGH,
                 ImageCompressionPreset.ORIGINAL,
             ).associateWith { preset ->
-                linkState?.estimateTransferTimeFormatted(preset.targetSizeBytes)
+                val sizeBytes = if (preset == ImageCompressionPreset.ORIGINAL && actualFileSize > 0) {
+                    actualFileSize
+                } else {
+                    preset.targetSizeBytes
+                }
+                linkState?.estimateTransferTimeFormatted(sizeBytes)
             }
         }
 

@@ -32,10 +32,25 @@ data class LinkSpeedProbeResult(
 
     /**
      * Get the best available rate estimate in bits per second.
-     * Prefers expected_rate (from actual transfers) over establishment_rate.
+     *
+     * Preference order:
+     * 1. expected_rate - Actual measured throughput from prior transfers (most accurate)
+     * 2. max(establishment_rate, next_hop_bitrate) - Fallback when no prior transfers exist
+     *
+     * The fallback uses max to prevent underestimating fast connections where establishment
+     * rate may be artificially low (e.g., WiFi showing 36kbps establishment but 10Mbps interface).
      */
     val bestRateBps: Long?
-        get() = expectedRateBps ?: establishmentRateBps
+        get() {
+            // Prefer expected_rate (actual measured throughput from prior transfers)
+            if (expectedRateBps != null && expectedRateBps > 0) {
+                return expectedRateBps
+            }
+            // Fall back to max of establishment_rate and interface bitrate
+            val rates = listOfNotNull(establishmentRateBps, nextHopBitrateBps)
+                .filter { it > 0 }
+            return rates.maxOrNull()
+        }
 
     /**
      * Calculate estimated transfer time for a given size in bytes.

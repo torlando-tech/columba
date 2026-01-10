@@ -5041,14 +5041,28 @@ class ReticulumWrapper:
                     "next_hop_bitrate_bps": get_next_hop_bitrate()
                 }
 
-            # 1. If propagated delivery, check/use propagation link
+            # 1. If propagated delivery, check propagation link AND backchannel link
             if delivery_method == "propagated":
+                # Check if there's a backchannel link with expected_rate from the recipient
+                # This tells us actual measured throughput from prior transfers with this peer
+                backchannel_expected_rate = None
+                backchannel_link = find_link(dest_hash, dest_hash_hex)
+                if backchannel_link is not None and backchannel_link.status == RNS.Link.ACTIVE:
+                    backchannel_expected_rate = backchannel_link.get_expected_rate()
+                    if backchannel_expected_rate:
+                        log_info("ReticulumWrapper", "probe_link_speed",
+                                 f"Found backchannel expected_rate: {backchannel_expected_rate} bps")
+
                 if self.router.outbound_propagation_link is not None:
                     link = self.router.outbound_propagation_link
                     if link.status == RNS.Link.ACTIVE:
                         log_info("ReticulumWrapper", "probe_link_speed",
                                  f"Using existing propagation link")
-                        return get_link_stats(link, True, "propagated")
+                        stats = get_link_stats(link, True, "propagated")
+                        # Use backchannel expected_rate if available (more relevant for this peer)
+                        if backchannel_expected_rate:
+                            stats["expected_rate_bps"] = backchannel_expected_rate
+                        return stats
 
                 # No active propagation link - return heuristics only
                 # Use status="success" since heuristic data is valid for compression recommendations
@@ -5057,7 +5071,7 @@ class ReticulumWrapper:
                 return {
                     "status": "success",
                     "establishment_rate_bps": None,
-                    "expected_rate_bps": None,
+                    "expected_rate_bps": backchannel_expected_rate,  # Include if available
                     "rtt_seconds": None,
                     "hops": None,
                     "link_reused": False,
@@ -5096,7 +5110,28 @@ class ReticulumWrapper:
                         "next_hop_bitrate_bps": get_next_hop_bitrate()
                     }
             else:
-                # Link establishment failed - map error to status
+                # Link establishment failed - check if we have heuristic data
+                hops = RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None
+                next_hop_bps = get_next_hop_bitrate()
+
+                # If we have useful heuristic data (hop count or next hop bitrate),
+                # return "success" so the UI can show recommendations based on that.
+                # Only return failure status when we have no useful info.
+                if hops is not None or next_hop_bps is not None:
+                    log_info("ReticulumWrapper", "probe_link_speed",
+                             f"Link failed but have heuristics: hops={hops}, next_hop_bps={next_hop_bps}")
+                    return {
+                        "status": "success",
+                        "establishment_rate_bps": None,
+                        "expected_rate_bps": None,
+                        "rtt_seconds": None,
+                        "hops": hops,
+                        "link_reused": False,
+                        "delivery_method": "direct",
+                        "next_hop_bitrate_bps": next_hop_bps
+                    }
+
+                # No heuristic data - return actual failure status
                 error = result.get("error", "unknown")
                 if "Identity not known" in error:
                     status = "no_identity"
@@ -5112,10 +5147,10 @@ class ReticulumWrapper:
                     "establishment_rate_bps": None,
                     "expected_rate_bps": None,
                     "rtt_seconds": None,
-                    "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
+                    "hops": None,
                     "link_reused": False,
                     "delivery_method": "direct",
-                    "next_hop_bitrate_bps": get_next_hop_bitrate()
+                    "next_hop_bitrate_bps": None
                 }
 
         except Exception as e:

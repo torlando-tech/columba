@@ -34,7 +34,6 @@ class LinkSpeedProbe
         private val reticulumProtocol: ReticulumProtocol,
         private val settingsRepository: SettingsRepository,
         private val propagationNodeManager: PropagationNodeManager,
-        private val conversationLinkManager: ConversationLinkManager,
     ) {
         companion object {
             private const val TAG = "LinkSpeedProbe"
@@ -106,23 +105,10 @@ class LinkSpeedProbe
                     val targetType = target.type
                     val deliveryMethod = target.deliveryMethod
 
-                    // Check if ConversationLinkManager already has an active link with speed data
-                    val existingLinkState = conversationLinkManager.getLinkState(targetHash)
-                    if (existingLinkState?.isActive == true && existingLinkState.establishmentRateBps != null) {
-                        Log.d(TAG, "Using existing link from ConversationLinkManager: ${existingLinkState.establishmentRateBps} bps")
-                        val result =
-                            LinkSpeedProbeResult(
-                                status = "success",
-                                establishmentRateBps = existingLinkState.establishmentRateBps,
-                                expectedRateBps = null,
-                                rttSeconds = null,
-                                hops = null,
-                                linkReused = true,
-                            )
-                        val recommendedPreset = recommendPreset(result)
-                        _probeState.value = ProbeState.Complete(result, targetType, recommendedPreset)
-                        return@withContext result
-                    }
+                    // Note: We don't shortcut via ConversationLinkManager because it doesn't have
+                    // the next_hop_bitrate which is needed for accurate speed estimates on fast
+                    // interfaces (WiFi). Python's probe_link_speed returns all metrics including
+                    // interface bitrate, and handles reusing existing links efficiently.
 
                     // Atomically check and set probe state to prevent concurrent probes
                     val existingProbeTarget =
@@ -270,13 +256,18 @@ class LinkSpeedProbe
                     "nextHop=${result.nextHopBitrateBps}, hops=${result.hops}",
             )
 
-            // First try the actual measured rate from link establishment
-            result.bestRateBps?.let { return presetFromBitrate(it) }
+            // Use the MAXIMUM of establishment rate and interface bitrate.
+            // Establishment rate can be artificially low for fast interfaces (like WiFi),
+            // while interface bitrate gives the theoretical maximum.
+            val establishmentRate = result.bestRateBps ?: 0L
+            val interfaceBitrate = result.nextHopBitrateBps?.takeIf { it > 0 } ?: 0L
+            val effectiveRate = maxOf(establishmentRate, interfaceBitrate)
 
-            // Fall back to next hop interface bitrate (validate positive)
-            result.nextHopBitrateBps?.takeIf { it > 0 }?.let {
-                Log.d(TAG, "Using next hop bitrate for recommendation: $it bps")
-                return presetFromBitrate(it)
+            if (effectiveRate > 0) {
+                if (interfaceBitrate > establishmentRate && interfaceBitrate > 0) {
+                    Log.d(TAG, "Using interface bitrate ($interfaceBitrate bps) over establishment rate ($establishmentRate bps)")
+                }
+                return presetFromBitrate(effectiveRate)
             }
 
             // Final fallback: use hop count heuristics or status-based default

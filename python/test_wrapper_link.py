@@ -819,11 +819,13 @@ class TestProbeLinkSpeed(unittest.TestCase):
         wrapper.identities = {}
 
         mock_rns.Identity.recall.return_value = None
+        # Ensure no heuristic data is available so we get true failure status
+        mock_rns.Transport.has_path.return_value = False
 
         dest_hash = b'0123456789abcdef'
         result = wrapper.probe_link_speed(dest_hash, timeout_seconds=0.1)
 
-        # Should get no_identity status when establish_link fails due to unknown identity
+        # Should get no_identity status when establish_link fails and no heuristics available
         self.assertIn(result['status'], ['no_identity', 'failed', 'error'])
 
 
@@ -892,6 +894,164 @@ class TestNextHopBitrate(unittest.TestCase):
         result = wrapper.probe_link_speed(dest_hash)
 
         self.assertIsNone(result['next_hop_bitrate_bps'])
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_probe_link_speed_propagated_uses_backchannel_expected_rate(self, mock_rns):
+        """Test that probe_link_speed in propagated mode uses backchannel expected_rate when available"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Propagation link (to relay)
+        mock_prop_link = Mock()
+        mock_prop_link.status = mock_rns.Link.ACTIVE
+        mock_prop_link.get_establishment_rate.return_value = 50000  # 50 kbps to relay
+        mock_prop_link.get_expected_rate.return_value = None  # No transfers to relay yet
+        mock_prop_link.rtt = 0.5
+
+        # Backchannel link from recipient with measured expected_rate
+        mock_backchannel_link = Mock()
+        mock_backchannel_link.status = mock_rns.Link.ACTIVE
+        mock_backchannel_link.get_expected_rate.return_value = 14711025  # 14.7 Mbps from prior transfer
+
+        mock_router = Mock()
+        mock_router.outbound_propagation_link = mock_prop_link
+        mock_router.direct_links = {}
+        dest_hash = b'0123456789abcdef'
+        mock_router.backchannel_links = {dest_hash: mock_backchannel_link}
+        wrapper.router = mock_router
+
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 3
+        mock_rns.Transport.next_hop_interface.return_value = Mock(bitrate=10000000)
+
+        result = wrapper.probe_link_speed(dest_hash, delivery_method="propagated")
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['delivery_method'], 'propagated')
+        # Should use backchannel's expected_rate (14.7 Mbps), not propagation link's None
+        self.assertEqual(result['expected_rate_bps'], 14711025)
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_probe_link_speed_propagated_no_prop_link_uses_backchannel_expected_rate(self, mock_rns):
+        """Test that probe_link_speed in propagated mode uses backchannel expected_rate when no propagation link"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # No propagation link
+        mock_router = Mock()
+        mock_router.outbound_propagation_link = None
+        mock_router.direct_links = {}
+
+        # Backchannel link from recipient with measured expected_rate
+        mock_backchannel_link = Mock()
+        mock_backchannel_link.status = mock_rns.Link.ACTIVE
+        mock_backchannel_link.get_expected_rate.return_value = 8000000  # 8 Mbps from prior transfer
+
+        dest_hash = b'0123456789abcdef'
+        mock_router.backchannel_links = {dest_hash: mock_backchannel_link}
+        wrapper.router = mock_router
+
+        mock_rns.Transport.has_path.return_value = False
+
+        result = wrapper.probe_link_speed(dest_hash, delivery_method="propagated")
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['delivery_method'], 'propagated')
+        # Should include backchannel's expected_rate even without propagation link
+        self.assertEqual(result['expected_rate_bps'], 8000000)
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_probe_link_speed_propagated_prefers_backchannel_over_prop_link_expected_rate(self, mock_rns):
+        """Test that propagated mode prefers backchannel expected_rate over propagation link expected_rate"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Propagation link with its own expected_rate (transfers to relay)
+        mock_prop_link = Mock()
+        mock_prop_link.status = mock_rns.Link.ACTIVE
+        mock_prop_link.get_establishment_rate.return_value = 50000
+        mock_prop_link.get_expected_rate.return_value = 1000000  # 1 Mbps to relay
+        mock_prop_link.rtt = 0.5
+
+        # Backchannel link with different expected_rate (actual peer throughput)
+        mock_backchannel_link = Mock()
+        mock_backchannel_link.status = mock_rns.Link.ACTIVE
+        mock_backchannel_link.get_expected_rate.return_value = 10000000  # 10 Mbps with peer
+
+        mock_router = Mock()
+        mock_router.outbound_propagation_link = mock_prop_link
+        mock_router.direct_links = {}
+        dest_hash = b'0123456789abcdef'
+        mock_router.backchannel_links = {dest_hash: mock_backchannel_link}
+        wrapper.router = mock_router
+
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 2
+        mock_rns.Transport.next_hop_interface.return_value = Mock(bitrate=10000000)
+
+        result = wrapper.probe_link_speed(dest_hash, delivery_method="propagated")
+
+        # Should use backchannel's 10 Mbps, not prop link's 1 Mbps
+        self.assertEqual(result['expected_rate_bps'], 10000000)
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_probe_link_speed_propagated_no_backchannel_uses_prop_link_expected_rate(self, mock_rns):
+        """Test that propagated mode uses propagation link expected_rate when no backchannel"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Propagation link with expected_rate
+        mock_prop_link = Mock()
+        mock_prop_link.status = mock_rns.Link.ACTIVE
+        mock_prop_link.get_establishment_rate.return_value = 50000
+        mock_prop_link.get_expected_rate.return_value = 2000000  # 2 Mbps to relay
+        mock_prop_link.rtt = 0.5
+
+        mock_router = Mock()
+        mock_router.outbound_propagation_link = mock_prop_link
+        mock_router.direct_links = {}
+        mock_router.backchannel_links = {}  # No backchannel
+        wrapper.router = mock_router
+
+        dest_hash = b'0123456789abcdef'
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 2
+        mock_rns.Transport.next_hop_interface.return_value = Mock(bitrate=10000000)
+
+        result = wrapper.probe_link_speed(dest_hash, delivery_method="propagated")
+
+        # Should use prop link's expected_rate when no backchannel
+        self.assertEqual(result['expected_rate_bps'], 2000000)
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_probe_link_speed_direct_uses_backchannel_expected_rate(self, mock_rns):
+        """Test that direct mode uses backchannel link's expected_rate"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        # Backchannel link from sender with measured expected_rate
+        mock_backchannel_link = Mock()
+        mock_backchannel_link.status = mock_rns.Link.ACTIVE
+        mock_backchannel_link.get_establishment_rate.return_value = 97000  # Low establishment
+        mock_backchannel_link.get_expected_rate.return_value = 14711025  # High measured rate
+        mock_backchannel_link.rtt = 0.017
+
+        mock_router = Mock()
+        mock_router.direct_links = {}  # No direct link (haven't sent yet)
+        dest_hash = b'0123456789abcdef'
+        mock_router.backchannel_links = {dest_hash: mock_backchannel_link}
+        wrapper.router = mock_router
+
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 2
+        mock_rns.Transport.next_hop_interface.return_value = Mock(bitrate=10000000)
+
+        result = wrapper.probe_link_speed(dest_hash, delivery_method="direct")
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['establishment_rate_bps'], 97000)
+        self.assertEqual(result['expected_rate_bps'], 14711025)
+        self.assertTrue(result['link_reused'])
 
 
 if __name__ == '__main__':

@@ -3,7 +3,6 @@ package com.lxmf.messenger.ui.components
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.service.SyncProgress
@@ -11,8 +10,6 @@ import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.ui.model.PendingFileInfo
 import com.lxmf.messenger.ui.screens.PendingFileNotificationBubble
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -39,12 +36,14 @@ class PendingFileNotificationBubbleTest {
 
     private var clickCount = 0
 
-    private val testPendingFileInfo = PendingFileInfo(
-        originalMessageId = "msg123",
-        filename = "document.pdf",
-        fileCount = 1,
-        totalSize = 1024 * 1024L, // 1 MB
-    )
+    private val testPendingFileInfo =
+        PendingFileInfo(
+            originalMessageId = "msg123",
+            filename = "document.pdf",
+            fileCount = 1,
+            // 1 MB
+            totalSize = 1024 * 1024L,
+        )
 
     private val testPeerName = "Alice"
 
@@ -374,7 +373,8 @@ class PendingFileNotificationBubbleTest {
     fun `hides additional files text when fileCount is 1`() {
         composeTestRule.setContent {
             PendingFileNotificationBubble(
-                pendingFileInfo = testPendingFileInfo, // fileCount = 1
+                // fileCount = 1
+                pendingFileInfo = testPendingFileInfo,
                 peerName = testPeerName,
                 syncProgress = SyncProgress.Idle,
                 onClick = { clickCount++ },

@@ -192,16 +192,20 @@ class TestGetHopCount(unittest.TestCase):
         self.assertEqual(result, 3, "get_hop_count should return 3 in mock mode")
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
-    def test_get_hop_count_returns_none_when_not_implemented(self):
-        """Test that get_hop_count returns None (TODO: implement actual hop count retrieval)"""
+    @patch('reticulum_wrapper.RNS')
+    def test_get_hop_count_returns_none_when_no_path(self, mock_rns):
+        """Test that get_hop_count returns None when no path exists"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.reticulum = Mock()
+
+        # Mock Transport.has_path to return False (no path to destination)
+        mock_rns.Transport.has_path.return_value = False
 
         test_dest_hash = b'test_destination_hash'
         result = wrapper.get_hop_count(test_dest_hash)
 
-        # Currently returns None as per TODO in implementation
-        self.assertIsNone(result, "get_hop_count should return None when not implemented")
+        # Should return None when no path exists
+        self.assertIsNone(result, "get_hop_count should return None when no path exists")
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
     def test_get_hop_count_returns_mock_when_reticulum_not_initialized(self):
@@ -486,6 +490,60 @@ class TestPathMethodsErrorHandling(unittest.TestCase):
         # Should not crash, should return valid list
         result = wrapper.get_path_table()
         self.assertIsInstance(result, list)
+
+
+class TestProbeLinkSpeed(unittest.TestCase):
+    """Tests for the probe_link_speed method"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def test_probe_link_speed_not_initialized_returns_status(self):
+        """Test that probe_link_speed returns not_initialized when wrapper is not ready"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        # Don't initialize - reticulum is None
+
+        test_dest_hash = bytes.fromhex('0123456789abcdef0123456789abcdef')
+        result = wrapper.probe_link_speed(test_dest_hash)
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['status'], 'not_initialized')
+        self.assertIsNone(result['establishment_rate_bps'])
+        self.assertIsNone(result['hops'])
+        self.assertFalse(result['link_reused'])
+
+    def test_probe_link_speed_returns_correct_structure(self):
+        """Test that probe_link_speed returns all expected fields"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        # Don't initialize
+
+        test_dest_hash = bytes.fromhex('0123456789abcdef0123456789abcdef')
+        result = wrapper.probe_link_speed(test_dest_hash)
+
+        # Check all expected fields are present
+        expected_fields = ['status', 'establishment_rate_bps', 'expected_rate_bps',
+                          'rtt_seconds', 'hops', 'link_reused']
+        for field in expected_fields:
+            self.assertIn(field, result, f"Field '{field}' should be present in result")
+
+    def test_probe_link_speed_timeout_parameter(self):
+        """Test that probe_link_speed accepts custom timeout"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        test_dest_hash = bytes.fromhex('0123456789abcdef0123456789abcdef')
+        # Should not raise with custom timeout
+        result = wrapper.probe_link_speed(test_dest_hash, timeout_seconds=5.0)
+
+        self.assertIsInstance(result, dict)
+        self.assertIn('status', result)
 
 
 if __name__ == '__main__':

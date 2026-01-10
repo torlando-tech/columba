@@ -53,7 +53,8 @@ fun SharedInstanceBannerCard(
     isUsingSharedInstance: Boolean,
     rpcKey: String?,
     wasUsingSharedInstance: Boolean = false,
-    sharedInstanceOnline: Boolean = false, // Current availability from service query
+    /** Current availability from service query */
+    sharedInstanceOnline: Boolean = false,
     onExpandToggle: (Boolean) -> Unit,
     onTogglePreferOwnInstance: (Boolean) -> Unit,
     onRpcKeyChange: (String?) -> Unit,

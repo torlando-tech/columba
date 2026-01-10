@@ -7,6 +7,7 @@ import com.lxmf.messenger.reticulum.model.Direction
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.model.Link
 import com.lxmf.messenger.reticulum.model.LinkEvent
+import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.PacketReceipt
 import com.lxmf.messenger.reticulum.model.PacketType
@@ -104,6 +105,53 @@ interface ReticulumProtocol {
     fun getHopCount(destinationHash: ByteArray): Int?
 
     suspend fun getPathTableHashes(): List<String>
+
+    /**
+     * Probe link speed to a destination by checking existing links or sending
+     * an empty LXMF message to establish one.
+     *
+     * @param destinationHash The destination to probe (16 bytes)
+     * @param timeoutSeconds How long to wait for link establishment (default 10s)
+     * @param deliveryMethod "direct" or "propagated" - affects which link to check/establish
+     * @return LinkSpeedProbeResult with measured speeds or error status
+     */
+    suspend fun probeLinkSpeed(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float = 10.0f,
+        deliveryMethod: String = "direct",
+    ): LinkSpeedProbeResult
+
+    // ==================== Conversation Link Management ====================
+
+    /**
+     * Establish a link to a destination for real-time connectivity.
+     * Used to show "Online" status and enable instant link speed probing.
+     *
+     * @param destinationHash Destination hash bytes (16 bytes identity hash)
+     * @param timeoutSeconds How long to wait for link establishment
+     * @return Result containing ConversationLinkResult with link status and speed
+     */
+    suspend fun establishConversationLink(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float = 10.0f,
+    ): Result<ConversationLinkResult>
+
+    /**
+     * Close an active link to a destination.
+     * Called when conversation has been inactive for too long.
+     *
+     * @param destinationHash Destination hash bytes (16 bytes identity hash)
+     * @return Result indicating success and whether link was active
+     */
+    suspend fun closeConversationLink(destinationHash: ByteArray): Result<Boolean>
+
+    /**
+     * Check if a link is active to a destination.
+     *
+     * @param destinationHash Destination hash bytes (16 bytes identity hash)
+     * @return ConversationLinkResult with current link status
+     */
+    suspend fun getConversationLinkStatus(destinationHash: ByteArray): ConversationLinkResult
 
     // Announce handling
     fun observeAnnounces(): Flow<AnnounceEvent>
@@ -344,6 +392,33 @@ data class FailedInterface(
         }
     }
 }
+
+/**
+ * Result of conversation link operations.
+ *
+ * Contains all metrics needed for connection quality assessment and
+ * image transfer time estimation.
+ */
+data class ConversationLinkResult(
+    /** Whether link is currently active */
+    val isActive: Boolean,
+    /** Link establishment rate in bits/sec (if active) */
+    val establishmentRateBps: Long? = null,
+    /** Actual measured throughput from prior transfers (most accurate) */
+    val expectedRateBps: Long? = null,
+    /** First hop interface bitrate (for fast links like WiFi) */
+    val nextHopBitrateBps: Long? = null,
+    /** Round-trip time in seconds */
+    val rttSeconds: Double? = null,
+    /** Number of hops to destination */
+    val hops: Int? = null,
+    /** Link MTU in bytes (higher = faster connection) */
+    val linkMtu: Int? = null,
+    /** Whether the link already existed (for establish operations) */
+    val alreadyExisted: Boolean = false,
+    /** Error message if operation failed */
+    val error: String? = null,
+)
 
 /**
  * State of propagation node message sync/transfer.

@@ -362,7 +362,6 @@ class PythonWrapperManager(
      *
      * @param stampGenerator The Kotlin StampGenerator instance to use
      */
-    // Holder for stamp generator instance - used by static callback method
     private var stampGeneratorInstance: StampGenerator? = null
 
     fun setStampGeneratorCallback(stampGenerator: StampGenerator) {

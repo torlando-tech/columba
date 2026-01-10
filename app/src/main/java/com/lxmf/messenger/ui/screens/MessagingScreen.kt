@@ -7,7 +7,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -59,6 +64,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
@@ -130,6 +136,7 @@ import com.lxmf.messenger.ui.components.FileAttachmentCard
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
 import com.lxmf.messenger.ui.components.FullEmojiPickerDialog
+import com.lxmf.messenger.ui.components.ImageQualitySelectionDialog
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.QuickShareLocationBottomSheet
 import com.lxmf.messenger.ui.components.ReactionDisplayRow
@@ -170,6 +177,7 @@ fun MessagingScreen(
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
     val announceInfo by viewModel.announceInfo.collectAsStateWithLifecycle()
+    val conversationLinkState by viewModel.conversationLinkState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     var messageText by remember { mutableStateOf("") }
 
@@ -234,6 +242,12 @@ fun MessagingScreen(
     // Lifecycle-aware coroutine scope for image and file processing
     val scope = rememberCoroutineScope()
 
+    // Image quality selection dialog state
+    val qualitySelectionState by viewModel.qualitySelectionState.collectAsStateWithLifecycle()
+
+    // Current link state for showing path info in quality dialog
+    val currentLinkState by viewModel.currentLinkState.collectAsStateWithLifecycle()
+
     // Observe manual sync results and show Toast
     LaunchedEffect(Unit) {
         viewModel.manualSyncResult.collect { result ->
@@ -273,33 +287,13 @@ fun MessagingScreen(
         }
     }
 
-    // Image picker launcher - uses compressImagePreservingAnimation to preserve GIF animation
+    // Image picker launcher - uses adaptive compression with warning dialog
     val imageLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent(),
         ) { uri: android.net.Uri? ->
             uri?.let {
-                viewModel.setProcessingImage(true)
-                scope.launch(Dispatchers.IO) {
-                    try {
-                        val compressed = ImageUtils.compressImagePreservingAnimation(context, it)
-                        withContext(Dispatchers.Main) {
-                            viewModel.setProcessingImage(false)
-                            if (compressed != null) {
-                                viewModel.selectImage(
-                                    compressed.data,
-                                    compressed.format,
-                                    compressed.isAnimated,
-                                )
-                            }
-                        }
-                    } catch (e: Exception) {
-                        withContext(Dispatchers.Main) {
-                            viewModel.setProcessingImage(false)
-                        }
-                        android.util.Log.e("MessagingScreen", "Error compressing image", e)
-                    }
-                }
+                viewModel.processImageWithCompression(context, it)
             }
         }
 
@@ -481,26 +475,77 @@ fun MessagingScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        // Online status indicator - updates in real-time
+                        // Online status indicator - considers active link OR recent announce
                         val lastSeen = announceInfo?.lastSeenTimestamp
-                        if (lastSeen != null) {
-                            val isOnline = System.currentTimeMillis() - lastSeen < (5 * 60 * 1000L) // 5 minutes
+                        val hasActiveLink = conversationLinkState?.isActive == true
+                        val isEstablishing = conversationLinkState?.isEstablishing == true
+                        val hasRecentAnnounce =
+                            lastSeen != null &&
+                                System.currentTimeMillis() - lastSeen < (5 * 60 * 1000L) // 5 minutes
+                        val isOnline = hasActiveLink || hasRecentAnnounce
 
+                        // Debug logging
+                        android.util.Log.d(
+                            "MessagingScreen",
+                            "Online indicator: hasActiveLink=$hasActiveLink, isEstablishing=$isEstablishing, hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState",
+                        )
+
+                        if (lastSeen != null || hasActiveLink || isEstablishing) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Circle,
-                                    contentDescription = null,
-                                    tint = if (isOnline) MeshConnected else MeshOffline,
-                                    modifier = Modifier.size(8.dp),
-                                )
+                                // Status dot - color and animation based on state
+                                if (isEstablishing) {
+                                    // Pulsing dot when establishing
+                                    val infiniteTransition = rememberInfiniteTransition(label = "establishing")
+                                    val alpha by infiniteTransition.animateFloat(
+                                        initialValue = 0.3f,
+                                        targetValue = 1f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(700, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse,
+                                        ),
+                                        label = "pulse",
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.Circle,
+                                        contentDescription = null,
+                                        tint = MeshConnected.copy(alpha = alpha),
+                                        modifier = Modifier.size(8.dp),
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Circle,
+                                        contentDescription = null,
+                                        tint = if (isOnline) MeshConnected else MeshOffline,
+                                        modifier = Modifier.size(8.dp),
+                                    )
+                                }
+
+                                // Status text
+                                val statusText = when {
+                                    isEstablishing -> "Connecting..."
+                                    hasActiveLink -> "Online"
+                                    hasRecentAnnounce -> "Online"
+                                    lastSeen != null -> formatRelativeTime(lastSeen)
+                                    else -> ""
+                                }
                                 Text(
-                                    text = if (isOnline) "Online" else formatRelativeTime(lastSeen),
+                                    text = statusText,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+
+                                // Link indicator icon when link is active
+                                if (hasActiveLink) {
+                                    Icon(
+                                        imageVector = Icons.Default.Link,
+                                        contentDescription = "Active link",
+                                        tint = MeshConnected,
+                                        modifier = Modifier.size(12.dp),
+                                    )
+                                }
                             }
                         }
                     }
@@ -591,7 +636,8 @@ fun MessagingScreen(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .imePadding(), // Apply IME padding to container
+                        // Apply IME padding to container
+                        .imePadding(),
             ) {
                 Box(
                     modifier =
@@ -610,10 +656,12 @@ fun MessagingScreen(
                                     start = 16.dp,
                                     end = 16.dp,
                                     top = 16.dp,
-                                    bottom = 16.dp, // Space for input bar
+                                    // Space for input bar
+                                    bottom = 16.dp,
                                 ),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
-                            reverseLayout = true, // Messages anchored to bottom (industry standard)
+                            // Messages anchored to bottom (industry standard)
+                            reverseLayout = true,
                         ) {
                             // Paging3 infinite scroll: loads 30 messages initially,
                             // then loads more as user scrolls up
@@ -621,7 +669,8 @@ fun MessagingScreen(
                             items(
                                 count = pagingItems.itemCount,
                                 key = pagingItems.itemKey { message -> message.id },
-                                contentType = { "message" }, // All items are message bubbles
+                                // All items are message bubbles
+                                contentType = { "message" },
                             ) { index ->
                                 val message = pagingItems[index]
                                 if (message != null) {
@@ -751,7 +800,10 @@ fun MessagingScreen(
                     selectedImageData = selectedImageData,
                     selectedImageIsAnimated = selectedImageIsAnimated,
                     isProcessingImage = isProcessingImage,
-                    onImageAttachmentClick = { imageLauncher.launch("image/*") },
+                    onImageAttachmentClick = {
+                        // Link is already established by ConversationLinkManager when entering conversation
+                        imageLauncher.launch("image/*")
+                    },
                     onImageContentReceived = { data, format, isAnimated ->
                         viewModel.selectImage(data, format, isAnimated)
                     },
@@ -955,6 +1007,17 @@ fun MessagingScreen(
             syncProgress = syncProgress,
             onDismiss = { showSyncStatusSheet = false },
             sheetState = syncStatusSheetState,
+        )
+    }
+
+    // Image quality selection dialog
+    qualitySelectionState?.let { state ->
+        ImageQualitySelectionDialog(
+            recommendedPreset = state.recommendedPreset,
+            linkState = currentLinkState,
+            transferTimeEstimates = state.transferTimeEstimates,
+            onSelect = { preset -> viewModel.selectImageQuality(preset) },
+            onDismiss = { viewModel.dismissQualitySelection() },
         )
     }
 }
@@ -1203,7 +1266,8 @@ fun MessageBubble(
                                         onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
                                     }
                                 },
-                                indication = null, // Disable ripple - we use scale animation instead
+                                // Disable ripple - we use scale animation instead
+                                indication = null,
                                 interactionSource = interactionSource,
                             ),
                 ) {

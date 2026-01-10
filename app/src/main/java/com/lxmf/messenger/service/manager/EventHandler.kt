@@ -246,12 +246,13 @@ class EventHandler(
                     ?: "Peer ${destinationHashHex.take(8).uppercase()}"
 
             // Extract transfer size limit for propagation nodes
-            val propagationTransferLimitKb = if (nodeType == NodeType.PROPAGATION_NODE) {
-                val metadata = AppDataParser.extractPropagationNodeMetadata(appData)
-                metadata.transferLimitKb
-            } else {
-                null
-            }
+            val propagationTransferLimitKb =
+                if (nodeType == NodeType.PROPAGATION_NODE) {
+                    val metadata = AppDataParser.extractPropagationNodeMetadata(appData)
+                    metadata.transferLimitKb
+                } else {
+                    null
+                }
 
             // Persist to database first (survives app process death)
             if (persistenceManager != null && publicKey != null) {
@@ -269,7 +270,8 @@ class EventHandler(
                     stampCost = stampCost,
                     stampCostFlexibility = stampCostFlexibility,
                     peeringCost = peeringCost,
-                    iconName = null, // Icon appearance updated via message field 4
+                    // Icon appearance updated via message field 4
+                    iconName = null,
                     iconForegroundColor = null,
                     iconBackgroundColor = null,
                     propagationTransferLimitKb = propagationTransferLimitKb,
@@ -502,7 +504,8 @@ class EventHandler(
                     val filePath =
                         attachmentStorage?.saveAttachment(
                             messageHash,
-                            "5_$i", // Unique key per file: "5_0", "5_1", etc.
+                            // Unique key per file: "5_0", "5_1", etc.
+                            "5_$i",
                             data,
                         )
                     if (filePath != null) {

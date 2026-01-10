@@ -137,7 +137,8 @@ class PropagationNodeManager
                     announce?.peerName
                         ?: contact.customNickname
                         ?: contact.destinationHash.take(12),
-                hops = announce?.hops ?: -1, // -1 = unknown
+                // -1 = unknown
+                hops = announce?.hops ?: -1,
                 isAutoSelected = isAutoSelect,
                 lastSeenTimestamp =
                     announce?.lastSeenTimestamp
@@ -310,12 +311,13 @@ class PropagationNodeManager
             val baseDelayMs = 500L
 
             for (attempt in 1..maxRetries) {
-                val result = if (destinationHash != null) {
-                    val destHashBytes = destinationHash.hexToByteArray()
-                    reticulumProtocol.setOutboundPropagationNode(destHashBytes)
-                } else {
-                    reticulumProtocol.setOutboundPropagationNode(null)
-                }
+                val result =
+                    if (destinationHash != null) {
+                        val destHashBytes = destinationHash.hexToByteArray()
+                        reticulumProtocol.setOutboundPropagationNode(destHashBytes)
+                    } else {
+                        reticulumProtocol.setOutboundPropagationNode(null)
+                    }
 
                 if (result.isSuccess) {
                     if (destinationHash != null) {

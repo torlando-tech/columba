@@ -10,9 +10,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.paging.PagingData
+import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.test.MessagingTestFixtures
 import com.lxmf.messenger.test.RegisterComponentActivityRule
-import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.ReplyPreviewUi
 import com.lxmf.messenger.viewmodel.ContactToggleResult
@@ -83,6 +83,12 @@ class MessagingScreenTest {
         // Animated image mocks
         every { mockViewModel.selectedImageIsAnimated } returns MutableStateFlow(false)
         every { mockViewModel.decodedImages } returns MutableStateFlow(emptyMap())
+        // Image quality selection mocks
+        every { mockViewModel.qualitySelectionState } returns MutableStateFlow(null)
+        // Link state mock (replaces linkSpeedProbeState)
+        every { mockViewModel.currentLinkState } returns MutableStateFlow(null)
+        // Conversation link state mock
+        every { mockViewModel.conversationLinkState } returns MutableStateFlow(null)
     }
 
     // ========== Empty State Tests ==========

@@ -27,8 +27,10 @@ import kotlin.math.min
  * @param backoffMultiplier Factor by which to increase interval each cycle
  */
 class SmartPoller(
-    private val minInterval: Long = 2_000, // 2s when active
-    private val maxInterval: Long = 30_000, // 30s max when idle
+    /** 2s when active */
+    private val minInterval: Long = 2_000,
+    /** 30s max when idle */
+    private val maxInterval: Long = 30_000,
     private val backoffMultiplier: Double = 2.0,
 ) {
     // Thread-safe state: @Volatile ensures visibility across threads

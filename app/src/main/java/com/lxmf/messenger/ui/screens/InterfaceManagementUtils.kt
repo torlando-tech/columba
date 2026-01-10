@@ -4,9 +4,7 @@ import android.bluetooth.BluetoothAdapter
 import android.util.Log
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 
-/**
- * Helper utilities for Interface Management UI.
- */
+// Interface Management UI helper utilities.
 
 /**
  * Check if this interface is a BLE (Bluetooth Low Energy) interface.

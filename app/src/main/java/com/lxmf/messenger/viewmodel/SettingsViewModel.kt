@@ -36,6 +36,7 @@ data class SettingsState(
     val autoAnnounceEnabled: Boolean = true,
     val autoAnnounceIntervalHours: Int = 3,
     val lastAutoAnnounceTime: Long? = null,
+    val nextAutoAnnounceTime: Long? = null,
     val isManualAnnouncing: Boolean = false,
     val showManualAnnounceSuccess: Boolean = false,
     val manualAnnounceError: String? = null,
@@ -183,6 +184,7 @@ class SettingsViewModel
                         settingsRepository.autoAnnounceEnabledFlow,
                         settingsRepository.autoAnnounceIntervalHoursFlow,
                         settingsRepository.lastAutoAnnounceTimeFlow,
+                        settingsRepository.nextAutoAnnounceTimeFlow,
                         settingsRepository.themePreferenceFlow,
                         customThemesFlow,
                         settingsRepository.preferOwnInstanceFlow,
@@ -210,36 +212,39 @@ class SettingsViewModel
                         val lastAnnounceTime = flows[3] as Long?
 
                         @Suppress("UNCHECKED_CAST")
-                        val selectedTheme = flows[4] as AppTheme
+                        val nextAnnounceTime = flows[4] as Long?
 
                         @Suppress("UNCHECKED_CAST")
-                        val customThemes = flows[5] as List<AppTheme>
+                        val selectedTheme = flows[5] as AppTheme
 
                         @Suppress("UNCHECKED_CAST")
-                        val preferOwnInstance = flows[6] as Boolean
+                        val customThemes = flows[6] as List<AppTheme>
 
                         @Suppress("UNCHECKED_CAST")
-                        val isSharedInstance = flows[7] as Boolean
+                        val preferOwnInstance = flows[7] as Boolean
 
                         @Suppress("UNCHECKED_CAST")
-                        val rpcKey = flows[8] as String?
+                        val isSharedInstance = flows[8] as Boolean
 
                         @Suppress("UNCHECKED_CAST")
-                        val transportNodeEnabled = flows[9] as Boolean
+                        val rpcKey = flows[9] as String?
 
                         @Suppress("UNCHECKED_CAST")
-                        val defaultDeliveryMethod = flows[10] as String
+                        val transportNodeEnabled = flows[10] as Boolean
+
+                        @Suppress("UNCHECKED_CAST")
+                        val defaultDeliveryMethod = flows[11] as String
 
                         // Sync state from flows (not preserved from _state.value to avoid races)
                         // Note: isSyncing is handled separately to avoid rapid recomposition
                         @Suppress("UNCHECKED_CAST")
-                        val lastSyncTimestamp = flows[11] as Long?
+                        val lastSyncTimestamp = flows[12] as Long?
 
                         @Suppress("UNCHECKED_CAST")
-                        val autoRetrieveEnabled = flows[12] as Boolean
+                        val autoRetrieveEnabled = flows[13] as Boolean
 
                         @Suppress("UNCHECKED_CAST")
-                        val retrievalIntervalSeconds = flows[13] as Int
+                        val retrievalIntervalSeconds = flows[14] as Int
 
                         val displayName = activeIdentity?.displayName ?: defaultName
 
@@ -251,6 +256,7 @@ class SettingsViewModel
                             autoAnnounceEnabled = autoAnnounceEnabled,
                             autoAnnounceIntervalHours = intervalHours,
                             lastAutoAnnounceTime = lastAnnounceTime,
+                            nextAutoAnnounceTime = nextAnnounceTime,
                             isManualAnnouncing = _state.value.isManualAnnouncing,
                             showManualAnnounceSuccess = _state.value.showManualAnnounceSuccess,
                             manualAnnounceError = _state.value.manualAnnounceError,

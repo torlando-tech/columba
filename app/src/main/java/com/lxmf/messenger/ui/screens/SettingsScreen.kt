@@ -163,6 +163,7 @@ fun SettingsScreen(
                     enabled = state.autoAnnounceEnabled,
                     intervalHours = state.autoAnnounceIntervalHours,
                     lastAnnounceTime = state.lastAutoAnnounceTime,
+                    nextAnnounceTime = state.nextAutoAnnounceTime,
                     isManualAnnouncing = state.isManualAnnouncing,
                     showManualAnnounceSuccess = state.showManualAnnounceSuccess,
                     manualAnnounceError = state.manualAnnounceError,

@@ -17,14 +17,14 @@ import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
-import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Manages automatic periodic announces based on user settings.
  *
  * This class observes the auto-announce settings (enabled state and interval)
  * and triggers announces at the configured interval when enabled.
- * The interval is randomized by +/- 1 hour to prevent network congestion.
+ * The interval is randomized by +/- 1 hour (with minute precision) to prevent network congestion.
  * The timer can be reset when a network topology change triggers an immediate announce.
  */
 @Singleton
@@ -38,7 +38,9 @@ class AutoAnnounceManager
     ) {
         companion object {
             private const val TAG = "AutoAnnounceManager"
-            private const val RANDOMIZATION_RANGE_HOURS = 1
+            private const val RANDOMIZATION_RANGE_MINUTES = 60 // ±1 hour in minutes
+            private const val MIN_INTERVAL_MINUTES = 60 // 1 hour minimum
+            private const val MAX_INTERVAL_MINUTES = 720 // 12 hours maximum
         }
 
         private var autoAnnounceJob: Job? = null
@@ -90,6 +92,8 @@ class AutoAnnounceManager
                             startAnnounceLoop(intervalHours, displayName)
                         } else {
                             Log.d(TAG, "Auto-announce disabled, stopping loop")
+                            // Clear the next announce time when disabled
+                            settingsRepository.saveNextAutoAnnounceTime(null)
                         }
                     }
                 }
@@ -110,13 +114,14 @@ class AutoAnnounceManager
         /**
          * Run the announce loop with the specified interval.
          * This is launched in a new coroutine each time settings change.
-         * The interval is randomized by +/- RANDOMIZATION_RANGE_HOURS (1 hour).
+         * The interval is randomized by +/- 1 hour with minute precision.
          */
         private suspend fun startAnnounceLoop(
             intervalHours: Int,
             displayName: String?,
         ) {
-            Log.d(TAG, "Starting announce loop with base interval ${intervalHours}h (+/- ${RANDOMIZATION_RANGE_HOURS}h randomization)")
+            val baseIntervalMinutes = intervalHours * 60
+            Log.d(TAG, "Starting announce loop with base interval ${intervalHours}h (±${RANDOMIZATION_RANGE_MINUTES}min randomization)")
 
             // The loop will be cancelled and restarted if settings change
             while (true) {
@@ -144,11 +149,19 @@ class AutoAnnounceManager
                     Log.e(TAG, "Error during auto-announce", e)
                 }
 
-                // Calculate randomized delay: base interval +/- 1 hour, clamped to valid range
-                val randomOffset = Random.nextInt(-RANDOMIZATION_RANGE_HOURS, RANDOMIZATION_RANGE_HOURS + 1)
-                val actualDelayHours = (intervalHours + randomOffset).coerceIn(1, 12)
-                val delayMillis = actualDelayHours.hours.inWholeMilliseconds
-                Log.d(TAG, "Next announce in ${actualDelayHours}h (base: ${intervalHours}h, offset: ${randomOffset}h)")
+                // Calculate randomized delay with minute precision: base interval +/- 1 hour
+                val randomOffsetMinutes = Random.nextInt(-RANDOMIZATION_RANGE_MINUTES, RANDOMIZATION_RANGE_MINUTES + 1)
+                val actualDelayMinutes = (baseIntervalMinutes + randomOffsetMinutes)
+                    .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
+                val delayMillis = actualDelayMinutes.minutes.inWholeMilliseconds
+
+                // Save the scheduled next announce time for UI display
+                val nextAnnounceTime = System.currentTimeMillis() + delayMillis
+                settingsRepository.saveNextAutoAnnounceTime(nextAnnounceTime)
+
+                val hours = actualDelayMinutes / 60
+                val mins = actualDelayMinutes % 60
+                Log.d(TAG, "Next announce in ${hours}h ${mins}m (base: ${intervalHours}h, offset: ${randomOffsetMinutes}min)")
 
                 // Wait for the randomized interval, or reset if network change occurs
                 // withTimeoutOrNull returns null on timeout, or the signal value if reset signal received

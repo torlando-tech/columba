@@ -65,6 +65,7 @@ class SettingsRepository
             val AUTO_ANNOUNCE_INTERVAL_MINUTES = intPreferencesKey("auto_announce_interval_minutes") // Legacy, for migration
             val AUTO_ANNOUNCE_INTERVAL_HOURS = intPreferencesKey("auto_announce_interval_hours")
             val LAST_AUTO_ANNOUNCE_TIME = longPreferencesKey("last_auto_announce_time")
+            val NEXT_AUTO_ANNOUNCE_TIME = longPreferencesKey("next_auto_announce_time") // Scheduled time for next announce
             val NETWORK_CHANGE_ANNOUNCE_TIME = longPreferencesKey("network_change_announce_time") // Cross-process signal for timer reset
 
             // Service status persistence
@@ -378,6 +379,32 @@ class SettingsRepository
         suspend fun saveLastAutoAnnounceTime(timestamp: Long) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.LAST_AUTO_ANNOUNCE_TIME] = timestamp
+            }
+        }
+
+        /**
+         * Flow of the next scheduled auto-announce timestamp (epoch milliseconds).
+         * Returns null if no announce is scheduled (e.g., auto-announce is disabled).
+         */
+        val nextAutoAnnounceTimeFlow: Flow<Long?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.NEXT_AUTO_ANNOUNCE_TIME]
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the next scheduled auto-announce timestamp.
+         *
+         * @param timestamp The timestamp in epoch milliseconds when the next announce is scheduled
+         */
+        suspend fun saveNextAutoAnnounceTime(timestamp: Long?) {
+            context.dataStore.edit { preferences ->
+                if (timestamp != null) {
+                    preferences[PreferencesKeys.NEXT_AUTO_ANNOUNCE_TIME] = timestamp
+                } else {
+                    preferences.remove(PreferencesKeys.NEXT_AUTO_ANNOUNCE_TIME)
+                }
             }
         }
 

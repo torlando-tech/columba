@@ -77,75 +77,92 @@ class AutoAnnounceManagerTest {
     }
 
     // ========== Randomization Logic Tests ==========
+    // Tests for minute-precision randomization: base interval ±60 minutes, clamped to 60-720 minutes
+
+    companion object {
+        private const val RANDOMIZATION_RANGE_MINUTES = 60
+        private const val MIN_INTERVAL_MINUTES = 60
+        private const val MAX_INTERVAL_MINUTES = 720
+    }
 
     @Test
-    fun randomizationLogic_baseInterval3h_producesValuesIn2to4Range() {
-        // Test the randomization formula: (intervalHours + Random.nextInt(-1, 2)).coerceIn(1, 12)
-        val intervalHours = 3
+    fun randomizationLogic_baseInterval3h_producesMinuteValuesIn2to4hRange() {
+        // Test the randomization formula with minute precision
+        // 3h = 180 min, ±60 min = 120-240 min range
+        val baseIntervalMinutes = 3 * 60 // 180 minutes
         val results = mutableSetOf<Int>()
 
         // Run many iterations to verify range
         repeat(1000) {
-            val randomOffset = Random.nextInt(-1, 2) // -1, 0, or 1
-            val actualDelay = (intervalHours + randomOffset).coerceIn(1, 12)
-            results.add(actualDelay)
+            val randomOffsetMinutes = Random.nextInt(-RANDOMIZATION_RANGE_MINUTES, RANDOMIZATION_RANGE_MINUTES + 1)
+            val actualDelayMinutes = (baseIntervalMinutes + randomOffsetMinutes)
+                .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
+            results.add(actualDelayMinutes)
         }
 
-        // Should produce values 2, 3, or 4 (3 +/- 1)
-        assertTrue("Should contain 2", 2 in results)
-        assertTrue("Should contain 3", 3 in results)
-        assertTrue("Should contain 4", 4 in results)
-        assertEquals("Should only contain 2, 3, 4", setOf(2, 3, 4), results)
+        // Should produce values from 120 to 240 minutes (2h to 4h)
+        assertTrue("Minimum should be 120 (2h)", results.min() == 120)
+        assertTrue("Maximum should be 240 (4h)", results.max() == 240)
+        assertTrue("All values should be in valid range", results.all { it in 120..240 })
+        // Should have more than 3 unique values (minute precision, not just hour buckets)
+        assertTrue("Should have minute precision (many unique values)", results.size > 3)
     }
 
     @Test
     fun randomizationLogic_minimumInterval1h_clampsToMinimum() {
-        val intervalHours = 1
+        // 1h = 60 min, 60 - 60 = 0, but should clamp to 60
+        val baseIntervalMinutes = 1 * 60 // 60 minutes
         val results = mutableSetOf<Int>()
 
         repeat(1000) {
-            val randomOffset = Random.nextInt(-1, 2)
-            val actualDelay = (intervalHours + randomOffset).coerceIn(1, 12)
-            results.add(actualDelay)
+            val randomOffsetMinutes = Random.nextInt(-RANDOMIZATION_RANGE_MINUTES, RANDOMIZATION_RANGE_MINUTES + 1)
+            val actualDelayMinutes = (baseIntervalMinutes + randomOffsetMinutes)
+                .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
+            results.add(actualDelayMinutes)
         }
 
-        // 1 - 1 = 0, but should clamp to 1
-        // 1 + 0 = 1
-        // 1 + 1 = 2
-        assertTrue("Should contain 1 (clamped from 0)", 1 in results)
-        assertTrue("Should contain 2", 2 in results)
-        assertTrue("All values should be >= 1", results.all { it >= 1 })
+        // Minimum should clamp to 60 (1h)
+        // Maximum should be 120 (2h)
+        assertTrue("Minimum should be clamped to 60 (1h)", results.min() == 60)
+        assertTrue("Maximum should be 120 (2h)", results.max() == 120)
+        assertTrue("All values should be >= 60", results.all { it >= MIN_INTERVAL_MINUTES })
     }
 
     @Test
     fun randomizationLogic_maximumInterval12h_clampsToMaximum() {
-        val intervalHours = 12
+        // 12h = 720 min, 720 + 60 = 780, but should clamp to 720
+        val baseIntervalMinutes = 12 * 60 // 720 minutes
         val results = mutableSetOf<Int>()
 
         repeat(1000) {
-            val randomOffset = Random.nextInt(-1, 2)
-            val actualDelay = (intervalHours + randomOffset).coerceIn(1, 12)
-            results.add(actualDelay)
+            val randomOffsetMinutes = Random.nextInt(-RANDOMIZATION_RANGE_MINUTES, RANDOMIZATION_RANGE_MINUTES + 1)
+            val actualDelayMinutes = (baseIntervalMinutes + randomOffsetMinutes)
+                .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
+            results.add(actualDelayMinutes)
         }
 
-        // 12 - 1 = 11
-        // 12 + 0 = 12
-        // 12 + 1 = 13, but should clamp to 12
-        assertTrue("Should contain 11", 11 in results)
-        assertTrue("Should contain 12", 12 in results)
-        assertTrue("All values should be <= 12", results.all { it <= 12 })
+        // Minimum should be 660 (11h)
+        // Maximum should clamp to 720 (12h)
+        assertTrue("Minimum should be 660 (11h)", results.min() == 660)
+        assertTrue("Maximum should be clamped to 720 (12h)", results.max() == 720)
+        assertTrue("All values should be <= 720", results.all { it <= MAX_INTERVAL_MINUTES })
     }
 
     @Test
-    fun randomizationLogic_randomOffsetRange_coversExpectedValues() {
-        // Verify Random.nextInt(-1, 2) produces -1, 0, 1
+    fun randomizationLogic_randomOffsetRange_coversFullMinuteRange() {
+        // Verify Random.nextInt(-60, 61) produces values from -60 to 60
         val offsets = mutableSetOf<Int>()
 
-        repeat(1000) {
-            offsets.add(Random.nextInt(-1, 2))
+        repeat(10000) {
+            offsets.add(Random.nextInt(-RANDOMIZATION_RANGE_MINUTES, RANDOMIZATION_RANGE_MINUTES + 1))
         }
 
-        assertEquals("Should produce exactly -1, 0, 1", setOf(-1, 0, 1), offsets)
+        assertTrue("Should include -60", -60 in offsets)
+        assertTrue("Should include 0", 0 in offsets)
+        assertTrue("Should include 60", 60 in offsets)
+        assertTrue("All offsets should be in range", offsets.all { it in -60..60 })
+        // Should have many unique values (121 possible: -60 to 60 inclusive)
+        assertTrue("Should have many unique offset values", offsets.size > 100)
     }
 
     // ========== Timer Reset Tests ==========

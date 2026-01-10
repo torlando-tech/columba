@@ -50,6 +50,7 @@ fun AutoAnnounceCard(
     enabled: Boolean,
     intervalHours: Int,
     lastAnnounceTime: Long?,
+    nextAnnounceTime: Long?,
     isManualAnnouncing: Boolean,
     showManualAnnounceSuccess: Boolean,
     manualAnnounceError: String?,
@@ -128,7 +129,7 @@ fun AutoAnnounceCard(
 
                 AnnounceStatus(
                     lastAnnounceTime = lastAnnounceTime,
-                    intervalHours = intervalHours,
+                    nextAnnounceTime = nextAnnounceTime,
                 )
 
                 ManualAnnounceSection(
@@ -213,9 +214,10 @@ private fun IntervalSelector(
 @Composable
 private fun AnnounceStatus(
     lastAnnounceTime: Long?,
-    intervalHours: Int,
+    nextAnnounceTime: Long?,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Show last announce time
         if (lastAnnounceTime != null) {
             val timeSinceLastAnnounce = System.currentTimeMillis() - lastAnnounceTime
             val hoursAgo = (timeSinceLastAnnounce / 3600000).toInt()
@@ -233,42 +235,36 @@ private fun AnnounceStatus(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
-            // Calculate range accounting for ±1 hour randomization (clamped to 1-12h)
-            val minIntervalHours = (intervalHours - 1).coerceAtLeast(1)
-            val maxIntervalHours = (intervalHours + 1).coerceAtMost(12)
-            val minNextAnnounceIn = (minIntervalHours * 3600000L) - timeSinceLastAnnounce
-            val maxNextAnnounceIn = (maxIntervalHours * 3600000L) - timeSinceLastAnnounce
-
-            if (maxNextAnnounceIn <= 0) {
-                Text(
-                    text = "Next announce: soon",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary,
-                    fontWeight = FontWeight.Medium,
-                )
-            } else {
-                val minHoursRemaining = (minNextAnnounceIn / 3600000).toInt().coerceAtLeast(0)
-                val maxHoursRemaining = (maxNextAnnounceIn / 3600000).toInt()
-
-                val displayText = when {
-                    minHoursRemaining == maxHoursRemaining -> "Next announce in: ~${maxHoursRemaining}h"
-                    minNextAnnounceIn <= 0 -> "Next announce in: <${maxHoursRemaining + 1}h"
-                    else -> "Next announce in: ${minHoursRemaining}-${maxHoursRemaining + 1}h"
-                }
-
-                Text(
-                    text = displayText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
         } else {
             Text(
                 text = "No announces sent yet",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Show next scheduled announce time
+        if (nextAnnounceTime != null) {
+            val timeUntilNext = nextAnnounceTime - System.currentTimeMillis()
+
+            val displayText = if (timeUntilNext <= 0) {
+                "Next announce: soon"
+            } else {
+                val hoursRemaining = (timeUntilNext / 3600000).toInt()
+                val minutesRemaining = ((timeUntilNext % 3600000) / 60000).toInt()
+
+                if (hoursRemaining > 0) {
+                    "Next announce in: ${hoursRemaining}h ${minutesRemaining}m"
+                } else {
+                    "Next announce in: ${minutesRemaining}m"
+                }
+            }
+
+            Text(
+                text = displayText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Medium,
             )
         }
     }

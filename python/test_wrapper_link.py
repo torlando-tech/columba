@@ -379,6 +379,111 @@ class TestEstablishLink(unittest.TestCase):
         self.assertFalse(result['success'])
         self.assertIn("Destination error", result['error'])
 
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_establish_link_finds_incoming_link_via_transport_active_links(self, mock_rns):
+        """Test fallback to Transport.active_links when link not in direct/backchannel dicts"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        mock_router = Mock()
+        mock_router.direct_links = {}
+        mock_router.backchannel_links = {}
+        wrapper.router = mock_router
+        wrapper.identities = {}
+
+        # No identity recall - simulate unknown identity
+        mock_rns.Identity.recall.return_value = None
+
+        dest_hash = b'0123456789abcdef'
+        mock_rns.Destination.OUT = 1
+        mock_rns.Destination.SINGLE = 1
+
+        # Setup an active incoming link in Transport.active_links
+        mock_active_link = Mock()
+        mock_active_link.status = 2  # ACTIVE
+        mock_active_link.get_expected_rate.return_value = 5000
+        mock_active_link.get_establishment_rate.return_value = 10000
+        mock_active_link.rtt = 0.1
+        mock_active_link.mtu = 500
+        mock_remote_identity = Mock()
+        mock_active_link.get_remote_identity.return_value = mock_remote_identity
+        mock_rns.Link.ACTIVE = 2
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 2
+
+        # The destination created from remote identity should match our dest_hash
+        mock_remote_dest = Mock()
+        mock_remote_dest.hash = dest_hash
+        mock_rns.Destination.return_value = mock_remote_dest
+
+        mock_rns.Transport.active_links = [mock_active_link]
+
+        result = wrapper.establish_link(dest_hash, timeout_seconds=0)
+
+        # Should find the link via Transport.active_links fallback
+        self.assertTrue(result['success'])
+        self.assertTrue(result['link_active'])
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.time')
+    def test_establish_link_handles_identify_exception(self, mock_time, mock_rns):
+        """Test that establish_link handles identify() failure gracefully"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        mock_router = Mock()
+        mock_router.direct_links = {}
+        mock_router.backchannel_links = {}
+        mock_router_identity = Mock()
+        mock_router.identity = mock_router_identity
+        wrapper.router = mock_router
+        wrapper.identities = {}
+
+        # Setup identity recall
+        mock_identity = Mock()
+        mock_identity.hash = b'identity_hash_16'
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        # Setup destination creation
+        dest_hash = b'0123456789abcdef'
+        mock_dest = Mock()
+        mock_dest.hash = dest_hash
+        mock_rns.Destination.return_value = mock_dest
+        mock_rns.Destination.OUT = 1
+        mock_rns.Destination.SINGLE = 1
+
+        # Path available
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 2
+
+        # Set Link constants before using them
+        mock_rns.Link.ACTIVE = 2
+        mock_rns.Link.PENDING = 1
+        mock_rns.Link.CLOSED = 0
+
+        # Setup link creation that becomes active
+        mock_link = Mock()
+        mock_link.status = mock_rns.Link.ACTIVE  # Now ACTIVE = 2
+        mock_link.get_expected_rate.return_value = None
+        mock_link.get_establishment_rate.return_value = 10000
+        mock_link.rtt = 0.1
+        mock_link.mtu = 500
+        # identify() throws an exception
+        mock_link.identify.side_effect = Exception("identify failed")
+        mock_rns.Link.return_value = mock_link
+
+        # Mock time to not actually wait
+        mock_time.time.side_effect = [0, 0, 0.1]
+        mock_time.sleep = Mock()
+
+        result = wrapper.establish_link(dest_hash, timeout_seconds=5)
+
+        # Should still succeed despite identify() failure
+        self.assertTrue(result['success'])
+        self.assertTrue(result['link_active'])
+        # Verify identify was attempted
+        mock_link.identify.assert_called_once_with(mock_router_identity)
+
 
 class TestCloseLink(unittest.TestCase):
     """Tests for the close_link method"""
@@ -645,6 +750,49 @@ class TestGetLinkStatus(unittest.TestCase):
         result = wrapper.get_link_status(dest_hash)
 
         self.assertTrue(result['active'])
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_get_link_status_finds_incoming_link_via_transport_active_links(self, mock_rns):
+        """Test fallback to Transport.active_links for incoming links"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        mock_router = Mock()
+        mock_router.direct_links = {}
+        mock_router.backchannel_links = {}
+        wrapper.router = mock_router
+        wrapper.identities = {}
+
+        dest_hash = b'0123456789abcdef'
+        dest_hash_hex = dest_hash.hex()
+
+        # No identity known, so normal lookup returns None
+        mock_rns.Identity.recall.return_value = None
+
+        # Setup an active incoming link in Transport.active_links
+        mock_active_link = Mock()
+        mock_active_link.status = 2  # ACTIVE
+        mock_active_link.get_expected_rate.return_value = 5000
+        mock_active_link.get_establishment_rate.return_value = 10000
+        mock_remote_identity = Mock()
+        mock_active_link.get_remote_identity.return_value = mock_remote_identity
+        mock_rns.Link.ACTIVE = 2
+
+        # The destination created from remote identity should match our dest_hash
+        mock_remote_dest = Mock()
+        mock_remote_dest.hash = dest_hash
+        mock_rns.Destination.return_value = mock_remote_dest
+        mock_rns.Destination.OUT = 1
+        mock_rns.Destination.SINGLE = 1
+
+        mock_rns.Transport.active_links = [mock_active_link]
+
+        result = wrapper.get_link_status(dest_hash)
+
+        # Should find the link via Transport.active_links fallback
+        self.assertTrue(result['active'])
+        self.assertEqual(result['expected_rate_bps'], 5000)
+        self.assertEqual(result['establishment_rate_bps'], 10000)
 
 
 class TestProbeLinkSpeed(unittest.TestCase):

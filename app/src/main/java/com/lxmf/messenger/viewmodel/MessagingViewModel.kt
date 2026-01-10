@@ -15,7 +15,7 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.service.LinkSpeedProbe
+import com.lxmf.messenger.service.ConversationLinkManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.SyncProgress
@@ -77,8 +77,7 @@ class MessagingViewModel
         private val propagationNodeManager: PropagationNodeManager,
         private val locationSharingManager: LocationSharingManager,
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
-        private val linkSpeedProbe: LinkSpeedProbe,
-        private val conversationLinkManager: com.lxmf.messenger.service.ConversationLinkManager,
+        private val conversationLinkManager: ConversationLinkManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -185,8 +184,14 @@ class MessagingViewModel
         private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
         val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
 
-        // Expose link speed probe state for UI
-        val linkSpeedProbeState: StateFlow<LinkSpeedProbe.ProbeState> = linkSpeedProbe.probeState
+        // Expose current conversation's link state for UI
+        val currentLinkState: StateFlow<ConversationLinkManager.LinkState?> =
+            combine(
+                _currentConversation,
+                conversationLinkManager.linkStates,
+            ) { peerHash, linkStates ->
+                peerHash?.let { linkStates[it] }
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
         // Sync state from PropagationNodeManager
         val isSyncing: StateFlow<Boolean> = propagationNodeManager.isSyncing
@@ -802,9 +807,6 @@ class MessagingViewModel
             // Enable fast polling (1s) for active conversation
             reticulumProtocol.setConversationActive(true)
 
-            // Reset probe state to avoid showing stale data from previous conversation
-            linkSpeedProbe.reset()
-
             // Open link to peer for real-time connectivity status and speed probing
             conversationLinkManager.openConversationLink(destinationHash)
 
@@ -1204,20 +1206,8 @@ class MessagingViewModel
         }
 
         /**
-         * Start probing link speed to the current conversation recipient.
-         * Should be called when the attachment dialog opens to give time for probe completion.
-         */
-        fun startLinkSpeedProbe() {
-            val peerHash = _currentConversation.value ?: return
-            viewModelScope.launch {
-                Log.d(TAG, "Starting link speed probe for conversation $peerHash")
-                linkSpeedProbe.probe(peerHash)
-            }
-        }
-
-        /**
          * Process an image by showing the quality selection dialog.
-         * The dialog shows recommended quality based on link speed probe results.
+         * The dialog shows recommended quality based on link state.
          *
          * @param context Android context for image processing
          * @param uri URI of the image to process
@@ -1229,26 +1219,25 @@ class MessagingViewModel
             viewModelScope.launch {
                 Log.d(TAG, "Opening quality selection for image")
 
-                // Get the probe result for recommendations
-                val probeState = linkSpeedProbe.probeState.value
+                // Get the current link state for recommendations
+                val linkState = currentLinkState.value
 
                 // Determine recommended preset
                 val recommendedPreset =
-                    when (probeState) {
-                        is LinkSpeedProbe.ProbeState.Complete -> probeState.recommendedPreset
-                        else -> {
-                            // Probe failed or not ready - use saved preset or default to MEDIUM
-                            val savedPreset = settingsRepository.getImageCompressionPreset()
-                            if (savedPreset == ImageCompressionPreset.AUTO) {
-                                ImageCompressionPreset.MEDIUM
-                            } else {
-                                savedPreset
-                            }
+                    if (linkState != null && linkState.isActive) {
+                        linkState.recommendPreset()
+                    } else {
+                        // No active link - use saved preset or default to MEDIUM
+                        val savedPreset = settingsRepository.getImageCompressionPreset()
+                        if (savedPreset == ImageCompressionPreset.AUTO) {
+                            ImageCompressionPreset.MEDIUM
+                        } else {
+                            savedPreset
                         }
                     }
 
                 // Calculate transfer time estimates for each preset
-                val transferTimeEstimates = calculateTransferTimeEstimates(probeState)
+                val transferTimeEstimates = calculateTransferTimeEstimates(linkState)
 
                 // Show the quality selection dialog
                 _qualitySelectionState.value =
@@ -1262,22 +1251,16 @@ class MessagingViewModel
         }
 
         /**
-         * Calculate transfer time estimates for each preset based on probe results.
+         * Calculate transfer time estimates for each preset based on link state.
          */
-        private fun calculateTransferTimeEstimates(probeState: LinkSpeedProbe.ProbeState): Map<ImageCompressionPreset, String?> {
-            val probeResult = (probeState as? LinkSpeedProbe.ProbeState.Complete)?.result
-
+        private fun calculateTransferTimeEstimates(linkState: ConversationLinkManager.LinkState?): Map<ImageCompressionPreset, String?> {
             return listOf(
                 ImageCompressionPreset.LOW,
                 ImageCompressionPreset.MEDIUM,
                 ImageCompressionPreset.HIGH,
                 ImageCompressionPreset.ORIGINAL,
             ).associateWith { preset ->
-                if (probeResult != null) {
-                    linkSpeedProbe.estimateTransferTime(preset.targetSizeBytes, probeResult)
-                } else {
-                    null
-                }
+                linkState?.estimateTransferTimeFormatted(preset.targetSizeBytes)
             }
         }
 

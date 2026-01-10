@@ -6,8 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.data.model.ImageCompressionPreset
-import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
-import com.lxmf.messenger.service.LinkSpeedProbe
+import com.lxmf.messenger.service.ConversationLinkManager
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -40,7 +39,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
@@ -55,7 +54,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
@@ -74,7 +73,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
@@ -93,7 +92,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
@@ -109,7 +108,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.LOW,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
@@ -132,7 +131,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = estimates,
                 onSelect = {},
                 onDismiss = {},
@@ -149,57 +148,51 @@ class ImageQualitySelectionDialogTest {
     // ========== Path Info Section Tests ==========
 
     @Test
-    fun dialog_displaysProbingMessage_whenProbing() {
+    fun dialog_displaysConnectingMessage_whenEstablishing() {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = LinkSpeedProbe.ProbeState.Probing("test_hash", LinkSpeedProbe.TargetType.DIRECT),
+                linkState = ConversationLinkManager.LinkState(isActive = false, isEstablishing = true),
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
             )
         }
 
-        composeTestRule.onNodeWithText("Measuring network speed...").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connecting...").assertIsDisplayed()
     }
 
     @Test
-    fun dialog_displaysFailedMessage_whenProbeFailed() {
+    fun dialog_displaysFailedMessage_whenLinkFailed() {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = LinkSpeedProbe.ProbeState.Failed("timeout", LinkSpeedProbe.TargetType.DIRECT),
+                linkState = ConversationLinkManager.LinkState(isActive = false, error = "timeout"),
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
             )
         }
 
-        composeTestRule.onNodeWithText("Network speed unknown").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connection failed").assertIsDisplayed()
     }
 
     @Test
-    fun dialog_displaysHopsAndBitrate_whenProbeComplete() {
-        val result =
-            LinkSpeedProbeResult(
-                status = "success",
-                establishmentRateBps = 10000L,
-                expectedRateBps = 12000L,
-                rttSeconds = 0.5,
-                hops = 3,
-                linkReused = true,
-                nextHopBitrateBps = 115200L,
-            )
+    fun dialog_displaysHopsAndBitrate_whenLinkActive() {
+        val linkState = ConversationLinkManager.LinkState(
+            isActive = true,
+            establishmentRateBps = 10000L,
+            expectedRateBps = 12000L,
+            rttSeconds = 0.5,
+            hops = 3,
+            linkMtu = 500,
+            nextHopBitrateBps = 115200L,
+        )
 
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState =
-                    LinkSpeedProbe.ProbeState.Complete(
-                        result = result,
-                        targetType = LinkSpeedProbe.TargetType.DIRECT,
-                        recommendedPreset = ImageCompressionPreset.MEDIUM,
-                    ),
+                linkState = linkState,
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
@@ -211,34 +204,18 @@ class ImageQualitySelectionDialogTest {
     }
 
     @Test
-    fun dialog_displaysViaRelay_whenPropagationNode() {
-        val result =
-            LinkSpeedProbeResult(
-                status = "success",
-                establishmentRateBps = 5000L,
-                expectedRateBps = null,
-                rttSeconds = null,
-                hops = null,
-                linkReused = false,
-                nextHopBitrateBps = null,
-            )
-
+    fun dialog_displaysNoActiveLink_whenInactive() {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.LOW,
-                probeState =
-                    LinkSpeedProbe.ProbeState.Complete(
-                        result = result,
-                        targetType = LinkSpeedProbe.TargetType.PROPAGATION_NODE,
-                        recommendedPreset = ImageCompressionPreset.LOW,
-                    ),
+                linkState = ConversationLinkManager.LinkState(isActive = false),
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
             )
         }
 
-        composeTestRule.onNodeWithText("(via relay)", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("No active link").assertIsDisplayed()
     }
 
     // ========== Interaction Tests ==========
@@ -250,7 +227,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.HIGH,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = { selectedPreset = it },
                 onDismiss = {},
@@ -269,7 +246,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.HIGH,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = { selectedPreset = it },
                 onDismiss = {},
@@ -292,7 +269,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = { dismissed = true },
@@ -311,7 +288,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = { selectCalled = true },
                 onDismiss = {},
@@ -331,7 +308,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = { selectedPresets.add(it) },
                 onDismiss = {},
@@ -352,7 +329,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.LOW,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = { selectedPreset = it },
                 onDismiss = {},
@@ -371,7 +348,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.ORIGINAL,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = { selectedPreset = it },
                 onDismiss = {},
@@ -386,11 +363,11 @@ class ImageQualitySelectionDialogTest {
     // ========== Null/Empty State Tests ==========
 
     @Test
-    fun dialog_handlesNullProbeState() {
+    fun dialog_handlesNullLinkState() {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
@@ -406,7 +383,7 @@ class ImageQualitySelectionDialogTest {
         composeTestRule.setContent {
             ImageQualitySelectionDialog(
                 recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = null,
+                linkState = null,
                 transferTimeEstimates = emptyMap(),
                 onSelect = {},
                 onDismiss = {},
@@ -416,21 +393,5 @@ class ImageQualitySelectionDialogTest {
         // Should still display quality options
         composeTestRule.onNodeWithText("Low").assertIsDisplayed()
         composeTestRule.onNodeWithText("Medium").assertIsDisplayed()
-    }
-
-    @Test
-    fun dialog_handlesIdleProbeState() {
-        composeTestRule.setContent {
-            ImageQualitySelectionDialog(
-                recommendedPreset = ImageCompressionPreset.MEDIUM,
-                probeState = LinkSpeedProbe.ProbeState.Idle,
-                transferTimeEstimates = emptyMap(),
-                onSelect = {},
-                onDismiss = {},
-            )
-        }
-
-        // Should display without path info section
-        composeTestRule.onNodeWithText("Choose Image Quality").assertIsDisplayed()
     }
 }

@@ -15,7 +15,6 @@ import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
 import com.lxmf.messenger.service.ConversationLinkManager
-import com.lxmf.messenger.service.LinkSpeedProbe
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.util.FileAttachment
@@ -67,7 +66,6 @@ class MessagingViewModelTest {
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var identityRepository: IdentityRepository
-    private lateinit var linkSpeedProbe: LinkSpeedProbe
     private lateinit var conversationLinkManager: ConversationLinkManager
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
@@ -92,14 +90,10 @@ class MessagingViewModelTest {
         propagationNodeManager = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
         identityRepository = mockk(relaxed = true)
-        linkSpeedProbe = mockk(relaxed = true)
         conversationLinkManager = mockk(relaxed = true)
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
-
-        // Mock linkSpeedProbe state
-        every { linkSpeedProbe.probeState } returns MutableStateFlow(LinkSpeedProbe.ProbeState.Idle)
 
         // Mock identityRepository to return null by default (no icon set)
         coEvery { identityRepository.getActiveIdentitySync() } returns null
@@ -166,7 +160,6 @@ class MessagingViewModelTest {
             propagationNodeManager,
             locationSharingManager,
             identityRepository,
-            linkSpeedProbe,
             conversationLinkManager,
         )
 
@@ -460,8 +453,6 @@ class MessagingViewModelTest {
             every { failingPropagationNodeManager.manualSyncResult } returns MutableSharedFlow()
             every { failingLocationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
 
-            val failingLinkSpeedProbe = mockk<LinkSpeedProbe>(relaxed = true)
-            every { failingLinkSpeedProbe.probeState } returns MutableStateFlow(LinkSpeedProbe.ProbeState.Idle)
             val failingConversationLinkManager = mockk<ConversationLinkManager>(relaxed = true)
             every { failingConversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
             val viewModelWithoutIdentity =
@@ -475,7 +466,6 @@ class MessagingViewModelTest {
                     failingPropagationNodeManager,
                     failingLocationSharingManager,
                     identityRepository,
-                    failingLinkSpeedProbe,
                     failingConversationLinkManager,
                 )
 
@@ -925,7 +915,6 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
-                linkSpeedProbe,
                 conversationLinkManager,
             )
             advanceUntilIdle()
@@ -988,7 +977,6 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
-                linkSpeedProbe,
                 conversationLinkManager,
             )
             advanceUntilIdle()
@@ -1047,7 +1035,6 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
-                linkSpeedProbe,
                 conversationLinkManager,
             )
             advanceUntilIdle()
@@ -1096,7 +1083,6 @@ class MessagingViewModelTest {
                 propagationNodeManager,
                 locationSharingManager,
                 identityRepository,
-                linkSpeedProbe,
                 conversationLinkManager,
             )
             advanceUntilIdle()

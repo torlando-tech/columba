@@ -1,6 +1,7 @@
 package com.lxmf.messenger.service
 
 import android.util.Log
+import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.util.HexUtils
 import kotlinx.coroutines.CoroutineScope
@@ -35,7 +36,46 @@ class ConversationLinkManager
             private const val TAG = "ConversationLinkManager"
             private const val INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000L // 10 minutes
             private const val INACTIVITY_CHECK_INTERVAL_MS = 30 * 1000L // Check every 30 seconds
+            private const val LINK_STATUS_REFRESH_INTERVAL_MS = 5 * 1000L // Refresh link status every 5 seconds
             private const val LINK_ESTABLISHMENT_TIMEOUT_SECONDS = 5.0f // Quick timeout - peer should respond fast if online
+
+            // Bandwidth thresholds for preset recommendations (bits per second)
+            private const val THRESHOLD_LOW_BPS = 5_000L // < 5 kbps -> LOW
+            private const val THRESHOLD_MEDIUM_BPS = 50_000L // < 50 kbps -> MEDIUM
+            private const val THRESHOLD_HIGH_BPS = 500_000L // < 500 kbps -> HIGH
+
+            /**
+             * Convert a bitrate to a compression preset based on thresholds.
+             */
+            fun presetFromBitrate(bps: Long): ImageCompressionPreset =
+                when {
+                    bps < THRESHOLD_LOW_BPS -> ImageCompressionPreset.LOW
+                    bps < THRESHOLD_MEDIUM_BPS -> ImageCompressionPreset.MEDIUM
+                    bps < THRESHOLD_HIGH_BPS -> ImageCompressionPreset.HIGH
+                    else -> ImageCompressionPreset.ORIGINAL
+                }
+
+            /**
+             * Format transfer time in seconds to a human-readable string.
+             */
+            fun formatTransferTime(seconds: Double): String {
+                if (seconds < 0) return "Unknown"
+                val totalSeconds = seconds.toInt()
+                return when {
+                    totalSeconds < 1 -> "< 1s"
+                    totalSeconds < 60 -> "~${totalSeconds}s"
+                    totalSeconds < 3600 -> {
+                        val minutes = totalSeconds / 60
+                        val remainingSeconds = totalSeconds % 60
+                        if (remainingSeconds > 0) "~${minutes}m ${remainingSeconds}s" else "~${minutes}m"
+                    }
+                    else -> {
+                        val hours = totalSeconds / 3600
+                        val remainingMinutes = (totalSeconds % 3600) / 60
+                        if (remainingMinutes > 0) "~${hours}h ${remainingMinutes}m" else "~${hours}h"
+                    }
+                }
+            }
         }
 
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -58,18 +98,104 @@ class ConversationLinkManager
         private var inactivityCheckJob: Job? = null
 
         /**
+         * Background job for refreshing link status (detects incoming links).
+         */
+        private var linkStatusRefreshJob: Job? = null
+
+        /**
          * State of a conversation link.
+         *
+         * Contains all metrics needed for connection quality assessment and
+         * image transfer time estimation.
          */
         data class LinkState(
             /** Whether link is currently active */
             val isActive: Boolean,
             /** Link establishment rate in bits/sec (if active) */
             val establishmentRateBps: Long? = null,
+            /** Actual measured throughput from prior transfers (most accurate) */
+            val expectedRateBps: Long? = null,
+            /** First hop interface bitrate (for fast links like WiFi) */
+            val nextHopBitrateBps: Long? = null,
+            /** Round-trip time in seconds */
+            val rttSeconds: Double? = null,
+            /** Number of hops to destination */
+            val hops: Int? = null,
+            /** Link MTU in bytes (higher = faster connection) */
+            val linkMtu: Int? = null,
             /** Whether link establishment is in progress */
             val isEstablishing: Boolean = false,
             /** Error message if establishment failed */
             val error: String? = null,
-        )
+        ) {
+            /**
+             * Get the best available rate estimate in bits per second.
+             *
+             * Preference order:
+             * 1. expectedRateBps - Actual measured throughput (most accurate)
+             * 2. max(establishmentRateBps, nextHopBitrateBps) - Fallback
+             */
+            val bestRateBps: Long?
+                get() {
+                    if (expectedRateBps != null && expectedRateBps > 0) {
+                        return expectedRateBps
+                    }
+                    val rates = listOfNotNull(establishmentRateBps, nextHopBitrateBps)
+                        .filter { it > 0 }
+                    return rates.maxOrNull()
+                }
+
+            /**
+             * Calculate estimated transfer time for a given size in bytes.
+             * Returns time in seconds, or null if no rate is available.
+             */
+            fun estimateTransferTimeSeconds(sizeBytes: Long): Double? {
+                val rateBps = bestRateBps ?: return null
+                if (rateBps <= 0) return null
+                val sizeBits = sizeBytes * 8
+                return sizeBits.toDouble() / rateBps
+            }
+
+            /**
+             * Estimate transfer time formatted as human-readable string.
+             */
+            fun estimateTransferTimeFormatted(sizeBytes: Long): String? {
+                val seconds = estimateTransferTimeSeconds(sizeBytes) ?: return null
+                return formatTransferTime(seconds)
+            }
+
+            /**
+             * Recommend a compression preset based on link metrics.
+             *
+             * Uses the MAXIMUM of establishment rate and interface bitrate.
+             * Establishment rate can be artificially low for fast interfaces (like WiFi),
+             * while interface bitrate gives the theoretical maximum.
+             */
+            fun recommendPreset(): ImageCompressionPreset {
+                // Use the MAXIMUM of establishment rate and interface bitrate
+                val establishmentRate = bestRateBps ?: 0L
+                val interfaceBitrate = nextHopBitrateBps?.takeIf { it > 0 } ?: 0L
+                val effectiveRate = maxOf(establishmentRate, interfaceBitrate)
+
+                if (effectiveRate > 0) {
+                    return presetFromBitrate(effectiveRate)
+                }
+
+                // Fallback: use hop count heuristics
+                val hopCount = hops
+                return when {
+                    hopCount != null -> {
+                        when {
+                            hopCount <= 1 -> ImageCompressionPreset.HIGH
+                            hopCount <= 3 -> ImageCompressionPreset.MEDIUM
+                            else -> ImageCompressionPreset.LOW
+                        }
+                    }
+                    error != null -> ImageCompressionPreset.LOW // No connection
+                    else -> ImageCompressionPreset.MEDIUM // Unknown state
+                }
+            }
+        }
 
         /**
          * Open a link to a conversation peer.
@@ -99,13 +225,19 @@ class ConversationLinkManager
                             Log.d(
                                 TAG,
                                 "Link established to ${destHashHex.take(16)}: " +
-                                    "active=${linkResult.isActive}, rate=${linkResult.establishmentRateBps}",
+                                    "active=${linkResult.isActive}, rate=${linkResult.establishmentRateBps}, " +
+                                    "expected=${linkResult.expectedRateBps}, mtu=${linkResult.linkMtu}",
                             )
                             updateLinkState(
                                 destHashHex,
                                 LinkState(
                                     isActive = linkResult.isActive,
                                     establishmentRateBps = linkResult.establishmentRateBps,
+                                    expectedRateBps = linkResult.expectedRateBps,
+                                    nextHopBitrateBps = linkResult.nextHopBitrateBps,
+                                    rttSeconds = linkResult.rttSeconds,
+                                    hops = linkResult.hops,
+                                    linkMtu = linkResult.linkMtu,
                                     isEstablishing = false,
                                 ),
                             )
@@ -135,6 +267,9 @@ class ConversationLinkManager
                         LinkState(isActive = false, isEstablishing = false, error = e.message),
                     )
                 }
+
+                // Start periodic refresh to detect incoming links from peer
+                startLinkStatusRefresh()
             }
         }
 
@@ -199,6 +334,11 @@ class ConversationLinkManager
                     LinkState(
                         isActive = result.isActive,
                         establishmentRateBps = result.establishmentRateBps,
+                        expectedRateBps = result.expectedRateBps,
+                        nextHopBitrateBps = result.nextHopBitrateBps,
+                        rttSeconds = result.rttSeconds,
+                        hops = result.hops,
+                        linkMtu = result.linkMtu,
                     )
 
                 updateLinkState(destHashHex, state)
@@ -229,6 +369,81 @@ class ConversationLinkManager
                             checkInactiveLinks()
                         }
                     }
+            }
+        }
+
+        /**
+         * Start periodic link status refresh to detect incoming links.
+         *
+         * This is needed because when a peer establishes a link TO us, our initial
+         * outgoing link attempt may have failed. This periodic check will detect
+         * when the peer's incoming link becomes available.
+         */
+        private fun startLinkStatusRefresh() {
+            synchronized(this) {
+                if (linkStatusRefreshJob?.isActive == true) return
+
+                linkStatusRefreshJob =
+                    scope.launch {
+                        Log.d(TAG, "Starting link status refresh")
+                        while (true) {
+                            delay(LINK_STATUS_REFRESH_INTERVAL_MS)
+                            refreshNonActiveLinks()
+                        }
+                    }
+            }
+        }
+
+        /**
+         * Refresh status for links that are not currently active.
+         * This detects incoming links that the peer established to us.
+         */
+        private suspend fun refreshNonActiveLinks() {
+            val currentStates = _linkStates.value
+
+            currentStates.forEach { (destHashHex, state) ->
+                // Only refresh non-active, non-establishing links
+                if (!state.isActive && !state.isEstablishing) {
+                    try {
+                        val destHashBytes = HexUtils.hexToBytes(destHashHex)
+                        val result = reticulumProtocol.getConversationLinkStatus(destHashBytes)
+
+                        if (result.isActive) {
+                            Log.d(
+                                TAG,
+                                "Detected incoming link from ${destHashHex.take(16)}: " +
+                                    "rate=${result.establishmentRateBps}, mtu=${result.linkMtu}",
+                            )
+                            updateLinkState(
+                                destHashHex,
+                                LinkState(
+                                    isActive = true,
+                                    establishmentRateBps = result.establishmentRateBps,
+                                    expectedRateBps = result.expectedRateBps,
+                                    nextHopBitrateBps = result.nextHopBitrateBps,
+                                    rttSeconds = result.rttSeconds,
+                                    hops = result.hops,
+                                    linkMtu = result.linkMtu,
+                                    isEstablishing = false,
+                                ),
+                            )
+                            // Start inactivity timer for the newly detected link
+                            lastMessageSentTime[destHashHex] = System.currentTimeMillis()
+                            startInactivityChecker()
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error refreshing link status for ${destHashHex.take(16)}: ${e.message}")
+                    }
+                }
+            }
+
+            // Stop refresh job if no tracked conversations
+            if (_linkStates.value.isEmpty()) {
+                Log.d(TAG, "No tracked conversations, stopping link status refresh")
+                synchronized(this@ConversationLinkManager) {
+                    linkStatusRefreshJob?.cancel()
+                    linkStatusRefreshJob = null
+                }
             }
         }
 

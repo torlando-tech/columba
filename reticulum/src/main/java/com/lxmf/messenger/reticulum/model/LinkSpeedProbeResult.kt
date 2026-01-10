@@ -12,6 +12,8 @@ package com.lxmf.messenger.reticulum.model
  * @property rttSeconds Round-trip time in seconds
  * @property hops Number of hops to destination
  * @property linkReused True if an existing active link was used instead of establishing a new one
+ * @property nextHopBitrateBps First hop interface bitrate in bits per second (heuristic)
+ * @property linkMtu Link MTU in bytes (higher values indicate faster connections)
  * @property error Error message if status is "error"
  */
 data class LinkSpeedProbeResult(
@@ -21,7 +23,8 @@ data class LinkSpeedProbeResult(
     val rttSeconds: Double?,
     val hops: Int?,
     val linkReused: Boolean,
-    val nextHopBitrateBps: Long? = null, // First hop interface bitrate (heuristic)
+    val nextHopBitrateBps: Long? = null,
+    val linkMtu: Int? = null,
     val error: String? = null,
 ) {
     /**
@@ -76,6 +79,7 @@ data class LinkSpeedProbeResult(
                 hops = (map["hops"] as? Number)?.toInt(),
                 linkReused = map["link_reused"] as? Boolean ?: false,
                 nextHopBitrateBps = (map["next_hop_bitrate_bps"] as? Number)?.toLong(),
+                linkMtu = (map["link_mtu"] as? Number)?.toInt(),
                 error = map["error"] as? String,
             )
         }

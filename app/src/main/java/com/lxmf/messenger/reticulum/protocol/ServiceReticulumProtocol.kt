@@ -24,6 +24,7 @@ import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.reticulum.model.Link
 import com.lxmf.messenger.reticulum.model.LinkEvent
+import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.PacketReceipt
 import com.lxmf.messenger.reticulum.model.PacketType
@@ -1228,7 +1229,8 @@ class ServiceReticulumProtocol(
                     Identity(
                         hash = hash,
                         publicKey = publicKey,
-                        privateKey = null, // We don't have the private key for recalled identities
+                        // We don't have the private key for recalled identities
+                        privateKey = null,
                     )
                 } else {
                     null
@@ -1496,6 +1498,171 @@ class ServiceReticulumProtocol(
         } catch (e: Exception) {
             Log.e(TAG, "Error getting path table hashes", e)
             emptyList()
+        }
+    }
+
+    override suspend fun probeLinkSpeed(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float,
+        deliveryMethod: String,
+    ): LinkSpeedProbeResult {
+        return try {
+            val service =
+                this.service ?: return LinkSpeedProbeResult(
+                    status = "not_bound",
+                    establishmentRateBps = null,
+                    expectedRateBps = null,
+                    rttSeconds = null,
+                    hops = null,
+                    linkReused = false,
+                    error = "Service not bound",
+                )
+
+            val resultJson = service.probeLinkSpeed(destinationHash, timeoutSeconds, deliveryMethod)
+            val result = JSONObject(resultJson)
+
+            LinkSpeedProbeResult(
+                status = result.optString("status", "error"),
+                establishmentRateBps = if (result.isNull("establishment_rate_bps")) null else result.optLong("establishment_rate_bps"),
+                expectedRateBps = if (result.isNull("expected_rate_bps")) null else result.optLong("expected_rate_bps"),
+                rttSeconds = if (result.isNull("rtt_seconds")) null else result.optDouble("rtt_seconds"),
+                hops = if (result.isNull("hops")) null else result.optInt("hops"),
+                linkReused = result.optBoolean("link_reused", false),
+                nextHopBitrateBps = if (result.isNull("next_hop_bitrate_bps")) null else result.optLong("next_hop_bitrate_bps"),
+                error = result.optString("error").takeIf { it.isNotEmpty() },
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error probing link speed", e)
+            LinkSpeedProbeResult(
+                status = "error",
+                establishmentRateBps = null,
+                expectedRateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+                error = e.message,
+            )
+        }
+    }
+
+    // ==================== Conversation Link Management ====================
+
+    override suspend fun establishConversationLink(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float,
+    ): Result<ConversationLinkResult> =
+        runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.establishLink(destinationHash, timeoutSeconds)
+            val result = JSONObject(resultJson)
+
+            ConversationLinkResult(
+                isActive = result.optBoolean("link_active", false),
+                establishmentRateBps =
+                    if (result.isNull("establishment_rate_bps")) {
+                        null
+                    } else {
+                        result.optLong("establishment_rate_bps")
+                    },
+                expectedRateBps =
+                    if (result.isNull("expected_rate_bps")) {
+                        null
+                    } else {
+                        result.optLong("expected_rate_bps")
+                    },
+                nextHopBitrateBps =
+                    if (result.isNull("next_hop_bitrate_bps")) {
+                        null
+                    } else {
+                        result.optLong("next_hop_bitrate_bps")
+                    },
+                rttSeconds =
+                    if (result.isNull("rtt_seconds")) {
+                        null
+                    } else {
+                        result.optDouble("rtt_seconds")
+                    },
+                hops =
+                    if (result.isNull("hops")) {
+                        null
+                    } else {
+                        result.optInt("hops")
+                    },
+                linkMtu =
+                    if (result.isNull("link_mtu")) {
+                        null
+                    } else {
+                        result.optInt("link_mtu")
+                    },
+                alreadyExisted = result.optBoolean("already_existed", false),
+                error = result.optString("error").takeIf { it.isNotEmpty() },
+            )
+        }
+
+    override suspend fun closeConversationLink(destinationHash: ByteArray): Result<Boolean> =
+        runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.closeLink(destinationHash)
+            val result = JSONObject(resultJson)
+
+            result.optBoolean("was_active", false)
+        }
+
+    override suspend fun getConversationLinkStatus(destinationHash: ByteArray): ConversationLinkResult {
+        return try {
+            val service =
+                this.service ?: return ConversationLinkResult(
+                    isActive = false,
+                    error = "Service not bound",
+                )
+
+            val resultJson = service.getLinkStatus(destinationHash)
+            val result = JSONObject(resultJson)
+
+            ConversationLinkResult(
+                isActive = result.optBoolean("active", false),
+                establishmentRateBps =
+                    if (result.isNull("establishment_rate_bps")) {
+                        null
+                    } else {
+                        result.optLong("establishment_rate_bps")
+                    },
+                expectedRateBps =
+                    if (result.isNull("expected_rate_bps")) {
+                        null
+                    } else {
+                        result.optLong("expected_rate_bps")
+                    },
+                nextHopBitrateBps =
+                    if (result.isNull("next_hop_bitrate_bps")) {
+                        null
+                    } else {
+                        result.optLong("next_hop_bitrate_bps")
+                    },
+                rttSeconds =
+                    if (result.isNull("rtt_seconds")) {
+                        null
+                    } else {
+                        result.optDouble("rtt_seconds")
+                    },
+                hops =
+                    if (result.isNull("hops")) {
+                        null
+                    } else {
+                        result.optInt("hops")
+                    },
+                linkMtu =
+                    if (result.isNull("link_mtu")) {
+                        null
+                    } else {
+                        result.optInt("link_mtu")
+                    },
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting link status", e)
+            ConversationLinkResult(isActive = false, error = e.message)
         }
     }
 
@@ -1915,6 +2082,23 @@ class ServiceReticulumProtocol(
                 }
             }
 
+            // Handle large images by writing to temp file to bypass Binder IPC limits
+            var smallImageData: ByteArray? = null
+            var imageDataPath: String? = null
+            if (imageData != null) {
+                if (imageData.size <= FileUtils.FILE_TRANSFER_THRESHOLD) {
+                    smallImageData = imageData
+                } else {
+                    // Write large image to temp on IO thread and pass path
+                    val tempFile =
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            FileUtils.writeTempAttachment(context, "image.$imageFormat", imageData)
+                        }
+                    imageDataPath = tempFile.absolutePath
+                    Log.d(TAG, "Large image (${imageData.size} bytes) written to temp file")
+                }
+            }
+
             val resultJson =
                 service.sendLxmfMessageWithMethod(
                     destinationHash,
@@ -1922,8 +2106,9 @@ class ServiceReticulumProtocol(
                     privateKey,
                     methodString,
                     tryPropagationOnFail,
-                    imageData,
+                    smallImageData,
                     imageFormat,
+                    imageDataPath,
                     smallAttachments.ifEmpty { null },
                     largeAttachmentPaths.ifEmpty { null },
                     replyToMessageId,

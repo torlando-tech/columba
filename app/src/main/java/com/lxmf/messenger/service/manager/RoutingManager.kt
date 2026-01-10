@@ -1,6 +1,7 @@
 package com.lxmf.messenger.service.manager
 
 import android.util.Log
+import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -104,6 +105,99 @@ class RoutingManager(private val wrapperManager: PythonWrapperManager) {
         } ?: run {
             Log.w(TAG, "getPathTableHashes called but wrapper is null")
             "[]"
+        }
+    }
+
+    /**
+     * Probe link speed to a destination by establishing a link.
+     *
+     * @param destHash Destination hash bytes
+     * @param timeoutSeconds How long to wait for link establishment
+     * @param deliveryMethod "direct" or "propagated" - affects which link to check/establish
+     * @return JSON string with probe result containing status, rates, RTT, hops
+     */
+    fun probeLinkSpeed(
+        destHash: ByteArray,
+        timeoutSeconds: Float,
+        deliveryMethod: String,
+    ): String {
+        return wrapperManager.withWrapper { wrapper ->
+            try {
+                val result = wrapper.callAttr("probe_link_speed", destHash, timeoutSeconds.toDouble(), deliveryMethod)
+                buildProbeResultJson(result)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error probing link speed", e)
+                JSONObject().apply {
+                    put("status", "error")
+                    put("error", e.message)
+                }.toString()
+            }
+        } ?: run {
+            Log.w(TAG, "probeLinkSpeed called but wrapper is null")
+            JSONObject().apply {
+                put("status", "not_initialized")
+                put("error", "Service not initialized")
+            }.toString()
+        }
+    }
+
+    /**
+     * Build JSON result from Python probe_link_speed dict response.
+     */
+    private fun buildProbeResultJson(result: com.chaquo.python.PyObject): String {
+        return JSONObject().apply {
+            put("status", result.getDictValue("status")?.toString() ?: "error")
+            putLongIfPresent(this, result, "establishment_rate_bps")
+            putLongIfPresent(this, result, "expected_rate_bps")
+            putDoubleIfPresent(this, result, "rtt_seconds")
+            putIntIfPresent(this, result, "hops")
+            put("link_reused", result.getDictValue("link_reused")?.toBoolean() ?: false)
+            putLongIfPresent(this, result, "next_hop_bitrate_bps")
+            putStringIfPresent(this, result, "error")
+        }.toString()
+    }
+
+    /** Helper to extract Long value from Python dict if present and valid. */
+    private fun putLongIfPresent(
+        json: JSONObject,
+        result: com.chaquo.python.PyObject,
+        key: String,
+    ) {
+        result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
+            str.toDoubleOrNull()?.toLong()?.let { json.put(key, it) }
+        }
+    }
+
+    /** Helper to extract Double value from Python dict if present and valid. */
+    private fun putDoubleIfPresent(
+        json: JSONObject,
+        result: com.chaquo.python.PyObject,
+        key: String,
+    ) {
+        result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
+            str.toDoubleOrNull()?.let { json.put(key, it) }
+        }
+    }
+
+    /** Helper to extract Int value from Python dict if present and valid. */
+    private fun putIntIfPresent(
+        json: JSONObject,
+        result: com.chaquo.python.PyObject,
+        key: String,
+    ) {
+        result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
+            str.toIntOrNull()?.let { json.put(key, it) }
+        }
+    }
+
+    /** Helper to extract String value from Python dict if present and valid. */
+    private fun putStringIfPresent(
+        json: JSONObject,
+        result: com.chaquo.python.PyObject,
+        key: String,
+    ) {
+        result.getDictValue(key)?.toString()?.takeIf { it != "None" && it.isNotEmpty() }?.let { str ->
+            json.put(key, str)
         }
     }
 }

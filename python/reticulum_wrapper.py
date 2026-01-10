@@ -1197,7 +1197,7 @@ class ReticulumWrapper:
 
                 # Deploy BLEInterface
                 log_debug("ReticulumWrapper", "initialize", "Deploying BLEInterface from bundled source")
-                ble_interface_bytes = pkgutil.get_data('ble_modules', 'BLEInterface.py')
+                ble_interface_bytes = pkgutil.get_data('ble_reticulum', 'BLEInterface.py')
                 ble_interface_dest = os.path.join(interfaces_dir, "BLEInterface.py")
                 with open(ble_interface_dest, 'wb') as f:
                     f.write(ble_interface_bytes)
@@ -2062,12 +2062,16 @@ class ReticulumWrapper:
             # Priority: FIELD_TELEMETRY (0x02) > FIELD_COLUMBA_META (0x70) > Legacy field 7
             is_location_only = False
 
-            if self.kotlin_location_received_callback and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
-                # Check if this is a location-only message (no text content or empty content)
-                content = lxmf_message.content
-                has_text_content = content and len(content.strip()) > 0 if isinstance(content, (str, bytes)) else False
+            # Check if message has text content (needed for empty message filtering)
+            content = lxmf_message.content
+            has_text_content = False
+            if content:
                 if isinstance(content, bytes):
                     has_text_content = len(content.strip()) > 0
+                elif isinstance(content, str):
+                    has_text_content = len(content.strip()) > 0
+
+            if self.kotlin_location_received_callback and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
 
                 location_event = None
                 telemetry_source = None
@@ -2207,6 +2211,23 @@ class ReticulumWrapper:
                 skip_reason = "location-only" if is_location_only else "reaction-only"
                 log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                          f"Skipping regular message processing for {skip_reason} message")
+                return
+            
+            # Skip truly empty messages (probe messages for link speed measurement)
+            # These have no text content and no meaningful fields (image, file, telemetry, etc.)
+            meaningful_fields = {
+                FIELD_TELEMETRY,           # 0x02 - Location/sensor data
+                LXMF.FIELD_FILE_ATTACHMENTS,  # 0x05
+                LXMF.FIELD_IMAGE,             # 0x06
+                LXMF.FIELD_AUDIO,             # 0x07
+            }
+            has_meaningful_fields = False
+            if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
+                has_meaningful_fields = any(f in lxmf_message.fields for f in meaningful_fields)
+            
+            if not has_text_content and not has_meaningful_fields:
+                log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                         f"Skipping empty probe message from {lxmf_message.source_hash.hex()[:16]}")
                 return
 
             # Add to pending_inbound queue (maintains backward compatibility with polling)
@@ -3115,6 +3136,7 @@ class ReticulumWrapper:
     def send_lxmf_message_with_method(self, dest_hash: bytes, content: str, source_identity_private_key: bytes,
                                        delivery_method: str = "direct", try_propagation_on_fail: bool = True,
                                        image_data: bytes = None, image_format: str = None,
+                                       image_data_path: str = None,
                                        file_attachments: list = None, file_attachment_paths: list = None,
                                        reply_to_message_id: str = None,
                                        icon_name: str = None, icon_fg_color: str = None, icon_bg_color: str = None) -> Dict:
@@ -3127,8 +3149,10 @@ class ReticulumWrapper:
             source_identity_private_key: Private key of sender identity
             delivery_method: "opportunistic", "direct", or "propagated"
             try_propagation_on_fail: If True and direct fails, retry via propagation
-            image_data: Optional image data bytes
+            image_data: Optional image data bytes (for small images)
             image_format: Optional image format (e.g., 'jpg', 'png', 'webp')
+            image_data_path: Optional file path for large images to bypass Binder IPC limits.
+                             File is read from disk and deleted after reading.
             file_attachments: Optional list of [filename, bytes] pairs for Field 5 (small files)
             file_attachment_paths: Optional list of [filename, path] pairs for large files
                                    Files are read from disk to bypass Android Binder IPC limits.
@@ -3143,7 +3167,7 @@ class ReticulumWrapper:
         """
         try:
             if not RETICULUM_AVAILABLE or not self.initialized or not self.router:
-                return {"success": False, "error": "LXMF not initialized"}
+                return {"success": False, "error": "LXMF not initialized", "delivery_method": None}
 
             # Convert jarray to bytes if needed
             if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
@@ -3171,7 +3195,7 @@ class ReticulumWrapper:
                     log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
                                f"Content too large for OPPORTUNISTIC ({len(content_bytes)} bytes > 295), falling back to DIRECT")
                     lxmf_method = LXMF.LXMessage.DIRECT
-                if image_data or file_attachments:
+                if image_data or image_data_path or file_attachments:
                     log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
                                "OPPORTUNISTIC doesn't support attachments, falling back to DIRECT")
                     lxmf_method = LXMF.LXMessage.DIRECT
@@ -3215,7 +3239,7 @@ class ReticulumWrapper:
                         break
 
                 if not recipient_identity:
-                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."}
+                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received.", "delivery_method": None}
 
             # Create destination
             recipient_lxmf_destination = RNS.Destination(
@@ -3225,6 +3249,29 @@ class ReticulumWrapper:
                 "lxmf",
                 "delivery"
             )
+
+            # If image_data_path is provided, read from file (for large images bypassing Binder IPC)
+            if image_data_path and image_format:
+                import os
+                try:
+                    with open(image_data_path, 'rb') as f:
+                        image_data = f.read()
+                    log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                             f"📎 Read large image from temp file: {len(image_data)} bytes")
+                except Exception as e:
+                    log_error("ReticulumWrapper", "send_lxmf_message_with_method",
+                              f"Failed to read image from temp file: {e}")
+                    return {"success": False, "error": f"Failed to read image file: {e}", "delivery_method": None}
+                finally:
+                    # Always try to delete temp file (best effort cleanup)
+                    try:
+                        if os.path.exists(image_data_path):
+                            os.remove(image_data_path)
+                            log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                                      f"Deleted temp image file: {image_data_path}")
+                    except Exception as del_err:
+                        log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                                   f"Failed to delete temp image file: {del_err}")
 
             # Prepare fields if image or file attachments provided
             fields = None
@@ -3419,7 +3466,7 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "send_lxmf_message_with_method", f"❌ ERROR: {e}")
             import traceback
             traceback.print_exc()
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "delivery_method": None}
 
     def send_reaction(self, dest_hash: bytes, target_message_id: str, emoji: str,
                       source_identity_private_key: bytes) -> Dict:
@@ -4905,8 +4952,693 @@ class ReticulumWrapper:
         if not RETICULUM_AVAILABLE or not self.reticulum:
             return 3  # Mock value
 
-        # TODO: Implement hop count retrieval
-        return None
+        try:
+            if RNS.Transport.has_path(dest_hash):
+                return RNS.Transport.hops_to(dest_hash)
+            return None
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_hop_count", f"Error: {e}")
+            return None
+
+    def probe_link_speed(self, dest_hash: bytes, timeout_seconds: float = 10.0,
+                         delivery_method: str = "direct") -> Dict:
+        """
+        Probe the link speed to a destination by checking existing links or
+        establishing one via establish_link().
+
+        This provides link speed data for adaptive image compression.
+
+        Args:
+            dest_hash: Destination hash as bytes (16 bytes)
+            timeout_seconds: How long to wait for link establishment (default 10s)
+            delivery_method: "direct" or "propagated" - affects which link to check/establish
+
+        Returns:
+            Dict with:
+            - status: "success", "no_path", "no_identity", "timeout", or "error"
+            - establishment_rate_bps: Bits/sec from link handshake (or None)
+            - expected_rate_bps: Bits/sec from actual transfers (or None)
+            - rtt_seconds: Round-trip time in seconds (or None)
+            - hops: Number of hops to destination (or None)
+            - link_reused: True if an existing active link was used
+            - delivery_method: "direct" or "propagated" - which method was used
+        """
+        if not RETICULUM_AVAILABLE or not self.router:
+            return {
+                "status": "not_initialized",
+                "establishment_rate_bps": None,
+                "expected_rate_bps": None,
+                "rtt_seconds": None,
+                "hops": None,
+                "link_reused": False,
+                "delivery_method": delivery_method,
+                "next_hop_bitrate_bps": None,
+                "link_mtu": None
+            }
+
+        try:
+            # Convert jarray to bytes (Chaquopy passes Kotlin ByteArray as jarray)
+            dest_hash = bytes(dest_hash)
+            dest_hash_hex = dest_hash.hex()
+            log_info("ReticulumWrapper", "probe_link_speed",
+                     f"Probing link speed to {dest_hash_hex[:16]}... (method: {delivery_method})")
+
+            # Helper to find link in both direct_links and backchannel_links
+            def find_link(dest_hash_bytes, dest_hash_hex_str):
+                """Find a link by checking direct_links and backchannel_links."""
+                # Check direct_links first
+                if dest_hash_bytes in self.router.direct_links:
+                    return self.router.direct_links[dest_hash_bytes]
+                if dest_hash_hex_str in self.router.direct_links:
+                    return self.router.direct_links[dest_hash_hex_str]
+                # Check backchannel_links (incoming links from peer)
+                if dest_hash_bytes in self.router.backchannel_links:
+                    return self.router.backchannel_links[dest_hash_bytes]
+                if dest_hash_hex_str in self.router.backchannel_links:
+                    return self.router.backchannel_links[dest_hash_hex_str]
+                return None
+
+            # Helper to get next hop interface bitrate
+            def get_next_hop_bitrate() -> int:
+                try:
+                    if RNS.Transport.has_path(dest_hash):
+                        next_hop_iface = RNS.Transport.next_hop_interface(dest_hash)
+                        if next_hop_iface and hasattr(next_hop_iface, 'bitrate'):
+                            return next_hop_iface.bitrate
+                except Exception:
+                    pass
+                return None
+
+            # Helper to get link stats
+            def get_link_stats(link, reused: bool, method: str) -> Dict:
+                return {
+                    "status": "success",
+                    "establishment_rate_bps": link.get_establishment_rate(),
+                    "expected_rate_bps": link.get_expected_rate(),
+                    "rtt_seconds": link.rtt,
+                    "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
+                    "link_reused": reused,
+                    "delivery_method": method,
+                    "next_hop_bitrate_bps": get_next_hop_bitrate(),
+                    "link_mtu": link.get_mtu() if hasattr(link, 'get_mtu') else None
+                }
+
+            # 1. If propagated delivery, check propagation link AND backchannel link
+            if delivery_method == "propagated":
+                # Check if there's a backchannel link with expected_rate from the recipient
+                # This tells us actual measured throughput from prior transfers with this peer
+                backchannel_expected_rate = None
+                backchannel_link = find_link(dest_hash, dest_hash_hex)
+                if backchannel_link is not None and backchannel_link.status == RNS.Link.ACTIVE:
+                    backchannel_expected_rate = backchannel_link.get_expected_rate()
+                    if backchannel_expected_rate:
+                        log_info("ReticulumWrapper", "probe_link_speed",
+                                 f"Found backchannel expected_rate: {backchannel_expected_rate} bps")
+
+                if self.router.outbound_propagation_link is not None:
+                    link = self.router.outbound_propagation_link
+                    if link.status == RNS.Link.ACTIVE:
+                        log_info("ReticulumWrapper", "probe_link_speed",
+                                 f"Using existing propagation link")
+                        stats = get_link_stats(link, True, "propagated")
+                        # Use backchannel expected_rate if available (more relevant for this peer)
+                        if backchannel_expected_rate:
+                            stats["expected_rate_bps"] = backchannel_expected_rate
+                        return stats
+
+                # No active propagation link - return heuristics only
+                # Use status="success" since heuristic data is valid for compression recommendations
+                log_info("ReticulumWrapper", "probe_link_speed",
+                         f"No active propagation link, returning heuristics")
+                return {
+                    "status": "success",
+                    "establishment_rate_bps": None,
+                    "expected_rate_bps": backchannel_expected_rate,  # Include if available
+                    "rtt_seconds": None,
+                    "hops": None,
+                    "link_reused": False,
+                    "delivery_method": "propagated",
+                    "next_hop_bitrate_bps": get_next_hop_bitrate(),
+                    "link_mtu": None
+                }
+
+            # 2. Check for existing active link (direct or backchannel)
+            link = find_link(dest_hash, dest_hash_hex)
+            if link is not None and link.status == RNS.Link.ACTIVE:
+                log_info("ReticulumWrapper", "probe_link_speed",
+                         f"Reusing existing link to {dest_hash_hex[:16]}")
+                return get_link_stats(link, True, "direct")
+
+            # 3. No existing link - use establish_link() to create one
+            log_info("ReticulumWrapper", "probe_link_speed",
+                     f"No existing link, establishing link to {dest_hash_hex[:16]}...")
+
+            result = self.establish_link(dest_hash, timeout_seconds)
+
+            if result.get("success"):
+                # Link established - get stats from the link
+                link = find_link(dest_hash, dest_hash_hex)
+                if link is not None and link.status == RNS.Link.ACTIVE:
+                    return get_link_stats(link, result.get("already_existed", False), "direct")
+                else:
+                    # Link reported success but we can't find it - return what we have
+                    return {
+                        "status": "success",
+                        "establishment_rate_bps": result.get("establishment_rate_bps"),
+                        "expected_rate_bps": None,
+                        "rtt_seconds": None,
+                        "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
+                        "link_reused": result.get("already_existed", False),
+                        "delivery_method": "direct",
+                        "next_hop_bitrate_bps": get_next_hop_bitrate(),
+                        "link_mtu": None
+                    }
+            else:
+                # Link establishment failed - check if we have heuristic data
+                hops = RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None
+                next_hop_bps = get_next_hop_bitrate()
+
+                # If we have useful heuristic data (hop count or next hop bitrate),
+                # return "success" so the UI can show recommendations based on that.
+                # Only return failure status when we have no useful info.
+                if hops is not None or next_hop_bps is not None:
+                    log_info("ReticulumWrapper", "probe_link_speed",
+                             f"Link failed but have heuristics: hops={hops}, next_hop_bps={next_hop_bps}")
+                    return {
+                        "status": "success",
+                        "establishment_rate_bps": None,
+                        "expected_rate_bps": None,
+                        "rtt_seconds": None,
+                        "hops": hops,
+                        "link_reused": False,
+                        "delivery_method": "direct",
+                        "next_hop_bitrate_bps": next_hop_bps,
+                        "link_mtu": None
+                    }
+
+                # No heuristic data - return actual failure status
+                error = result.get("error", "unknown")
+                if "Identity not known" in error:
+                    status = "no_identity"
+                elif "No path" in error:
+                    status = "no_path"
+                elif "Timeout" in error:
+                    status = "timeout"
+                else:
+                    status = "failed"
+
+                return {
+                    "status": status,
+                    "establishment_rate_bps": None,
+                    "expected_rate_bps": None,
+                    "rtt_seconds": None,
+                    "hops": None,
+                    "link_reused": False,
+                    "delivery_method": "direct",
+                    "next_hop_bitrate_bps": None,
+                    "link_mtu": None
+                }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "probe_link_speed", f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "status": "error",
+                "error": str(e),
+                "establishment_rate_bps": None,
+                "expected_rate_bps": None,
+                "rtt_seconds": None,
+                "hops": None,
+                "link_reused": False,
+                "delivery_method": delivery_method,
+                "next_hop_bitrate_bps": None,
+                "link_mtu": None
+            }
+
+    def establish_link(self, dest_hash: bytes, timeout_seconds: float = 10.0) -> Dict:
+        """
+        Establish a link to a destination for real-time connectivity.
+        
+        This is used to:
+        1. Show "Online" status when link is active
+        2. Enable instant link speed probing for transfer time estimates
+        
+        Args:
+            dest_hash: Destination hash as bytes (16 bytes)
+            timeout_seconds: How long to wait for link establishment
+            
+        Returns:
+            Dict with:
+            - success: True if link is now active
+            - link_active: True if link is active
+            - establishment_rate_bps: Link speed in bits/sec (if active)
+            - error: Error message (if failed)
+        """
+        if not RETICULUM_AVAILABLE or not self.router:
+            return {"success": False, "link_active": False, "error": "Not initialized"}
+        
+        try:
+            dest_hash = bytes(dest_hash)
+            dest_hash_hex = dest_hash.hex()
+            log_info("ReticulumWrapper", "establish_link", 
+                     f"Establishing link to {dest_hash_hex[:16]}...")
+            
+            # Check if link already exists (in direct_links OR backchannel_links)
+            # Links are bidirectional, so either direction counts
+            link = None
+            if dest_hash in self.router.direct_links:
+                link = self.router.direct_links[dest_hash]
+            elif dest_hash_hex in self.router.direct_links:
+                link = self.router.direct_links[dest_hash_hex]
+            # Also check backchannel_links (incoming links from peer)
+            if link is None and dest_hash in self.router.backchannel_links:
+                link = self.router.backchannel_links[dest_hash]
+            elif link is None and dest_hash_hex in self.router.backchannel_links:
+                link = self.router.backchannel_links[dest_hash_hex]
+
+            # Fallback: Check Transport.active_links for incoming links not yet in backchannel_links
+            if link is None and hasattr(RNS.Transport, 'active_links'):
+                for active_link in RNS.Transport.active_links:
+                    if active_link.status == RNS.Link.ACTIVE:
+                        try:
+                            remote_identity = active_link.get_remote_identity()
+                            if remote_identity:
+                                remote_dest = RNS.Destination(
+                                    remote_identity,
+                                    RNS.Destination.OUT,
+                                    RNS.Destination.SINGLE,
+                                    "lxmf",
+                                    "delivery"
+                                )
+                                if remote_dest.hash == dest_hash or remote_dest.hash.hex() == dest_hash_hex:
+                                    log_info("ReticulumWrapper", "establish_link",
+                                             f"Found existing incoming link via Transport.active_links")
+                                    link = active_link
+                                    break
+                        except Exception:
+                            pass
+
+            # Helper to get next hop interface bitrate
+            def get_next_hop_bitrate(hash_to_check) -> int:
+                try:
+                    if RNS.Transport.has_path(hash_to_check):
+                        next_hop_iface = RNS.Transport.next_hop_interface(hash_to_check)
+                        if next_hop_iface and hasattr(next_hop_iface, 'bitrate'):
+                            return next_hop_iface.bitrate
+                except Exception:
+                    pass
+                return None
+
+            # Helper to build full link stats response
+            def get_full_link_stats(link, already_existed: bool, hash_for_path) -> Dict:
+                return {
+                    "success": True,
+                    "link_active": True,
+                    "establishment_rate_bps": link.get_establishment_rate(),
+                    "expected_rate_bps": link.get_expected_rate(),
+                    "rtt_seconds": link.rtt,
+                    "hops": RNS.Transport.hops_to(hash_for_path) if RNS.Transport.has_path(hash_for_path) else None,
+                    "link_mtu": link.mtu if hasattr(link, 'mtu') else None,
+                    "next_hop_bitrate_bps": get_next_hop_bitrate(hash_for_path),
+                    "already_existed": already_existed
+                }
+
+            if link is not None:
+                if link.status == RNS.Link.ACTIVE:
+                    log_info("ReticulumWrapper", "establish_link",
+                             f"Link already active to {dest_hash_hex[:16]} (existing)")
+                    return get_full_link_stats(link, True, dest_hash)
+                else:
+                    # Clean up stale link from both dicts before proceeding
+                    self.router.direct_links.pop(dest_hash, None)
+                    self.router.direct_links.pop(dest_hash_hex, None)
+                    self.router.backchannel_links.pop(dest_hash, None)
+                    self.router.backchannel_links.pop(dest_hash_hex, None)
+                    link = None
+            
+            # No existing link - try to establish one
+            # The recipient's LXMF router will accept incoming links to lxmf.delivery
+            
+            # DEBUG: Log target hash
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Target dest_hash: {dest_hash_hex}")
+            
+            # Try to recall identity using multiple methods (matching send_lxmf_message pattern)
+            recipient_identity = None
+            try:
+                # Try as destination hash first (this is what LXMF uses)
+                recipient_identity = RNS.Identity.recall(dest_hash)
+                if recipient_identity:
+                    log_debug("ReticulumWrapper", "establish_link",
+                             "Recalled identity from destination hash")
+                else:
+                    # Try with from_identity_hash=True
+                    recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                    if recipient_identity:
+                        log_debug("ReticulumWrapper", "establish_link",
+                                 "Recalled identity from identity hash")
+            except Exception as e:
+                log_debug("ReticulumWrapper", "establish_link",
+                         f"Error recalling identity from Reticulum: {e}")
+
+            # Fallback to local cache
+            if not recipient_identity and dest_hash_hex in self.identities:
+                recipient_identity = self.identities[dest_hash_hex]
+                log_debug("ReticulumWrapper", "establish_link",
+                         "Retrieved identity from local cache")
+
+            if not recipient_identity:
+                log_warning("ReticulumWrapper", "establish_link",
+                           f"Cannot establish link - identity not known for {dest_hash_hex[:16]}")
+                return {"success": False, "link_active": False, "error": "Identity not known"}
+            
+            # DEBUG: Log recalled identity hash
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Recalled identity hash: {recipient_identity.hash.hex()}")
+            
+            # Create destination for link (same as LXMF uses for DIRECT delivery)
+            recipient_dest = RNS.Destination(
+                recipient_identity,
+                RNS.Destination.OUT,
+                RNS.Destination.SINGLE,
+                "lxmf",
+                "delivery"
+            )
+            
+            # DEBUG: Log created destination hash and compare
+            created_hash = recipient_dest.hash.hex()
+            hashes_match = recipient_dest.hash == dest_hash
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Created dest.hash: {created_hash}")
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Hashes match: {hashes_match}")
+
+            # Always check for existing link using created destination hash
+            # (links are stored under recipient_dest.hash, which may differ from input dest_hash)
+            link = None
+            if recipient_dest.hash in self.router.direct_links:
+                link = self.router.direct_links[recipient_dest.hash]
+            elif recipient_dest.hash in self.router.backchannel_links:
+                link = self.router.backchannel_links[recipient_dest.hash]
+            if link is not None:
+                if link.status == RNS.Link.ACTIVE:
+                    log_info("ReticulumWrapper", "establish_link",
+                            f"Link already active (found via created hash) to {created_hash[:16]}")
+                    return get_full_link_stats(link, True, recipient_dest.hash)
+                else:
+                    # Clean up stale link before proceeding
+                    self.router.direct_links.pop(recipient_dest.hash, None)
+                    self.router.backchannel_links.pop(recipient_dest.hash, None)
+                    link = None
+
+            # Check if path exists to the created destination
+            # Use recipient_dest.hash since that's where we'll create the link
+            has_path = RNS.Transport.has_path(recipient_dest.hash)
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Transport.has_path({recipient_dest.hash.hex()[:16]}): {has_path}")
+
+            # Only request path if we don't have one (avoid unnecessary network traffic)
+            # If the existing path is stale, link establishment will fail and we can retry
+            if not has_path:
+                log_debug("ReticulumWrapper", "establish_link",
+                         f"Requesting path to {recipient_dest.hash.hex()[:16]}...")
+                RNS.Transport.request_path(recipient_dest.hash)
+
+            # Wait for path if we don't have one
+            if not has_path:
+                for _ in range(10):
+                    time.sleep(0.5)
+                    if RNS.Transport.has_path(recipient_dest.hash):
+                        log_debug("ReticulumWrapper", "establish_link", "Path discovered")
+                        has_path = True
+                        break
+                if not has_path:
+                    log_warning("ReticulumWrapper", "establish_link",
+                               f"No path available to {recipient_dest.hash.hex()[:16]}")
+                    return {"success": False, "link_active": False, "error": "No path available"}
+            
+            if not hashes_match:
+                log_warning("ReticulumWrapper", "establish_link",
+                           f"HASH MISMATCH! Target={dest_hash_hex[:16]}, Created={created_hash[:16]}")
+            
+            # Establish link using RNS.Link - matching LXMF's exact approach
+            log_info("ReticulumWrapper", "establish_link",
+                     f"Establishing new link to {dest_hash_hex[:16]}...")
+            
+            # Create a flag to track establishment
+            link_established = [False]
+            link_rate = [None]
+            
+            def on_link_established(link):
+                log_info("ReticulumWrapper", "establish_link", 
+                         f"Link callback: link to {dest_hash_hex[:16]} established!")
+                link_established[0] = True
+                link_rate[0] = link.get_establishment_rate()
+            
+            # Create link with callback (like LXMF does)
+            link = RNS.Link(recipient_dest, established_callback=on_link_established)
+            
+            # Store in router.direct_links using created destination hash
+            # (LXMF uses lxmessage.get_destination().hash which is the created destination's hash)
+            self.router.direct_links[recipient_dest.hash] = link
+            log_debug("ReticulumWrapper", "establish_link",
+                     f"Stored link in router.direct_links with key {recipient_dest.hash.hex()[:16]}")
+
+            # Wait for link establishment with timeout
+            # Use try/finally to ensure cleanup on all exit paths
+            try:
+                start_time = time.time()
+                while time.time() - start_time < timeout_seconds:
+                    if link_established[0] or link.status == RNS.Link.ACTIVE:
+                        log_info("ReticulumWrapper", "establish_link",
+                                 f"Link established to {dest_hash_hex[:16]} in {time.time() - start_time:.2f}s")
+
+                        # Identify ourselves on the link so the remote peer's LXMRouter
+                        # adds this to their backchannel_links (via delivery_remote_identified callback)
+                        try:
+                            if self.router.identity:
+                                link.identify(self.router.identity)
+                                log_debug("ReticulumWrapper", "establish_link",
+                                         f"Identified ourselves on link to enable backchannel")
+                        except Exception as e:
+                            log_warning("ReticulumWrapper", "establish_link",
+                                       f"Failed to identify on link: {e}")
+
+                        return get_full_link_stats(link, False, recipient_dest.hash)
+                    elif link.status == RNS.Link.CLOSED:
+                        log_warning("ReticulumWrapper", "establish_link",
+                                   f"Link closed during establishment to {dest_hash_hex[:16]}")
+                        return {"success": False, "link_active": False, "error": "Link closed"}
+                    time.sleep(0.1)
+
+                # Timeout
+                link.teardown()
+                log_info("ReticulumWrapper", "establish_link",
+                         f"Link establishment timed out to {dest_hash_hex[:16]} (peer may be offline)")
+                return {"success": False, "link_active": False, "error": "Timeout"}
+            finally:
+                # Clean up failed/inactive links from direct_links
+                # Only remove if it's still our link (not replaced by concurrent call)
+                if link.status != RNS.Link.ACTIVE:
+                    if self.router.direct_links.get(recipient_dest.hash) is link:
+                        self.router.direct_links.pop(recipient_dest.hash, None)
+            
+        except Exception as e:
+            # Clean up stored link if variables are in scope
+            try:
+                if recipient_dest and recipient_dest.hash in self.router.direct_links:
+                    try:
+                        link.teardown()
+                    except:
+                        pass
+                    self.router.direct_links.pop(recipient_dest.hash, None)
+            except NameError:
+                pass  # Variables not yet defined
+            log_error("ReticulumWrapper", "establish_link", f"Error: {e}")
+            return {"success": False, "link_active": False, "error": str(e)}
+
+    def close_link(self, dest_hash: bytes) -> Dict:
+        """
+        Close an active link to a destination.
+
+        Called when conversation has been inactive for too long.
+
+        Args:
+            dest_hash: Destination hash as bytes (16 bytes)
+
+        Returns:
+            Dict with:
+            - success: True if link was closed or didn't exist
+            - was_active: True if link was active before closing
+        """
+        if not RETICULUM_AVAILABLE or not self.router:
+            return {"success": True, "was_active": False}
+
+        try:
+            dest_hash = bytes(dest_hash)
+            dest_hash_hex = dest_hash.hex()
+
+            # Find link - try input hash first
+            link = None
+            link_key = None
+            if dest_hash in self.router.direct_links:
+                link = self.router.direct_links[dest_hash]
+                link_key = dest_hash
+            elif dest_hash_hex in self.router.direct_links:
+                link = self.router.direct_links[dest_hash_hex]
+                link_key = dest_hash_hex
+
+            # If not found, try via created destination hash (handles mismatch case)
+            if link is None:
+                recipient_identity = RNS.Identity.recall(dest_hash)
+                if not recipient_identity:
+                    recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                if not recipient_identity and dest_hash_hex in self.identities:
+                    recipient_identity = self.identities[dest_hash_hex]
+
+                if recipient_identity:
+                    recipient_dest = RNS.Destination(
+                        recipient_identity,
+                        RNS.Destination.OUT,
+                        RNS.Destination.SINGLE,
+                        "lxmf",
+                        "delivery"
+                    )
+                    if recipient_dest.hash in self.router.direct_links:
+                        link = self.router.direct_links[recipient_dest.hash]
+                        link_key = recipient_dest.hash
+
+            if link is None:
+                log_debug("ReticulumWrapper", "close_link",
+                         f"No link found to {dest_hash_hex[:16]}")
+                return {"success": True, "was_active": False}
+
+            was_active = link.status == RNS.Link.ACTIVE
+
+            if was_active:
+                log_info("ReticulumWrapper", "close_link",
+                        f"Closing link to {dest_hash_hex[:16]}")
+                link.teardown()
+
+            # Remove from direct_links
+            if link_key and link_key in self.router.direct_links:
+                self.router.direct_links.pop(link_key)
+
+            return {"success": True, "was_active": was_active}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "close_link", f"Error: {e}")
+            return {"success": False, "was_active": False, "error": str(e)}
+
+    def get_link_status(self, dest_hash: bytes) -> Dict:
+        """
+        Check if a link is active to a destination.
+
+        Checks both direct_links (outgoing) and backchannel_links (incoming).
+        A link is bidirectional, so either direction counts as "active".
+
+        Args:
+            dest_hash: Destination hash as bytes (16 bytes)
+
+        Returns:
+            Dict with:
+            - active: True if link is currently active
+            - establishment_rate_bps: Link speed in bits/sec (if active)
+        """
+        if not RETICULUM_AVAILABLE or not self.router:
+            return {"active": False}
+
+        try:
+            dest_hash = bytes(dest_hash)
+            dest_hash_hex = dest_hash.hex()
+
+            # Helper to find link in a dictionary
+            def find_link_in_dict(links_dict, hash_bytes, hash_hex):
+                if hash_bytes in links_dict:
+                    return links_dict[hash_bytes]
+                if hash_hex in links_dict:
+                    return links_dict[hash_hex]
+                return None
+
+            # Check direct_links (links we initiated)
+            link = find_link_in_dict(self.router.direct_links, dest_hash, dest_hash_hex)
+
+            # Check backchannel_links (links peer initiated to us)
+            if link is None:
+                link = find_link_in_dict(self.router.backchannel_links, dest_hash, dest_hash_hex)
+
+            # Fallback: Check RNS.Transport.active_links for incoming links
+            # This is rarely needed since link.identify() populates backchannel_links
+            if link is None and hasattr(RNS.Transport, 'active_links'):
+                for active_link in RNS.Transport.active_links:
+                    if active_link.status == RNS.Link.ACTIVE:
+                        try:
+                            remote_identity = active_link.get_remote_identity()
+                            if remote_identity:
+                                remote_dest = RNS.Destination(
+                                    remote_identity,
+                                    RNS.Destination.OUT,
+                                    RNS.Destination.SINGLE,
+                                    "lxmf",
+                                    "delivery"
+                                )
+                                if remote_dest.hash == dest_hash or remote_dest.hash.hex() == dest_hash_hex:
+                                    link = active_link
+                                    break
+                        except Exception:
+                            pass
+
+            # If not found, try via created destination hash (handles mismatch case)
+            if link is None:
+                recipient_identity = RNS.Identity.recall(dest_hash)
+                if not recipient_identity:
+                    recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                if not recipient_identity and dest_hash_hex in self.identities:
+                    recipient_identity = self.identities[dest_hash_hex]
+
+                if recipient_identity:
+                    recipient_dest = RNS.Destination(
+                        recipient_identity,
+                        RNS.Destination.OUT,
+                        RNS.Destination.SINGLE,
+                        "lxmf",
+                        "delivery"
+                    )
+                    created_hash = recipient_dest.hash
+                    created_hex = created_hash.hex()
+                    # Check both dictionaries with created hash
+                    link = find_link_in_dict(self.router.direct_links, created_hash, created_hex)
+                    if link is None:
+                        link = find_link_in_dict(self.router.backchannel_links, created_hash, created_hex)
+
+            if link is not None and link.status == RNS.Link.ACTIVE:
+                # Helper to get next hop interface bitrate
+                def get_next_hop_bitrate(hash_to_check) -> int:
+                    try:
+                        if RNS.Transport.has_path(hash_to_check):
+                            next_hop_iface = RNS.Transport.next_hop_interface(hash_to_check)
+                            if next_hop_iface and hasattr(next_hop_iface, 'bitrate'):
+                                return next_hop_iface.bitrate
+                    except Exception:
+                        pass
+                    return None
+
+                return {
+                    "active": True,
+                    "establishment_rate_bps": link.get_establishment_rate(),
+                    "expected_rate_bps": link.get_expected_rate(),
+                    "rtt_seconds": link.rtt,
+                    "hops": RNS.Transport.hops_to(dest_hash) if RNS.Transport.has_path(dest_hash) else None,
+                    "link_mtu": link.mtu if hasattr(link, 'mtu') else None,
+                    "next_hop_bitrate_bps": get_next_hop_bitrate(dest_hash),
+                }
+
+            return {"active": False}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_link_status", f"Error: {e}")
+            return {"active": False, "error": str(e)}
 
     def get_debug_info(self) -> Dict:
         """

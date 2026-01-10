@@ -15,6 +15,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.data.repository.CustomThemeRepository
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.CustomTheme
@@ -35,6 +36,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
  * Repository for managing user settings using DataStore.
  * Currently handles display name persistence.
  */
+@Suppress("LargeClass") // Repository managing many user preferences
 @Singleton
 class SettingsRepository
     @Inject
@@ -98,6 +100,9 @@ class SettingsRepository
 
             // Incoming message size limit
             val INCOMING_MESSAGE_SIZE_LIMIT_KB = intPreferencesKey("incoming_message_size_limit_kb")
+
+            // Image compression preferences
+            val IMAGE_COMPRESSION_PRESET = stringPreferencesKey("image_compression_preset")
         }
 
         // Notification preferences
@@ -969,6 +974,24 @@ class SettingsRepository
                 }
                 .distinctUntilChanged()
 
+        // Image compression preferences
+
+        /**
+         * Flow of the image compression preset.
+         * Defaults to AUTO if not set.
+         */
+        val imageCompressionPresetFlow: Flow<ImageCompressionPreset> =
+            context.dataStore.data
+                .map { preferences ->
+                    val presetName = preferences[PreferencesKeys.IMAGE_COMPRESSION_PRESET]
+                    if (presetName != null) {
+                        ImageCompressionPreset.fromName(presetName)
+                    } else {
+                        ImageCompressionPreset.DEFAULT
+                    }
+                }
+                .distinctUntilChanged()
+
         /**
          * Get the incoming message size limit in KB (non-flow).
          */
@@ -988,6 +1011,31 @@ class SettingsRepository
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.INCOMING_MESSAGE_SIZE_LIMIT_KB] =
                     limitKb.coerceIn(MIN_INCOMING_SIZE_LIMIT_KB, MAX_INCOMING_SIZE_LIMIT_KB)
+            }
+        }
+
+        /**
+         * Get the image compression preset (non-flow).
+         */
+        suspend fun getImageCompressionPreset(): ImageCompressionPreset {
+            return context.dataStore.data.map { preferences ->
+                val presetName = preferences[PreferencesKeys.IMAGE_COMPRESSION_PRESET]
+                if (presetName != null) {
+                    ImageCompressionPreset.fromName(presetName)
+                } else {
+                    ImageCompressionPreset.DEFAULT
+                }
+            }.first()
+        }
+
+        /**
+         * Save the image compression preset.
+         *
+         * @param preset The compression preset to save
+         */
+        suspend fun saveImageCompressionPreset(preset: ImageCompressionPreset) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.IMAGE_COMPRESSION_PRESET] = preset.name
             }
         }
 

@@ -337,16 +337,20 @@ private val oledBlackDarkScheme =
         onSecondary = OledOnSecondary80,
         tertiary = OledTertiary80,
         onTertiary = OledOnTertiary80,
-        background = OledSurfaceDim80, // True black (#000000)
+        // True black (#000000)
+        background = OledSurfaceDim80,
         onBackground = OledOnSurface80,
-        surface = OledSurfaceDim80, // True black (#000000)
+        // True black (#000000)
+        surface = OledSurfaceDim80,
         onSurface = OledOnSurface80,
         surfaceVariant = OledSurface80,
         onSurfaceVariant = OledOnSurface80,
         surfaceTint = OledPrimary80,
-        surfaceDim = OledSurfaceDim80, // True black
+        // True black
+        surfaceDim = OledSurfaceDim80,
         surfaceBright = OledSurfaceBright80,
-        surfaceContainerLowest = OledSurfaceContainerLowest80, // True black
+        // True black
+        surfaceContainerLowest = OledSurfaceContainerLowest80,
         surfaceContainerLow = OledSurfaceContainerLow80,
         surfaceContainer = OledSurfaceContainer80,
         surfaceContainerHigh = OledSurfaceContainerHigh80,

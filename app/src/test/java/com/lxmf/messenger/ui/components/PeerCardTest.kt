@@ -3,11 +3,11 @@ package com.lxmf.messenger.ui.components
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.longClick
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.test.TestFactories
 import org.junit.Assert.assertEquals

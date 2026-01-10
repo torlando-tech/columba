@@ -723,7 +723,8 @@ class MessageMapperTest {
         val result =
             decodeAndCacheImage(
                 "odd-hex-test",
-                """{"6": "fff"}""", // 3 chars, not valid hex pair
+                // 3 chars, not valid hex pair
+                """{"6": "fff"}""",
             )
 
         // Result may be null or non-null depending on Robolectric's BitmapFactory
@@ -1956,11 +1957,12 @@ class MessageMapperTest {
                 status = "delivered",
                 isAnimatedImage = true,
                 imageData = byteArrayOf(1, 2, 3),
-                replyPreview = ReplyPreviewUi(
-                    messageId = "original",
-                    senderName = "Alice",
-                    contentPreview = "Original message",
-                ),
+                replyPreview =
+                    ReplyPreviewUi(
+                        messageId = "original",
+                        senderName = "Alice",
+                        contentPreview = "Original message",
+                    ),
             )
 
         assertFalse(messageUi.isMediaOnlyMessage)
@@ -2143,7 +2145,9 @@ class MessageMapperTest {
                 timestamp = 0L,
                 isFromMe = false,
                 status = "delivered",
-                fieldsJson = """{"16": {"pending_file_notification": {"original_message_id": "abc123", "filename": "report.pdf", "file_count": 3, "total_size": 1048576}}}""",
+                fieldsJson =
+                    """{"16": {"pending_file_notification": {"original_message_id": "abc123", """ +
+                        """"filename": "report.pdf", "file_count": 3, "total_size": 1048576}}}""",
             )
 
         val info = messageUi.pendingFileInfo
@@ -2231,20 +2235,22 @@ class MessageMapperTest {
 
     @Test
     fun `ReactionUi count equals senderHashes size`() {
-        val reaction = ReactionUi(
-            emoji = "👍",
-            senderHashes = listOf("hash1", "hash2", "hash3"),
-        )
+        val reaction =
+            ReactionUi(
+                emoji = "👍",
+                senderHashes = listOf("hash1", "hash2", "hash3"),
+            )
 
         assertEquals(3, reaction.count)
     }
 
     @Test
     fun `ReactionUi count is zero for empty senderHashes`() {
-        val reaction = ReactionUi(
-            emoji = "❤️",
-            senderHashes = emptyList(),
-        )
+        val reaction =
+            ReactionUi(
+                emoji = "❤️",
+                senderHashes = emptyList(),
+            )
 
         assertEquals(0, reaction.count)
     }

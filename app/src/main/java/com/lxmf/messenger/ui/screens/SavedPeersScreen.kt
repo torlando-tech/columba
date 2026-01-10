@@ -139,7 +139,8 @@ fun SavedPeerCard(
         onClick = onClick,
         onFavoriteClick = onFavoriteClick,
         onLongPress = onLongPress,
-        showFavoriteToggle = false, // Always show filled star for saved peers
+        // Always show filled star for saved peers
+        showFavoriteToggle = false,
     )
 }
 

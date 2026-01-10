@@ -207,6 +207,17 @@ class ConversationLinkManager
          */
         fun openConversationLink(destHashHex: String) {
             scope.launch {
+                // Check if already establishing or active to prevent duplicate concurrent calls
+                val currentState = _linkStates.value[destHashHex]
+                if (currentState?.isEstablishing == true) {
+                    Log.d(TAG, "Link to ${destHashHex.take(16)} already establishing, skipping")
+                    return@launch
+                }
+                if (currentState?.isActive == true) {
+                    Log.d(TAG, "Link to ${destHashHex.take(16)} already active, skipping")
+                    return@launch
+                }
+
                 Log.d(TAG, "Opening conversation link to ${destHashHex.take(16)}...")
 
                 // Mark as establishing
@@ -427,9 +438,9 @@ class ConversationLinkManager
                                     isEstablishing = false,
                                 ),
                             )
-                            // Start inactivity timer for the newly detected link
-                            lastMessageSentTime[destHashHex] = System.currentTimeMillis()
-                            startInactivityChecker()
+                            // Don't start inactivity timer for incoming links
+                            // The peer owns this link and should manage its lifecycle
+                            // We only track inactivity for links WE established
                         }
                     } catch (e: Exception) {
                         Log.w(TAG, "Error refreshing link status for ${destHashHex.take(16)}: ${e.message}")

@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -352,6 +353,69 @@ class SettingsRepositoryTest {
                 // Save same new value - should NOT emit
                 repository.saveLastAutoAnnounceTime(newValue)
                 expectNoEvents()
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun nextAutoAnnounceTimeFlow_defaultsToNull() =
+        runTest {
+            val value = repository.nextAutoAnnounceTimeFlow.first()
+            assertNull(value)
+        }
+
+    @Test
+    fun nextAutoAnnounceTimeFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.nextAutoAnnounceTimeFlow.test(timeout = 5.seconds) {
+                // Initial value should be null
+                assertNull(awaitItem())
+
+                // Save a timestamp - should emit
+                val timestamp = 1704067200000L
+                repository.saveNextAutoAnnounceTime(timestamp)
+                assertEquals(timestamp, awaitItem())
+
+                // Save same value - should NOT emit
+                repository.saveNextAutoAnnounceTime(timestamp)
+                expectNoEvents()
+
+                // Save null - should emit
+                repository.saveNextAutoAnnounceTime(null)
+                assertNull(awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun networkChangeAnnounceTimeFlow_defaultsToNull() =
+        runTest {
+            val value = repository.networkChangeAnnounceTimeFlow.first()
+            assertNull(value)
+        }
+
+    @Test
+    fun networkChangeAnnounceTimeFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.networkChangeAnnounceTimeFlow.test(timeout = 5.seconds) {
+                // Initial value should be null
+                assertNull(awaitItem())
+
+                // Save a timestamp - should emit
+                val timestamp = System.currentTimeMillis()
+                repository.saveNetworkChangeAnnounceTime(timestamp)
+                assertEquals(timestamp, awaitItem())
+
+                // Save same value - should NOT emit
+                repository.saveNetworkChangeAnnounceTime(timestamp)
+                expectNoEvents()
+
+                // Save new value - should emit
+                val newTimestamp = timestamp + 1000
+                repository.saveNetworkChangeAnnounceTime(newTimestamp)
+                assertEquals(newTimestamp, awaitItem())
 
                 cancelAndIgnoreRemainingEvents()
             }

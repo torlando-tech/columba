@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:no-wildcard-imports")
+
 package com.lxmf.messenger.data.repository
 
 import android.content.Context
@@ -650,7 +652,8 @@ class IdentityRepositoryTest {
                     displayName = "Test",
                     destinationHash = "dest_hash",
                     filePath = "/missing/path",
-                    keyData = null, // No backup!
+                    // No backup!
+                    keyData = null,
                     createdTimestamp = 0L,
                     lastUsedTimestamp = 0L,
                     isActive = true,
@@ -685,7 +688,8 @@ class IdentityRepositoryTest {
                     displayName = "Test",
                     destinationHash = "dest_hash",
                     filePath = "/missing/path",
-                    keyData = ByteArray(32), // Wrong size - should be 64
+                    // Wrong size - should be 64
+                    keyData = ByteArray(32),
                     createdTimestamp = 0L,
                     lastUsedTimestamp = 0L,
                     isActive = true,

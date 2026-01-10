@@ -157,6 +157,17 @@ interface IReticulumService {
     String getPathTableHashes();
 
     /**
+     * Probe link speed to a destination by checking existing links or sending
+     * an empty LXMF message to establish one.
+     *
+     * @param destHash Destination hash bytes
+     * @param timeoutSeconds How long to wait for link establishment
+     * @param deliveryMethod "direct" or "propagated" - affects which link to check/establish
+     * @return JSON string with probe result containing status, rates, RTT, hops
+     */
+    String probeLinkSpeed(in byte[] destHash, float timeoutSeconds, String deliveryMethod);
+
+    /**
      * Get debug information.
      * @return JSON string with debug info
      */
@@ -331,8 +342,9 @@ interface IReticulumService {
      * @param sourceIdentityPrivateKey Source identity private key bytes
      * @param deliveryMethod Delivery method: "opportunistic", "direct", or "propagated"
      * @param tryPropagationOnFail If true and direct fails, retry via propagation
-     * @param imageData Optional image data bytes (null if none)
+     * @param imageData Optional image data bytes for small images (null if none or using imageDataPath)
      * @param imageFormat Optional image format string (e.g., "jpg", "png", null if none)
+     * @param imageDataPath Optional file path for large images to bypass Binder IPC limits (null if using imageData)
      * @param fileAttachments Optional map of filename -> file bytes for small files (null if none)
      * @param fileAttachmentPaths Optional map of filename -> file path for large files (null if none)
      *                            Large files are written to temp files to bypass Binder IPC size limits.
@@ -343,7 +355,7 @@ interface IReticulumService {
      * @param iconBgColor Optional icon background color hex string (3 bytes RGB, e.g., "1E88E5")
      * @return JSON string with result: {"success": true, "message_hash": "...", "delivery_method": "..."}
      */
-    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat, in Map fileAttachments, in Map fileAttachmentPaths, String replyToMessageId, String iconName, String iconFgColor, String iconBgColor);
+    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat, String imageDataPath, in Map fileAttachments, in Map fileAttachmentPaths, String replyToMessageId, String iconName, String iconFgColor, String iconBgColor);
 
     /**
      * Provide an alternative relay for message retry.
@@ -388,4 +400,33 @@ interface IReticulumService {
      * @return JSON string with result: {"success": true, "message_hash": "...", "timestamp": ...}
      */
     String sendReaction(in byte[] destHash, String targetMessageId, String emoji, in byte[] sourceIdentityPrivateKey);
+
+    // ==================== CONVERSATION LINK MANAGEMENT ====================
+
+    /**
+     * Establish a link to a destination for real-time connectivity.
+     * Used to show "Online" status and enable instant link speed probing.
+     *
+     * @param destHash Destination hash bytes (16 bytes)
+     * @param timeoutSeconds How long to wait for link establishment
+     * @return JSON string with result: {"success": true, "link_active": true, "establishment_rate_bps": ...}
+     */
+    String establishLink(in byte[] destHash, float timeoutSeconds);
+
+    /**
+     * Close an active link to a destination.
+     * Called when conversation has been inactive for too long.
+     *
+     * @param destHash Destination hash bytes (16 bytes)
+     * @return JSON string with result: {"success": true, "was_active": true}
+     */
+    String closeLink(in byte[] destHash);
+
+    /**
+     * Check if a link is active to a destination.
+     *
+     * @param destHash Destination hash bytes (16 bytes)
+     * @return JSON string with result: {"active": true, "establishment_rate_bps": ...}
+     */
+    String getLinkStatus(in byte[] destHash);
 }

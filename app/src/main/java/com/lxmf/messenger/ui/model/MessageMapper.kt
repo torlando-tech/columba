@@ -251,9 +251,35 @@ fun decodeImageWithAnimation(
             DecodedImageResult(rawBytes, null, isAnimated = true)
         } else {
             // Static image - decode to bitmap and cache
+            // Use subsampling for large images to avoid memory/rendering issues
             val bitmap =
                 ImageCache.get(messageId) ?: run {
-                    val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)?.asImageBitmap()
+                    // First pass: get dimensions
+                    val boundsOptions =
+                        BitmapFactory.Options().apply {
+                            inJustDecodeBounds = true
+                        }
+                    BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, boundsOptions)
+
+                    // Calculate sample size for display (max 1024px for message bubbles)
+                    val maxDisplayDimension = 1024
+                    val sampleSize =
+                        ImageUtils.calculateSampleSize(
+                            boundsOptions.outWidth,
+                            boundsOptions.outHeight,
+                            maxDisplayDimension,
+                        )
+
+                    // Second pass: decode with subsampling
+                    val decodeOptions =
+                        BitmapFactory.Options().apply {
+                            inSampleSize = sampleSize
+                        }
+                    val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOptions)?.asImageBitmap()
+
+                    if (sampleSize > 1) {
+                        Log.d(TAG, "Subsampled image for display: sampleSize=$sampleSize")
+                    }
                     decoded?.let { ImageCache.put(messageId, it) }
                     decoded
                 }

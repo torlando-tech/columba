@@ -38,7 +38,8 @@ data class IdentityExport(
     val identityHash: String,
     val displayName: String,
     val destinationHash: String,
-    val keyData: String, // Base64 encoded 64-byte private key
+    /** Base64 encoded 64-byte private key */
+    val keyData: String,
     val createdTimestamp: Long,
     val lastUsedTimestamp: Long,
     val isActive: Boolean,
@@ -56,7 +57,8 @@ data class ConversationExport(
     val peerHash: String,
     val identityHash: String,
     val peerName: String,
-    val peerPublicKey: String?, // Base64 encoded public key
+    /** Base64 encoded public key */
+    val peerPublicKey: String?,
     val lastMessage: String,
     val lastMessageTimestamp: Long,
     val unreadCount: Int,
@@ -86,7 +88,8 @@ data class MessageExport(
 data class ContactExport(
     val destinationHash: String,
     val identityHash: String,
-    val publicKey: String, // Base64 encoded public key
+    /** Base64 encoded public key */
+    val publicKey: String,
     val customNickname: String?,
     val notes: String?,
     val tags: String?,
@@ -103,8 +106,10 @@ data class ContactExport(
 data class AnnounceExport(
     val destinationHash: String,
     val peerName: String,
-    val publicKey: String, // Base64 encoded 64-byte public key
-    val appData: String?, // Base64 encoded
+    /** Base64 encoded 64-byte public key */
+    val publicKey: String,
+    /** Base64 encoded */
+    val appData: String?,
     val hops: Int,
     val lastSeenTimestamp: Long,
     val nodeType: String,
@@ -121,8 +126,10 @@ data class AnnounceExport(
  */
 @Serializable
 data class PeerIdentityExport(
-    val peerHash: String, // Identity hash (SHA256 of public key)
-    val publicKey: String, // Base64 encoded public key
+    /** Identity hash (SHA256 of public key) */
+    val peerHash: String,
+    /** Base64 encoded public key */
+    val publicKey: String,
     val lastSeenTimestamp: Long,
 )
 
@@ -211,8 +218,10 @@ data class CustomThemeExport(
 @Serializable
 data class PreferenceEntry(
     val key: String,
-    val type: String, // "boolean", "int", "long", "float", "string", "string_set"
-    val value: String, // String representation of the value
+    /** "boolean", "int", "long", "float", "string", "string_set" */
+    val type: String,
+    /** String representation of the value */
+    val value: String,
 )
 
 /**
@@ -284,7 +293,8 @@ data class SettingsExport(
 data class AttachmentRef(
     val messageId: String,
     val fieldKey: String,
-    val relativePath: String, // Path within attachments/ in the ZIP
+    /** Path within attachments/ in the ZIP */
+    val relativePath: String,
     val sizeBytes: Long,
 )
 
@@ -408,7 +418,8 @@ fun CustomThemeEntity.toExport(): CustomThemeExport =
  */
 fun CustomThemeExport.toEntity(): CustomThemeEntity =
     CustomThemeEntity(
-        id = 0, // New entity, will be auto-generated
+        // New entity, will be auto-generated
+        id = 0,
         name = name,
         description = description,
         baseTheme = baseTheme,

@@ -66,185 +66,64 @@ import kotlinx.coroutines.launch
 
 /**
  * Standard emoji reactions available for selection.
- * Matches Signal-style reaction picker with 6 common emotions.
+ * Matches Signal-style reaction picker with 6 common emotions: 👍 ❤️ 😂 😮 😢 😡
  */
 val REACTION_EMOJIS =
     listOf(
-        "\uD83D\uDC4D", // 👍 thumbs up
-        "\u2764\uFE0F", // ❤️ red heart
-        "\uD83D\uDE02", // 😂 face with tears of joy
-        "\uD83D\uDE2E", // 😮 face with open mouth
-        "\uD83D\uDE22", // 😢 crying face
-        "\uD83D\uDE21", // 😡 angry face
+        "\uD83D\uDC4D",
+        "\u2764\uFE0F",
+        "\uD83D\uDE02",
+        "\uD83D\uDE2E",
+        "\uD83D\uDE22",
+        "\uD83D\uDE21",
     )
 
 /**
  * Extended emoji list for the full emoji picker tray.
  * Contains a broader selection of commonly used emojis.
+ * Curated list of common reaction emojis organized by category.
  */
 val EXTENDED_EMOJIS =
     listOf(
-        // Smileys & People
-        "\uD83D\uDE00", // 😀 grinning face
-        "\uD83D\uDE03", // 😃 grinning face with big eyes
-        "\uD83D\uDE04", // 😄 grinning face with smiling eyes
-        "\uD83D\uDE01", // 😁 beaming face with smiling eyes
-        "\uD83D\uDE06", // 😆 grinning squinting face
-        "\uD83D\uDE05", // 😅 grinning face with sweat
-        "\uD83D\uDE02", // 😂 face with tears of joy
-        "\uD83E\uDD23", // 🤣 rolling on the floor laughing
-        "\uD83D\uDE0A", // 😊 smiling face with smiling eyes
-        "\uD83D\uDE07", // 😇 smiling face with halo
-        "\uD83D\uDE42", // 🙂 slightly smiling face
-        "\uD83D\uDE43", // 🙃 upside-down face
-        "\uD83D\uDE09", // 😉 winking face
-        "\uD83D\uDE0C", // 😌 relieved face
-        "\uD83D\uDE0D", // 😍 smiling face with heart-eyes
-        "\uD83E\uDD70", // 🥰 smiling face with hearts
-        "\uD83D\uDE18", // 😘 face blowing a kiss
-        "\uD83D\uDE17", // 😗 kissing face
-        "\uD83D\uDE1A", // 😚 kissing face with closed eyes
-        "\uD83D\uDE19", // 😙 kissing face with smiling eyes
-        "\uD83E\uDD17", // 🤗 hugging face
-        "\uD83E\uDD14", // 🤔 thinking face
-        "\uD83E\uDD28", // 🤨 face with raised eyebrow
-        "\uD83D\uDE10", // 😐 neutral face
-        "\uD83D\uDE11", // 😑 expressionless face
-        "\uD83D\uDE36", // 😶 face without mouth
-        "\uD83D\uDE0F", // 😏 smirking face
-        "\uD83D\uDE12", // 😒 unamused face
-        "\uD83D\uDE44", // 🙄 face with rolling eyes
-        "\uD83D\uDE2C", // 😬 grimacing face
-        "\uD83D\uDE2E", // 😮 face with open mouth
-        "\uD83D\uDE2F", // 😯 hushed face
-        "\uD83D\uDE32", // 😲 astonished face
-        "\uD83D\uDE33", // 😳 flushed face
-        "\uD83E\uDD7A", // 🥺 pleading face
-        "\uD83D\uDE26", // 😦 frowning face with open mouth
-        "\uD83D\uDE27", // 😧 anguished face
-        "\uD83D\uDE28", // 😨 fearful face
-        "\uD83D\uDE30", // 😰 anxious face with sweat
-        "\uD83D\uDE25", // 😥 sad but relieved face
-        "\uD83D\uDE22", // 😢 crying face
-        "\uD83D\uDE2D", // 😭 loudly crying face
-        "\uD83D\uDE31", // 😱 face screaming in fear
-        "\uD83D\uDE16", // 😖 confounded face
-        "\uD83D\uDE23", // 😣 persevering face
-        "\uD83D\uDE1E", // 😞 disappointed face
-        "\uD83D\uDE13", // 😓 downcast face with sweat
-        "\uD83D\uDE29", // 😩 weary face
-        "\uD83D\uDE2A", // 😪 sleepy face
-        "\uD83E\uDD24", // 🤤 drooling face
-        "\uD83D\uDE34", // 😴 sleeping face
-        "\uD83D\uDE37", // 😷 face with medical mask
-        "\uD83E\uDD12", // 🤒 face with thermometer
-        "\uD83E\uDD15", // 🤕 face with head-bandage
-        "\uD83E\uDD22", // 🤢 nauseated face
-        "\uD83E\uDD2E", // 🤮 face vomiting
-        "\uD83E\uDD27", // 🤧 sneezing face
-        "\uD83E\uDD75", // 🥵 hot face
-        "\uD83E\uDD76", // 🥶 cold face
-        "\uD83D\uDE35", // 😵 dizzy face
-        "\uD83E\uDD2F", // 🤯 exploding head
-        "\uD83E\uDD20", // 🤠 cowboy hat face
-        "\uD83E\uDD73", // 🥳 partying face
-        "\uD83D\uDE0E", // 😎 smiling face with sunglasses
-        "\uD83E\uDD13", // 🤓 nerd face
-        "\uD83E\uDDD0", // 🧐 face with monocle
-        "\uD83D\uDE15", // 😕 confused face
-        "\uD83D\uDE1F", // 😟 worried face
-        "\uD83D\uDE41", // 🙁 slightly frowning face
-        "\uD83D\uDE2E", // ☹️ frowning face (approximation)
-        "\uD83D\uDE24", // 😤 face with steam from nose
-        "\uD83D\uDE21", // 😡 pouting face
-        "\uD83D\uDE20", // 😠 angry face
-        "\uD83E\uDD2C", // 🤬 face with symbols on mouth
-        // Gestures
-        "\uD83D\uDC4D", // 👍 thumbs up
-        "\uD83D\uDC4E", // 👎 thumbs down
-        "\uD83D\uDC4A", // 👊 oncoming fist
-        "\u270A", // ✊ raised fist
-        "\uD83E\uDD1B", // 🤛 left-facing fist
-        "\uD83E\uDD1C", // 🤜 right-facing fist
-        "\uD83D\uDC4F", // 👏 clapping hands
-        "\uD83D\uDE4C", // 🙌 raising hands
-        "\uD83D\uDC50", // 👐 open hands
-        "\uD83E\uDD32", // 🤲 palms up together
-        "\uD83E\uDD1D", // 🤝 handshake
-        "\uD83D\uDE4F", // 🙏 folded hands
-        "\u270C\uFE0F", // ✌️ victory hand
-        "\uD83E\uDD1E", // 🤞 crossed fingers
-        "\uD83E\uDD1F", // 🤟 love-you gesture
-        "\uD83E\uDD18", // 🤘 sign of the horns
-        "\uD83D\uDC4C", // 👌 OK hand
-        "\uD83D\uDC48", // 👈 backhand index pointing left
-        "\uD83D\uDC49", // 👉 backhand index pointing right
-        "\uD83D\uDC46", // 👆 backhand index pointing up
-        "\uD83D\uDC47", // 👇 backhand index pointing down
-        "\u261D\uFE0F", // ☝️ index pointing up
-        "\u270B", // ✋ raised hand
-        "\uD83E\uDD1A", // 🤚 raised back of hand
-        "\uD83D\uDD90\uFE0F", // 🖐️ hand with fingers splayed
-        "\uD83D\uDC4B", // 👋 waving hand
-        "\uD83E\uDD19", // 🤙 call me hand
-        "\uD83D\uDCAA", // 💪 flexed biceps
-        // Hearts & Love
-        "\u2764\uFE0F", // ❤️ red heart
-        "\uD83E\uDDE1", // 🧡 orange heart
-        "\uD83D\uDC9B", // 💛 yellow heart
-        "\uD83D\uDC9A", // 💚 green heart
-        "\uD83D\uDC99", // 💙 blue heart
-        "\uD83D\uDC9C", // 💜 purple heart
-        "\uD83D\uDDA4", // 🖤 black heart
-        "\uD83E\uDD0D", // 🤍 white heart
-        "\uD83E\uDD0E", // 🤎 brown heart
-        "\uD83D\uDC94", // 💔 broken heart
-        "\u2763\uFE0F", // ❣️ heart exclamation
-        "\uD83D\uDC95", // 💕 two hearts
-        "\uD83D\uDC9E", // 💞 revolving hearts
-        "\uD83D\uDC93", // 💓 beating heart
-        "\uD83D\uDC97", // 💗 growing heart
-        "\uD83D\uDC96", // 💖 sparkling heart
-        "\uD83D\uDC98", // 💘 heart with arrow
-        "\uD83D\uDC9D", // 💝 heart with ribbon
-        // Celebrations
-        "\uD83C\uDF89", // 🎉 party popper
-        "\uD83C\uDF8A", // 🎊 confetti ball
-        "\uD83C\uDF8E", // 🎎 Japanese dolls
-        "\uD83C\uDF81", // 🎁 wrapped gift
-        "\uD83C\uDF84", // 🎄 Christmas tree
-        "\uD83C\uDF86", // 🎆 fireworks
-        "\uD83C\uDF87", // 🎇 sparkler
-        "\u2728", // ✨ sparkles
-        "\uD83C\uDF88", // 🎈 balloon
-        // Fire & Stars
-        "\uD83D\uDD25", // 🔥 fire
-        "\u2B50", // ⭐ star
-        "\uD83C\uDF1F", // 🌟 glowing star
-        "\uD83D\uDCAB", // 💫 dizzy
-        "\u26A1", // ⚡ high voltage
-        // Other common
-        "\uD83D\uDC4B", // 👋 waving hand
-        "\uD83D\uDC40", // 👀 eyes
-        "\uD83D\uDC80", // 💀 skull
-        "\uD83D\uDCA9", // 💩 pile of poo
-        "\uD83E\uDD21", // 🤡 clown face
-        "\uD83D\uDC7B", // 👻 ghost
-        "\uD83D\uDC7D", // 👽 alien
-        "\uD83E\uDD16", // 🤖 robot
-        "\uD83D\uDCA5", // 💥 collision
-        "\uD83D\uDCAF", // 💯 hundred points
-        "\uD83D\uDCA4", // 💤 zzz
-        "\uD83D\uDCAC", // 💬 speech balloon
-        "\uD83D\uDCA1", // 💡 light bulb
-        "\uD83D\uDC8E", // 💎 gem stone
-        "\uD83C\uDF08", // 🌈 rainbow
-        "\u2600\uFE0F", // ☀️ sun
-        "\uD83C\uDF19", // 🌙 crescent moon
-        "\u2744\uFE0F", // ❄️ snowflake
-        "\uD83C\uDF3B", // 🌻 sunflower
-        "\uD83C\uDF39", // 🌹 rose
-        "\uD83C\uDF37", // 🌷 tulip
+        // Smileys & People: 😀😃😄😁😆😅😂🤣😊😇🙂🙃😉😌😍🥰😘😗😚😙🤗🤔🤨😐😑😶😏😒🙄😬😮😯😲😳🥺😦😧😨😰😥😢😭😱😖😣😞😓😩😪🤤😴😷🤒🤕🤢🤮🤧🥵🥶😵🤯🤠🥳😎🤓🧐😕😟🙁☹️😤😡😠🤬
+        "\uD83D\uDE00", "\uD83D\uDE03", "\uD83D\uDE04", "\uD83D\uDE01", "\uD83D\uDE06",
+        "\uD83D\uDE05", "\uD83D\uDE02", "\uD83E\uDD23", "\uD83D\uDE0A", "\uD83D\uDE07",
+        "\uD83D\uDE42", "\uD83D\uDE43", "\uD83D\uDE09", "\uD83D\uDE0C", "\uD83D\uDE0D",
+        "\uD83E\uDD70", "\uD83D\uDE18", "\uD83D\uDE17", "\uD83D\uDE1A", "\uD83D\uDE19",
+        "\uD83E\uDD17", "\uD83E\uDD14", "\uD83E\uDD28", "\uD83D\uDE10", "\uD83D\uDE11",
+        "\uD83D\uDE36", "\uD83D\uDE0F", "\uD83D\uDE12", "\uD83D\uDE44", "\uD83D\uDE2C",
+        "\uD83D\uDE2E", "\uD83D\uDE2F", "\uD83D\uDE32", "\uD83D\uDE33", "\uD83E\uDD7A",
+        "\uD83D\uDE26", "\uD83D\uDE27", "\uD83D\uDE28", "\uD83D\uDE30", "\uD83D\uDE25",
+        "\uD83D\uDE22", "\uD83D\uDE2D", "\uD83D\uDE31", "\uD83D\uDE16", "\uD83D\uDE23",
+        "\uD83D\uDE1E", "\uD83D\uDE13", "\uD83D\uDE29", "\uD83D\uDE2A", "\uD83E\uDD24",
+        "\uD83D\uDE34", "\uD83D\uDE37", "\uD83E\uDD12", "\uD83E\uDD15", "\uD83E\uDD22",
+        "\uD83E\uDD2E", "\uD83E\uDD27", "\uD83E\uDD75", "\uD83E\uDD76", "\uD83D\uDE35",
+        "\uD83E\uDD2F", "\uD83E\uDD20", "\uD83E\uDD73", "\uD83D\uDE0E", "\uD83E\uDD13",
+        "\uD83E\uDDD0", "\uD83D\uDE15", "\uD83D\uDE1F", "\uD83D\uDE41", "\uD83D\uDE2E",
+        "\uD83D\uDE24", "\uD83D\uDE21", "\uD83D\uDE20", "\uD83E\uDD2C",
+        // Gestures: 👍👎👊✊🤛🤜👏🙌👐🤲🤝🙏✌️🤞🤟🤘👌👈👉👆👇☝️✋🤚🖐️👋🤙💪
+        "\uD83D\uDC4D", "\uD83D\uDC4E", "\uD83D\uDC4A", "\u270A", "\uD83E\uDD1B",
+        "\uD83E\uDD1C", "\uD83D\uDC4F", "\uD83D\uDE4C", "\uD83D\uDC50", "\uD83E\uDD32",
+        "\uD83E\uDD1D", "\uD83D\uDE4F", "\u270C\uFE0F", "\uD83E\uDD1E", "\uD83E\uDD1F",
+        "\uD83E\uDD18", "\uD83D\uDC4C", "\uD83D\uDC48", "\uD83D\uDC49", "\uD83D\uDC46",
+        "\uD83D\uDC47", "\u261D\uFE0F", "\u270B", "\uD83E\uDD1A", "\uD83D\uDD90\uFE0F",
+        "\uD83D\uDC4B", "\uD83E\uDD19", "\uD83D\uDCAA",
+        // Hearts & Love: ❤️🧡💛💚💙💜🖤🤍🤎💔❣️💕💞💓💗💖💘💝
+        "\u2764\uFE0F", "\uD83E\uDDE1", "\uD83D\uDC9B", "\uD83D\uDC9A", "\uD83D\uDC99",
+        "\uD83D\uDC9C", "\uD83D\uDDA4", "\uD83E\uDD0D", "\uD83E\uDD0E", "\uD83D\uDC94",
+        "\u2763\uFE0F", "\uD83D\uDC95", "\uD83D\uDC9E", "\uD83D\uDC93", "\uD83D\uDC97",
+        "\uD83D\uDC96", "\uD83D\uDC98", "\uD83D\uDC9D",
+        // Celebrations: 🎉🎊🎎🎁🎄🎆🎇✨🎈
+        "\uD83C\uDF89", "\uD83C\uDF8A", "\uD83C\uDF8E", "\uD83C\uDF81", "\uD83C\uDF84",
+        "\uD83C\uDF86", "\uD83C\uDF87", "\u2728", "\uD83C\uDF88",
+        // Fire & Stars: 🔥⭐🌟💫⚡
+        "\uD83D\uDD25", "\u2B50", "\uD83C\uDF1F", "\uD83D\uDCAB", "\u26A1",
+        // Other common: 👋👀💀💩🤡👻👽🤖💥💯💤💬💡💎🌈☀️🌙❄️🌻🌹🌷
+        "\uD83D\uDC4B", "\uD83D\uDC40", "\uD83D\uDC80", "\uD83D\uDCA9", "\uD83E\uDD21",
+        "\uD83D\uDC7B", "\uD83D\uDC7D", "\uD83E\uDD16", "\uD83D\uDCA5", "\uD83D\uDCAF",
+        "\uD83D\uDCA4", "\uD83D\uDCAC", "\uD83D\uDCA1", "\uD83D\uDC8E", "\uD83C\uDF08",
+        "\u2600\uFE0F", "\uD83C\uDF19", "\u2744\uFE0F", "\uD83C\uDF3B", "\uD83C\uDF39",
+        "\uD83C\uDF37",
     )
 
 /**
@@ -807,8 +686,10 @@ fun ReactionModeOverlay(
     onCopy: () -> Unit,
     onViewDetails: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
-    onDismissStarted: () -> Unit = {}, // Called when dismiss animation starts
-    onDismiss: () -> Unit, // Called when dismiss animation completes
+    /** Called when dismiss animation starts */
+    onDismissStarted: () -> Unit = {},
+    /** Called when dismiss animation completes */
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var visible by remember { mutableStateOf(false) }

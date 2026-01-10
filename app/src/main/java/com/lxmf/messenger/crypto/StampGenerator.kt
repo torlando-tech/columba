@@ -96,7 +96,8 @@ class StampGenerator
                     hkdfExpand(
                         ikm = material,
                         salt = salt,
-                        info = ByteArray(0), // context=None
+                        // context=None
+                        info = ByteArray(0),
                         length = HKDF_OUTPUT_LENGTH,
                     )
                 output.write(expanded)

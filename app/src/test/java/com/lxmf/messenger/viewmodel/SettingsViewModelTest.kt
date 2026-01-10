@@ -67,6 +67,7 @@ class SettingsViewModelTest {
     private val autoAnnounceEnabledFlow = MutableStateFlow(true)
     private val autoAnnounceIntervalHoursFlow = MutableStateFlow(3)
     private val lastAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
+    private val nextAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
     private val themePreferenceFlow = MutableStateFlow(PresetTheme.VIBRANT)
     private val activeIdentityFlow = MutableStateFlow<LocalIdentityEntity?>(null)
     private val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
@@ -105,6 +106,7 @@ class SettingsViewModelTest {
         every { settingsRepository.autoAnnounceEnabledFlow } returns autoAnnounceEnabledFlow
         every { settingsRepository.autoAnnounceIntervalHoursFlow } returns autoAnnounceIntervalHoursFlow
         every { settingsRepository.lastAutoAnnounceTimeFlow } returns lastAutoAnnounceTimeFlow
+        every { settingsRepository.nextAutoAnnounceTimeFlow } returns nextAutoAnnounceTimeFlow
         every { settingsRepository.themePreferenceFlow } returns themePreferenceFlow
         every { settingsRepository.getAllCustomThemes() } returns flowOf(emptyList())
         every { settingsRepository.autoRetrieveEnabledFlow } returns autoRetrieveEnabledFlow

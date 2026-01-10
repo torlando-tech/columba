@@ -172,6 +172,7 @@ class AutoAnnounceManager
 
                 if (wasReset) {
                     Log.d(TAG, "Timer was reset by network change, restarting delay loop")
+                    continue // Skip announce, network change already triggered one
                 }
             }
         }

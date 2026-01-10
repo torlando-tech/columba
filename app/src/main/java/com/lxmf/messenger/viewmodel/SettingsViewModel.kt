@@ -75,7 +75,7 @@ data class SettingsState(
     val availableRelaysLoading: Boolean = true,
     // Message retrieval state
     val autoRetrieveEnabled: Boolean = true,
-    val retrievalIntervalSeconds: Int = 30,
+    val retrievalIntervalSeconds: Int = 3600,
     val lastSyncTimestamp: Long? = null,
     val isSyncing: Boolean = false,
     // Transport node state

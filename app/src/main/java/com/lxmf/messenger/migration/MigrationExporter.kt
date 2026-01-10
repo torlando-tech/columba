@@ -58,9 +58,13 @@ class MigrationExporter
          * Export all app data to a migration bundle file.
          *
          * @param onProgress Callback for progress updates (0.0 to 1.0)
+         * @param includeAttachments Whether to include file/image attachments in the export
          * @return URI to the exported file via FileProvider, or null on failure
          */
-        suspend fun exportData(onProgress: (Float) -> Unit = {}): Result<Uri> =
+        suspend fun exportData(
+            onProgress: (Float) -> Unit = {},
+            includeAttachments: Boolean = true,
+        ): Result<Uri> =
             withContext(Dispatchers.IO) {
                 try {
                     Log.i(TAG, "Starting migration export...")
@@ -92,7 +96,7 @@ class MigrationExporter
                     val settingsExport = exportSettings()
                     onProgress(0.65f)
 
-                    val attachmentRefs = collectAttachments()
+                    val attachmentRefs = if (includeAttachments) collectAttachments() else emptyList()
                     onProgress(0.7f)
 
                     // Create migration bundle

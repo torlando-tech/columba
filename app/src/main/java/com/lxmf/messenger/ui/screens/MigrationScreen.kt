@@ -27,6 +27,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -77,6 +78,7 @@ fun MigrationScreen(
     val exportProgress by viewModel.exportProgress.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
     val exportPreview by viewModel.exportPreview.collectAsState()
+    val includeAttachments by viewModel.includeAttachments.collectAsState()
 
     var showImportConfirmDialog by remember { mutableStateOf(false) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
@@ -152,6 +154,8 @@ fun MigrationScreen(
                 exportPreview = exportPreview,
                 uiState = uiState,
                 exportProgress = exportProgress,
+                includeAttachments = includeAttachments,
+                onIncludeAttachmentsChange = { viewModel.setIncludeAttachments(it) },
                 onExport = { viewModel.exportData() },
             )
 
@@ -197,6 +201,8 @@ private fun ExportSection(
     exportPreview: ExportResult?,
     uiState: MigrationUiState,
     exportProgress: Float,
+    includeAttachments: Boolean,
+    onIncludeAttachmentsChange: (Boolean) -> Unit,
     onExport: () -> Unit,
 ) {
     Card(
@@ -300,6 +306,23 @@ private fun ExportSection(
                     }
                 }
                 else -> {}
+            }
+
+            // Include attachments checkbox
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = includeAttachments,
+                    onCheckedChange = onIncludeAttachmentsChange,
+                    enabled = uiState !is MigrationUiState.Exporting,
+                )
+                Text(
+                    "Include file attachments",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
             }
 
             Button(

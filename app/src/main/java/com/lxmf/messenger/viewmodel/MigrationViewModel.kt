@@ -69,6 +69,12 @@ class MigrationViewModel
         private val _exportedFileUri = MutableStateFlow<Uri?>(null)
         val exportedFileUri: StateFlow<Uri?> = _exportedFileUri.asStateFlow()
 
+        /**
+         * Whether to include file/image attachments in export.
+         */
+        private val _includeAttachments = MutableStateFlow(true)
+        val includeAttachments: StateFlow<Boolean> = _includeAttachments.asStateFlow()
+
         init {
             loadExportPreview()
         }
@@ -84,6 +90,13 @@ class MigrationViewModel
         }
 
         /**
+         * Set whether to include file/image attachments in export.
+         */
+        fun setIncludeAttachments(include: Boolean) {
+            _includeAttachments.value = include
+        }
+
+        /**
          * Export all app data to a migration file.
          */
         fun exportData() {
@@ -94,9 +107,10 @@ class MigrationViewModel
                     _exportProgress.value = 0f
 
                     val result =
-                        migrationExporter.exportData { progress ->
-                            _exportProgress.value = progress
-                        }
+                        migrationExporter.exportData(
+                            onProgress = { progress -> _exportProgress.value = progress },
+                            includeAttachments = _includeAttachments.value,
+                        )
 
                     result.fold(
                         onSuccess = { uri ->

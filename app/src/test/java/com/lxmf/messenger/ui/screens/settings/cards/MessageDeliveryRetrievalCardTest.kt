@@ -474,14 +474,15 @@ class MessageDeliveryRetrievalCardTest {
     fun autoRetrieveToggle_displaysCurrentInterval() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        // Default interval is 300s (5min)
-        composeTestRule.onNodeWithText("Retrieval interval: 5min").performScrollTo().assertIsDisplayed()
+        // Default interval is 3600s (1h)
+        composeTestRule.onNodeWithText("Retrieval interval: 60min").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun autoRetrieveToggle_customInterval_displaysFormattedInterval() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval600sState())
 
+        // 600s is a legacy value, shows as custom
         composeTestRule.onNodeWithText("Retrieval interval: 10min").performScrollTo().assertIsDisplayed()
     }
 
@@ -491,10 +492,10 @@ class MessageDeliveryRetrievalCardTest {
     fun intervalChips_allPresetsDisplayed() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("5min").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("10min").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("30min").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("1h").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("3h").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("6h").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("12h").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -506,48 +507,48 @@ class MessageDeliveryRetrievalCardTest {
     }
 
     @Test
-    fun intervalChips_5minSelected_showsAsSelected() {
-        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval300sState())
-
-        // 5min chip should be displayed and selected
-        composeTestRule.onNodeWithText("5min").performScrollTo().assertIsDisplayed()
-    }
-
-    @Test
-    fun intervalChips_10minSelected_showsAsSelected() {
-        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval600sState())
-
-        // 10min chip should be selected
-        composeTestRule.onNodeWithText("10min").performScrollTo().assertIsDisplayed()
-    }
-
-    @Test
-    fun intervalChips_30minSelected_showsAsSelected() {
-        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval1800sState())
-
-        composeTestRule.onNodeWithText("30min").performScrollTo().assertIsDisplayed()
-    }
-
-    @Test
     fun intervalChips_1hSelected_showsAsSelected() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval3600sState())
 
+        // 1h chip should be displayed and selected (first preset)
         composeTestRule.onNodeWithText("1h").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun intervalChips_3hSelected_showsAsSelected() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval10800sState())
+
+        // 3h chip should be selected (second preset)
+        composeTestRule.onNodeWithText("3h").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun intervalChips_6hSelected_showsAsSelected() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval21600sState())
+
+        composeTestRule.onNodeWithText("6h").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun intervalChips_12hSelected_showsAsSelected() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval43200sState())
+
+        composeTestRule.onNodeWithText("12h").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun intervalChips_customInterval_customChipSelected() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.customIntervalState())
 
-        // Custom interval of 450s (7.5min) should show custom chip as selected
-        composeTestRule.onNodeWithText("Custom (7m 30s)").performScrollTo().assertIsDisplayed()
+        // Custom interval of 7200s (2h) should show custom chip as selected
+        composeTestRule.onNodeWithText("Custom (120min)").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun intervalChips_customInterval_showsValueInLabel() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.customIntervalState())
 
-        composeTestRule.onNodeWithText("Custom (7m 30s)").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Custom (120min)").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -560,35 +561,8 @@ class MessageDeliveryRetrievalCardTest {
     }
 
     @Test
-    fun intervalChip_click5min_invokesOnIntervalChange300() {
-        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval600sState())
-
-        composeTestRule.onNodeWithText("5min").performScrollTo().performClick()
-
-        assertEquals(300, intervalChanged)
-    }
-
-    @Test
-    fun intervalChip_click10min_invokesOnIntervalChange600() {
-        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
-
-        composeTestRule.onNodeWithText("10min").performScrollTo().performClick()
-
-        assertEquals(600, intervalChanged)
-    }
-
-    @Test
-    fun intervalChip_click30min_invokesOnIntervalChange1800() {
-        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
-
-        composeTestRule.onNodeWithText("30min").performScrollTo().performClick()
-
-        assertEquals(1800, intervalChanged)
-    }
-
-    @Test
     fun intervalChip_click1h_invokesOnIntervalChange3600() {
-        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval10800sState())
 
         composeTestRule.onNodeWithText("1h").performScrollTo().performClick()
 
@@ -596,13 +570,40 @@ class MessageDeliveryRetrievalCardTest {
     }
 
     @Test
+    fun intervalChip_click3h_invokesOnIntervalChange10800() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText("3h").performScrollTo().performClick()
+
+        assertEquals(10800, intervalChanged)
+    }
+
+    @Test
+    fun intervalChip_click6h_invokesOnIntervalChange21600() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText("6h").performScrollTo().performClick()
+
+        assertEquals(21600, intervalChanged)
+    }
+
+    @Test
+    fun intervalChip_click12h_invokesOnIntervalChange43200() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
+
+        composeTestRule.onNodeWithText("12h").performScrollTo().performClick()
+
+        assertEquals(43200, intervalChanged)
+    }
+
+    @Test
     fun intervalChips_autoRetrieveDisabled_allChipsDisabled() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.autoRetrieveDisabledState())
 
-        composeTestRule.onNodeWithText("5min").performScrollTo().assertIsNotEnabled()
-        composeTestRule.onNodeWithText("10min").performScrollTo().assertIsNotEnabled()
-        composeTestRule.onNodeWithText("30min").performScrollTo().assertIsNotEnabled()
         composeTestRule.onNodeWithText("1h").performScrollTo().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("3h").performScrollTo().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("6h").performScrollTo().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("12h").performScrollTo().assertIsNotEnabled()
         // Use [0] to get the first Custom chip (retrieval interval, not size limit)
         composeTestRule.onAllNodesWithText("Custom")[0].performScrollTo().assertIsNotEnabled()
     }
@@ -638,7 +639,7 @@ class MessageDeliveryRetrievalCardTest {
 
         clickRetrievalIntervalCustomChip()
 
-        composeTestRule.onNodeWithText("Enter retrieval interval (60-7200 seconds):")
+        composeTestRule.onNodeWithText("Enter retrieval interval (1-12 hours):")
             .assertIsDisplayed()
     }
 
@@ -675,8 +676,8 @@ class MessageDeliveryRetrievalCardTest {
 
         clickRetrievalIntervalCustomChip()
 
-        // Dialog should be prefilled with current interval (300)
-        composeTestRule.onNodeWithText("300").assertIsDisplayed()
+        // Dialog should be prefilled with current interval (3600)
+        composeTestRule.onNodeWithText("3600").assertIsDisplayed()
     }
 
     @Test
@@ -685,7 +686,7 @@ class MessageDeliveryRetrievalCardTest {
 
         clickRetrievalIntervalCustomChip()
 
-        // Prefilled with 300, which is valid
+        // Prefilled with 3600, which is valid
         composeTestRule.onNodeWithText("Confirm").assertIsEnabled()
     }
 
@@ -694,8 +695,8 @@ class MessageDeliveryRetrievalCardTest {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
         clickRetrievalIntervalCustomChip()
-        composeTestRule.onNodeWithText("300").performTextClearance()
-        composeTestRule.onNodeWithText("Seconds").performTextInput("30")
+        composeTestRule.onNodeWithText("3600").performTextClearance()
+        composeTestRule.onNodeWithText("Seconds").performTextInput("1800")
 
         composeTestRule.onNodeWithText("Confirm").assertIsNotEnabled()
     }
@@ -705,8 +706,8 @@ class MessageDeliveryRetrievalCardTest {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
         clickRetrievalIntervalCustomChip()
-        composeTestRule.onNodeWithText("300").performTextClearance()
-        composeTestRule.onNodeWithText("Seconds").performTextInput("8000")
+        composeTestRule.onNodeWithText("3600").performTextClearance()
+        composeTestRule.onNodeWithText("Seconds").performTextInput("50000")
 
         composeTestRule.onNodeWithText("Confirm").assertIsNotEnabled()
     }
@@ -716,7 +717,7 @@ class MessageDeliveryRetrievalCardTest {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
         clickRetrievalIntervalCustomChip()
-        composeTestRule.onNodeWithText("300").performTextClearance()
+        composeTestRule.onNodeWithText("3600").performTextClearance()
 
         composeTestRule.onNodeWithText("Confirm").assertIsNotEnabled()
     }
@@ -726,10 +727,10 @@ class MessageDeliveryRetrievalCardTest {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
         clickRetrievalIntervalCustomChip()
-        composeTestRule.onNodeWithText("300").performTextClearance()
-        composeTestRule.onNodeWithText("Seconds").performTextInput("30")
+        composeTestRule.onNodeWithText("3600").performTextClearance()
+        composeTestRule.onNodeWithText("Seconds").performTextInput("1800")
 
-        composeTestRule.onNodeWithText("Minimum is 60 seconds (1 min)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Minimum is 3600 seconds (1 hour)").assertIsDisplayed()
     }
 
     @Test
@@ -737,10 +738,10 @@ class MessageDeliveryRetrievalCardTest {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
         clickRetrievalIntervalCustomChip()
-        composeTestRule.onNodeWithText("300").performTextClearance()
-        composeTestRule.onNodeWithText("Seconds").performTextInput("8000")
+        composeTestRule.onNodeWithText("3600").performTextClearance()
+        composeTestRule.onNodeWithText("Seconds").performTextInput("50000")
 
-        composeTestRule.onNodeWithText("Maximum is 7200 seconds (2 hours)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Maximum is 43200 seconds (12 hours)").assertIsDisplayed()
     }
 
     @Test
@@ -748,21 +749,21 @@ class MessageDeliveryRetrievalCardTest {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
         clickRetrievalIntervalCustomChip()
-        composeTestRule.onNodeWithText("300").performTextClearance()
-        composeTestRule.onNodeWithText("Seconds").performTextInput("600")
+        composeTestRule.onNodeWithText("3600").performTextClearance()
+        composeTestRule.onNodeWithText("Seconds").performTextInput("7200")
 
-        composeTestRule.onNodeWithText("= 10min").assertIsDisplayed()
+        composeTestRule.onNodeWithText("= 120min").assertIsDisplayed()
     }
 
     @Test
-    fun customIntervalDialog_validInput90s_showsMixedFormat() {
+    fun customIntervalDialog_validInput5400s_showsMixedFormat() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
         clickRetrievalIntervalCustomChip()
-        composeTestRule.onNodeWithText("300").performTextClearance()
-        composeTestRule.onNodeWithText("Seconds").performTextInput("90")
+        composeTestRule.onNodeWithText("3600").performTextClearance()
+        composeTestRule.onNodeWithText("Seconds").performTextInput("5400")
 
-        composeTestRule.onNodeWithText("= 1m 30s").assertIsDisplayed()
+        composeTestRule.onNodeWithText("= 90min").assertIsDisplayed()
     }
 
     @Test
@@ -770,11 +771,11 @@ class MessageDeliveryRetrievalCardTest {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
         clickRetrievalIntervalCustomChip()
-        composeTestRule.onNodeWithText("300").performTextClearance()
-        composeTestRule.onNodeWithText("Seconds").performTextInput("450")
+        composeTestRule.onNodeWithText("3600").performTextClearance()
+        composeTestRule.onNodeWithText("Seconds").performTextInput("7200")
         composeTestRule.onNodeWithText("Confirm").performClick()
 
-        assertEquals(450, intervalChanged)
+        assertEquals(7200, intervalChanged)
     }
 
     @Test
@@ -782,8 +783,8 @@ class MessageDeliveryRetrievalCardTest {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
         clickRetrievalIntervalCustomChip()
-        composeTestRule.onNodeWithText("300").performTextClearance()
-        composeTestRule.onNodeWithText("Seconds").performTextInput("450")
+        composeTestRule.onNodeWithText("3600").performTextClearance()
+        composeTestRule.onNodeWithText("Seconds").performTextInput("7200")
         composeTestRule.onNodeWithText("Cancel").performClick()
 
         // Dialog should be dismissed
@@ -1002,35 +1003,36 @@ class MessageDeliveryRetrievalCardTest {
     // These test the utility function through UI by examining displayed interval
 
     @Test
-    fun formatIntervalDisplay_5min_showsMinutes() {
-        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval300sState())
-
-        composeTestRule.onNodeWithText("Retrieval interval: 5min").performScrollTo().assertIsDisplayed()
-    }
-
-    @Test
-    fun formatIntervalDisplay_10min_showsCorrectly() {
-        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval600sState())
-
-        composeTestRule.onNodeWithText("Retrieval interval: 10min").performScrollTo().assertIsDisplayed()
-    }
-
-    @Test
-    fun formatIntervalDisplay_30min_showsCorrectly() {
-        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval1800sState())
-
-        composeTestRule.onNodeWithText("Retrieval interval: 30min").performScrollTo().assertIsDisplayed()
-    }
-
-    @Test
-    fun formatIntervalDisplay_1hr_showsCorrectly() {
+    fun formatIntervalDisplay_1hr_showsMinutes() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval3600sState())
 
         composeTestRule.onNodeWithText("Retrieval interval: 60min").performScrollTo().assertIsDisplayed()
     }
 
     @Test
-    fun formatIntervalDisplay_mixedMinutesAndSeconds_showsBoth() {
+    fun formatIntervalDisplay_3hr_showsCorrectly() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval10800sState())
+
+        composeTestRule.onNodeWithText("Retrieval interval: 180min").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun formatIntervalDisplay_6hr_showsCorrectly() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval21600sState())
+
+        composeTestRule.onNodeWithText("Retrieval interval: 360min").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun formatIntervalDisplay_12hr_showsCorrectly() {
+        setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.interval43200sState())
+
+        composeTestRule.onNodeWithText("Retrieval interval: 720min").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun formatIntervalDisplay_legacyValue_showsCorrectly() {
+        // Legacy 15min value should still show its interval display
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.mixedIntervalState())
 
         composeTestRule.onNodeWithText("Retrieval interval: 15min").performScrollTo().assertIsDisplayed()
@@ -1092,24 +1094,26 @@ class MessageDeliveryRetrievalCardTest {
     fun edgeCase_customIntervalAtMinBoundary() {
         val config =
             CardConfig(
-                retrievalIntervalSeconds = 60, // Minimum valid (1 min)
+                retrievalIntervalSeconds = 3600, // Minimum valid (1 hour) - also first preset
             )
         setUpCardWithConfig(config)
 
-        composeTestRule.onNodeWithText("Retrieval interval: 1min").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Custom (1min)").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Retrieval interval: 60min").performScrollTo().assertIsDisplayed()
+        // 3600 is a preset now, so it shows as "1h" not as Custom
+        composeTestRule.onNodeWithText("1h").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun edgeCase_customIntervalAtMaxBoundary() {
         val config =
             CardConfig(
-                retrievalIntervalSeconds = 7200, // Maximum valid (2 hr = 120min)
+                retrievalIntervalSeconds = 43200, // Maximum valid (12 hr = 720min) - also fourth preset
             )
         setUpCardWithConfig(config)
 
-        composeTestRule.onNodeWithText("Retrieval interval: 120min").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Custom (120min)").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Retrieval interval: 720min").performScrollTo().assertIsDisplayed()
+        // 43200 is a preset now, so it shows as "12h" not as Custom
+        composeTestRule.onNodeWithText("12h").performScrollTo().assertIsDisplayed()
     }
 
     @Test

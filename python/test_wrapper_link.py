@@ -222,6 +222,52 @@ class TestEstablishLink(unittest.TestCase):
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
     @patch('reticulum_wrapper.RNS')
     @patch('reticulum_wrapper.time')
+    def test_establish_link_calls_identify_for_backchannel(self, mock_time, mock_rns):
+        """Test that establish_link calls link.identify() to enable backchannel on remote peer"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        mock_router_identity = Mock()
+        mock_router = Mock()
+        mock_router.direct_links = {}
+        mock_router.backchannel_links = {}
+        mock_router.identity = mock_router_identity
+        wrapper.router = mock_router
+
+        dest_hash = b'0123456789abcdef'
+        mock_identity = Mock()
+        mock_rns.Identity.recall.return_value = mock_identity
+
+        mock_dest = Mock()
+        mock_dest.hash = dest_hash
+        mock_rns.Destination.return_value = mock_dest
+
+        # Path available
+        mock_rns.Transport.has_path.return_value = True
+
+        # Create mock link that becomes active
+        mock_link = Mock()
+        mock_link.status = mock_rns.Link.ACTIVE
+        mock_link.get_establishment_rate.return_value = 15000
+        mock_link.get_expected_rate.return_value = 12000
+        mock_link.rtt = 0.5
+        mock_link.mtu = 500
+        mock_rns.Link.return_value = mock_link
+        mock_rns.Transport.hops_to.return_value = 2
+
+        # Mock time to not actually wait
+        mock_time.time.side_effect = [0, 0, 0.1]
+        mock_time.sleep = Mock()
+
+        result = wrapper.establish_link(dest_hash, timeout_seconds=5)
+
+        # Verify link.identify() was called with router's identity
+        # This enables the remote peer's LXMRouter to add us to their backchannel_links
+        mock_link.identify.assert_called_once_with(mock_router_identity)
+        self.assertTrue(result['success'])
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    @patch('reticulum_wrapper.time')
     def test_establish_link_timeout(self, mock_time, mock_rns):
         """Test that establish_link returns timeout when link doesn't establish"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)

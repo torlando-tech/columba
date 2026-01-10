@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -310,19 +311,31 @@ private fun ExportSection(
 
             // Include attachments checkbox
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = uiState !is MigrationUiState.Exporting) {
+                        onIncludeAttachmentsChange(!includeAttachments)
+                    },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Checkbox(
                     checked = includeAttachments,
-                    onCheckedChange = onIncludeAttachmentsChange,
+                    onCheckedChange = null, // Parent Row handles clicks
                     enabled = uiState !is MigrationUiState.Exporting,
                 )
-                Text(
-                    "Include file attachments",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Include file attachments",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (!includeAttachments) {
+                        Text(
+                            "Images and files won't be included in export",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
 
             Button(

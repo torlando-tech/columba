@@ -637,6 +637,7 @@ class TestProbeLinkSpeed(unittest.TestCase):
         mock_link.get_establishment_rate.return_value = 10000
         mock_link.get_expected_rate.return_value = 12000
         mock_link.rtt = 0.5
+        mock_link.get_mtu.return_value = 1196  # AutoInterface MTU
 
         dest_hash = b'0123456789abcdef'
         mock_router.direct_links = {dest_hash: mock_link}
@@ -654,6 +655,7 @@ class TestProbeLinkSpeed(unittest.TestCase):
         self.assertEqual(result['expected_rate_bps'], 12000)
         self.assertEqual(result['rtt_seconds'], 0.5)
         self.assertTrue(result['link_reused'])
+        self.assertEqual(result['link_mtu'], 1196)
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
     @patch('reticulum_wrapper.RNS')
@@ -1052,6 +1054,60 @@ class TestNextHopBitrate(unittest.TestCase):
         self.assertEqual(result['establishment_rate_bps'], 97000)
         self.assertEqual(result['expected_rate_bps'], 14711025)
         self.assertTrue(result['link_reused'])
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_probe_link_speed_returns_link_mtu(self, mock_rns):
+        """Test that probe_link_speed returns link_mtu from the link"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        mock_router = Mock()
+        mock_link = Mock()
+        mock_link.status = mock_rns.Link.ACTIVE
+        mock_link.get_establishment_rate.return_value = 50000
+        mock_link.get_expected_rate.return_value = None
+        mock_link.rtt = 0.1
+        mock_link.get_mtu.return_value = 1196  # AutoInterface MTU (WiFi/LAN)
+
+        dest_hash = b'0123456789abcdef'
+        mock_router.direct_links = {dest_hash: mock_link}
+        mock_router.backchannel_links = {}
+        wrapper.router = mock_router
+
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 1
+        mock_rns.Transport.next_hop_interface.return_value = Mock(bitrate=10000000)
+
+        result = wrapper.probe_link_speed(dest_hash)
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['link_mtu'], 1196)
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_probe_link_speed_link_mtu_none_when_no_link(self, mock_rns):
+        """Test that link_mtu is None when no active link exists"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        mock_router = Mock()
+        mock_router.direct_links = {}
+        mock_router.backchannel_links = {}
+        mock_router.propagation_node_link = None
+        wrapper.router = mock_router
+
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 2
+        mock_rns.Transport.next_hop_interface.return_value = Mock(bitrate=50000)
+
+        # Mock establish_link to return success but link not found
+        with patch.object(wrapper, 'establish_link') as mock_establish:
+            mock_establish.return_value = {'success': True, 'establishment_rate_bps': 10000}
+
+            result = wrapper.probe_link_speed(b'0123456789abcdef')
+
+            # Should still succeed (with heuristics) but link_mtu should be None
+            self.assertEqual(result['status'], 'success')
+            self.assertIsNone(result['link_mtu'])
 
 
 if __name__ == '__main__':

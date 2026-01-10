@@ -1565,6 +1565,36 @@ class ServiceReticulumProtocol(
                     } else {
                         result.optLong("establishment_rate_bps")
                     },
+                expectedRateBps =
+                    if (result.isNull("expected_rate_bps")) {
+                        null
+                    } else {
+                        result.optLong("expected_rate_bps")
+                    },
+                nextHopBitrateBps =
+                    if (result.isNull("next_hop_bitrate_bps")) {
+                        null
+                    } else {
+                        result.optLong("next_hop_bitrate_bps")
+                    },
+                rttSeconds =
+                    if (result.isNull("rtt_seconds")) {
+                        null
+                    } else {
+                        result.optDouble("rtt_seconds")
+                    },
+                hops =
+                    if (result.isNull("hops")) {
+                        null
+                    } else {
+                        result.optInt("hops")
+                    },
+                linkMtu =
+                    if (result.isNull("link_mtu")) {
+                        null
+                    } else {
+                        result.optInt("link_mtu")
+                    },
                 alreadyExisted = result.optBoolean("already_existed", false),
                 error = result.optString("error").takeIf { it.isNotEmpty() },
             )
@@ -1598,6 +1628,36 @@ class ServiceReticulumProtocol(
                         null
                     } else {
                         result.optLong("establishment_rate_bps")
+                    },
+                expectedRateBps =
+                    if (result.isNull("expected_rate_bps")) {
+                        null
+                    } else {
+                        result.optLong("expected_rate_bps")
+                    },
+                nextHopBitrateBps =
+                    if (result.isNull("next_hop_bitrate_bps")) {
+                        null
+                    } else {
+                        result.optLong("next_hop_bitrate_bps")
+                    },
+                rttSeconds =
+                    if (result.isNull("rtt_seconds")) {
+                        null
+                    } else {
+                        result.optDouble("rtt_seconds")
+                    },
+                hops =
+                    if (result.isNull("hops")) {
+                        null
+                    } else {
+                        result.optInt("hops")
+                    },
+                linkMtu =
+                    if (result.isNull("link_mtu")) {
+                        null
+                    } else {
+                        result.optInt("link_mtu")
                     },
             )
         } catch (e: Exception) {

@@ -270,6 +270,7 @@ class LinkSpeedProbeResultTest {
             "hops" to 3,
             "link_reused" to true,
             "next_hop_bitrate_bps" to 10000000L,
+            "link_mtu" to 1196,
             "error" to null,
         )
 
@@ -282,6 +283,7 @@ class LinkSpeedProbeResultTest {
         assertEquals(3, result.hops)
         assertTrue(result.linkReused)
         assertEquals(10000000L, result.nextHopBitrateBps)
+        assertEquals(1196, result.linkMtu)
         assertNull(result.error)
     }
 
@@ -301,6 +303,7 @@ class LinkSpeedProbeResultTest {
         assertNull(result.hops)
         assertFalse(result.linkReused)
         assertNull(result.nextHopBitrateBps)
+        assertNull(result.linkMtu)
         assertNull(result.error)
     }
 
@@ -428,5 +431,60 @@ class LinkSpeedProbeResultTest {
 
         // Should prefer expected_rate (actual measured) over interface capability
         assertEquals(8_000_000L, result.bestRateBps)
+    }
+
+    // ========== linkMtu Tests ==========
+
+    @Test
+    fun `fromMap parses linkMtu correctly`() {
+        val map = mapOf<String, Any?>(
+            "status" to "success",
+            "link_mtu" to 1196, // AutoInterface MTU
+            "link_reused" to false,
+        )
+
+        val result = LinkSpeedProbeResult.fromMap(map)
+
+        assertEquals(1196, result.linkMtu)
+    }
+
+    @Test
+    fun `linkMtu values for different interface types`() {
+        // Basic MTU (default Reticulum.MTU)
+        val basicResult = LinkSpeedProbeResult(
+            status = "success",
+            establishmentRateBps = 1_200L,
+            expectedRateBps = null,
+            rttSeconds = 2.5,
+            hops = 1,
+            linkReused = false,
+            linkMtu = 500, // Basic MTU
+        )
+        assertEquals(500, basicResult.linkMtu)
+
+        // AutoInterface MTU (WiFi/LAN)
+        val wifiResult = LinkSpeedProbeResult(
+            status = "success",
+            establishmentRateBps = 36_000L,
+            expectedRateBps = 14_711_025L,
+            rttSeconds = 0.017,
+            hops = 2,
+            linkReused = true,
+            nextHopBitrateBps = 10_000_000L,
+            linkMtu = 1196, // AutoInterface MTU
+        )
+        assertEquals(1196, wifiResult.linkMtu)
+
+        // BackboneInterface MTU (TCP)
+        val backboneResult = LinkSpeedProbeResult(
+            status = "success",
+            establishmentRateBps = 100_000_000L,
+            expectedRateBps = null,
+            rttSeconds = 0.001,
+            hops = 1,
+            linkReused = false,
+            linkMtu = 1_048_576, // 1 MB - BackboneInterface
+        )
+        assertEquals(1_048_576, backboneResult.linkMtu)
     }
 }

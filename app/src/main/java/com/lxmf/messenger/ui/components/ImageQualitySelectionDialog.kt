@@ -28,19 +28,19 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.ImageCompressionPreset
-import com.lxmf.messenger.service.LinkSpeedProbe
+import com.lxmf.messenger.service.ConversationLinkManager
 import java.util.Locale
 
 /**
  * Dialog for selecting image quality/compression level before sending.
  *
  * Shows all available presets with:
- * - Recommended preset highlighted based on link speed probe
+ * - Recommended preset highlighted based on link state
  * - Estimated transfer times for each option
- * - Path information (hops, via relay, etc.)
+ * - Path information (hops, rate, etc.)
  *
  * @param recommendedPreset The preset recommended based on network speed
- * @param probeState The current probe state with speed measurements
+ * @param linkState The current link state with speed measurements (null if no link)
  * @param transferTimeEstimates Map of preset to estimated transfer time string
  * @param onSelect Called when user selects a preset
  * @param onDismiss Called when dialog is dismissed
@@ -48,7 +48,7 @@ import java.util.Locale
 @Composable
 fun ImageQualitySelectionDialog(
     recommendedPreset: ImageCompressionPreset,
-    probeState: LinkSpeedProbe.ProbeState?,
+    linkState: ConversationLinkManager.LinkState?,
     transferTimeEstimates: Map<ImageCompressionPreset, String?>,
     onSelect: (ImageCompressionPreset) -> Unit,
     onDismiss: () -> Unit,
@@ -68,7 +68,7 @@ fun ImageQualitySelectionDialog(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 // Path info section
-                PathInfoSection(probeState)
+                PathInfoSection(linkState)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -111,27 +111,28 @@ fun ImageQualitySelectionDialog(
 }
 
 @Composable
-private fun PathInfoSection(probeState: LinkSpeedProbe.ProbeState?) {
+private fun PathInfoSection(linkState: ConversationLinkManager.LinkState?) {
     val pathInfo =
-        when (probeState) {
-            is LinkSpeedProbe.ProbeState.Complete -> {
+        when {
+            linkState == null -> null
+            linkState.isEstablishing -> "Connecting..."
+            linkState.isActive -> {
                 buildString {
-                    probeState.result.hops?.let { append("$it hops") }
+                    linkState.hops?.let { append("$it hops") }
 
-                    probeState.result.bestRateBps?.let { rate ->
+                    linkState.bestRateBps?.let { rate ->
                         if (isNotEmpty()) append(" • ")
                         append(formatBitrate(rate))
                     }
 
-                    if (probeState.targetType == LinkSpeedProbe.TargetType.PROPAGATION_NODE) {
-                        if (isNotEmpty()) append(" ")
-                        append("(via relay)")
+                    linkState.linkMtu?.let { mtu ->
+                        if (isNotEmpty()) append(" • ")
+                        append("${mtu}B MTU")
                     }
                 }
             }
-            is LinkSpeedProbe.ProbeState.Probing -> "Measuring network speed..."
-            is LinkSpeedProbe.ProbeState.Failed -> "Network speed unknown"
-            else -> null
+            linkState.error != null -> "Connection failed"
+            else -> "No active link"
         }
 
     if (pathInfo != null) {

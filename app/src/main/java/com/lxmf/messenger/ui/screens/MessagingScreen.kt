@@ -7,7 +7,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -59,6 +64,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
@@ -239,8 +245,8 @@ fun MessagingScreen(
     // Image quality selection dialog state
     val qualitySelectionState by viewModel.qualitySelectionState.collectAsStateWithLifecycle()
 
-    // Link speed probe state for showing path info
-    val linkSpeedProbeState by viewModel.linkSpeedProbeState.collectAsStateWithLifecycle()
+    // Current link state for showing path info in quality dialog
+    val currentLinkState by viewModel.currentLinkState.collectAsStateWithLifecycle()
 
     // Observe manual sync results and show Toast
     LaunchedEffect(Unit) {
@@ -472,6 +478,7 @@ fun MessagingScreen(
                         // Online status indicator - considers active link OR recent announce
                         val lastSeen = announceInfo?.lastSeenTimestamp
                         val hasActiveLink = conversationLinkState?.isActive == true
+                        val isEstablishing = conversationLinkState?.isEstablishing == true
                         val hasRecentAnnounce =
                             lastSeen != null &&
                                 System.currentTimeMillis() - lastSeen < (5 * 60 * 1000L) // 5 minutes
@@ -480,25 +487,65 @@ fun MessagingScreen(
                         // Debug logging
                         android.util.Log.d(
                             "MessagingScreen",
-                            "Online indicator: hasActiveLink=$hasActiveLink, hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState",
+                            "Online indicator: hasActiveLink=$hasActiveLink, isEstablishing=$isEstablishing, hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState",
                         )
 
-                        if (lastSeen != null || hasActiveLink) {
+                        if (lastSeen != null || hasActiveLink || isEstablishing) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Circle,
-                                    contentDescription = null,
-                                    tint = if (isOnline) MeshConnected else MeshOffline,
-                                    modifier = Modifier.size(8.dp),
-                                )
+                                // Status dot - color and animation based on state
+                                if (isEstablishing) {
+                                    // Pulsing dot when establishing
+                                    val infiniteTransition = rememberInfiniteTransition(label = "establishing")
+                                    val alpha by infiniteTransition.animateFloat(
+                                        initialValue = 0.3f,
+                                        targetValue = 1f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(700, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse,
+                                        ),
+                                        label = "pulse",
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.Circle,
+                                        contentDescription = null,
+                                        tint = MeshConnected.copy(alpha = alpha),
+                                        modifier = Modifier.size(8.dp),
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Circle,
+                                        contentDescription = null,
+                                        tint = if (isOnline) MeshConnected else MeshOffline,
+                                        modifier = Modifier.size(8.dp),
+                                    )
+                                }
+
+                                // Status text
+                                val statusText = when {
+                                    isEstablishing -> "Connecting..."
+                                    hasActiveLink -> "Online"
+                                    hasRecentAnnounce -> "Online"
+                                    lastSeen != null -> formatRelativeTime(lastSeen)
+                                    else -> ""
+                                }
                                 Text(
-                                    text = if (isOnline) "Online" else formatRelativeTime(lastSeen!!),
+                                    text = statusText,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+
+                                // Link indicator icon when link is active
+                                if (hasActiveLink) {
+                                    Icon(
+                                        imageVector = Icons.Default.Link,
+                                        contentDescription = "Active link",
+                                        tint = MeshConnected,
+                                        modifier = Modifier.size(12.dp),
+                                    )
+                                }
                             }
                         }
                     }
@@ -754,7 +801,7 @@ fun MessagingScreen(
                     selectedImageIsAnimated = selectedImageIsAnimated,
                     isProcessingImage = isProcessingImage,
                     onImageAttachmentClick = {
-                        viewModel.startLinkSpeedProbe()
+                        // Link is already established by ConversationLinkManager when entering conversation
                         imageLauncher.launch("image/*")
                     },
                     onImageContentReceived = { data, format, isAnimated ->
@@ -967,7 +1014,7 @@ fun MessagingScreen(
     qualitySelectionState?.let { state ->
         ImageQualitySelectionDialog(
             recommendedPreset = state.recommendedPreset,
-            probeState = linkSpeedProbeState,
+            linkState = currentLinkState,
             transferTimeEstimates = state.transferTimeEstimates,
             onSelect = { preset -> viewModel.selectImageQuality(preset) },
             onDismiss = { viewModel.dismissQualitySelection() },

@@ -146,6 +146,7 @@ class OnboardingViewModel
             viewModelScope.launch {
                 try {
                     _state.value = _state.value.copy(isSaving = true, error = null)
+                    var hasWarnings = false
 
                     val nameToSave =
                         _state.value.displayName.trim().ifEmpty {
@@ -161,15 +162,19 @@ class OnboardingViewModel
                             }
                             .onFailure { error ->
                                 Log.e(TAG, "Failed to update display name", error)
+                                hasWarnings = true
                             }
                     } else {
                         Log.w(TAG, "No active identity found - display name will be set when identity is created")
                     }
 
                     // Create selected interfaces
-                    createSelectedInterfaces()
+                    val interfacesCreated = createSelectedInterfaces()
+                    if (!interfacesCreated) {
+                        hasWarnings = true
+                    }
 
-                    // Mark onboarding as completed
+                    // Mark onboarding as completed - this is critical and will throw if it fails
                     settingsRepository.markOnboardingCompleted()
 
                     // Restart service to apply changes
@@ -180,6 +185,7 @@ class OnboardingViewModel
                         }
                         .onFailure { error ->
                             Log.w(TAG, "Failed to restart service (settings saved but may need manual restart)", error)
+                            hasWarnings = true
                         }
 
                     _state.value =
@@ -187,7 +193,12 @@ class OnboardingViewModel
                             isSaving = false,
                             hasCompletedOnboarding = true,
                         )
-                    Log.d(TAG, "Onboarding completed successfully")
+
+                    if (hasWarnings) {
+                        Log.w(TAG, "Onboarding completed with warnings - some settings may need manual configuration")
+                    } else {
+                        Log.d(TAG, "Onboarding completed successfully")
+                    }
 
                     onComplete()
                 } catch (e: Exception) {
@@ -205,8 +216,11 @@ class OnboardingViewModel
          * Create or update interface configurations based on user selections.
          * - Selected interfaces: create if missing, enable if exists
          * - Unselected interfaces: disable if exists (preserve user config)
+         *
+         * @return true if all interfaces were created/updated successfully, false if any failed
          */
-        private suspend fun createSelectedInterfaces() {
+        private suspend fun createSelectedInterfaces(): Boolean {
+            var success = true
             val selectedInterfaces = _state.value.selectedInterfaces
 
             // Get existing interface entities (which include IDs)
@@ -274,6 +288,7 @@ class OnboardingViewModel
                                 Log.d(TAG, "Created interface: ${it.name}")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to create interface: ${it.name}", e)
+                                success = false
                             }
                         }
                     }
@@ -284,6 +299,7 @@ class OnboardingViewModel
                     }
                 }
             }
+            return success
         }
 
         /**

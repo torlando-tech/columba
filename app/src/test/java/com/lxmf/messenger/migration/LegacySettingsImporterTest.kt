@@ -64,8 +64,26 @@ class LegacySettingsImporterTest {
     // region Auto-Announce Settings
 
     @Test
-    fun `importAll imports announce settings when present`() =
+    fun `importAll imports announce settings with hours field when present`() =
         runTest {
+            val settings =
+                createLegacySettings(
+                    autoAnnounceEnabled = true,
+                    autoAnnounceIntervalHours = 3,
+                    lastAutoAnnounceTime = 1700000000000L,
+                )
+
+            importer.importAll(settings, emptyMap())
+
+            coVerify { settingsRepository.saveAutoAnnounceEnabled(true) }
+            coVerify { settingsRepository.saveAutoAnnounceIntervalHours(3) }
+            coVerify { settingsRepository.saveLastAutoAnnounceTime(1700000000000L) }
+        }
+
+    @Test
+    fun `importAll converts legacy minutes to hours when hours field missing`() =
+        runTest {
+            // 15 minutes should convert to 1 hour (minimum) via ((15+30)/60).coerceIn(1,12) = 0.75 -> 1
             val settings =
                 createLegacySettings(
                     autoAnnounceEnabled = true,
@@ -76,8 +94,24 @@ class LegacySettingsImporterTest {
             importer.importAll(settings, emptyMap())
 
             coVerify { settingsRepository.saveAutoAnnounceEnabled(true) }
-            coVerify { settingsRepository.saveAutoAnnounceIntervalMinutes(15) }
+            coVerify { settingsRepository.saveAutoAnnounceIntervalHours(1) } // Converted from 15 min
             coVerify { settingsRepository.saveLastAutoAnnounceTime(1700000000000L) }
+        }
+
+    @Test
+    fun `importAll prefers hours field over minutes field when both present`() =
+        runTest {
+            val settings =
+                createLegacySettings(
+                    autoAnnounceEnabled = true,
+                    autoAnnounceIntervalHours = 6,
+                    autoAnnounceIntervalMinutes = 15, // Should be ignored
+                    lastAutoAnnounceTime = 1700000000000L,
+                )
+
+            importer.importAll(settings, emptyMap())
+
+            coVerify { settingsRepository.saveAutoAnnounceIntervalHours(6) } // Uses hours, not converted minutes
         }
 
     // endregion
@@ -215,6 +249,7 @@ class LegacySettingsImporterTest {
         hasRequestedNotificationPermission: Boolean? = null,
         autoAnnounceEnabled: Boolean? = null,
         autoAnnounceIntervalMinutes: Int? = null,
+        autoAnnounceIntervalHours: Int? = null,
         lastAutoAnnounceTime: Long? = null,
         themePreference: String? = null,
         preferOwnInstance: Boolean? = null,
@@ -243,6 +278,7 @@ class LegacySettingsImporterTest {
         hasRequestedNotificationPermission = hasRequestedNotificationPermission,
         autoAnnounceEnabled = autoAnnounceEnabled,
         autoAnnounceIntervalMinutes = autoAnnounceIntervalMinutes,
+        autoAnnounceIntervalHours = autoAnnounceIntervalHours,
         lastAutoAnnounceTime = lastAutoAnnounceTime,
         themePreference = themePreference,
         preferOwnInstance = preferOwnInstance,

@@ -253,6 +253,8 @@ data class SettingsExport(
     @Deprecated("Use preferences list instead")
     val autoAnnounceIntervalMinutes: Int? = null,
     @Deprecated("Use preferences list instead")
+    val autoAnnounceIntervalHours: Int? = null,
+    @Deprecated("Use preferences list instead")
     val lastAutoAnnounceTime: Long? = null,
     @Deprecated("Use preferences list instead")
     val themePreference: String? = null,

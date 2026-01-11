@@ -62,8 +62,11 @@ class SettingsRepository
 
             // Auto-announce preferences
             val AUTO_ANNOUNCE_ENABLED = booleanPreferencesKey("auto_announce_enabled")
-            val AUTO_ANNOUNCE_INTERVAL_MINUTES = intPreferencesKey("auto_announce_interval_minutes")
+            val AUTO_ANNOUNCE_INTERVAL_MINUTES = intPreferencesKey("auto_announce_interval_minutes") // Legacy, for migration
+            val AUTO_ANNOUNCE_INTERVAL_HOURS = intPreferencesKey("auto_announce_interval_hours")
             val LAST_AUTO_ANNOUNCE_TIME = longPreferencesKey("last_auto_announce_time")
+            val NEXT_AUTO_ANNOUNCE_TIME = longPreferencesKey("next_auto_announce_time") // Scheduled time for next announce
+            val NETWORK_CHANGE_ANNOUNCE_TIME = longPreferencesKey("network_change_announce_time") // Cross-process signal for timer reset
 
             // Service status persistence
             val LAST_SERVICE_STATUS = stringPreferencesKey("last_service_status")
@@ -338,24 +341,22 @@ class SettingsRepository
         }
 
         /**
-         * Flow of the auto-announce interval in minutes.
-         * Defaults to 5 minutes if not set.
+         * Flow of the auto-announce interval in hours.
+         * Defaults to 3 hours if not set.
          */
-        val autoAnnounceIntervalMinutesFlow: Flow<Int> =
+        val autoAnnounceIntervalHoursFlow: Flow<Int> =
             context.dataStore.data
-                .map { preferences ->
-                    preferences[PreferencesKeys.AUTO_ANNOUNCE_INTERVAL_MINUTES] ?: 5
-                }
+                .map { preferences -> preferences[PreferencesKeys.AUTO_ANNOUNCE_INTERVAL_HOURS] ?: 3 }
                 .distinctUntilChanged()
 
         /**
-         * Save the auto-announce interval in minutes.
+         * Save the auto-announce interval in hours.
          *
-         * @param minutes The interval in minutes (1-60)
+         * @param hours The interval in hours (1-12)
          */
-        suspend fun saveAutoAnnounceIntervalMinutes(minutes: Int) {
+        suspend fun saveAutoAnnounceIntervalHours(hours: Int) {
             context.dataStore.edit { preferences ->
-                preferences[PreferencesKeys.AUTO_ANNOUNCE_INTERVAL_MINUTES] = minutes.coerceIn(1, 60)
+                preferences[PreferencesKeys.AUTO_ANNOUNCE_INTERVAL_HOURS] = hours.coerceIn(1, 12)
             }
         }
 
@@ -378,6 +379,57 @@ class SettingsRepository
         suspend fun saveLastAutoAnnounceTime(timestamp: Long) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.LAST_AUTO_ANNOUNCE_TIME] = timestamp
+            }
+        }
+
+        /**
+         * Flow of the next scheduled auto-announce timestamp (epoch milliseconds).
+         * Returns null if no announce is scheduled (e.g., auto-announce is disabled).
+         */
+        val nextAutoAnnounceTimeFlow: Flow<Long?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.NEXT_AUTO_ANNOUNCE_TIME]
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the next scheduled auto-announce timestamp.
+         *
+         * @param timestamp The timestamp in epoch milliseconds when the next announce is scheduled
+         */
+        suspend fun saveNextAutoAnnounceTime(timestamp: Long?) {
+            context.dataStore.edit { preferences ->
+                if (timestamp != null) {
+                    preferences[PreferencesKeys.NEXT_AUTO_ANNOUNCE_TIME] = timestamp
+                } else {
+                    preferences.remove(PreferencesKeys.NEXT_AUTO_ANNOUNCE_TIME)
+                }
+            }
+        }
+
+        /**
+         * Flow of the network change announce timestamp (epoch milliseconds).
+         * Used for cross-process signaling: when the service triggers an announce
+         * due to network topology change, it saves this timestamp, and the main app's
+         * AutoAnnounceManager observes this to reset its timer.
+         */
+        val networkChangeAnnounceTimeFlow: Flow<Long?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.NETWORK_CHANGE_ANNOUNCE_TIME]
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Save the network change announce timestamp.
+         * Call this from the service when a network topology change triggers an announce.
+         *
+         * @param timestamp The timestamp in epoch milliseconds
+         */
+        suspend fun saveNetworkChangeAnnounceTime(timestamp: Long) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.NETWORK_CHANGE_ANNOUNCE_TIME] = timestamp
             }
         }
 
@@ -767,14 +819,14 @@ class SettingsRepository
 
         /**
          * Flow of the retrieval interval in seconds.
-         * Defaults to 30 seconds if not set.
+         * Defaults to 1 hour (3600 seconds) if not set.
          * Uses distinctUntilChanged to only emit when the interval actually changes,
          * not when other DataStore values change (which would restart sync unnecessarily).
          */
         val retrievalIntervalSecondsFlow: Flow<Int> =
             context.dataStore.data
                 .map { preferences ->
-                    preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 300
+                    preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 3600
                 }
                 .distinctUntilChanged()
 
@@ -783,7 +835,7 @@ class SettingsRepository
          */
         suspend fun getRetrievalIntervalSeconds(): Int {
             return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 300
+                preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 3600
             }.first()
         }
 

@@ -65,8 +65,9 @@ class SettingsViewModelTest {
     private val isSharedInstanceFlow = MutableStateFlow(false)
     private val rpcKeyFlow = MutableStateFlow<String?>(null)
     private val autoAnnounceEnabledFlow = MutableStateFlow(true)
-    private val autoAnnounceIntervalMinutesFlow = MutableStateFlow(5)
+    private val autoAnnounceIntervalHoursFlow = MutableStateFlow(3)
     private val lastAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
+    private val nextAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
     private val themePreferenceFlow = MutableStateFlow(PresetTheme.VIBRANT)
     private val activeIdentityFlow = MutableStateFlow<LocalIdentityEntity?>(null)
     private val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
@@ -103,8 +104,9 @@ class SettingsViewModelTest {
         every { settingsRepository.isSharedInstanceFlow } returns isSharedInstanceFlow
         every { settingsRepository.rpcKeyFlow } returns rpcKeyFlow
         every { settingsRepository.autoAnnounceEnabledFlow } returns autoAnnounceEnabledFlow
-        every { settingsRepository.autoAnnounceIntervalMinutesFlow } returns autoAnnounceIntervalMinutesFlow
+        every { settingsRepository.autoAnnounceIntervalHoursFlow } returns autoAnnounceIntervalHoursFlow
         every { settingsRepository.lastAutoAnnounceTimeFlow } returns lastAutoAnnounceTimeFlow
+        every { settingsRepository.nextAutoAnnounceTimeFlow } returns nextAutoAnnounceTimeFlow
         every { settingsRepository.themePreferenceFlow } returns themePreferenceFlow
         every { settingsRepository.getAllCustomThemes() } returns flowOf(emptyList())
         every { settingsRepository.autoRetrieveEnabledFlow } returns autoRetrieveEnabledFlow
@@ -1372,7 +1374,7 @@ class SettingsViewModelTest {
 
             viewModel.setAnnounceInterval(10)
 
-            coVerify { settingsRepository.saveAutoAnnounceIntervalMinutes(10) }
+            coVerify { settingsRepository.saveAutoAnnounceIntervalHours(10) }
         }
 
     @Test
@@ -1382,7 +1384,7 @@ class SettingsViewModelTest {
 
             viewModel.setAnnounceInterval(1)
 
-            coVerify { settingsRepository.saveAutoAnnounceIntervalMinutes(1) }
+            coVerify { settingsRepository.saveAutoAnnounceIntervalHours(1) }
         }
 
     @Test
@@ -1392,7 +1394,7 @@ class SettingsViewModelTest {
 
             viewModel.setAnnounceInterval(60)
 
-            coVerify { settingsRepository.saveAutoAnnounceIntervalMinutes(60) }
+            coVerify { settingsRepository.saveAutoAnnounceIntervalHours(60) }
         }
 
     @Test
@@ -1563,7 +1565,7 @@ class SettingsViewModelTest {
     @Test
     fun `state collectsAutoAnnounceIntervalFromRepository`() =
         runTest {
-            autoAnnounceIntervalMinutesFlow.value = 15
+            autoAnnounceIntervalHoursFlow.value = 6
             viewModel = createViewModel()
 
             viewModel.state.test {
@@ -1573,7 +1575,7 @@ class SettingsViewModelTest {
                     state = awaitItem()
                 }
 
-                assertEquals(15, state.autoAnnounceIntervalMinutes)
+                assertEquals(6, state.autoAnnounceIntervalHours)
 
                 cancelAndConsumeRemainingEvents()
             }

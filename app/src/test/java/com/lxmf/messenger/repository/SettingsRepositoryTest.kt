@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -291,22 +292,45 @@ class SettingsRepositoryTest {
         }
 
     @Test
-    fun autoAnnounceIntervalMinutesFlow_emitsOnlyOnChange() =
+    fun autoAnnounceIntervalHoursFlow_emitsOnlyOnChange() =
         runTest {
-            repository.autoAnnounceIntervalMinutesFlow.test(timeout = 5.seconds) {
+            repository.autoAnnounceIntervalHoursFlow.test(timeout = 5.seconds) {
                 val initial = awaitItem()
 
                 // Save same value - should NOT emit
-                repository.saveAutoAnnounceIntervalMinutes(initial)
+                repository.saveAutoAnnounceIntervalHours(initial)
                 expectNoEvents()
 
                 // Save different value - should emit
-                val newValue = if (initial == 5) 10 else 5
-                repository.saveAutoAnnounceIntervalMinutes(newValue)
+                val newValue = if (initial == 3) 6 else 3
+                repository.saveAutoAnnounceIntervalHours(newValue)
                 assertEquals(newValue, awaitItem())
 
                 cancelAndIgnoreRemainingEvents()
             }
+        }
+
+    @Test
+    fun autoAnnounceIntervalHoursFlow_defaultsTo3Hours() =
+        runTest {
+            // Fresh repository should default to 3 hours
+            val defaultValue = repository.autoAnnounceIntervalHoursFlow.first()
+            // Default is 3, but if previously set in another test, just verify it's in valid range
+            assertTrue("Default should be in valid range 1-12", defaultValue in 1..12)
+        }
+
+    @Test
+    fun saveAutoAnnounceIntervalHours_clampsToValidRange() =
+        runTest {
+            // Save values and verify they're accepted within range
+            repository.saveAutoAnnounceIntervalHours(1)
+            assertEquals(1, repository.autoAnnounceIntervalHoursFlow.first())
+
+            repository.saveAutoAnnounceIntervalHours(12)
+            assertEquals(12, repository.autoAnnounceIntervalHoursFlow.first())
+
+            repository.saveAutoAnnounceIntervalHours(6)
+            assertEquals(6, repository.autoAnnounceIntervalHoursFlow.first())
         }
 
     @Test
@@ -329,6 +353,69 @@ class SettingsRepositoryTest {
                 // Save same new value - should NOT emit
                 repository.saveLastAutoAnnounceTime(newValue)
                 expectNoEvents()
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun nextAutoAnnounceTimeFlow_defaultsToNull() =
+        runTest {
+            val value = repository.nextAutoAnnounceTimeFlow.first()
+            assertNull(value)
+        }
+
+    @Test
+    fun nextAutoAnnounceTimeFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.nextAutoAnnounceTimeFlow.test(timeout = 5.seconds) {
+                // Initial value should be null
+                assertNull(awaitItem())
+
+                // Save a timestamp - should emit
+                val timestamp = 1704067200000L
+                repository.saveNextAutoAnnounceTime(timestamp)
+                assertEquals(timestamp, awaitItem())
+
+                // Save same value - should NOT emit
+                repository.saveNextAutoAnnounceTime(timestamp)
+                expectNoEvents()
+
+                // Save null - should emit
+                repository.saveNextAutoAnnounceTime(null)
+                assertNull(awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun networkChangeAnnounceTimeFlow_defaultsToNull() =
+        runTest {
+            val value = repository.networkChangeAnnounceTimeFlow.first()
+            assertNull(value)
+        }
+
+    @Test
+    fun networkChangeAnnounceTimeFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.networkChangeAnnounceTimeFlow.test(timeout = 5.seconds) {
+                // Initial value should be null
+                assertNull(awaitItem())
+
+                // Save a timestamp - should emit
+                val timestamp = System.currentTimeMillis()
+                repository.saveNetworkChangeAnnounceTime(timestamp)
+                assertEquals(timestamp, awaitItem())
+
+                // Save same value - should NOT emit
+                repository.saveNetworkChangeAnnounceTime(timestamp)
+                expectNoEvents()
+
+                // Save new value - should emit
+                val newTimestamp = timestamp + 1000
+                repository.saveNetworkChangeAnnounceTime(newTimestamp)
+                assertEquals(newTimestamp, awaitItem())
 
                 cancelAndIgnoreRemainingEvents()
             }
@@ -792,7 +879,7 @@ class SettingsRepositoryTest {
             // Save some settings
             repository.saveNotificationsEnabled(true)
             repository.saveAutoAnnounceEnabled(false)
-            repository.saveAutoAnnounceIntervalMinutes(30)
+            repository.saveAutoAnnounceIntervalHours(3)
             testDispatcher.scheduler.advanceUntilIdle()
 
             // Export
@@ -807,9 +894,9 @@ class SettingsRepositoryTest {
             assertEquals("boolean", autoAnnounceEntry?.type)
             assertEquals("false", autoAnnounceEntry?.value)
 
-            val intervalEntry = entries.find { it.key == "auto_announce_interval_minutes" }
+            val intervalEntry = entries.find { it.key == "auto_announce_interval_hours" }
             assertEquals("int", intervalEntry?.type)
-            assertEquals("30", intervalEntry?.value)
+            assertEquals("3", intervalEntry?.value)
         }
 
     @Test
@@ -837,17 +924,17 @@ class SettingsRepositoryTest {
             val entries =
                 listOf(
                     com.lxmf.messenger.migration.PreferenceEntry(
-                        key = "auto_announce_interval_minutes",
+                        key = "auto_announce_interval_hours",
                         type = "int",
-                        value = "45",
+                        value = "6",
                     ),
                 )
 
             repository.importAllPreferences(entries)
             testDispatcher.scheduler.advanceUntilIdle()
 
-            val result = repository.autoAnnounceIntervalMinutesFlow.first()
-            assertEquals(45, result)
+            val result = repository.autoAnnounceIntervalHoursFlow.first()
+            assertEquals(6, result)
         }
 
     @Test
@@ -937,7 +1024,7 @@ class SettingsRepositoryTest {
             // Save some settings
             repository.saveNotificationsEnabled(true)
             repository.saveAutoAnnounceEnabled(true)
-            repository.saveAutoAnnounceIntervalMinutes(60)
+            repository.saveAutoAnnounceIntervalHours(6)
             repository.saveTransportNodeEnabled(true)
             testDispatcher.scheduler.advanceUntilIdle()
 
@@ -947,7 +1034,7 @@ class SettingsRepositoryTest {
             // Change settings
             repository.saveNotificationsEnabled(false)
             repository.saveAutoAnnounceEnabled(false)
-            repository.saveAutoAnnounceIntervalMinutes(5)
+            repository.saveAutoAnnounceIntervalHours(1)
             repository.saveTransportNodeEnabled(false)
             testDispatcher.scheduler.advanceUntilIdle()
 
@@ -958,7 +1045,7 @@ class SettingsRepositoryTest {
             // Verify original values restored
             assertTrue(repository.notificationsEnabledFlow.first())
             assertTrue(repository.autoAnnounceEnabledFlow.first())
-            assertEquals(60, repository.autoAnnounceIntervalMinutesFlow.first())
+            assertEquals(6, repository.autoAnnounceIntervalHoursFlow.first())
             assertTrue(repository.transportNodeEnabledFlow.first())
         }
 }

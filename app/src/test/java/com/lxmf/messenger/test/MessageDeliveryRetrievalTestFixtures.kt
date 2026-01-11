@@ -8,12 +8,12 @@ object MessageDeliveryRetrievalTestFixtures {
         const val RELAY_NAME_DEFAULT = "TestRelay01"
         const val RELAY_NAME_LONG = "VeryLongRelayNameForEdgeCaseTesting"
         const val DEFAULT_HOPS = 2
-        const val DEFAULT_INTERVAL_SECONDS = 60
-        const val CUSTOM_INTERVAL_VALID = 45
-        const val CUSTOM_INTERVAL_MIN = 10
-        const val CUSTOM_INTERVAL_MAX = 600
-        const val CUSTOM_INTERVAL_BELOW_MIN = 5
-        const val CUSTOM_INTERVAL_ABOVE_MAX = 700
+        const val DEFAULT_INTERVAL_SECONDS = 3600 // 1 hour - first preset
+        const val CUSTOM_INTERVAL_VALID = 7200 // 2 hours - not a preset
+        const val CUSTOM_INTERVAL_MIN = 3600
+        const val CUSTOM_INTERVAL_MAX = 43200
+        const val CUSTOM_INTERVAL_BELOW_MIN = 1800
+        const val CUSTOM_INTERVAL_ABOVE_MAX = 50000
     }
 
     /**
@@ -76,13 +76,22 @@ object MessageDeliveryRetrievalTestFixtures {
 
     fun tryPropagationEnabledState() = CardConfig(tryPropagationOnFail = true)
 
-    fun interval30sState() = CardConfig(retrievalIntervalSeconds = 30)
+    fun interval3600sState() = CardConfig(retrievalIntervalSeconds = 3600) // 1h - first preset
 
-    fun interval120sState() = CardConfig(retrievalIntervalSeconds = 120)
+    fun interval10800sState() = CardConfig(retrievalIntervalSeconds = 10800) // 3h - second preset
 
-    fun interval300sState() = CardConfig(retrievalIntervalSeconds = 300)
+    fun interval21600sState() = CardConfig(retrievalIntervalSeconds = 21600) // 6h - third preset
 
-    fun mixedIntervalState() = CardConfig(retrievalIntervalSeconds = 90) // 1m 30s
+    fun interval43200sState() = CardConfig(retrievalIntervalSeconds = 43200) // 12h - fourth preset
+
+    fun mixedIntervalState() = CardConfig(retrievalIntervalSeconds = 900) // 15min - not a preset (legacy)
+
+    // Legacy interval states for testing custom display of old values
+    fun interval300sState() = CardConfig(retrievalIntervalSeconds = 300) // 5min - legacy, shows as Custom
+
+    fun interval600sState() = CardConfig(retrievalIntervalSeconds = 600) // 10min - legacy, shows as Custom
+
+    fun interval1800sState() = CardConfig(retrievalIntervalSeconds = 1800) // 30min - legacy, shows as Custom
 
     // ========== Size Limit State Factories ==========
 

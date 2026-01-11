@@ -34,8 +34,9 @@ data class SettingsState(
     val isLoading: Boolean = true,
     val showSaveSuccess: Boolean = false,
     val autoAnnounceEnabled: Boolean = true,
-    val autoAnnounceIntervalMinutes: Int = 5,
+    val autoAnnounceIntervalHours: Int = 3,
     val lastAutoAnnounceTime: Long? = null,
+    val nextAutoAnnounceTime: Long? = null,
     val isManualAnnouncing: Boolean = false,
     val showManualAnnounceSuccess: Boolean = false,
     val manualAnnounceError: String? = null,
@@ -74,7 +75,7 @@ data class SettingsState(
     val availableRelaysLoading: Boolean = true,
     // Message retrieval state
     val autoRetrieveEnabled: Boolean = true,
-    val retrievalIntervalSeconds: Int = 30,
+    val retrievalIntervalSeconds: Int = 3600,
     val lastSyncTimestamp: Long? = null,
     val isSyncing: Boolean = false,
     // Transport node state
@@ -181,8 +182,9 @@ class SettingsViewModel
                     combine(
                         identityRepository.activeIdentity,
                         settingsRepository.autoAnnounceEnabledFlow,
-                        settingsRepository.autoAnnounceIntervalMinutesFlow,
+                        settingsRepository.autoAnnounceIntervalHoursFlow,
                         settingsRepository.lastAutoAnnounceTimeFlow,
+                        settingsRepository.nextAutoAnnounceTimeFlow,
                         settingsRepository.themePreferenceFlow,
                         customThemesFlow,
                         settingsRepository.preferOwnInstanceFlow,
@@ -204,42 +206,45 @@ class SettingsViewModel
                         val autoAnnounceEnabled = flows[1] as Boolean
 
                         @Suppress("UNCHECKED_CAST")
-                        val intervalMinutes = flows[2] as Int
+                        val intervalHours = flows[2] as Int
 
                         @Suppress("UNCHECKED_CAST")
                         val lastAnnounceTime = flows[3] as Long?
 
                         @Suppress("UNCHECKED_CAST")
-                        val selectedTheme = flows[4] as AppTheme
+                        val nextAnnounceTime = flows[4] as Long?
 
                         @Suppress("UNCHECKED_CAST")
-                        val customThemes = flows[5] as List<AppTheme>
+                        val selectedTheme = flows[5] as AppTheme
 
                         @Suppress("UNCHECKED_CAST")
-                        val preferOwnInstance = flows[6] as Boolean
+                        val customThemes = flows[6] as List<AppTheme>
 
                         @Suppress("UNCHECKED_CAST")
-                        val isSharedInstance = flows[7] as Boolean
+                        val preferOwnInstance = flows[7] as Boolean
 
                         @Suppress("UNCHECKED_CAST")
-                        val rpcKey = flows[8] as String?
+                        val isSharedInstance = flows[8] as Boolean
 
                         @Suppress("UNCHECKED_CAST")
-                        val transportNodeEnabled = flows[9] as Boolean
+                        val rpcKey = flows[9] as String?
 
                         @Suppress("UNCHECKED_CAST")
-                        val defaultDeliveryMethod = flows[10] as String
+                        val transportNodeEnabled = flows[10] as Boolean
+
+                        @Suppress("UNCHECKED_CAST")
+                        val defaultDeliveryMethod = flows[11] as String
 
                         // Sync state from flows (not preserved from _state.value to avoid races)
                         // Note: isSyncing is handled separately to avoid rapid recomposition
                         @Suppress("UNCHECKED_CAST")
-                        val lastSyncTimestamp = flows[11] as Long?
+                        val lastSyncTimestamp = flows[12] as Long?
 
                         @Suppress("UNCHECKED_CAST")
-                        val autoRetrieveEnabled = flows[12] as Boolean
+                        val autoRetrieveEnabled = flows[13] as Boolean
 
                         @Suppress("UNCHECKED_CAST")
-                        val retrievalIntervalSeconds = flows[13] as Int
+                        val retrievalIntervalSeconds = flows[14] as Int
 
                         val displayName = activeIdentity?.displayName ?: defaultName
 
@@ -249,8 +254,9 @@ class SettingsViewModel
                             isLoading = false,
                             showSaveSuccess = _state.value.showSaveSuccess,
                             autoAnnounceEnabled = autoAnnounceEnabled,
-                            autoAnnounceIntervalMinutes = intervalMinutes,
+                            autoAnnounceIntervalHours = intervalHours,
                             lastAutoAnnounceTime = lastAnnounceTime,
+                            nextAutoAnnounceTime = nextAnnounceTime,
                             isManualAnnouncing = _state.value.isManualAnnouncing,
                             showManualAnnounceSuccess = _state.value.showManualAnnounceSuccess,
                             manualAnnounceError = _state.value.manualAnnounceError,
@@ -351,7 +357,7 @@ class SettingsViewModel
                             TAG,
                             "Settings updated: displayName=${newState.displayName}, " +
                                 "autoAnnounce=${newState.autoAnnounceEnabled}, " +
-                                "interval=${newState.autoAnnounceIntervalMinutes}min, " +
+                                "interval=${newState.autoAnnounceIntervalHours}h, " +
                                 "theme=${newState.selectedTheme}, " +
                                 "customThemes=${newState.customThemes.size}",
                         )
@@ -545,12 +551,12 @@ class SettingsViewModel
         }
 
         /**
-         * Update the auto-announce interval in minutes.
+         * Update the auto-announce interval in hours.
          */
-        fun setAnnounceInterval(minutes: Int) {
+        fun setAnnounceInterval(hours: Int) {
             viewModelScope.launch {
-                settingsRepository.saveAutoAnnounceIntervalMinutes(minutes)
-                Log.d(TAG, "Auto-announce interval set to $minutes minutes")
+                settingsRepository.saveAutoAnnounceIntervalHours(hours)
+                Log.d(TAG, "Auto-announce interval set to $hours hours")
             }
         }
 

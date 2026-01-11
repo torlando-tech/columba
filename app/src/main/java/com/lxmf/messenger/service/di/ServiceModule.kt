@@ -16,6 +16,7 @@ import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.RoutingManager
 import com.lxmf.messenger.service.manager.ServiceNotificationManager
 import com.lxmf.messenger.service.persistence.ServicePersistenceManager
+import com.lxmf.messenger.service.persistence.ServiceSettingsAccessor
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CoroutineScope
 
@@ -58,6 +59,7 @@ object ServiceModule {
         val messagingManager: MessagingManager,
         val eventHandler: EventHandler,
         val persistenceManager: ServicePersistenceManager,
+        val settingsAccessor: ServiceSettingsAccessor,
     )
 
     /**
@@ -83,6 +85,7 @@ object ServiceModule {
         val broadcaster = CallbackBroadcaster()
         val bleCoordinator = BleCoordinator(context)
         val persistenceManager = ServicePersistenceManager(context, scope)
+        val settingsAccessor = ServiceSettingsAccessor(context)
 
         // Phase 2: Python wrapper (depends on state, context, scope)
         val wrapperManager = PythonWrapperManager(state, context, scope)
@@ -121,6 +124,7 @@ object ServiceModule {
             messagingManager = messagingManager,
             eventHandler = eventHandler,
             persistenceManager = persistenceManager,
+            settingsAccessor = settingsAccessor,
         )
     }
 

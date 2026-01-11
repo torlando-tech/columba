@@ -314,7 +314,11 @@ private fun ExportSection(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .clickable(enabled = uiState !is MigrationUiState.Exporting) {
+                        .clickable(
+                            enabled =
+                                uiState !is MigrationUiState.Exporting &&
+                                    uiState !is MigrationUiState.Importing,
+                        ) {
                             onIncludeAttachmentsChange(!includeAttachments)
                         },
                 verticalAlignment = Alignment.CenterVertically,
@@ -323,7 +327,9 @@ private fun ExportSection(
                     checked = includeAttachments,
                     // Parent Row handles clicks
                     onCheckedChange = null,
-                    enabled = uiState !is MigrationUiState.Exporting,
+                    enabled =
+                        uiState !is MigrationUiState.Exporting &&
+                            uiState !is MigrationUiState.Importing,
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(

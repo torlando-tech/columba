@@ -420,6 +420,12 @@ class TileDownloadManager(
             val y = buffer.int
             val size = buffer.int
 
+            // Validate tile size to prevent OOM attacks (vector tiles are typically 5-50KB)
+            if (size < 0 || size > 1_000_000) { // 1MB max per tile
+                Log.w(TAG, "Invalid tile size: $size bytes (skipping)")
+                return@repeat
+            }
+
             val dataAvailable = buffer.remaining() >= size
             if (!dataAvailable) return@repeat
 

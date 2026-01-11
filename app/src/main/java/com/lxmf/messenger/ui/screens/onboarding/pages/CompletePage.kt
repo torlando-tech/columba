@@ -62,10 +62,11 @@ fun CompletePage(
     val hasLoRaSelected = selectedInterfaces.contains(OnboardingInterfaceType.RNODE)
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -96,14 +97,16 @@ fun CompletePage(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
@@ -124,11 +127,12 @@ fun CompletePage(
 
                 SummaryRow(
                     label = "Networks",
-                    value = if (selectedInterfaces.isEmpty()) {
-                        "None selected"
-                    } else {
-                        selectedInterfaces.joinToString(", ") { it.displayName }
-                    },
+                    value =
+                        if (selectedInterfaces.isEmpty()) {
+                            "None selected"
+                        } else {
+                            selectedInterfaces.joinToString(", ") { it.displayName }
+                        },
                 )
 
                 SummaryRow(
@@ -178,9 +182,10 @@ fun CompletePage(
         // Start messaging button (or Configure LoRa Radio if LoRa is selected)
         Button(
             onClick = onStartMessaging,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
             shape = RoundedCornerShape(12.dp),
             enabled = !isSaving,
         ) {
@@ -211,11 +216,12 @@ fun CompletePage(
             onDismiss = { showQrDialog = false },
             onShareClick = {
                 val shareText = "Add me on Reticulum:\n\n${displayName.ifEmpty { "Anonymous Peer" }}\n$qrCodeData"
-                val sendIntent = Intent().apply {
-                    action = Intent.ACTION_SEND
-                    putExtra(Intent.EXTRA_TEXT, shareText)
-                    type = "text/plain"
-                }
+                val sendIntent =
+                    Intent().apply {
+                        action = Intent.ACTION_SEND
+                        putExtra(Intent.EXTRA_TEXT, shareText)
+                        type = "text/plain"
+                    }
                 context.startActivity(Intent.createChooser(sendIntent, "Share identity"))
             },
         )
@@ -255,11 +261,12 @@ private fun SummaryRow(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = when (isEnabled) {
-                    true -> MaterialTheme.colorScheme.primary
-                    false -> MaterialTheme.colorScheme.onSurfaceVariant
-                    null -> MaterialTheme.colorScheme.onSurface
-                },
+                color =
+                    when (isEnabled) {
+                        true -> MaterialTheme.colorScheme.primary
+                        false -> MaterialTheme.colorScheme.onSurfaceVariant
+                        null -> MaterialTheme.colorScheme.onSurface
+                    },
             )
         }
     }

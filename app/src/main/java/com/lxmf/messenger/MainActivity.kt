@@ -46,8 +46,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
-import androidx.core.content.PermissionChecker
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
@@ -80,7 +78,6 @@ import com.lxmf.messenger.ui.screens.QrScannerScreen
 import com.lxmf.messenger.ui.screens.SettingsScreen
 import com.lxmf.messenger.ui.screens.ThemeEditorScreen
 import com.lxmf.messenger.ui.screens.ThemeManagementScreen
-import com.lxmf.messenger.ui.screens.WelcomeScreen
 import com.lxmf.messenger.ui.screens.onboarding.OnboardingPagerScreen
 import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme

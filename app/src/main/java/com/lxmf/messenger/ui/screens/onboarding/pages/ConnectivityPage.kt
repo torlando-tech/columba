@@ -51,10 +51,11 @@ fun ConnectivityPage(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(modifier = Modifier.height(16.dp))
@@ -105,11 +106,12 @@ fun ConnectivityPage(
             isSelected = selectedInterfaces.contains(OnboardingInterfaceType.BLE),
             onClick = { onInterfaceToggle(OnboardingInterfaceType.BLE) },
             icon = Icons.Default.Bluetooth,
-            statusText = when {
-                blePermissionsDenied -> "Permissions denied"
-                blePermissionsGranted -> "Permissions granted"
-                else -> null
-            },
+            statusText =
+                when {
+                    blePermissionsDenied -> "Permissions denied"
+                    blePermissionsGranted -> "Permissions granted"
+                    else -> null
+                },
             statusIsError = blePermissionsDenied,
         )
 
@@ -150,9 +152,10 @@ fun ConnectivityPage(
         ) {
             FilledTonalButton(
                 onClick = onBack,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Text("Back")
@@ -160,9 +163,10 @@ fun ConnectivityPage(
 
             Button(
                 onClick = onContinue,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Text("Continue")
@@ -185,20 +189,22 @@ private fun InterfaceCard(
     statusIsError: Boolean = false,
 ) {
     val borderColor by animateColorAsState(
-        targetValue = when {
-            !enabled -> MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-            isSelected -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.outline
-        },
+        targetValue =
+            when {
+                !enabled -> MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                isSelected -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.outline
+            },
         label = "borderColor",
     )
 
     val containerColor by animateColorAsState(
-        targetValue = when {
-            !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            else -> MaterialTheme.colorScheme.surface
-        },
+        targetValue =
+            when {
+                !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                else -> MaterialTheme.colorScheme.surface
+            },
         label = "containerColor",
     )
 
@@ -206,16 +212,18 @@ private fun InterfaceCard(
         onClick = { if (enabled) onClick() },
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = containerColor,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = containerColor,
+            ),
         border = BorderStroke(1.dp, borderColor),
         enabled = enabled,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Checkbox(
@@ -227,14 +235,16 @@ private fun InterfaceCard(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier
-                    .padding(horizontal = 12.dp)
-                    .size(24.dp),
-                tint = if (enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                },
+                modifier =
+                    Modifier
+                        .padding(horizontal = 12.dp)
+                        .size(24.dp),
+                tint =
+                    if (enabled) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    },
             )
 
             Column(
@@ -244,30 +254,33 @@ private fun InterfaceCard(
                     text = interfaceType.displayName,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    },
+                    color =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        },
                 )
                 Text(
                     text = interfaceType.description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    },
+                    color =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        },
                 )
                 interfaceType.secondaryDescription?.let { secondary ->
                     Text(
                         text = secondary,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (enabled) {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                        },
+                        color =
+                            if (enabled) {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                            },
                     )
                 }
                 statusText?.let { status ->
@@ -275,11 +288,12 @@ private fun InterfaceCard(
                     Text(
                         text = status,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (statusIsError) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        },
+                        color =
+                            if (statusIsError) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
                     )
                 }
             }

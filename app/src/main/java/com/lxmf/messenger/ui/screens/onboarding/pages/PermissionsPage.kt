@@ -48,10 +48,11 @@ fun PermissionsPage(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(modifier = Modifier.height(16.dp))
@@ -129,9 +130,10 @@ fun PermissionsPage(
         ) {
             FilledTonalButton(
                 onClick = onBack,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Text("Back")
@@ -139,9 +141,10 @@ fun PermissionsPage(
 
             Button(
                 onClick = onContinue,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Text("Continue")
@@ -186,52 +189,58 @@ private fun PermissionCard(
     secondaryDescription: String? = null,
 ) {
     val borderColor by animateColorAsState(
-        targetValue = if (isGranted) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.outline
-        },
+        targetValue =
+            if (isGranted) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outline
+            },
         label = "borderColor",
     )
 
     val containerColor by animateColorAsState(
-        targetValue = if (isGranted) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        } else {
-            MaterialTheme.colorScheme.surface
-        },
+        targetValue =
+            if (isGranted) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
         label = "containerColor",
     )
 
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = containerColor,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = containerColor,
+            ),
         border = BorderStroke(1.dp, borderColor),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(32.dp),
-                tint = if (isGranted) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                tint =
+                    if (isGranted) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
             )
 
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(horizontal = 16.dp),
             ) {
                 Text(
                     text = title,

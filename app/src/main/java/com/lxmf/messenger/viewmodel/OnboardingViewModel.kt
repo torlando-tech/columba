@@ -53,10 +53,11 @@ class OnboardingViewModel
             viewModelScope.launch {
                 try {
                     val hasCompleted = settingsRepository.hasCompletedOnboardingFlow.first()
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        hasCompletedOnboarding = hasCompleted,
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isLoading = false,
+                            hasCompletedOnboarding = hasCompleted,
+                        )
                     Log.d(TAG, "Onboarding status checked: hasCompleted=$hasCompleted")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error checking onboarding status", e)
@@ -96,21 +97,26 @@ class OnboardingViewModel
          * Handle notification permission result.
          */
         fun onNotificationPermissionResult(granted: Boolean) {
-            _state.value = _state.value.copy(
-                notificationsEnabled = granted,
-                notificationsGranted = granted,
-            )
+            _state.value =
+                _state.value.copy(
+                    notificationsEnabled = granted,
+                    notificationsGranted = granted,
+                )
             Log.d(TAG, "Notification permission result: granted=$granted")
         }
 
         /**
          * Handle BLE permissions result.
          */
-        fun onBlePermissionsResult(allGranted: Boolean, anyDenied: Boolean) {
-            _state.value = _state.value.copy(
-                blePermissionsGranted = allGranted,
-                blePermissionsDenied = anyDenied && !allGranted,
-            )
+        fun onBlePermissionsResult(
+            allGranted: Boolean,
+            anyDenied: Boolean,
+        ) {
+            _state.value =
+                _state.value.copy(
+                    blePermissionsGranted = allGranted,
+                    blePermissionsDenied = anyDenied && !allGranted,
+                )
             Log.d(TAG, "BLE permissions result: allGranted=$allGranted, anyDenied=$anyDenied")
 
             // If permissions were denied, remove BLE from selected interfaces
@@ -141,9 +147,10 @@ class OnboardingViewModel
                 try {
                     _state.value = _state.value.copy(isSaving = true, error = null)
 
-                    val nameToSave = _state.value.displayName.trim().ifEmpty {
-                        DEFAULT_DISPLAY_NAME
-                    }
+                    val nameToSave =
+                        _state.value.displayName.trim().ifEmpty {
+                            DEFAULT_DISPLAY_NAME
+                        }
 
                     // Update display name in database
                     val activeIdentity = identityRepository.getActiveIdentitySync()
@@ -175,19 +182,21 @@ class OnboardingViewModel
                             Log.w(TAG, "Failed to restart service (settings saved but may need manual restart)", error)
                         }
 
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        hasCompletedOnboarding = true,
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            hasCompletedOnboarding = true,
+                        )
                     Log.d(TAG, "Onboarding completed successfully")
 
                     onComplete()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error completing onboarding", e)
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        error = e.message ?: "Failed to save",
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            error = e.message ?: "Failed to save",
+                        )
                 }
             }
         }
@@ -204,12 +213,13 @@ class OnboardingViewModel
             val existingEntities = interfaceRepository.allInterfaceEntities.first()
 
             // Map interface types to database type strings
-            val typeMapping = mapOf(
-                OnboardingInterfaceType.AUTO to "AutoInterface",
-                OnboardingInterfaceType.BLE to "AndroidBLE",
-                OnboardingInterfaceType.TCP to "TCPClient",
-                OnboardingInterfaceType.RNODE to "RNode",
-            )
+            val typeMapping =
+                mapOf(
+                    OnboardingInterfaceType.AUTO to "AutoInterface",
+                    OnboardingInterfaceType.BLE to "AndroidBLE",
+                    OnboardingInterfaceType.TCP to "TCPClient",
+                    OnboardingInterfaceType.RNODE to "RNode",
+                )
 
             // Process each interface type
             for ((onboardingType, dbType) in typeMapping) {
@@ -230,31 +240,34 @@ class OnboardingViewModel
 
                     // Interface doesn't exist and is selected - create it
                     isSelected -> {
-                        val config = when (onboardingType) {
-                            OnboardingInterfaceType.AUTO -> InterfaceConfig.AutoInterface(
-                                name = "Local WiFi",
-                                enabled = true,
-                            )
-                            OnboardingInterfaceType.BLE -> InterfaceConfig.AndroidBLE(
-                                name = "Bluetooth LE",
-                                enabled = true,
-                            )
-                            OnboardingInterfaceType.TCP -> {
-                                val defaultServer = TcpCommunityServers.servers.firstOrNull()
-                                if (defaultServer != null) {
-                                    InterfaceConfig.TCPClient(
-                                        name = defaultServer.name,
+                        val config =
+                            when (onboardingType) {
+                                OnboardingInterfaceType.AUTO ->
+                                    InterfaceConfig.AutoInterface(
+                                        name = "Local WiFi",
                                         enabled = true,
-                                        targetHost = defaultServer.host,
-                                        targetPort = defaultServer.port,
                                     )
-                                } else {
-                                    Log.w(TAG, "No default TCP server available")
-                                    null
+                                OnboardingInterfaceType.BLE ->
+                                    InterfaceConfig.AndroidBLE(
+                                        name = "Bluetooth LE",
+                                        enabled = true,
+                                    )
+                                OnboardingInterfaceType.TCP -> {
+                                    val defaultServer = TcpCommunityServers.servers.firstOrNull()
+                                    if (defaultServer != null) {
+                                        InterfaceConfig.TCPClient(
+                                            name = defaultServer.name,
+                                            enabled = true,
+                                            targetHost = defaultServer.host,
+                                            targetPort = defaultServer.port,
+                                        )
+                                    } else {
+                                        Log.w(TAG, "No default TCP server available")
+                                        null
+                                    }
                                 }
+                                OnboardingInterfaceType.RNODE -> null
                             }
-                            OnboardingInterfaceType.RNODE -> null
-                        }
                         config?.let {
                             try {
                                 interfaceRepository.insertInterface(it)
@@ -304,7 +317,7 @@ class OnboardingViewModel
                             InterfaceConfig.AutoInterface(
                                 name = "Local WiFi",
                                 enabled = true,
-                            )
+                            ),
                         )
                         Log.d(TAG, "Created default AutoInterface for skip")
                     }
@@ -312,19 +325,21 @@ class OnboardingViewModel
                     // Mark onboarding as completed
                     settingsRepository.markOnboardingCompleted()
 
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        hasCompletedOnboarding = true,
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            hasCompletedOnboarding = true,
+                        )
                     Log.d(TAG, "Onboarding skipped, using default settings")
 
                     onComplete()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error skipping onboarding", e)
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        error = e.message,
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            error = e.message,
+                        )
                 }
             }
         }

@@ -275,4 +275,9 @@ class EventHandlerTest {
 
             // No crash
         }
+
+    // Note: handleAnnounceEvent() tests require Android runtime for Base64/Log
+    // The fix for issue #233 (propagation node garbled names) is tested via:
+    // - AppDataParserTest for msgpack metadata extraction
+    // - Integration tests for end-to-end announce handling
 }

@@ -284,4 +284,52 @@ class AppDataParserTest {
         assertEquals(metadata1.hashCode(), metadata2.hashCode())
         assert(metadata1 != metadata3)
     }
+
+    /**
+     * Test for issue #233: Propagation nodes with no name in metadata should return null,
+     * NOT garbled UTF-8 from interpreting msgpack binary as text.
+     *
+     * Before the fix, EventHandler would fall back to:
+     *   String(appData, Charsets.UTF_8)
+     * which produces garbled text like "ö¤..." from msgpack binary.
+     *
+     * The fix uses extractPropagationNodeMetadata().name which returns null when no name
+     * is present, allowing proper fallback to hash-based name like "Peer 970A60FC".
+     */
+    @Test
+    fun `extractPropagationNodeMetadata returns null name when metadata has no name key - issue 233`() {
+        // Create realistic propagation node data WITHOUT a name in metadata
+        // This msgpack data would produce garbled UTF-8 if incorrectly interpreted as string
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packArrayHeader(7)
+        packer.packBoolean(false) // 0: legacy support
+        packer.packLong(1735934000) // 1: timebase
+        packer.packBoolean(true) // 2: node state (active)
+        packer.packDouble(256.0) // 3: transfer limit
+        packer.packDouble(10240.0) // 4: sync limit
+        // 5: stamp cost array
+        packer.packArrayHeader(3)
+        packer.packInt(16)
+        packer.packInt(3)
+        packer.packInt(18)
+        // 6: metadata WITHOUT name key (just some other metadata)
+        packer.packMapHeader(1)
+        packer.packString("version")
+        packer.packInt(2)
+        val appData = packer.toByteArray()
+        packer.close()
+
+        // Verify: If this were interpreted as UTF-8 string, it would be garbled
+        val garbledIfUtf8 = String(appData, Charsets.UTF_8)
+        assert(garbledIfUtf8.contains("\u0097") || garbledIfUtf8.any { !it.isLetterOrDigit() && !it.isWhitespace() }) {
+            "Expected garbled output from msgpack binary interpreted as UTF-8"
+        }
+
+        // Act: Extract metadata properly
+        val result = AppDataParser.extractPropagationNodeMetadata(appData)
+
+        // Assert: Name should be null (not garbled), transfer limit should be extracted
+        assertNull("Name should be null when not in metadata (not garbled UTF-8)", result.name)
+        assertEquals(256, result.transferLimitKb)
+    }
 }

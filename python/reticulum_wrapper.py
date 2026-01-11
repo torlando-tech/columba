@@ -4853,11 +4853,14 @@ class ReticulumWrapper:
                             log_debug("ReticulumWrapper", "poll_received_messages",
                                      f"⚠️ Could not get hop count: {e}")
 
-                        # Extract receiving interface from path table (for received message info)
+                        # Extract receiving interface from path table (only for direct messages)
+                        # Note: Path table stores outbound routing info. For multi-hop messages,
+                        # path_entry[5] is the next-hop interface for sending TO the sender,
+                        # not the interface that received the message. Only accurate for hops=0.
                         try:
-                            if lxmf_message.source_hash in RNS.Transport.path_table:
+                            if message_event.get('hops') == 0 and lxmf_message.source_hash in RNS.Transport.path_table:
                                 path_entry = RNS.Transport.path_table[lxmf_message.source_hash]
-                                # Path table entry format: [timestamp, via, via_hash, hops, expires, interface, ...
+                                # Path table entry format: [timestamp, via, via_hash, hops, expires, interface, ...]
                                 if len(path_entry) > 5 and path_entry[5] is not None:
                                     interface_obj = path_entry[5]
                                     # Use .name attribute if available for cleaner interface name

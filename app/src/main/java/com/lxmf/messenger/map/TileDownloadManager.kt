@@ -735,16 +735,15 @@ class TileDownloadManager(
         ): Set<String> {
             val geohashes = mutableSetOf<String>()
 
-            // Get the geohash cell size at this precision
+            // Get cell dimensions from a sample
             val sampleHash = encodeGeohash(bounds.south, bounds.west, precision)
             val sampleBounds = decodeGeohashBounds(sampleHash)
             val cellWidth = sampleBounds.east - sampleBounds.west
             val cellHeight = sampleBounds.north - sampleBounds.south
 
-            // Iterate over the bounding box with step size slightly smaller than cell size
-            // to ensure we don't miss any cells
-            val stepLon = cellWidth * 0.9
+            // Calculate grid with 10% overlap to ensure no gaps
             val stepLat = cellHeight * 0.9
+            val stepLon = cellWidth * 0.9
 
             var lat = bounds.south
             while (lat <= bounds.north) {
@@ -753,17 +752,18 @@ class TileDownloadManager(
                     geohashes.add(encodeGeohash(lat, lon, precision))
                     lon += stepLon
                 }
-                // Also check the east edge
+                // Ensure east edge is covered
                 geohashes.add(encodeGeohash(lat, bounds.east, precision))
                 lat += stepLat
             }
 
-            // Also check the north edge
+            // Ensure north edge is covered
             var lon = bounds.west
             while (lon <= bounds.east) {
                 geohashes.add(encodeGeohash(bounds.north, lon, precision))
                 lon += stepLon
             }
+            // Ensure northeast corner is covered
             geohashes.add(encodeGeohash(bounds.north, bounds.east, precision))
 
             return geohashes

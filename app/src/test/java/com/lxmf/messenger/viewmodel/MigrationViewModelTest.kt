@@ -378,4 +378,62 @@ class MigrationViewModelTest {
         }
 
     // endregion
+
+    // region Include Attachments Tests
+
+    @Test
+    fun `includeAttachments defaults to true`() =
+        runTest {
+            viewModel.includeAttachments.test {
+                assertEquals(true, awaitItem())
+            }
+        }
+
+    @Test
+    fun `setIncludeAttachments updates includeAttachments state`() =
+        runTest {
+            viewModel.includeAttachments.test {
+                assertEquals(true, awaitItem())
+
+                viewModel.setIncludeAttachments(false)
+                assertEquals(false, awaitItem())
+
+                viewModel.setIncludeAttachments(true)
+                assertEquals(true, awaitItem())
+            }
+        }
+
+    @Test
+    fun `exportData passes includeAttachments false to exporter`() =
+        runTest {
+            val mockUri = mockk<Uri>()
+            coEvery { migrationExporter.exportData(any(), any()) } returns Result.success(mockUri)
+
+            // Set includeAttachments to false
+            viewModel.setIncludeAttachments(false)
+            advanceUntilIdle()
+
+            // Export
+            viewModel.exportData()
+            advanceUntilIdle()
+
+            // Verify exporter was called with includeAttachments = false
+            coVerify { migrationExporter.exportData(any(), includeAttachments = false) }
+        }
+
+    @Test
+    fun `exportData passes includeAttachments true to exporter by default`() =
+        runTest {
+            val mockUri = mockk<Uri>()
+            coEvery { migrationExporter.exportData(any(), any()) } returns Result.success(mockUri)
+
+            // Export without changing default
+            viewModel.exportData()
+            advanceUntilIdle()
+
+            // Verify exporter was called with includeAttachments = true
+            coVerify { migrationExporter.exportData(any(), includeAttachments = true) }
+        }
+
+    // endregion
 }

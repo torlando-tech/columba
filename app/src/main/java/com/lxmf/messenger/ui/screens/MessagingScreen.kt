@@ -488,7 +488,8 @@ fun MessagingScreen(
                         // Debug logging
                         android.util.Log.d(
                             "MessagingScreen",
-                            "Online indicator: hasActiveLink=$hasActiveLink, isEstablishing=$isEstablishing, hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState",
+                            "Online indicator: hasActiveLink=$hasActiveLink, isEstablishing=$isEstablishing, " +
+                                "hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState",
                         )
 
                         if (lastSeen != null || hasActiveLink || isEstablishing) {
@@ -503,10 +504,11 @@ fun MessagingScreen(
                                     val alpha by infiniteTransition.animateFloat(
                                         initialValue = 0.3f,
                                         targetValue = 1f,
-                                        animationSpec = infiniteRepeatable(
-                                            animation = tween(700, easing = LinearEasing),
-                                            repeatMode = RepeatMode.Reverse,
-                                        ),
+                                        animationSpec =
+                                            infiniteRepeatable(
+                                                animation = tween(700, easing = LinearEasing),
+                                                repeatMode = RepeatMode.Reverse,
+                                            ),
                                         label = "pulse",
                                     )
                                     Icon(
@@ -525,13 +527,14 @@ fun MessagingScreen(
                                 }
 
                                 // Status text
-                                val statusText = when {
-                                    isEstablishing -> "Connecting..."
-                                    hasActiveLink -> "Online"
-                                    hasRecentAnnounce -> "Online"
-                                    lastSeen != null -> formatRelativeTime(lastSeen)
-                                    else -> ""
-                                }
+                                val statusText =
+                                    when {
+                                        isEstablishing -> "Connecting..."
+                                        hasActiveLink -> "Online"
+                                        hasRecentAnnounce -> "Online"
+                                        lastSeen != null -> formatRelativeTime(lastSeen)
+                                        else -> ""
+                                    }
                                 Text(
                                     text = statusText,
                                     style = MaterialTheme.typography.bodySmall,

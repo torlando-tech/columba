@@ -74,7 +74,12 @@ class MBTilesWriter(
     private fun createSchema() {
         db?.let { database ->
             // Enable WAL mode for better concurrency and crash recovery
-            database.execSQL("PRAGMA journal_mode=WAL")
+            // Wrapped in try-catch as WAL may not be supported in all environments (e.g., Robolectric tests)
+            try {
+                database.execSQL("PRAGMA journal_mode=WAL")
+            } catch (e: Exception) {
+                Log.w("MBTilesWriter", "WAL mode not available, using default journal mode", e)
+            }
 
             // Create tiles table
             database.execSQL(

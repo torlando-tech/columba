@@ -991,10 +991,11 @@ class MBTilesWriterRobolectricTest {
             writer.writeTile(5, i, 0, ByteArray(10000))
         }
 
-        val finalSize = writer.getFileSize()
-        assertTrue("File should grow after writes", finalSize > initialSize)
-
+        // Close to ensure all data is flushed to disk
         writer.close()
+
+        val finalSize = testFile.length()
+        assertTrue("File should grow after writes", finalSize > initialSize)
     }
 
     // ========== Error Handling Tests ==========

@@ -4857,7 +4857,9 @@ class ReticulumWrapper:
                                 path_entry = RNS.Transport.path_table[lxmf_message.source_hash]
                                 # Path table entry format: [timestamp, via, via_hash, hops, expires, interface, ...
                                 if len(path_entry) > 5 and path_entry[5] is not None:
-                                    interface_name = str(path_entry[5])
+                                    interface_obj = path_entry[5]
+                                    # Use .name attribute if available for cleaner interface name
+                                    interface_name = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
                                     message_event['receiving_interface'] = interface_name
                                     log_debug("ReticulumWrapper", "poll_received_messages",
                                              f"📡 Receiving interface: {interface_name}")

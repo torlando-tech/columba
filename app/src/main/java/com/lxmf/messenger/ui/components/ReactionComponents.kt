@@ -792,8 +792,10 @@ fun ReactionModeOverlay(
     val wrappedOnViewDetails: (() -> Unit)? =
         onViewDetails?.let {
             {
+                // Exit reaction mode immediately before navigating (no animation needed)
+                // This ensures back navigation returns to chat, not the overlay
+                onDismiss()
                 it()
-                handleDismiss()
             }
         }
 

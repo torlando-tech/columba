@@ -420,7 +420,7 @@ class EventHandler(
             val deliveryMethod = event.getDictValue("delivery_method")?.toString()?.takeIf { it != "None" }
 
             // Extract received message info (hop count and receiving interface)
-            val receivedHopCount = event.getDictValue("hops")?.toInt()
+            val receivedHopCount = event.getDictValue("hops").toIntOrNull()
             val receivedInterface = event.getDictValue("receiving_interface")?.toString()?.takeIf { it != "None" }
 
             // Persist to database first (survives app process death)

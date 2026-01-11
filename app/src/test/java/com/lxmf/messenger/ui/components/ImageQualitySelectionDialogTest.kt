@@ -179,15 +179,16 @@ class ImageQualitySelectionDialogTest {
 
     @Test
     fun dialog_displaysHopsAndBitrate_whenLinkActive() {
-        val linkState = ConversationLinkManager.LinkState(
-            isActive = true,
-            establishmentRateBps = 10000L,
-            expectedRateBps = 12000L,
-            rttSeconds = 0.5,
-            hops = 3,
-            linkMtu = 500,
-            nextHopBitrateBps = 115200L,
-        )
+        val linkState =
+            ConversationLinkManager.LinkState(
+                isActive = true,
+                establishmentRateBps = 10000L,
+                expectedRateBps = 12000L,
+                rttSeconds = 0.5,
+                hops = 3,
+                linkMtu = 500,
+                nextHopBitrateBps = 115200L,
+            )
 
         composeTestRule.setContent {
             ImageQualitySelectionDialog(

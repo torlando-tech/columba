@@ -6,7 +6,6 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import io.mockk.clearAllMocks
-import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +19,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -60,12 +58,13 @@ class AutoAnnounceManagerTest {
         every { mockSettingsRepository.networkChangeAnnounceTimeFlow } returns flowOf(null)
         every { mockIdentityRepository.activeIdentity } returns flowOf(null)
 
-        manager = AutoAnnounceManager(
-            mockSettingsRepository,
-            mockIdentityRepository,
-            mockReticulumProtocol,
-            testScope,
-        )
+        manager =
+            AutoAnnounceManager(
+                mockSettingsRepository,
+                mockIdentityRepository,
+                mockReticulumProtocol,
+                testScope,
+            )
     }
 
     @After
@@ -95,8 +94,9 @@ class AutoAnnounceManagerTest {
         // Run many iterations to verify range
         repeat(1000) {
             val randomOffsetMinutes = Random.nextInt(-RANDOMIZATION_RANGE_MINUTES, RANDOMIZATION_RANGE_MINUTES + 1)
-            val actualDelayMinutes = (baseIntervalMinutes + randomOffsetMinutes)
-                .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
+            val actualDelayMinutes =
+                (baseIntervalMinutes + randomOffsetMinutes)
+                    .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
             results.add(actualDelayMinutes)
         }
 
@@ -116,8 +116,9 @@ class AutoAnnounceManagerTest {
 
         repeat(1000) {
             val randomOffsetMinutes = Random.nextInt(-RANDOMIZATION_RANGE_MINUTES, RANDOMIZATION_RANGE_MINUTES + 1)
-            val actualDelayMinutes = (baseIntervalMinutes + randomOffsetMinutes)
-                .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
+            val actualDelayMinutes =
+                (baseIntervalMinutes + randomOffsetMinutes)
+                    .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
             results.add(actualDelayMinutes)
         }
 
@@ -136,8 +137,9 @@ class AutoAnnounceManagerTest {
 
         repeat(1000) {
             val randomOffsetMinutes = Random.nextInt(-RANDOMIZATION_RANGE_MINUTES, RANDOMIZATION_RANGE_MINUTES + 1)
-            val actualDelayMinutes = (baseIntervalMinutes + randomOffsetMinutes)
-                .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
+            val actualDelayMinutes =
+                (baseIntervalMinutes + randomOffsetMinutes)
+                    .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
             results.add(actualDelayMinutes)
         }
 

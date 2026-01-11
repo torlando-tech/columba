@@ -202,14 +202,16 @@ class AnnounceDaoTest {
             dao.upsertAnnounce(
                 createTestAnnounce(destinationHash = "modern1", nodeType = "PROPAGATION_NODE", hops = 1, stampCostFlexibility = 3),
             )
+            // null stampCostFlexibility
             dao.upsertAnnounce(
-                createTestAnnounce(destinationHash = "deprecated1", nodeType = "PROPAGATION_NODE", hops = 1), // null stampCostFlexibility
+                createTestAnnounce(destinationHash = "deprecated1", nodeType = "PROPAGATION_NODE", hops = 1),
             )
             dao.upsertAnnounce(
                 createTestAnnounce(destinationHash = "modern2", nodeType = "PROPAGATION_NODE", hops = 2, stampCostFlexibility = 3),
             )
+            // null stampCostFlexibility
             dao.upsertAnnounce(
-                createTestAnnounce(destinationHash = "deprecated2", nodeType = "PROPAGATION_NODE", hops = 2), // null stampCostFlexibility
+                createTestAnnounce(destinationHash = "deprecated2", nodeType = "PROPAGATION_NODE", hops = 2),
             )
 
             // When/Then - only modern nodes should be returned
@@ -229,8 +231,9 @@ class AnnounceDaoTest {
             dao.upsertAnnounce(
                 createTestAnnounce(destinationHash = "modern_prop", nodeType = "PROPAGATION_NODE", stampCostFlexibility = 3),
             )
+            // null stampCostFlexibility
             dao.upsertAnnounce(
-                createTestAnnounce(destinationHash = "deprecated_prop", nodeType = "PROPAGATION_NODE"), // null stampCostFlexibility
+                createTestAnnounce(destinationHash = "deprecated_prop", nodeType = "PROPAGATION_NODE"),
             )
             dao.upsertAnnounce(
                 createTestAnnounce(destinationHash = "peer1", nodeType = "PEER"),

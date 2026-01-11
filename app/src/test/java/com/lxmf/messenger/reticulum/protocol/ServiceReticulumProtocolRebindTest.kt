@@ -3,6 +3,7 @@ package com.lxmf.messenger.reticulum.protocol
 import android.app.NotificationManager
 import android.content.Context
 import com.lxmf.messenger.IReticulumService
+import com.lxmf.messenger.data.repository.RmspServerRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import io.mockk.Runs
@@ -41,6 +42,7 @@ class ServiceReticulumProtocolRebindTest {
 
     private lateinit var context: Context
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var rmspServerRepository: RmspServerRepository
     private lateinit var mockService: IReticulumService
     private lateinit var protocol: ServiceReticulumProtocol
     private lateinit var notificationManager: NotificationManager
@@ -64,6 +66,7 @@ class ServiceReticulumProtocolRebindTest {
         // Create mocks
         context = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
+        rmspServerRepository = mockk(relaxed = true)
         mockService = mockk(relaxed = true)
         notificationManager = mockk(relaxed = true)
 
@@ -85,7 +88,7 @@ class ServiceReticulumProtocolRebindTest {
         every { IReticulumService.Stub.asInterface(any()) } returns mockService
 
         // Create protocol instance
-        protocol = ServiceReticulumProtocol(context, settingsRepository)
+        protocol = ServiceReticulumProtocol(context, settingsRepository, rmspServerRepository)
     }
 
     @After

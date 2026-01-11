@@ -325,8 +325,9 @@ class RoomUpgradeValidationTest {
             database.messageDao().insertMessage(
                 createTestMessage(id = "msg3", isFromMe = false).copy(isRead = true),
             )
+            // From me, doesn't count
             database.messageDao().insertMessage(
-                createTestMessage(id = "msg4", isFromMe = true), // From me, doesn't count
+                createTestMessage(id = "msg4", isFromMe = true),
             )
 
             val unreadCount = database.messageDao().getUnreadCount(TEST_PEER_HASH, TEST_IDENTITY_HASH)

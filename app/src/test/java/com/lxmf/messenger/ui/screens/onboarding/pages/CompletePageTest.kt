@@ -174,11 +174,12 @@ class CompletePageTest {
         composeTestRule.setContent {
             CompletePage(
                 displayName = "Test User",
-                selectedInterfaces = setOf(
-                    OnboardingInterfaceType.AUTO,
-                    OnboardingInterfaceType.BLE,
-                    OnboardingInterfaceType.TCP,
-                ),
+                selectedInterfaces =
+                    setOf(
+                        OnboardingInterfaceType.AUTO,
+                        OnboardingInterfaceType.BLE,
+                        OnboardingInterfaceType.TCP,
+                    ),
                 notificationsEnabled = true,
                 batteryOptimizationExempt = true,
                 isSaving = false,
@@ -558,10 +559,11 @@ class CompletePageTest {
         composeTestRule.setContent {
             CompletePage(
                 displayName = "Test User",
-                selectedInterfaces = setOf(
-                    OnboardingInterfaceType.AUTO,
-                    OnboardingInterfaceType.RNODE,
-                ),
+                selectedInterfaces =
+                    setOf(
+                        OnboardingInterfaceType.AUTO,
+                        OnboardingInterfaceType.RNODE,
+                    ),
                 notificationsEnabled = true,
                 batteryOptimizationExempt = true,
                 isSaving = false,
@@ -579,10 +581,11 @@ class CompletePageTest {
         composeTestRule.setContent {
             CompletePage(
                 displayName = "Test User",
-                selectedInterfaces = setOf(
-                    OnboardingInterfaceType.AUTO,
-                    OnboardingInterfaceType.BLE,
-                ),
+                selectedInterfaces =
+                    setOf(
+                        OnboardingInterfaceType.AUTO,
+                        OnboardingInterfaceType.BLE,
+                    ),
                 notificationsEnabled = true,
                 batteryOptimizationExempt = true,
                 isSaving = false,
@@ -731,12 +734,13 @@ class CompletePageTest {
         composeTestRule.setContent {
             CompletePage(
                 displayName = "Test User",
-                selectedInterfaces = setOf(
-                    OnboardingInterfaceType.AUTO,
-                    OnboardingInterfaceType.BLE,
-                    OnboardingInterfaceType.TCP,
-                    OnboardingInterfaceType.RNODE,
-                ),
+                selectedInterfaces =
+                    setOf(
+                        OnboardingInterfaceType.AUTO,
+                        OnboardingInterfaceType.BLE,
+                        OnboardingInterfaceType.TCP,
+                        OnboardingInterfaceType.RNODE,
+                    ),
                 notificationsEnabled = true,
                 batteryOptimizationExempt = true,
                 isSaving = false,

@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -434,10 +433,11 @@ class OnboardingPagerScreenTest {
     @Test
     fun completionCallback_invokedWithFalse_whenNoLoRaSelected() {
         // Given - No RNODE in selected interfaces
-        val mockViewModel = createMockOnboardingViewModel(
-            currentPage = 4,
-            selectedInterfaces = setOf(OnboardingInterfaceType.AUTO),
-        )
+        val mockViewModel =
+            createMockOnboardingViewModel(
+                currentPage = 4,
+                selectedInterfaces = setOf(OnboardingInterfaceType.AUTO),
+            )
         val mockDebugViewModel = createMockDebugViewModel()
 
         val callbackSlot = slot<() -> Unit>()
@@ -473,10 +473,11 @@ class OnboardingPagerScreenTest {
     @Test
     fun completionCallback_invokedWithTrue_whenLoRaSelected() {
         // Given - RNODE is in selected interfaces
-        val mockViewModel = createMockOnboardingViewModel(
-            currentPage = 4,
-            selectedInterfaces = setOf(OnboardingInterfaceType.AUTO, OnboardingInterfaceType.RNODE),
-        )
+        val mockViewModel =
+            createMockOnboardingViewModel(
+                currentPage = 4,
+                selectedInterfaces = setOf(OnboardingInterfaceType.AUTO, OnboardingInterfaceType.RNODE),
+            )
         val mockDebugViewModel = createMockDebugViewModel()
 
         val callbackSlot = slot<() -> Unit>()
@@ -710,13 +711,14 @@ class OnboardingPagerScreenTest {
     ): OnboardingViewModel {
         val mockViewModel = mockk<OnboardingViewModel>(relaxed = true)
 
-        val state = OnboardingState(
-            currentPage = currentPage,
-            displayName = displayName,
-            selectedInterfaces = selectedInterfaces,
-            isSaving = isSaving,
-            isLoading = isLoading,
-        )
+        val state =
+            OnboardingState(
+                currentPage = currentPage,
+                displayName = displayName,
+                selectedInterfaces = selectedInterfaces,
+                isSaving = isSaving,
+                isLoading = isLoading,
+            )
 
         every { mockViewModel.state } returns MutableStateFlow(state)
 

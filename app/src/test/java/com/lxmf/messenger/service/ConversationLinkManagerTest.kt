@@ -9,7 +9,6 @@ import org.junit.Test
  * Tests for ConversationLinkManager.LinkState transfer time estimation.
  */
 class ConversationLinkManagerTest {
-
     @Test
     fun `estimateTransferTimeSeconds returns null when no rate available`() {
         val state = ConversationLinkManager.LinkState(isActive = true)
@@ -19,10 +18,11 @@ class ConversationLinkManagerTest {
     @Test
     fun `estimateTransferTimeSeconds calculates correctly with expectedRateBps`() {
         // 8000 bps = 1000 bytes per second
-        val state = ConversationLinkManager.LinkState(
-            isActive = true,
-            expectedRateBps = 8000,
-        )
+        val state =
+            ConversationLinkManager.LinkState(
+                isActive = true,
+                expectedRateBps = 8000,
+            )
         // 1000 bytes at 1000 B/s = 1 second
         assertEquals(1.0, state.estimateTransferTimeSeconds(1000)!!, 0.01)
     }
@@ -30,32 +30,35 @@ class ConversationLinkManagerTest {
     @Test
     fun `estimateTransferTimeSeconds calculates correctly with establishmentRateBps`() {
         // 80000 bps = 10000 bytes per second
-        val state = ConversationLinkManager.LinkState(
-            isActive = true,
-            establishmentRateBps = 80000,
-        )
+        val state =
+            ConversationLinkManager.LinkState(
+                isActive = true,
+                establishmentRateBps = 80000,
+            )
         // 50000 bytes at 10000 B/s = 5 seconds
         assertEquals(5.0, state.estimateTransferTimeSeconds(50000)!!, 0.01)
     }
 
     @Test
     fun `estimateTransferTimeSeconds prefers expectedRateBps over establishmentRateBps`() {
-        val state = ConversationLinkManager.LinkState(
-            isActive = true,
-            expectedRateBps = 8000, // 1000 B/s - should use this
-            establishmentRateBps = 80000, // 10000 B/s - should ignore
-        )
+        val state =
+            ConversationLinkManager.LinkState(
+                isActive = true,
+                expectedRateBps = 8000, // 1000 B/s - should use this
+                establishmentRateBps = 80000, // 10000 B/s - should ignore
+            )
         // 1000 bytes at 1000 B/s = 1 second (using expectedRateBps)
         assertEquals(1.0, state.estimateTransferTimeSeconds(1000)!!, 0.01)
     }
 
     @Test
     fun `estimateTransferTimeSeconds uses max of fallback rates`() {
-        val state = ConversationLinkManager.LinkState(
-            isActive = true,
-            establishmentRateBps = 8000, // 1000 B/s
-            nextHopBitrateBps = 80000, // 10000 B/s - higher, should use this
-        )
+        val state =
+            ConversationLinkManager.LinkState(
+                isActive = true,
+                establishmentRateBps = 8000, // 1000 B/s
+                nextHopBitrateBps = 80000, // 10000 B/s - higher, should use this
+            )
         // 10000 bytes at 10000 B/s = 1 second (using nextHopBitrateBps)
         assertEquals(1.0, state.estimateTransferTimeSeconds(10000)!!, 0.01)
     }
@@ -83,10 +86,11 @@ class ConversationLinkManagerTest {
     @Test
     fun `estimateTransferTimeFormatted returns formatted string`() {
         // 8000 bps = 1000 bytes per second
-        val state = ConversationLinkManager.LinkState(
-            isActive = true,
-            expectedRateBps = 8000,
-        )
+        val state =
+            ConversationLinkManager.LinkState(
+                isActive = true,
+                expectedRateBps = 8000,
+            )
         // 30000 bytes at 1000 B/s = 30 seconds
         assertEquals("~30s", state.estimateTransferTimeFormatted(30000))
     }
@@ -103,10 +107,11 @@ class ConversationLinkManagerTest {
         // With the fix, ORIGINAL preset uses actual file size (e.g., 3MB)
         // instead of targetSizeBytes (25MB)
 
-        val state = ConversationLinkManager.LinkState(
-            isActive = true,
-            expectedRateBps = 8_000_000, // 1 MB/s = 1,000,000 bytes/sec
-        )
+        val state =
+            ConversationLinkManager.LinkState(
+                isActive = true,
+                expectedRateBps = 8_000_000, // 1 MB/s = 1,000,000 bytes/sec
+            )
 
         val actualFileSize = 3_000_000L // 3MB actual photo (exact for easy math)
         val targetSize = ImageCompressionPreset.ORIGINAL.targetSizeBytes // 25MB

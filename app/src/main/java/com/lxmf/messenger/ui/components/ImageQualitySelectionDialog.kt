@@ -256,4 +256,3 @@ private fun formatBitrate(bps: Long): String {
         else -> "$bps bps"
     }
 }
-

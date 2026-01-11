@@ -3,6 +3,7 @@ package com.lxmf.messenger.viewmodel
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.IdentityRepository
+import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
@@ -58,6 +59,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var interfaceRepository: InterfaceRepository
+    private lateinit var mapTileSourceManager: MapTileSourceManager
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -91,6 +93,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         propagationNodeManager = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
         interfaceRepository = mockk(relaxed = true)
+        mapTileSourceManager = mockk(relaxed = true)
 
         // Mock interfaceRepository flows
         every { interfaceRepository.enabledInterfaces } returns MutableStateFlow(emptyList<InterfaceConfig>())
@@ -151,6 +154,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             propagationNodeManager = propagationNodeManager,
             locationSharingManager = locationSharingManager,
             interfaceRepository = interfaceRepository,
+            mapTileSourceManager = mapTileSourceManager,
         )
     }
 

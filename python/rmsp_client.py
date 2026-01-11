@@ -578,6 +578,12 @@ def unpack_tiles(data: bytes) -> List[tuple]:
     tile_count = struct.unpack(">I", data[offset:offset+4])[0]
     offset += 4
 
+    # Validate tile count to prevent DoS
+    if tile_count > 100000:
+        log_warning("RmspClient", "unpack_tiles",
+                   f"Invalid tile count: {tile_count} (max 100000)")
+        return []
+
     tiles = []
     for _ in range(tile_count):
         if offset + 13 > len(data):
@@ -585,6 +591,12 @@ def unpack_tiles(data: bytes) -> List[tuple]:
 
         z, x, y, size = struct.unpack(">BIII", data[offset:offset+13])
         offset += 13
+
+        # Validate tile size to prevent OOM
+        if size > 1000000:  # 1MB max
+            log_warning("RmspClient", "unpack_tiles",
+                       f"Invalid tile size: {size} bytes (max 1MB)")
+            break
 
         if offset + size > len(data):
             break

@@ -43,7 +43,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -273,9 +272,8 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
         }
     }
 
-    // Bluetooth permission state (survives configuration changes like rotation)
-    var hasShownPermissionSheet by rememberSaveable { mutableStateOf(false) }
-    var showPermissionBottomSheet by rememberSaveable { mutableStateOf(false) }
+    // Bluetooth permission state
+    var showPermissionBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Shared flag with BluetoothPermissionController to know if we've already
@@ -334,14 +332,9 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
 
     // Check BLE permissions after onboarding is completed.
     // Don't show during onboarding - it's handled in OnboardingPagerScreen.
-    // Only show once per session (hasShownPermissionSheet survives rotation).
     LaunchedEffect(onboardingState.hasCompletedOnboarding) {
-        if (onboardingState.hasCompletedOnboarding &&
-            !BlePermissionManager.hasAllPermissions(context) &&
-            !hasShownPermissionSheet
-        ) {
+        if (onboardingState.hasCompletedOnboarding && !BlePermissionManager.hasAllPermissions(context)) {
             showPermissionBottomSheet = true
-            hasShownPermissionSheet = true
         }
     }
 

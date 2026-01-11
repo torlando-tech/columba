@@ -106,9 +106,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -1597,17 +1594,6 @@ fun MessageInputBar(
     val scope = rememberCoroutineScope()
     val textFieldState = rememberTextFieldState(messageText)
 
-    // Focus state preservation across rotation
-    var wasFocused by rememberSaveable { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
-
-    // Restore focus after rotation if the field was previously focused
-    LaunchedEffect(Unit) {
-        if (wasFocused) {
-            focusRequester.requestFocus()
-        }
-    }
-
     // Sync external messageText changes to textFieldState
     LaunchedEffect(messageText) {
         if (textFieldState.text.toString() != messageText) {
@@ -1754,8 +1740,6 @@ fun MessageInputBar(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .focusRequester(focusRequester)
-                                .onFocusChanged { wasFocused = it.isFocused }
                                 .contentReceiver { transferableContent ->
                                     // Check if content contains images
                                     if (!transferableContent.hasMediaType(MediaType.Image)) {

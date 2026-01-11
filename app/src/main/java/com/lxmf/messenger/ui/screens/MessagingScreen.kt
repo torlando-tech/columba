@@ -58,6 +58,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
@@ -487,7 +488,8 @@ fun MessagingScreen(
                         // Debug logging
                         android.util.Log.d(
                             "MessagingScreen",
-                            "Online indicator: hasActiveLink=$hasActiveLink, isEstablishing=$isEstablishing, hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState",
+                            "Online indicator: hasActiveLink=$hasActiveLink, isEstablishing=$isEstablishing, " +
+                                "hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState",
                         )
 
                         if (lastSeen != null || hasActiveLink || isEstablishing) {
@@ -502,10 +504,11 @@ fun MessagingScreen(
                                     val alpha by infiniteTransition.animateFloat(
                                         initialValue = 0.3f,
                                         targetValue = 1f,
-                                        animationSpec = infiniteRepeatable(
-                                            animation = tween(700, easing = LinearEasing),
-                                            repeatMode = RepeatMode.Reverse,
-                                        ),
+                                        animationSpec =
+                                            infiniteRepeatable(
+                                                animation = tween(700, easing = LinearEasing),
+                                                repeatMode = RepeatMode.Reverse,
+                                            ),
                                         label = "pulse",
                                     )
                                     Icon(
@@ -524,13 +527,14 @@ fun MessagingScreen(
                                 }
 
                                 // Status text
-                                val statusText = when {
-                                    isEstablishing -> "Connecting..."
-                                    hasActiveLink -> "Online"
-                                    hasRecentAnnounce -> "Online"
-                                    lastSeen != null -> formatRelativeTime(lastSeen)
-                                    else -> ""
-                                }
+                                val statusText =
+                                    when {
+                                        isEstablishing -> "Connecting..."
+                                        hasActiveLink -> "Online"
+                                        hasRecentAnnounce -> "Online"
+                                        lastSeen != null -> formatRelativeTime(lastSeen)
+                                        else -> ""
+                                    }
                                 Text(
                                     text = statusText,
                                     style = MaterialTheme.typography.bodySmall,
@@ -748,6 +752,7 @@ fun MessagingScreen(
                                             myIdentityHash = myIdentityHash,
                                             peerName = peerName,
                                             syncProgress = syncProgress,
+                                            isImageLoading = needsImageLoading,
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
@@ -1032,6 +1037,7 @@ fun MessageBubble(
     myIdentityHash: String? = null,
     peerName: String = "",
     syncProgress: SyncProgress = SyncProgress.Idle,
+    isImageLoading: Boolean = false,
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
@@ -1098,6 +1104,7 @@ fun MessageBubble(
 
     val context = LocalContext.current
     var showFullscreenImage by remember { mutableStateOf(false) }
+    var showMissingImageInfo by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -1327,7 +1334,7 @@ fun MessageBubble(
                                 contentScale = ContentScale.FillWidth,
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                        } else if (message.hasImageAttachment) {
+                        } else if (isImageLoading) {
                             // Image is loading - show placeholder
                             Box(
                                 modifier =
@@ -1343,6 +1350,58 @@ fun MessageBubble(
                                 )
                             }
                             Spacer(modifier = Modifier.height(8.dp))
+                        } else if (message.hasImageAttachment) {
+                            // Image was expected but not available (file missing)
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(100.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                        .clickable { showMissingImageInfo = true },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Default.BrokenImage,
+                                        contentDescription = "Image unavailable",
+                                        modifier = Modifier.size(32.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "Not available",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        // Missing image info dialog
+                        if (showMissingImageInfo) {
+                            AlertDialog(
+                                onDismissRequest = { showMissingImageInfo = false },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.BrokenImage,
+                                        contentDescription = null,
+                                    )
+                                },
+                                title = { Text("Image Not Available") },
+                                text = {
+                                    Text(
+                                        "The original image could not be found. This can happen when " +
+                                            "importing data without attachments included.",
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = { showMissingImageInfo = false }) {
+                                        Text("OK")
+                                    }
+                                },
+                            )
                         }
 
                         // Fullscreen image dialog - show when clicked and image is available

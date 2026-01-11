@@ -1271,11 +1271,12 @@ class MessagingViewModel
                 ImageCompressionPreset.HIGH,
                 ImageCompressionPreset.ORIGINAL,
             ).associateWith { preset ->
-                val sizeBytes = if (preset == ImageCompressionPreset.ORIGINAL && actualFileSize > 0) {
-                    actualFileSize
-                } else {
-                    preset.targetSizeBytes
-                }
+                val sizeBytes =
+                    if (preset == ImageCompressionPreset.ORIGINAL && actualFileSize > 0) {
+                        actualFileSize
+                    } else {
+                        preset.targetSizeBytes
+                    }
                 linkState?.estimateTransferTimeFormatted(sizeBytes)
             }
         }
@@ -1353,17 +1354,47 @@ class MessagingViewModel
                     if (result != null) {
                         // Store the decoded result for animated images
                         _decodedImages.update { it + (messageId to result) }
-                        // Signal that this image is now available
-                        _loadedImageIds.update { it + messageId }
                         Log.d(
                             TAG,
                             "Image loaded async: ${messageId.take(8)}... " +
                                 "(animated=${result.isAnimated}, ${result.rawBytes.size} bytes)",
                         )
+                        // Mark as loaded (success)
+                        _loadedImageIds.update { it + messageId }
+                    } else if (hasImageField(fieldsJson)) {
+                        // Image field exists but loading failed (file missing or corrupt)
+                        // Mark as loaded to stop spinner, even though there's no image
+                        Log.w(TAG, "Image not found for message: ${messageId.take(8)}...")
+                        _loadedImageIds.update { it + messageId }
                     }
+                    // If no image field exists, don't update loadedImageIds
                 } catch (e: Exception) {
                     Log.e(TAG, "Error loading image async: ${messageId.take(8)}...", e)
+                    // Mark as loaded to stop spinner on error (if there was an image field)
+                    if (hasImageField(fieldsJson)) {
+                        _loadedImageIds.update { it + messageId }
+                    }
                 }
+            }
+        }
+
+        /**
+         * Check if fieldsJson contains an image field (field 6).
+         * Used to determine if we should mark loading as complete on failure.
+         */
+        private fun hasImageField(fieldsJson: String?): Boolean {
+            if (fieldsJson == null) return false
+            return try {
+                val fields = org.json.JSONObject(fieldsJson)
+                val field6 = fields.opt("6")
+                when {
+                    field6 is org.json.JSONObject && field6.has("_file_ref") -> true
+                    field6 is String && field6.isNotEmpty() -> true
+                    else -> false
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error parsing fieldsJson for image field check: ${e.message}")
+                false
             }
         }
 

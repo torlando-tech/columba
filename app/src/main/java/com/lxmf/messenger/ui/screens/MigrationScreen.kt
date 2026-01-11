@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -77,6 +79,7 @@ fun MigrationScreen(
     val exportProgress by viewModel.exportProgress.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
     val exportPreview by viewModel.exportPreview.collectAsState()
+    val includeAttachments by viewModel.includeAttachments.collectAsState()
 
     var showImportConfirmDialog by remember { mutableStateOf(false) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
@@ -152,6 +155,8 @@ fun MigrationScreen(
                 exportPreview = exportPreview,
                 uiState = uiState,
                 exportProgress = exportProgress,
+                includeAttachments = includeAttachments,
+                onIncludeAttachmentsChange = { viewModel.setIncludeAttachments(it) },
                 onExport = { viewModel.exportData() },
             )
 
@@ -197,6 +202,8 @@ private fun ExportSection(
     exportPreview: ExportResult?,
     uiState: MigrationUiState,
     exportProgress: Float,
+    includeAttachments: Boolean,
+    onIncludeAttachmentsChange: (Boolean) -> Unit,
     onExport: () -> Unit,
 ) {
     Card(
@@ -300,6 +307,43 @@ private fun ExportSection(
                     }
                 }
                 else -> {}
+            }
+
+            // Include attachments checkbox
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            enabled =
+                                uiState !is MigrationUiState.Exporting &&
+                                    uiState !is MigrationUiState.Importing,
+                        ) {
+                            onIncludeAttachmentsChange(!includeAttachments)
+                        },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = includeAttachments,
+                    // Parent Row handles clicks
+                    onCheckedChange = null,
+                    enabled =
+                        uiState !is MigrationUiState.Exporting &&
+                            uiState !is MigrationUiState.Importing,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Include file attachments",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (!includeAttachments) {
+                        Text(
+                            "Images and files won't be included in export",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
 
             Button(

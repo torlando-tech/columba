@@ -134,9 +134,11 @@ class MessagingViewModelImageLoadingTest {
 
     @After
     fun tearDown() {
-        Dispatchers.resetMain()
+        // Wait for any pending IO work to complete before resetting dispatcher
+        Thread.sleep(50)
         ImageCache.clear()
         clearAllMocks()
+        Dispatchers.resetMain()
     }
 
     @Test
@@ -196,7 +198,7 @@ class MessagingViewModelImageLoadingTest {
         }
 
     @Test
-    fun `loadImageAsync handles decode failure without updating loadedImageIds`() =
+    fun `loadImageAsync marks loading complete on decode failure to stop spinner`() =
         runTest {
             val messageId = "decode-fail-msg"
 
@@ -205,10 +207,17 @@ class MessagingViewModelImageLoadingTest {
 
             // Call with invalid image data (valid JSON but won't decode to image)
             viewModel.loadImageAsync(messageId, """{"6": "zzzz"}""")
+
+            // Wait for IO dispatcher work to complete
+            // The viewModelScope.launch runs on main (test) dispatcher, but
+            // withContext(Dispatchers.IO) runs on real IO threads
+            advanceUntilIdle()
+            Thread.sleep(200) // Allow real IO work to complete
             advanceUntilIdle()
 
-            // Assert: loadedImageIds should NOT contain messageId (decode failed)
-            assertFalse(viewModel.loadedImageIds.value.contains(messageId))
+            // Assert: loadedImageIds SHOULD contain messageId even on failure
+            // This stops the loading spinner in the UI
+            assertTrue(viewModel.loadedImageIds.value.contains(messageId))
         }
 
     @Test
@@ -252,6 +261,7 @@ class MessagingViewModelImageLoadingTest {
             viewModel.loadImageAsync("test-msg", """{"1": "some text"}""")
             advanceUntilIdle()
 
+            // No image field exists, so nothing to mark as loaded
             assertFalse(viewModel.loadedImageIds.value.contains("test-msg"))
         }
 
@@ -303,19 +313,23 @@ class MessagingViewModelImageLoadingTest {
         }
 
     @Test
-    fun `loadImageAsync with file reference path exercises file loading code`() =
+    fun `loadImageAsync with missing file reference marks loading complete`() =
         runTest {
             val messageId = "file-ref-msg"
 
-            // Test with file reference format - exercises different code path
+            // Test with file reference format - file doesn't exist
             viewModel.loadImageAsync(
                 messageId,
                 """{"6": {"_file_ref": "/nonexistent/path.dat"}}""",
             )
+
+            // Wait for IO dispatcher work to complete
+            advanceUntilIdle()
+            Thread.sleep(200)
             advanceUntilIdle()
 
-            // File doesn't exist, so decode fails
-            assertFalse(viewModel.loadedImageIds.value.contains(messageId))
+            // File doesn't exist, but loading is complete (stops spinner)
+            assertTrue(viewModel.loadedImageIds.value.contains(messageId))
         }
 
     @Test
@@ -326,21 +340,23 @@ class MessagingViewModelImageLoadingTest {
             viewModel.loadImageAsync(messageId, """{"6": ""}""")
             advanceUntilIdle()
 
+            // Empty string in field 6 is not a valid image, so nothing to mark as loaded
             assertFalse(viewModel.loadedImageIds.value.contains(messageId))
         }
 
     @Test
-    fun `loadImageAsync with nested JSON in field 6 but missing file_ref`() =
+    fun `loadImageAsync with nested JSON in field 6 but missing file_ref does not update loadedImageIds`() =
         runTest {
             val messageId = "nested-json-msg"
 
-            // JSON object in field 6 but without _file_ref key
+            // JSON object in field 6 but without _file_ref key - not a valid image reference
             viewModel.loadImageAsync(
                 messageId,
                 """{"6": {"other_key": "value"}}""",
             )
             advanceUntilIdle()
 
+            // Invalid format (no _file_ref), so nothing to mark as loaded
             assertFalse(viewModel.loadedImageIds.value.contains(messageId))
         }
 

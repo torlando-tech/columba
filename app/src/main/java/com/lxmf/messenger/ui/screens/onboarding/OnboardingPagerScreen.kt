@@ -85,7 +85,12 @@ fun OnboardingPagerScreen(
             ActivityResultContracts.RequestMultiplePermissions(),
         ) { permissions ->
             val allGranted = permissions.values.all { it }
-            viewModel.onBlePermissionsResult(allGranted, permissions.values.any { !it })
+            val anyDenied = permissions.values.any { !it }
+            viewModel.onBlePermissionsResult(allGranted, anyDenied)
+            // Toggle BLE on only if all permissions were granted
+            if (allGranted) {
+                viewModel.toggleInterface(OnboardingInterfaceType.BLE)
+            }
         }
 
     // Battery optimization launcher
@@ -186,11 +191,13 @@ fun OnboardingPagerScreen(
                                     if (interfaceType == OnboardingInterfaceType.BLE &&
                                         !state.selectedInterfaces.contains(OnboardingInterfaceType.BLE)
                                     ) {
-                                        // Request BLE permissions when enabling BLE
+                                        // Request BLE permissions first - toggle happens in callback
                                         val permissions = getBlePermissions()
                                         blePermissionsLauncher.launch(permissions)
+                                    } else {
+                                        // For other interfaces or disabling BLE, toggle immediately
+                                        viewModel.toggleInterface(interfaceType)
                                     }
-                                    viewModel.toggleInterface(interfaceType)
                                 },
                                 blePermissionsGranted = state.blePermissionsGranted,
                                 blePermissionsDenied = state.blePermissionsDenied,

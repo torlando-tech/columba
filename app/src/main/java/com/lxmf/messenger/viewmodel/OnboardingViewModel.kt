@@ -325,6 +325,20 @@ class OnboardingViewModel
                     // Mark onboarding as completed
                     settingsRepository.markOnboardingCompleted()
 
+                    // Restart service to apply changes
+                    Log.d(TAG, "Restarting service to apply default settings...")
+                    interfaceConfigManager.applyInterfaceChanges()
+                        .onSuccess {
+                            Log.d(TAG, "Service restarted with default settings")
+                        }
+                        .onFailure { error ->
+                            Log.w(
+                                TAG,
+                                "Failed to restart service (settings saved but may need manual restart)",
+                                error,
+                            )
+                        }
+
                     _state.value =
                         _state.value.copy(
                             isSaving = false,

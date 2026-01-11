@@ -599,6 +599,8 @@ def unpack_tiles(data: bytes) -> List[tuple]:
             break
 
         if offset + size > len(data):
+            log_warning("RmspClient", "unpack_tiles",
+                       f"Truncated tile data (need {size} bytes, have {len(data) - offset})")
             break
 
         tile_data = data[offset:offset+size]

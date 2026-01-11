@@ -364,9 +364,9 @@ class OnboardingPagerScreenTest {
             )
         }
 
-        // When
+        // When - scroll to and click
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Restore from backup").performClick()
+        composeTestRule.onNodeWithText("Restore from backup").performScrollTo().performClick()
 
         // Then
         assertTrue(importDataCalled)

@@ -184,8 +184,8 @@ class PermissionsPageTest {
             )
         }
 
-        // Then - Should have at least one Enable button visible
-        composeTestRule.onNodeWithText("Enable").assertIsDisplayed()
+        // Then - Should have at least one Enable button visible (scroll to make visible)
+        composeTestRule.onNodeWithText("Enable").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -546,8 +546,8 @@ class PermissionsPageTest {
             )
         }
 
-        // When
-        composeTestRule.onNodeWithText("Enable").performClick()
+        // When - scroll to and click
+        composeTestRule.onNodeWithText("Enable").performScrollTo().performClick()
 
         // Then
         assertEquals("Callback should be called exactly once", 1, callCount)
@@ -572,8 +572,8 @@ class PermissionsPageTest {
         // Then - No Enable buttons should be visible
         composeTestRule.onNodeWithText("Enable").assertDoesNotExist()
 
-        // And - Granted indicators should be visible
-        composeTestRule.onNodeWithContentDescription("Granted").assertIsDisplayed()
+        // And - Granted indicators should be visible (scroll to make visible)
+        composeTestRule.onNodeWithContentDescription("Granted").performScrollTo().assertIsDisplayed()
     }
 
     // ========== Complete Page Layout Tests ==========
@@ -592,18 +592,18 @@ class PermissionsPageTest {
             )
         }
 
-        // Then - All key elements should be displayed
+        // Then - All key elements should be displayed (scroll for off-screen elements)
         composeTestRule.onNodeWithText("Stay Connected").assertIsDisplayed()
         composeTestRule.onNodeWithText("Columba can notify you when:").assertIsDisplayed()
-        composeTestRule.onNodeWithText("New messages arrive").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Someone adds you as a contact").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Delivery confirmations are received").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Notifications").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Get alerts for new messages").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Unrestricted Battery").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Receive messages even when phone is idle").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Prevents Android from pausing Columba").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Continue").assertIsDisplayed()
+        composeTestRule.onNodeWithText("New messages arrive").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Someone adds you as a contact").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delivery confirmations are received").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Notifications").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Get alerts for new messages").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Unrestricted Battery").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Receive messages even when phone is idle").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Prevents Android from pausing Columba").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Back").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Continue").performScrollTo().assertIsDisplayed()
     }
 }

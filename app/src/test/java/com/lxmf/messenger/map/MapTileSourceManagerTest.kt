@@ -114,7 +114,7 @@ class MapTileSourceManagerTest {
             val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
 
             assertTrue(result is MapStyleResult.Unavailable)
-            assertEquals("No RMSP servers available", (result as MapStyleResult.Unavailable).reason)
+            assertTrue((result as MapStyleResult.Unavailable).reason.contains("No RMSP servers discovered"))
         }
 
     // ========== getMapStyle() Tests - Offline Source ==========

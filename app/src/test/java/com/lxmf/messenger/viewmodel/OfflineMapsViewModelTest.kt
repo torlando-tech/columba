@@ -842,7 +842,7 @@ class OfflineMapsViewModelTest {
         }
 
     @Test
-    fun `deleteRegion with exception during file delete still deletes from repository`() =
+    fun `deleteRegion with file delete failure does not delete from repository`() =
         runTest {
             // Create a directory instead of a file - File.delete() will return false for non-empty dir
             val tempDir =
@@ -853,13 +853,24 @@ class OfflineMapsViewModelTest {
             val tempFile = File(tempDir, "nested.txt").also { it.writeText("test") }
 
             val testRegion = createTestRegion(TestRegionConfig(mbtilesPath = tempDir.absolutePath))
-            coEvery { offlineMapRegionRepository.deleteRegion(testRegion.id) } just Runs
             viewModel = createViewModel()
 
-            viewModel.deleteRegion(testRegion)
+            viewModel.state.test {
+                // Initial state
+                assertNull(awaitItem().errorMessage)
 
-            // Repository delete should still be called even if file delete fails
-            coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
+                viewModel.deleteRegion(testRegion)
+
+                val finalState = expectMostRecentItem()
+                // Error message should be shown
+                assertNotNull(finalState.errorMessage)
+                assertTrue(finalState.errorMessage!!.contains("Failed to delete"))
+
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Repository delete should NOT be called when file delete fails (maintains consistency)
+            coVerify(exactly = 0) { offlineMapRegionRepository.deleteRegion(any()) }
 
             // Cleanup
             tempFile.delete()

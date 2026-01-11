@@ -234,23 +234,28 @@ class TileDownloadManager(
                     Log.d(TAG, "Starting zoom level $zoom with ${zoomTiles.size} tiles")
                     _progress.value = _progress.value.copy(currentZoom = zoom)
 
-                    // Download tiles concurrently
-                    val results = zoomTiles.map { tile ->
-                        async {
-                            if (isCancelled) return@async null
-                            semaphore.withPermit { downloadTileWithRetry(tile) }
-                        }
-                    }.awaitAll()
+                    // Process tiles in batches to reduce memory usage
+                    zoomTiles.chunked(BATCH_SIZE).forEach { batch ->
+                        if (isCancelled) return@forEach
 
-                    // Write tiles and update counts
-                    for ((index, data) in results.withIndex()) {
-                        if (data != null) {
-                            val tile = zoomTiles[index]
-                            writeMutex.withLock { writer.writeTile(tile.z, tile.x, tile.y, data) }
-                            downloadedCount++
-                            totalBytes += data.size
-                        } else {
-                            failedCount++
+                        // Download batch concurrently
+                        val results = batch.map { tile ->
+                            async {
+                                if (isCancelled) return@async null
+                                semaphore.withPermit { downloadTileWithRetry(tile) }
+                            }
+                        }.awaitAll()
+
+                        // Write batch immediately to reduce memory footprint
+                        for ((index, data) in results.withIndex()) {
+                            if (data != null) {
+                                val tile = batch[index]
+                                writeMutex.withLock { writer.writeTile(tile.z, tile.x, tile.y, data) }
+                                downloadedCount++
+                                totalBytes += data.size
+                            } else {
+                                failedCount++
+                            }
                         }
                         _progress.value = _progress.value.copy(
                             downloadedTiles = downloadedCount,
@@ -576,6 +581,7 @@ class TileDownloadManager(
         // OpenFreeMap tiles - use versionless URL that redirects to latest
         const val DEFAULT_TILE_URL = "https://tiles.openfreemap.org/planet"
         const val CONCURRENT_DOWNLOADS = 4
+        const val BATCH_SIZE = 100 // Process tiles in batches to reduce memory usage
         const val MAX_RETRIES = 3
         const val RETRY_DELAY_MS = 1000L
         const val AVERAGE_TILE_SIZE_BYTES = 15_000L

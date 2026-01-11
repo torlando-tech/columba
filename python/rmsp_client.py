@@ -465,12 +465,14 @@ class RmspClientWrapper:
                 # Wait for path to be established
                 path_timeout = min(timeout, 30.0)
                 start = time.time()
+                sleep_duration = 0.1  # Start with 100ms
                 while not RNS.Transport.has_path(server.destination_hash):
                     if time.time() - start > path_timeout:
                         log_error("RmspClient", "_establish_link",
                                  "Path request timeout")
                         return None
-                    time.sleep(0.5)
+                    time.sleep(sleep_duration)
+                    sleep_duration = min(sleep_duration * 1.5, 2.0)  # Exponential backoff, max 2s
                 log_info("RmspClient", "_establish_link", "Path established")
 
             # Create destination

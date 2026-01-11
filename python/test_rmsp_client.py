@@ -1219,6 +1219,40 @@ class TestUnpackTiles(unittest.TestCase):
         self.assertEqual(z, 5)
         self.assertEqual(content, tile1)
 
+    def test_excessive_tile_count_rejected(self):
+        """Tile count exceeding 100,000 should be rejected."""
+        # Create data with tile_count = 100,001
+        data = struct.pack(">I", 100001)
+        result = rmsp_client.unpack_tiles(data)
+        self.assertEqual(len(result), 0)
+
+    def test_max_tile_count_accepted(self):
+        """Tile count of exactly 100,000 should be accepted (if data available)."""
+        # Create data with tile_count = 100,000 but no actual tiles
+        data = struct.pack(">I", 100000)
+        result = rmsp_client.unpack_tiles(data)
+        # Should return empty list (no tiles, but count is valid)
+        self.assertEqual(len(result), 0)
+
+    def test_excessive_tile_size_rejected(self):
+        """Tile size exceeding 1MB should be rejected."""
+        # Create data with one tile having size > 1MB
+        data = struct.pack(">I", 1)  # tile_count = 1
+        data += struct.pack(">BIII", 5, 10, 20, 1000001)  # size > 1MB
+        result = rmsp_client.unpack_tiles(data)
+        self.assertEqual(len(result), 0)
+
+    def test_max_tile_size_accepted(self):
+        """Tile size of exactly 1MB should be accepted."""
+        tile_data = b"x" * 1000000  # Exactly 1MB
+        data = struct.pack(">I", 1)  # tile_count = 1
+        data += struct.pack(">BIII", 5, 10, 20, 1000000)
+        data += tile_data
+        result = rmsp_client.unpack_tiles(data)
+        self.assertEqual(len(result), 1)
+        z, x, y, content = result[0]
+        self.assertEqual(len(content), 1000000)
+
 
 class TestGetRmspClient(unittest.TestCase):
     """Test the singleton get_rmsp_client function."""

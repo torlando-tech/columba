@@ -1145,6 +1145,51 @@ class TileDownloadManagerRobolectricTest {
     }
 
     @Test
+    fun `unpackRmspTiles rejects invalid zoom level`() {
+        val buffer = ByteBuffer.allocate(17).order(ByteOrder.BIG_ENDIAN)
+        buffer.putInt(1) // tile count = 1
+        buffer.put(23.toByte()) // z = 23, exceeds max of 22
+        buffer.putInt(0) // x
+        buffer.putInt(0) // y
+        buffer.putInt(10) // size
+
+        val manager = TileDownloadManager(context, TileSource.Http())
+        val tiles = manager.unpackRmspTiles(buffer.array())
+
+        assertTrue("Should return empty list for invalid zoom level", tiles.isEmpty())
+    }
+
+    @Test
+    fun `unpackRmspTiles rejects coordinates out of bounds for zoom`() {
+        val buffer = ByteBuffer.allocate(17).order(ByteOrder.BIG_ENDIAN)
+        buffer.putInt(1) // tile count = 1
+        buffer.put(5.toByte()) // z = 5, max coord = 31
+        buffer.putInt(32) // x = 32, exceeds max of 31 for zoom 5
+        buffer.putInt(0) // y
+        buffer.putInt(10) // size
+
+        val manager = TileDownloadManager(context, TileSource.Http())
+        val tiles = manager.unpackRmspTiles(buffer.array())
+
+        assertTrue("Should return empty list for out-of-bounds coordinates", tiles.isEmpty())
+    }
+
+    @Test
+    fun `unpackRmspTiles rejects negative coordinates`() {
+        val buffer = ByteBuffer.allocate(17).order(ByteOrder.BIG_ENDIAN)
+        buffer.putInt(1) // tile count = 1
+        buffer.put(10.toByte()) // z
+        buffer.putInt(-1) // x = -1, invalid
+        buffer.putInt(0) // y
+        buffer.putInt(10) // size
+
+        val manager = TileDownloadManager(context, TileSource.Http())
+        val tiles = manager.unpackRmspTiles(buffer.array())
+
+        assertTrue("Should return empty list for negative coordinates", tiles.isEmpty())
+    }
+
+    @Test
     fun `unpackRmspTiles accepts valid tile data`() {
         val tileData = ByteArray(50) { it.toByte() }
         val buffer = ByteBuffer.allocate(4 + 13 + tileData.size).order(ByteOrder.BIG_ENDIAN)

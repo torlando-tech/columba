@@ -421,6 +421,19 @@ class TileDownloadManager(
             val y = buffer.int
             val size = buffer.int
 
+            // Validate zoom level (0-22 covers all practical tile systems)
+            if (z > 22) {
+                Log.w(TAG, "Invalid zoom level: $z (skipping)")
+                return@repeat
+            }
+
+            // Validate tile coordinates are within bounds for this zoom level
+            val maxCoord = (1 shl z) - 1 // 2^z - 1
+            if (x < 0 || x > maxCoord || y < 0 || y > maxCoord) {
+                Log.w(TAG, "Invalid coordinates for zoom $z: x=$x, y=$y (skipping)")
+                return@repeat
+            }
+
             // Validate tile size to prevent OOM attacks (vector tiles are typically 5-50KB)
             if (size < 0 || size > 1_000_000) { // 1MB max per tile
                 Log.w(TAG, "Invalid tile size: $size bytes (skipping)")

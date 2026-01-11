@@ -244,20 +244,22 @@ class TileDownloadManager(
                         val results =
                             batch.map { tile ->
                                 async {
-                                    if (isCancelled) return@async null
+                                    if (isCancelled) return@async TileResult.Failed
                                     semaphore.withPermit { downloadTileWithRetry(tile) }
                                 }
                             }.awaitAll()
 
                         // Write batch immediately to reduce memory footprint
-                        for ((index, data) in results.withIndex()) {
-                            if (data != null) {
-                                val tile = batch[index]
-                                writeMutex.withLock { writer.writeTile(tile.z, tile.x, tile.y, data) }
-                                downloadedCount++
-                                totalBytes += data.size
-                            } else {
-                                failedCount++
+                        for ((index, result) in results.withIndex()) {
+                            when (result) {
+                                is TileResult.Success -> {
+                                    val tile = batch[index]
+                                    writeMutex.withLock { writer.writeTile(tile.z, tile.x, tile.y, result.data) }
+                                    downloadedCount++
+                                    totalBytes += result.data.size
+                                }
+                                is TileResult.NotAvailable -> { /* Skip - no data at this location */ }
+                                is TileResult.Failed -> failedCount++
                             }
                         }
                         _progress.value =
@@ -487,6 +489,9 @@ class TileDownloadManager(
      */
     fun cancel() {
         isCancelled = true
+        if (_progress.value.status == DownloadProgress.Status.DOWNLOADING) {
+            _progress.value = _progress.value.copy(status = DownloadProgress.Status.CANCELLED)
+        }
     }
 
     /**
@@ -545,10 +550,18 @@ class TileDownloadManager(
         return tiles
     }
 
-    private suspend fun downloadTileWithRetry(tile: TileCoord): ByteArray? {
+    /** Result of attempting to download a tile */
+    private sealed class TileResult {
+        data class Success(val data: ByteArray) : TileResult()
+        object NotAvailable : TileResult() // 204 - tile doesn't exist at this location
+        object Failed : TileResult() // Failed after retries
+    }
+
+    private suspend fun downloadTileWithRetry(tile: TileCoord): TileResult {
         repeat(MAX_RETRIES) { attempt ->
             try {
-                return downloadTile(tile)
+                val data = downloadTile(tile)
+                return if (data != null) TileResult.Success(data) else TileResult.NotAvailable
             } catch (e: IOException) {
                 Log.w(TAG, "Download attempt ${attempt + 1} failed for tile ${tile.z}/${tile.x}/${tile.y}: ${e.message}")
                 if (attempt < MAX_RETRIES - 1) {
@@ -556,10 +569,10 @@ class TileDownloadManager(
                 }
             }
         }
-        return null
+        return TileResult.Failed
     }
 
-    private fun downloadTile(tile: TileCoord): ByteArray {
+    private fun downloadTile(tile: TileCoord): ByteArray? {
         val baseUrl = (tileSource as? TileSource.Http)?.baseUrl ?: DEFAULT_TILE_URL
         val urlString = "$baseUrl/${tile.z}/${tile.x}/${tile.y}.pbf"
         val url = URL(urlString)
@@ -573,9 +586,9 @@ class TileDownloadManager(
 
             val responseCode = connection.responseCode
             if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
-                // Tile not available at this location/zoom - return empty data
+                // Tile not available at this location/zoom - skip storing
                 Log.v(TAG, "Tile ${tile.z}/${tile.x}/${tile.y} not available (204)")
-                return ByteArray(0)
+                return null
             }
             if (responseCode != HttpURLConnection.HTTP_OK) {
                 Log.w(TAG, "HTTP $responseCode for tile ${tile.z}/${tile.x}/${tile.y}")

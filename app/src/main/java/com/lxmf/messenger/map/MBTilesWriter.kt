@@ -248,15 +248,19 @@ class MBTilesWriter(
     }
 
     override fun close() {
-        db?.let { database ->
-            // Rollback any active transaction before closing
-            if (database.inTransaction()) {
-                Log.w("MBTilesWriter", "Closing with active transaction - rolling back")
-                database.endTransaction()
+        try {
+            db?.let { database ->
+                if (database.inTransaction()) {
+                    Log.w("MBTilesWriter", "Closing with active transaction - rolling back")
+                    database.endTransaction()
+                }
             }
+        } catch (e: Exception) {
+            Log.e("MBTilesWriter", "Error rolling back transaction", e)
+        } finally {
+            db?.close()
+            db = null
         }
-        db?.close()
-        db = null
     }
 
     companion object {

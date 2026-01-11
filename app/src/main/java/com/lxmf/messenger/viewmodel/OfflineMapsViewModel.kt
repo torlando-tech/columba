@@ -93,15 +93,15 @@ class OfflineMapsViewModel
             viewModelScope.launch {
                 _isDeleting.value = true
                 try {
-                    // Delete the MBTiles file if it exists
+                    // Delete the MBTiles file first - if this fails, keep the DB record for retry
                     region.mbtilesPath?.let { path ->
                         val file = File(path)
-                        if (file.exists()) {
-                            file.delete()
+                        if (file.exists() && !file.delete()) {
+                            error("Failed to delete MBTiles file at $path")
                         }
                     }
 
-                    // Delete from database
+                    // Delete from database only after file is successfully removed
                     offlineMapRegionRepository.deleteRegion(region.id)
                 } catch (e: Exception) {
                     _errorMessage.value = "Failed to delete region: ${e.message}"

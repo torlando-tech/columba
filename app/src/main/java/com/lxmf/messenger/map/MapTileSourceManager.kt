@@ -107,9 +107,14 @@ class MapTileSourceManager
             // Check offline source first
             val offlineResult = if (latitude != null && longitude != null) {
                 findOfflineRegion(latitude, longitude)?.let { region ->
-                    Log.d(TAG, "Found offline region: ${region.name}")
-                    val styleJson = OfflineMapStyleBuilder.buildOfflineStyle(region.mbtilesPath!!, region.name)
-                    MapStyleResult.Offline(styleJson, region.name)
+                    val path = region.mbtilesPath
+                    if (path != null) {
+                        Log.d(TAG, "Found offline region: ${region.name}")
+                        val styleJson = OfflineMapStyleBuilder.buildOfflineStyle(path, region.name)
+                        MapStyleResult.Offline(styleJson, region.name)
+                    } else {
+                        null
+                    }
                 }
             } else {
                 null

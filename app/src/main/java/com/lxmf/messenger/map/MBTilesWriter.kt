@@ -73,6 +73,9 @@ class MBTilesWriter(
 
     private fun createSchema() {
         db?.let { database ->
+            // Enable WAL mode for better concurrency and crash recovery
+            database.execSQL("PRAGMA journal_mode=WAL")
+
             // Create tiles table
             database.execSQL(
                 """

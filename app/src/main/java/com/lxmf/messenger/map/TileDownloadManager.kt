@@ -611,7 +611,7 @@ class TileDownloadManager(
 
         // OpenFreeMap tiles - use versionless URL that redirects to latest
         const val DEFAULT_TILE_URL = "https://tiles.openfreemap.org/planet"
-        const val CONCURRENT_DOWNLOADS = 4
+        const val CONCURRENT_DOWNLOADS = 8
         const val BATCH_SIZE = 100 // Process tiles in batches to reduce memory usage
         const val MAX_RETRIES = 3
         const val RETRY_DELAY_MS = 1000L

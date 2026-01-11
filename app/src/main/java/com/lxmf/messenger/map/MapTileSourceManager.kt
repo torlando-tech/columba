@@ -71,7 +71,9 @@ class MapTileSourceManager
         val rmspEnabledFlow: Flow<Boolean> = settingsRepository.mapSourceRmspEnabledFlow
 
         // Runtime overrides for backwards compatibility
+        @Volatile
         private var _httpEnabledOverride: Boolean? = null
+        @Volatile
         private var _rmspEnabledOverride: Boolean? = null
 
         var httpEnabled: Boolean

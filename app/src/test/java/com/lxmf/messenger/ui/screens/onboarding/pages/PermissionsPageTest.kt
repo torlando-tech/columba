@@ -172,11 +172,11 @@ class PermissionsPageTest {
 
     @Test
     fun notificationCard_showsEnableButton_whenNotGranted() {
-        // When
+        // When - battery exempt to isolate the notification Enable button
         composeTestRule.setContent {
             PermissionsPage(
                 notificationsGranted = false,
-                batteryOptimizationExempt = false,
+                batteryOptimizationExempt = true, // Battery already exempt to isolate notification button
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
                 onBack = {},
@@ -184,7 +184,7 @@ class PermissionsPageTest {
             )
         }
 
-        // Then - Should have at least one Enable button visible (scroll to make visible)
+        // Then - Should have exactly one Enable button visible (scroll to make visible)
         composeTestRule.onNodeWithText("Enable").performScrollTo().assertIsDisplayed()
     }
 
@@ -557,11 +557,11 @@ class PermissionsPageTest {
 
     @Test
     fun notificationCard_transitionsFromEnableButtonToSuccessIndicator() {
-        // Given - Initial state: not granted
+        // Given - Only notification granted to have exactly one Granted indicator
         composeTestRule.setContent {
             PermissionsPage(
                 notificationsGranted = true,
-                batteryOptimizationExempt = true,
+                batteryOptimizationExempt = false, // Battery not exempt so we have exactly one Granted icon
                 onEnableNotifications = {},
                 onEnableBatteryOptimization = {},
                 onBack = {},
@@ -569,11 +569,11 @@ class PermissionsPageTest {
             )
         }
 
-        // Then - No Enable buttons should be visible
-        composeTestRule.onNodeWithText("Enable").assertDoesNotExist()
-
-        // And - Granted indicators should be visible (scroll to make visible)
+        // Then - Notification Granted indicator should be visible (scroll to make visible)
         composeTestRule.onNodeWithContentDescription("Granted").performScrollTo().assertIsDisplayed()
+
+        // And - Battery Enable button should still exist
+        composeTestRule.onNodeWithText("Enable").performScrollTo().assertIsDisplayed()
     }
 
     // ========== Complete Page Layout Tests ==========

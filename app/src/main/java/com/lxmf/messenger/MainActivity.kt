@@ -46,8 +46,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
-import androidx.core.content.PermissionChecker
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
@@ -80,7 +78,7 @@ import com.lxmf.messenger.ui.screens.QrScannerScreen
 import com.lxmf.messenger.ui.screens.SettingsScreen
 import com.lxmf.messenger.ui.screens.ThemeEditorScreen
 import com.lxmf.messenger.ui.screens.ThemeManagementScreen
-import com.lxmf.messenger.ui.screens.WelcomeScreen
+import com.lxmf.messenger.ui.screens.onboarding.OnboardingPagerScreen
 import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
 import com.lxmf.messenger.viewmodel.ContactsViewModel
@@ -235,55 +233,7 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
             Screen.Welcome.route
         }
 
-    // Access NotificationSettingsViewModel to check permission request status
-    val notificationSettingsViewModel: com.lxmf.messenger.viewmodel.NotificationSettingsViewModel =
-        androidx.hilt.navigation.compose.hiltViewModel()
-
-    // Collect notification settings state
-    val notificationState by notificationSettingsViewModel.state.collectAsState()
-
-    // Track whether we've already shown the permission request dialog in this session
-    var hasShownPermissionRequest by remember { mutableStateOf(false) }
-
-    // Notification permission launcher for first-launch request
-    val notificationPermissionLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission(),
-        ) { isGranted ->
-            if (isGranted) {
-                Log.d("ColumbaNavigation", "Notification permission granted")
-                // Enable notifications in settings since permission was granted
-                notificationSettingsViewModel.toggleNotificationsEnabled(true)
-            } else {
-                Log.d("ColumbaNavigation", "Notification permission denied")
-                // Disable notifications in settings since permission was denied
-                notificationSettingsViewModel.toggleNotificationsEnabled(false)
-            }
-        }
-
-    // Check if we should request notification permission on first launch
-    LaunchedEffect(notificationState.isLoading) {
-        // Only run this check once when the state is loaded
-        if (!notificationState.isLoading &&
-            !hasShownPermissionRequest &&
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-        ) {
-            // Check if we haven't requested before and don't have permission
-            val hasPermission =
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS,
-                ) == PermissionChecker.PERMISSION_GRANTED
-
-            if (!notificationState.hasRequestedNotificationPermission && !hasPermission) {
-                // This is first launch and permission not granted - request it
-                hasShownPermissionRequest = true
-                notificationSettingsViewModel.markNotificationPermissionRequested()
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                Log.d("ColumbaNavigation", "Requesting notification permission on first launch")
-            }
-        }
-    }
+    // Notification permission is now handled in OnboardingPagerScreen
 
     // State for pending contact add from deep link
     var pendingContactAdd by remember { mutableStateOf<String?>(null) }
@@ -380,10 +330,10 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
             }
         }
 
-    // Check permissions on first launch.
-    // Always show the bottom sheet if BLE permissions are missing.
-    LaunchedEffect(Unit) {
-        if (!BlePermissionManager.hasAllPermissions(context)) {
+    // Check BLE permissions after onboarding is completed.
+    // Don't show during onboarding - it's handled in OnboardingPagerScreen.
+    LaunchedEffect(onboardingState.hasCompletedOnboarding) {
+        if (onboardingState.hasCompletedOnboarding && !BlePermissionManager.hasAllPermissions(context)) {
             showPermissionBottomSheet = true
         }
     }
@@ -475,10 +425,14 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
                     popExitTransition = { fadeOut(tween(75)) },
                 ) {
                     composable(Screen.Welcome.route) {
-                        WelcomeScreen(
-                            onOnboardingComplete = {
+                        OnboardingPagerScreen(
+                            onOnboardingComplete = { navigateToRNodeWizard ->
                                 navController.navigate(Screen.Chats.route) {
                                     popUpTo(Screen.Welcome.route) { inclusive = true }
+                                }
+                                // Navigate to RNode wizard if LoRa Radio was selected
+                                if (navigateToRNodeWizard) {
+                                    navController.navigate("rnode_wizard")
                                 }
                             },
                             onImportData = {

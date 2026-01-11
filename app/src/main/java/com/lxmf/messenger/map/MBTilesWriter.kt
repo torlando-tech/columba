@@ -188,7 +188,8 @@ class MBTilesWriter(
      * Begin a transaction for bulk inserts.
      * Call [endTransaction] when done.
      *
-     * Note: Uses IMMEDIATE transaction to avoid deadlocks with concurrent access.
+     * Note: Uses NON-EXCLUSIVE mode to allow concurrent reads during tile writes.
+     * Only one writer should exist at a time (enforced by singleton ViewModel).
      */
     fun beginTransaction() {
         db?.beginTransactionNonExclusive()

@@ -404,6 +404,12 @@ class TileDownloadManager(
         val tileCount = buffer.int
         Log.d(TAG, "RMSP tile count in header: $tileCount")
 
+        // Validate tile count to prevent DoS attacks
+        if (tileCount < 0 || tileCount > 100_000) {
+            Log.w(TAG, "Invalid tile count: $tileCount (expected 0-100000)")
+            return tiles
+        }
+
         repeat(tileCount) {
             // Need at least z(1) + x(4) + y(4) + size(4) = 13 bytes, then tile data
             val headerAvailable = buffer.remaining() >= 13

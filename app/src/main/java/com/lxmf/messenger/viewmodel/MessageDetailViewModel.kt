@@ -60,6 +60,8 @@ class MessageDetailViewModel
                                             fieldsJson = entity.fieldsJson,
                                             deliveryMethod = entity.deliveryMethod,
                                             errorMessage = entity.errorMessage,
+                                            receivedHopCount = entity.receivedHopCount,
+                                            receivedInterface = entity.receivedInterface,
                                         )
                                     Log.d(TAG, "Message updated: status=${entity.status}, method=${entity.deliveryMethod}")
                                     domainMessage.toMessageUi()

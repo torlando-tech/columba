@@ -4840,6 +4840,31 @@ class ReticulumWrapper:
                             'timestamp': int(lxmf_message.timestamp * 1000) if lxmf_message.timestamp else int(time.time() * 1000)
                         }
 
+                        # Extract hop count to sender (for received message info)
+                        try:
+                            if RNS.Transport.has_path(lxmf_message.source_hash):
+                                hops = RNS.Transport.hops_to(lxmf_message.source_hash)
+                                message_event['hops'] = hops
+                                log_debug("ReticulumWrapper", "poll_received_messages",
+                                         f"📡 Hop count to sender: {hops}")
+                        except Exception as e:
+                            log_debug("ReticulumWrapper", "poll_received_messages",
+                                     f"⚠️ Could not get hop count: {e}")
+
+                        # Extract receiving interface from path table (for received message info)
+                        try:
+                            if lxmf_message.source_hash in RNS.Transport.path_table:
+                                path_entry = RNS.Transport.path_table[lxmf_message.source_hash]
+                                # Path table entry format: [timestamp, via, via_hash, hops, expires, interface, ...
+                                if len(path_entry) > 5 and path_entry[5] is not None:
+                                    interface_name = str(path_entry[5])
+                                    message_event['receiving_interface'] = interface_name
+                                    log_debug("ReticulumWrapper", "poll_received_messages",
+                                             f"📡 Receiving interface: {interface_name}")
+                        except Exception as e:
+                            log_debug("ReticulumWrapper", "poll_received_messages",
+                                     f"⚠️ Could not get receiving interface: {e}")
+
                         # Try to get sender's public key from RNS identity cache
                         try:
                             source_identity = RNS.Identity.recall(lxmf_message.source_hash)

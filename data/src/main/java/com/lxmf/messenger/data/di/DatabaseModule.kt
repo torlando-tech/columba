@@ -62,6 +62,7 @@ object DatabaseModule {
             MIGRATION_26_27,
             MIGRATION_27_28,
             MIGRATION_28_29,
+            MIGRATION_29_30,
         )
     }
 
@@ -1234,6 +1235,18 @@ object DatabaseModule {
                 // Create indices for rmsp_servers
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_rmsp_servers_lastSeenTimestamp ON rmsp_servers(lastSeenTimestamp)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_rmsp_servers_hops ON rmsp_servers(hops)")
+            }
+        }
+
+    // Migration from version 29 to 30: Add received message info fields
+    // Stores hop count and receiving interface captured when messages are received
+    private val MIGRATION_29_30 =
+        object : Migration(29, 30) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add receivedHopCount column (nullable INTEGER for hop count at reception)
+                database.execSQL("ALTER TABLE messages ADD COLUMN receivedHopCount INTEGER DEFAULT NULL")
+                // Add receivedInterface column (nullable TEXT for interface name at reception)
+                database.execSQL("ALTER TABLE messages ADD COLUMN receivedInterface TEXT DEFAULT NULL")
             }
         }
 

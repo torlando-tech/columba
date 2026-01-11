@@ -419,6 +419,10 @@ class EventHandler(
             // Extract delivery method if available
             val deliveryMethod = event.getDictValue("delivery_method")?.toString()?.takeIf { it != "None" }
 
+            // Extract received message info (hop count and receiving interface)
+            val receivedHopCount = event.getDictValue("hops")?.toInt()
+            val receivedInterface = event.getDictValue("receiving_interface")?.toString()?.takeIf { it != "None" }
+
             // Persist to database first (survives app process death)
             if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
                 persistenceManager.persistMessage(
@@ -431,6 +435,8 @@ class EventHandler(
                     replyToMessageId = replyToMessageId,
                     deliveryMethod = deliveryMethod,
                     hasFileAttachments = hasFileAttachments,
+                    receivedHopCount = receivedHopCount,
+                    receivedInterface = receivedInterface,
                 )
                 Log.d(TAG, "Message persisted to database: $messageHash from $sourceHashHex")
             }

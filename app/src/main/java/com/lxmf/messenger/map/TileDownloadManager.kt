@@ -450,7 +450,9 @@ class TileDownloadManager(
 
             // Validate tile coordinates are within bounds for this zoom level
             val maxCoord = (1 shl z) - 1 // 2^z - 1
-            if (x < 0 || x > maxCoord || y < 0 || y > maxCoord) {
+            val xInBounds = x in 0..maxCoord
+            val yInBounds = y in 0..maxCoord
+            if (!xInBounds || !yInBounds) {
                 Log.w(TAG, "Invalid coordinates for zoom $z: x=$x, y=$y (skipping)")
                 return@repeat
             }

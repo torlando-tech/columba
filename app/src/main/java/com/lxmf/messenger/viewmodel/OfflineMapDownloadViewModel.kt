@@ -269,6 +269,7 @@ class OfflineMapDownloadViewModel
             }
         }
 
+        @Suppress("LongMethod") // Orchestrates download process - splitting would fragment cohesive flow
         private fun startDownload() {
             val currentState = _state.value
             val lat = currentState.centerLatitude ?: return
@@ -424,7 +425,8 @@ class OfflineMapDownloadViewModel
                                 geohash = geohash,
                                 zoomMin = zoomMin,
                                 zoomMax = zoomMax,
-                                timeoutMs = 3600_000L, // 1 hour timeout for large downloads
+                                // 1 hour timeout for large downloads
+                                timeoutMs = 3600_000L,
                             )
                         } catch (e: Exception) {
                             Log.w(TAG, "RMSP fetch failed for geohash $geohash: ${e.message}")

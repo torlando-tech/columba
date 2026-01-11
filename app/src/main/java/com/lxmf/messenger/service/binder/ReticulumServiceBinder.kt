@@ -885,7 +885,8 @@ class ReticulumServiceBinder(
                         publicKey,
                         geohash,
                         pyList,
-                        null, // format
+                        // format
+                        null,
                         timeoutSec,
                     )
                 result?.toJava(ByteArray::class.java)

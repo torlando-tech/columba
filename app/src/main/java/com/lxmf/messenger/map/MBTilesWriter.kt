@@ -112,12 +112,14 @@ class MBTilesWriter(
             val metadata =
                 mutableMapOf(
                     "name" to name,
-                    "format" to "pbf", // Vector tiles
+                    // Vector tiles
+                    "format" to "pbf",
                     "type" to "baselayer",
                     "version" to "1.0.0",
                     "minzoom" to minZoom.toString(),
                     "maxzoom" to maxZoom.toString(),
-                    "scheme" to "tms", // MBTiles uses TMS scheme
+                    // MBTiles uses TMS scheme
+                    "scheme" to "tms",
                 )
 
             if (description.isNotEmpty()) {

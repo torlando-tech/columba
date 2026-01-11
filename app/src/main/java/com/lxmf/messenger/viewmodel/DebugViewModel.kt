@@ -438,6 +438,17 @@ class DebugViewModel
         }
 
         /**
+         * Refresh identity data for QR code generation.
+         * Call this when entering a screen that needs identity data.
+         */
+        fun refreshIdentityData() {
+            // Only refresh if we don't already have the data
+            if (_qrCodeData.value == null) {
+                loadIdentityData()
+            }
+        }
+
+        /**
          * Load identity data for QR code generation and sharing.
          * Retries with exponential backoff if the service isn't ready yet.
          */

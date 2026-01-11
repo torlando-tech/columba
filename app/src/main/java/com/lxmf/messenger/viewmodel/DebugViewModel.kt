@@ -58,6 +58,7 @@ data class TestAnnounceResult(
     val error: String? = null,
 )
 
+@Suppress("TooManyFunctions") // Debug-related utilities naturally group together
 @HiltViewModel
 class DebugViewModel
     @Inject

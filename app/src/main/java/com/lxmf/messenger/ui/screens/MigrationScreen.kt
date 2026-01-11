@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -311,16 +311,18 @@ private fun ExportSection(
 
             // Include attachments checkbox
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = uiState !is MigrationUiState.Exporting) {
-                        onIncludeAttachmentsChange(!includeAttachments)
-                    },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = uiState !is MigrationUiState.Exporting) {
+                            onIncludeAttachmentsChange(!includeAttachments)
+                        },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Checkbox(
                     checked = includeAttachments,
-                    onCheckedChange = null, // Parent Row handles clicks
+                    // Parent Row handles clicks
+                    onCheckedChange = null,
                     enabled = uiState !is MigrationUiState.Exporting,
                 )
                 Column(modifier = Modifier.weight(1f)) {

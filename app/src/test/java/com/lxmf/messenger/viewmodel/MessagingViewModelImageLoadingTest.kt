@@ -134,9 +134,11 @@ class MessagingViewModelImageLoadingTest {
 
     @After
     fun tearDown() {
-        Dispatchers.resetMain()
+        // Wait for any pending IO work to complete before resetting dispatcher
+        Thread.sleep(50)
         ImageCache.clear()
         clearAllMocks()
+        Dispatchers.resetMain()
     }
 
     @Test

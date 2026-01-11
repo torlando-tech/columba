@@ -1271,11 +1271,12 @@ class MessagingViewModel
                 ImageCompressionPreset.HIGH,
                 ImageCompressionPreset.ORIGINAL,
             ).associateWith { preset ->
-                val sizeBytes = if (preset == ImageCompressionPreset.ORIGINAL && actualFileSize > 0) {
-                    actualFileSize
-                } else {
-                    preset.targetSizeBytes
-                }
+                val sizeBytes =
+                    if (preset == ImageCompressionPreset.ORIGINAL && actualFileSize > 0) {
+                        actualFileSize
+                    } else {
+                        preset.targetSizeBytes
+                    }
                 linkState?.estimateTransferTimeFormatted(sizeBytes)
             }
         }
@@ -1392,6 +1393,7 @@ class MessagingViewModel
                     else -> false
                 }
             } catch (e: Exception) {
+                Log.w(TAG, "Error parsing fieldsJson for image field check: ${e.message}")
                 false
             }
         }

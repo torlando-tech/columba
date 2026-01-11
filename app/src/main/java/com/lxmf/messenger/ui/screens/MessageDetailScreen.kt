@@ -352,13 +352,18 @@ private data class HopCountInfo(
 )
 
 private fun getHopCountInfo(hops: Int): HopCountInfo {
-    return when (hops) {
-        0 ->
+    return when {
+        hops < 0 ->
+            HopCountInfo(
+                text = "Unknown",
+                subtitle = "Hop count unavailable",
+            )
+        hops == 0 ->
             HopCountInfo(
                 text = "Direct",
                 subtitle = "Message received directly from sender",
             )
-        1 ->
+        hops == 1 ->
             HopCountInfo(
                 text = "1 hop",
                 subtitle = "Message traveled through 1 relay",

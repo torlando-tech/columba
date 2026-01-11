@@ -573,9 +573,8 @@ class TileDownloadManager(
     companion object {
         private const val TAG = "TileDownloadManager"
 
-        // OpenFreeMap requires a version in the URL path
-        // This version should be updated periodically or fetched dynamically
-        const val DEFAULT_TILE_URL = "https://tiles.openfreemap.org/planet/20251224_001001_pt"
+        // OpenFreeMap tiles - use versionless URL that redirects to latest
+        const val DEFAULT_TILE_URL = "https://tiles.openfreemap.org/planet"
         const val CONCURRENT_DOWNLOADS = 4
         const val MAX_RETRIES = 3
         const val RETRY_DELAY_MS = 1000L

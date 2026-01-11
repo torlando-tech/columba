@@ -77,11 +77,11 @@ class OnboardingPagerScreenTest {
             )
         }
 
-        // Then - Privacy features from welcome page are displayed
+        // Then - Privacy features from welcome page are displayed (scroll to make visible)
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("No phone number").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No email address").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No sign-up or accounts").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No phone number").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("No email address").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("No sign-up or accounts").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -100,9 +100,9 @@ class OnboardingPagerScreenTest {
             )
         }
 
-        // Then
+        // Then - scroll to make visible
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Get Started").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Get Started").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -121,9 +121,9 @@ class OnboardingPagerScreenTest {
             )
         }
 
-        // Then
+        // Then - scroll to make visible
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Restore from backup").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Restore from backup").performScrollTo().assertIsDisplayed()
     }
 
     // ========== Test 2: Skip button is visible and clickable ==========

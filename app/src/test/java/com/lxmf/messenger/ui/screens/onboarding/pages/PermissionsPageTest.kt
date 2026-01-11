@@ -243,8 +243,8 @@ class PermissionsPageTest {
             )
         }
 
-        // Then
-        composeTestRule.onNodeWithText("Unrestricted Battery").assertIsDisplayed()
+        // Then - scroll to make visible
+        composeTestRule.onNodeWithText("Unrestricted Battery").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -261,8 +261,8 @@ class PermissionsPageTest {
             )
         }
 
-        // Then
-        composeTestRule.onNodeWithText("Receive messages even when phone is idle").assertIsDisplayed()
+        // Then - scroll to make visible
+        composeTestRule.onNodeWithText("Receive messages even when phone is idle").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -279,8 +279,8 @@ class PermissionsPageTest {
             )
         }
 
-        // Then
-        composeTestRule.onNodeWithText("Prevents Android from pausing Columba").assertIsDisplayed()
+        // Then - scroll to make visible
+        composeTestRule.onNodeWithText("Prevents Android from pausing Columba").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -297,8 +297,8 @@ class PermissionsPageTest {
             )
         }
 
-        // Then - Should have Enable button visible for battery
-        composeTestRule.onNodeWithText("Enable").assertIsDisplayed()
+        // Then - Should have Enable button visible for battery, scroll to make visible
+        composeTestRule.onNodeWithText("Enable").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -317,7 +317,7 @@ class PermissionsPageTest {
         }
 
         // When - Click the Enable button (for battery since notifications is granted)
-        composeTestRule.onNodeWithText("Enable").performClick()
+        composeTestRule.onNodeWithText("Enable").performScrollTo().performClick()
 
         // Then
         assertTrue("onEnableBatteryOptimization callback should be invoked", callbackInvoked)
@@ -337,8 +337,8 @@ class PermissionsPageTest {
             )
         }
 
-        // Then - Should show check icon with "Granted" content description
-        composeTestRule.onNodeWithContentDescription("Granted").assertIsDisplayed()
+        // Then - Should show check icon with "Granted" content description, scroll to make visible
+        composeTestRule.onNodeWithContentDescription("Granted").performScrollTo().assertIsDisplayed()
     }
 
     // ========== Both Permissions Granted Tests ==========
@@ -377,7 +377,7 @@ class PermissionsPageTest {
 
         // Then - Both permission cards should show their titles
         composeTestRule.onNodeWithText("Notifications").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Unrestricted Battery").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Unrestricted Battery").performScrollTo().assertIsDisplayed()
     }
 
     // ========== Navigation Button Tests ==========
@@ -396,8 +396,8 @@ class PermissionsPageTest {
             )
         }
 
-        // Then
-        composeTestRule.onNodeWithText("Back").assertIsDisplayed()
+        // Then - scroll to make visible
+        composeTestRule.onNodeWithText("Back").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -415,8 +415,8 @@ class PermissionsPageTest {
             )
         }
 
-        // When
-        composeTestRule.onNodeWithText("Back").performClick()
+        // When - scroll to and click
+        composeTestRule.onNodeWithText("Back").performScrollTo().performClick()
 
         // Then
         assertTrue("onBack callback should be invoked", callbackInvoked)
@@ -436,8 +436,8 @@ class PermissionsPageTest {
             )
         }
 
-        // Then
-        composeTestRule.onNodeWithText("Continue").assertIsDisplayed()
+        // Then - scroll to make visible
+        composeTestRule.onNodeWithText("Continue").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -455,8 +455,8 @@ class PermissionsPageTest {
             )
         }
 
-        // When
-        composeTestRule.onNodeWithText("Continue").performClick()
+        // When - scroll to and click
+        composeTestRule.onNodeWithText("Continue").performScrollTo().performClick()
 
         // Then
         assertTrue("onContinue callback should be invoked", callbackInvoked)
@@ -479,8 +479,8 @@ class PermissionsPageTest {
             )
         }
 
-        // When
-        composeTestRule.onNodeWithText("Back").performClick()
+        // When - scroll to and click
+        composeTestRule.onNodeWithText("Back").performScrollTo().performClick()
 
         // Then
         assertEquals("Callback should be called exactly once", 1, callCount)
@@ -501,8 +501,8 @@ class PermissionsPageTest {
             )
         }
 
-        // When
-        composeTestRule.onNodeWithText("Continue").performClick()
+        // When - scroll to and click
+        composeTestRule.onNodeWithText("Continue").performScrollTo().performClick()
 
         // Then
         assertEquals("Callback should be called exactly once", 1, callCount)

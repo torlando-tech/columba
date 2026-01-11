@@ -1629,7 +1629,7 @@ class ReticulumWrapper:
                         if packet and hasattr(packet, 'receiving_interface'):
                             interface_obj = packet.receiving_interface
                             if interface_obj:
-                                receiving_interface = str(interface_obj)
+                                receiving_interface = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
             except Exception as e:
                 log_debug("ReticulumWrapper", "_announce_handler",
                          f"Could not extract interface: {e}")
@@ -2427,7 +2427,7 @@ class ReticulumWrapper:
                         if packet and hasattr(packet, 'receiving_interface'):
                             interface_obj = packet.receiving_interface
                             if interface_obj:
-                                receiving_interface = str(interface_obj)
+                                receiving_interface = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
                 except Exception as e:
                     log_debug("ReticulumWrapper", "poll_received_announces",
                              f"Could not extract interface: {e}")

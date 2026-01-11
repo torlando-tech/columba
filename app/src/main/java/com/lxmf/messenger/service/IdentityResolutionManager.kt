@@ -137,11 +137,8 @@ class IdentityResolutionManager
         suspend fun retryResolution(destinationHash: String) {
             Log.d(TAG, "Retry resolution for ${destinationHash.take(8)}...")
 
-            // Reset status to PENDING_IDENTITY
-            contactRepository.updateContactStatus(
-                destinationHash = destinationHash,
-                status = ContactStatus.PENDING_IDENTITY,
-            )
+            // Reset status to PENDING_IDENTITY and restart 48-hour timeout
+            contactRepository.resetContactForRetry(destinationHash)
 
             // Request path on network
             val destHashBytes =

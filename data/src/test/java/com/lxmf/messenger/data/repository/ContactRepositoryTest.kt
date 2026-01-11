@@ -387,6 +387,73 @@ class ContactRepositoryTest {
             assertEquals("Status update failed", result.exceptionOrNull()?.message)
         }
 
+    // ========== resetContactForRetry Tests ==========
+
+    @Test
+    fun `resetContactForRetry - no active identity returns failure`() =
+        runTest {
+            // Given: No active identity
+            coEvery { mockLocalIdentityDao.getActiveIdentitySync() } returns null
+
+            // When
+            val result = repository.resetContactForRetry(testDestHash)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalStateException)
+        }
+
+    @Test
+    fun `resetContactForRetry - success updates status and timestamp`() =
+        runTest {
+            // Given
+            coEvery {
+                mockContactDao.resetContactForRetry(any(), any(), any(), any())
+            } just Runs
+
+            // When
+            val beforeTime = System.currentTimeMillis()
+            val result = repository.resetContactForRetry(testDestHash)
+            val afterTime = System.currentTimeMillis()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isSuccess)
+
+            // Verify DAO was called with correct parameters
+            val timestampSlot = slot<Long>()
+            coVerify {
+                mockContactDao.resetContactForRetry(
+                    destinationHash = testDestHash,
+                    identityHash = testIdentityHash,
+                    status = ContactStatus.PENDING_IDENTITY.name,
+                    addedTimestamp = capture(timestampSlot),
+                )
+            }
+
+            // Verify timestamp is current (within test execution window)
+            assertTrue(timestampSlot.captured >= beforeTime)
+            assertTrue(timestampSlot.captured <= afterTime)
+        }
+
+    @Test
+    fun `resetContactForRetry - database error returns failure`() =
+        runTest {
+            // Given
+            coEvery {
+                mockContactDao.resetContactForRetry(any(), any(), any(), any())
+            } throws RuntimeException("Reset failed")
+
+            // When
+            val result = repository.resetContactForRetry(testDestHash)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertTrue(result.isFailure)
+            assertEquals("Reset failed", result.exceptionOrNull()?.message)
+        }
+
     // ========== getContactsByStatus Tests ==========
 
     @Test

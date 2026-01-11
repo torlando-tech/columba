@@ -3,7 +3,6 @@ package com.lxmf.messenger.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -493,16 +492,12 @@ class ContactsViewModel
         fun retryIdentityResolution(destinationHash: String) {
             viewModelScope.launch {
                 try {
-                    val result =
-                        contactRepository.updateContactStatus(
-                            destinationHash = destinationHash,
-                            status = ContactStatus.PENDING_IDENTITY,
-                        )
+                    val result = contactRepository.resetContactForRetry(destinationHash)
                     if (result.isSuccess) {
-                        Log.d(TAG, "Reset contact status to PENDING_IDENTITY: $destinationHash")
+                        Log.d(TAG, "Reset contact for retry: $destinationHash")
                         // TODO: Trigger network path request here when service integration is ready
                     } else {
-                        Log.e(TAG, "Failed to reset contact status: ${result.exceptionOrNull()?.message}")
+                        Log.e(TAG, "Failed to reset contact for retry: ${result.exceptionOrNull()?.message}")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error retrying identity resolution", e)

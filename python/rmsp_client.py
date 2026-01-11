@@ -490,6 +490,7 @@ class RmspClientWrapper:
             link = RNS.Link(dest)
 
             start = time.time()
+            sleep_duration = 0.05  # Start with 50ms
             while link.status != RNS.Link.ACTIVE:
                 if link.status == RNS.Link.CLOSED:
                     log_error("RmspClient", "_establish_link", "Link closed")
@@ -498,7 +499,8 @@ class RmspClientWrapper:
                     log_error("RmspClient", "_establish_link", "Link timeout")
                     link.teardown()
                     return None
-                time.sleep(0.1)
+                time.sleep(sleep_duration)
+                sleep_duration = min(sleep_duration * 1.5, 1.0)  # Exponential backoff, max 1s
 
             log_info("RmspClient", "_establish_link", "Link active")
             return link

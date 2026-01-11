@@ -2266,6 +2266,29 @@ class ReticulumWrapper:
                 self.router.pending_inbound = []
 
             if lxmf_message not in self.router.pending_inbound:
+                # Capture hop count and receiving interface at delivery time
+                # (path table values may change after reception, so capture now)
+                try:
+                    if RNS.Transport.has_path(lxmf_message.source_hash):
+                        hops = RNS.Transport.hops_to(lxmf_message.source_hash)
+                        if hops is not None and hops >= 0:
+                            lxmf_message._columba_hops = hops
+                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"📡 Captured hop count at delivery: {hops}")
+                            # Only capture interface for direct messages (hops=0)
+                            # Path table interface is only accurate for direct delivery
+                            if hops == 0 and lxmf_message.source_hash in RNS.Transport.path_table:
+                                path_entry = RNS.Transport.path_table[lxmf_message.source_hash]
+                                if len(path_entry) > 5 and path_entry[5] is not None:
+                                    interface_obj = path_entry[5]
+                                    interface_name = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
+                                    lxmf_message._columba_interface = interface_name
+                                    log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                             f"📡 Captured receiving interface: {interface_name}")
+                except Exception as e:
+                    log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                             f"⚠️ Could not capture hop count/interface: {e}")
+
                 self.router.pending_inbound.append(lxmf_message)
                 log_info("ReticulumWrapper", "_on_lxmf_delivery", f"✅ Added message to pending_inbound queue (now has {len(self.router.pending_inbound)} messages)")
             else:
@@ -4840,37 +4863,16 @@ class ReticulumWrapper:
                             'timestamp': int(lxmf_message.timestamp * 1000) if lxmf_message.timestamp else int(time.time() * 1000)
                         }
 
-                        # Extract hop count to sender (for received message info)
-                        try:
-                            if RNS.Transport.has_path(lxmf_message.source_hash):
-                                hops = RNS.Transport.hops_to(lxmf_message.source_hash)
-                                # Only store valid hop counts (0 or positive)
-                                if hops is not None and hops >= 0:
-                                    message_event['hops'] = hops
-                                    log_debug("ReticulumWrapper", "poll_received_messages",
-                                             f"📡 Hop count to sender: {hops}")
-                        except Exception as e:
+                        # Use hop count and interface captured at delivery time
+                        # (values are stored on message object in _on_lxmf_delivery)
+                        if hasattr(lxmf_message, '_columba_hops'):
+                            message_event['hops'] = lxmf_message._columba_hops
                             log_debug("ReticulumWrapper", "poll_received_messages",
-                                     f"⚠️ Could not get hop count: {e}")
-
-                        # Extract receiving interface from path table (only for direct messages)
-                        # Note: Path table stores outbound routing info. For multi-hop messages,
-                        # path_entry[5] is the next-hop interface for sending TO the sender,
-                        # not the interface that received the message. Only accurate for hops=0.
-                        try:
-                            if message_event.get('hops') == 0 and lxmf_message.source_hash in RNS.Transport.path_table:
-                                path_entry = RNS.Transport.path_table[lxmf_message.source_hash]
-                                # Path table entry format: [timestamp, via, via_hash, hops, expires, interface, ...]
-                                if len(path_entry) > 5 and path_entry[5] is not None:
-                                    interface_obj = path_entry[5]
-                                    # Use .name attribute if available for cleaner interface name
-                                    interface_name = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
-                                    message_event['receiving_interface'] = interface_name
-                                    log_debug("ReticulumWrapper", "poll_received_messages",
-                                             f"📡 Receiving interface: {interface_name}")
-                        except Exception as e:
+                                     f"📡 Hop count (captured at delivery): {lxmf_message._columba_hops}")
+                        if hasattr(lxmf_message, '_columba_interface'):
+                            message_event['receiving_interface'] = lxmf_message._columba_interface
                             log_debug("ReticulumWrapper", "poll_received_messages",
-                                     f"⚠️ Could not get receiving interface: {e}")
+                                     f"📡 Receiving interface (captured at delivery): {lxmf_message._columba_interface}")
 
                         # Try to get sender's public key from RNS identity cache
                         try:

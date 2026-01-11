@@ -549,6 +549,11 @@ class TileDownloadManager(
             connection.requestMethod = "GET"
 
             val responseCode = connection.responseCode
+            if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
+                // Tile not available at this location/zoom - return empty data
+                Log.v(TAG, "Tile ${tile.z}/${tile.x}/${tile.y} not available (204)")
+                return ByteArray(0)
+            }
             if (responseCode != HttpURLConnection.HTTP_OK) {
                 Log.w(TAG, "HTTP $responseCode for tile ${tile.z}/${tile.x}/${tile.y}")
                 throw IOException("HTTP $responseCode for $urlString")

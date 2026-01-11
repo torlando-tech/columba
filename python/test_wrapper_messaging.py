@@ -1628,6 +1628,122 @@ class TestPollReceivedMessages(unittest.TestCase):
         msg = messages[0]
         self.assertNotIn('public_key', msg)
 
+    @patch('reticulum_wrapper.RNS')
+    def test_poll_extracts_valid_hop_count(self, mock_rns):
+        """Test that poll_received_messages extracts valid hop counts (0 or positive)"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+
+        # Mock router with pending message
+        mock_router = Mock()
+        mock_message = MagicMock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash123456789'
+
+        mock_router.pending_inbound = [mock_message]
+        wrapper.router = mock_router
+
+        # Mock RNS.Transport with valid hop count
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 3
+        mock_rns.Transport.path_table = {}
+        mock_rns.Identity.recall.return_value = None
+
+        messages = wrapper.poll_received_messages()
+
+        self.assertEqual(len(messages), 1)
+        self.assertIn('hops', messages[0])
+        self.assertEqual(messages[0]['hops'], 3)
+
+    @patch('reticulum_wrapper.RNS')
+    def test_poll_extracts_zero_hop_count(self, mock_rns):
+        """Test that poll_received_messages extracts hop count of 0 (direct)"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+
+        mock_router = Mock()
+        mock_message = MagicMock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345678a'
+
+        mock_router.pending_inbound = [mock_message]
+        wrapper.router = mock_router
+
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 0
+        mock_rns.Transport.path_table = {}
+        mock_rns.Identity.recall.return_value = None
+
+        messages = wrapper.poll_received_messages()
+
+        self.assertEqual(len(messages), 1)
+        self.assertIn('hops', messages[0])
+        self.assertEqual(messages[0]['hops'], 0)
+
+    @patch('reticulum_wrapper.RNS')
+    def test_poll_skips_negative_hop_count(self, mock_rns):
+        """Test that poll_received_messages skips negative hop counts"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+
+        mock_router = Mock()
+        mock_message = MagicMock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345678b'
+
+        mock_router.pending_inbound = [mock_message]
+        wrapper.router = mock_router
+
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = -1  # Invalid hop count
+        mock_rns.Transport.path_table = {}
+        mock_rns.Identity.recall.return_value = None
+
+        messages = wrapper.poll_received_messages()
+
+        self.assertEqual(len(messages), 1)
+        self.assertNotIn('hops', messages[0])  # Should NOT include invalid hop count
+
+    @patch('reticulum_wrapper.RNS')
+    def test_poll_skips_none_hop_count(self, mock_rns):
+        """Test that poll_received_messages skips None hop counts"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+
+        mock_router = Mock()
+        mock_message = MagicMock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345678c'
+
+        mock_router.pending_inbound = [mock_message]
+        wrapper.router = mock_router
+
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = None  # No path info
+        mock_rns.Transport.path_table = {}
+        mock_rns.Identity.recall.return_value = None
+
+        messages = wrapper.poll_received_messages()
+
+        self.assertEqual(len(messages), 1)
+        self.assertNotIn('hops', messages[0])  # Should NOT include None hop count
+
 
 class TestErrorHandling(unittest.TestCase):
     """Test error handling across messaging methods"""

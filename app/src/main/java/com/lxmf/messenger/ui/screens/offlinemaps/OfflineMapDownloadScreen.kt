@@ -3,7 +3,6 @@ package com.lxmf.messenger.ui.screens.offlinemaps
 import android.Manifest
 import android.location.Location
 import android.util.Log
-import java.util.Locale
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -67,6 +66,7 @@ import com.lxmf.messenger.map.TileDownloadManager
 import com.lxmf.messenger.viewmodel.DownloadWizardStep
 import com.lxmf.messenger.viewmodel.OfflineMapDownloadViewModel
 import com.lxmf.messenger.viewmodel.RadiusOption
+import java.util.Locale
 
 private const val TAG = "OfflineMapDownload"
 
@@ -463,8 +463,9 @@ fun LocationSelectionStep(
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Text(
-                        text = "Location set: ${String.format(Locale.US, "%.4f", latitude)}, " +
-                            String.format(Locale.US, "%.4f", longitude),
+                        text =
+                            "Location set: ${String.format(Locale.US, "%.4f", latitude)}, " +
+                                String.format(Locale.US, "%.4f", longitude),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(start = 8.dp),
                     )

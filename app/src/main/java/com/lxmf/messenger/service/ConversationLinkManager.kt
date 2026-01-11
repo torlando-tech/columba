@@ -140,8 +140,9 @@ class ConversationLinkManager
                     if (expectedRateBps != null && expectedRateBps > 0) {
                         return expectedRateBps
                     }
-                    val rates = listOfNotNull(establishmentRateBps, nextHopBitrateBps)
-                        .filter { it > 0 }
+                    val rates =
+                        listOfNotNull(establishmentRateBps, nextHopBitrateBps)
+                            .filter { it > 0 }
                     return rates.maxOrNull()
                 }
 

@@ -175,23 +175,25 @@ class TileDownloadManager(
                 return null
             }
 
-            _progress.value = _progress.value.copy(
-                status = DownloadProgress.Status.DOWNLOADING,
-                totalTiles = tiles.size,
-                downloadedTiles = 0,
-                failedTiles = 0,
-                bytesDownloaded = 0,
-            )
+            _progress.value =
+                _progress.value.copy(
+                    status = DownloadProgress.Status.DOWNLOADING,
+                    totalTiles = tiles.size,
+                    downloadedTiles = 0,
+                    failedTiles = 0,
+                    bytesDownloaded = 0,
+                )
 
-            val writer = MBTilesWriter(
-                file = params.outputFile,
-                name = params.name,
-                description = "Offline map for ${params.name}",
-                minZoom = params.minZoom,
-                maxZoom = params.maxZoom,
-                bounds = bounds,
-                center = MBTilesWriter.Center(params.centerLon, params.centerLat, (params.minZoom + params.maxZoom) / 2),
-            )
+            val writer =
+                MBTilesWriter(
+                    file = params.outputFile,
+                    name = params.name,
+                    description = "Offline map for ${params.name}",
+                    minZoom = params.minZoom,
+                    maxZoom = params.maxZoom,
+                    bounds = bounds,
+                    center = MBTilesWriter.Center(params.centerLon, params.centerLat, (params.minZoom + params.maxZoom) / 2),
+                )
             writer.open()
 
             try {
@@ -239,12 +241,13 @@ class TileDownloadManager(
                         if (isCancelled) return@forEach
 
                         // Download batch concurrently
-                        val results = batch.map { tile ->
-                            async {
-                                if (isCancelled) return@async null
-                                semaphore.withPermit { downloadTileWithRetry(tile) }
-                            }
-                        }.awaitAll()
+                        val results =
+                            batch.map { tile ->
+                                async {
+                                    if (isCancelled) return@async null
+                                    semaphore.withPermit { downloadTileWithRetry(tile) }
+                                }
+                            }.awaitAll()
 
                         // Write batch immediately to reduce memory footprint
                         for ((index, data) in results.withIndex()) {
@@ -257,11 +260,12 @@ class TileDownloadManager(
                                 failedCount++
                             }
                         }
-                        _progress.value = _progress.value.copy(
-                            downloadedTiles = downloadedCount,
-                            failedTiles = failedCount,
-                            bytesDownloaded = totalBytes,
-                        )
+                        _progress.value =
+                            _progress.value.copy(
+                                downloadedTiles = downloadedCount,
+                                failedTiles = failedCount,
+                                bytesDownloaded = totalBytes,
+                            )
                     }
                 }
             }
@@ -284,7 +288,10 @@ class TileDownloadManager(
     /**
      * Download tiles from RMSP server.
      */
-    private suspend fun downloadRegionRmsp(source: TileSource.Rmsp, params: RegionParams): File? {
+    private suspend fun downloadRegionRmsp(
+        source: TileSource.Rmsp,
+        params: RegionParams,
+    ): File? {
         return try {
             val allTiles = fetchAllRmspTiles(source, params) ?: return null
 
@@ -301,26 +308,31 @@ class TileDownloadManager(
         }
     }
 
-    private suspend fun fetchAllRmspTiles(source: TileSource.Rmsp, params: RegionParams): List<RmspTile>? {
+    private suspend fun fetchAllRmspTiles(
+        source: TileSource.Rmsp,
+        params: RegionParams,
+    ): List<RmspTile>? {
         _progress.value = _progress.value.copy(status = DownloadProgress.Status.CALCULATING)
 
         val bounds = MBTilesWriter.boundsFromCenter(params.centerLat, params.centerLon, params.radiusKm)
-        val geohashPrecision = when {
-            params.radiusKm <= 5 -> 5
-            params.radiusKm <= 20 -> 4
-            params.radiusKm <= 80 -> 3
-            else -> 2
-        }
+        val geohashPrecision =
+            when {
+                params.radiusKm <= 5 -> 5
+                params.radiusKm <= 20 -> 4
+                params.radiusKm <= 80 -> 3
+                else -> 2
+            }
         val geohashes = geohashesForBounds(bounds, geohashPrecision)
 
         Log.d(TAG, "RMSP Download: ${geohashes.size} geohash cells at precision $geohashPrecision")
         Log.d(TAG, "Server: ${source.serverHash}, zoom range ${params.minZoom}-${params.maxZoom}")
 
-        _progress.value = _progress.value.copy(
-            status = DownloadProgress.Status.DOWNLOADING,
-            totalTiles = geohashes.size,
-            downloadedTiles = 0,
-        )
+        _progress.value =
+            _progress.value.copy(
+                status = DownloadProgress.Status.DOWNLOADING,
+                totalTiles = geohashes.size,
+                downloadedTiles = 0,
+            )
 
         val allTiles = mutableListOf<RmspTile>()
         val seenTileCoords = mutableSetOf<Triple<Int, Int, Int>>()
@@ -352,19 +364,23 @@ class TileDownloadManager(
         return allTiles
     }
 
-    private fun writeRmspTilesToFile(allTiles: List<RmspTile>, params: RegionParams): File? {
+    private fun writeRmspTilesToFile(
+        allTiles: List<RmspTile>,
+        params: RegionParams,
+    ): File? {
         _progress.value = _progress.value.copy(totalTiles = allTiles.size, downloadedTiles = 0, status = DownloadProgress.Status.WRITING)
 
         val bounds = MBTilesWriter.boundsFromCenter(params.centerLat, params.centerLon, params.radiusKm)
-        val writer = MBTilesWriter(
-            file = params.outputFile,
-            name = params.name,
-            description = "Offline map from RMSP: ${params.name}",
-            minZoom = params.minZoom,
-            maxZoom = params.maxZoom,
-            bounds = bounds,
-            center = MBTilesWriter.Center(params.centerLon, params.centerLat, (params.minZoom + params.maxZoom) / 2),
-        )
+        val writer =
+            MBTilesWriter(
+                file = params.outputFile,
+                name = params.name,
+                description = "Offline map from RMSP: ${params.name}",
+                minZoom = params.minZoom,
+                maxZoom = params.maxZoom,
+                bounds = bounds,
+                center = MBTilesWriter.Center(params.centerLon, params.centerLat, (params.minZoom + params.maxZoom) / 2),
+            )
         writer.open()
 
         try {

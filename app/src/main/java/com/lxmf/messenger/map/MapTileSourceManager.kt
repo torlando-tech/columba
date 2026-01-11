@@ -73,6 +73,7 @@ class MapTileSourceManager
         // Runtime overrides for backwards compatibility
         @Volatile
         private var _httpEnabledOverride: Boolean? = null
+
         @Volatile
         private var _rmspEnabledOverride: Boolean? = null
 
@@ -105,20 +106,21 @@ class MapTileSourceManager
             Log.d(TAG, "Getting map style for location: $latitude, $longitude (HTTP=$httpEnabled, RMSP=$rmspEnabled)")
 
             // Check offline source first
-            val offlineResult = if (latitude != null && longitude != null) {
-                findOfflineRegion(latitude, longitude)?.let { region ->
-                    val path = region.mbtilesPath
-                    if (path != null) {
-                        Log.d(TAG, "Found offline region: ${region.name}")
-                        val styleJson = OfflineMapStyleBuilder.buildOfflineStyle(path, region.name)
-                        MapStyleResult.Offline(styleJson, region.name)
-                    } else {
-                        null
+            val offlineResult =
+                if (latitude != null && longitude != null) {
+                    findOfflineRegion(latitude, longitude)?.let { region ->
+                        val path = region.mbtilesPath
+                        if (path != null) {
+                            Log.d(TAG, "Found offline region: ${region.name}")
+                            val styleJson = OfflineMapStyleBuilder.buildOfflineStyle(path, region.name)
+                            MapStyleResult.Offline(styleJson, region.name)
+                        } else {
+                            null
+                        }
                     }
+                } else {
+                    null
                 }
-            } else {
-                null
-            }
             if (offlineResult != null) return offlineResult
 
             // Check HTTP source, then RMSP source, then return unavailable

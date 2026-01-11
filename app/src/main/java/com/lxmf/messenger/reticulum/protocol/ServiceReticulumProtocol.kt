@@ -2427,20 +2427,21 @@ class ServiceReticulumProtocol(
             // Store in repository using protocolScope
             protocolScope.launch {
                 try {
-                    val announce = com.lxmf.messenger.data.repository.RmspServerAnnounce(
-                        destinationHash = destHashHex,
-                        serverName = serverName,
-                        publicKey = publicKey,
-                        coverageGeohashes = coverage,
-                        minZoom = minZoom,
-                        maxZoom = maxZoom,
-                        formats = formats,
-                        layers = layers,
-                        dataUpdatedTimestamp = dataUpdated,
-                        dataSize = dataSize,
-                        version = version,
-                        hops = hops,
-                    )
+                    val announce =
+                        com.lxmf.messenger.data.repository.RmspServerAnnounce(
+                            destinationHash = destHashHex,
+                            serverName = serverName,
+                            publicKey = publicKey,
+                            coverageGeohashes = coverage,
+                            minZoom = minZoom,
+                            maxZoom = maxZoom,
+                            formats = formats,
+                            layers = layers,
+                            dataUpdatedTimestamp = dataUpdated,
+                            dataSize = dataSize,
+                            version = version,
+                            hops = hops,
+                        )
                     rmspServerRepository.upsertServer(announce)
                     Log.d(TAG, "RMSP server stored: $serverName")
                 } catch (e: Exception) {

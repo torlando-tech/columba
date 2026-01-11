@@ -168,21 +168,22 @@ class RmspServerRepository
          * Insert or update a server from an announce.
          */
         suspend fun upsertServer(announce: RmspServerAnnounce) {
-            val entity = RmspServerEntity(
-                destinationHash = announce.destinationHash,
-                serverName = announce.serverName,
-                publicKey = announce.publicKey,
-                coverageGeohashes = announce.coverageGeohashes.joinToString(","),
-                minZoom = announce.minZoom,
-                maxZoom = announce.maxZoom,
-                formats = announce.formats.joinToString(","),
-                layers = announce.layers.joinToString(","),
-                dataUpdatedTimestamp = announce.dataUpdatedTimestamp,
-                dataSize = announce.dataSize,
-                version = announce.version,
-                lastSeenTimestamp = System.currentTimeMillis(),
-                hops = announce.hops,
-            )
+            val entity =
+                RmspServerEntity(
+                    destinationHash = announce.destinationHash,
+                    serverName = announce.serverName,
+                    publicKey = announce.publicKey,
+                    coverageGeohashes = announce.coverageGeohashes.joinToString(","),
+                    minZoom = announce.minZoom,
+                    maxZoom = announce.maxZoom,
+                    formats = announce.formats.joinToString(","),
+                    layers = announce.layers.joinToString(","),
+                    dataUpdatedTimestamp = announce.dataUpdatedTimestamp,
+                    dataSize = announce.dataSize,
+                    version = announce.version,
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                    hops = announce.hops,
+                )
             rmspServerDao.upsertServer(entity)
         }
 

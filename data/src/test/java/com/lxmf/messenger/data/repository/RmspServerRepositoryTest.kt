@@ -14,21 +14,22 @@ import org.junit.Test
  */
 class RmspServerRepositoryTest {
     companion object {
-        private val DEFAULT_SERVER = RmspServer(
-            destinationHash = "abc123",
-            serverName = "Test Server",
-            publicKey = byteArrayOf(1, 2, 3),
-            coverageGeohashes = listOf("9q8y"),
-            minZoom = 0,
-            maxZoom = 14,
-            formats = listOf("pbf"),
-            layers = listOf("base"),
-            dataUpdatedTimestamp = 1000000L,
-            dataSize = 1000000L,
-            version = "1.0",
-            lastSeenTimestamp = 2000000L,
-            hops = 1,
-        )
+        private val DEFAULT_SERVER =
+            RmspServer(
+                destinationHash = "abc123",
+                serverName = "Test Server",
+                publicKey = byteArrayOf(1, 2, 3),
+                coverageGeohashes = listOf("9q8y"),
+                minZoom = 0,
+                maxZoom = 14,
+                formats = listOf("pbf"),
+                layers = listOf("base"),
+                dataUpdatedTimestamp = 1000000L,
+                dataSize = 1000000L,
+                version = "1.0",
+                lastSeenTimestamp = 2000000L,
+                hops = 1,
+            )
     }
 
     // ========== RmspServer coversGeohash() Tests ==========
@@ -208,20 +209,21 @@ class RmspServerRepositoryTest {
 
     @Test
     fun `RmspServerAnnounce holds correct values`() {
-        val announce = RmspServerAnnounce(
-            destinationHash = "abc123",
-            serverName = "Test Server",
-            publicKey = byteArrayOf(1, 2, 3),
-            coverageGeohashes = listOf("9q8y"),
-            minZoom = 0,
-            maxZoom = 14,
-            formats = listOf("pbf"),
-            layers = listOf("base"),
-            dataUpdatedTimestamp = 1000L,
-            dataSize = 5000L,
-            version = "1.0",
-            hops = 2,
-        )
+        val announce =
+            RmspServerAnnounce(
+                destinationHash = "abc123",
+                serverName = "Test Server",
+                publicKey = byteArrayOf(1, 2, 3),
+                coverageGeohashes = listOf("9q8y"),
+                minZoom = 0,
+                maxZoom = 14,
+                formats = listOf("pbf"),
+                layers = listOf("base"),
+                dataUpdatedTimestamp = 1000L,
+                dataSize = 5000L,
+                version = "1.0",
+                hops = 2,
+            )
 
         assertEquals("abc123", announce.destinationHash)
         assertEquals("Test Server", announce.serverName)
@@ -239,20 +241,21 @@ class RmspServerRepositoryTest {
 
     @Test
     fun `RmspServerAnnounce handles null dataSize`() {
-        val announce = RmspServerAnnounce(
-            destinationHash = "abc123",
-            serverName = "Test Server",
-            publicKey = byteArrayOf(),
-            coverageGeohashes = emptyList(),
-            minZoom = 0,
-            maxZoom = 14,
-            formats = emptyList(),
-            layers = emptyList(),
-            dataUpdatedTimestamp = 0L,
-            dataSize = null,
-            version = "1.0",
-            hops = 0,
-        )
+        val announce =
+            RmspServerAnnounce(
+                destinationHash = "abc123",
+                serverName = "Test Server",
+                publicKey = byteArrayOf(),
+                coverageGeohashes = emptyList(),
+                minZoom = 0,
+                maxZoom = 14,
+                formats = emptyList(),
+                layers = emptyList(),
+                dataUpdatedTimestamp = 0L,
+                dataSize = null,
+                version = "1.0",
+                hops = 0,
+            )
 
         assertNull(announce.dataSize)
     }
@@ -261,11 +264,12 @@ class RmspServerRepositoryTest {
 
     @Test
     fun `RmspServer handles empty lists correctly`() {
-        val server = DEFAULT_SERVER.copy(
-            coverageGeohashes = emptyList(),
-            formats = emptyList(),
-            layers = emptyList(),
-        )
+        val server =
+            DEFAULT_SERVER.copy(
+                coverageGeohashes = emptyList(),
+                formats = emptyList(),
+                layers = emptyList(),
+            )
 
         assertEquals(emptyList<String>(), server.coverageGeohashes)
         assertEquals(emptyList<String>(), server.formats)
@@ -274,11 +278,12 @@ class RmspServerRepositoryTest {
 
     @Test
     fun `RmspServer handles zero values correctly`() {
-        val server = DEFAULT_SERVER.copy(
-            minZoom = 0,
-            maxZoom = 0,
-            hops = 0,
-        )
+        val server =
+            DEFAULT_SERVER.copy(
+                minZoom = 0,
+                maxZoom = 0,
+                hops = 0,
+            )
 
         assertEquals(0, server.minZoom)
         assertEquals(0, server.maxZoom)
@@ -291,5 +296,4 @@ class RmspServerRepositoryTest {
 
         assertEquals(255, server.hops)
     }
-
 }

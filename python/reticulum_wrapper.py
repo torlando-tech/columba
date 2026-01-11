@@ -4844,9 +4844,11 @@ class ReticulumWrapper:
                         try:
                             if RNS.Transport.has_path(lxmf_message.source_hash):
                                 hops = RNS.Transport.hops_to(lxmf_message.source_hash)
-                                message_event['hops'] = hops
-                                log_debug("ReticulumWrapper", "poll_received_messages",
-                                         f"📡 Hop count to sender: {hops}")
+                                # Only store valid hop counts (0 or positive)
+                                if hops is not None and hops >= 0:
+                                    message_event['hops'] = hops
+                                    log_debug("ReticulumWrapper", "poll_received_messages",
+                                             f"📡 Hop count to sender: {hops}")
                         except Exception as e:
                             log_debug("ReticulumWrapper", "poll_received_messages",
                                      f"⚠️ Could not get hop count: {e}")

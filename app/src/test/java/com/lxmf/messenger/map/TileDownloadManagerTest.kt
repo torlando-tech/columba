@@ -1090,6 +1090,80 @@ class TileDownloadManagerRobolectricTest {
             unmockkConstructor(MBTilesWriter::class)
         }
 
+    // ========== RMSP Tile Validation Tests ==========
+
+    @Test
+    fun `unpackRmspTiles rejects negative tile count`() {
+        val buffer = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN)
+        buffer.putInt(-1) // Invalid negative count
+
+        val manager = TileDownloadManager(context, TileSource.Http())
+        val tiles = manager.unpackRmspTiles(buffer.array())
+
+        assertTrue("Should return empty list for negative tile count", tiles.isEmpty())
+    }
+
+    @Test
+    fun `unpackRmspTiles rejects excessive tile count`() {
+        val buffer = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN)
+        buffer.putInt(100_001) // Exceeds 100,000 limit
+
+        val manager = TileDownloadManager(context, TileSource.Http())
+        val tiles = manager.unpackRmspTiles(buffer.array())
+
+        assertTrue("Should return empty list for excessive tile count", tiles.isEmpty())
+    }
+
+    @Test
+    fun `unpackRmspTiles rejects negative tile size`() {
+        val buffer = ByteBuffer.allocate(17).order(ByteOrder.BIG_ENDIAN)
+        buffer.putInt(1) // tile count = 1
+        buffer.put(10.toByte()) // z
+        buffer.putInt(100) // x
+        buffer.putInt(200) // y
+        buffer.putInt(-1) // Invalid negative size
+
+        val manager = TileDownloadManager(context, TileSource.Http())
+        val tiles = manager.unpackRmspTiles(buffer.array())
+
+        assertTrue("Should return empty list for negative tile size", tiles.isEmpty())
+    }
+
+    @Test
+    fun `unpackRmspTiles rejects excessive tile size`() {
+        val buffer = ByteBuffer.allocate(17).order(ByteOrder.BIG_ENDIAN)
+        buffer.putInt(1) // tile count = 1
+        buffer.put(10.toByte()) // z
+        buffer.putInt(100) // x
+        buffer.putInt(200) // y
+        buffer.putInt(1_000_001) // Exceeds 1MB limit
+
+        val manager = TileDownloadManager(context, TileSource.Http())
+        val tiles = manager.unpackRmspTiles(buffer.array())
+
+        assertTrue("Should return empty list for excessive tile size", tiles.isEmpty())
+    }
+
+    @Test
+    fun `unpackRmspTiles accepts valid tile data`() {
+        val tileData = ByteArray(50) { it.toByte() }
+        val buffer = ByteBuffer.allocate(4 + 13 + tileData.size).order(ByteOrder.BIG_ENDIAN)
+        buffer.putInt(1) // tile count = 1
+        buffer.put(10.toByte()) // z
+        buffer.putInt(100) // x
+        buffer.putInt(200) // y
+        buffer.putInt(tileData.size) // valid size
+        buffer.put(tileData)
+
+        val manager = TileDownloadManager(context, TileSource.Http())
+        val tiles = manager.unpackRmspTiles(buffer.array())
+
+        assertEquals("Should parse one valid tile", 1, tiles.size)
+        assertEquals("Tile z should match", 10, tiles[0].z)
+        assertEquals("Tile x should match", 100, tiles[0].x)
+        assertEquals("Tile y should match", 200, tiles[0].y)
+    }
+
     // ========== Geohash Precision Selection Tests ==========
 
     @Test

@@ -935,6 +935,30 @@ class MBTilesWriterRobolectricTest {
     }
 
     @Test
+    fun `close with active transaction rolls back uncommitted changes`() {
+        val writer = MBTilesWriter(file = testFile, name = "Test Map")
+        writer.open()
+
+        // Write one tile and commit
+        writer.writeTile(0, 0, 0, byteArrayOf(1))
+
+        // Start transaction and write another tile but don't commit
+        writer.beginTransaction()
+        writer.writeTile(1, 0, 0, byteArrayOf(2))
+
+        // Close without ending transaction - should rollback
+        writer.close()
+
+        // Verify only the first tile was persisted
+        val db = SQLiteDatabase.openDatabase(testFile.path, null, SQLiteDatabase.OPEN_READONLY)
+        val cursor = db.rawQuery("SELECT COUNT(*) FROM tiles", null)
+        cursor.moveToFirst()
+        assertEquals("Only committed tile should be persisted", 1, cursor.getInt(0))
+        cursor.close()
+        db.close()
+    }
+
+    @Test
     fun `optimize compacts the database`() {
         val writer = MBTilesWriter(file = testFile, name = "Test Map")
         writer.open()

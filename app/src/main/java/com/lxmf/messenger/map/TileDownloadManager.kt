@@ -396,7 +396,8 @@ class TileDownloadManager(
      * Format: tile_count (u32), followed by tile_entries
      * Each tile_entry: z (u8), x (u32), y (u32), size (u32), data (bytes)
      */
-    private fun unpackRmspTiles(data: ByteArray): List<RmspTile> {
+    @Suppress("MemberVisibilityCanBePrivate") // Internal for testing
+    internal fun unpackRmspTiles(data: ByteArray): List<RmspTile> {
         val tiles = mutableListOf<RmspTile>()
         if (data.size < 4) return tiles
 
@@ -437,7 +438,8 @@ class TileDownloadManager(
         return tiles
     }
 
-    private data class RmspTile(
+    @Suppress("MemberVisibilityCanBePrivate") // Internal for testing
+    internal data class RmspTile(
         val z: Int,
         val x: Int,
         val y: Int,

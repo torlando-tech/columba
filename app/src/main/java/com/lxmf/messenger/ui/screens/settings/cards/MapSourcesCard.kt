@@ -56,14 +56,16 @@ fun MapSourcesCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Header
@@ -107,11 +109,12 @@ fun MapSourcesCard(
             if (RMSP_FEATURE_ENABLED) {
                 MapSourceToggle(
                     title = "RMSP (Mesh Network)",
-                    description = if (rmspServerCount > 0) {
-                        "$rmspServerCount server${if (rmspServerCount != 1) "s" else ""} available"
-                    } else {
-                        "Fetch tiles from Reticulum mesh"
-                    },
+                    description =
+                        if (rmspServerCount > 0) {
+                            "$rmspServerCount server${if (rmspServerCount != 1) "s" else ""} available"
+                        } else {
+                            "Fetch tiles from Reticulum mesh"
+                        },
                     enabled = rmspEnabled,
                     onEnabledChange = { enabled ->
                         if (enabled || canDisableRmsp) {
@@ -125,9 +128,10 @@ fun MapSourcesCard(
             // Warning when no sources enabled
             if (showWarning) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -165,11 +169,12 @@ private fun MapSourceToggle(
     isDisabled: Boolean = false,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = !isDisabled) {
-                onEnabledChange(!enabled)
-            },
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !isDisabled) {
+                    onEnabledChange(!enabled)
+                },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -180,20 +185,22 @@ private fun MapSourceToggle(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = if (isDisabled) {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
+                color =
+                    if (isDisabled) {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (isDisabled) {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                color =
+                    if (isDisabled) {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
             )
         }
         Switch(

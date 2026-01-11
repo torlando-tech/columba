@@ -53,11 +53,12 @@ internal class LegacySettingsImporter(
     private suspend fun importAnnounceSettings(settings: SettingsExport) {
         settings.autoAnnounceEnabled?.let { settingsRepository.saveAutoAnnounceEnabled(it) }
         // Use hours field if present, otherwise convert legacy minutes to hours
-        val intervalHours = settings.autoAnnounceIntervalHours
-            ?: settings.autoAnnounceIntervalMinutes?.let { minutes ->
-                // Old values (5, 10, 15, 30, 60 min) all < 60, convert with rounding and clamp to valid range
-                ((minutes + 30) / 60).coerceIn(1, 12)
-            }
+        val intervalHours =
+            settings.autoAnnounceIntervalHours
+                ?: settings.autoAnnounceIntervalMinutes?.let { minutes ->
+                    // Old values (5, 10, 15, 30, 60 min) all < 60, convert with rounding and clamp to valid range
+                    ((minutes + 30) / 60).coerceIn(1, 12)
+                }
         intervalHours?.let { settingsRepository.saveAutoAnnounceIntervalHours(it) }
         settings.lastAutoAnnounceTime?.let { settingsRepository.saveLastAutoAnnounceTime(it) }
     }

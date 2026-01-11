@@ -522,11 +522,12 @@ class ConnectivityPageTest {
         // Given/When
         composeTestRule.setContent {
             ConnectivityPage(
-                selectedInterfaces = setOf(
-                    OnboardingInterfaceType.AUTO,
-                    OnboardingInterfaceType.BLE,
-                    OnboardingInterfaceType.TCP,
-                ),
+                selectedInterfaces =
+                    setOf(
+                        OnboardingInterfaceType.AUTO,
+                        OnboardingInterfaceType.BLE,
+                        OnboardingInterfaceType.TCP,
+                    ),
                 onInterfaceToggle = {},
                 blePermissionsGranted = false,
                 blePermissionsDenied = false,
@@ -748,12 +749,13 @@ class ConnectivityPageTest {
         // Given/When
         composeTestRule.setContent {
             ConnectivityPage(
-                selectedInterfaces = setOf(
-                    OnboardingInterfaceType.AUTO,
-                    OnboardingInterfaceType.BLE,
-                    OnboardingInterfaceType.TCP,
-                    OnboardingInterfaceType.RNODE,
-                ),
+                selectedInterfaces =
+                    setOf(
+                        OnboardingInterfaceType.AUTO,
+                        OnboardingInterfaceType.BLE,
+                        OnboardingInterfaceType.TCP,
+                        OnboardingInterfaceType.RNODE,
+                    ),
                 onInterfaceToggle = {},
                 blePermissionsGranted = true,
                 blePermissionsDenied = false,

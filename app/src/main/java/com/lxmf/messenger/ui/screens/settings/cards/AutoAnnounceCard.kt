@@ -247,18 +247,19 @@ private fun AnnounceStatus(
         if (nextAnnounceTime != null) {
             val timeUntilNext = nextAnnounceTime - System.currentTimeMillis()
 
-            val displayText = if (timeUntilNext <= 0) {
-                "Next announce: soon"
-            } else {
-                val hoursRemaining = (timeUntilNext / 3600000).toInt()
-                val minutesRemaining = ((timeUntilNext % 3600000) / 60000).toInt()
-
-                if (hoursRemaining > 0) {
-                    "Next announce in: ${hoursRemaining}h ${minutesRemaining}m"
+            val displayText =
+                if (timeUntilNext <= 0) {
+                    "Next announce: soon"
                 } else {
-                    "Next announce in: ${minutesRemaining}m"
+                    val hoursRemaining = (timeUntilNext / 3600000).toInt()
+                    val minutesRemaining = ((timeUntilNext % 3600000) / 60000).toInt()
+
+                    if (hoursRemaining > 0) {
+                        "Next announce in: ${hoursRemaining}h ${minutesRemaining}m"
+                    } else {
+                        "Next announce in: ${minutesRemaining}m"
+                    }
                 }
-            }
 
             Text(
                 text = displayText,

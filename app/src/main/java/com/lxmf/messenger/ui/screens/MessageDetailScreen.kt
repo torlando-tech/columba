@@ -115,43 +115,46 @@ fun MessageDetailScreen(
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Timestamp card
+                // Timestamp card - label depends on message direction
                 MessageInfoCard(
                     icon = Icons.Default.AccessTime,
-                    title = "Sent",
+                    title = if (msg.isFromMe) "Sent" else "Received",
                     content = formatFullTimestamp(msg.timestamp),
                 )
 
-                // Status card
-                val statusInfo = getStatusInfo(msg.status)
-                MessageInfoCard(
-                    icon = statusInfo.icon,
-                    iconTint = statusInfo.color,
-                    title = "Status",
-                    content = statusInfo.text,
-                    subtitle = statusInfo.subtitle,
-                )
-
-                // Delivery method card (only if available)
-                msg.deliveryMethod?.let { method ->
-                    val methodInfo = getDeliveryMethodInfo(method)
+                // Status, delivery method, and error cards only apply to sent messages
+                if (msg.isFromMe) {
+                    // Status card
+                    val statusInfo = getStatusInfo(msg.status)
                     MessageInfoCard(
-                        icon = methodInfo.icon,
-                        title = "Delivery Method",
-                        content = methodInfo.text,
-                        subtitle = methodInfo.subtitle,
+                        icon = statusInfo.icon,
+                        iconTint = statusInfo.color,
+                        title = "Status",
+                        content = statusInfo.text,
+                        subtitle = statusInfo.subtitle,
                     )
-                }
 
-                // Error card (only if failed and has error message)
-                if (msg.status == "failed" && !msg.errorMessage.isNullOrBlank()) {
-                    MessageInfoCard(
-                        icon = Icons.Default.Error,
-                        iconTint = MaterialTheme.colorScheme.error,
-                        title = "Error Details",
-                        content = msg.errorMessage,
-                        contentColor = MaterialTheme.colorScheme.error,
-                    )
+                    // Delivery method card (only if available)
+                    msg.deliveryMethod?.let { method ->
+                        val methodInfo = getDeliveryMethodInfo(method)
+                        MessageInfoCard(
+                            icon = methodInfo.icon,
+                            title = "Delivery Method",
+                            content = methodInfo.text,
+                            subtitle = methodInfo.subtitle,
+                        )
+                    }
+
+                    // Error card (only if failed and has error message)
+                    if (msg.status == "failed" && !msg.errorMessage.isNullOrBlank()) {
+                        MessageInfoCard(
+                            icon = Icons.Default.Error,
+                            iconTint = MaterialTheme.colorScheme.error,
+                            title = "Error Details",
+                            content = msg.errorMessage,
+                            contentColor = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
         }

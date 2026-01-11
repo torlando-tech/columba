@@ -2,6 +2,7 @@ package com.lxmf.messenger.map
 
 import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
+import android.util.Log
 import java.io.Closeable
 import java.io.File
 import kotlin.math.pow
@@ -237,6 +238,13 @@ class MBTilesWriter(
     }
 
     override fun close() {
+        db?.let { database ->
+            // Rollback any active transaction before closing
+            if (database.inTransaction()) {
+                Log.w("MBTilesWriter", "Closing with active transaction - rolling back")
+                database.endTransaction()
+            }
+        }
         db?.close()
         db = null
     }

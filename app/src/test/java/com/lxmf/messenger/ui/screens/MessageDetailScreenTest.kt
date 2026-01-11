@@ -598,4 +598,117 @@ class MessageDetailScreenTest {
         composeTestRule.onNodeWithText("Delivery Method").assertDoesNotExist()
         composeTestRule.onNodeWithText("Error Details").assertDoesNotExist()
     }
+
+    // ========== Hop Count Card Tests ==========
+
+    @Test
+    fun `hop count card displays Direct for zero hops`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 0),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Hop Count").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Direct").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Message received directly from sender").assertIsDisplayed()
+    }
+
+    @Test
+    fun `hop count card displays singular hop for one hop`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 1),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Hop Count").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 hop").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Message traveled through 1 relay").assertIsDisplayed()
+    }
+
+    @Test
+    fun `hop count card displays plural hops for multiple hops`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 3),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Hop Count").assertIsDisplayed()
+        composeTestRule.onNodeWithText("3 hops").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Message traveled through 3 relays").assertIsDisplayed()
+    }
+
+    @Test
+    fun `hop count card displays Unknown for negative hops`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = -1),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Hop Count").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Unknown").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Hop count unavailable").assertIsDisplayed()
+    }
+
+    @Test
+    fun `hop count card not displayed when hop count is null`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = null),
+            )
+
+        composeTestRule.setContent {
+            MessageDetailScreen(
+                messageId = "test-id",
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Hop Count").assertDoesNotExist()
+    }
 }

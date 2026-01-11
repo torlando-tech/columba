@@ -11,6 +11,7 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.ui.theme.PresetTheme
@@ -58,6 +59,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var interfaceRepository: InterfaceRepository
+    private lateinit var mapTileSourceManager: MapTileSourceManager
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -91,6 +93,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         propagationNodeManager = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
         interfaceRepository = mockk(relaxed = true)
+        mapTileSourceManager = mockk(relaxed = true)
 
         // Mock interfaceRepository flows
         every { interfaceRepository.enabledInterfaces } returns MutableStateFlow(emptyList<InterfaceConfig>())
@@ -151,6 +154,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             propagationNodeManager = propagationNodeManager,
             locationSharingManager = locationSharingManager,
             interfaceRepository = interfaceRepository,
+            mapTileSourceManager = mapTileSourceManager,
         )
     }
 

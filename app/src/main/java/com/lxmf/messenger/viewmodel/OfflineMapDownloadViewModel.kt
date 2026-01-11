@@ -415,16 +415,21 @@ class OfflineMapDownloadViewModel
                 return TileSource.Rmsp(
                     serverHash = server.destinationHash,
                     fetchTiles = { geohash, zoomRange ->
-                        val zoomMin = zoomRange.minOrNull() ?: 0
-                        val zoomMax = zoomRange.maxOrNull() ?: 14
-                        reticulumProtocol.fetchRmspTiles(
-                            destinationHashHex = server.destinationHash,
-                            publicKey = serverPublicKey,
-                            geohash = geohash,
-                            zoomMin = zoomMin,
-                            zoomMax = zoomMax,
-                            timeoutMs = 3600_000L, // 1 hour timeout for large downloads
-                        )
+                        try {
+                            val zoomMin = zoomRange.minOrNull() ?: 0
+                            val zoomMax = zoomRange.maxOrNull() ?: 14
+                            reticulumProtocol.fetchRmspTiles(
+                                destinationHashHex = server.destinationHash,
+                                publicKey = serverPublicKey,
+                                geohash = geohash,
+                                zoomMin = zoomMin,
+                                zoomMax = zoomMax,
+                                timeoutMs = 3600_000L, // 1 hour timeout for large downloads
+                            )
+                        } catch (e: Exception) {
+                            Log.w(TAG, "RMSP fetch failed for geohash $geohash: ${e.message}")
+                            null // Allow download to continue with other geohashes
+                        }
                     },
                 )
             }

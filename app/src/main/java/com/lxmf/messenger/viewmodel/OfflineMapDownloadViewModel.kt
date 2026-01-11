@@ -352,14 +352,21 @@ class OfflineMapDownloadViewModel
 
                     if (result != null) {
                         // Mark as complete in database
-                        offlineMapRegionRepository.markComplete(
-                            id = regionId,
-                            tileCount = manager.progress.value.downloadedTiles,
-                            sizeBytes = result.length(),
-                            mbtilesPath = result.absolutePath,
-                        )
-
-                        _state.update { it.copy(isComplete = true) }
+                        try {
+                            offlineMapRegionRepository.markComplete(
+                                id = regionId,
+                                tileCount = manager.progress.value.downloadedTiles,
+                                sizeBytes = result.length(),
+                                mbtilesPath = result.absolutePath,
+                            )
+                            _state.update { it.copy(isComplete = true) }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to mark region complete in database", e)
+                            // Clean up the file since we can't track it
+                            result.delete()
+                            offlineMapRegionRepository.deleteRegion(regionId)
+                            _state.update { it.copy(errorMessage = "Failed to save region: ${e.message}") }
+                        }
                     }
                 } catch (e: Exception) {
                     _state.update {

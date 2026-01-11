@@ -424,16 +424,21 @@ class RmspClientWrapper:
                     log_error("RmspClient", "fetch_tiles", "Request timed out")
                     return None
 
-                # Check if it's an error response
-                if len(response_data) < 1000:
-                    try:
-                        response = umsgpack.unpackb(response_data)
-                        if "e" in response:
-                            log_error("RmspClient", "fetch_tiles",
-                                     f"Fetch error: {response.get('m')}")
-                            return None
-                    except:
-                        pass  # Not msgpack, probably real data
+                # Check if it's an error response by detecting msgpack map format
+                # Error responses are msgpack dicts, tile data starts with u32 tile count
+                # Msgpack maps start with: 0x80-0x8f (fixmap), 0xde (map16), 0xdf (map32)
+                if response_data and len(response_data) > 0:
+                    first_byte = response_data[0]
+                    is_msgpack_map = (0x80 <= first_byte <= 0x8f) or first_byte in (0xde, 0xdf)
+                    if is_msgpack_map:
+                        try:
+                            response = umsgpack.unpackb(response_data)
+                            if isinstance(response, dict) and "e" in response:
+                                log_error("RmspClient", "fetch_tiles",
+                                         f"Fetch error: {response.get('m')}")
+                                return None
+                        except Exception:
+                            pass  # Malformed msgpack, treat as tile data
 
                 log_info("RmspClient", "fetch_tiles",
                         f"Received {len(response_data)} bytes")

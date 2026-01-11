@@ -136,7 +136,10 @@ class MapTileSourceManager
                         Log.d(TAG, "Using RMSP server: ${server.serverName}")
                         MapStyleResult.Rmsp(server = server, styleJson = "")
                     } else {
-                        MapStyleResult.Unavailable("No RMSP servers available")
+                        Log.w(TAG, "RMSP enabled but no servers available")
+                        MapStyleResult.Unavailable(
+                            "No RMSP servers discovered. Enable HTTP in Settings > Map Sources to use online maps.",
+                        )
                     }
                 }
                 else -> MapStyleResult.Unavailable("Both HTTP and RMSP sources are disabled")

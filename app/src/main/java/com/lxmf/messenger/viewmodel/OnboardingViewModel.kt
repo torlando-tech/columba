@@ -193,72 +193,81 @@ class OnboardingViewModel
         }
 
         /**
-         * Create interface configurations based on user selections.
+         * Create or update interface configurations based on user selections.
+         * - Selected interfaces: create if missing, enable if exists
+         * - Unselected interfaces: disable if exists (preserve user config)
          */
         private suspend fun createSelectedInterfaces() {
             val selectedInterfaces = _state.value.selectedInterfaces
 
-            // Check existing interfaces to avoid duplicates
-            val existingInterfaces = interfaceRepository.allInterfaces.first()
-            val existingTypes = existingInterfaces.map { it::class.simpleName }.toSet()
+            // Get existing interface entities (which include IDs)
+            val existingEntities = interfaceRepository.allInterfaceEntities.first()
 
-            for (interfaceType in selectedInterfaces) {
-                val config = when (interfaceType) {
-                    OnboardingInterfaceType.AUTO -> {
-                        if (existingTypes.contains("AutoInterface")) {
-                            Log.d(TAG, "AutoInterface already exists, skipping")
-                            null
-                        } else {
-                            InterfaceConfig.AutoInterface(
+            // Map interface types to database type strings
+            val typeMapping = mapOf(
+                OnboardingInterfaceType.AUTO to "AutoInterface",
+                OnboardingInterfaceType.BLE to "AndroidBLE",
+                OnboardingInterfaceType.TCP to "TCPClient",
+                OnboardingInterfaceType.RNODE to "RNode",
+            )
+
+            // Process each interface type
+            for ((onboardingType, dbType) in typeMapping) {
+                val isSelected = selectedInterfaces.contains(onboardingType)
+                val existingEntity = existingEntities.find { it.type == dbType }
+
+                when {
+                    // RNode requires wizard setup, don't auto-create or modify
+                    onboardingType == OnboardingInterfaceType.RNODE -> {
+                        Log.d(TAG, "RNode requires wizard setup, skipping")
+                    }
+
+                    // Interface exists - update enabled state based on selection
+                    existingEntity != null -> {
+                        interfaceRepository.toggleInterfaceEnabled(existingEntity.id, isSelected)
+                        Log.d(TAG, "$dbType ${if (isSelected) "enabled" else "disabled"}")
+                    }
+
+                    // Interface doesn't exist and is selected - create it
+                    isSelected -> {
+                        val config = when (onboardingType) {
+                            OnboardingInterfaceType.AUTO -> InterfaceConfig.AutoInterface(
                                 name = "Local WiFi",
                                 enabled = true,
                             )
-                        }
-                    }
-                    OnboardingInterfaceType.BLE -> {
-                        if (existingTypes.contains("AndroidBLE")) {
-                            Log.d(TAG, "AndroidBLE already exists, skipping")
-                            null
-                        } else {
-                            InterfaceConfig.AndroidBLE(
+                            OnboardingInterfaceType.BLE -> InterfaceConfig.AndroidBLE(
                                 name = "Bluetooth LE",
                                 enabled = true,
                             )
+                            OnboardingInterfaceType.TCP -> {
+                                val defaultServer = TcpCommunityServers.servers.firstOrNull()
+                                if (defaultServer != null) {
+                                    InterfaceConfig.TCPClient(
+                                        name = defaultServer.name,
+                                        enabled = true,
+                                        targetHost = defaultServer.host,
+                                        targetPort = defaultServer.port,
+                                    )
+                                } else {
+                                    Log.w(TAG, "No default TCP server available")
+                                    null
+                                }
+                            }
+                            OnboardingInterfaceType.RNODE -> null
                         }
-                    }
-                    OnboardingInterfaceType.TCP -> {
-                        if (existingTypes.contains("TCPClient")) {
-                            Log.d(TAG, "TCPClient already exists, skipping")
-                            null
-                        } else {
-                            // Use the first community server as default
-                            val defaultServer = TcpCommunityServers.servers.firstOrNull()
-                            if (defaultServer != null) {
-                                InterfaceConfig.TCPClient(
-                                    name = defaultServer.name,
-                                    enabled = true,
-                                    targetHost = defaultServer.host,
-                                    targetPort = defaultServer.port,
-                                )
-                            } else {
-                                Log.w(TAG, "No default TCP server available")
-                                null
+                        config?.let {
+                            try {
+                                interfaceRepository.insertInterface(it)
+                                Log.d(TAG, "Created interface: ${it.name}")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to create interface: ${it.name}", e)
                             }
                         }
                     }
-                    OnboardingInterfaceType.RNODE -> {
-                        // RNode requires wizard setup, don't auto-create
-                        Log.d(TAG, "RNode requires wizard setup, not auto-creating")
-                        null
-                    }
-                }
 
-                config?.let {
-                    try {
-                        interfaceRepository.insertInterface(it)
-                        Log.d(TAG, "Created interface: ${it.name}")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to create interface: ${it.name}", e)
+                    // Interface doesn't exist and is not selected - nothing to do
+                    else -> {
+                        Log.d(TAG, "$dbType not selected and doesn't exist, skipping")
                     }
                 }
             }

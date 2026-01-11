@@ -1177,7 +1177,10 @@ class SettingsRepository
                         Log.w("SettingsRepository", "Skipping invalid preference: ${entry.key}", e)
                     }
                 }
-=======
+            }
+        }
+
+        /**
          * Save the HTTP map source enabled setting.
          *
          * @param enabled Whether HTTP map source is enabled
@@ -1217,7 +1220,6 @@ class SettingsRepository
         suspend fun saveMapSourceRmspEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.MAP_SOURCE_RMSP_ENABLED] = enabled
->>>>>>> 2d1d1a2c (feat: Phase 3-6 - MapLibre integration, RMSP client, Kotlin bridge, and settings)
             }
         }
 

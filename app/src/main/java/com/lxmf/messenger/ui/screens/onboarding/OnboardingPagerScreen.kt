@@ -1,9 +1,7 @@
 package com.lxmf.messenger.ui.screens.onboarding
 
 import android.Manifest
-import android.content.Intent
 import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -12,18 +10,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,26 +72,29 @@ fun OnboardingPagerScreen(
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
 
     // Notification permission launcher (Android 13+)
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        viewModel.onNotificationPermissionResult(granted)
-    }
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            viewModel.onNotificationPermissionResult(granted)
+        }
 
     // BLE permissions launcher
-    val blePermissionsLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.values.all { it }
-        viewModel.onBlePermissionsResult(allGranted, permissions.values.any { !it })
-    }
+    val blePermissionsLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions(),
+        ) { permissions ->
+            val allGranted = permissions.values.all { it }
+            viewModel.onBlePermissionsResult(allGranted, permissions.values.any { !it })
+        }
 
     // Battery optimization launcher
-    val batteryOptimizationLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        viewModel.checkBatteryOptimizationStatus(context)
-    }
+    val batteryOptimizationLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.StartActivityForResult(),
+        ) {
+            viewModel.checkBatteryOptimizationStatus(context)
+        }
 
     // Check initial battery status
     LaunchedEffect(Unit) {
@@ -132,9 +130,10 @@ fun OnboardingPagerScreen(
             }
         } else {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.statusBars),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.statusBars),
             ) {
                 // Top bar with Skip button
                 TopBar(
@@ -146,108 +145,116 @@ fun OnboardingPagerScreen(
                 )
 
                 // Main pager content
+                // Note: Navigation controlled by buttons, not user swipes
                 HorizontalPager(
                     state = pagerState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    userScrollEnabled = false, // Navigation controlled by buttons
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    userScrollEnabled = false,
                 ) { page ->
                     when (page) {
-                        0 -> WelcomePage(
-                            onGetStarted = {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(1)
-                                }
-                            },
-                            onRestoreFromBackup = onImportData,
-                        )
-                        1 -> IdentityPage(
-                            displayName = state.displayName,
-                            onDisplayNameChange = viewModel::updateDisplayName,
-                            onBack = {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(0)
-                                }
-                            },
-                            onContinue = {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(2)
-                                }
-                            },
-                        )
-                        2 -> ConnectivityPage(
-                            selectedInterfaces = state.selectedInterfaces,
-                            onInterfaceToggle = { interfaceType ->
-                                if (interfaceType == OnboardingInterfaceType.BLE &&
-                                    !state.selectedInterfaces.contains(OnboardingInterfaceType.BLE)
-                                ) {
-                                    // Request BLE permissions when enabling BLE
-                                    val permissions = getBlePermissions()
-                                    blePermissionsLauncher.launch(permissions)
-                                }
-                                viewModel.toggleInterface(interfaceType)
-                            },
-                            blePermissionsGranted = state.blePermissionsGranted,
-                            blePermissionsDenied = state.blePermissionsDenied,
-                            onBack = {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(1)
-                                }
-                            },
-                            onContinue = {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(3)
-                                }
-                            },
-                        )
-                        3 -> PermissionsPage(
-                            notificationsGranted = state.notificationsGranted,
-                            batteryOptimizationExempt = state.batteryOptimizationExempt,
-                            onEnableNotifications = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    notificationPermissionLauncher.launch(
-                                        Manifest.permission.POST_NOTIFICATIONS
-                                    )
-                                } else {
-                                    // Pre-Android 13, notifications are enabled by default
-                                    viewModel.onNotificationPermissionResult(true)
-                                }
-                            },
-                            onEnableBatteryOptimization = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                    val intent = BatteryOptimizationManager
-                                        .createRequestExemptionIntent(context)
-                                    batteryOptimizationLauncher.launch(intent)
-                                }
-                            },
-                            onBack = {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(2)
-                                }
-                            },
-                            onContinue = {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(4)
-                                }
-                            },
-                        )
-                        4 -> CompletePage(
-                            displayName = state.displayName,
-                            selectedInterfaces = state.selectedInterfaces,
-                            notificationsEnabled = state.notificationsGranted,
-                            batteryOptimizationExempt = state.batteryOptimizationExempt,
-                            isSaving = state.isSaving,
-                            onStartMessaging = {
-                                val hasLoRaSelected = state.selectedInterfaces.contains(OnboardingInterfaceType.RNODE)
-                                viewModel.completeOnboarding {
-                                    onOnboardingComplete(hasLoRaSelected)
-                                }
-                            },
-                            identityHash = identityHash,
-                            destinationHash = destinationHash,
-                            qrCodeData = qrCodeData,
-                        )
+                        0 ->
+                            WelcomePage(
+                                onGetStarted = {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(1)
+                                    }
+                                },
+                                onRestoreFromBackup = onImportData,
+                            )
+                        1 ->
+                            IdentityPage(
+                                displayName = state.displayName,
+                                onDisplayNameChange = viewModel::updateDisplayName,
+                                onBack = {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(0)
+                                    }
+                                },
+                                onContinue = {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(2)
+                                    }
+                                },
+                            )
+                        2 ->
+                            ConnectivityPage(
+                                selectedInterfaces = state.selectedInterfaces,
+                                onInterfaceToggle = { interfaceType ->
+                                    if (interfaceType == OnboardingInterfaceType.BLE &&
+                                        !state.selectedInterfaces.contains(OnboardingInterfaceType.BLE)
+                                    ) {
+                                        // Request BLE permissions when enabling BLE
+                                        val permissions = getBlePermissions()
+                                        blePermissionsLauncher.launch(permissions)
+                                    }
+                                    viewModel.toggleInterface(interfaceType)
+                                },
+                                blePermissionsGranted = state.blePermissionsGranted,
+                                blePermissionsDenied = state.blePermissionsDenied,
+                                onBack = {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(1)
+                                    }
+                                },
+                                onContinue = {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(3)
+                                    }
+                                },
+                            )
+                        3 ->
+                            PermissionsPage(
+                                notificationsGranted = state.notificationsGranted,
+                                batteryOptimizationExempt = state.batteryOptimizationExempt,
+                                onEnableNotifications = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        notificationPermissionLauncher.launch(
+                                            Manifest.permission.POST_NOTIFICATIONS,
+                                        )
+                                    } else {
+                                        // Pre-Android 13, notifications are enabled by default
+                                        viewModel.onNotificationPermissionResult(true)
+                                    }
+                                },
+                                onEnableBatteryOptimization = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                        val intent =
+                                            BatteryOptimizationManager
+                                                .createRequestExemptionIntent(context)
+                                        batteryOptimizationLauncher.launch(intent)
+                                    }
+                                },
+                                onBack = {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(2)
+                                    }
+                                },
+                                onContinue = {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(4)
+                                    }
+                                },
+                            )
+                        4 ->
+                            CompletePage(
+                                displayName = state.displayName,
+                                selectedInterfaces = state.selectedInterfaces,
+                                notificationsEnabled = state.notificationsGranted,
+                                batteryOptimizationExempt = state.batteryOptimizationExempt,
+                                isSaving = state.isSaving,
+                                onStartMessaging = {
+                                    val hasLoRaSelected = state.selectedInterfaces.contains(OnboardingInterfaceType.RNODE)
+                                    viewModel.completeOnboarding {
+                                        onOnboardingComplete(hasLoRaSelected)
+                                    }
+                                },
+                                identityHash = identityHash,
+                                destinationHash = destinationHash,
+                                qrCodeData = qrCodeData,
+                            )
                     }
                 }
 
@@ -255,10 +262,11 @@ fun OnboardingPagerScreen(
                 PageIndicator(
                     pageCount = ONBOARDING_PAGE_COUNT,
                     currentPage = pagerState.currentPage,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 24.dp)
-                        .windowInsetsPadding(WindowInsets.navigationBars),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 24.dp)
+                            .windowInsetsPadding(WindowInsets.navigationBars),
                 )
             }
         }
@@ -273,9 +281,10 @@ private fun TopBar(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
     ) {
         // Skip button (not shown on last page)
         if (currentPage < ONBOARDING_PAGE_COUNT - 1) {
@@ -307,20 +316,22 @@ private fun PageIndicator(
         repeat(pageCount) { index ->
             val isSelected = index == currentPage
             val color by animateColorAsState(
-                targetValue = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                },
+                targetValue =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    },
                 label = "pageIndicatorColor",
             )
 
             Box(
-                modifier = Modifier
-                    .padding(horizontal = 4.dp)
-                    .size(if (isSelected) 10.dp else 8.dp)
-                    .clip(CircleShape)
-                    .background(color),
+                modifier =
+                    Modifier
+                        .padding(horizontal = 4.dp)
+                        .size(if (isSelected) 10.dp else 8.dp)
+                        .clip(CircleShape)
+                        .background(color),
             )
         }
     }

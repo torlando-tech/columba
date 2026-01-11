@@ -45,10 +45,11 @@ fun IdentityPage(
     val focusManager = LocalFocusManager.current
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -93,15 +94,17 @@ fun IdentityPage(
             placeholder = { Text("Anonymous Peer") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    focusManager.clearFocus()
-                    onContinue()
-                },
-            ),
+            keyboardOptions =
+                KeyboardOptions(
+                    imeAction = ImeAction.Done,
+                ),
+            keyboardActions =
+                KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        onContinue()
+                    },
+                ),
             shape = RoundedCornerShape(12.dp),
         )
 
@@ -124,9 +127,10 @@ fun IdentityPage(
         ) {
             FilledTonalButton(
                 onClick = onBack,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Text("Back")
@@ -137,9 +141,10 @@ fun IdentityPage(
                     focusManager.clearFocus()
                     onContinue()
                 },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Text("Continue")

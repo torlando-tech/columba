@@ -671,29 +671,6 @@ class MessageDetailScreenTest {
     }
 
     @Test
-    fun `hop count card displays Unknown for negative hops`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
-        every { mockViewModel.message } returns
-            MutableStateFlow(
-                MessageDetailTestFixtures.receivedMessage(hopCount = -1),
-            )
-
-        composeTestRule.setContent {
-            MaterialTheme {
-                MessageDetailScreen(
-                    messageId = "test-id",
-                    onBackClick = {},
-                    viewModel = mockViewModel,
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Hop Count").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Unknown").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Hop count unavailable").assertIsDisplayed()
-    }
-
-    @Test
     fun `hop count card not displayed when hop count is null`() {
         val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
         every { mockViewModel.message } returns

@@ -137,8 +137,8 @@ fun WelcomeScreen(
                         )
 
                         OutlinedTextField(
-                            value = state.displayNameInput,
-                            onValueChange = { viewModel.updateDisplayNameInput(it) },
+                            value = state.displayName,
+                            onValueChange = { viewModel.updateDisplayName(it) },
                             label = { Text("Display Name") },
                             placeholder = { Text("Anonymous Peer") },
                             singleLine = true,
@@ -187,7 +187,7 @@ fun WelcomeScreen(
                     } else {
                         Text(
                             text =
-                                if (state.displayNameInput.isBlank()) {
+                                if (state.displayName.isBlank()) {
                                     "Continue as Anonymous Peer"
                                 } else {
                                     "Continue"

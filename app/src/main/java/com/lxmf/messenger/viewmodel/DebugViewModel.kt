@@ -58,6 +58,7 @@ data class TestAnnounceResult(
     val error: String? = null,
 )
 
+@Suppress("TooManyFunctions") // Debug-related utilities naturally group together
 @HiltViewModel
 class DebugViewModel
     @Inject
@@ -435,6 +436,15 @@ class DebugViewModel
             // Fallback: shouldn't happen with service protocol
             Log.e(TAG, "Failed to get LXMF destination - throwing RuntimeException")
             throw RuntimeException("Could not get LXMF destination")
+        }
+
+        /**
+         * Refresh identity data for QR code generation.
+         * Call this when entering a screen that needs identity data.
+         * Always reloads to ensure fresh data if identity changed.
+         */
+        fun refreshIdentityData() {
+            loadIdentityData()
         }
 
         /**

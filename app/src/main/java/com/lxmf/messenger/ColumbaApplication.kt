@@ -320,31 +320,8 @@ class ColumbaApplication : Application() {
                         .onSuccess {
                             android.util.Log.i("ColumbaApplication", "Reticulum initialized successfully")
 
-                            // Check and prompt for battery optimization exemption if needed
-                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                                if (com.lxmf.messenger.util.BatteryOptimizationManager.shouldPromptForExemption(this@ColumbaApplication)) {
-                                    android.util.Log.d("ColumbaApplication", "Battery optimization detected - will show exemption dialog")
-
-                                    // Show dialog after a delay to ensure MainActivity is ready
-                                    applicationScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                                        kotlinx.coroutines.delay(3000) // Wait 3s for MainActivity
-                                        com.lxmf.messenger.util.BatteryOptimizationManager.recordPromptShown(this@ColumbaApplication)
-
-                                        // Launch battery exemption request
-                                        try {
-                                            val intent =
-                                                com.lxmf.messenger.util.BatteryOptimizationManager.createRequestExemptionIntent(
-                                                    this@ColumbaApplication,
-                                                )
-                                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            startActivity(intent)
-                                            android.util.Log.i("ColumbaApplication", "Launched battery exemption request")
-                                        } catch (e: Exception) {
-                                            android.util.Log.e("ColumbaApplication", "Failed to launch battery exemption request", e)
-                                        }
-                                    }
-                                }
-                            }
+                            // Battery optimization exemption is now handled in OnboardingPagerScreen
+                            // for new users, and via Settings for existing users
 
                             // Migrate default identity to database if needed
                             // Wait a bit for the identity file to be created by Python

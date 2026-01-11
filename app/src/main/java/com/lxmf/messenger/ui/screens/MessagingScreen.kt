@@ -98,6 +98,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -180,7 +181,7 @@ fun MessagingScreen(
     val announceInfo by viewModel.announceInfo.collectAsStateWithLifecycle()
     val conversationLinkState by viewModel.conversationLinkState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
-    var messageText by remember { mutableStateOf("") }
+    var messageText by rememberSaveable { mutableStateOf("") }
 
     // Image selection state
     val context = androidx.compose.ui.platform.LocalContext.current

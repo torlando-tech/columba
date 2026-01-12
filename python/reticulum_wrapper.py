@@ -219,8 +219,8 @@ def unpack_telemetry_stream(stream_data: List) -> List[Dict]:
                            f"Failed to unpack telemetry for source {source_hash_hex[:16]}...")
                 continue
 
-            # Override timestamp if provided separately
-            if timestamp:
+            # Override timestamp if provided separately (validate to avoid setting 0/invalid)
+            if timestamp is not None and timestamp > 0:
                 location_event['ts'] = timestamp * 1000  # Convert to milliseconds
 
             # Add source hash

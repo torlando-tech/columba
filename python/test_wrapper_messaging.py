@@ -1843,14 +1843,14 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')
-    def test_delivery_skips_interface_for_multihop_message(self, mock_rns, mock_lxmf):
-        """Test interface NOT captured when hops > 0"""
+    def test_delivery_captures_interface_for_multihop_message(self, mock_rns, mock_lxmf):
+        """Test interface captured for multi-hop messages (last hop interface)"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
         wrapper.router = Mock()
         wrapper.router.pending_inbound = []
 
-        mock_message = Mock(spec=['source_hash', 'destination_hash', 'content', 'timestamp', 'fields', 'hash', '_columba_hops'])
+        mock_message = Mock()
         mock_message.source_hash = b'source123source1'
         mock_message.destination_hash = b'dest456dest45678'
         mock_message.content = b'Test content'
@@ -1870,9 +1870,9 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
         wrapper._on_lxmf_delivery(mock_message)
 
-        # Verify hop count captured but NOT interface (multi-hop)
+        # Verify both hop count and interface captured for multi-hop
         self.assertEqual(mock_message._columba_hops, 3)
-        self.assertFalse(hasattr(mock_message, '_columba_interface'))
+        self.assertEqual(mock_message._columba_interface, "AutoInterface")
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')

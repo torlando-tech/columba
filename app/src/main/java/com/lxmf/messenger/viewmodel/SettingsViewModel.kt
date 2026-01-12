@@ -363,6 +363,12 @@ class SettingsViewModel
                             mapSourceRmspEnabled = _state.value.mapSourceRmspEnabled,
                             rmspServerCount = _state.value.rmspServerCount,
                             hasOfflineMaps = _state.value.hasOfflineMaps,
+                            // Preserve telemetry collector state from loadTelemetryCollectorSettings()
+                            telemetryCollectorEnabled = _state.value.telemetryCollectorEnabled,
+                            telemetryCollectorAddress = _state.value.telemetryCollectorAddress,
+                            telemetrySendIntervalSeconds = _state.value.telemetrySendIntervalSeconds,
+                            lastTelemetrySendTime = _state.value.lastTelemetrySendTime,
+                            isSendingTelemetry = _state.value.isSendingTelemetry,
                             // Preserve notifications state from loadNotificationsSettings()
                             notificationsEnabled = _state.value.notificationsEnabled,
                             // Preserve protocol versions from fetchProtocolVersions()

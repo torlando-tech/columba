@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -70,6 +71,14 @@ class TelemetryCollectorManagerTest {
         coEvery { mockSettingsRepository.saveTelemetryCollectorEnabled(any()) } just Runs
         coEvery { mockSettingsRepository.saveTelemetrySendIntervalSeconds(any()) } just Runs
         coEvery { mockSettingsRepository.saveLastTelemetrySendTime(any()) } just Runs
+    }
+
+    @After
+    fun tearDown() {
+        // Stop the manager to cancel any running coroutines
+        if (::manager.isInitialized) {
+            manager.stop()
+        }
     }
 
     private fun createManager(): TelemetryCollectorManager {
@@ -148,6 +157,8 @@ class TelemetryCollectorManagerTest {
             assertEquals("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
+
+        manager.stop()
     }
 
     @Test
@@ -162,6 +173,8 @@ class TelemetryCollectorManagerTest {
             assertTrue(awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
+
+        manager.stop()
     }
 
     @Test
@@ -176,6 +189,8 @@ class TelemetryCollectorManagerTest {
             assertEquals(900, awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
+
+        manager.stop()
     }
 
     @Test
@@ -191,6 +206,8 @@ class TelemetryCollectorManagerTest {
             assertEquals(timestamp, awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
+
+        manager.stop()
     }
 
     @Test
@@ -226,6 +243,8 @@ class TelemetryCollectorManagerTest {
         advanceUntilIdle()
 
         assertEquals("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", manager.collectorAddress.value)
+
+        manager.stop()
     }
 
     // ========== setCollectorAddress Tests ==========
@@ -340,6 +359,8 @@ class TelemetryCollectorManagerTest {
         val result = manager.sendTelemetryNow()
 
         assertEquals(TelemetrySendResult.NetworkNotReady, result)
+
+        manager.stop()
     }
 
     @Test
@@ -348,12 +369,14 @@ class TelemetryCollectorManagerTest {
         manager.start()
 
         collectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
-        networkStatusFlow.value = NetworkStatus.ERROR
+        networkStatusFlow.value = NetworkStatus.ERROR("Test error")
         advanceUntilIdle()
 
         val result = manager.sendTelemetryNow()
 
         assertEquals(TelemetrySendResult.NetworkNotReady, result)
+
+        manager.stop()
     }
 
     // ========== TelemetrySendResult Tests ==========
@@ -421,6 +444,8 @@ class TelemetryCollectorManagerTest {
 
             cancelAndIgnoreRemainingEvents()
         }
+
+        manager.stop()
     }
 
     @Test
@@ -444,6 +469,8 @@ class TelemetryCollectorManagerTest {
 
             cancelAndIgnoreRemainingEvents()
         }
+
+        manager.stop()
     }
 
     @Test
@@ -467,6 +494,8 @@ class TelemetryCollectorManagerTest {
 
             cancelAndIgnoreRemainingEvents()
         }
+
+        manager.stop()
     }
 
     @Test
@@ -492,5 +521,7 @@ class TelemetryCollectorManagerTest {
 
             cancelAndIgnoreRemainingEvents()
         }
+
+        manager.stop()
     }
 }

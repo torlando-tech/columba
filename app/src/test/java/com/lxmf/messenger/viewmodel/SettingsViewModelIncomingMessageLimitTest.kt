@@ -14,6 +14,7 @@ import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.theme.PresetTheme
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -60,6 +61,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var mapTileSourceManager: MapTileSourceManager
+    private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -94,6 +96,10 @@ class SettingsViewModelIncomingMessageLimitTest {
         locationSharingManager = mockk(relaxed = true)
         interfaceRepository = mockk(relaxed = true)
         mapTileSourceManager = mockk(relaxed = true)
+        telemetryCollectorManager = mockk(relaxed = true)
+
+        // Mock TelemetryCollectorManager flows
+        every { telemetryCollectorManager.isSending } returns MutableStateFlow(false)
 
         // Mock interfaceRepository flows
         every { interfaceRepository.enabledInterfaces } returns MutableStateFlow(emptyList<InterfaceConfig>())
@@ -120,6 +126,10 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.defaultSharingDurationFlow } returns MutableStateFlow("ONE_HOUR")
         every { settingsRepository.locationPrecisionRadiusFlow } returns MutableStateFlow(0)
         every { settingsRepository.imageCompressionPresetFlow } returns MutableStateFlow(com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO)
+        every { settingsRepository.telemetryCollectorEnabledFlow } returns MutableStateFlow(false)
+        every { settingsRepository.telemetryCollectorAddressFlow } returns MutableStateFlow<String?>(null)
+        every { settingsRepository.telemetrySendIntervalSecondsFlow } returns MutableStateFlow(SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS)
+        every { settingsRepository.lastTelemetrySendTimeFlow } returns MutableStateFlow<Long?>(null)
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 
         // Mock PropagationNodeManager flows (StateFlows)
@@ -155,6 +165,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             locationSharingManager = locationSharingManager,
             interfaceRepository = interfaceRepository,
             mapTileSourceManager = mapTileSourceManager,
+            telemetryCollectorManager = telemetryCollectorManager,
         )
     }
 

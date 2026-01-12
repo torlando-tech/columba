@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
@@ -243,8 +244,9 @@ class TelemetryCollectorManager
                     delay(100)
                 }
 
-                // Initial delay to let things settle
-                delay(10_000)
+                // Wait for network to be ready before starting periodic sends
+                reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
+                Log.d(TAG, "Network ready, starting periodic telemetry sends")
 
                 while (true) {
                     val intervalSeconds = _sendIntervalSeconds.value
@@ -270,8 +272,10 @@ class TelemetryCollectorManager
                         }
                     }
 
-                    // Check again in 30 seconds
-                    delay(30_000)
+                    // Calculate time until next send, cap at 30 seconds for responsiveness
+                    val timeUntilNextSend = maxOf(0L, nextSendTime - System.currentTimeMillis())
+                    val delayTime = minOf(timeUntilNextSend, 30_000L)
+                    delay(if (delayTime > 0) delayTime else 30_000L)
                 }
             }
         }
@@ -308,11 +312,12 @@ class TelemetryCollectorManager
                 } ?: return TelemetrySendResult.Error("No LXMF identity")
 
                 // Build location JSON using the location's actual capture time
+                // Fallback to current time if location.time is 0 (unknown)
                 val telemetryData = LocationTelemetryData(
                     lat = location.latitude,
                     lng = location.longitude,
                     acc = location.accuracy,
-                    ts = location.time,
+                    ts = if (location.time > 0) location.time else System.currentTimeMillis(),
                     altitude = location.altitude,
                     speed = location.speed,
                     bearing = location.bearing,

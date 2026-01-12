@@ -160,42 +160,33 @@ class MapTileSourceManager
                 // Check file exists first (fast fail)
                 if (mbtilesPath == null || !File(mbtilesPath).exists()) return@find false
 
-                // Check if location is within radius of region center
-                val distance =
-                    haversineDistance(
-                        lat1 = latitude,
-                        lon1 = longitude,
-                        lat2 = region.centerLatitude,
-                        lon2 = region.centerLongitude,
-                    )
-                distance <= region.radiusKm
+                // Check if location is within bounding box (tiles are downloaded as a square region)
+                isWithinBounds(latitude, longitude, region)
             }
         }
 
         /**
-         * Calculate distance between two points using Haversine formula.
-         *
-         * @return Distance in kilometers
+         * Check if a point is within the bounding box of a region.
+         * Uses same calculation as MBTilesWriter.boundsFromCenter for consistency.
          */
-        private fun haversineDistance(
-            lat1: Double,
-            lon1: Double,
-            lat2: Double,
-            lon2: Double,
-        ): Double {
-            val r = 6371.0 // Earth radius in km
+        private fun isWithinBounds(
+            latitude: Double,
+            longitude: Double,
+            region: OfflineMapRegion,
+        ): Boolean {
+            // Approximate degrees per km at region center latitude
+            val latDegPerKm = 1.0 / 111.0
+            val lonDegPerKm = 1.0 / (111.0 * kotlin.math.cos(Math.toRadians(region.centerLatitude)))
 
-            val dLat = Math.toRadians(lat2 - lat1)
-            val dLon = Math.toRadians(lon2 - lon1)
+            val latOffset = region.radiusKm * latDegPerKm
+            val lonOffset = region.radiusKm * lonDegPerKm
 
-            val a =
-                kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
-                    kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
-                    kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
+            val south = region.centerLatitude - latOffset
+            val north = region.centerLatitude + latOffset
+            val west = region.centerLongitude - lonOffset
+            val east = region.centerLongitude + lonOffset
 
-            val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
-
-            return r * c
+            return latitude in south..north && longitude in west..east
         }
 
         /**

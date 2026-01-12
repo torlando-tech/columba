@@ -800,6 +800,21 @@ class TileDownloadManager(
         }
 
         /**
+         * Decode a geohash string to its center point.
+         *
+         * @param geohash The geohash string to decode
+         * @return Pair of (latitude, longitude), or null if invalid/empty
+         */
+        fun decodeGeohashCenter(geohash: String): Pair<Double, Double>? {
+            if (geohash.isEmpty()) return null
+            val bounds = decodeGeohashBounds(geohash)
+            return Pair(
+                (bounds.south + bounds.north) / 2,
+                (bounds.west + bounds.east) / 2,
+            )
+        }
+
+        /**
          * Get all geohashes at a given precision that cover a bounding box.
          *
          * @param bounds The bounding box to cover

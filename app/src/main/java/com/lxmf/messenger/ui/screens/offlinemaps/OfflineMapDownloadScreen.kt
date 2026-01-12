@@ -70,43 +70,6 @@ import java.util.Locale
 
 private const val TAG = "OfflineMapDownload"
 
-/**
- * Decode a geohash string to latitude and longitude coordinates.
- * Returns the center point of the geohash cell.
- *
- * @param geohash The geohash string to decode (e.g., "dqcjq")
- * @return Pair of (latitude, longitude), or null if invalid
- */
-private fun decodeGeohash(geohash: String): Pair<Double, Double>? {
-    if (geohash.isEmpty()) return null
-
-    val base32 = "0123456789bcdefghjkmnpqrstuvwxyz"
-    var minLat = -90.0
-    var maxLat = 90.0
-    var minLon = -180.0
-    var maxLon = 180.0
-    var isLon = true
-
-    for (char in geohash.lowercase()) {
-        val idx = base32.indexOf(char)
-        if (idx == -1) return null // Invalid character
-
-        for (bit in 4 downTo 0) {
-            val bitValue = (idx shr bit) and 1
-            if (isLon) {
-                val mid = (minLon + maxLon) / 2
-                if (bitValue == 1) minLon = mid else maxLon = mid
-            } else {
-                val mid = (minLat + maxLat) / 2
-                if (bitValue == 1) minLat = mid else maxLat = mid
-            }
-            isLon = !isLon
-        }
-    }
-
-    return Pair((minLat + maxLat) / 2, (minLon + maxLon) / 2)
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OfflineMapDownloadScreen(
@@ -415,7 +378,7 @@ fun LocationSelectionStep(
             onValueChange = { input ->
                 geohashText = input
                 if (input.isNotEmpty()) {
-                    val coords = decodeGeohash(input)
+                    val coords = TileDownloadManager.decodeGeohashCenter(input)
                     if (coords != null) {
                         geohashError = null
                         latText = String.format(Locale.US, "%.6f", coords.first)

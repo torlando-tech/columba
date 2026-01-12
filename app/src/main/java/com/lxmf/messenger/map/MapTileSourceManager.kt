@@ -156,6 +156,10 @@ class MapTileSourceManager
             val regions = offlineMapRegionRepository.getCompletedRegions().first()
 
             return regions.find { region ->
+                val mbtilesPath = region.mbtilesPath
+                // Check file exists first (fast fail)
+                if (mbtilesPath == null || !File(mbtilesPath).exists()) return@find false
+
                 // Check if location is within radius of region center
                 val distance =
                     haversineDistance(
@@ -164,8 +168,7 @@ class MapTileSourceManager
                         lat2 = region.centerLatitude,
                         lon2 = region.centerLongitude,
                     )
-                val mbtilesPath = region.mbtilesPath
-                distance <= region.radiusKm && mbtilesPath != null && File(mbtilesPath).exists()
+                distance <= region.radiusKm
             }
         }
 

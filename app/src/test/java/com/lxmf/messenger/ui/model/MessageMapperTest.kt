@@ -2338,4 +2338,194 @@ class MessageMapperTest {
         assertEquals(1, result.size)
         assertEquals(listOf("sender1"), result[0].senderHashes)
     }
+
+    // ========== loadImageData() TESTS ==========
+
+    @Test
+    fun `loadImageData returns null for null fieldsJson`() {
+        val result = loadImageData(null)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadImageData returns null for empty fieldsJson`() {
+        val result = loadImageData("")
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadImageData returns null for invalid JSON`() {
+        val result = loadImageData("not valid json")
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadImageData returns null when field 6 is missing`() {
+        val result = loadImageData("""{"1": "some text"}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadImageData returns null for empty field 6`() {
+        val result = loadImageData("""{"6": ""}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadImageData returns bytes for valid inline hex`() {
+        // "48656c6c6f" is hex for "Hello"
+        val result = loadImageData("""{"6": "48656c6c6f"}""")
+
+        assertNotNull(result)
+        assertEquals("Hello", String(result!!))
+    }
+
+    @Test
+    fun `loadImageData handles uppercase hex`() {
+        val result = loadImageData("""{"6": "48454C4C4F"}""")
+
+        assertNotNull(result)
+        assertEquals("HELLO", String(result!!))
+    }
+
+    @Test
+    fun `loadImageData handles mixed case hex`() {
+        val result = loadImageData("""{"6": "48656C6c6F"}""")
+
+        assertNotNull(result)
+        assertEquals("Hello", String(result!!))
+    }
+
+    @Test
+    fun `loadImageData returns null for field 6 as number`() {
+        val result = loadImageData("""{"6": 12345}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadImageData reads from file reference when file exists`() {
+        val tempFile = tempFolder.newFile("image_data.dat")
+        tempFile.writeText("48656c6c6f") // "Hello" in hex
+
+        val fieldsJson = """{"6": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = loadImageData(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("Hello", String(result!!))
+    }
+
+    @Test
+    fun `loadImageData returns null for nonexistent file reference`() {
+        val fieldsJson = """{"6": {"_file_ref": "/nonexistent/path/to/file.dat"}}"""
+        val result = loadImageData(fieldsJson)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadImageData returns null for empty file reference path`() {
+        val fieldsJson = """{"6": {"_file_ref": ""}}"""
+        val result = loadImageData(fieldsJson)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadImageData returns null when file reference object has wrong key`() {
+        val fieldsJson = """{"6": {"other_key": "/path/to/file"}}"""
+        val result = loadImageData(fieldsJson)
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadImageData handles large image data`() {
+        val originalBytes = ByteArray(10_000) { (it % 256).toByte() }
+        val hexString = originalBytes.joinToString("") { "%02x".format(it) }
+        val fieldsJson = """{"6": "$hexString"}"""
+
+        val result = loadImageData(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals(10_000, result!!.size)
+        assertEquals(originalBytes[0], result[0])
+        assertEquals(originalBytes[9999], result[9999])
+    }
+
+    // ========== getImageMetadata() TESTS ==========
+
+    @Test
+    fun `getImageMetadata returns null for null fieldsJson`() {
+        val result = getImageMetadata(null)
+        assertNull(result)
+    }
+
+    @Test
+    fun `getImageMetadata returns null for empty fieldsJson`() {
+        val result = getImageMetadata("")
+        assertNull(result)
+    }
+
+    @Test
+    fun `getImageMetadata returns null when field 6 is missing`() {
+        val result = getImageMetadata("""{"1": "some text"}""")
+        assertNull(result)
+    }
+
+    @Test
+    fun `getImageMetadata returns webp for static image`() {
+        // Some arbitrary non-GIF bytes
+        val staticImageHex = "ffd8ffe000104a46494600" // JPEG-like header
+        val fieldsJson = """{"6": "$staticImageHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("image/webp", result!!.first)
+        assertEquals("webp", result.second)
+    }
+
+    @Test
+    fun `getImageMetadata returns gif for animated GIF`() {
+        val animatedGifHex = createMinimalAnimatedGifHex()
+        val fieldsJson = """{"6": "$animatedGifHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("image/gif", result!!.first)
+        assertEquals("gif", result.second)
+    }
+
+    @Test
+    fun `getImageMetadata returns webp for static GIF without animation`() {
+        val staticGif = createMinimalStaticGifBytes()
+        val staticGifHex = staticGif.joinToString("") { "%02x".format(it) }
+        val fieldsJson = """{"6": "$staticGifHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        // Static GIF is treated as non-animated, so we return webp
+        assertEquals("image/webp", result!!.first)
+        assertEquals("webp", result.second)
+    }
+
+    @Test
+    fun `getImageMetadata reads from file reference`() {
+        val animatedGifHex = createMinimalAnimatedGifHex()
+        val tempFile = tempFolder.newFile("animated.dat")
+        tempFile.writeText(animatedGifHex)
+
+        val fieldsJson = """{"6": {"_file_ref": "${tempFile.absolutePath}"}}"""
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("image/gif", result!!.first)
+        assertEquals("gif", result.second)
+    }
+
+    @Test
+    fun `getImageMetadata returns null for nonexistent file reference`() {
+        val fieldsJson = """{"6": {"_file_ref": "/nonexistent/path/file.dat"}}"""
+        val result = getImageMetadata(fieldsJson)
+        assertNull(result)
+    }
 }

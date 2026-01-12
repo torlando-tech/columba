@@ -597,6 +597,38 @@ fun loadFileAttachmentMetadata(
 }
 
 /**
+ * Load image data (raw bytes) from a message's fields JSON.
+ *
+ * Supports two formats:
+ * 1. Inline hex string: "6": "ffda8e..." (original format)
+ * 2. File reference: "6": {"_file_ref": "/path/to/file"} (large attachments saved to disk)
+ *
+ * IMPORTANT: This performs disk I/O. Must be called from a background thread.
+ *
+ * @param fieldsJson The message's fields JSON containing image data (field 6)
+ * @return Raw image bytes, or null if not found or loading fails
+ */
+fun loadImageData(fieldsJson: String?): ByteArray? {
+    return extractImageBytes(fieldsJson)
+}
+
+/**
+ * Get image metadata for save operations.
+ *
+ * @param fieldsJson The message's fields JSON containing image data (field 6)
+ * @return Pair of (mimeType, fileExtension) based on image format, or null if no image
+ */
+fun getImageMetadata(fieldsJson: String?): Pair<String, String>? {
+    val bytes = extractImageBytes(fieldsJson) ?: return null
+    return if (ImageUtils.isAnimatedGif(bytes)) {
+        Pair("image/gif", "gif")
+    } else {
+        // WebP is our default compression format for static images
+        Pair("image/webp", "webp")
+    }
+}
+
+/**
  * Efficiently convert a hex string to byte array.
  * Uses direct array allocation and character arithmetic instead of
  * chunked/map which creates many intermediate objects.

@@ -26,8 +26,10 @@ import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.ui.model.SharingDuration
 import com.lxmf.messenger.ui.model.decodeImageWithAnimation
+import com.lxmf.messenger.ui.model.getImageMetadata
 import com.lxmf.messenger.ui.model.loadFileAttachmentData
 import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
+import com.lxmf.messenger.ui.model.loadImageData
 import com.lxmf.messenger.ui.model.toMessageUi
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
@@ -1150,6 +1152,119 @@ class MessagingViewModel
                     Pair(uri, metadata.mimeType)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to get file attachment URI", e)
+                    null
+                }
+            }
+        }
+
+        /**
+         * Save an image attachment to a user-selected destination.
+         *
+         * @param context Android context for content resolver
+         * @param messageId The message ID containing the image attachment
+         * @param destinationUri The Uri where the user wants to save the image
+         * @return true if save was successful, false otherwise
+         */
+        suspend fun saveImage(
+            context: Context,
+            messageId: String,
+            destinationUri: Uri,
+        ): Boolean {
+            return try {
+                // Get the message from the database
+                val messageEntity = conversationRepository.getMessageById(messageId)
+                if (messageEntity == null) {
+                    Log.e(TAG, "Message not found: $messageId")
+                    return false
+                }
+
+                // Load the image data from the message's fieldsJson
+                val imageData = loadImageData(messageEntity.fieldsJson)
+                if (imageData == null) {
+                    Log.e(TAG, "Could not load image data for message $messageId")
+                    return false
+                }
+
+                // Write to the destination Uri
+                context.contentResolver.openOutputStream(destinationUri)?.use { outputStream ->
+                    outputStream.write(imageData)
+                    Log.d(TAG, "Saved image (${imageData.size} bytes) to $destinationUri")
+                    true
+                } ?: run {
+                    Log.e(TAG, "Could not open output stream for $destinationUri")
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save image", e)
+                false
+            }
+        }
+
+        /**
+         * Get a FileProvider URI for an image attachment.
+         *
+         * Creates a temporary file in the attachments directory and returns a content URI
+         * that can be shared with external apps via Intent.ACTION_SEND.
+         *
+         * @param context Android context for file operations
+         * @param messageId The message ID containing the image attachment
+         * @return Pair of (Uri, mimeType) or null if the image cannot be accessed
+         */
+        suspend fun getImageShareUri(
+            context: Context,
+            messageId: String,
+        ): Pair<Uri, String>? {
+            return withContext(Dispatchers.IO) {
+                try {
+                    // Get the message from the database
+                    val messageEntity = conversationRepository.getMessageById(messageId)
+                    if (messageEntity == null) {
+                        Log.e(TAG, "Message not found: $messageId")
+                        return@withContext null
+                    }
+
+                    // Get image metadata (MIME type and extension)
+                    val metadata = getImageMetadata(messageEntity.fieldsJson)
+                    if (metadata == null) {
+                        Log.e(TAG, "Could not get image metadata for message $messageId")
+                        return@withContext null
+                    }
+
+                    val (mimeType, extension) = metadata
+
+                    // Load the image data
+                    val imageData = loadImageData(messageEntity.fieldsJson)
+                    if (imageData == null) {
+                        Log.e(TAG, "Could not load image data for message $messageId")
+                        return@withContext null
+                    }
+
+                    // Create attachments directory if needed
+                    val attachmentsDir = File(context.filesDir, "attachments")
+                    if (!attachmentsDir.exists()) {
+                        attachmentsDir.mkdirs()
+                    }
+
+                    // Generate filename with timestamp
+                    val timestamp = System.currentTimeMillis()
+                    val filename = "image_$timestamp.$extension"
+
+                    // Write to temp file
+                    val tempFile = File(attachmentsDir, filename)
+                    tempFile.writeBytes(imageData)
+                    Log.d(TAG, "Created temp file for sharing: ${tempFile.absolutePath}")
+
+                    // Get FileProvider URI
+                    val uri =
+                        FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            tempFile,
+                        )
+
+                    Pair(uri, mimeType)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to get image share URI", e)
                     null
                 }
             }

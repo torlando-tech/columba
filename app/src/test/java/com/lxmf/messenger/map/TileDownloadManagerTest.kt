@@ -1270,7 +1270,7 @@ class TileDownloadManagerRobolectricTest {
             manager.downloadRegion(
                 centerLat = 37.7749,
                 centerLon = -122.4194,
-                radiusKm = 100, // Large radius - should use precision 2
+                radiusKm = 100, // Large radius - should use precision 3 (~150km cells)
                 minZoom = 10,
                 maxZoom = 10,
                 name = "Test Region",
@@ -1279,11 +1279,11 @@ class TileDownloadManagerRobolectricTest {
 
             advanceUntilIdle()
 
-            // Verify geohashes have precision 2 (2 characters)
+            // Verify geohashes have precision 3 (3 characters) - precision 2 is too coarse (~630km)
             assertTrue("Should have observed geohashes", observedGeohashes.isNotEmpty())
             assertTrue(
-                "Geohashes should have precision 2 for large radius",
-                observedGeohashes.all { it.length == 2 },
+                "Geohashes should have precision 3 for large radius",
+                observedGeohashes.all { it.length == 3 },
             )
 
             unmockkConstructor(MBTilesWriter::class)

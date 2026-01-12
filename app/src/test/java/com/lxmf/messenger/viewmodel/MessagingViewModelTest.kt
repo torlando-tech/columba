@@ -1622,6 +1622,151 @@ class MessagingViewModelTest {
             deliveryMethod = null,
         )
 
+    // ========== IMAGE SAVE/SHARE TESTS ==========
+
+    @Test
+    fun `saveImage returns false when message not found`() =
+        runTest {
+            // Arrange
+            coEvery { conversationRepository.getMessageById("nonexistent-id") } returns null
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+            val uri = mockk<android.net.Uri>()
+
+            // Act
+            val result = viewModel.saveImage(context, "nonexistent-id", uri)
+
+            // Assert
+            assertFalse(result)
+        }
+
+    @Test
+    fun `saveImage returns false when fieldsJson has no image`() =
+        runTest {
+            // Arrange - fieldsJson without field 6 (image)
+            val messageEntity = createMessageEntity(fieldsJson = """{"1": "text only"}""")
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+            val uri = mockk<android.net.Uri>()
+
+            // Act
+            val result = viewModel.saveImage(context, "test-id", uri)
+
+            // Assert
+            assertFalse(result)
+        }
+
+    @Test
+    fun `saveImage writes image data to output stream`() =
+        runTest {
+            // Arrange - "Hello" in hex is "48656c6c6f"
+            val fieldsJson = """{"6": "48656c6c6f"}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val outputStream = ByteArrayOutputStream()
+            val context = mockk<android.content.Context>()
+            val uri = mockk<android.net.Uri>()
+            val contentResolver = mockk<android.content.ContentResolver>()
+            every { context.contentResolver } returns contentResolver
+            every { contentResolver.openOutputStream(uri) } returns outputStream
+
+            val viewModel = createTestViewModel()
+
+            // Act
+            val result = viewModel.saveImage(context, "test-id", uri)
+
+            // Assert
+            assertTrue(result)
+            assertEquals("Hello", outputStream.toString())
+        }
+
+    @Test
+    fun `saveImage returns false when output stream is null`() =
+        runTest {
+            // Arrange
+            val fieldsJson = """{"6": "48656c6c6f"}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val context = mockk<android.content.Context>()
+            val uri = mockk<android.net.Uri>()
+            val contentResolver = mockk<android.content.ContentResolver>()
+            every { context.contentResolver } returns contentResolver
+            every { contentResolver.openOutputStream(uri) } returns null
+
+            val viewModel = createTestViewModel()
+
+            // Act
+            val result = viewModel.saveImage(context, "test-id", uri)
+
+            // Assert
+            assertFalse(result)
+        }
+
+    @Test
+    fun `saveImage returns false on exception`() =
+        runTest {
+            // Arrange
+            coEvery { conversationRepository.getMessageById("test-id") } throws RuntimeException("DB error")
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+            val uri = mockk<android.net.Uri>()
+
+            // Act
+            val result = viewModel.saveImage(context, "test-id", uri)
+
+            // Assert
+            assertFalse(result)
+        }
+
+    @Test
+    fun `getImageShareUri returns null when message not found`() =
+        runTest {
+            // Arrange
+            coEvery { conversationRepository.getMessageById("nonexistent-id") } returns null
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getImageShareUri(context, "nonexistent-id")
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getImageShareUri returns null when fieldsJson has no image`() =
+        runTest {
+            // Arrange - fieldsJson without field 6 (image)
+            val messageEntity = createMessageEntity(fieldsJson = """{"1": "text only"}""")
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getImageShareUri(context, "test-id")
+
+            // Assert
+            assertNull(result)
+        }
+
+    @Test
+    fun `getImageShareUri returns null on exception`() =
+        runTest {
+            // Arrange
+            coEvery { conversationRepository.getMessageById("test-id") } throws RuntimeException("DB error")
+            val viewModel = createTestViewModel()
+            val context = mockk<android.content.Context>(relaxed = true)
+
+            // Act
+            val result = viewModel.getImageShareUri(context, "test-id")
+
+            // Assert
+            assertNull(result)
+        }
+
     // ========== FILE ATTACHMENT TESTS ==========
 
     @Test

@@ -2565,4 +2565,45 @@ class MessageMapperTest {
         val result = getImageMetadata(fieldsJson)
         assertNull(result)
     }
+
+    @Test
+    fun `getImageMetadata returns webp for WebP image`() {
+        // WebP magic bytes: RIFF....WEBP
+        // 52 49 46 46 (RIFF) + 4 bytes size + 57 45 42 50 (WEBP)
+        val webpImageHex = "52494646" + "00000000" + "57454250" + "00000000"
+        val fieldsJson = """{"6": "$webpImageHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("image/webp", result!!.first)
+        assertEquals("webp", result.second)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary for RIFF without WEBP`() {
+        // RIFF header but not WebP (e.g., could be AVI or WAV)
+        val riffNonWebpHex = "52494646" + "00000000" + "41564920" + "00000000"
+        val fieldsJson = """{"6": "$riffNonWebpHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+        assertEquals("bin", result.second)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary for partial RIFF header`() {
+        // Only 8 bytes - RIFF header present but not enough to check WEBP
+        val shortRiffHex = "5249464600000000"
+        val fieldsJson = """{"6": "$shortRiffHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        // Not enough bytes to verify WEBP, so falls back to binary
+        assertEquals("application/octet-stream", result!!.first)
+        assertEquals("bin", result.second)
+    }
 }

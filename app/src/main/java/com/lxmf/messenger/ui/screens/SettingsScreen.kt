@@ -45,6 +45,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.MessageDeliveryRetrievalCard
 import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
+import com.lxmf.messenger.ui.screens.settings.cards.TelemetryCollectorCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
 import com.lxmf.messenger.viewmodel.DebugViewModel
@@ -182,6 +183,18 @@ fun SettingsScreen(
                     onDefaultDurationChange = { viewModel.setDefaultSharingDuration(it) },
                     locationPrecisionRadius = state.locationPrecisionRadius,
                     onLocationPrecisionRadiusChange = { viewModel.setLocationPrecisionRadius(it) },
+                )
+
+                TelemetryCollectorCard(
+                    enabled = state.telemetryCollectorEnabled,
+                    collectorAddress = state.telemetryCollectorAddress,
+                    sendIntervalSeconds = state.telemetrySendIntervalSeconds,
+                    lastSendTime = state.lastTelemetrySendTime,
+                    isSending = state.isSendingTelemetry,
+                    onEnabledChange = { viewModel.setTelemetryCollectorEnabled(it) },
+                    onCollectorAddressChange = { viewModel.setTelemetryCollectorAddress(it) },
+                    onSendIntervalChange = { viewModel.setTelemetrySendInterval(it) },
+                    onSendNow = { viewModel.sendTelemetryNow() },
                 )
 
                 MessageDeliveryRetrievalCard(

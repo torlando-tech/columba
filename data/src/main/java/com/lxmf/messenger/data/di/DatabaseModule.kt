@@ -59,6 +59,7 @@ object DatabaseModule {
             MIGRATION_25_26,
             MIGRATION_26_27,
             MIGRATION_27_28,
+            MIGRATION_28_29,
         )
     }
 
@@ -1170,6 +1171,15 @@ object DatabaseModule {
         object : Migration(27, 28) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE announces ADD COLUMN propagationTransferLimitKb INTEGER DEFAULT NULL")
+            }
+        }
+
+    // Migration from version 28 to 29: Add appearanceJson to received_locations for telemetry stream
+    // Stores icon appearance (name, foreground/background colors) from telemetry collector responses
+    private val MIGRATION_28_29 =
+        object : Migration(28, 29) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE received_locations ADD COLUMN appearanceJson TEXT DEFAULT NULL")
             }
         }
 

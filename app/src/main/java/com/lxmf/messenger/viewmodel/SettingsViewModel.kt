@@ -12,6 +12,7 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
+import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -91,6 +92,12 @@ data class SettingsState(
     val imageCompressionPreset: ImageCompressionPreset = ImageCompressionPreset.AUTO,
     /** Optimal preset based on interfaces */
     val detectedCompressionPreset: ImageCompressionPreset? = null,
+    // Telemetry collector state
+    val telemetryCollectorEnabled: Boolean = false,
+    val telemetryCollectorAddress: String? = null,
+    val telemetrySendIntervalSeconds: Int = 300,
+    val lastTelemetrySendTime: Long? = null,
+    val isSendingTelemetry: Boolean = false,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -105,6 +112,7 @@ class SettingsViewModel
         private val propagationNodeManager: PropagationNodeManager,
         private val locationSharingManager: com.lxmf.messenger.service.LocationSharingManager,
         private val interfaceRepository: InterfaceRepository,
+        private val telemetryCollectorManager: TelemetryCollectorManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -141,6 +149,7 @@ class SettingsViewModel
             // Always load location sharing settings (not dependent on monitors)
             loadLocationSharingSettings()
             loadImageCompressionSettings()
+            loadTelemetryCollectorSettings()
             // Always start sync state monitoring (no infinite loops, needed for UI)
             startSyncStateMonitor()
             if (enableMonitors) {
@@ -148,6 +157,7 @@ class SettingsViewModel
                 startSharedInstanceAvailabilityMonitor()
                 startRelayMonitor()
                 startLocationSharingMonitor()
+                startTelemetryCollectorMonitor()
             }
         }
 
@@ -301,6 +311,12 @@ class SettingsViewModel
                             activeSharingSessions = _state.value.activeSharingSessions,
                             defaultSharingDuration = _state.value.defaultSharingDuration,
                             locationPrecisionRadius = _state.value.locationPrecisionRadius,
+                            // Preserve telemetry collector state from loadTelemetryCollectorSettings()
+                            telemetryCollectorEnabled = _state.value.telemetryCollectorEnabled,
+                            telemetryCollectorAddress = _state.value.telemetryCollectorAddress,
+                            telemetrySendIntervalSeconds = _state.value.telemetrySendIntervalSeconds,
+                            lastTelemetrySendTime = _state.value.lastTelemetrySendTime,
+                            isSendingTelemetry = _state.value.isSendingTelemetry,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value
@@ -1391,6 +1407,90 @@ class SettingsViewModel
                 _state.value.detectedCompressionPreset ?: ImageCompressionPreset.HIGH
             } else {
                 current
+            }
+        }
+
+        // Telemetry collector methods
+
+        /**
+         * Load telemetry collector settings from the repository.
+         */
+        private fun loadTelemetryCollectorSettings() {
+            viewModelScope.launch {
+                settingsRepository.telemetryCollectorEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(telemetryCollectorEnabled = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.telemetryCollectorAddressFlow.collect { address ->
+                    _state.update { it.copy(telemetryCollectorAddress = address) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.telemetrySendIntervalSecondsFlow.collect { interval ->
+                    _state.update { it.copy(telemetrySendIntervalSeconds = interval) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.lastTelemetrySendTimeFlow.collect { timestamp ->
+                    _state.update { it.copy(lastTelemetrySendTime = timestamp) }
+                }
+            }
+        }
+
+        /**
+         * Start monitoring telemetry collector state from the manager.
+         */
+        private fun startTelemetryCollectorMonitor() {
+            viewModelScope.launch {
+                telemetryCollectorManager.isSending.collect { sending ->
+                    _state.update { it.copy(isSendingTelemetry = sending) }
+                }
+            }
+        }
+
+        /**
+         * Set the telemetry collector enabled state.
+         * When enabled, location telemetry is automatically sent to the collector.
+         */
+        fun setTelemetryCollectorEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                telemetryCollectorManager.setEnabled(enabled)
+                Log.d(TAG, "Telemetry collector ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the telemetry collector address.
+         *
+         * @param address 32-character hex destination hash, or null to clear
+         */
+        fun setTelemetryCollectorAddress(address: String?) {
+            viewModelScope.launch {
+                telemetryCollectorManager.setCollectorAddress(address)
+                Log.d(TAG, "Telemetry collector address set to: ${address?.take(16) ?: "none"}")
+            }
+        }
+
+        /**
+         * Set the telemetry send interval.
+         *
+         * @param seconds Interval in seconds (minimum 60, maximum 86400)
+         */
+        fun setTelemetrySendInterval(seconds: Int) {
+            viewModelScope.launch {
+                telemetryCollectorManager.setSendIntervalSeconds(seconds)
+                Log.d(TAG, "Telemetry send interval set to: ${seconds}s")
+            }
+        }
+
+        /**
+         * Manually trigger a telemetry send to the collector.
+         */
+        fun sendTelemetryNow() {
+            viewModelScope.launch {
+                Log.d(TAG, "User triggered manual telemetry send")
+                telemetryCollectorManager.sendTelemetryNow()
             }
         }
     }

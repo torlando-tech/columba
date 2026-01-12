@@ -13,6 +13,7 @@ import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.MessageCollector
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.startup.ConfigApplyFlagManager
 import com.lxmf.messenger.startup.ServiceIdentityVerifier
 import com.lxmf.messenger.startup.StartupConfigLoader
@@ -74,6 +75,9 @@ class ColumbaApplication : Application() {
 
     @Inject
     lateinit var propagationNodeManager: PropagationNodeManager
+
+    @Inject
+    lateinit var telemetryCollectorManager: TelemetryCollectorManager
 
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Main for lifecycle operations and UI coordination
@@ -247,9 +251,10 @@ class ColumbaApplication : Application() {
                             autoAnnounceManager.start()
                             identityResolutionManager.start(applicationScope)
                             propagationNodeManager.start()
+                            telemetryCollectorManager.start()
                             android.util.Log.d(
                                 "ColumbaApplication",
-                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started",
+                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager, TelemetryCollectorManager started",
                             )
                             return@launch
                         }
@@ -379,9 +384,10 @@ class ColumbaApplication : Application() {
                             autoAnnounceManager.start()
                             identityResolutionManager.start(applicationScope)
                             propagationNodeManager.start()
+                            telemetryCollectorManager.start()
                             android.util.Log.d(
                                 "ColumbaApplication",
-                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started",
+                                "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager, TelemetryCollectorManager started",
                             )
                         }
                         .onFailure { error ->
@@ -582,9 +588,10 @@ class ColumbaApplication : Application() {
                     autoAnnounceManager.start()
                     identityResolutionManager.start(applicationScope)
                     propagationNodeManager.start()
+                    telemetryCollectorManager.start()
                     android.util.Log.d(
                         "ColumbaApplication",
-                        "initializeReticulumService: MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started",
+                        "initializeReticulumService: MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager, TelemetryCollectorManager started",
                     )
                 }
                 .onFailure { error ->

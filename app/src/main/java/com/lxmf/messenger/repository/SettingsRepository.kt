@@ -115,6 +115,14 @@ class SettingsRepository
 
             // Privacy preferences
             val BLOCK_UNKNOWN_SENDERS = booleanPreferencesKey("block_unknown_senders")
+
+            // Telemetry collector preferences
+            val TELEMETRY_COLLECTOR_ADDRESS = stringPreferencesKey("telemetry_collector_address")
+            val TELEMETRY_COLLECTOR_ENABLED = booleanPreferencesKey("telemetry_collector_enabled")
+            val TELEMETRY_SEND_INTERVAL_SECONDS = intPreferencesKey("telemetry_send_interval_seconds")
+            val TELEMETRY_REQUEST_INTERVAL_SECONDS = intPreferencesKey("telemetry_request_interval_seconds")
+            val LAST_TELEMETRY_SEND_TIME = longPreferencesKey("last_telemetry_send_time")
+            val LAST_TELEMETRY_REQUEST_TIME = longPreferencesKey("last_telemetry_request_time")
         }
 
         // Cross-process SharedPreferences for service communication
@@ -1137,6 +1145,198 @@ class SettingsRepository
             }.first()
         }
 
+        // Telemetry collector preferences
+
+        /**
+         * Flow of the telemetry collector address (32-char hex destination hash).
+         * Returns null if not set.
+         */
+        val telemetryCollectorAddressFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ADDRESS]
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the telemetry collector address (non-flow).
+         */
+        suspend fun getTelemetryCollectorAddress(): String? {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ADDRESS]
+            }.first()
+        }
+
+        /**
+         * Save the telemetry collector address.
+         *
+         * @param address The 32-character hex destination hash, or null to clear
+         */
+        suspend fun saveTelemetryCollectorAddress(address: String?) {
+            context.dataStore.edit { preferences ->
+                if (address != null) {
+                    preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ADDRESS] = address
+                } else {
+                    preferences.remove(PreferencesKeys.TELEMETRY_COLLECTOR_ADDRESS)
+                }
+            }
+        }
+
+        /**
+         * Flow of the telemetry collector enabled state.
+         * Defaults to false if not set.
+         */
+        val telemetryCollectorEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ENABLED] ?: false
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the telemetry collector enabled state (non-flow).
+         */
+        suspend fun getTelemetryCollectorEnabled(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ENABLED] ?: false
+            }.first()
+        }
+
+        /**
+         * Save the telemetry collector enabled state.
+         *
+         * @param enabled Whether automatic telemetry sending to collector is enabled
+         */
+        suspend fun saveTelemetryCollectorEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ENABLED] = enabled
+            }
+        }
+
+        /**
+         * Flow of the telemetry send interval in seconds.
+         * Defaults to 300 (5 minutes) if not set.
+         */
+        val telemetrySendIntervalSecondsFlow: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_SEND_INTERVAL_SECONDS] ?: DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the telemetry send interval in seconds (non-flow).
+         */
+        suspend fun getTelemetrySendIntervalSeconds(): Int {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_SEND_INTERVAL_SECONDS] ?: DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS
+            }.first()
+        }
+
+        /**
+         * Save the telemetry send interval in seconds.
+         *
+         * @param seconds The interval in seconds (minimum 60, maximum 86400)
+         */
+        suspend fun saveTelemetrySendIntervalSeconds(seconds: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_SEND_INTERVAL_SECONDS] = seconds.coerceIn(60, 86400)
+            }
+        }
+
+        /**
+         * Flow of the telemetry request interval in seconds.
+         * Defaults to 900 (15 minutes) if not set.
+         */
+        val telemetryRequestIntervalSecondsFlow: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_REQUEST_INTERVAL_SECONDS] ?: DEFAULT_TELEMETRY_REQUEST_INTERVAL_SECONDS
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the telemetry request interval in seconds (non-flow).
+         */
+        suspend fun getTelemetryRequestIntervalSeconds(): Int {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_REQUEST_INTERVAL_SECONDS] ?: DEFAULT_TELEMETRY_REQUEST_INTERVAL_SECONDS
+            }.first()
+        }
+
+        /**
+         * Save the telemetry request interval in seconds.
+         *
+         * @param seconds The interval in seconds (minimum 60, maximum 86400)
+         */
+        suspend fun saveTelemetryRequestIntervalSeconds(seconds: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_REQUEST_INTERVAL_SECONDS] = seconds.coerceIn(60, 86400)
+            }
+        }
+
+        /**
+         * Flow of the last telemetry send timestamp (epoch milliseconds).
+         * Returns null if no telemetry has been sent yet.
+         */
+        val lastTelemetrySendTimeFlow: Flow<Long?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LAST_TELEMETRY_SEND_TIME]
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the last telemetry send timestamp (non-flow).
+         */
+        suspend fun getLastTelemetrySendTime(): Long? {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.LAST_TELEMETRY_SEND_TIME]
+            }.first()
+        }
+
+        /**
+         * Save the last telemetry send timestamp.
+         *
+         * @param timestamp The timestamp in epoch milliseconds
+         */
+        suspend fun saveLastTelemetrySendTime(timestamp: Long) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LAST_TELEMETRY_SEND_TIME] = timestamp
+            }
+        }
+
+        /**
+         * Flow of the last telemetry request timestamp (epoch milliseconds).
+         * Returns null if no request has been made yet.
+         */
+        val lastTelemetryRequestTimeFlow: Flow<Long?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LAST_TELEMETRY_REQUEST_TIME]
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the last telemetry request timestamp (non-flow).
+         */
+        suspend fun getLastTelemetryRequestTime(): Long? {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.LAST_TELEMETRY_REQUEST_TIME]
+            }.first()
+        }
+
+        /**
+         * Save the last telemetry request timestamp.
+         *
+         * @param timestamp The timestamp in epoch milliseconds
+         */
+        suspend fun saveLastTelemetryRequestTime(timestamp: Long) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LAST_TELEMETRY_REQUEST_TIME] = timestamp
+            }
+        }
+
         companion object {
             /** Default incoming message size limit: 1MB */
             const val DEFAULT_INCOMING_SIZE_LIMIT_KB = 1024
@@ -1150,6 +1350,12 @@ class SettingsRepository
             // Cross-process SharedPreferences keys (for settings read by the service)
             const val CROSS_PROCESS_PREFS_NAME = "cross_process_settings"
             const val KEY_BLOCK_UNKNOWN_SENDERS = "block_unknown_senders"
+
+            /** Default telemetry send interval: 5 minutes */
+            const val DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS = 300
+
+            /** Default telemetry request interval: 15 minutes */
+            const val DEFAULT_TELEMETRY_REQUEST_INTERVAL_SECONDS = 900
         }
 
         // Export/Import methods for migration

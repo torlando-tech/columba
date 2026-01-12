@@ -1098,4 +1098,270 @@ class SettingsRepositoryTest {
             assertEquals("Flow and method should return same value", flowValue, methodValue)
             assertTrue("Both should be true", methodValue)
         }
+
+    // ========== Telemetry Collector Flow Tests ==========
+
+    @Test
+    fun telemetryCollectorEnabledFlow_defaultsToFalse() =
+        runTest {
+            repository.telemetryCollectorEnabledFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                assertFalse("Telemetry collector should default to disabled", initial)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun telemetryCollectorEnabledFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.telemetryCollectorEnabledFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveTelemetryCollectorEnabled(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveTelemetryCollectorEnabled(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun telemetryCollectorAddressFlow_defaultsToNull() =
+        runTest {
+            repository.telemetryCollectorAddressFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                assertNull("Telemetry collector address should default to null", initial)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun telemetryCollectorAddressFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.telemetryCollectorAddressFlow.test(timeout = 5.seconds) {
+                awaitItem() // initial
+
+                // Save address - should emit
+                val testAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+                repository.saveTelemetryCollectorAddress(testAddress)
+                assertEquals(testAddress, awaitItem())
+
+                // Save same address - should NOT emit
+                repository.saveTelemetryCollectorAddress(testAddress)
+                expectNoEvents()
+
+                // Save null - should emit
+                repository.saveTelemetryCollectorAddress(null)
+                assertNull(awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun telemetrySendIntervalSecondsFlow_defaultsTo300() =
+        runTest {
+            repository.telemetrySendIntervalSecondsFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                assertEquals(
+                    "Default send interval should be 300 seconds (5 min)",
+                    SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS,
+                    initial,
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun telemetrySendIntervalSecondsFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.telemetrySendIntervalSecondsFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveTelemetrySendIntervalSeconds(initial)
+                expectNoEvents()
+
+                // Save different value - should emit
+                val newValue = if (initial == 300) 900 else 300
+                repository.saveTelemetrySendIntervalSeconds(newValue)
+                assertEquals(newValue, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun saveTelemetrySendIntervalSeconds_clampsToMinimum() =
+        runTest {
+            // Try to save below minimum (60s)
+            repository.saveTelemetrySendIntervalSeconds(30)
+
+            val result = repository.getTelemetrySendIntervalSeconds()
+            assertEquals("Should be clamped to minimum 60s", 60, result)
+        }
+
+    @Test
+    fun saveTelemetrySendIntervalSeconds_clampsToMaximum() =
+        runTest {
+            // Try to save above maximum (86400s = 24 hours)
+            repository.saveTelemetrySendIntervalSeconds(100000)
+
+            val result = repository.getTelemetrySendIntervalSeconds()
+            assertEquals("Should be clamped to maximum 86400s", 86400, result)
+        }
+
+    @Test
+    fun saveTelemetrySendIntervalSeconds_acceptsValidValues() =
+        runTest {
+            val validValues = listOf(300, 900, 1800, 3600)
+
+            for (value in validValues) {
+                repository.saveTelemetrySendIntervalSeconds(value)
+                val result = repository.getTelemetrySendIntervalSeconds()
+                assertEquals("Value $value should be saved as-is", value, result)
+            }
+        }
+
+    @Test
+    fun telemetryRequestIntervalSecondsFlow_defaultsTo900() =
+        runTest {
+            repository.telemetryRequestIntervalSecondsFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                assertEquals(
+                    "Default request interval should be 900 seconds (15 min)",
+                    SettingsRepository.DEFAULT_TELEMETRY_REQUEST_INTERVAL_SECONDS,
+                    initial,
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun telemetryRequestIntervalSecondsFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.telemetryRequestIntervalSecondsFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveTelemetryRequestIntervalSeconds(initial)
+                expectNoEvents()
+
+                // Save different value - should emit
+                val newValue = if (initial == 900) 1800 else 900
+                repository.saveTelemetryRequestIntervalSeconds(newValue)
+                assertEquals(newValue, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun saveTelemetryRequestIntervalSeconds_clampsToValidRange() =
+        runTest {
+            // Test minimum clamping
+            repository.saveTelemetryRequestIntervalSeconds(30)
+            assertEquals(60, repository.getTelemetryRequestIntervalSeconds())
+
+            // Test maximum clamping
+            repository.saveTelemetryRequestIntervalSeconds(100000)
+            assertEquals(86400, repository.getTelemetryRequestIntervalSeconds())
+        }
+
+    @Test
+    fun lastTelemetrySendTimeFlow_defaultsToNull() =
+        runTest {
+            repository.lastTelemetrySendTimeFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                assertNull("Last telemetry send time should default to null", initial)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun lastTelemetrySendTimeFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.lastTelemetrySendTimeFlow.test(timeout = 5.seconds) {
+                awaitItem() // initial (null)
+
+                // Save timestamp - should emit
+                val timestamp1 = System.currentTimeMillis()
+                repository.saveLastTelemetrySendTime(timestamp1)
+                assertEquals(timestamp1, awaitItem())
+
+                // Save same timestamp - should NOT emit
+                repository.saveLastTelemetrySendTime(timestamp1)
+                expectNoEvents()
+
+                // Save new timestamp - should emit
+                val timestamp2 = timestamp1 + 60_000
+                repository.saveLastTelemetrySendTime(timestamp2)
+                assertEquals(timestamp2, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun lastTelemetryRequestTimeFlow_defaultsToNull() =
+        runTest {
+            repository.lastTelemetryRequestTimeFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                assertNull("Last telemetry request time should default to null", initial)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun lastTelemetryRequestTimeFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.lastTelemetryRequestTimeFlow.test(timeout = 5.seconds) {
+                awaitItem() // initial (null)
+
+                // Save timestamp - should emit
+                val timestamp1 = System.currentTimeMillis()
+                repository.saveLastTelemetryRequestTime(timestamp1)
+                assertEquals(timestamp1, awaitItem())
+
+                // Save same timestamp - should NOT emit
+                repository.saveLastTelemetryRequestTime(timestamp1)
+                expectNoEvents()
+
+                // Save new timestamp - should emit
+                val timestamp2 = timestamp1 + 60_000
+                repository.saveLastTelemetryRequestTime(timestamp2)
+                assertEquals(timestamp2, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun telemetryCollector_flowAndGetMethodReturnSameValue() =
+        runTest {
+            // Set to known values
+            val testAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+            repository.saveTelemetryCollectorEnabled(true)
+            repository.saveTelemetryCollectorAddress(testAddress)
+            repository.saveTelemetrySendIntervalSeconds(900)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Compare flow and method values
+            assertEquals(
+                repository.telemetryCollectorEnabledFlow.first(),
+                repository.getTelemetryCollectorEnabled(),
+            )
+            assertEquals(
+                repository.telemetryCollectorAddressFlow.first(),
+                repository.getTelemetryCollectorAddress(),
+            )
+            assertEquals(
+                repository.telemetrySendIntervalSecondsFlow.first(),
+                repository.getTelemetrySendIntervalSeconds(),
+            )
+        }
 }

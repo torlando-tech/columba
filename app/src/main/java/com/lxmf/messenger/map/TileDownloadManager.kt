@@ -462,8 +462,15 @@ class TileDownloadManager(
 
             // Validate tile size to prevent OOM attacks (vector tiles are typically 5-50KB)
             if (size < 0 || size > 1_000_000) { // 1MB max per tile
-                Log.w(TAG, "Invalid tile size: $size bytes (skipping)")
-                return@repeat
+                Log.w(TAG, "Invalid tile size: $size bytes (aborting)")
+                return tiles // Data is likely corrupted
+            }
+
+            // Check cumulative size to prevent memory exhaustion
+            val totalSize = tiles.sumOf { it.data.size.toLong() }
+            if (totalSize + size > 100_000_000) { // 100MB max total
+                Log.w(TAG, "Total tile data exceeds 100MB limit (aborting)")
+                return tiles
             }
 
             val dataAvailable = buffer.remaining() >= size

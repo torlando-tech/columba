@@ -395,7 +395,6 @@ class RmspClientWrapper:
                     if expected_dest.hash != dest_hash:
                         log_error("RmspClient", "fetch_tiles",
                                  f"Destination hash mismatch - possible impersonation attempt")
-                        server = None  # Explicitly ensure server remains None
                         return None
 
                     # Verification passed - safe to create server info

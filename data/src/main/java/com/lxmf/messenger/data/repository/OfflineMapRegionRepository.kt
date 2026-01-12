@@ -279,8 +279,10 @@ class OfflineMapRegionRepository
                 val radiusKm = if (bounds != null && bounds.size == 4) {
                     val west = bounds[0].toDoubleOrNull() ?: 0.0
                     val east = bounds[2].toDoubleOrNull() ?: 0.0
-                    // Approximate radius from bounds width (rough calculation)
-                    ((east - west) * 111 / 2).toInt().coerceIn(10, 200)
+                    // Approximate radius from bounds width with latitude correction
+                    // (111km per degree at equator, less at higher latitudes)
+                    val lonDegToKm = 111.0 * kotlin.math.cos(Math.toRadians(centerLat))
+                    ((east - west) * lonDegToKm / 2).toInt().coerceIn(10, 200)
                 } else {
                     100 // Default
                 }

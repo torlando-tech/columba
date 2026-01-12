@@ -277,10 +277,15 @@ class TileDownloadManager(
 
         if (isCancelled) {
             writer.close()
-            // Brief delay to allow file handles to be fully released after SQLite close
-            delay(100)
-            if (!params.outputFile.delete() && params.outputFile.exists()) {
-                Log.w(TAG, "Failed to delete cancelled download file: ${params.outputFile.absolutePath}")
+            // Retry deletion with backoff - file handles may not release immediately
+            repeat(5) { attempt ->
+                delay(100L * (attempt + 1))
+                if (params.outputFile.delete() || !params.outputFile.exists()) {
+                    return@repeat
+                }
+            }
+            if (params.outputFile.exists()) {
+                Log.e(TAG, "Failed to delete cancelled download after retries: ${params.outputFile.absolutePath}")
             }
             _progress.value = _progress.value.copy(status = DownloadProgress.Status.CANCELLED)
             return false

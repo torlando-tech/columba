@@ -284,10 +284,14 @@ class TileDownloadManager(
                     return@repeat
                 }
             }
-            if (params.outputFile.exists()) {
+            val deletionFailed = params.outputFile.exists()
+            if (deletionFailed) {
                 Log.e(TAG, "Failed to delete cancelled download after retries: ${params.outputFile.absolutePath}")
             }
-            _progress.value = _progress.value.copy(status = DownloadProgress.Status.CANCELLED)
+            _progress.value = _progress.value.copy(
+                status = DownloadProgress.Status.CANCELLED,
+                errorMessage = if (deletionFailed) "Cancelled. Incomplete file may need manual cleanup." else null,
+            )
             return false
         }
 
@@ -410,10 +414,14 @@ class TileDownloadManager(
                             return@repeat
                         }
                     }
-                    if (params.outputFile.exists()) {
+                    val deletionFailed = params.outputFile.exists()
+                    if (deletionFailed) {
                         Log.e(TAG, "Failed to delete cancelled RMSP download: ${params.outputFile.absolutePath}")
                     }
-                    _progress.value = _progress.value.copy(status = DownloadProgress.Status.CANCELLED)
+                    _progress.value = _progress.value.copy(
+                        status = DownloadProgress.Status.CANCELLED,
+                        errorMessage = if (deletionFailed) "Cancelled. Incomplete file may need manual cleanup." else null,
+                    )
                     return null
                 }
                 writer.writeTile(tile.z, tile.x, tile.y, tile.data)

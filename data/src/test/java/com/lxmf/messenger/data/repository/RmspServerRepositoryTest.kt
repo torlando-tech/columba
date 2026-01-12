@@ -54,8 +54,17 @@ class RmspServerRepositoryTest {
     }
 
     @Test
-    fun `coversGeohash returns true for empty coverage list (global)`() {
+    fun `coversGeohash returns false for empty coverage list`() {
         val server = DEFAULT_SERVER.copy(coverageGeohashes = emptyList())
+
+        assertFalse(server.coversGeohash("9q8y"))
+        assertFalse(server.coversGeohash("u10h"))
+        assertFalse(server.coversGeohash("xn76"))
+    }
+
+    @Test
+    fun `coversGeohash returns true for explicit global coverage marker`() {
+        val server = DEFAULT_SERVER.copy(coverageGeohashes = listOf("*"))
 
         assertTrue(server.coversGeohash("9q8y"))
         assertTrue(server.coversGeohash("u10h"))

@@ -49,9 +49,11 @@ data class RmspServerEntity(
 ) {
     /**
      * Check if this server covers the given geohash.
+     * Use "*" for explicit global coverage; empty means no coverage data available.
      */
     fun coversGeohash(geohash: String): Boolean {
-        if (coverageGeohashes.isEmpty()) return true // Empty means global coverage
+        if (coverageGeohashes.isEmpty()) return false // No coverage data - don't assume global
+        if (coverageGeohashes == "*") return true // Explicit global coverage marker
 
         return coverageGeohashes.split(",").any { prefix ->
             geohash.startsWith(prefix.trim()) || prefix.trim().startsWith(geohash)

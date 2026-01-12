@@ -215,19 +215,23 @@ class OfflineMapRegionRepository
 
         /**
          * Import an orphaned MBTiles file into the database.
+         * Attempts to extract center/bounds from MBTiles metadata.
          * @return The ID of the imported region
          */
         suspend fun importOrphanedFile(
             file: java.io.File,
             name: String = file.nameWithoutExtension,
         ): Long {
+            // Try to extract metadata from MBTiles
+            val metadata = extractMbtilesMetadata(file)
+
             val entity = OfflineMapRegionEntity(
-                name = name,
-                centerLatitude = 0.0,
-                centerLongitude = 0.0,
-                radiusKm = 0,
-                minZoom = 0,
-                maxZoom = 14,
+                name = metadata?.name ?: name,
+                centerLatitude = metadata?.centerLat ?: 0.0,
+                centerLongitude = metadata?.centerLon ?: 0.0,
+                radiusKm = metadata?.radiusKm ?: 100, // Default to 100km to ensure it's usable
+                minZoom = metadata?.minZoom ?: 0,
+                maxZoom = metadata?.maxZoom ?: 14,
                 status = OfflineMapRegionEntity.STATUS_COMPLETE,
                 mbtilesPath = file.absolutePath,
                 tileCount = 0,
@@ -239,6 +243,60 @@ class OfflineMapRegionRepository
                 source = OfflineMapRegionEntity.SOURCE_HTTP,
             )
             return offlineMapRegionDao.insert(entity)
+        }
+
+        private data class MbtilesMetadata(
+            val name: String?,
+            val centerLat: Double,
+            val centerLon: Double,
+            val radiusKm: Int,
+            val minZoom: Int,
+            val maxZoom: Int,
+        )
+
+        private fun extractMbtilesMetadata(file: java.io.File): MbtilesMetadata? {
+            return try {
+                val db = android.database.sqlite.SQLiteDatabase.openDatabase(
+                    file.absolutePath,
+                    null,
+                    android.database.sqlite.SQLiteDatabase.OPEN_READONLY,
+                )
+                db.use { database ->
+                    val metadata = mutableMapOf<String, String>()
+                    database.rawQuery("SELECT name, value FROM metadata", null).use { cursor ->
+                        while (cursor.moveToNext()) {
+                            metadata[cursor.getString(0)] = cursor.getString(1)
+                        }
+                    }
+
+                    // Parse center (format: "lon,lat,zoom")
+                    val center = metadata["center"]?.split(",")
+                    val centerLon = center?.getOrNull(0)?.toDoubleOrNull() ?: 0.0
+                    val centerLat = center?.getOrNull(1)?.toDoubleOrNull() ?: 0.0
+
+                    // Parse bounds (format: "west,south,east,north")
+                    val bounds = metadata["bounds"]?.split(",")
+                    val radiusKm = if (bounds != null && bounds.size == 4) {
+                        val west = bounds[0].toDoubleOrNull() ?: 0.0
+                        val east = bounds[2].toDoubleOrNull() ?: 0.0
+                        // Approximate radius from bounds width (rough calculation)
+                        ((east - west) * 111 / 2).toInt().coerceIn(10, 200)
+                    } else {
+                        100 // Default
+                    }
+
+                    MbtilesMetadata(
+                        name = metadata["name"],
+                        centerLat = centerLat,
+                        centerLon = centerLon,
+                        radiusKm = radiusKm,
+                        minZoom = metadata["minzoom"]?.toIntOrNull() ?: 0,
+                        maxZoom = metadata["maxzoom"]?.toIntOrNull() ?: 14,
+                    )
+                }
+            } catch (@Suppress("SwallowedException") e: Exception) {
+                null // Return null if metadata extraction fails - file may be corrupted
+            }
         }
     }
 

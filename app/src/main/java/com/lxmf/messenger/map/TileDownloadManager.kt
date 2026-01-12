@@ -276,7 +276,7 @@ class TileDownloadManager(
         }
 
         if (isCancelled) {
-            writer.close()
+            // Note: writer.close() called by finally block in downloadRegionHttp()
             // Retry deletion with backoff - file handles may not release immediately
             repeat(5) { attempt ->
                 delay(100L * (attempt + 1))
@@ -434,6 +434,7 @@ class TileDownloadManager(
     @Suppress("MemberVisibilityCanBePrivate", "ReturnCount") // Internal for testing; multiple returns for security validation
     internal fun unpackRmspTiles(data: ByteArray): List<RmspTile> {
         val tiles = mutableListOf<RmspTile>()
+        var cumulativeSize = 0L
         if (data.size < 4) return tiles
 
         val buffer = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN)
@@ -478,9 +479,8 @@ class TileDownloadManager(
                 return tiles // Data is likely corrupted
             }
 
-            // Check cumulative size to prevent memory exhaustion
-            val totalSize = tiles.sumOf { it.data.size.toLong() }
-            if (totalSize + size > 100_000_000) { // 100MB max total
+            // Check cumulative size to prevent memory exhaustion (tracked incrementally to avoid O(n²))
+            if (cumulativeSize + size > 100_000_000) { // 100MB max total
                 Log.w(TAG, "Total tile data exceeds 100MB limit (aborting)")
                 return tiles
             }
@@ -491,6 +491,7 @@ class TileDownloadManager(
             val tileData = ByteArray(size)
             buffer.get(tileData)
             tiles.add(RmspTile(z, x, y, tileData))
+            cumulativeSize += size
         }
 
         return tiles
@@ -832,7 +833,15 @@ class TileDownloadManager(
             // Ensure northeast corner is covered
             geohashes.add(encodeGeohash(bounds.north, bounds.east, precision))
 
+            // Safety limit to prevent memory exhaustion
+            if (geohashes.size > MAX_GEOHASHES) {
+                Log.w(TAG, "Geohash count ${geohashes.size} exceeds limit $MAX_GEOHASHES, truncating")
+                return geohashes.take(MAX_GEOHASHES).toSet()
+            }
+
             return geohashes
         }
+
+        private const val MAX_GEOHASHES = 500
     }
 }

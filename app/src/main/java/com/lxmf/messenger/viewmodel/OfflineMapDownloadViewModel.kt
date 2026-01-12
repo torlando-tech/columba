@@ -145,10 +145,13 @@ class OfflineMapDownloadViewModel
             latitude: Double,
             longitude: Double,
         ) {
+            // Validate coordinate ranges
+            val validLat = latitude.coerceIn(-90.0, 90.0)
+            val validLon = longitude.coerceIn(-180.0, 180.0)
             _state.update {
                 it.copy(
-                    centerLatitude = latitude,
-                    centerLongitude = longitude,
+                    centerLatitude = validLat,
+                    centerLongitude = validLon,
                 )
             }
             updateEstimate()
@@ -169,10 +172,13 @@ class OfflineMapDownloadViewModel
             minZoom: Int,
             maxZoom: Int,
         ) {
+            val validMin = minZoom.coerceIn(0, 14)
+            val validMax = maxZoom.coerceIn(0, 14)
+            // Ensure minZoom <= maxZoom
             _state.update {
                 it.copy(
-                    minZoom = minZoom.coerceIn(0, 14),
-                    maxZoom = maxZoom.coerceIn(0, 14),
+                    minZoom = minOf(validMin, validMax),
+                    maxZoom = maxOf(validMin, validMax),
                 )
             }
             updateEstimate()
@@ -377,6 +383,7 @@ class OfflineMapDownloadViewModel
                                 Log.e(TAG, "Database error, file preserved at: ${result.absolutePath}", dbError)
                                 // DO NOT delete the file - it's valid and expensive to re-download
                             }
+                            downloadManager = null // Reset for potential retry
                             _state.update {
                                 it.copy(
                                     errorMessage = "Download completed but database error. " +
@@ -387,6 +394,7 @@ class OfflineMapDownloadViewModel
                         }
                     }
                 } catch (e: Exception) {
+                    downloadManager = null // Reset for potential retry
                     _state.update {
                         it.copy(errorMessage = "Download failed: ${e.message}")
                     }

@@ -286,6 +286,25 @@ class TelemetryCollectorManagerTest {
         coVerify(exactly = 0) { mockSettingsRepository.saveTelemetryCollectorAddress(any()) }
     }
 
+    @Test
+    fun `setCollectorAddress rejects address with non-hex characters`() = testScope.runTest {
+        manager = createManager()
+
+        manager.setCollectorAddress("g1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4") // 'g' is invalid
+
+        coVerify(exactly = 0) { mockSettingsRepository.saveTelemetryCollectorAddress(any()) }
+    }
+
+    @Test
+    fun `setCollectorAddress accepts uppercase hex characters`() = testScope.runTest {
+        manager = createManager()
+
+        val uppercaseAddress = "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4"
+        manager.setCollectorAddress(uppercaseAddress)
+
+        coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(uppercaseAddress) }
+    }
+
     // ========== setEnabled Tests ==========
 
     @Test

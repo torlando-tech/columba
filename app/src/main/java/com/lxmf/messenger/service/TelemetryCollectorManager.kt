@@ -174,9 +174,15 @@ class TelemetryCollectorManager
          * @param address 32-character hex destination hash, or null to clear
          */
         suspend fun setCollectorAddress(address: String?) {
-            if (address != null && address.length != 32) {
-                Log.w(TAG, "Invalid collector address length: ${address.length} (expected 32)")
-                return
+            if (address != null) {
+                if (address.length != 32) {
+                    Log.w(TAG, "Invalid collector address length: ${address.length} (expected 32)")
+                    return
+                }
+                if (!address.matches(Regex("^[0-9a-fA-F]{32}$"))) {
+                    Log.w(TAG, "Invalid collector address: contains non-hex characters")
+                    return
+                }
             }
             settingsRepository.saveTelemetryCollectorAddress(address)
         }

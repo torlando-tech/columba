@@ -323,9 +323,15 @@ private fun formatRelativeTime(
  * Format interval in seconds to a readable string.
  */
 private fun formatIntervalDisplay(seconds: Int): String {
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    val secs = seconds % 60
+
     return when {
         seconds < 60 -> "${seconds}s"
-        seconds % 60 == 0 -> "${seconds / 60}min"
-        else -> "${seconds / 60}m ${seconds % 60}s"
+        hours > 0 && minutes == 0 && secs == 0 -> "${hours}hr"
+        hours > 0 -> "${hours}h ${minutes}m"
+        secs == 0 -> "${minutes}min"
+        else -> "${minutes}m ${secs}s"
     }
 }

@@ -311,6 +311,12 @@ class SettingsViewModel
                             activeSharingSessions = _state.value.activeSharingSessions,
                             defaultSharingDuration = _state.value.defaultSharingDuration,
                             locationPrecisionRadius = _state.value.locationPrecisionRadius,
+                            // Preserve telemetry collector state from loadTelemetryCollectorSettings()
+                            telemetryCollectorEnabled = _state.value.telemetryCollectorEnabled,
+                            telemetryCollectorAddress = _state.value.telemetryCollectorAddress,
+                            telemetrySendIntervalSeconds = _state.value.telemetrySendIntervalSeconds,
+                            lastTelemetrySendTime = _state.value.lastTelemetrySendTime,
+                            isSendingTelemetry = _state.value.isSendingTelemetry,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value

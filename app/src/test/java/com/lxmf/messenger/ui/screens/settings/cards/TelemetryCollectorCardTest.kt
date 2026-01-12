@@ -1,12 +1,17 @@
 package com.lxmf.messenger.ui.screens.settings.cards
 
 import android.app.Application
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
@@ -121,20 +126,23 @@ class TelemetryCollectorCardTest {
     @Test
     fun `card displays send now button`() {
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Send Now").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Send Now").performScrollTo().assertIsDisplayed()
     }
 
     // ========== Interval Chip Tests ==========
@@ -142,134 +150,155 @@ class TelemetryCollectorCardTest {
     @Test
     fun `card displays 5min interval chip`() {
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("5min").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("5min").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun `card displays 15min interval chip`() {
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("15min").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("15min").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun `card displays 30min interval chip`() {
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("30min").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("30min").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun `card displays 1hr interval chip`() {
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("1hr").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("1hr").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun `card displays current send interval`() {
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Send interval: 5min").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Send interval: 5min").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun `card displays send interval for 15 minutes`() {
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 900,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 900,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Send interval: 15min").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Send interval: 15min").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun `card displays send interval for 1 hour`() {
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 3600,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 3600,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Send interval: 1hr", substring = true).assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Send interval: 1hr", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     // ========== Send Button State Tests ==========
@@ -315,39 +344,45 @@ class TelemetryCollectorCardTest {
     @Test
     fun `send button shows sending state`() {
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = true,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = true,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Sending...").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Sending...").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun `send button is disabled while sending`() {
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = true,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = true,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Sending...").assertIsNotEnabled()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Sending...").performScrollTo().assertIsNotEnabled()
     }
 
     // ========== Callback Tests ==========
@@ -357,20 +392,23 @@ class TelemetryCollectorCardTest {
         var sendNowCalled = false
 
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = { sendNowCalled = true },
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = { sendNowCalled = true },
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Send Now").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Send Now").performScrollTo().performClick()
 
         assertTrue(sendNowCalled)
     }
@@ -380,20 +418,23 @@ class TelemetryCollectorCardTest {
         var receivedInterval = 0
 
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = { receivedInterval = it },
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = { receivedInterval = it },
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("15min").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("15min").performScrollTo().performClick()
 
         assertEquals(900, receivedInterval)
     }
@@ -403,20 +444,23 @@ class TelemetryCollectorCardTest {
         var receivedInterval = 0
 
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = { receivedInterval = it },
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = { receivedInterval = it },
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("30min").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("30min").performScrollTo().performClick()
 
         assertEquals(1800, receivedInterval)
     }
@@ -426,20 +470,23 @@ class TelemetryCollectorCardTest {
         var receivedInterval = 0
 
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = null,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = { receivedInterval = it },
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = null,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = { receivedInterval = it },
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("1hr").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("1hr").performScrollTo().performClick()
 
         assertEquals(3600, receivedInterval)
     }
@@ -470,20 +517,23 @@ class TelemetryCollectorCardTest {
         val recentTime = System.currentTimeMillis() - 2000 // 2 seconds ago
 
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = recentTime,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = recentTime,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Last sent: Just now").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Last sent: Just now").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -491,20 +541,23 @@ class TelemetryCollectorCardTest {
         val pastTime = System.currentTimeMillis() - 30_000 // 30 seconds ago
 
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = pastTime,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = pastTime,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Last sent:", substring = true).assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Last sent:", substring = true).performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("seconds ago", substring = true).assertIsDisplayed()
     }
 
@@ -513,20 +566,23 @@ class TelemetryCollectorCardTest {
         val pastTime = System.currentTimeMillis() - 5 * 60_000 // 5 minutes ago
 
         composeTestRule.setContent {
-            TelemetryCollectorCard(
-                enabled = true,
-                collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-                sendIntervalSeconds = 300,
-                lastSendTime = pastTime,
-                isSending = false,
-                onEnabledChange = {},
-                onCollectorAddressChange = {},
-                onSendIntervalChange = {},
-                onSendNow = {},
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TelemetryCollectorCard(
+                    enabled = true,
+                    collectorAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    sendIntervalSeconds = 300,
+                    lastSendTime = pastTime,
+                    isSending = false,
+                    onEnabledChange = {},
+                    onCollectorAddressChange = {},
+                    onSendIntervalChange = {},
+                    onSendNow = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Last sent:", substring = true).assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Last sent:", substring = true).performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("minutes ago", substring = true).assertIsDisplayed()
     }
 

@@ -332,12 +332,12 @@ class TileDownloadManager(
         _progress.value = _progress.value.copy(status = DownloadProgress.Status.CALCULATING)
 
         val bounds = MBTilesWriter.boundsFromCenter(params.centerLat, params.centerLon, params.radiusKm)
-        // Adjust precision based on radius (precision 2 cells are ~630km, too coarse for most requests)
+        // Use higher precision with more cells rather than lower precision with fewer cells
+        // to avoid downloading unnecessary tiles outside the requested area
         val geohashPrecision =
             when {
-                params.radiusKm <= 5 -> 5   // ~5km cells
-                params.radiusKm <= 20 -> 4  // ~40km cells
-                params.radiusKm <= 50 -> 4  // Still fits in ~40km cells
+                params.radiusKm <= 15 -> 5  // ~5km cells, up to ~9 cells for 15km radius
+                params.radiusKm <= 40 -> 4  // ~40km cells
                 else -> 3                   // ~150km cells for 50-100km radius
             }
         val geohashes = geohashesForBounds(bounds, geohashPrecision)

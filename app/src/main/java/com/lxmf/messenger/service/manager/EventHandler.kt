@@ -239,20 +239,31 @@ class EventHandler(
             // Detect node type from aspect and app_data
             val nodeType = NodeTypeDetector.detectNodeType(appData, aspect)
 
-            // Determine display name (prefer parsed name, fall back to identity hash)
-            val peerName =
-                displayName
-                    ?: appData?.let { String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 } }
-                    ?: "Peer ${destinationHashHex.take(8).uppercase()}"
+            // Extract propagation node metadata once (reused for name and transfer limit)
+            val propagationMetadata = if (nodeType == NodeType.PROPAGATION_NODE) {
+                AppDataParser.extractPropagationNodeMetadata(appData)
+            } else {
+                null
+            }
 
-            // Extract transfer size limit for propagation nodes
-            val propagationTransferLimitKb =
-                if (nodeType == NodeType.PROPAGATION_NODE) {
-                    val metadata = AppDataParser.extractPropagationNodeMetadata(appData)
-                    metadata.transferLimitKb
-                } else {
-                    null
+            // Determine display name (prefer parsed name from Python LXMF helpers)
+            // For propagation nodes: DO NOT interpret msgpack binary as UTF-8 (causes garbled names)
+            // For regular peers: app_data IS a UTF-8 display name string, so fallback is safe
+            val peerName =
+                when {
+                    !displayName.isNullOrBlank() -> displayName
+                    nodeType == NodeType.PROPAGATION_NODE -> {
+                        propagationMetadata?.name ?: "Peer ${destinationHashHex.take(8).uppercase()}"
+                    }
+                    else -> {
+                        appData?.let {
+                            String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 }
+                        } ?: "Peer ${destinationHashHex.take(8).uppercase()}"
+                    }
                 }
+
+            // Transfer size limit for propagation nodes (from cached metadata)
+            val propagationTransferLimitKb = propagationMetadata?.transferLimitKb
 
             // Persist to database first (survives app process death)
             if (persistenceManager != null && publicKey != null) {

@@ -873,12 +873,7 @@ fun MessagingScreen(
                             clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(it.content))
                         }
                     },
-                    onViewDetails =
-                        if (state.isFromMe) {
-                            { onViewMessageDetails(state.messageId) }
-                        } else {
-                            null
-                        },
+                    onViewDetails = { onViewMessageDetails(state.messageId) },
                     onRetry =
                         if (state.isFailed) {
                             { viewModel.retryFailedMessage(state.messageId) }

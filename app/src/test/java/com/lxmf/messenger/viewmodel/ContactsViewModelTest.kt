@@ -1,8 +1,8 @@
 package com.lxmf.messenger.viewmodel
 
+import android.util.Log
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
-import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -15,6 +15,9 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,6 +68,13 @@ class ContactsViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
+        // Mock Android Log to prevent "not mocked" errors
+        mockkStatic(Log::class)
+        every { Log.d(any(), any()) } returns 0
+        every { Log.e(any(), any()) } returns 0
+        every { Log.i(any(), any()) } returns 0
+        every { Log.w(any<String>(), any<String>()) } returns 0
+
         contactRepository = mockk(relaxed = true)
         propagationNodeManager = mockk(relaxed = true)
 
@@ -78,6 +88,7 @@ class ContactsViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkStatic(Log::class)
         clearAllMocks()
     }
 
@@ -662,22 +673,50 @@ class ContactsViewModelTest {
     // ========== Retry Identity Tests ==========
 
     @Test
-    fun `retryIdentityResolution - updates status to pending`() =
+    fun `retryIdentityResolution - resets contact with fresh timestamp`() =
         runTest {
             // Given
-            coEvery { contactRepository.updateContactStatus(any(), any()) } returns Result.success(Unit)
+            coEvery { contactRepository.resetContactForRetry(any()) } returns Result.success(Unit)
 
             // When
             viewModel.retryIdentityResolution(testDestHash)
             advanceUntilIdle()
 
-            // Then
-            coVerify {
-                contactRepository.updateContactStatus(
-                    destinationHash = testDestHash,
-                    status = ContactStatus.PENDING_IDENTITY,
-                )
-            }
+            // Then: Should call resetContactForRetry and log success
+            coVerify { contactRepository.resetContactForRetry(testDestHash) }
+            verify { Log.d(any(), match { it.contains("Reset contact for retry") }) }
+        }
+
+    @Test
+    fun `retryIdentityResolution - handles Result failure gracefully`() =
+        runTest {
+            // Given: Repository returns failure result
+            coEvery { contactRepository.resetContactForRetry(any()) } returns
+                Result.failure(RuntimeException("Reset failed"))
+
+            // When: Should not crash
+            viewModel.retryIdentityResolution(testDestHash)
+            advanceUntilIdle()
+
+            // Then: Verify attempt was made and error was logged (covers else branch)
+            coVerify { contactRepository.resetContactForRetry(testDestHash) }
+            verify { Log.e(any(), match { it.contains("Failed to reset contact") }) }
+        }
+
+    @Test
+    fun `retryIdentityResolution - handles exception gracefully`() =
+        runTest {
+            // Given: Repository throws exception
+            coEvery { contactRepository.resetContactForRetry(any()) } throws
+                RuntimeException("Database error")
+
+            // When: Should not crash
+            viewModel.retryIdentityResolution(testDestHash)
+            advanceUntilIdle()
+
+            // Then: Verify attempt was made and exception was logged (covers catch block)
+            coVerify { contactRepository.resetContactForRetry(testDestHash) }
+            verify { Log.e(any(), match { it.contains("Error retrying identity") }, any<Throwable>()) }
         }
 
     // ========== Contact Count Tests ==========

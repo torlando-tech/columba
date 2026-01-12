@@ -191,7 +191,7 @@ fun InlineReactionBar(
  * @param onShowFullPicker Callback to show the full emoji picker dialog
  * @param onReply Callback when Reply is tapped
  * @param onCopy Callback when Copy is tapped
- * @param onViewDetails Optional callback for View Details (sent messages only)
+ * @param onViewDetails Optional callback for View Details (all messages)
  * @param onRetry Optional callback for Retry (failed messages only)
  */
 @Composable
@@ -279,7 +279,7 @@ fun MessageActionBar(
                     },
                 )
 
-                // Details button (only for sent messages)
+                // Details button (shown for all messages)
                 if (onViewDetails != null) {
                     ActionButton(
                         icon = Icons.Default.Info,
@@ -664,7 +664,7 @@ private fun ReactionChip(
  * @param onShowFullPicker Callback to show the full emoji picker
  * @param onReply Callback for the reply action
  * @param onCopy Callback for the copy action
- * @param onViewDetails Optional callback for viewing message details (sent messages only)
+ * @param onViewDetails Optional callback for viewing message details (all messages)
  * @param onRetry Optional callback for retrying failed messages
  * @param onDismiss Callback when the overlay is dismissed
  * @param modifier Optional modifier for the overlay
@@ -792,8 +792,10 @@ fun ReactionModeOverlay(
     val wrappedOnViewDetails: (() -> Unit)? =
         onViewDetails?.let {
             {
+                // Exit reaction mode immediately before navigating (no animation needed)
+                // This ensures back navigation returns to chat, not the overlay
+                onDismiss()
                 it()
-                handleDismiss()
             }
         }
 
@@ -974,7 +976,7 @@ private fun MessageActionButtons(
                 onClick = onCopy,
             )
 
-            // View Details button (sent messages only)
+            // View Details button (shown for all messages)
             if (onViewDetails != null) {
                 ReactionModeActionButton(
                     icon = Icons.Default.Info,

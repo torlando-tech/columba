@@ -165,31 +165,31 @@ class TestRmspServerInfoCoversGeohash(unittest.TestCase):
         self.mock_identity = MagicMock()
         self.dest_hash = bytes.fromhex("deadbeef" * 4)
 
-    def test_empty_coverage_covers_all(self):
-        """Empty coverage list means global coverage."""
+    def test_empty_coverage_returns_false(self):
+        """Empty coverage list means no coverage data available."""
         server = rmsp_client.RmspServerInfo(
             destination_hash=self.dest_hash,
             identity=self.mock_identity,
             version="0.1.0",
-            name="Global Server",
-            coverage=[],  # Empty = global
+            name="No Coverage Server",
+            coverage=[],  # Empty = no coverage
             zoom_range=(0, 15),
             formats=[],
             layers=[],
             updated=0,
         )
-        self.assertTrue(server.covers_geohash("u4pr"))
-        self.assertTrue(server.covers_geohash("ezs42"))
-        self.assertTrue(server.covers_geohash("gcpvj"))
+        self.assertFalse(server.covers_geohash("u4pr"))
+        self.assertFalse(server.covers_geohash("ezs42"))
+        self.assertFalse(server.covers_geohash("gcpvj"))
 
-    def test_empty_string_in_coverage_covers_all(self):
-        """Empty string in coverage means global coverage."""
+    def test_explicit_global_coverage_marker(self):
+        """Explicit '*' marker means global coverage."""
         server = rmsp_client.RmspServerInfo(
             destination_hash=self.dest_hash,
             identity=self.mock_identity,
             version="0.1.0",
             name="Global Server",
-            coverage=[""],  # Empty string = global
+            coverage=["*"],  # Explicit global marker
             zoom_range=(0, 15),
             formats=[],
             layers=[],

@@ -70,9 +70,14 @@ class RmspServerInfo:
     hops: int = 0
 
     def covers_geohash(self, geohash: str) -> bool:
-        """Check if this server covers the given geohash."""
-        if not self.coverage or "" in self.coverage:
-            return True
+        """Check if this server covers the given geohash.
+
+        Use ["*"] for explicit global coverage; empty list means no coverage data.
+        """
+        if not self.coverage:
+            return False  # No coverage data - don't assume global
+        if "*" in self.coverage:
+            return True  # Explicit global coverage marker
         return any(
             geohash.startswith(prefix) or prefix.startswith(geohash)
             for prefix in self.coverage

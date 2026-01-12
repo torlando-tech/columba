@@ -378,7 +378,7 @@ class TileDownloadManager(
         return allTiles
     }
 
-    private fun writeRmspTilesToFile(
+    private suspend fun writeRmspTilesToFile(
         allTiles: List<RmspTile>,
         params: RegionParams,
     ): File? {
@@ -405,7 +405,7 @@ class TileDownloadManager(
                     writer.close()
                     // Retry deletion with backoff - file handles may not release immediately
                     repeat(5) { attempt ->
-                        Thread.sleep(100L * (attempt + 1))
+                        delay(100L * (attempt + 1))
                         if (params.outputFile.delete() || !params.outputFile.exists()) {
                             return@repeat
                         }

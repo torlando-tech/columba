@@ -662,14 +662,22 @@ private fun isWebP(bytes: ByteArray): Boolean =
  * Efficiently convert a hex string to byte array.
  * Uses direct array allocation and character arithmetic instead of
  * chunked/map which creates many intermediate objects.
+ *
+ * @throws IllegalArgumentException if hex string has odd length or invalid characters
  */
 private fun hexStringToByteArray(hex: String): ByteArray {
     val len = hex.length
+    if (len % 2 != 0) {
+        throw IllegalArgumentException("Hex string must have even length, got: $len")
+    }
     val result = ByteArray(len / 2)
     var i = 0
     while (i < len) {
         val high = Character.digit(hex[i], 16)
         val low = Character.digit(hex[i + 1], 16)
+        if (high == -1 || low == -1) {
+            throw IllegalArgumentException("Invalid hex character at position $i")
+        }
         result[i / 2] = ((high shl 4) or low).toByte()
         i += 2
     }

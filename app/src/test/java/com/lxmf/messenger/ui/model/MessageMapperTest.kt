@@ -1251,14 +1251,14 @@ class MessageMapperTest {
     @Test
     fun `loadFileAttachmentData handles invalid hex data in file reference gracefully`() {
         val tempFile = tempFolder.newFile("invalid.dat")
-        // hexStringToByteArray doesn't validate hex - it returns garbage bytes for invalid input
+        // Invalid hex data - odd length and invalid characters
         tempFile.writeText("not valid hex [{{{")
 
         val fieldsJson = """{"5": [{"filename": "test.txt", "size": 5, "_data_ref": "${tempFile.absolutePath}"}]}"""
         val result = loadFileAttachmentData(fieldsJson, 0)
 
-        // Function returns a byte array (with garbage values) - doesn't validate hex
-        assertNotNull(result)
+        // Invalid hex throws exception which is caught, returning null
+        assertNull(result)
     }
 
     @Test

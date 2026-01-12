@@ -643,15 +643,13 @@ private fun detectImageFormat(bytes: ByteArray): Pair<String, String> =
         else -> "application/octet-stream" to "bin"
     }
 
-private fun isJpeg(bytes: ByteArray): Boolean =
-    bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()
+private fun isJpeg(bytes: ByteArray): Boolean = bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()
 
 private fun isPng(bytes: ByteArray): Boolean =
     bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() &&
         bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()
 
-private fun isGif(bytes: ByteArray): Boolean =
-    bytes[0] == 0x47.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 0x46.toByte()
+private fun isGif(bytes: ByteArray): Boolean = bytes[0] == 0x47.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 0x46.toByte()
 
 private fun isWebP(bytes: ByteArray): Boolean =
     bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&

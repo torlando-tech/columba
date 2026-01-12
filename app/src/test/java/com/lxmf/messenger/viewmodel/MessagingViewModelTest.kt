@@ -1767,6 +1767,100 @@ class MessagingViewModelTest {
             assertNull(result)
         }
 
+    @Test
+    fun `getImageShareUri returns uri and mimetype for valid image`() =
+        runTest {
+            // Arrange - PNG image header: 89 50 4E 47 0D 0A 1A 0A
+            val pngHex = "89504e470d0a1a0a" + "00".repeat(8) // Add more bytes for valid image
+            val fieldsJson = """{"6": "$pngHex"}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val context = mockk<android.content.Context>()
+            val filesDir = kotlin.io.path.createTempDirectory("test-share").toFile()
+            val mockUri = mockk<android.net.Uri>()
+
+            every { context.filesDir } returns filesDir
+            every { context.packageName } returns "com.lxmf.messenger"
+
+            mockkStatic(androidx.core.content.FileProvider::class)
+            every {
+                androidx.core.content.FileProvider.getUriForFile(any(), any(), any())
+            } returns mockUri
+
+            val viewModel = createTestViewModel()
+
+            // Act
+            val result = viewModel.getImageShareUri(context, "test-id")
+
+            // Assert
+            assertNotNull(result)
+            assertEquals(mockUri, result!!.first)
+            assertEquals("image/png", result.second)
+
+            // Cleanup
+            unmockkStatic(androidx.core.content.FileProvider::class)
+            filesDir.deleteRecursively()
+        }
+
+    @Test
+    fun `getImageShareUri returns gif mimetype for animated gif`() =
+        runTest {
+            // Arrange - GIF89a header: 47 49 46 38 39 61 followed by enough bytes for animation detection
+            // GIF89a + minimal valid GIF structure
+            val gifHex =
+                "474946383961" + "0100" + "0100" + "00" + "00" + "00" + // Header
+                    "21f904" + "01" + "0000" + "00" + "00" + // Graphic Control Extension
+                    "21f904" + "01" + "0000" + "00" + "00" + // Second GCE (makes it animated)
+                    "2c" + "00000000" + "01000100" + "00" + "02" + "02" + "4c01003b" // Image + trailer
+            val fieldsJson = """{"6": "$gifHex"}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val context = mockk<android.content.Context>()
+            val filesDir = kotlin.io.path.createTempDirectory("test-share-gif").toFile()
+            val mockUri = mockk<android.net.Uri>()
+
+            every { context.filesDir } returns filesDir
+            every { context.packageName } returns "com.lxmf.messenger"
+
+            mockkStatic(androidx.core.content.FileProvider::class)
+            every {
+                androidx.core.content.FileProvider.getUriForFile(any(), any(), any())
+            } returns mockUri
+
+            val viewModel = createTestViewModel()
+
+            // Act
+            val result = viewModel.getImageShareUri(context, "test-id")
+
+            // Assert
+            assertNotNull(result)
+            assertEquals("image/gif", result!!.second)
+
+            // Cleanup
+            unmockkStatic(androidx.core.content.FileProvider::class)
+            filesDir.deleteRecursively()
+        }
+
+    @Test
+    fun `getImageShareUri returns null when metadata is null`() =
+        runTest {
+            // Arrange - only 3 bytes, not enough for format detection (needs >= 4)
+            val fieldsJson = """{"6": "010203"}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val context = mockk<android.content.Context>(relaxed = true)
+            val viewModel = createTestViewModel()
+
+            // Act
+            val result = viewModel.getImageShareUri(context, "test-id")
+
+            // Assert
+            assertNull(result)
+        }
+
     // ========== FILE ATTACHMENT TESTS ==========
 
     @Test

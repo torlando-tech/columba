@@ -2606,4 +2606,188 @@ class MessageMapperTest {
         assertEquals("application/octet-stream", result!!.first)
         assertEquals("bin", result.second)
     }
+
+    // ========== BRANCH COVERAGE TESTS FOR FORMAT DETECTION ==========
+
+    @Test
+    fun `getImageMetadata returns binary when first byte is FF but not JPEG`() {
+        // First byte is 0xFF but second is not 0xD8
+        val notJpegHex = "ff00ff00"
+        val fieldsJson = """{"6": "$notJpegHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when first two bytes are FF D8 but third is not FF`() {
+        // First two bytes match JPEG but third doesn't
+        val notJpegHex = "ffd80000"
+        val fieldsJson = """{"6": "$notJpegHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when first byte is 89 but not PNG`() {
+        // First byte is 0x89 (PNG) but subsequent bytes don't match
+        val notPngHex = "89000000"
+        val fieldsJson = """{"6": "$notPngHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when first two PNG bytes match but third does not`() {
+        // 89 50 matches PNG but next bytes don't
+        val notPngHex = "89500000"
+        val fieldsJson = """{"6": "$notPngHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when first three PNG bytes match but fourth does not`() {
+        // 89 50 4E matches PNG but fourth byte isn't 0x47
+        val notPngHex = "89504e00"
+        val fieldsJson = """{"6": "$notPngHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when first byte is 47 but not GIF`() {
+        // First byte is 'G' but not followed by 'IF'
+        val notGifHex = "47000000"
+        val fieldsJson = """{"6": "$notGifHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when first two GIF bytes match but third does not`() {
+        // 'GI' matches but third byte isn't 'F'
+        val notGifHex = "47490000"
+        val fieldsJson = """{"6": "$notGifHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when first RIFF byte matches but second does not`() {
+        // 'R' matches but not followed by 'IFF'
+        val notRiffHex = "52000000" + "00000000" + "57454250"
+        val fieldsJson = """{"6": "$notRiffHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when RI matches but FF does not`() {
+        // 'RI' matches but not 'FF'
+        val notRiffHex = "52490000" + "00000000" + "57454250"
+        val fieldsJson = """{"6": "$notRiffHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when RIF matches but fourth byte does not`() {
+        // 'RIF' matches but not 'F'
+        val notRiffHex = "52494600" + "00000000" + "57454250"
+        val fieldsJson = """{"6": "$notRiffHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when RIFF matches but WEBP W does not`() {
+        // RIFF header complete but 'W' at position 8 doesn't match
+        val notWebpHex = "52494646" + "00000000" + "00454250"
+        val fieldsJson = """{"6": "$notWebpHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when RIFF and W match but E does not`() {
+        // RIFF + 'W' match but 'E' doesn't
+        val notWebpHex = "52494646" + "00000000" + "57004250"
+        val fieldsJson = """{"6": "$notWebpHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when RIFF and WE match but B does not`() {
+        // RIFF + 'WE' match but 'B' doesn't
+        val notWebpHex = "52494646" + "00000000" + "57450050"
+        val fieldsJson = """{"6": "$notWebpHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary when RIFF and WEB match but P does not`() {
+        // RIFF + 'WEB' match but 'P' doesn't
+        val notWebpHex = "52494646" + "00000000" + "57454200"
+        val fieldsJson = """{"6": "$notWebpHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary for exactly 11 byte RIFF with WEBP prefix`() {
+        // RIFF header + almost WEBP but only 11 bytes total (need 12 for full WEBP check)
+        // This tests the bytes.size >= 12 condition
+        val shortWebpHex = "52494646" + "0000" + "574542" // 11 bytes
+        val fieldsJson = """{"6": "$shortWebpHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        // Not enough bytes to verify WEBP fully
+        assertEquals("application/octet-stream", result!!.first)
+    }
 }

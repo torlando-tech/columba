@@ -163,6 +163,46 @@ class TestUnpackTelemetryStreamTimestamp(unittest.TestCase):
         # Should preserve the timestamp from packed telemetry
         self.assertAlmostEqual(result[0]['ts'], packed_ts_ms, delta=999)
 
+    def test_future_timestamp_rejected(self):
+        """Timestamps more than 1 hour in the future should be rejected."""
+        import time
+        source_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+        packed_ts_ms = 1703980800000
+        packed = create_packed_telemetry(
+            lat=37.7749,
+            lon=-122.4194,
+            timestamp_ms=packed_ts_ms,
+        )
+
+        # Timestamp 2 hours in the future
+        future_timestamp = int(time.time()) + 7200
+        stream = [[source_hash, future_timestamp, packed]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        # Should preserve packed timestamp, not the future override
+        self.assertAlmostEqual(result[0]['ts'], packed_ts_ms, delta=999)
+
+    def test_near_future_timestamp_accepted(self):
+        """Timestamps less than 1 hour in the future should be accepted."""
+        import time
+        source_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+        packed_ts_ms = 1703980800000
+        packed = create_packed_telemetry(
+            lat=37.7749,
+            lon=-122.4194,
+            timestamp_ms=packed_ts_ms,
+        )
+
+        # Timestamp 30 minutes in the future (within tolerance)
+        near_future_timestamp = int(time.time()) + 1800
+        stream = [[source_hash, near_future_timestamp, packed]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        # Should use the override timestamp (converted to ms)
+        self.assertAlmostEqual(result[0]['ts'], near_future_timestamp * 1000, delta=999)
+
 
 class TestUnpackTelemetryStreamSourceHash(unittest.TestCase):
     """Test source hash handling in unpack_telemetry_stream."""
@@ -256,16 +296,73 @@ class TestUnpackTelemetryStreamAppearance(unittest.TestCase):
         """Non-bytes color values should result in None colors."""
         source_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
         packed = create_packed_telemetry(lat=37.7749, lon=-122.4194)
-        appearance = ["icon", "not_bytes", [1, 2, 3]]  # Invalid color formats
+        appearance = ["valid_icon", "not_bytes", [1, 2, 3]]  # Invalid color formats
 
         stream = [[source_hash, 1703980800, packed, appearance]]
         result = unpack_telemetry_stream(stream)
 
         self.assertEqual(len(result), 1)
         self.assertIn('appearance', result[0])
-        self.assertEqual(result[0]['appearance']['name'], "icon")
+        self.assertEqual(result[0]['appearance']['name'], "valid_icon")
         self.assertIsNone(result[0]['appearance']['fg'])
         self.assertIsNone(result[0]['appearance']['bg'])
+
+    def test_icon_name_with_special_chars_rejected(self):
+        """Icon names with special characters should be rejected."""
+        source_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+        packed = create_packed_telemetry(lat=37.7749, lon=-122.4194)
+        fg = bytes([255, 0, 0])
+        bg = bytes([0, 0, 255])
+
+        invalid_names = [
+            "<script>alert(1)</script>",
+            "icon\x00null",
+            "icon\njson",
+            "../../etc/passwd",
+            '{"injection": true}',
+        ]
+
+        for name in invalid_names:
+            appearance = [name, fg, bg]
+            stream = [[source_hash, 1703980800, packed, appearance]]
+            result = unpack_telemetry_stream(stream)
+            self.assertEqual(len(result), 1)
+            self.assertNotIn('appearance', result[0], f"Icon name '{repr(name)}' should be rejected")
+
+    def test_icon_name_too_long_rejected(self):
+        """Icon names longer than 50 chars should be rejected."""
+        source_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+        packed = create_packed_telemetry(lat=37.7749, lon=-122.4194)
+        appearance = ["a" * 51, bytes([255, 0, 0]), bytes([0, 0, 255])]
+
+        stream = [[source_hash, 1703980800, packed, appearance]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        self.assertNotIn('appearance', result[0])
+
+    def test_valid_icon_names_accepted(self):
+        """Valid icon names with alphanumeric and underscores should be accepted."""
+        source_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+        packed = create_packed_telemetry(lat=37.7749, lon=-122.4194)
+        fg = bytes([255, 0, 0])
+        bg = bytes([0, 0, 255])
+
+        valid_names = [
+            "icon",
+            "my_icon",
+            "Icon123",
+            "LOCATION_PIN",
+            "a" * 50,  # Exactly 50 chars
+        ]
+
+        for name in valid_names:
+            appearance = [name, fg, bg]
+            stream = [[source_hash, 1703980800, packed, appearance]]
+            result = unpack_telemetry_stream(stream)
+            self.assertEqual(len(result), 1)
+            self.assertIn('appearance', result[0], f"Icon name '{name}' should be accepted")
+            self.assertEqual(result[0]['appearance']['name'], name)
 
 
 class TestUnpackTelemetryStreamErrorHandling(unittest.TestCase):

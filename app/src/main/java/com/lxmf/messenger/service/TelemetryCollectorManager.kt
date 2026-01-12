@@ -238,6 +238,11 @@ class TelemetryCollectorManager
             }
 
             periodicSendJob = scope.launch {
+                // Wait for any in-progress send to complete before starting new schedule
+                while (_isSending.value) {
+                    delay(100)
+                }
+
                 // Initial delay to let things settle
                 delay(10_000)
 

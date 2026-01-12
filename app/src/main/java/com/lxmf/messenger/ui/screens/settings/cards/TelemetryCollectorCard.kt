@@ -257,6 +257,14 @@ private fun CollectorAddressInput(
     val isValid = validationResult is DestinationHashValidator.ValidationResult.Valid
     val errorMessage = (validationResult as? DestinationHashValidator.ValidationResult.Error)?.message
 
+    // Auto-confirm after state is synchronized
+    LaunchedEffect(addressInput) {
+        if (addressInput.length == 32 && isValid) {
+            val result = validationResult as DestinationHashValidator.ValidationResult.Valid
+            onConfirm(result.normalizedHash)
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -272,16 +280,8 @@ private fun CollectorAddressInput(
             onValueChange = { input ->
                 // Only allow hex characters, up to 32 chars
                 val filtered = input.filter { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
-                if (filtered.length <= 32) {
-                    onAddressChange(filtered)
-                    // Auto-confirm when valid
-                    if (filtered.length == 32) {
-                        val result = DestinationHashValidator.validate(filtered)
-                        if (result is DestinationHashValidator.ValidationResult.Valid) {
-                            onConfirm(result.normalizedHash)
-                        }
-                    }
-                }
+                    .take(32)
+                onAddressChange(filtered)
             },
             label = { Text("Destination Hash") },
             placeholder = { Text("32-character hex") },

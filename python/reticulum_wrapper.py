@@ -219,9 +219,15 @@ def unpack_telemetry_stream(stream_data: List) -> List[Dict]:
                            f"Failed to unpack telemetry for source {source_hash_hex[:16]}...")
                 continue
 
-            # Override timestamp if provided separately (validate to avoid setting 0/invalid)
+            # Override timestamp if provided separately (validate to avoid setting 0/invalid/future)
             if timestamp is not None and timestamp > 0:
-                location_event['ts'] = timestamp * 1000  # Convert to milliseconds
+                # Reject timestamps more than 1 hour in the future
+                current_time = time.time()
+                if timestamp > current_time + 3600:
+                    log_warning("TelemetryHelper", "unpack_telemetry_stream",
+                               f"Rejecting future timestamp: {timestamp} (current: {current_time})")
+                else:
+                    location_event['ts'] = timestamp * 1000  # Convert to milliseconds
 
             # Add source hash
             location_event['source_hash'] = source_hash_hex
@@ -233,22 +239,27 @@ def unpack_telemetry_stream(stream_data: List) -> List[Dict]:
                     fg_bytes = appearance[1]
                     bg_bytes = appearance[2]
 
-                    # Convert RGB bytes to hex color string
-                    if isinstance(fg_bytes, bytes) and len(fg_bytes) >= 3:
-                        fg_hex = "#{:02x}{:02x}{:02x}".format(fg_bytes[0], fg_bytes[1], fg_bytes[2])
-                    else:
-                        fg_hex = None
+                    # Validate icon name - alphanumeric and underscores only, max 50 chars
+                    if isinstance(icon_name, str) and len(icon_name) <= 50 and icon_name.replace('_', '').isalnum():
+                        # Convert RGB bytes to hex color string
+                        if isinstance(fg_bytes, bytes) and len(fg_bytes) >= 3:
+                            fg_hex = "#{:02x}{:02x}{:02x}".format(fg_bytes[0], fg_bytes[1], fg_bytes[2])
+                        else:
+                            fg_hex = None
 
-                    if isinstance(bg_bytes, bytes) and len(bg_bytes) >= 3:
-                        bg_hex = "#{:02x}{:02x}{:02x}".format(bg_bytes[0], bg_bytes[1], bg_bytes[2])
-                    else:
-                        bg_hex = None
+                        if isinstance(bg_bytes, bytes) and len(bg_bytes) >= 3:
+                            bg_hex = "#{:02x}{:02x}{:02x}".format(bg_bytes[0], bg_bytes[1], bg_bytes[2])
+                        else:
+                            bg_hex = None
 
-                    location_event['appearance'] = {
-                        'name': icon_name,
-                        'fg': fg_hex,
-                        'bg': bg_hex,
-                    }
+                        location_event['appearance'] = {
+                            'name': icon_name,
+                            'fg': fg_hex,
+                            'bg': bg_hex,
+                        }
+                    else:
+                        log_warning("TelemetryHelper", "unpack_telemetry_stream",
+                                   f"Invalid icon name format: {repr(icon_name)[:50]}")
                 except Exception as e:
                     log_warning("TelemetryHelper", "unpack_telemetry_stream",
                                f"Failed to parse appearance: {e}")

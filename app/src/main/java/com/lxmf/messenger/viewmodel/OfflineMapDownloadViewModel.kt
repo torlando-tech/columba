@@ -366,19 +366,18 @@ class OfflineMapDownloadViewModel
                             _state.update { it.copy(isComplete = true) }
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to mark region complete in database", e)
-                            // Keep the file (download succeeded) but mark region as error
-                            // so user can see what happened and potentially retry
+                            // File is valid - keep it for manual recovery
                             try {
                                 offlineMapRegionRepository.markError(
                                     regionId,
-                                    "Download completed but failed to save: ${e.message}",
+                                    "Download completed but database error: ${e.message}. File saved at ${result.absolutePath}",
                                 )
                             } catch (dbError: Exception) {
-                                // DB is broken - clean up file to avoid orphan
-                                Log.e(TAG, "Database error, cleaning up file", dbError)
-                                result.delete()
+                                // Database is broken - log file location for manual recovery
+                                Log.e(TAG, "Database error, file preserved at: ${result.absolutePath}", dbError)
+                                // DO NOT delete the file - it's valid and expensive to re-download
                             }
-                            _state.update { it.copy(errorMessage = "Failed to save region: ${e.message}") }
+                            _state.update { it.copy(errorMessage = "Download succeeded but failed to save: ${e.message}") }
                         }
                     }
                 } catch (e: Exception) {

@@ -323,11 +323,13 @@ class TileDownloadManager(
         _progress.value = _progress.value.copy(status = DownloadProgress.Status.CALCULATING)
 
         val bounds = MBTilesWriter.boundsFromCenter(params.centerLat, params.centerLon, params.radiusKm)
+        // Adjust precision based on both radius and zoom level
         val geohashPrecision =
             when {
                 params.radiusKm <= 5 -> 5
                 params.radiusKm <= 20 -> 4
-                params.radiusKm <= 80 -> 3
+                params.radiusKm <= 80 && params.maxZoom >= 12 -> 3
+                params.radiusKm <= 80 -> 2 // Lower zoom doesn't need fine granularity
                 else -> 2
             }
         val geohashes = geohashesForBounds(bounds, geohashPrecision)
@@ -343,6 +345,7 @@ class TileDownloadManager(
             )
 
         val allTiles = mutableListOf<RmspTile>()
+        val seenCoords = mutableSetOf<Triple<Int, Int, Int>>()
         var processed = 0
 
         for (geohash in geohashes) {
@@ -350,9 +353,13 @@ class TileDownloadManager(
 
             val tileData = source.fetchTiles(geohash, listOf(params.minZoom, params.maxZoom))
             tileData?.takeIf { it.isNotEmpty() }?.let { data ->
-                // Add all tiles - MBTilesWriter uses CONFLICT_REPLACE to handle duplicates
-                // This avoids memory overhead of tracking coordinates in a Set
-                allTiles.addAll(unpackRmspTiles(data))
+                // Filter duplicates to reduce memory and database overhead
+                for (tile in unpackRmspTiles(data)) {
+                    val coord = Triple(tile.z, tile.x, tile.y)
+                    if (seenCoords.add(coord)) {
+                        allTiles.add(tile)
+                    }
+                }
             }
             processed++
             _progress.value = _progress.value.copy(downloadedTiles = processed, totalTiles = geohashes.size)
@@ -447,8 +454,8 @@ class TileDownloadManager(
 
             // Validate zoom level (0-22 covers all practical tile systems)
             if (z > 22) {
-                Log.w(TAG, "Invalid zoom level: $z (skipping)")
-                return@repeat
+                Log.w(TAG, "Invalid zoom level: $z (expected 0-22, aborting)")
+                return tiles // Data is corrupted
             }
 
             // Validate tile coordinates are within bounds for this zoom level
@@ -456,8 +463,8 @@ class TileDownloadManager(
             val xInBounds = x in 0..maxCoord
             val yInBounds = y in 0..maxCoord
             if (!xInBounds || !yInBounds) {
-                Log.w(TAG, "Invalid coordinates for zoom $z: x=$x, y=$y (skipping)")
-                return@repeat
+                Log.w(TAG, "Invalid coordinates for zoom $z: x=$x, y=$y (expected 0-$maxCoord, aborting)")
+                return tiles // Data is corrupted
             }
 
             // Validate tile size to prevent OOM attacks (vector tiles are typically 5-50KB)
@@ -792,11 +799,17 @@ class TileDownloadManager(
             val stepLat = cellHeight * 0.9
             val stepLon = cellWidth * 0.9
 
+            // Handle date line crossing: normalize longitude bounds
+            val westLon = bounds.west
+            val eastLon = if (bounds.east < bounds.west) bounds.east + 360.0 else bounds.east
+
             var lat = bounds.south
             while (lat <= bounds.north) {
-                var lon = bounds.west
-                while (lon <= bounds.east) {
-                    geohashes.add(encodeGeohash(lat, lon, precision))
+                var lon = westLon
+                while (lon <= eastLon) {
+                    // Normalize longitude back to [-180, 180] for encoding
+                    val normLon = if (lon > 180.0) lon - 360.0 else lon
+                    geohashes.add(encodeGeohash(lat, normLon, precision))
                     lon += stepLon
                 }
                 // Ensure east edge is covered
@@ -805,9 +818,10 @@ class TileDownloadManager(
             }
 
             // Ensure north edge is covered
-            var lon = bounds.west
-            while (lon <= bounds.east) {
-                geohashes.add(encodeGeohash(bounds.north, lon, precision))
+            var lon = westLon
+            while (lon <= eastLon) {
+                val normLon = if (lon > 180.0) lon - 360.0 else lon
+                geohashes.add(encodeGeohash(bounds.north, normLon, precision))
                 lon += stepLon
             }
             // Ensure northeast corner is covered

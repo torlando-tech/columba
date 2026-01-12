@@ -61,7 +61,7 @@ class MBTilesWriter(
         // Ensure parent directory exists
         file.parentFile?.mkdirs()
 
-        // Delete existing file to start fresh (delete() is safe on non-existent files)
+        // Delete existing file to start fresh
         file.delete()
 
         db = SQLiteDatabase.openOrCreateDatabase(file, null)

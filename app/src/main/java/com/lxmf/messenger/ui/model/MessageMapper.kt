@@ -627,30 +627,38 @@ fun loadImageData(fieldsJson: String?): ByteArray? {
 fun getImageMetadata(fieldsJson: String?): Pair<String, String>? {
     val bytes = extractImageBytes(fieldsJson) ?: return null
     if (bytes.size < 4) return null
-
-    return when {
-        // GIF - check for animated GIF first
-        ImageUtils.isAnimatedGif(bytes) -> Pair("image/gif", "gif")
-        // JPEG: FF D8 FF
-        bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte() ->
-            Pair("image/jpeg", "jpg")
-        // PNG: 89 50 4E 47 (89 P N G)
-        bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() &&
-            bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte() ->
-            Pair("image/png", "png")
-        // GIF (non-animated): 47 49 46 (G I F)
-        bytes[0] == 0x47.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 0x46.toByte() ->
-            Pair("image/gif", "gif")
-        // WebP: 52 49 46 46 (R I F F) with WEBP at offset 8
-        bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&
-            bytes[2] == 0x46.toByte() && bytes[3] == 0x46.toByte() &&
-            bytes.size >= 12 && bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte() &&
-            bytes[10] == 0x42.toByte() && bytes[11] == 0x50.toByte() ->
-            Pair("image/webp", "webp")
-        // Default fallback - use binary format for unknown types
-        else -> Pair("application/octet-stream", "bin")
-    }
+    return detectImageFormat(bytes)
 }
+
+/**
+ * Detect image format from magic bytes.
+ */
+private fun detectImageFormat(bytes: ByteArray): Pair<String, String> =
+    when {
+        ImageUtils.isAnimatedGif(bytes) -> "image/gif" to "gif"
+        isJpeg(bytes) -> "image/jpeg" to "jpg"
+        isPng(bytes) -> "image/png" to "png"
+        isGif(bytes) -> "image/gif" to "gif"
+        isWebP(bytes) -> "image/webp" to "webp"
+        else -> "application/octet-stream" to "bin"
+    }
+
+private fun isJpeg(bytes: ByteArray): Boolean =
+    bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()
+
+private fun isPng(bytes: ByteArray): Boolean =
+    bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() &&
+        bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()
+
+private fun isGif(bytes: ByteArray): Boolean =
+    bytes[0] == 0x47.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 0x46.toByte()
+
+private fun isWebP(bytes: ByteArray): Boolean =
+    bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&
+        bytes[2] == 0x46.toByte() && bytes[3] == 0x46.toByte() &&
+        bytes.size >= 12 &&
+        bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte() &&
+        bytes[10] == 0x42.toByte() && bytes[11] == 0x50.toByte()
 
 /**
  * Efficiently convert a hex string to byte array.

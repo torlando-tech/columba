@@ -21,14 +21,14 @@ import org.robolectric.annotation.Config
 class ImageCacheTest {
     @Before
     fun setup() {
-        // Clear cache before each test to ensure isolation
-        ImageCache.clear()
+        // Reset cache before each test to ensure isolation (including stats)
+        ImageCache.resetForTest()
     }
 
     @After
     fun tearDown() {
-        // Clear cache after each test
-        ImageCache.clear()
+        // Reset cache after each test
+        ImageCache.resetForTest()
     }
 
     @Test

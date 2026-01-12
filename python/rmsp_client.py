@@ -397,7 +397,10 @@ class RmspClientWrapper:
                                  f"Destination hash mismatch - possible impersonation attempt")
                         return None
 
-                    # Create a temporary server info
+                    # Verification passed - safe to create server info
+                    # (We only reach here if hash check above succeeded)
+                    log_info("RmspClient", "fetch_tiles",
+                            f"Hash verification passed for {dest_hash.hex()[:16]}")
                     server = RmspServerInfo(
                         destination_hash=dest_hash,
                         identity=identity,

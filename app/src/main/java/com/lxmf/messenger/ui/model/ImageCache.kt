@@ -19,7 +19,7 @@ object ImageCache {
      */
     private const val MAX_CACHE_SIZE = 50
 
-    private val cache = LruCache<String, ImageBitmap>(MAX_CACHE_SIZE)
+    private var cache = LruCache<String, ImageBitmap>(MAX_CACHE_SIZE)
 
     /**
      * Get a cached image by message ID.
@@ -67,4 +67,13 @@ object ImageCache {
      * Get the current number of cached items.
      */
     fun size(): Int = cache.size()
+
+    /**
+     * Reset cache completely, including hit/miss statistics.
+     * Only for testing - creates a fresh cache instance.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun resetForTest() {
+        cache = LruCache(MAX_CACHE_SIZE)
+    }
 }

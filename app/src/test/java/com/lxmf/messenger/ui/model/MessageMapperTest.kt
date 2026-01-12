@@ -2470,16 +2470,53 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `getImageMetadata returns webp for static image`() {
-        // Some arbitrary non-GIF bytes
-        val staticImageHex = "ffd8ffe000104a46494600" // JPEG-like header
-        val fieldsJson = """{"6": "$staticImageHex"}"""
+    fun `getImageMetadata returns jpeg for JPEG image`() {
+        // JPEG magic bytes: FF D8 FF
+        val jpegImageHex = "ffd8ffe000104a46494600" // JPEG header
+        val fieldsJson = """{"6": "$jpegImageHex"}"""
 
         val result = getImageMetadata(fieldsJson)
 
         assertNotNull(result)
-        assertEquals("image/webp", result!!.first)
-        assertEquals("webp", result.second)
+        assertEquals("image/jpeg", result!!.first)
+        assertEquals("jpg", result.second)
+    }
+
+    @Test
+    fun `getImageMetadata returns png for PNG image`() {
+        // PNG magic bytes: 89 50 4E 47
+        val pngImageHex = "89504e470d0a1a0a0000000d" // PNG header
+        val fieldsJson = """{"6": "$pngImageHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("image/png", result!!.first)
+        assertEquals("png", result.second)
+    }
+
+    @Test
+    fun `getImageMetadata returns binary for unknown format`() {
+        // Random bytes that don't match any known format
+        val unknownHex = "0102030405060708"
+        val fieldsJson = """{"6": "$unknownHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNotNull(result)
+        assertEquals("application/octet-stream", result!!.first)
+        assertEquals("bin", result.second)
+    }
+
+    @Test
+    fun `getImageMetadata returns null for too short data`() {
+        // Only 2 bytes - too short to detect format
+        val shortHex = "0102"
+        val fieldsJson = """{"6": "$shortHex"}"""
+
+        val result = getImageMetadata(fieldsJson)
+
+        assertNull(result)
     }
 
     @Test
@@ -2495,7 +2532,7 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `getImageMetadata returns webp for static GIF without animation`() {
+    fun `getImageMetadata returns gif for static GIF without animation`() {
         val staticGif = createMinimalStaticGifBytes()
         val staticGifHex = staticGif.joinToString("") { "%02x".format(it) }
         val fieldsJson = """{"6": "$staticGifHex"}"""
@@ -2503,9 +2540,9 @@ class MessageMapperTest {
         val result = getImageMetadata(fieldsJson)
 
         assertNotNull(result)
-        // Static GIF is treated as non-animated, so we return webp
-        assertEquals("image/webp", result!!.first)
-        assertEquals("webp", result.second)
+        // Static GIF (non-animated) still gets gif mime type
+        assertEquals("image/gif", result!!.first)
+        assertEquals("gif", result.second)
     }
 
     @Test

@@ -1861,6 +1861,72 @@ class MessagingViewModelTest {
             assertNull(result)
         }
 
+    // ========== getImageExtension TESTS ==========
+
+    @Test
+    fun `getImageExtension returns bin when message not found`() =
+        runTest {
+            // Arrange
+            coEvery { conversationRepository.getMessageById("nonexistent-id") } returns null
+            val viewModel = createTestViewModel()
+
+            // Act
+            val result = viewModel.getImageExtension("nonexistent-id")
+
+            // Assert
+            assertEquals("bin", result)
+        }
+
+    @Test
+    fun `getImageExtension returns png for PNG image`() =
+        runTest {
+            // Arrange - PNG magic bytes
+            val pngHex = "89504e470d0a1a0a" + "00".repeat(8)
+            val fieldsJson = """{"6": "$pngHex"}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val viewModel = createTestViewModel()
+
+            // Act
+            val result = viewModel.getImageExtension("test-id")
+
+            // Assert
+            assertEquals("png", result)
+        }
+
+    @Test
+    fun `getImageExtension returns jpg for JPEG image`() =
+        runTest {
+            // Arrange - JPEG magic bytes: FF D8 FF
+            val jpegHex = "ffd8ffe0" + "00".repeat(8)
+            val fieldsJson = """{"6": "$jpegHex"}"""
+            val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
+            coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+
+            val viewModel = createTestViewModel()
+
+            // Act
+            val result = viewModel.getImageExtension("test-id")
+
+            // Assert
+            assertEquals("jpg", result)
+        }
+
+    @Test
+    fun `getImageExtension returns bin on exception`() =
+        runTest {
+            // Arrange
+            coEvery { conversationRepository.getMessageById("test-id") } throws RuntimeException("DB error")
+            val viewModel = createTestViewModel()
+
+            // Act
+            val result = viewModel.getImageExtension("test-id")
+
+            // Assert
+            assertEquals("bin", result)
+        }
+
     // ========== FILE ATTACHMENT TESTS ==========
 
     @Test

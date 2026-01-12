@@ -975,12 +975,14 @@ fun MessagingScreen(
     // Image options bottom sheet
     if (showImageOptionsSheet && selectedImageMessageId != null) {
         val messageId = selectedImageMessageId!!
-        val extension = if (selectedImageForOptionsIsAnimated) "gif" else "webp"
         ImageOptionsSheet(
             onSaveToDevice = {
                 showImageOptionsSheet = false
-                pendingImageSave = Pair(messageId, extension)
-                imageSaveLauncher.launch("image.$extension")
+                scope.launch {
+                    val extension = viewModel.getImageExtension(messageId)
+                    pendingImageSave = Pair(messageId, extension)
+                    imageSaveLauncher.launch("image.$extension")
+                }
             },
             onShare = {
                 showImageOptionsSheet = false

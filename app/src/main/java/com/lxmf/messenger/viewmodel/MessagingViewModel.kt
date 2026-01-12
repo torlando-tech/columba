@@ -1271,6 +1271,24 @@ class MessagingViewModel
         }
 
         /**
+         * Get the file extension for an image attachment.
+         *
+         * Detects the actual image format from magic bytes and returns the appropriate extension.
+         * Falls back to "bin" if format cannot be detected.
+         */
+        suspend fun getImageExtension(messageId: String): String =
+            withContext(Dispatchers.IO) {
+                try {
+                    val messageEntity = conversationRepository.getMessageById(messageId) ?: return@withContext "bin"
+                    val metadata = getImageMetadata(messageEntity.fieldsJson) ?: return@withContext "bin"
+                    metadata.second // extension
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to get image extension", e)
+                    "bin"
+                }
+            }
+
+        /**
          * Load a reply preview asynchronously.
          *
          * Called by the UI when a message has replyToMessageId but no cached replyPreview.

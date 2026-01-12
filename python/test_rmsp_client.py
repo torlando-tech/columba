@@ -617,7 +617,7 @@ class TestRmspClientWrapperGetServers(unittest.TestCase):
             ("Server A", ["u4pr"], 1),
             ("Server B", ["ezs4"], 3),
             ("Server C", ["u4pr", "u4pq"], 2),
-            ("Server D", [], 5),  # Global coverage
+            ("Server D", ["*"], 5),  # Global coverage (explicit marker)
         ]):
             dest_hash = bytes([i] * 16)
             server = rmsp_client.RmspServerInfo(

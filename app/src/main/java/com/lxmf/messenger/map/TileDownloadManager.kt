@@ -277,6 +277,8 @@ class TileDownloadManager(
 
         if (isCancelled) {
             writer.close()
+            // Brief delay to allow file handles to be fully released after SQLite close
+            delay(100)
             if (!params.outputFile.delete() && params.outputFile.exists()) {
                 Log.w(TAG, "Failed to delete cancelled download file: ${params.outputFile.absolutePath}")
             }
@@ -610,7 +612,9 @@ class TileDownloadManager(
 
         // OpenFreeMap tiles - use versionless URL that redirects to latest
         const val DEFAULT_TILE_URL = "https://tiles.openfreemap.org/planet"
-        const val CONCURRENT_DOWNLOADS = 8
+
+        // Adaptive concurrency based on device capabilities (2-6 range)
+        val CONCURRENT_DOWNLOADS = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
         const val BATCH_SIZE = 100 // Process tiles in batches to reduce memory usage
         const val MAX_RETRIES = 3
         const val RETRY_DELAY_MS = 1000L

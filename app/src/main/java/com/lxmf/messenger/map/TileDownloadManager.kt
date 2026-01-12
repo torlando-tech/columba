@@ -196,19 +196,21 @@ class TileDownloadManager(
                 )
             writer.open()
 
+            var success = false
             try {
-                val success = executeHttpDownload(writer, tiles, params)
-                if (!success) return null
-                _progress.value = _progress.value.copy(status = DownloadProgress.Status.WRITING)
-                writer.optimize()
+                success = executeHttpDownload(writer, tiles, params)
+                if (success) {
+                    _progress.value = _progress.value.copy(status = DownloadProgress.Status.WRITING)
+                    writer.optimize()
+                    _progress.value = _progress.value.copy(status = DownloadProgress.Status.COMPLETE)
+                }
+            } finally {
                 writer.close()
-                _progress.value = _progress.value.copy(status = DownloadProgress.Status.COMPLETE)
-                params.outputFile
-            } catch (e: Exception) {
-                writer.close()
-                params.outputFile.delete()
-                throw e
+                if (!success) {
+                    params.outputFile.delete()
+                }
             }
+            if (success) params.outputFile else null
         } catch (e: Exception) {
             updateErrorStatus(e.message ?: "Download failed")
             null

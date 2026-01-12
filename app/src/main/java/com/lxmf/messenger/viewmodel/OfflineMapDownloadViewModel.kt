@@ -371,25 +371,22 @@ class OfflineMapDownloadViewModel
                             )
                             _state.update { it.copy(isComplete = true) }
                         } catch (e: Exception) {
-                            Log.e(TAG, "Failed to mark region complete in database", e)
-                            // File is valid - keep it for manual recovery
+                            Log.e(TAG, "Failed to mark region complete, attempting recovery", e)
+                            // Try immediate recovery via orphan import
                             try {
-                                offlineMapRegionRepository.markError(
-                                    regionId,
-                                    "Download completed but database error: ${e.message}. File saved at ${result.absolutePath}",
-                                )
-                            } catch (dbError: Exception) {
-                                // Database is broken - log file location for manual recovery
-                                Log.e(TAG, "Database error, file preserved at: ${result.absolutePath}", dbError)
-                                // DO NOT delete the file - it's valid and expensive to re-download
-                            }
-                            downloadManager = null // Reset for potential retry
-                            _state.update {
-                                it.copy(
-                                    errorMessage = "Download completed but database error. " +
-                                        "File saved at: ${result.absolutePath}. " +
-                                        "Restart app to auto-recover orphaned maps.",
-                                )
+                                // Delete the failed record and re-import the valid file
+                                offlineMapRegionRepository.deleteRegion(regionId)
+                                val recoveredId = offlineMapRegionRepository.importOrphanedFile(result)
+                                Log.i(TAG, "Recovered download as region $recoveredId")
+                                _state.update { it.copy(isComplete = true, createdRegionId = recoveredId) }
+                            } catch (recoveryError: Exception) {
+                                Log.e(TAG, "Recovery failed, file preserved at: ${result.absolutePath}", recoveryError)
+                                _state.update {
+                                    it.copy(
+                                        errorMessage = "Download completed but database error. " +
+                                            "File saved at: ${result.absolutePath}",
+                                    )
+                                }
                             }
                         }
                     }

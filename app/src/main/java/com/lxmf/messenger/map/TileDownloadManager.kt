@@ -403,7 +403,16 @@ class TileDownloadManager(
             for (tile in allTiles) {
                 if (isCancelled) {
                     writer.close()
-                    params.outputFile.delete()
+                    // Retry deletion with backoff - file handles may not release immediately
+                    repeat(5) { attempt ->
+                        Thread.sleep(100L * (attempt + 1))
+                        if (params.outputFile.delete() || !params.outputFile.exists()) {
+                            return@repeat
+                        }
+                    }
+                    if (params.outputFile.exists()) {
+                        Log.e(TAG, "Failed to delete cancelled RMSP download: ${params.outputFile.absolutePath}")
+                    }
                     _progress.value = _progress.value.copy(status = DownloadProgress.Status.CANCELLED)
                     return null
                 }
@@ -633,8 +642,8 @@ class TileDownloadManager(
         // OpenFreeMap tiles - use versionless URL that redirects to latest
         const val DEFAULT_TILE_URL = "https://tiles.openfreemap.org/planet"
 
-        // Adaptive concurrency based on device capabilities (2-6 range)
-        val CONCURRENT_DOWNLOADS = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+        // Network I/O bound - higher concurrency than CPU count is optimal
+        const val CONCURRENT_DOWNLOADS = 10
         const val BATCH_SIZE = 100 // Process tiles in batches to reduce memory usage
         const val MAX_RETRIES = 3
         const val RETRY_DELAY_MS = 1000L

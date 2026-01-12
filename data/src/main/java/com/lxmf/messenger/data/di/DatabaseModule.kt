@@ -1239,10 +1239,19 @@ object DatabaseModule {
             }
         }
 
-    // Migration from version 29 to 30: Add received message info fields
-    // Stores hop count and receiving interface captured when messages are received
+    // Migration from version 29 to 30: Add appearanceJson to received_locations for telemetry stream
+    // Stores icon appearance (name, foreground/background colors) from telemetry collector responses
     private val MIGRATION_29_30 =
         object : Migration(29, 30) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE received_locations ADD COLUMN appearanceJson TEXT DEFAULT NULL")
+            }
+        }
+
+    // Migration from version 30 to 31: Add received message info fields
+    // Stores hop count and receiving interface captured when messages are received
+    private val MIGRATION_30_31 =
+        object : Migration(30, 31) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Add receivedHopCount column (nullable INTEGER for hop count at reception)
                 database.execSQL("ALTER TABLE messages ADD COLUMN receivedHopCount INTEGER DEFAULT NULL")

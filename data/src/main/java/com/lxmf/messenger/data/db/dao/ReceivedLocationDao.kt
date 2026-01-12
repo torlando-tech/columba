@@ -16,6 +16,12 @@ interface ReceivedLocationDao {
     suspend fun insert(location: ReceivedLocationEntity)
 
     /**
+     * Insert multiple received locations at once (for telemetry stream bulk import).
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(locations: List<ReceivedLocationEntity>)
+
+    /**
      * Get the latest location for each sender (for map display).
      * Only returns non-expired locations.
      *

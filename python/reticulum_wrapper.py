@@ -64,6 +64,7 @@ sys.excepthook = _global_exception_handler
 # LXMF Field Constants (from LXMF specification)
 # ============================================================================
 FIELD_TELEMETRY = 0x02        # Standard telemetry field for Sideband interoperability
+FIELD_TELEMETRY_STREAM = 0x03 # Bulk telemetry stream from collector [[source_hash, timestamp, packed_telemetry, appearance], ...]
 FIELD_COLUMBA_META = 0x70     # Custom field for Columba-specific metadata (cease signals, etc.)
 FIELD_ICON_APPEARANCE = 0x04  # Icon appearance [name, fg_bytes(3), bg_bytes(3)] for Sideband/MeshChat interoperability
 FIELD_FILE_ATTACHMENTS = 0x05 # LXMF standard field for file attachments
@@ -175,6 +176,89 @@ def unpack_location_telemetry(packed_data: bytes) -> Optional[Dict]:
         log_warning("TelemetryHelper", "unpack_location_telemetry",
                    f"Failed to unpack telemetry: {e}")
         return None
+
+
+def unpack_telemetry_stream(stream_data: List) -> List[Dict]:
+    """
+    Unpack FIELD_TELEMETRY_STREAM entries to Columba location format.
+
+    The stream format from Sideband is:
+    [[source_hash, timestamp, packed_telemetry, appearance], ...]
+
+    Where appearance is optional: [icon_name, fg_bytes(3), bg_bytes(3)]
+
+    Args:
+        stream_data: List of telemetry stream entries
+
+    Returns:
+        List of dicts with location data and appearance in Columba format
+    """
+    results = []
+    for entry in stream_data:
+        try:
+            if len(entry) < 3:
+                log_warning("TelemetryHelper", "unpack_telemetry_stream",
+                           f"Invalid stream entry, expected at least 3 elements: {len(entry)}")
+                continue
+
+            source_hash = entry[0]
+            timestamp = entry[1]
+            packed_telemetry = entry[2]
+            appearance = entry[3] if len(entry) > 3 else None
+
+            # Convert source_hash to hex string
+            if isinstance(source_hash, bytes):
+                source_hash_hex = source_hash.hex()
+            else:
+                source_hash_hex = str(source_hash)
+
+            # Unpack the telemetry data
+            location_event = unpack_location_telemetry(packed_telemetry)
+            if not location_event:
+                log_warning("TelemetryHelper", "unpack_telemetry_stream",
+                           f"Failed to unpack telemetry for source {source_hash_hex[:16]}...")
+                continue
+
+            # Override timestamp if provided separately
+            if timestamp:
+                location_event['ts'] = timestamp * 1000  # Convert to milliseconds
+
+            # Add source hash
+            location_event['source_hash'] = source_hash_hex
+
+            # Parse appearance if present
+            if appearance and isinstance(appearance, list) and len(appearance) >= 3:
+                try:
+                    icon_name = appearance[0]
+                    fg_bytes = appearance[1]
+                    bg_bytes = appearance[2]
+
+                    # Convert RGB bytes to hex color string
+                    if isinstance(fg_bytes, bytes) and len(fg_bytes) >= 3:
+                        fg_hex = "#{:02x}{:02x}{:02x}".format(fg_bytes[0], fg_bytes[1], fg_bytes[2])
+                    else:
+                        fg_hex = None
+
+                    if isinstance(bg_bytes, bytes) and len(bg_bytes) >= 3:
+                        bg_hex = "#{:02x}{:02x}{:02x}".format(bg_bytes[0], bg_bytes[1], bg_bytes[2])
+                    else:
+                        bg_hex = None
+
+                    location_event['appearance'] = {
+                        'name': icon_name,
+                        'fg': fg_hex,
+                        'bg': bg_hex,
+                    }
+                except Exception as e:
+                    log_warning("TelemetryHelper", "unpack_telemetry_stream",
+                               f"Failed to parse appearance: {e}")
+
+            results.append(location_event)
+        except Exception as e:
+            log_warning("TelemetryHelper", "unpack_telemetry_stream",
+                       f"Failed to process stream entry: {e}")
+
+    return results
 
 
 def get_hello_message() -> str:
@@ -2198,6 +2282,38 @@ class ReticulumWrapper:
                         log_warning("ReticulumWrapper", "_on_lxmf_delivery",
                                    f"Failed to unpack FIELD_TELEMETRY: {e}")
 
+                # Priority 1.5: Check FIELD_TELEMETRY_STREAM (0x03) - Bulk telemetry from collector
+                if FIELD_TELEMETRY_STREAM in lxmf_message.fields:
+                    try:
+                        stream_data = lxmf_message.fields[FIELD_TELEMETRY_STREAM]
+                        if stream_data and len(stream_data) > 0:
+                            stream_entries = unpack_telemetry_stream(stream_data)
+                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                    f"📍 Telemetry stream received with {len(stream_entries)} entries from collector")
+
+                            # Invoke callback for each entry in the stream
+                            for stream_entry in stream_entries:
+                                try:
+                                    self.kotlin_location_received_callback(json.dumps(stream_entry))
+                                    log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                             f"✅ Stream entry callback invoked for source {stream_entry.get('source_hash', 'unknown')[:16]}...")
+                                except Exception as e:
+                                    log_error("ReticulumWrapper", "_on_lxmf_delivery",
+                                             f"⚠️ Error invoking stream entry callback: {e}")
+
+                            # Mark as location-only if no text content
+                            if not has_text_content:
+                                is_location_only = True
+                                telemetry_source = "FIELD_TELEMETRY_STREAM"
+                                log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                        f"📍 Location-only telemetry stream message, skipping message queue")
+                        else:
+                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"Empty telemetry stream field received")
+                    except Exception as e:
+                        log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                   f"Failed to unpack FIELD_TELEMETRY_STREAM: {e}")
+
                 # Priority 2: Check FIELD_COLUMBA_META (0x70) for cease signals
                 if FIELD_COLUMBA_META in lxmf_message.fields:
                     try:
@@ -2326,6 +2442,7 @@ class ReticulumWrapper:
             # These have no text content and no meaningful fields (image, file, telemetry, etc.)
             meaningful_fields = {
                 FIELD_TELEMETRY,           # 0x02 - Location/sensor data
+                FIELD_TELEMETRY_STREAM,    # 0x03 - Bulk telemetry from collector
                 FIELD_FILE_ATTACHMENTS,    # 0x05
                 FIELD_IMAGE,               # 0x06
                 FIELD_AUDIO,               # 0x07

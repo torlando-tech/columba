@@ -1777,10 +1777,10 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
 
             val context = mockk<android.content.Context>()
-            val filesDir = kotlin.io.path.createTempDirectory("test-share").toFile()
+            val cacheDir = kotlin.io.path.createTempDirectory("test-share").toFile()
             val mockUri = mockk<android.net.Uri>()
 
-            every { context.filesDir } returns filesDir
+            every { context.cacheDir } returns cacheDir
             every { context.packageName } returns "com.lxmf.messenger"
 
             mockkStatic(androidx.core.content.FileProvider::class)
@@ -1800,7 +1800,7 @@ class MessagingViewModelTest {
 
             // Cleanup
             unmockkStatic(androidx.core.content.FileProvider::class)
-            filesDir.deleteRecursively()
+            cacheDir.deleteRecursively()
         }
 
     @Test
@@ -1818,10 +1818,10 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
 
             val context = mockk<android.content.Context>()
-            val filesDir = kotlin.io.path.createTempDirectory("test-share-gif").toFile()
+            val cacheDir = kotlin.io.path.createTempDirectory("test-share-gif").toFile()
             val mockUri = mockk<android.net.Uri>()
 
-            every { context.filesDir } returns filesDir
+            every { context.cacheDir } returns cacheDir
             every { context.packageName } returns "com.lxmf.messenger"
 
             mockkStatic(androidx.core.content.FileProvider::class)
@@ -1840,7 +1840,7 @@ class MessagingViewModelTest {
 
             // Cleanup
             unmockkStatic(androidx.core.content.FileProvider::class)
-            filesDir.deleteRecursively()
+            cacheDir.deleteRecursively()
         }
 
     @Test

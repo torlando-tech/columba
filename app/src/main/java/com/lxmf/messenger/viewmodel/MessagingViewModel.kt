@@ -1130,8 +1130,8 @@ class MessagingViewModel
                         return@withContext null
                     }
 
-                    // Create attachments directory if needed
-                    val attachmentsDir = File(context.filesDir, "attachments")
+                    // Create attachments cache directory if needed (auto-cleaned by Android)
+                    val attachmentsDir = File(context.cacheDir, "attachments")
                     if (!attachmentsDir.exists()) {
                         attachmentsDir.mkdirs()
                     }
@@ -1139,7 +1139,7 @@ class MessagingViewModel
                     // Write to temp file with original filename
                     val tempFile = File(attachmentsDir, metadata.filename)
                     tempFile.writeBytes(fileData)
-                    Log.d(TAG, "Created temp file for sharing: ${tempFile.absolutePath}")
+                    Log.d(TAG, "Created cache file for sharing: ${tempFile.absolutePath}")
 
                     // Get FileProvider URI
                     val uri =
@@ -1239,8 +1239,8 @@ class MessagingViewModel
                         return@withContext null
                     }
 
-                    // Create attachments directory if needed
-                    val attachmentsDir = File(context.filesDir, "attachments")
+                    // Create attachments cache directory if needed (auto-cleaned by Android)
+                    val attachmentsDir = File(context.cacheDir, "attachments")
                     if (!attachmentsDir.exists()) {
                         attachmentsDir.mkdirs()
                     }
@@ -1249,10 +1249,10 @@ class MessagingViewModel
                     val timestamp = System.currentTimeMillis()
                     val filename = "image_$timestamp.$extension"
 
-                    // Write to temp file
+                    // Write to cache file
                     val tempFile = File(attachmentsDir, filename)
                     tempFile.writeBytes(imageData)
-                    Log.d(TAG, "Created temp file for sharing: ${tempFile.absolutePath}")
+                    Log.d(TAG, "Created cache file for sharing: ${tempFile.absolutePath}")
 
                     // Get FileProvider URI
                     val uri =

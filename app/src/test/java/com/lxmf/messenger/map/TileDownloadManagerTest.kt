@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -779,6 +780,9 @@ class TileDownloadManagerRobolectricTest {
                         }
                     }
                 }
+
+            // Yield to ensure collector is subscribed before starting download
+            yield()
 
             manager.downloadRegion(
                 centerLat = 37.7749,

@@ -2402,7 +2402,7 @@ class MessagingViewModelTest {
             val attachmentsDir = java.io.File(tempDir, "attachments")
 
             val context = mockk<android.content.Context>()
-            every { context.filesDir } returns tempDir
+            every { context.cacheDir } returns tempDir
             every { context.packageName } returns "com.lxmf.messenger"
 
             val mockUri = mockk<android.net.Uri>()
@@ -2450,7 +2450,7 @@ class MessagingViewModelTest {
                 }
 
             val context = mockk<android.content.Context>()
-            every { context.filesDir } returns tempDir
+            every { context.cacheDir } returns tempDir
             every { context.packageName } returns "com.lxmf.messenger"
 
             val mockUri = mockk<android.net.Uri>()
@@ -2495,7 +2495,7 @@ class MessagingViewModelTest {
                 }
 
             val context = mockk<android.content.Context>()
-            every { context.filesDir } returns tempDir
+            every { context.cacheDir } returns tempDir
             every { context.packageName } returns "com.lxmf.messenger"
 
             val mockUri = mockk<android.net.Uri>()
@@ -2547,7 +2547,7 @@ class MessagingViewModelTest {
             assertFalse(attachmentsDir.exists())
 
             val context = mockk<android.content.Context>()
-            every { context.filesDir } returns tempDir
+            every { context.cacheDir } returns tempDir
             every { context.packageName } returns "com.lxmf.messenger"
 
             val mockUri = mockk<android.net.Uri>()
@@ -2591,7 +2591,7 @@ class MessagingViewModelTest {
                 }
 
             val context = mockk<android.content.Context>()
-            every { context.filesDir } returns tempDir
+            every { context.cacheDir } returns tempDir
             every { context.packageName } returns "com.lxmf.messenger"
 
             val mockUri = mockk<android.net.Uri>()

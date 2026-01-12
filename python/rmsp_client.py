@@ -479,8 +479,8 @@ class RmspClientWrapper:
                 RNS.Transport.request_path(server.destination_hash)
 
                 # Wait for path with fixed polling interval (simpler than exponential backoff)
-                # Use short timeout since caller already has overall timeout
-                path_timeout = min(timeout * 0.3, 10.0)  # Use 30% of timeout, max 10s
+                # Fixed 30s timeout for path establishment (or half of total for short timeouts)
+                path_timeout = min(30.0, timeout * 0.5)
                 start = time.time()
                 while not RNS.Transport.has_path(server.destination_hash):
                     if time.time() - start > path_timeout:

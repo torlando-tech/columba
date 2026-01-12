@@ -84,6 +84,17 @@ class MessagingViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
+
+            /**
+             * Sanitize a filename to prevent path traversal attacks.
+             * Removes path separators and invalid characters, limits length.
+             */
+            private fun sanitizeFilename(filename: String): String =
+                filename
+                    .replace(Regex("[/\\\\]"), "_") // Remove path separators
+                    .replace(Regex("[<>:\"|?*]"), "_") // Remove invalid chars
+                    .take(255) // Limit length for filesystem compatibility
+                    .ifEmpty { "attachment" } // Fallback if empty after sanitization
         }
 
         // Track the currently active conversation - drives reactive message loading
@@ -1136,8 +1147,9 @@ class MessagingViewModel
                         attachmentsDir.mkdirs()
                     }
 
-                    // Write to temp file with original filename
-                    val tempFile = File(attachmentsDir, metadata.filename)
+                    // Sanitize filename to prevent path traversal attacks
+                    val safeFilename = sanitizeFilename(metadata.filename)
+                    val tempFile = File(attachmentsDir, safeFilename)
                     tempFile.writeBytes(fileData)
                     Log.d(TAG, "Created cache file for sharing: ${tempFile.absolutePath}")
 

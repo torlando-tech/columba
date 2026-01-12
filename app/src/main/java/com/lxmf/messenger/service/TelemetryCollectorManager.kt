@@ -245,7 +245,7 @@ class TelemetryCollectorManager
                         // Time to send
                         if (reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
                             Log.d(TAG, "📡 Periodic telemetry send to collector")
-                            val result = sendTelemetryToCollector(_collectorAddress.value!!)
+                            val result = sendTelemetryToCollector(_collectorAddress.value ?: return@launch)
                             when (result) {
                                 is TelemetrySendResult.Success ->
                                     Log.i(TAG, "✅ Periodic telemetry sent successfully")

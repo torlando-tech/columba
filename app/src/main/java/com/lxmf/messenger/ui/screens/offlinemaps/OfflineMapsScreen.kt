@@ -13,13 +13,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -51,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.viewmodel.OfflineMapsViewModel
+import com.lxmf.messenger.viewmodel.UpdateCheckResult
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -145,6 +150,13 @@ fun OfflineMapsScreen(
                         region = region,
                         onDelete = { viewModel.deleteRegion(region) },
                         isDeleting = state.isDeleting,
+                        updateCheckResult = state.updateCheckResults[region.id],
+                        onCheckForUpdates = { viewModel.checkForUpdates(region) },
+                        onUpdateNow = {
+                            // Navigate to download screen to re-download the region
+                            // For now, just trigger the update check - full re-download TBD
+                            viewModel.checkForUpdates(region)
+                        },
                     )
                 }
 
@@ -211,9 +223,13 @@ fun OfflineMapRegionCard(
     region: OfflineMapRegion,
     onDelete: () -> Unit,
     isDeleting: Boolean,
+    updateCheckResult: UpdateCheckResult? = null,
+    onCheckForUpdates: () -> Unit = {},
+    onUpdateNow: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -311,13 +327,99 @@ fun OfflineMapRegionCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                // Created date
-                region.completedAt?.let { completedAt ->
-                    Text(
-                        text = "Downloaded ${formatDate(completedAt)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                // Version and update info
+                if (region.status == OfflineMapRegion.Status.COMPLETE) {
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Show version or download date
+                    val versionText = region.tileVersion?.let { version ->
+                        // Parse version like "20260107_001001_pt" to show as date
+                        val dateStr = version.take(8)
+                        val formattedDate = runCatching {
+                            val year = dateStr.substring(0, 4)
+                            val month = dateStr.substring(4, 6)
+                            val day = dateStr.substring(6, 8)
+                            "$year-$month-$day"
+                        }.getOrNull() ?: version
+                        "Map data: $formattedDate"
+                    } ?: region.completedAt?.let { "Downloaded ${formatDate(it)}" }
+
+                    versionText?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    // Update check button and status
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        when {
+                            updateCheckResult?.isChecking == true -> {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Text(
+                                    text = "Checking...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            updateCheckResult?.hasUpdate == true -> {
+                                Icon(
+                                    imageVector = Icons.Default.Update,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    text = "Update available",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                TextButton(
+                                    onClick = { showUpdateDialog = true },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(28.dp),
+                                ) {
+                                    Text("Update Now", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                            updateCheckResult?.latestVersion != null && !updateCheckResult.hasUpdate -> {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.tertiary,
+                                )
+                                Text(
+                                    text = "Up to date",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                )
+                            }
+                            else -> {
+                                TextButton(
+                                    onClick = onCheckForUpdates,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(28.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Check for Updates", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -355,6 +457,35 @@ fun OfflineMapRegionCard(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    // Update confirmation dialog
+    if (showUpdateDialog) {
+        AlertDialog(
+            onDismissRequest = { showUpdateDialog = false },
+            title = { Text("Update Offline Map") },
+            text = {
+                Text(
+                    "Download the latest map data for \"${region.name}\"? " +
+                        "This will replace the current data and may take a few minutes."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showUpdateDialog = false
+                        onUpdateNow()
+                    },
+                ) {
+                    Text("Update")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUpdateDialog = false }) {
                     Text("Cancel")
                 }
             },

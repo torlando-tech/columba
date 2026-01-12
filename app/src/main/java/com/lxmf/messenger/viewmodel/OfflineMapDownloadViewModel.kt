@@ -368,6 +368,7 @@ class OfflineMapDownloadViewModel
                                 tileCount = manager.progress.value.downloadedTiles,
                                 sizeBytes = result.length(),
                                 mbtilesPath = result.absolutePath,
+                                tileVersion = manager.lastResolvedVersion,
                             )
                             _state.update { it.copy(isComplete = true) }
                         } catch (e: Exception) {

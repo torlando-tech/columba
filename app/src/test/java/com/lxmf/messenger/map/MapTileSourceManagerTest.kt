@@ -141,6 +141,7 @@ class MapTileSourceManagerTest {
                     createdAt = System.currentTimeMillis(),
                     completedAt = System.currentTimeMillis(),
                     source = OfflineMapRegion.Source.HTTP,
+                    tileVersion = null,
                 )
             every { offlineMapRegionRepository.getCompletedRegions() } returns flowOf(listOf(region))
 

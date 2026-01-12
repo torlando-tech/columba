@@ -20,6 +20,21 @@ import java.io.File
 import javax.inject.Inject
 
 /**
+ * Result of checking for updates for a region.
+ */
+@Immutable
+data class UpdateCheckResult(
+    val regionId: Long,
+    val currentVersion: String?,
+    val latestVersion: String?,
+    val isChecking: Boolean = false,
+    val error: String? = null,
+) {
+    val hasUpdate: Boolean
+        get() = latestVersion != null && currentVersion != null && latestVersion != currentVersion
+}
+
+/**
  * UI state for the Offline Maps screen.
  */
 @Immutable
@@ -29,6 +44,8 @@ data class OfflineMapsState(
     val isLoading: Boolean = true,
     val isDeleting: Boolean = false,
     val errorMessage: String? = null,
+    val updateCheckResults: Map<Long, UpdateCheckResult> = emptyMap(),
+    val latestTileVersion: String? = null,
 ) {
     /**
      * Get a human-readable total storage string.
@@ -64,6 +81,8 @@ class OfflineMapsViewModel
 
         private val _errorMessage = MutableStateFlow<String?>(null)
         private val _isDeleting = MutableStateFlow(false)
+        private val _updateCheckResults = MutableStateFlow<Map<Long, UpdateCheckResult>>(emptyMap())
+        private val _latestTileVersion = MutableStateFlow<String?>(null)
 
         init {
             // Scan for orphaned MBTiles files on startup
@@ -78,13 +97,16 @@ class OfflineMapsViewModel
                 offlineMapRegionRepository.getTotalStorageUsed(),
                 _errorMessage,
                 _isDeleting,
-            ) { regions, totalStorage, error, isDeleting ->
+                combine(_updateCheckResults, _latestTileVersion) { a, b -> a to b },
+            ) { regions, totalStorage, error, isDeleting, (updateResults, latestVersion) ->
                 OfflineMapsState(
                     regions = regions,
                     totalStorageBytes = totalStorage ?: 0L,
                     isLoading = false,
                     isDeleting = isDeleting,
                     errorMessage = error,
+                    updateCheckResults = updateResults,
+                    latestTileVersion = latestVersion,
                 )
             }.stateIn(
                 scope = viewModelScope,
@@ -133,6 +155,55 @@ class OfflineMapsViewModel
          */
         fun clearError() {
             _errorMessage.value = null
+        }
+
+        /**
+         * Check if updates are available for a specific region.
+         */
+        fun checkForUpdates(region: OfflineMapRegion) {
+            viewModelScope.launch {
+                // Mark as checking
+                _updateCheckResults.value = _updateCheckResults.value + (
+                    region.id to UpdateCheckResult(
+                        regionId = region.id,
+                        currentVersion = region.tileVersion,
+                        latestVersion = null,
+                        isChecking = true,
+                    )
+                )
+
+                try {
+                    val latestVersion = TileDownloadManager.fetchCurrentTileVersion()
+                    _latestTileVersion.value = latestVersion
+
+                    _updateCheckResults.value = _updateCheckResults.value + (
+                        region.id to UpdateCheckResult(
+                            regionId = region.id,
+                            currentVersion = region.tileVersion,
+                            latestVersion = latestVersion,
+                            isChecking = false,
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to check for updates", e)
+                    _updateCheckResults.value = _updateCheckResults.value + (
+                        region.id to UpdateCheckResult(
+                            regionId = region.id,
+                            currentVersion = region.tileVersion,
+                            latestVersion = null,
+                            isChecking = false,
+                            error = e.message,
+                        )
+                    )
+                }
+            }
+        }
+
+        /**
+         * Clear the update check result for a region.
+         */
+        fun clearUpdateCheckResult(regionId: Long) {
+            _updateCheckResults.value = _updateCheckResults.value - regionId
         }
 
         /**

@@ -69,6 +69,7 @@ sealed class TileSource {
  *
  * Downloads vector tiles from OpenFreeMap or RMSP and stores them in MBTiles format.
  */
+@Suppress("TooManyFunctions")
 class TileDownloadManager(
     private val context: Context,
     private val tileSource: TileSource = TileSource.Http(),
@@ -124,6 +125,15 @@ class TileDownloadManager(
     @Volatile
     private var isCancelled = false
 
+    // Resolved tile URL template from TileJSON (contains version path)
+    @Volatile
+    private var resolvedTileUrlTemplate: String? = null
+
+    // Extracted tile version (e.g., "20260107_001001_pt")
+    @Volatile
+    var lastResolvedVersion: String? = null
+        private set
+
     /**
      * Download tiles for a circular region and save to MBTiles.
      *
@@ -158,12 +168,68 @@ class TileDownloadManager(
         }
 
     /**
+     * Fetch TileJSON to get the current versioned tile URL template.
+     * OpenFreeMap updates the version path with each planet update.
+     * Also extracts and stores the version string.
+     */
+    private fun fetchTileUrlTemplate(tileJsonUrl: String): String? {
+        return try {
+            val url = URL(tileJsonUrl)
+            val connection = url.openConnection() as HttpURLConnection
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
+            connection.setRequestProperty("User-Agent", USER_AGENT)
+
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                Log.w(TAG, "Failed to fetch TileJSON: HTTP ${connection.responseCode}")
+                return null
+            }
+
+            val json = connection.inputStream.use { it.bufferedReader().readText() }
+            val tileJson = org.json.JSONObject(json)
+            val tilesArray = tileJson.optJSONArray("tiles")
+            if (tilesArray != null && tilesArray.length() > 0) {
+                val template = tilesArray.getString(0)
+                Log.d(TAG, "Resolved tile URL template: $template")
+                // Extract version from template URL
+                // e.g., "https://tiles.openfreemap.org/planet/20260107_001001_pt/{z}/{x}/{y}.pbf"
+                lastResolvedVersion = extractVersionFromTemplate(template)
+                Log.d(TAG, "Extracted tile version: $lastResolvedVersion")
+                template
+            } else {
+                Log.w(TAG, "TileJSON missing 'tiles' array")
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to fetch TileJSON: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Extract the version string from a tile URL template.
+     * e.g., "https://tiles.openfreemap.org/planet/20260107_001001_pt/{z}/{x}/{y}.pbf" -> "20260107_001001_pt"
+     */
+    private fun extractVersionFromTemplate(template: String): String? {
+        // Pattern: .../planet/<version>/{z}/...
+        val regex = Regex("""/planet/([^/]+)/\{z\}""")
+        return regex.find(template)?.groupValues?.get(1)
+    }
+
+    /**
      * Download tiles from HTTP source.
      */
     private suspend fun downloadRegionHttp(params: RegionParams): File? {
         return try {
             // Calculate bounds and tiles
             _progress.value = _progress.value.copy(status = DownloadProgress.Status.CALCULATING)
+
+            // Fetch the current tile URL template from TileJSON
+            val baseUrl = (tileSource as? TileSource.Http)?.baseUrl ?: DEFAULT_TILE_URL
+            resolvedTileUrlTemplate = withContext(Dispatchers.IO) { fetchTileUrlTemplate(baseUrl) }
+            if (resolvedTileUrlTemplate == null) {
+                Log.w(TAG, "Could not resolve tile URL template, using fallback")
+            }
             val bounds = MBTilesWriter.boundsFromCenter(params.centerLat, params.centerLon, params.radiusKm)
             val tiles = calculateTilesForRegion(bounds, params.minZoom, params.maxZoom)
 
@@ -611,8 +677,15 @@ class TileDownloadManager(
     }
 
     private fun downloadTile(tile: TileCoord): ByteArray? {
-        val baseUrl = (tileSource as? TileSource.Http)?.baseUrl ?: DEFAULT_TILE_URL
-        val urlString = "$baseUrl/${tile.z}/${tile.x}/${tile.y}.pbf"
+        // Use resolved template if available, otherwise fall back to direct URL construction
+        val urlString = resolvedTileUrlTemplate
+            ?.replace("{z}", tile.z.toString())
+            ?.replace("{x}", tile.x.toString())
+            ?.replace("{y}", tile.y.toString())
+            ?: run {
+                val baseUrl = (tileSource as? TileSource.Http)?.baseUrl ?: DEFAULT_TILE_URL
+                "$baseUrl/${tile.z}/${tile.x}/${tile.y}.pbf"
+            }
         val url = URL(urlString)
         val connection = url.openConnection() as HttpURLConnection
 
@@ -652,6 +725,48 @@ class TileDownloadManager(
 
         // Network I/O bound - higher concurrency than CPU count is optimal
         const val CONCURRENT_DOWNLOADS = 10
+
+        /**
+         * Fetch the current tile version from OpenFreeMap without downloading any tiles.
+         * Useful for checking if updates are available.
+         *
+         * @return The current version string (e.g., "20260107_001001_pt") or null if failed
+         */
+        suspend fun fetchCurrentTileVersion(): String? = withContext(Dispatchers.IO) {
+            try {
+                val url = URL(DEFAULT_TILE_URL)
+                val connection = url.openConnection() as HttpURLConnection
+                connection.connectTimeout = CONNECT_TIMEOUT_MS
+                connection.readTimeout = READ_TIMEOUT_MS
+                connection.setRequestProperty("User-Agent", USER_AGENT)
+
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    Log.w(TAG, "Failed to fetch TileJSON for version check: HTTP ${connection.responseCode}")
+                    return@withContext null
+                }
+
+                val json = connection.inputStream.use { it.bufferedReader().readText() }
+                connection.disconnect()
+
+                val tileJson = org.json.JSONObject(json)
+                val tilesArray = tileJson.optJSONArray("tiles")
+                if (tilesArray != null && tilesArray.length() > 0) {
+                    val template = tilesArray.getString(0)
+                    // Extract version from template URL
+                    val regex = Regex("""/planet/([^/]+)/\{z\}""")
+                    val version = regex.find(template)?.groupValues?.get(1)
+                    Log.d(TAG, "Current tile version: $version")
+                    version
+                } else {
+                    Log.w(TAG, "TileJSON missing 'tiles' array")
+                    null
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to fetch tile version: ${e.message}")
+                null
+            }
+        }
+
         const val BATCH_SIZE = 100 // Process tiles in batches to reduce memory usage
         const val MAX_RETRIES = 3
         const val RETRY_DELAY_MS = 1000L

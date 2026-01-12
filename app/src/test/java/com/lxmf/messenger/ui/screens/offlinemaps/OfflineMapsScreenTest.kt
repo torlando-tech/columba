@@ -415,6 +415,7 @@ class OfflineMapsScreenTest {
         tileCount: Int = 500,
         errorMessage: String? = null,
         completedAt: Long? = System.currentTimeMillis(),
+        tileVersion: String? = null,
     ): OfflineMapRegion {
         return OfflineMapRegion(
             id = id,
@@ -433,6 +434,7 @@ class OfflineMapsScreenTest {
             createdAt = System.currentTimeMillis(),
             completedAt = completedAt,
             source = OfflineMapRegion.Source.HTTP,
+            tileVersion = tileVersion,
         )
     }
 }

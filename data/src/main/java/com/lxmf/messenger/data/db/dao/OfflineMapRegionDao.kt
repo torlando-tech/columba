@@ -75,7 +75,8 @@ interface OfflineMapRegionDao {
             tileCount = :tileCount,
             sizeBytes = :sizeBytes,
             mbtilesPath = :mbtilesPath,
-            completedAt = :completedAt
+            completedAt = :completedAt,
+            tileVersion = :tileVersion
         WHERE id = :id
         """,
     )
@@ -85,7 +86,14 @@ interface OfflineMapRegionDao {
         sizeBytes: Long,
         mbtilesPath: String,
         completedAt: Long = System.currentTimeMillis(),
+        tileVersion: String? = null,
     )
+
+    /**
+     * Update the tile version for a region.
+     */
+    @Query("UPDATE offline_map_regions SET tileVersion = :version WHERE id = :id")
+    suspend fun updateTileVersion(id: Long, version: String)
 
     /**
      * Mark a region as failed with an error message.

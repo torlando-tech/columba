@@ -27,6 +27,7 @@ data class OfflineMapRegion(
     val createdAt: Long,
     val completedAt: Long?,
     val source: Source,
+    val tileVersion: String?,
 ) {
     enum class Status {
         PENDING,
@@ -56,6 +57,7 @@ data class OfflineMapRegion(
 /**
  * Repository for managing offline map regions.
  */
+@Suppress("TooManyFunctions")
 @Singleton
 class OfflineMapRegionRepository
     @Inject
@@ -151,13 +153,22 @@ class OfflineMapRegionRepository
             tileCount: Int,
             sizeBytes: Long,
             mbtilesPath: String,
+            tileVersion: String? = null,
         ) {
             offlineMapRegionDao.markComplete(
                 id = id,
                 tileCount = tileCount,
                 sizeBytes = sizeBytes,
                 mbtilesPath = mbtilesPath,
+                tileVersion = tileVersion,
             )
+        }
+
+        /**
+         * Update the tile version for a region.
+         */
+        suspend fun updateTileVersion(id: Long, version: String) {
+            offlineMapRegionDao.updateTileVersion(id, version)
         }
 
         /**
@@ -335,6 +346,7 @@ private fun OfflineMapRegionEntity.toOfflineMapRegion(): OfflineMapRegion {
             } else {
                 OfflineMapRegion.Source.HTTP
             },
+        tileVersion = tileVersion,
     )
 }
 

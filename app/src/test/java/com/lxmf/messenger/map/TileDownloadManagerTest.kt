@@ -190,6 +190,38 @@ class TileDownloadManagerTest {
         assertTrue(bounds.east > -1.0)
     }
 
+    // ========== decodeGeohashCenter() Tests ==========
+
+    @Test
+    fun `decodeGeohashCenter returns center of geohash cell`() {
+        val center = TileDownloadManager.decodeGeohashCenter("9q8yy")
+
+        assertNotNull(center)
+        // San Francisco area - center should be within the cell
+        assertTrue(center!!.first > 37.0 && center.first < 38.0) // latitude
+        assertTrue(center.second > -123.0 && center.second < -122.0) // longitude
+    }
+
+    @Test
+    fun `decodeGeohashCenter returns null for empty string`() {
+        val center = TileDownloadManager.decodeGeohashCenter("")
+        assertNull(center)
+    }
+
+    @Test
+    fun `decodeGeohashCenter is consistent with decodeGeohashBounds`() {
+        val geohash = "u4pruydqqvj"
+        val bounds = TileDownloadManager.decodeGeohashBounds(geohash)
+        val center = TileDownloadManager.decodeGeohashCenter(geohash)
+
+        assertNotNull(center)
+        // Center should be midpoint of bounds
+        val expectedLat = (bounds.south + bounds.north) / 2
+        val expectedLon = (bounds.west + bounds.east) / 2
+        assertEquals(expectedLat, center!!.first, 0.0001)
+        assertEquals(expectedLon, center.second, 0.0001)
+    }
+
     // ========== geohashesForBounds() Tests ==========
 
     @Test

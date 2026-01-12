@@ -124,6 +124,7 @@ class OfflineMapsViewModelTest {
             createdAt = now,
             completedAt = if (config.status == OfflineMapRegion.Status.COMPLETE) now else null,
             source = config.source,
+            tileVersion = null,
         )
     }
 

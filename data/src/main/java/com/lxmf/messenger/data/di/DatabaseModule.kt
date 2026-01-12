@@ -62,6 +62,7 @@ object DatabaseModule {
             MIGRATION_26_27,
             MIGRATION_27_28,
             MIGRATION_28_29,
+            MIGRATION_29_30,
         )
     }
 
@@ -1232,6 +1233,14 @@ object DatabaseModule {
                 // Create indices for rmsp_servers
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_rmsp_servers_lastSeenTimestamp ON rmsp_servers(lastSeenTimestamp)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_rmsp_servers_hops ON rmsp_servers(hops)")
+            }
+        }
+
+    // Migration from version 29 to 30: Add tileVersion column to offline_map_regions
+    private val MIGRATION_29_30 =
+        object : Migration(29, 30) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE offline_map_regions ADD COLUMN tileVersion TEXT")
             }
         }
 

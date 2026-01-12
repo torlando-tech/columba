@@ -50,6 +50,8 @@ data class OfflineMapRegionEntity(
     val completedAt: Long?,
     /** Source of the tiles: "http" or "rmsp" */
     val source: String = "http",
+    /** Version of the tile data from OpenFreeMap (e.g., "20260107_001001_pt") */
+    val tileVersion: String? = null,
 ) {
     companion object {
         const val STATUS_PENDING = "PENDING"

@@ -381,6 +381,17 @@ class RmspClientWrapper:
                     identity = RNS.Identity(create_keys=False)
                     identity.load_public_key(public_key)
 
+                    # Verify destination hash matches public key to prevent impersonation
+                    # Compute expected dest hash from identity for RMSP service
+                    expected_dest = RNS.Destination(
+                        identity, RNS.Destination.OUT, RNS.Destination.SINGLE,
+                        RMSP_APP_NAME, RMSP_ASPECT
+                    )
+                    if expected_dest.hash != dest_hash:
+                        log_error("RmspClient", "fetch_tiles",
+                                 f"Destination hash mismatch - possible impersonation attempt")
+                        return None
+
                     # Create a temporary server info
                     server = RmspServerInfo(
                         destination_hash=dest_hash,
@@ -395,7 +406,7 @@ class RmspClientWrapper:
                         hops=0,
                     )
                     log_info("RmspClient", "fetch_tiles",
-                            "Created server info from public key")
+                            "Created server info from public key (verified)")
                 except Exception as e:
                     log_error("RmspClient", "fetch_tiles",
                              f"Failed to create identity from public key: {e}")

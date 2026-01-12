@@ -516,6 +516,31 @@ class ContactRepository
         }
 
         /**
+         * Resets a contact for retry: updates status to PENDING_IDENTITY and resets addedTimestamp.
+         * Used when user retries identity resolution so the 48-hour timeout restarts fresh.
+         *
+         * @param destinationHash The contact's destination hash
+         * @return Result indicating success or failure
+         */
+        suspend fun resetContactForRetry(destinationHash: String): Result<Unit> {
+            return try {
+                val activeIdentity =
+                    localIdentityDao.getActiveIdentitySync()
+                        ?: return Result.failure(IllegalStateException("No active identity found"))
+
+                contactDao.resetContactForRetry(
+                    destinationHash = destinationHash,
+                    identityHash = activeIdentity.identityHash,
+                    status = ContactStatus.PENDING_IDENTITY.name,
+                    addedTimestamp = System.currentTimeMillis(),
+                )
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+        /**
          * Gets all contacts with specified statuses (for background identity resolution).
          * Returns contacts from ALL identities, not just the active one.
          *

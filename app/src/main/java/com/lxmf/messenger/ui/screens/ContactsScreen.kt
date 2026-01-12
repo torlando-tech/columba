@@ -1487,7 +1487,7 @@ fun PendingContactBottomSheet(
                                     "you'll be able to send messages."
                             } else {
                                 "Columba couldn't find this contact's identity on the network " +
-                                    "after 48 hours. They may be offline or using a different " +
+                                    "after 24 hours. They may be offline or using a different " +
                                     "address. You can retry the search or remove this contact."
                             },
                         style = MaterialTheme.typography.bodyMedium,

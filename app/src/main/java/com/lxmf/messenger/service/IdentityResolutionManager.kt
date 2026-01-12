@@ -19,7 +19,7 @@ import javax.inject.Singleton
  * This manager periodically:
  * 1. Checks pending contacts against Reticulum's identity cache
  * 2. Requests paths for contacts that need resolution
- * 3. Marks contacts as UNRESOLVED after 48 hours
+ * 3. Marks contacts as UNRESOLVED after 24 hours
  */
 @Singleton
 class IdentityResolutionManager
@@ -34,8 +34,8 @@ class IdentityResolutionManager
             // Check interval: 15 minutes
             private const val CHECK_INTERVAL_MS = 15 * 60 * 1000L
 
-            // Resolution timeout: 48 hours
-            private const val RESOLUTION_TIMEOUT_MS = 48 * 60 * 60 * 1000L
+            // Resolution timeout: 24 hours
+            private const val RESOLUTION_TIMEOUT_MS = 24 * 60 * 60 * 1000L
         }
 
         private var resolutionJob: Job? = null
@@ -92,10 +92,10 @@ class IdentityResolutionManager
 
             for (contact in pendingContacts) {
                 try {
-                    // Check if resolution has timed out (48 hours)
+                    // Check if resolution has timed out (24 hours)
                     val age = currentTime - contact.addedTimestamp
                     if (age > RESOLUTION_TIMEOUT_MS) {
-                        Log.d(TAG, "Contact ${contact.destinationHash.take(8)}... timed out after 48h")
+                        Log.d(TAG, "Contact ${contact.destinationHash.take(8)}... timed out after 24h")
                         contactRepository.updateContactStatus(
                             destinationHash = contact.destinationHash,
                             status = ContactStatus.UNRESOLVED,
@@ -137,11 +137,8 @@ class IdentityResolutionManager
         suspend fun retryResolution(destinationHash: String) {
             Log.d(TAG, "Retry resolution for ${destinationHash.take(8)}...")
 
-            // Reset status to PENDING_IDENTITY
-            contactRepository.updateContactStatus(
-                destinationHash = destinationHash,
-                status = ContactStatus.PENDING_IDENTITY,
-            )
+            // Reset status to PENDING_IDENTITY and restart 48-hour timeout
+            contactRepository.resetContactForRetry(destinationHash)
 
             // Request path on network
             val destHashBytes =

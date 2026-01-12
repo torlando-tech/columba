@@ -301,6 +301,24 @@ interface ContactDao {
     )
 
     /**
+     * Reset contact for retry: updates both status and addedTimestamp.
+     * Used when user retries identity resolution so the 48-hour timeout restarts.
+     */
+    @Query(
+        """
+        UPDATE contacts
+        SET status = :status, addedTimestamp = :addedTimestamp
+        WHERE destinationHash = :destinationHash AND identityHash = :identityHash
+        """,
+    )
+    suspend fun resetContactForRetry(
+        destinationHash: String,
+        identityHash: String,
+        status: String,
+        addedTimestamp: Long,
+    )
+
+    /**
      * Get all contacts with specified statuses (for background identity resolution)
      */
     @Query("SELECT * FROM contacts WHERE status IN (:statuses)")

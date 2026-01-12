@@ -277,7 +277,9 @@ class TileDownloadManager(
 
         if (isCancelled) {
             writer.close()
-            params.outputFile.delete()
+            if (!params.outputFile.delete() && params.outputFile.exists()) {
+                Log.w(TAG, "Failed to delete cancelled download file: ${params.outputFile.absolutePath}")
+            }
             _progress.value = _progress.value.copy(status = DownloadProgress.Status.CANCELLED)
             return false
         }

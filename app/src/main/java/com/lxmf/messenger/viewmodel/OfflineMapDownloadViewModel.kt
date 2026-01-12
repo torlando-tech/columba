@@ -373,17 +373,19 @@ class OfflineMapDownloadViewModel
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to mark region complete, attempting recovery", e)
                             // Try immediate recovery via orphan import
-                            try {
-                                // Delete the failed record and re-import the valid file
+                            val recoveryResult = runCatching {
                                 offlineMapRegionRepository.deleteRegion(regionId)
-                                val recoveredId = offlineMapRegionRepository.importOrphanedFile(result)
+                                offlineMapRegionRepository.importOrphanedFile(result)
+                            }
+                            recoveryResult.onSuccess { recoveredId ->
                                 Log.i(TAG, "Recovered download as region $recoveredId")
                                 _state.update { it.copy(isComplete = true, createdRegionId = recoveredId) }
-                            } catch (recoveryError: Exception) {
+                            }.onFailure { recoveryError ->
                                 Log.e(TAG, "Recovery failed, file preserved at: ${result.absolutePath}", recoveryError)
                                 _state.update {
                                     it.copy(
-                                        errorMessage = "Download completed but database error. " +
+                                        errorMessage = "Database error: ${e.message}. " +
+                                            "Recovery failed: ${recoveryError.message}. " +
                                             "File saved at: ${result.absolutePath}",
                                     )
                                 }

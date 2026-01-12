@@ -377,7 +377,13 @@ class OfflineMapDownloadViewModel
                                 Log.e(TAG, "Database error, file preserved at: ${result.absolutePath}", dbError)
                                 // DO NOT delete the file - it's valid and expensive to re-download
                             }
-                            _state.update { it.copy(errorMessage = "Download succeeded but failed to save: ${e.message}") }
+                            _state.update {
+                                it.copy(
+                                    errorMessage = "Download completed but database error. " +
+                                        "File saved at: ${result.absolutePath}. " +
+                                        "Restart app to auto-recover orphaned maps.",
+                                )
+                            }
                         }
                     }
                 } catch (e: Exception) {

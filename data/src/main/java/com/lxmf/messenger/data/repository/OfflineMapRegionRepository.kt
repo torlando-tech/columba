@@ -200,6 +200,46 @@ class OfflineMapRegionRepository
         ): OfflineMapRegion? {
             return offlineMapRegionDao.findNearestRegion(latitude, longitude)?.toOfflineMapRegion()
         }
+
+        /**
+         * Find orphaned MBTiles files not tracked in the database.
+         * @param offlineMapsDir The directory containing MBTiles files
+         * @return List of orphaned file paths
+         */
+        suspend fun findOrphanedFiles(offlineMapsDir: java.io.File): List<java.io.File> {
+            val trackedPaths = offlineMapRegionDao.getAllMbtilesPaths().toSet()
+            return offlineMapsDir.listFiles { file ->
+                file.extension == "mbtiles" && file.absolutePath !in trackedPaths
+            }?.toList() ?: emptyList()
+        }
+
+        /**
+         * Import an orphaned MBTiles file into the database.
+         * @return The ID of the imported region
+         */
+        suspend fun importOrphanedFile(
+            file: java.io.File,
+            name: String = file.nameWithoutExtension,
+        ): Long {
+            val entity = OfflineMapRegionEntity(
+                name = name,
+                centerLatitude = 0.0,
+                centerLongitude = 0.0,
+                radiusKm = 0,
+                minZoom = 0,
+                maxZoom = 14,
+                status = OfflineMapRegionEntity.STATUS_COMPLETE,
+                mbtilesPath = file.absolutePath,
+                tileCount = 0,
+                sizeBytes = file.length(),
+                downloadProgress = 1f,
+                errorMessage = null,
+                createdAt = file.lastModified(),
+                completedAt = file.lastModified(),
+                source = OfflineMapRegionEntity.SOURCE_HTTP,
+            )
+            return offlineMapRegionDao.insert(entity)
+        }
     }
 
 /**

@@ -146,4 +146,10 @@ interface OfflineMapRegionDao {
         latitude: Double,
         longitude: Double,
     ): OfflineMapRegionEntity?
+
+    /**
+     * Get all tracked MBTiles file paths for orphan detection.
+     */
+    @Query("SELECT mbtilesPath FROM offline_map_regions WHERE mbtilesPath IS NOT NULL")
+    suspend fun getAllMbtilesPaths(): List<String>
 }

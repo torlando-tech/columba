@@ -65,6 +65,13 @@ class OfflineMapsViewModel
         private val _errorMessage = MutableStateFlow<String?>(null)
         private val _isDeleting = MutableStateFlow(false)
 
+        init {
+            // Scan for orphaned MBTiles files on startup
+            viewModelScope.launch {
+                recoverOrphanedFiles()
+            }
+        }
+
         val state: StateFlow<OfflineMapsState> =
             combine(
                 offlineMapRegionRepository.getAllRegions(),
@@ -133,5 +140,23 @@ class OfflineMapsViewModel
          */
         fun getOfflineMapsDir(): File {
             return TileDownloadManager.getOfflineMapsDir(context)
+        }
+
+        /**
+         * Scan for orphaned MBTiles files and import them into the database.
+         */
+        private suspend fun recoverOrphanedFiles() {
+            try {
+                val orphanedFiles = offlineMapRegionRepository.findOrphanedFiles(getOfflineMapsDir())
+                for (file in orphanedFiles) {
+                    Log.i(TAG, "Recovering orphaned map file: ${file.name}")
+                    offlineMapRegionRepository.importOrphanedFile(file)
+                }
+                if (orphanedFiles.isNotEmpty()) {
+                    Log.i(TAG, "Recovered ${orphanedFiles.size} orphaned map file(s)")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to recover orphaned files", e)
+            }
         }
     }

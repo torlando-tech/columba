@@ -868,7 +868,8 @@ class TileDownloadManager(
             // Safety limit to prevent memory exhaustion
             if (geohashes.size > MAX_GEOHASHES) {
                 Log.w(TAG, "Geohash count ${geohashes.size} exceeds limit $MAX_GEOHASHES, truncating")
-                return geohashes.take(MAX_GEOHASHES).toSet()
+                // Sort for deterministic coverage - alphabetical order clusters geographically
+                return geohashes.sorted().take(MAX_GEOHASHES).toSet()
             }
 
             return geohashes

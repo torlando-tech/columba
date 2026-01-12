@@ -296,12 +296,12 @@ class TelemetryCollectorManager
                     null
                 } ?: return TelemetrySendResult.Error("No LXMF identity")
 
-                // Build location JSON
+                // Build location JSON using the location's actual capture time
                 val telemetryData = LocationTelemetryData(
                     lat = location.latitude,
                     lng = location.longitude,
                     acc = location.accuracy,
-                    ts = System.currentTimeMillis(),
+                    ts = location.time,
                     altitude = location.altitude,
                     speed = location.speed,
                     bearing = location.bearing,

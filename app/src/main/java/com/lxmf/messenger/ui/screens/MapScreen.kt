@@ -204,8 +204,8 @@ fun MapScreen(
     }
 
     // Reload map style when mapStyleResult changes (e.g., after offline map download)
-    LaunchedEffect(state.mapStyleResult, mapLibreMap, mapStyleLoaded) {
-        if (!mapStyleLoaded) return@LaunchedEffect
+    // No mapStyleLoaded guard needed - setStyle can be called anytime and replaces any loading style
+    LaunchedEffect(state.mapStyleResult, mapLibreMap) {
         val map = mapLibreMap ?: return@LaunchedEffect
         val styleResult = state.mapStyleResult ?: return@LaunchedEffect
 
@@ -215,7 +215,7 @@ fun MapScreen(
             is MapStyleResult.Rmsp -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
             is MapStyleResult.Unavailable -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
         }
-        Log.d("MapScreen", "Reloading style: ${styleResult.javaClass.simpleName}")
+        Log.d("MapScreen", "Applying style: ${styleResult.javaClass.simpleName}")
         map.setStyle(styleBuilder)
     }
 

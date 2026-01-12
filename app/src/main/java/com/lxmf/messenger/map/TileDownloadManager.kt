@@ -450,9 +450,9 @@ class TileDownloadManager(
         val tileCount = buffer.int
         Log.d(TAG, "RMSP tile count in header: $tileCount")
 
-        // Validate tile count to prevent DoS attacks (1M tiles supports ~100km radius at zoom 14)
-        if (tileCount < 0 || tileCount > 1_000_000) {
-            Log.w(TAG, "Invalid tile count: $tileCount (expected 0-1000000)")
+        // Validate tile count to prevent DoS attacks
+        if (tileCount < 0 || tileCount > 100_000) {
+            Log.w(TAG, "Invalid tile count: $tileCount (expected 0-100000)")
             return tiles
         }
 

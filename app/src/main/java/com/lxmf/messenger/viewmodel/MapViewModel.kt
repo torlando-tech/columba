@@ -9,6 +9,8 @@ import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.map.MapStyleResult
+import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.SharingSession
@@ -81,6 +83,7 @@ data class MapState(
     val isSharing: Boolean = false,
     val activeSessions: List<SharingSession> = emptyList(),
     val lastRefresh: Long = 0L,
+    val mapStyleResult: MapStyleResult? = null,
 )
 
 /**
@@ -101,6 +104,7 @@ class MapViewModel
         private val locationSharingManager: LocationSharingManager,
         private val announceDao: AnnounceDao,
         private val settingsRepository: SettingsRepository,
+        private val mapTileSourceManager: MapTileSourceManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MapViewModel"
@@ -133,6 +137,9 @@ class MapViewModel
                 )
 
         init {
+            // Resolve initial map style (with null location)
+            resolveMapStyle(null, null)
+
             // Collect location permission sheet dismissal state
             viewModelScope.launch {
                 settingsRepository.hasDismissedLocationPermissionSheetFlow.collect { dismissed ->
@@ -248,9 +255,35 @@ class MapViewModel
          * Called by the MapScreen when location updates are received.
          */
         fun updateUserLocation(location: Location) {
+            val previousLocation = _state.value.userLocation
             _state.update { currentState ->
                 currentState.copy(userLocation = location)
             }
+            // Resolve map style on first location fix
+            if (previousLocation == null) {
+                resolveMapStyle(location.latitude, location.longitude)
+            }
+        }
+
+        /**
+         * Resolve which map style to use based on location and settings.
+         */
+        private fun resolveMapStyle(
+            latitude: Double?,
+            longitude: Double?,
+        ) {
+            viewModelScope.launch {
+                val result = mapTileSourceManager.getMapStyle(latitude, longitude)
+                _state.update { it.copy(mapStyleResult = result) }
+            }
+        }
+
+        /**
+         * Force refresh of map style (e.g., after settings change).
+         */
+        fun refreshMapStyle() {
+            val location = _state.value.userLocation
+            resolveMapStyle(location?.latitude, location?.longitude)
         }
 
         /**

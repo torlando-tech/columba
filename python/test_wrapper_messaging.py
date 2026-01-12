@@ -1738,6 +1738,236 @@ class TestPollReceivedMessages(unittest.TestCase):
         self.assertEqual(messages[0]['receiving_interface'], 'AutoInterface')
 
 
+class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
+    """Test hop count and interface capture at delivery time in _on_lxmf_delivery()"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_delivery_captures_hop_count_when_path_exists(self, mock_rns, mock_lxmf):
+        """Test that _on_lxmf_delivery captures hop count when path exists"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        # Create mock LXMF message
+        mock_message = Mock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash123456789'
+
+        # Mock RNS.Transport to return hop count
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 2
+        mock_rns.Transport.path_table = {}
+
+        # Call delivery handler
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify hop count was captured on message object
+        self.assertEqual(mock_message._columba_hops, 2)
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_delivery_skips_hop_count_when_no_path(self, mock_rns, mock_lxmf):
+        """Test that hop count not captured when has_path returns False"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        mock_message = Mock(spec=['source_hash', 'destination_hash', 'content', 'timestamp', 'fields', 'hash'])
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345678a'
+
+        # Mock RNS.Transport to return no path
+        mock_rns.Transport.has_path.return_value = False
+        mock_rns.Transport.path_table = {}
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify hop count was NOT captured (attribute should not exist)
+        self.assertFalse(hasattr(mock_message, '_columba_hops'))
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_delivery_captures_interface_for_direct_message(self, mock_rns, mock_lxmf):
+        """Test interface captured when hops=0 and path table entry exists"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        mock_message = Mock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345678b'
+
+        # Mock interface object
+        mock_interface = Mock()
+        mock_interface.name = "AutoInterface"
+
+        # Mock RNS.Transport for direct delivery (0 hops) with interface in path table
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 0
+        mock_rns.Transport.path_table = {
+            b'source123source1': [None, None, None, None, None, mock_interface]
+        }
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify both hop count and interface were captured
+        self.assertEqual(mock_message._columba_hops, 0)
+        self.assertEqual(mock_message._columba_interface, "AutoInterface")
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_delivery_skips_interface_for_multihop_message(self, mock_rns, mock_lxmf):
+        """Test interface NOT captured when hops > 0"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        mock_message = Mock(spec=['source_hash', 'destination_hash', 'content', 'timestamp', 'fields', 'hash', '_columba_hops'])
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345678c'
+
+        mock_interface = Mock()
+        mock_interface.name = "AutoInterface"
+
+        # Mock RNS.Transport for multi-hop delivery (3 hops)
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 3
+        mock_rns.Transport.path_table = {
+            b'source123source1': [None, None, None, None, None, mock_interface]
+        }
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify hop count captured but NOT interface (multi-hop)
+        self.assertEqual(mock_message._columba_hops, 3)
+        self.assertFalse(hasattr(mock_message, '_columba_interface'))
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_delivery_uses_interface_name_attribute(self, mock_rns, mock_lxmf):
+        """Test interface.name is used when available"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        mock_message = Mock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345678d'
+
+        # Interface with name attribute
+        mock_interface = Mock()
+        mock_interface.name = "TCPClientInterface[192.168.1.1:4242]"
+
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 0
+        mock_rns.Transport.path_table = {
+            b'source123source1': [None, None, None, None, None, mock_interface]
+        }
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        self.assertEqual(mock_message._columba_interface, "TCPClientInterface[192.168.1.1:4242]")
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_delivery_falls_back_to_str_without_name_attribute(self, mock_rns, mock_lxmf):
+        """Test str(interface) used when no name attribute"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        mock_message = Mock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345678e'
+
+        # Interface WITHOUT name attribute (uses __str__)
+        # Create a simple class with only __str__, no name attribute
+        class InterfaceWithoutName:
+            def __str__(self):
+                return "CustomInterface[test]"
+        mock_interface = InterfaceWithoutName()
+
+        mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.hops_to.return_value = 0
+        mock_rns.Transport.path_table = {
+            b'source123source1': [None, None, None, None, None, mock_interface]
+        }
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        self.assertEqual(mock_message._columba_interface, "CustomInterface[test]")
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_delivery_handles_exception_gracefully(self, mock_rns, mock_lxmf):
+        """Test exception in RNS.Transport calls doesn't crash delivery"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        mock_message = Mock(spec=['source_hash', 'destination_hash', 'content', 'timestamp', 'fields', 'hash'])
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345678f'
+
+        # Mock RNS.Transport to raise exception
+        mock_rns.Transport.has_path.side_effect = Exception("Transport error")
+
+        # Should not raise - delivery should continue even if hop capture fails
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Message should still be in pending_inbound queue
+        self.assertIn(mock_message, wrapper.router.pending_inbound)
+        # No hop count should be captured
+        self.assertFalse(hasattr(mock_message, '_columba_hops'))
+
+
 class TestErrorHandling(unittest.TestCase):
     """Test error handling across messaging methods"""
 

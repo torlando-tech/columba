@@ -29,13 +29,14 @@ interface ReceivedLocationDao {
      */
     @Query(
         """
-        SELECT * FROM received_locations r1
-        WHERE timestamp = (
-            SELECT MAX(timestamp) FROM received_locations r2
-            WHERE r2.senderHash = r1.senderHash
-        )
-        AND (expiresAt IS NULL OR expiresAt > :currentTime)
-        ORDER BY timestamp DESC
+        SELECT r1.* FROM received_locations r1
+        INNER JOIN (
+            SELECT senderHash, MAX(timestamp) as maxTimestamp
+            FROM received_locations
+            GROUP BY senderHash
+        ) r2 ON r1.senderHash = r2.senderHash AND r1.timestamp = r2.maxTimestamp
+        WHERE (r1.expiresAt IS NULL OR r1.expiresAt > :currentTime)
+        ORDER BY r1.timestamp DESC
         """,
     )
     fun getLatestLocationsPerSender(currentTime: Long = System.currentTimeMillis()): Flow<List<ReceivedLocationEntity>>
@@ -46,12 +47,13 @@ interface ReceivedLocationDao {
      */
     @Query(
         """
-        SELECT * FROM received_locations r1
-        WHERE timestamp = (
-            SELECT MAX(timestamp) FROM received_locations r2
-            WHERE r2.senderHash = r1.senderHash
-        )
-        ORDER BY timestamp DESC
+        SELECT r1.* FROM received_locations r1
+        INNER JOIN (
+            SELECT senderHash, MAX(timestamp) as maxTimestamp
+            FROM received_locations
+            GROUP BY senderHash
+        ) r2 ON r1.senderHash = r2.senderHash AND r1.timestamp = r2.maxTimestamp
+        ORDER BY r1.timestamp DESC
         """,
     )
     fun getLatestLocationsPerSenderUnfiltered(): Flow<List<ReceivedLocationEntity>>

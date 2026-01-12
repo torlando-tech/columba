@@ -180,12 +180,16 @@ class TelemetryCollectorManager
                     Log.w(TAG, "Invalid collector address length: ${address.length} (expected 32)")
                     return
                 }
-                if (!address.matches(Regex("^[0-9a-fA-F]{32}$"))) {
+                // Normalize to lowercase for consistent storage and comparison
+                val normalized = address.lowercase()
+                if (!normalized.matches(Regex("^[0-9a-f]{32}$"))) {
                     Log.w(TAG, "Invalid collector address: contains non-hex characters")
                     return
                 }
+                settingsRepository.saveTelemetryCollectorAddress(normalized)
+            } else {
+                settingsRepository.saveTelemetryCollectorAddress(null)
             }
-            settingsRepository.saveTelemetryCollectorAddress(address)
         }
 
         /**
@@ -255,10 +259,11 @@ class TelemetryCollectorManager
                     val nextSendTime = lastSend + (intervalSeconds * 1000L)
 
                     if (now >= nextSendTime) {
-                        // Time to send
-                        if (reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
+                        // Time to send - capture address to avoid race condition
+                        val currentCollector = _collectorAddress.value
+                        if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
                             Log.d(TAG, "📡 Periodic telemetry send to collector")
-                            val result = sendTelemetryToCollector(_collectorAddress.value ?: return@launch)
+                            val result = sendTelemetryToCollector(currentCollector)
                             when (result) {
                                 is TelemetrySendResult.Success ->
                                     Log.i(TAG, "✅ Periodic telemetry sent successfully")
@@ -267,6 +272,8 @@ class TelemetryCollectorManager
                                 else ->
                                     Log.d(TAG, "Periodic send skipped: $result")
                             }
+                        } else if (currentCollector == null) {
+                            Log.d(TAG, "No collector configured, skipping periodic send")
                         } else {
                             Log.d(TAG, "Network not ready, skipping periodic send")
                         }

@@ -2276,14 +2276,13 @@ class ReticulumWrapper:
                             log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                                      f"📡 Captured hop count at delivery: {hops}")
                         # Capture receiving interface (the interface through which we received this message)
-                        if lxmf_message.source_hash in RNS.Transport.path_table:
-                            path_entry = RNS.Transport.path_table[lxmf_message.source_hash]
-                            if len(path_entry) > 5 and path_entry[5] is not None:
-                                interface_obj = path_entry[5]
-                                interface_name = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
-                                lxmf_message._columba_interface = interface_name
-                                log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                         f"📡 Captured receiving interface: {interface_name}")
+                        path_entry = RNS.Transport.path_table.get(lxmf_message.source_hash)
+                        if path_entry is not None and len(path_entry) > 5 and path_entry[5] is not None:
+                            interface_obj = path_entry[5]
+                            interface_name = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
+                            lxmf_message._columba_interface = interface_name
+                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"📡 Captured receiving interface: {interface_name}")
                 except Exception as e:
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                              f"⚠️ Could not capture hop count/interface: {e}")

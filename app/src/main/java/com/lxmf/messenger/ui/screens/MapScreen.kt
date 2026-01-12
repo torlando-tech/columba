@@ -65,6 +65,8 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.lxmf.messenger.map.MapStyleResult
+import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.ui.components.ContactLocationBottomSheet
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.ShareLocationBottomSheet
@@ -201,6 +203,22 @@ fun MapScreen(
         }
     }
 
+    // Reload map style when mapStyleResult changes (e.g., after offline map download)
+    LaunchedEffect(state.mapStyleResult, mapLibreMap, mapStyleLoaded) {
+        if (!mapStyleLoaded) return@LaunchedEffect
+        val map = mapLibreMap ?: return@LaunchedEffect
+        val styleResult = state.mapStyleResult ?: return@LaunchedEffect
+
+        val styleBuilder = when (styleResult) {
+            is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
+            is MapStyleResult.Offline -> Style.Builder().fromJson(styleResult.styleJson)
+            is MapStyleResult.Rmsp -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+            is MapStyleResult.Unavailable -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+        }
+        Log.d("MapScreen", "Reloading style: ${styleResult.javaClass.simpleName}")
+        map.setStyle(styleBuilder)
+    }
+
     // Cleanup when leaving screen
     DisposableEffect(Unit) {
         onDispose {
@@ -226,13 +244,24 @@ fun MapScreen(
                     getMapAsync { map ->
                         mapLibreMap = map
 
-                        // Use OpenFreeMap tiles (free, no API key required)
-                        // https://openfreemap.org - OpenStreetMap data with good detail
-                        map.setStyle(
-                            Style.Builder()
-                                .fromUri("https://tiles.openfreemap.org/styles/liberty"),
-                        ) { style ->
-                            Log.d("MapScreen", "Map style loaded")
+                        // Load map style based on settings (offline, HTTP, or RMSP)
+                        val styleResult = state.mapStyleResult
+                        val styleBuilder = when (styleResult) {
+                            is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
+                            is MapStyleResult.Offline -> Style.Builder().fromJson(styleResult.styleJson)
+                            is MapStyleResult.Rmsp -> {
+                                // For RMSP, use default HTTP as fallback (RMSP rendering not yet implemented)
+                                Log.d("MapScreen", "RMSP style requested, using HTTP fallback")
+                                Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                            }
+                            is MapStyleResult.Unavailable -> {
+                                Log.w("MapScreen", "No map source available: ${styleResult.reason}")
+                                Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                            }
+                            null -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                        }
+                        map.setStyle(styleBuilder) { style ->
+                            Log.d("MapScreen", "Map style loaded: ${styleResult?.javaClass?.simpleName ?: "default"}")
 
                             // Add dashed circle bitmaps for stale markers
                             val density = ctx.resources.displayMetrics.density

@@ -382,9 +382,9 @@ class RmspClientWrapper:
                     identity.load_public_key(public_key)
 
                     # Verify destination hash matches public key to prevent impersonation
-                    # Compute expected dest hash from identity for RMSP service
+                    # Server announces with IN direction (listening for requests)
                     expected_dest = RNS.Destination(
-                        identity, RNS.Destination.OUT, RNS.Destination.SINGLE,
+                        identity, RNS.Destination.IN, RNS.Destination.SINGLE,
                         RMSP_APP_NAME, RMSP_ASPECT
                     )
                     if expected_dest.hash != dest_hash:

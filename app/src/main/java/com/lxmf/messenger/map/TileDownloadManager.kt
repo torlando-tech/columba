@@ -464,7 +464,8 @@ class TileDownloadManager(
             }
 
             // Validate tile coordinates are within bounds for this zoom level
-            val maxCoord = (1 shl z) - 1 // 2^z - 1
+            // Use Long to prevent overflow if zoom validation ever changes
+            val maxCoord = ((1L shl z) - 1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             val xInBounds = x in 0..maxCoord
             val yInBounds = y in 0..maxCoord
             if (!xInBounds || !yInBounds) {

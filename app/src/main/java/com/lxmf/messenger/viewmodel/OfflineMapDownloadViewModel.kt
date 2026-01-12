@@ -70,6 +70,7 @@ data class OfflineMapDownloadState(
     val isComplete: Boolean = false,
     val errorMessage: String? = null,
     val createdRegionId: Long? = null,
+    val usesHttpSource: Boolean = true, // true = OpenFreeMap (HTTP), false = RMSP mesh
 ) {
     /**
      * Check if the location is set.
@@ -280,7 +281,9 @@ class OfflineMapDownloadViewModel
                 try {
                     // Determine tile source based on settings
                     val tileSource = determineTileSource()
+                    val isHttp = tileSource is TileSource.Http
                     Log.d(TAG, "Using tile source: ${tileSource::class.simpleName}")
+                    _state.update { it.copy(usesHttpSource = isHttp) }
 
                     // Create database record
                     val regionId =

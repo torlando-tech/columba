@@ -220,6 +220,7 @@ fun OfflineMapDownloadScreen(
                         estimatedTileCount = state.estimatedTileCount,
                         estimatedSize = state.getEstimatedSizeString(),
                         name = state.name,
+                        usesHttpSource = state.usesHttpSource,
                         onNameChange = { viewModel.setName(it) },
                         onStartDownload = { viewModel.nextStep() },
                         onBack = { viewModel.previousStep() },
@@ -645,6 +646,7 @@ fun ConfirmDownloadStep(
     estimatedTileCount: Int,
     estimatedSize: String,
     name: String,
+    usesHttpSource: Boolean,
     onNameChange: (String) -> Unit,
     onStartDownload: () -> Unit,
     onBack: () -> Unit,
@@ -710,7 +712,11 @@ fun ConfirmDownloadStep(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "This will download map tiles from OpenFreeMap for offline use. Make sure you're connected to Wi-Fi for large downloads.",
+            text = if (usesHttpSource) {
+                "This will download map tiles from OpenFreeMap for offline use. Make sure you're connected to Wi-Fi for large downloads."
+            } else {
+                "This will download map tiles from RMSP servers on the mesh network for offline use."
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -140,6 +140,13 @@ class MapViewModel
             // Resolve initial map style (with null location)
             resolveMapStyle(null, null)
 
+            // Refresh map style when offline map availability changes (e.g., after download)
+            viewModelScope.launch {
+                mapTileSourceManager.hasOfflineMaps().collect {
+                    refreshMapStyle()
+                }
+            }
+
             // Collect location permission sheet dismissal state
             viewModelScope.launch {
                 settingsRepository.hasDismissedLocationPermissionSheetFlow.collect { dismissed ->

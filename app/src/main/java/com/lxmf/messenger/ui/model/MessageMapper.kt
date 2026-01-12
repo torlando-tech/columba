@@ -667,17 +667,13 @@ private fun isWebP(bytes: ByteArray): Boolean =
  */
 private fun hexStringToByteArray(hex: String): ByteArray {
     val len = hex.length
-    if (len % 2 != 0) {
-        throw IllegalArgumentException("Hex string must have even length, got: $len")
-    }
+    require(len % 2 == 0) { "Hex string must have even length, got: $len" }
     val result = ByteArray(len / 2)
     var i = 0
     while (i < len) {
         val high = Character.digit(hex[i], 16)
         val low = Character.digit(hex[i + 1], 16)
-        if (high == -1 || low == -1) {
-            throw IllegalArgumentException("Invalid hex character at position $i")
-        }
+        require(high != -1 && low != -1) { "Invalid hex character at position $i" }
         result[i / 2] = ((high shl 4) or low).toByte()
         i += 2
     }

@@ -350,6 +350,9 @@ data class ReceivedMessage(
     val publicKey: ByteArray? = null,
     // Sender's icon appearance (LXMF Field 4 - Sideband/MeshChat interop)
     val iconAppearance: IconAppearance? = null,
+    // Received message routing info (hop count and receiving interface)
+    val receivedHopCount: Int? = null,
+    val receivedInterface: String? = null,
 )
 
 /**

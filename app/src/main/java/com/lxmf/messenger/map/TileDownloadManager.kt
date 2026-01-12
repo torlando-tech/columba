@@ -337,7 +337,6 @@ class TileDownloadManager(
             )
 
         val allTiles = mutableListOf<RmspTile>()
-        val seenTileCoords = mutableSetOf<Triple<Int, Int, Int>>()
         var processed = 0
 
         for (geohash in geohashes) {
@@ -345,13 +344,9 @@ class TileDownloadManager(
 
             val tileData = source.fetchTiles(geohash, listOf(params.minZoom, params.maxZoom))
             tileData?.takeIf { it.isNotEmpty() }?.let { data ->
-                unpackRmspTiles(data).forEach { tile ->
-                    val coord = Triple(tile.z, tile.x, tile.y)
-                    if (coord !in seenTileCoords) {
-                        seenTileCoords.add(coord)
-                        allTiles.add(tile)
-                    }
-                }
+                // Add all tiles - MBTilesWriter uses CONFLICT_REPLACE to handle duplicates
+                // This avoids memory overhead of tracking coordinates in a Set
+                allTiles.addAll(unpackRmspTiles(data))
             }
             processed++
             _progress.value = _progress.value.copy(downloadedTiles = processed, totalTiles = geohashes.size)

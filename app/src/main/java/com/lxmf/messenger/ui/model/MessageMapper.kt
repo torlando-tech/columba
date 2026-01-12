@@ -626,7 +626,7 @@ fun loadImageData(fieldsJson: String?): ByteArray? {
  */
 fun getImageMetadata(fieldsJson: String?): Pair<String, String>? {
     val bytes = extractImageBytes(fieldsJson) ?: return null
-    if (bytes.size < 3) return null // Need at least 3 bytes for any format detection
+    if (bytes.size < 4) return null // Need at least 4 bytes for PNG detection
     return detectImageFormat(bytes)
 }
 

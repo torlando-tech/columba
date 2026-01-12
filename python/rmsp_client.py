@@ -594,10 +594,10 @@ def unpack_tiles(data: bytes) -> List[tuple]:
     tile_count = struct.unpack(">I", data[offset:offset+4])[0]
     offset += 4
 
-    # Validate tile count to prevent DoS
-    if tile_count > 100000:
+    # Validate tile count to prevent DoS (1M tiles supports ~100km radius at zoom 14)
+    if tile_count > 1000000:
         log_warning("RmspClient", "unpack_tiles",
-                   f"Invalid tile count: {tile_count} (max 100000)")
+                   f"Invalid tile count: {tile_count} (max 1000000)")
         return []
 
     tiles = []

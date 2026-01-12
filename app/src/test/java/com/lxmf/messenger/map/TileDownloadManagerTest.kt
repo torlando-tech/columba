@@ -1106,7 +1106,7 @@ class TileDownloadManagerRobolectricTest {
     @Test
     fun `unpackRmspTiles rejects excessive tile count`() {
         val buffer = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN)
-        buffer.putInt(100_001) // Exceeds 100,000 limit
+        buffer.putInt(1_000_001) // Exceeds 1,000,000 limit
 
         val manager = TileDownloadManager(context, TileSource.Http())
         val tiles = manager.unpackRmspTiles(buffer.array())

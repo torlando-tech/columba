@@ -1220,16 +1220,16 @@ class TestUnpackTiles(unittest.TestCase):
         self.assertEqual(content, tile1)
 
     def test_excessive_tile_count_rejected(self):
-        """Tile count exceeding 100,000 should be rejected."""
-        # Create data with tile_count = 100,001
-        data = struct.pack(">I", 100001)
+        """Tile count exceeding 1,000,000 should be rejected."""
+        # Create data with tile_count = 1,000,001
+        data = struct.pack(">I", 1000001)
         result = rmsp_client.unpack_tiles(data)
         self.assertEqual(len(result), 0)
 
     def test_max_tile_count_accepted(self):
-        """Tile count of exactly 100,000 should be accepted (if data available)."""
-        # Create data with tile_count = 100,000 but no actual tiles
-        data = struct.pack(">I", 100000)
+        """Tile count of exactly 1,000,000 should be accepted (if data available)."""
+        # Create data with tile_count = 1,000,000 but no actual tiles
+        data = struct.pack(">I", 1000000)
         result = rmsp_client.unpack_tiles(data)
         # Should return empty list (no tiles, but count is valid)
         self.assertEqual(len(result), 0)

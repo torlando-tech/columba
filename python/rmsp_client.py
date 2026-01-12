@@ -478,17 +478,16 @@ class RmspClientWrapper:
                         f"No path to {dest_hash_hex}, requesting...")
                 RNS.Transport.request_path(server.destination_hash)
 
-                # Wait for path to be established
-                path_timeout = min(timeout, 30.0)
+                # Wait for path with fixed polling interval (simpler than exponential backoff)
+                # Use short timeout since caller already has overall timeout
+                path_timeout = min(timeout * 0.3, 10.0)  # Use 30% of timeout, max 10s
                 start = time.time()
-                sleep_duration = 0.1  # Start with 100ms
                 while not RNS.Transport.has_path(server.destination_hash):
                     if time.time() - start > path_timeout:
                         log_error("RmspClient", "_establish_link",
                                  "Path request timeout")
                         return None
-                    time.sleep(sleep_duration)
-                    sleep_duration = min(sleep_duration * 1.5, 2.0)  # Exponential backoff, max 2s
+                    time.sleep(0.25)  # Fixed 250ms polling - responsive without busy-waiting
                 log_info("RmspClient", "_establish_link", "Path established")
 
             # Create destination

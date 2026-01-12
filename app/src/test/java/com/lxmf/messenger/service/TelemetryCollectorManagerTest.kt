@@ -296,13 +296,14 @@ class TelemetryCollectorManagerTest {
     }
 
     @Test
-    fun `setCollectorAddress accepts uppercase hex characters`() = testScope.runTest {
+    fun `setCollectorAddress normalizes uppercase to lowercase`() = testScope.runTest {
         manager = createManager()
 
         val uppercaseAddress = "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4"
+        val expectedLowercase = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
         manager.setCollectorAddress(uppercaseAddress)
 
-        coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(uppercaseAddress) }
+        coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(expectedLowercase) }
     }
 
     // ========== setEnabled Tests ==========

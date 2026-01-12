@@ -626,7 +626,7 @@ fun loadImageData(fieldsJson: String?): ByteArray? {
  */
 fun getImageMetadata(fieldsJson: String?): Pair<String, String>? {
     val bytes = extractImageBytes(fieldsJson) ?: return null
-    if (bytes.size < 4) return null
+    if (bytes.size < 3) return null // Need at least 3 bytes for any format detection
     return detectImageFormat(bytes)
 }
 
@@ -652,9 +652,9 @@ private fun isPng(bytes: ByteArray): Boolean =
 private fun isGif(bytes: ByteArray): Boolean = bytes[0] == 0x47.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 0x46.toByte()
 
 private fun isWebP(bytes: ByteArray): Boolean =
-    bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&
+    bytes.size >= 12 &&
+        bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&
         bytes[2] == 0x46.toByte() && bytes[3] == 0x46.toByte() &&
-        bytes.size >= 12 &&
         bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte() &&
         bytes[10] == 0x42.toByte() && bytes[11] == 0x50.toByte()
 

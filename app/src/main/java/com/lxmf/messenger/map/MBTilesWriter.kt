@@ -76,7 +76,7 @@ class MBTilesWriter(
             try {
                 database.execSQL("PRAGMA journal_mode=WAL")
             } catch (e: Exception) {
-                Log.w("MBTilesWriter", "WAL mode not available, using default journal mode", e)
+                Log.w(TAG, "WAL mode not available, using default journal mode", e)
             }
 
             // Create tiles table
@@ -210,13 +210,23 @@ class MBTilesWriter(
      */
     fun endTransaction(success: Boolean = true) {
         db?.let { database ->
+            val wasInTransaction = database.inTransaction()
             try {
-                if (success && database.inTransaction()) {
+                if (success && wasInTransaction) {
                     database.setTransactionSuccessful()
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to mark transaction successful (inTransaction=$wasInTransaction)", e)
             } finally {
-                if (database.inTransaction()) {
-                    database.endTransaction()
+                try {
+                    if (database.inTransaction()) {
+                        database.endTransaction()
+                    } else if (wasInTransaction) {
+                        // Transaction state changed unexpectedly (SQLite implicit rollback)
+                        Log.w(TAG, "Transaction ended implicitly - possible SQLITE_BUSY or contention")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to end transaction", e)
                 }
             }
         }
@@ -249,12 +259,12 @@ class MBTilesWriter(
         try {
             db?.let { database ->
                 if (database.inTransaction()) {
-                    Log.w("MBTilesWriter", "Closing with active transaction - rolling back")
+                    Log.w(TAG, "Closing with active transaction - rolling back")
                     database.endTransaction()
                 }
             }
         } catch (e: Exception) {
-            Log.e("MBTilesWriter", "Error rolling back transaction", e)
+            Log.e(TAG, "Error rolling back transaction", e)
         } finally {
             db?.close()
             db = null
@@ -262,6 +272,8 @@ class MBTilesWriter(
     }
 
     companion object {
+        private const val TAG = "MBTilesWriter"
+
         /**
          * Convert XYZ y-coordinate to TMS y-coordinate.
          *

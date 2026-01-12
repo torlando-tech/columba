@@ -89,6 +89,7 @@ class TestPollReceivedAnnounces(unittest.TestCase):
         mock_identity.get_public_key = MagicMock(return_value=b'mock_public_key_data')
 
         mock_interface = MagicMock()
+        mock_interface.name = "TCPInterface[127.0.0.1:4242]"
         mock_interface.__str__ = MagicMock(return_value="TCPInterface[127.0.0.1:4242]")
         mock_packet = MagicMock()
         mock_packet.receiving_interface = mock_interface
@@ -474,9 +475,10 @@ class TestPollReceivedAnnounces(unittest.TestCase):
         mock_identity.hash = dest_hash
         mock_identity.get_public_key = MagicMock(return_value=b'')
 
-        # Create mock interface with custom __str__
+        # Create mock interface with custom name and __str__
         mock_interface = MagicMock()
         interface_name = "UDPInterface[0.0.0.0:4242/AutoInterface]"
+        mock_interface.name = interface_name
         mock_interface.__str__ = MagicMock(return_value=interface_name)
 
         mock_packet = MagicMock()

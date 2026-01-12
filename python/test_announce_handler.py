@@ -238,6 +238,7 @@ class TestAnnounceTableExtraction(unittest.TestCase):
         # Mock packet with receiving_interface
         mock_packet = Mock()
         mock_interface = Mock()
+        mock_interface.name = "TCPInterface[Testnet/127.0.0.1:4242]"
         mock_interface.__str__ = Mock(return_value="TCPInterface[Testnet/127.0.0.1:4242]")
         mock_packet.receiving_interface = mock_interface
 

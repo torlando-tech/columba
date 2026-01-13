@@ -620,30 +620,42 @@ class MessagingViewModel
             // Safe to enable now that identity loading is lazy (doesn't crash init)
             if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
                 viewModelScope.launch {
-                    reticulumProtocol.observeDeliveryStatus().collect { update ->
-                        try {
-                            Log.d(TAG, "Delivery status update: ${update.messageHash.take(16)}... -> ${update.status}")
-                            handleDeliveryStatusUpdate(update)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error handling delivery status update", e)
+                    try {
+                        reticulumProtocol.observeDeliveryStatus().collect { update ->
+                            try {
+                                Log.d(TAG, "Delivery status update: ${update.messageHash.take(16)}... -> ${update.status}")
+                                handleDeliveryStatusUpdate(update)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error handling delivery status update", e)
+                            }
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error collecting delivery status updates", e)
                     }
                 }
 
                 // Collect incoming reactions and update target messages
                 viewModelScope.launch {
-                    reticulumProtocol.reactionReceivedFlow.collect { reactionJson ->
-                        try {
-                            handleIncomingReaction(reactionJson)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error handling incoming reaction", e)
+                    try {
+                        reticulumProtocol.reactionReceivedFlow.collect { reactionJson ->
+                            try {
+                                handleIncomingReaction(reactionJson)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error handling incoming reaction", e)
+                            }
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error collecting reactions", e)
                     }
                 }
 
                 // Pre-load identity hash for reaction ownership checks
                 viewModelScope.launch {
-                    loadIdentityIfNeeded()
+                    try {
+                        loadIdentityIfNeeded()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error pre-loading identity in init", e)
+                    }
                 }
             } else {
                 Log.d(TAG, "Delivery status collection skipped for ${reticulumProtocol.javaClass.simpleName}")

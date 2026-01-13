@@ -7,6 +7,9 @@ import androidx.room.Query
 import androidx.room.Update
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import org.json.JSONException
+import org.json.JSONObject
 
 /**
  * Data Access Object for Reticulum interface configurations.
@@ -97,4 +100,39 @@ interface InterfaceDao {
      */
     @Query("SELECT COUNT(*) FROM interfaces")
     fun getTotalInterfaceCount(): Flow<Int>
+
+    /**
+     * Check if any Bluetooth-requiring interface is enabled.
+     * This includes AndroidBLE and RNode interfaces (except RNode in TCP mode, which uses network connections).
+     *
+     * @return Flow emitting true if any Bluetooth-requiring interface is enabled
+     */
+    fun hasEnabledBluetoothInterface(): Flow<Boolean> {
+        return getEnabledBluetoothCandidates().map { interfaces ->
+            interfaces.any { it.requiresBluetooth() }
+        }
+    }
+
+    @Query("SELECT * FROM interfaces WHERE enabled = 1 AND (type = 'AndroidBLE' OR type = 'RNode')")
+    fun getEnabledBluetoothCandidates(): Flow<List<InterfaceEntity>>
+}
+
+/**
+ * Check if this interface requires Bluetooth permissions.
+ */
+@Suppress("SwallowedException")
+private fun InterfaceEntity.requiresBluetooth(): Boolean {
+    return when (type) {
+        "AndroidBLE" -> true
+        "RNode" -> {
+            try {
+                val json = JSONObject(configJson)
+                json.optString("connection_mode") != "tcp"
+            } catch (e: JSONException) {
+                // Malformed JSON defaults to requiring Bluetooth (conservative fallback)
+                true
+            }
+        }
+        else -> false
+    }
 }

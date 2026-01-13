@@ -572,6 +572,33 @@ class EventHandler(
                 }
             }
 
+            // Special handling for field 6 and 7 (image/audio)
+            // Format from Python: ["format", "hex_data"] - extract just the hex data
+            if (key == "6" || key == "7") {
+                val fieldArray = fields.optJSONArray(key)
+                if (fieldArray != null && fieldArray.length() >= 2) {
+                    val hexData = fieldArray.optString(1, "")
+                    if (hexData.length > AttachmentStorageManager.SIZE_THRESHOLD) {
+                        val filePath = attachmentStorage.saveAttachment(messageHash, key, hexData)
+                        if (filePath != null) {
+                            val refObj =
+                                JSONObject().apply {
+                                    put(AttachmentStorageManager.FILE_REF_KEY, filePath)
+                                }
+                            modifiedFields.put(key, refObj)
+                            Log.i(TAG, "Extracted field '$key' (${hexData.length} chars) to disk: $filePath")
+                        } else {
+                            modifiedFields.put(key, fieldArray)
+                            Log.w(TAG, "Failed to extract field '$key', keeping inline")
+                        }
+                    } else {
+                        // Small enough to keep inline, but convert to just hex string for consistency
+                        modifiedFields.put(key, hexData)
+                    }
+                    continue
+                }
+            }
+
             val value = fields.optString(key, "")
 
             if (value.length > AttachmentStorageManager.SIZE_THRESHOLD) {

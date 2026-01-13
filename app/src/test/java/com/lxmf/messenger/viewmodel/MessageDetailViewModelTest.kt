@@ -51,24 +51,30 @@ class MessageDetailViewModelTest {
     /**
      * Create a test MessageEntity with the given parameters.
      */
+    @Suppress("LongParameterList") // Test helper with sensible defaults
     private fun createTestMessageEntity(
         id: String = testMessageId,
         status: String = "pending",
         deliveryMethod: String? = "direct",
         errorMessage: String? = null,
         content: String = "Test message content",
+        isFromMe: Boolean = true,
+        receivedHopCount: Int? = null,
+        receivedInterface: String? = null,
     ) = MessageEntity(
         id = id,
         conversationHash = testConversationHash,
         identityHash = testIdentityHash,
         content = content,
         timestamp = System.currentTimeMillis(),
-        isFromMe = true,
+        isFromMe = isFromMe,
         status = status,
         isRead = true,
         fieldsJson = null,
         deliveryMethod = deliveryMethod,
         errorMessage = errorMessage,
+        receivedHopCount = receivedHopCount,
+        receivedInterface = receivedInterface,
     )
 
     @Before
@@ -503,6 +509,216 @@ class MessageDetailViewModelTest {
                 advanceUntilIdle()
                 assertEquals(status, viewModel.message.value?.status)
             }
+
+            collectJob.cancel()
+        }
+
+    // ========== Received Message Info Tests ==========
+
+    @Test
+    fun `loadMessage maps receivedHopCount correctly for received message`() =
+        runTest {
+            // Given: A received message with hop count
+            val messageEntity =
+                createTestMessageEntity(
+                    isFromMe = false,
+                    status = "delivered",
+                    receivedHopCount = 3,
+                )
+            every { conversationRepository.observeMessageById(testMessageId) } returns flowOf(messageEntity)
+
+            viewModel = MessageDetailViewModel(conversationRepository)
+
+            // Start collecting to trigger the StateFlow
+            val collectJob = launch { viewModel.message.collect {} }
+            advanceUntilIdle()
+
+            // When: Load message
+            viewModel.loadMessage(testMessageId)
+            advanceUntilIdle()
+
+            // Then: Hop count should be correctly mapped
+            val message = viewModel.message.value
+            assertNotNull(message)
+            assertEquals(false, message?.isFromMe)
+            assertEquals(3, message?.receivedHopCount)
+
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `loadMessage maps receivedInterface correctly for received message`() =
+        runTest {
+            // Given: A received message with interface info
+            val messageEntity =
+                createTestMessageEntity(
+                    isFromMe = false,
+                    status = "delivered",
+                    receivedInterface = "AutoInterfacePeer[wlan0/fe80::1234]",
+                )
+            every { conversationRepository.observeMessageById(testMessageId) } returns flowOf(messageEntity)
+
+            viewModel = MessageDetailViewModel(conversationRepository)
+
+            // Start collecting to trigger the StateFlow
+            val collectJob = launch { viewModel.message.collect {} }
+            advanceUntilIdle()
+
+            // When: Load message
+            viewModel.loadMessage(testMessageId)
+            advanceUntilIdle()
+
+            // Then: Interface should be correctly mapped
+            val message = viewModel.message.value
+            assertNotNull(message)
+            assertEquals("AutoInterfacePeer[wlan0/fe80::1234]", message?.receivedInterface)
+
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `loadMessage maps both hopCount and interface for received message`() =
+        runTest {
+            // Given: A received message with both hop count and interface
+            val messageEntity =
+                createTestMessageEntity(
+                    isFromMe = false,
+                    status = "delivered",
+                    receivedHopCount = 1,
+                    receivedInterface = "TCPClientInterface",
+                )
+            every { conversationRepository.observeMessageById(testMessageId) } returns flowOf(messageEntity)
+
+            viewModel = MessageDetailViewModel(conversationRepository)
+
+            // Start collecting to trigger the StateFlow
+            val collectJob = launch { viewModel.message.collect {} }
+            advanceUntilIdle()
+
+            // When: Load message
+            viewModel.loadMessage(testMessageId)
+            advanceUntilIdle()
+
+            // Then: Both fields should be correctly mapped
+            val message = viewModel.message.value
+            assertNotNull(message)
+            assertEquals(false, message?.isFromMe)
+            assertEquals(1, message?.receivedHopCount)
+            assertEquals("TCPClientInterface", message?.receivedInterface)
+
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `loadMessage handles null hopCount and interface for received message`() =
+        runTest {
+            // Given: A received message without hop count or interface info
+            val messageEntity =
+                createTestMessageEntity(
+                    isFromMe = false,
+                    status = "delivered",
+                    receivedHopCount = null,
+                    receivedInterface = null,
+                )
+            every { conversationRepository.observeMessageById(testMessageId) } returns flowOf(messageEntity)
+
+            viewModel = MessageDetailViewModel(conversationRepository)
+
+            // Start collecting to trigger the StateFlow
+            val collectJob = launch { viewModel.message.collect {} }
+            advanceUntilIdle()
+
+            // When: Load message
+            viewModel.loadMessage(testMessageId)
+            advanceUntilIdle()
+
+            // Then: Both fields should be null
+            val message = viewModel.message.value
+            assertNotNull(message)
+            assertNull(message?.receivedHopCount)
+            assertNull(message?.receivedInterface)
+
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `sent message does not use receivedHopCount and receivedInterface`() =
+        runTest {
+            // Given: A sent message (isFromMe = true)
+            val messageEntity =
+                createTestMessageEntity(
+                    isFromMe = true,
+                    status = "delivered",
+                    deliveryMethod = "direct",
+                    // These should not be displayed for sent messages
+                    receivedHopCount = 2,
+                    receivedInterface = "SomeInterface",
+                )
+            every { conversationRepository.observeMessageById(testMessageId) } returns flowOf(messageEntity)
+
+            viewModel = MessageDetailViewModel(conversationRepository)
+
+            // Start collecting to trigger the StateFlow
+            val collectJob = launch { viewModel.message.collect {} }
+            advanceUntilIdle()
+
+            // When: Load message
+            viewModel.loadMessage(testMessageId)
+            advanceUntilIdle()
+
+            // Then: Fields are mapped (UI decides what to display based on isFromMe)
+            val message = viewModel.message.value
+            assertNotNull(message)
+            assertEquals(true, message?.isFromMe)
+            // Fields are still mapped, but UI won't display them for sent messages
+            assertEquals(2, message?.receivedHopCount)
+            assertEquals("SomeInterface", message?.receivedInterface)
+
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `received message updates hop count reactively`() =
+        runTest {
+            // Given: A MutableStateFlow to simulate database changes
+            val messageFlow =
+                MutableStateFlow<MessageEntity?>(
+                    createTestMessageEntity(
+                        isFromMe = false,
+                        status = "delivered",
+                        receivedHopCount = null,
+                        receivedInterface = null,
+                    ),
+                )
+            every { conversationRepository.observeMessageById(testMessageId) } returns messageFlow
+
+            viewModel = MessageDetailViewModel(conversationRepository)
+
+            // Start collecting to trigger the StateFlow
+            val collectJob = launch { viewModel.message.collect {} }
+            advanceUntilIdle()
+
+            // When: Load message
+            viewModel.loadMessage(testMessageId)
+            advanceUntilIdle()
+
+            // Then: Initially null
+            assertNull(viewModel.message.value?.receivedHopCount)
+            assertNull(viewModel.message.value?.receivedInterface)
+
+            // When: Database updates with hop count and interface
+            messageFlow.value =
+                createTestMessageEntity(
+                    isFromMe = false,
+                    status = "delivered",
+                    receivedHopCount = 2,
+                    receivedInterface = "RNodeInterface",
+                )
+            advanceUntilIdle()
+
+            // Then: UI should reflect the new values
+            assertEquals(2, viewModel.message.value?.receivedHopCount)
+            assertEquals("RNodeInterface", viewModel.message.value?.receivedInterface)
 
             collectJob.cancel()
         }

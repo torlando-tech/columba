@@ -25,6 +25,7 @@ import org.json.JSONObject
  * Message delivery is 100% event-driven via Python callbacks.
  * A one-time startup drain catches any messages that arrived before callback registration.
  */
+@Suppress("TooManyFunctions") // Event handlers are grouped logically in this class
 class EventHandler(
     private val state: ServiceState,
     private val wrapperManager: PythonWrapperManager,

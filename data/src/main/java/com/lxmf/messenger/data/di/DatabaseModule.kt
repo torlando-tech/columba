@@ -62,8 +62,6 @@ object DatabaseModule {
             MIGRATION_26_27,
             MIGRATION_27_28,
             MIGRATION_28_29,
-            MIGRATION_29_30,
-            MIGRATION_30_31,
         )
     }
 
@@ -1179,7 +1177,7 @@ object DatabaseModule {
         }
 
     // Migration from version 28 to 29: Add offline maps and RMSP server tables
-    // Creates offline_map_regions for storing downloaded map regions
+    // Creates offline_map_regions for storing downloaded map regions with MapLibre OfflineManager support
     // Creates rmsp_servers for tracking discovered RMSP map servers
     private val MIGRATION_28_29 =
         object : Migration(28, 29) {
@@ -1203,7 +1201,9 @@ object DatabaseModule {
                         errorMessage TEXT,
                         createdAt INTEGER NOT NULL,
                         completedAt INTEGER,
-                        source TEXT NOT NULL DEFAULT 'http'
+                        source TEXT NOT NULL DEFAULT 'http',
+                        tileVersion TEXT,
+                        maplibreRegionId INTEGER
                     )
                     """.trimIndent(),
                 )
@@ -1234,25 +1234,6 @@ object DatabaseModule {
                 // Create indices for rmsp_servers
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_rmsp_servers_lastSeenTimestamp ON rmsp_servers(lastSeenTimestamp)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_rmsp_servers_hops ON rmsp_servers(hops)")
-            }
-        }
-
-    // Migration from version 29 to 30: Add tileVersion column to offline_map_regions
-    private val MIGRATION_29_30 =
-        object : Migration(29, 30) {
-            override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("ALTER TABLE offline_map_regions ADD COLUMN tileVersion TEXT")
-            }
-        }
-
-    // Migration from version 30 to 31: Add maplibreRegionId column for MapLibre OfflineManager API
-    // This replaces the MBTiles approach which doesn't work on MapLibre Android (mbtiles:// protocol unsupported)
-    // MapLibre's OfflineManager stores tiles in its internal database and auto-uses them when offline
-    private val MIGRATION_30_31 =
-        object : Migration(30, 31) {
-            override fun migrate(database: SupportSQLiteDatabase) {
-                // Add maplibreRegionId column (nullable - existing regions won't have it)
-                database.execSQL("ALTER TABLE offline_map_regions ADD COLUMN maplibreRegionId INTEGER")
             }
         }
 

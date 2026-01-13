@@ -6,9 +6,11 @@
 # connecting to another app's shared instance with mismatched RPC keys
 rns @ git+https://github.com/torlando-tech/Reticulum@fix-phy-stats-rpc
 
-# LXMF from fork with external stamp generator support
-# Patch: adds set_external_generator() to bypass Python multiprocessing on Android
-lxmf @ git+https://github.com/torlando-tech/LXMF@feature/external-stamp-generator
+# LXMF from fork with external stamp generator + receiving interface capture
+# Patches:
+#   - set_external_generator() to bypass Python multiprocessing on Android
+#   - Pass receiving_interface to delivery callback for opportunistic messages
+lxmf @ git+https://github.com/torlando-tech/LXMF@feature/receiving-interface-capture
 cryptography>=42.0.0
 
 # msgpack for Sideband-compatible telemetry format

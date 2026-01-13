@@ -2314,17 +2314,20 @@ class ReticulumWrapper:
                 except Exception as e:
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Failed to parse icon appearance: {e}")
 
-            # ✅ PHASE 2.2: Invoke Kotlin callback for instant notification (event-driven)
-            # Same pattern as delivery status callbacks which work reliably
+            # ✅ PHASE 2.2: Invoke Kotlin callback with FULL message data (truly event-driven)
+            # Send complete message so Kotlin doesn't need to poll
             if self.kotlin_message_received_callback:
                 try:
+                    # Build full message event with all data
+                    content = lxmf_message.content.decode('utf-8') if isinstance(lxmf_message.content, bytes) else str(lxmf_message.content)
                     message_event = {
                         'message_hash': lxmf_message.hash.hex() if lxmf_message.hash else "unknown",
+                        'content': content,
                         'source_hash': lxmf_message.source_hash.hex(),
                         'destination_hash': lxmf_message.destination_hash.hex(),
-                        'timestamp': int(time.time() * 1000),
-                        'content_length': len(lxmf_message.content) if lxmf_message.content else 0,
-                        'icon_appearance': icon_appearance
+                        'timestamp': int(lxmf_message.timestamp * 1000) if lxmf_message.timestamp else int(time.time() * 1000),
+                        'icon_appearance': icon_appearance,
+                        'full_message': True,  # Flag indicating this has full data, no polling needed
                     }
                     # Add hop count and receiving interface if captured
                     if hasattr(lxmf_message, '_columba_hops'):
@@ -2332,11 +2335,54 @@ class ReticulumWrapper:
                     if hasattr(lxmf_message, '_columba_interface'):
                         message_event['receiving_interface'] = lxmf_message._columba_interface
 
+                    # Get sender's public key from RNS identity cache
+                    try:
+                        source_identity = RNS.Identity.recall(lxmf_message.source_hash)
+                        if source_identity is not None:
+                            public_key = source_identity.get_public_key()
+                            if public_key:
+                                message_event['public_key'] = public_key.hex()
+                    except Exception as e:
+                        log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Could not get public key: {e}")
+
+                    # Extract LXMF fields (attachments, reactions, etc.)
+                    if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
+                        fields_serialized = {}
+                        for key, value in lxmf_message.fields.items():
+                            if key == 5 and isinstance(value, list):
+                                # Field 5: file attachments
+                                serialized_attachments = []
+                                for attachment in value:
+                                    if isinstance(attachment, (list, tuple)) and len(attachment) >= 2:
+                                        filename, file_data = attachment[0], attachment[1]
+                                        if isinstance(file_data, bytes):
+                                            serialized_attachments.append({
+                                                'filename': str(filename),
+                                                'data': file_data.hex(),
+                                                'size': len(file_data)
+                                            })
+                                if serialized_attachments:
+                                    fields_serialized['5'] = serialized_attachments
+                            elif key == 16 and isinstance(value, dict):
+                                # Field 16: app extensions (reactions, replies)
+                                fields_serialized['16'] = value
+                            elif key == 4 and isinstance(value, list) and len(value) >= 3:
+                                # Field 4: icon appearance (already parsed above)
+                                pass
+                            elif key in (6, 7) and isinstance(value, (list, tuple)) and len(value) >= 2:
+                                # Field 6/7: image/audio
+                                if isinstance(value[1], bytes):
+                                    fields_serialized[str(key)] = [value[0], value[1].hex()]
+                            else:
+                                fields_serialized[str(key)] = str(value)
+                        if fields_serialized:
+                            message_event['fields'] = json.dumps(fields_serialized)
+
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                             "Invoking Kotlin callback for instant notification...")
+                             f"Invoking Kotlin callback with full message data ({len(content)} chars)...")
                     self.kotlin_message_received_callback(json.dumps(message_event))
                     log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                            "✅ Kotlin callback invoked successfully (event-driven notification sent)")
+                            "✅ Kotlin callback invoked with full message (event-driven)")
                 except Exception as e:
                     log_error("ReticulumWrapper", "_on_lxmf_delivery",
                              f"⚠️ Error invoking Kotlin callback: {e}")

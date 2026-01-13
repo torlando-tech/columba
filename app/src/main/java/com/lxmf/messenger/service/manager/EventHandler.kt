@@ -175,30 +175,34 @@ class EventHandler(
 
     /**
      * Handle message received event from Python callback.
-     * Fetches and processes messages from the pending queue.
+     * Now truly event-driven: processes message data directly from callback JSON.
      */
     fun handleMessageReceivedEvent(messageJson: String) {
         try {
-            Log.d(TAG, "Message received event: $messageJson")
+            Log.d(TAG, "Message received event: ${messageJson.take(200)}...")
 
             scope.launch {
                 try {
-                    val startTime = System.currentTimeMillis()
+                    val json = JSONObject(messageJson)
 
-                    val messages =
-                        wrapperManager.withWrapper { wrapper ->
-                            wrapper.callAttr("poll_received_messages")?.asList()
-                        }
-
-                    if (messages != null && messages.isNotEmpty()) {
-                        val latency = System.currentTimeMillis() - startTime
-                        Log.d(TAG, "Event-driven fetch retrieved ${messages.size} message(s) in ${latency}ms")
-
-                        for (messageObj in messages) {
-                            handleMessageEvent(messageObj as PyObject)
-                        }
+                    // Check if this is a full message (truly event-driven) or just a notification
+                    if (json.optBoolean("full_message", false)) {
+                        // Process directly from callback data - no polling needed
+                        processMessageFromJson(json)
+                        Log.d(TAG, "Processed message directly from callback (event-driven)")
                     } else {
-                        Log.d(TAG, "Event notification received but no messages in queue (already processed)")
+                        // Fallback to polling for backwards compatibility
+                        Log.d(TAG, "Callback missing full_message flag, falling back to polling")
+                        val messages =
+                            wrapperManager.withWrapper { wrapper ->
+                                wrapper.callAttr("poll_received_messages")?.asList()
+                            }
+
+                        if (messages != null && messages.isNotEmpty()) {
+                            for (messageObj in messages) {
+                                handleMessageEvent(messageObj as PyObject)
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error processing message event", e)
@@ -206,6 +210,73 @@ class EventHandler(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling message received event", e)
+        }
+    }
+
+    /**
+     * Process a message directly from JSON callback data (truly event-driven).
+     */
+    private suspend fun processMessageFromJson(json: JSONObject) {
+        try {
+            val messageHash = json.optString("message_hash", "")
+            val content = json.optString("content", "")
+            val sourceHashHex = json.optString("source_hash", "")
+            val timestamp = json.optLong("timestamp", System.currentTimeMillis())
+            val receivedHopCount = json.optInt("hops", -1).takeIf { it >= 0 }
+            val receivedInterface = json.optString("receiving_interface", "").takeIf { it.isNotEmpty() }
+
+            // Parse public key from hex string
+            val publicKeyHex = json.optString("public_key", "")
+            val publicKey = if (publicKeyHex.isNotEmpty()) {
+                publicKeyHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            } else {
+                null
+            }
+
+            // Parse fields JSON if present
+            val fieldsStr = json.optString("fields", "")
+            var fieldsJson = if (fieldsStr.isNotEmpty()) {
+                try {
+                    JSONObject(fieldsStr)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not parse fields: ${e.message}")
+                    null
+                }
+            } else {
+                null
+            }
+
+            // Check if message has file attachments
+            val hasFileAttachments = fieldsJson?.optJSONArray("5")?.let { it.length() > 0 } ?: false
+
+            // Extract large attachments to disk if needed
+            fieldsJson = extractLargeAttachments(messageHash, fieldsJson)
+
+            // Extract reply_to_message_id from fields
+            val replyToMessageId = fieldsJson?.optString("9")?.takeIf { it.isNotBlank() }
+
+            // Persist to database
+            if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
+                persistenceManager.persistMessage(
+                    messageHash = messageHash,
+                    content = content,
+                    sourceHash = sourceHashHex,
+                    timestamp = timestamp,
+                    fieldsJson = fieldsJson?.toString(),
+                    publicKey = publicKey,
+                    replyToMessageId = replyToMessageId,
+                    deliveryMethod = null,
+                    hasFileAttachments = hasFileAttachments,
+                    receivedHopCount = receivedHopCount,
+                    receivedInterface = receivedInterface,
+                )
+                Log.d(TAG, "Message persisted from callback: $messageHash from $sourceHashHex")
+            }
+
+            // Broadcast to app process for UI updates
+            broadcaster.broadcastMessage(messageJson = json.toString())
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing message from JSON", e)
         }
     }
 

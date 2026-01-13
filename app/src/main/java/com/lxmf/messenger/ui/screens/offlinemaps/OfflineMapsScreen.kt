@@ -332,17 +332,19 @@ fun OfflineMapRegionCard(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     // Show version or download date
-                    val versionText = region.tileVersion?.let { version ->
-                        // Parse version like "20260107_001001_pt" to show as date
-                        val dateStr = version.take(8)
-                        val formattedDate = runCatching {
-                            val year = dateStr.substring(0, 4)
-                            val month = dateStr.substring(4, 6)
-                            val day = dateStr.substring(6, 8)
-                            "$year-$month-$day"
-                        }.getOrNull() ?: version
-                        "Map data: $formattedDate"
-                    } ?: region.completedAt?.let { "Downloaded ${formatDate(it)}" }
+                    val versionText =
+                        region.tileVersion?.let { version ->
+                            // Parse version like "20260107_001001_pt" to show as date
+                            val dateStr = version.take(8)
+                            val formattedDate =
+                                runCatching {
+                                    val year = dateStr.substring(0, 4)
+                                    val month = dateStr.substring(4, 6)
+                                    val day = dateStr.substring(6, 8)
+                                    "$year-$month-$day"
+                                }.getOrNull() ?: version
+                            "Map data: $formattedDate"
+                        } ?: region.completedAt?.let { "Downloaded ${formatDate(it)}" }
 
                     versionText?.let {
                         Text(
@@ -471,7 +473,7 @@ fun OfflineMapRegionCard(
             text = {
                 Text(
                     "Download the latest map data for \"${region.name}\"? " +
-                        "This will replace the current data and may take a few minutes."
+                        "This will replace the current data and may take a few minutes.",
                 )
             },
             confirmButton = {

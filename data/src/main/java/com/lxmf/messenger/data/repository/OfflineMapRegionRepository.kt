@@ -28,6 +28,8 @@ data class OfflineMapRegion(
     val completedAt: Long?,
     val source: Source,
     val tileVersion: String?,
+    /** MapLibre's internal region ID for OfflineManager API (null for legacy MBTiles regions) */
+    val maplibreRegionId: Long? = null,
 ) {
     enum class Status {
         PENDING,
@@ -146,7 +148,7 @@ class OfflineMapRegionRepository
         }
 
         /**
-         * Mark a region as complete.
+         * Mark a region as complete (legacy MBTiles).
          */
         suspend fun markComplete(
             id: Long,
@@ -165,9 +167,29 @@ class OfflineMapRegionRepository
         }
 
         /**
+         * Mark a region as complete with MapLibre region ID (new OfflineManager API).
+         */
+        suspend fun markCompleteWithMaplibreId(
+            id: Long,
+            tileCount: Int,
+            sizeBytes: Long,
+            maplibreRegionId: Long,
+        ) {
+            offlineMapRegionDao.markCompleteWithMaplibreId(
+                id = id,
+                tileCount = tileCount,
+                sizeBytes = sizeBytes,
+                maplibreRegionId = maplibreRegionId,
+            )
+        }
+
+        /**
          * Update the tile version for a region.
          */
-        suspend fun updateTileVersion(id: Long, version: String) {
+        suspend fun updateTileVersion(
+            id: Long,
+            version: String,
+        ) {
             offlineMapRegionDao.updateTileVersion(id, version)
         }
 
@@ -225,6 +247,31 @@ class OfflineMapRegionRepository
         }
 
         /**
+         * Get all MapLibre region IDs tracked in the database.
+         * Used for detecting orphaned MapLibre regions.
+         */
+        suspend fun getAllMaplibreRegionIds(): List<Long> {
+            return offlineMapRegionDao.getAllMaplibreRegionIds()
+        }
+
+        /**
+         * Get a region by its MapLibre region ID.
+         */
+        suspend fun getRegionByMaplibreId(maplibreRegionId: Long): OfflineMapRegion? {
+            return offlineMapRegionDao.getRegionByMaplibreId(maplibreRegionId)?.toOfflineMapRegion()
+        }
+
+        /**
+         * Update the MapLibre region ID for a region.
+         */
+        suspend fun updateMaplibreRegionId(
+            id: Long,
+            maplibreRegionId: Long,
+        ) {
+            offlineMapRegionDao.updateMaplibreRegionId(id, maplibreRegionId)
+        }
+
+        /**
          * Import an orphaned MBTiles file into the database.
          * Attempts to extract center/bounds from MBTiles metadata.
          * @return The ID of the imported region
@@ -236,23 +283,24 @@ class OfflineMapRegionRepository
             // Try to extract metadata from MBTiles
             val metadata = extractMbtilesMetadata(file)
 
-            val entity = OfflineMapRegionEntity(
-                name = metadata?.name ?: name,
-                centerLatitude = metadata?.centerLat ?: 0.0,
-                centerLongitude = metadata?.centerLon ?: 0.0,
-                radiusKm = metadata?.radiusKm ?: 100, // Default to 100km to ensure it's usable
-                minZoom = metadata?.minZoom ?: 0,
-                maxZoom = metadata?.maxZoom ?: 14,
-                status = OfflineMapRegionEntity.STATUS_COMPLETE,
-                mbtilesPath = file.absolutePath,
-                tileCount = 0,
-                sizeBytes = file.length(),
-                downloadProgress = 1f,
-                errorMessage = null,
-                createdAt = file.lastModified(),
-                completedAt = file.lastModified(),
-                source = OfflineMapRegionEntity.SOURCE_HTTP,
-            )
+            val entity =
+                OfflineMapRegionEntity(
+                    name = metadata?.name ?: name,
+                    centerLatitude = metadata?.centerLat ?: 0.0,
+                    centerLongitude = metadata?.centerLon ?: 0.0,
+                    radiusKm = metadata?.radiusKm ?: 100, // Default to 100km to ensure it's usable
+                    minZoom = metadata?.minZoom ?: 0,
+                    maxZoom = metadata?.maxZoom ?: 14,
+                    status = OfflineMapRegionEntity.STATUS_COMPLETE,
+                    mbtilesPath = file.absolutePath,
+                    tileCount = 0,
+                    sizeBytes = file.length(),
+                    downloadProgress = 1f,
+                    errorMessage = null,
+                    createdAt = file.lastModified(),
+                    completedAt = file.lastModified(),
+                    source = OfflineMapRegionEntity.SOURCE_HTTP,
+                )
             return offlineMapRegionDao.insert(entity)
         }
 
@@ -268,11 +316,12 @@ class OfflineMapRegionRepository
         private fun extractMbtilesMetadata(file: java.io.File): MbtilesMetadata? {
             var db: android.database.sqlite.SQLiteDatabase? = null
             return try {
-                db = android.database.sqlite.SQLiteDatabase.openDatabase(
-                    file.absolutePath,
-                    null,
-                    android.database.sqlite.SQLiteDatabase.OPEN_READONLY,
-                )
+                db =
+                    android.database.sqlite.SQLiteDatabase.openDatabase(
+                        file.absolutePath,
+                        null,
+                        android.database.sqlite.SQLiteDatabase.OPEN_READONLY,
+                    )
                 val metadata = mutableMapOf<String, String>()
                 db.rawQuery("SELECT name, value FROM metadata", null).use { cursor ->
                     while (cursor.moveToNext()) {
@@ -287,16 +336,17 @@ class OfflineMapRegionRepository
 
                 // Parse bounds (format: "west,south,east,north")
                 val bounds = metadata["bounds"]?.split(",")
-                val radiusKm = if (bounds != null && bounds.size == 4) {
-                    val west = bounds[0].toDoubleOrNull() ?: 0.0
-                    val east = bounds[2].toDoubleOrNull() ?: 0.0
-                    // Approximate radius from bounds width with latitude correction
-                    // (111km per degree at equator, less at higher latitudes)
-                    val lonDegToKm = 111.0 * kotlin.math.cos(Math.toRadians(centerLat))
-                    ((east - west) * lonDegToKm / 2).toInt().coerceIn(10, 200)
-                } else {
-                    100 // Default
-                }
+                val radiusKm =
+                    if (bounds != null && bounds.size == 4) {
+                        val west = bounds[0].toDoubleOrNull() ?: 0.0
+                        val east = bounds[2].toDoubleOrNull() ?: 0.0
+                        // Approximate radius from bounds width with latitude correction
+                        // (111km per degree at equator, less at higher latitudes)
+                        val lonDegToKm = 111.0 * kotlin.math.cos(Math.toRadians(centerLat))
+                        ((east - west) * lonDegToKm / 2).toInt().coerceIn(10, 200)
+                    } else {
+                        100 // Default
+                    }
 
                 MbtilesMetadata(
                     name = metadata["name"],
@@ -306,7 +356,9 @@ class OfflineMapRegionRepository
                     minZoom = metadata["minzoom"]?.toIntOrNull() ?: 0,
                     maxZoom = metadata["maxzoom"]?.toIntOrNull() ?: 14,
                 )
-            } catch (@Suppress("SwallowedException") e: Exception) {
+            } catch (
+                @Suppress("SwallowedException") e: Exception,
+            ) {
                 null // Return null if metadata extraction fails - file may be corrupted
             } finally {
                 db?.close()
@@ -347,6 +399,7 @@ private fun OfflineMapRegionEntity.toOfflineMapRegion(): OfflineMapRegion {
                 OfflineMapRegion.Source.HTTP
             },
         tileVersion = tileVersion,
+        maplibreRegionId = maplibreRegionId,
     )
 }
 

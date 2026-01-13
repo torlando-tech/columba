@@ -354,10 +354,11 @@ class TileDownloadManager(
             if (deletionFailed) {
                 Log.e(TAG, "Failed to delete cancelled download after retries: ${params.outputFile.absolutePath}")
             }
-            _progress.value = _progress.value.copy(
-                status = DownloadProgress.Status.CANCELLED,
-                errorMessage = if (deletionFailed) "Cancelled. Incomplete file may need manual cleanup." else null,
-            )
+            _progress.value =
+                _progress.value.copy(
+                    status = DownloadProgress.Status.CANCELLED,
+                    errorMessage = if (deletionFailed) "Cancelled. Incomplete file may need manual cleanup." else null,
+                )
             return false
         }
 
@@ -402,9 +403,9 @@ class TileDownloadManager(
         // to avoid downloading unnecessary tiles outside the requested area
         val geohashPrecision =
             when {
-                params.radiusKm <= 15 -> 5  // ~5km cells, up to ~9 cells for 15km radius
-                params.radiusKm <= 40 -> 4  // ~40km cells
-                else -> 3                   // ~150km cells for 50-100km radius
+                params.radiusKm <= 15 -> 5 // ~5km cells, up to ~9 cells for 15km radius
+                params.radiusKm <= 40 -> 4 // ~40km cells
+                else -> 3 // ~150km cells for 50-100km radius
             }
         val geohashes = geohashesForBounds(bounds, geohashPrecision)
 
@@ -484,10 +485,11 @@ class TileDownloadManager(
                     if (deletionFailed) {
                         Log.e(TAG, "Failed to delete cancelled RMSP download: ${params.outputFile.absolutePath}")
                     }
-                    _progress.value = _progress.value.copy(
-                        status = DownloadProgress.Status.CANCELLED,
-                        errorMessage = if (deletionFailed) "Cancelled. Incomplete file may need manual cleanup." else null,
-                    )
+                    _progress.value =
+                        _progress.value.copy(
+                            status = DownloadProgress.Status.CANCELLED,
+                            errorMessage = if (deletionFailed) "Cancelled. Incomplete file may need manual cleanup." else null,
+                        )
                     return null
                 }
                 writer.writeTile(tile.z, tile.x, tile.y, tile.data)
@@ -657,7 +659,9 @@ class TileDownloadManager(
     /** Result of attempting to download a tile */
     private sealed class TileResult {
         data class Success(val data: ByteArray) : TileResult()
+
         object NotAvailable : TileResult() // 204 - tile doesn't exist at this location
+
         object Failed : TileResult() // Failed after retries
     }
 
@@ -678,14 +682,15 @@ class TileDownloadManager(
 
     private fun downloadTile(tile: TileCoord): ByteArray? {
         // Use resolved template if available, otherwise fall back to direct URL construction
-        val urlString = resolvedTileUrlTemplate
-            ?.replace("{z}", tile.z.toString())
-            ?.replace("{x}", tile.x.toString())
-            ?.replace("{y}", tile.y.toString())
-            ?: run {
-                val baseUrl = (tileSource as? TileSource.Http)?.baseUrl ?: DEFAULT_TILE_URL
-                "$baseUrl/${tile.z}/${tile.x}/${tile.y}.pbf"
-            }
+        val urlString =
+            resolvedTileUrlTemplate
+                ?.replace("{z}", tile.z.toString())
+                ?.replace("{x}", tile.x.toString())
+                ?.replace("{y}", tile.y.toString())
+                ?: run {
+                    val baseUrl = (tileSource as? TileSource.Http)?.baseUrl ?: DEFAULT_TILE_URL
+                    "$baseUrl/${tile.z}/${tile.x}/${tile.y}.pbf"
+                }
         val url = URL(urlString)
         val connection = url.openConnection() as HttpURLConnection
 
@@ -732,40 +737,41 @@ class TileDownloadManager(
          *
          * @return The current version string (e.g., "20260107_001001_pt") or null if failed
          */
-        suspend fun fetchCurrentTileVersion(): String? = withContext(Dispatchers.IO) {
-            try {
-                val url = URL(DEFAULT_TILE_URL)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.connectTimeout = CONNECT_TIMEOUT_MS
-                connection.readTimeout = READ_TIMEOUT_MS
-                connection.setRequestProperty("User-Agent", USER_AGENT)
+        suspend fun fetchCurrentTileVersion(): String? =
+            withContext(Dispatchers.IO) {
+                try {
+                    val url = URL(DEFAULT_TILE_URL)
+                    val connection = url.openConnection() as HttpURLConnection
+                    connection.connectTimeout = CONNECT_TIMEOUT_MS
+                    connection.readTimeout = READ_TIMEOUT_MS
+                    connection.setRequestProperty("User-Agent", USER_AGENT)
 
-                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                    Log.w(TAG, "Failed to fetch TileJSON for version check: HTTP ${connection.responseCode}")
-                    return@withContext null
-                }
+                    if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                        Log.w(TAG, "Failed to fetch TileJSON for version check: HTTP ${connection.responseCode}")
+                        return@withContext null
+                    }
 
-                val json = connection.inputStream.use { it.bufferedReader().readText() }
-                connection.disconnect()
+                    val json = connection.inputStream.use { it.bufferedReader().readText() }
+                    connection.disconnect()
 
-                val tileJson = org.json.JSONObject(json)
-                val tilesArray = tileJson.optJSONArray("tiles")
-                if (tilesArray != null && tilesArray.length() > 0) {
-                    val template = tilesArray.getString(0)
-                    // Extract version from template URL
-                    val regex = Regex("""/planet/([^/]+)/\{z\}""")
-                    val version = regex.find(template)?.groupValues?.get(1)
-                    Log.d(TAG, "Current tile version: $version")
-                    version
-                } else {
-                    Log.w(TAG, "TileJSON missing 'tiles' array")
+                    val tileJson = org.json.JSONObject(json)
+                    val tilesArray = tileJson.optJSONArray("tiles")
+                    if (tilesArray != null && tilesArray.length() > 0) {
+                        val template = tilesArray.getString(0)
+                        // Extract version from template URL
+                        val regex = Regex("""/planet/([^/]+)/\{z\}""")
+                        val version = regex.find(template)?.groupValues?.get(1)
+                        Log.d(TAG, "Current tile version: $version")
+                        version
+                    } else {
+                        Log.w(TAG, "TileJSON missing 'tiles' array")
+                        null
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to fetch tile version: ${e.message}")
                     null
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to fetch tile version: ${e.message}")
-                null
             }
-        }
 
         const val BATCH_SIZE = 100 // Process tiles in batches to reduce memory usage
         const val MAX_RETRIES = 3

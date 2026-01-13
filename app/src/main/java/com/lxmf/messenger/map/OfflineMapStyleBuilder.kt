@@ -1,6 +1,7 @@
 package com.lxmf.messenger.map
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -138,6 +139,7 @@ object OfflineMapStyleBuilder {
                             "openmaptiles",
                             JSONObject().apply {
                                 put("type", "vector")
+                                // Use url with mbtiles:// protocol (note: path must start with /)
                                 put("url", "mbtiles://$mbtilesPath")
                             },
                         )
@@ -145,7 +147,9 @@ object OfflineMapStyleBuilder {
                 )
                 put("layers", JSONArray(BASE_LAYERS))
             }
-        return style.toString()
+        val json = style.toString()
+        Log.d("OfflineMapStyleBuilder", "Generated style JSON: $json")
+        return json
     }
 
     /**

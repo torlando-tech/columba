@@ -65,7 +65,7 @@ interface OfflineMapRegionDao {
     )
 
     /**
-     * Mark a region as complete with final stats.
+     * Mark a region as complete with final stats (legacy MBTiles).
      */
     @Query(
         """
@@ -90,10 +90,36 @@ interface OfflineMapRegionDao {
     )
 
     /**
+     * Mark a region as complete with MapLibre region ID (new OfflineManager API).
+     */
+    @Query(
+        """
+        UPDATE offline_map_regions
+        SET status = 'COMPLETE',
+            downloadProgress = 1.0,
+            tileCount = :tileCount,
+            sizeBytes = :sizeBytes,
+            maplibreRegionId = :maplibreRegionId,
+            completedAt = :completedAt
+        WHERE id = :id
+        """,
+    )
+    suspend fun markCompleteWithMaplibreId(
+        id: Long,
+        tileCount: Int,
+        sizeBytes: Long,
+        maplibreRegionId: Long,
+        completedAt: Long = System.currentTimeMillis(),
+    )
+
+    /**
      * Update the tile version for a region.
      */
     @Query("UPDATE offline_map_regions SET tileVersion = :version WHERE id = :id")
-    suspend fun updateTileVersion(id: Long, version: String)
+    suspend fun updateTileVersion(
+        id: Long,
+        version: String,
+    )
 
     /**
      * Mark a region as failed with an error message.
@@ -160,4 +186,25 @@ interface OfflineMapRegionDao {
      */
     @Query("SELECT mbtilesPath FROM offline_map_regions WHERE mbtilesPath IS NOT NULL")
     suspend fun getAllMbtilesPaths(): List<String>
+
+    /**
+     * Get a region by its MapLibre region ID.
+     */
+    @Query("SELECT * FROM offline_map_regions WHERE maplibreRegionId = :maplibreRegionId")
+    suspend fun getRegionByMaplibreId(maplibreRegionId: Long): OfflineMapRegionEntity?
+
+    /**
+     * Get all tracked MapLibre region IDs for orphan detection.
+     */
+    @Query("SELECT maplibreRegionId FROM offline_map_regions WHERE maplibreRegionId IS NOT NULL")
+    suspend fun getAllMaplibreRegionIds(): List<Long>
+
+    /**
+     * Update the MapLibre region ID for a region.
+     */
+    @Query("UPDATE offline_map_regions SET maplibreRegionId = :maplibreRegionId WHERE id = :id")
+    suspend fun updateMaplibreRegionId(
+        id: Long,
+        maplibreRegionId: Long,
+    )
 }

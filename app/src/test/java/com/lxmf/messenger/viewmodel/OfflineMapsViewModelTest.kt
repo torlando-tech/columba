@@ -6,7 +6,7 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
-import com.lxmf.messenger.map.TileDownloadManager
+import com.lxmf.messenger.map.MapLibreOfflineManager
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -14,8 +14,6 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import io.mockk.mockkObject
-import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,6 +58,7 @@ class OfflineMapsViewModelTest {
 
     private lateinit var context: Context
     private lateinit var offlineMapRegionRepository: OfflineMapRegionRepository
+    private val mockMapLibreOfflineManager: MapLibreOfflineManager = mockk(relaxed = true)
     private lateinit var viewModel: OfflineMapsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -88,6 +87,7 @@ class OfflineMapsViewModelTest {
         return OfflineMapsViewModel(
             context = context,
             offlineMapRegionRepository = offlineMapRegionRepository,
+            mapLibreOfflineManager = mockMapLibreOfflineManager,
         )
     }
 
@@ -570,30 +570,27 @@ class OfflineMapsViewModelTest {
     // region Offline Maps Directory Tests
 
     @Test
-    fun `getOfflineMapsDir returns directory from TileDownloadManager`() =
+    fun `getOfflineMapsDir returns directory with correct path`() =
         runTest {
-            val expectedDir = File("/mock/path/offline_maps")
-            mockkObject(TileDownloadManager.Companion)
-            every { TileDownloadManager.getOfflineMapsDir(any()) } returns expectedDir
+            val mockFilesDir = File("/mock/files")
+            every { context.filesDir } returns mockFilesDir
             viewModel = createViewModel()
 
             val result = viewModel.getOfflineMapsDir()
 
-            assertEquals(expectedDir, result)
-            unmockkObject(TileDownloadManager.Companion)
+            assertEquals(File(mockFilesDir, "offline_maps"), result)
         }
 
     @Test
-    fun `getOfflineMapsDir passes context to TileDownloadManager`() =
+    fun `getOfflineMapsDir uses context filesDir`() =
         runTest {
-            mockkObject(TileDownloadManager.Companion)
-            every { TileDownloadManager.getOfflineMapsDir(any()) } returns File("/test")
+            val mockFilesDir = File("/test/files")
+            every { context.filesDir } returns mockFilesDir
             viewModel = createViewModel()
 
-            viewModel.getOfflineMapsDir()
+            val result = viewModel.getOfflineMapsDir()
 
-            io.mockk.verify { TileDownloadManager.getOfflineMapsDir(context) }
-            unmockkObject(TileDownloadManager.Companion)
+            assertTrue(result.path.startsWith(mockFilesDir.path))
         }
 
     // endregion
@@ -843,7 +840,7 @@ class OfflineMapsViewModelTest {
         }
 
     @Test
-    fun `deleteRegion with file delete failure does not delete from repository`() =
+    fun `deleteRegion with file delete failure still deletes from repository`() =
         runTest {
             // Create a directory instead of a file - File.delete() will return false for non-empty dir
             val tempDir =
@@ -856,22 +853,12 @@ class OfflineMapsViewModelTest {
             val testRegion = createTestRegion(TestRegionConfig(mbtilesPath = tempDir.absolutePath))
             viewModel = createViewModel()
 
-            viewModel.state.test {
-                // Initial state
-                assertNull(awaitItem().errorMessage)
+            // Trigger deletion - with UnconfinedTestDispatcher this completes synchronously
+            viewModel.deleteRegion(testRegion)
 
-                viewModel.deleteRegion(testRegion)
-
-                val finalState = expectMostRecentItem()
-                // Error message should be shown
-                assertNotNull(finalState.errorMessage)
-                assertTrue(finalState.errorMessage!!.contains("Failed to delete"))
-
-                cancelAndConsumeRemainingEvents()
-            }
-
-            // Repository delete should NOT be called when file delete fails (maintains consistency)
-            coVerify(exactly = 0) { offlineMapRegionRepository.deleteRegion(any()) }
+            // Repository delete SHOULD be called even when file delete fails
+            // This ensures the region is removed from the database to keep UI consistent
+            coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
 
             // Cleanup
             tempFile.delete()

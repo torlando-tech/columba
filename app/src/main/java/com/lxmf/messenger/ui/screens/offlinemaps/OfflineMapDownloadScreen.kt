@@ -63,6 +63,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.lxmf.messenger.map.TileDownloadManager
+import com.lxmf.messenger.viewmodel.DownloadProgress
 import com.lxmf.messenger.viewmodel.DownloadWizardStep
 import com.lxmf.messenger.viewmodel.OfflineMapDownloadViewModel
 import com.lxmf.messenger.viewmodel.RadiusOption
@@ -183,7 +184,6 @@ fun OfflineMapDownloadScreen(
                         estimatedTileCount = state.estimatedTileCount,
                         estimatedSize = state.getEstimatedSizeString(),
                         name = state.name,
-                        usesHttpSource = state.usesHttpSource,
                         onNameChange = { viewModel.setName(it) },
                         onStartDownload = { viewModel.nextStep() },
                         onBack = { viewModel.previousStep() },
@@ -454,7 +454,7 @@ fun RadiusSelectionStep(
     radiusOption: RadiusOption,
     minZoom: Int,
     maxZoom: Int,
-    estimatedTileCount: Int,
+    estimatedTileCount: Long,
     estimatedSize: String,
     onRadiusChange: (RadiusOption) -> Unit,
     onZoomRangeChange: (Int, Int) -> Unit,
@@ -606,10 +606,9 @@ fun ConfirmDownloadStep(
     radiusKm: Int,
     minZoom: Int,
     maxZoom: Int,
-    estimatedTileCount: Int,
+    estimatedTileCount: Long,
     estimatedSize: String,
     name: String,
-    usesHttpSource: Boolean,
     onNameChange: (String) -> Unit,
     onStartDownload: () -> Unit,
     onBack: () -> Unit,
@@ -675,11 +674,9 @@ fun ConfirmDownloadStep(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = if (usesHttpSource) {
-                "This will download map tiles from OpenFreeMap for offline use. Make sure you're connected to Wi-Fi for large downloads."
-            } else {
-                "This will download map tiles from RMSP servers on the mesh network for offline use."
-            },
+            text =
+                "This will download map tiles from OpenFreeMap for offline use. " +
+                    "Make sure you're connected to Wi-Fi for large downloads.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -731,7 +728,7 @@ fun SummaryRow(
 
 @Composable
 fun DownloadingStep(
-    progress: TileDownloadManager.DownloadProgress?,
+    progress: DownloadProgress?,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -749,14 +746,11 @@ fun DownloadingStep(
             Text("Preparing download...")
         } else {
             val statusText =
-                when (progress.status) {
-                    TileDownloadManager.DownloadProgress.Status.IDLE -> "Preparing..."
-                    TileDownloadManager.DownloadProgress.Status.CALCULATING -> "Calculating tiles..."
-                    TileDownloadManager.DownloadProgress.Status.DOWNLOADING -> "Downloading..."
-                    TileDownloadManager.DownloadProgress.Status.WRITING -> "Finalizing..."
-                    TileDownloadManager.DownloadProgress.Status.COMPLETE -> "Complete!"
-                    TileDownloadManager.DownloadProgress.Status.ERROR -> "Error"
-                    TileDownloadManager.DownloadProgress.Status.CANCELLED -> "Cancelled"
+                when {
+                    progress.isComplete -> "Complete!"
+                    progress.errorMessage != null -> "Error"
+                    progress.progress > 0 -> "Downloading..."
+                    else -> "Preparing..."
                 }
 
             Text(
@@ -781,35 +775,21 @@ fun DownloadingStep(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "${progress.downloadedTiles} / ${progress.totalTiles} tiles",
+                text = "${progress.completedResources} / ${progress.requiredResources} resources",
                 style = MaterialTheme.typography.bodyLarge,
             )
 
-            if (progress.currentZoom > 0) {
-                Text(
-                    text = "Zoom level ${progress.currentZoom}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            if (progress.failedTiles > 0) {
+            if (progress.errorMessage != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "${progress.failedTiles} tiles failed",
+                    text = progress.errorMessage,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
             }
 
-            val mbDownloaded = progress.bytesDownloaded / (1024.0 * 1024.0)
-            Text(
-                text = String.format(Locale.US, "%.1f MB downloaded", mbDownloaded),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            if (progress.status == TileDownloadManager.DownloadProgress.Status.DOWNLOADING) {
+            // Show cancel button while downloading
+            if (!progress.isComplete && progress.errorMessage == null) {
                 Spacer(modifier = Modifier.height(32.dp))
 
                 OutlinedButton(onClick = onCancel) {

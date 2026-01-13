@@ -52,6 +52,8 @@ data class OfflineMapRegionEntity(
     val source: String = "http",
     /** Version of the tile data from OpenFreeMap (e.g., "20260107_001001_pt") */
     val tileVersion: String? = null,
+    /** MapLibre's internal region ID for OfflineManager API (null for legacy MBTiles regions) */
+    val maplibreRegionId: Long? = null,
 ) {
     companion object {
         const val STATUS_PENDING = "PENDING"

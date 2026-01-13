@@ -240,11 +240,12 @@ class EventHandler(
             val nodeType = NodeTypeDetector.detectNodeType(appData, aspect)
 
             // Extract propagation node metadata once (reused for name and transfer limit)
-            val propagationMetadata = if (nodeType == NodeType.PROPAGATION_NODE) {
-                AppDataParser.extractPropagationNodeMetadata(appData)
-            } else {
-                null
-            }
+            val propagationMetadata =
+                if (nodeType == NodeType.PROPAGATION_NODE) {
+                    AppDataParser.extractPropagationNodeMetadata(appData)
+                } else {
+                    null
+                }
 
             // Determine display name (prefer parsed name from Python LXMF helpers)
             // For propagation nodes: DO NOT interpret msgpack binary as UTF-8 (causes garbled names)

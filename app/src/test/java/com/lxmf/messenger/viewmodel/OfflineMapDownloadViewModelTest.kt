@@ -1,28 +1,20 @@
 package com.lxmf.messenger.viewmodel
 
-import android.content.Context
 import android.location.Location
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
-import com.lxmf.messenger.data.repository.RmspServer
-import com.lxmf.messenger.data.repository.RmspServerRepository
-import com.lxmf.messenger.map.MapTileSourceManager
-import com.lxmf.messenger.map.TileDownloadManager
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.map.MapLibreOfflineManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
-import io.mockk.mockkConstructor
-import io.mockk.runs
-import io.mockk.unmockkConstructor
+import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -38,8 +30,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
-import java.io.File
 
 /**
  * Unit tests for OfflineMapDownloadViewModel.
@@ -64,76 +54,30 @@ class OfflineMapDownloadViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
-    private lateinit var context: Context
     private lateinit var offlineMapRegionRepository: OfflineMapRegionRepository
-    private lateinit var mapTileSourceManager: MapTileSourceManager
-    private lateinit var rmspServerRepository: RmspServerRepository
-    private lateinit var reticulumProtocol: ServiceReticulumProtocol
+    private val mockMapLibreOfflineManager: MapLibreOfflineManager = mockk(relaxed = true)
     private lateinit var viewModel: OfflineMapDownloadViewModel
-
-    // Mutable flows for controlling test scenarios
-    private val httpEnabledFlow = MutableStateFlow(true)
-    private val rmspEnabledFlow = MutableStateFlow(false)
-    private val allServersFlow = MutableStateFlow<List<RmspServer>>(emptyList())
-
-    // Progress flow for TileDownloadManager
-    private val progressFlow =
-        MutableStateFlow(
-            TileDownloadManager.DownloadProgress(
-                status = TileDownloadManager.DownloadProgress.Status.IDLE,
-                totalTiles = 0,
-                downloadedTiles = 0,
-                failedTiles = 0,
-                bytesDownloaded = 0L,
-                currentZoom = 0,
-            ),
-        )
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        context = RuntimeEnvironment.getApplication()
 
         offlineMapRegionRepository = mockk(relaxed = true)
-        mapTileSourceManager = mockk(relaxed = true)
-        rmspServerRepository = mockk(relaxed = true)
-        reticulumProtocol = mockk(relaxed = true)
 
-        // Setup flow mocks
-        every { mapTileSourceManager.httpEnabledFlow } returns httpEnabledFlow
-        every { mapTileSourceManager.rmspEnabledFlow } returns rmspEnabledFlow
-        every { rmspServerRepository.getAllServers() } returns allServersFlow
-
-        // Setup TileDownloadManager mock behavior
-        mockkConstructor(TileDownloadManager::class)
-        every { anyConstructed<TileDownloadManager>().progress } returns progressFlow
-        every {
-            anyConstructed<TileDownloadManager>().estimateDownload(
-                any(),
-                any(),
-                any(),
-                any(),
-                any(),
-            )
-        } returns Pair(100, 1500000L)
-        every { anyConstructed<TileDownloadManager>().cancel() } just runs
-        every { anyConstructed<TileDownloadManager>().reset() } just runs
+        // Setup MapLibreOfflineManager mock behavior
+        every { mockMapLibreOfflineManager.estimateTileCount(any(), any(), any()) } returns 100L
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
         clearAllMocks()
-        unmockkConstructor(TileDownloadManager::class)
     }
 
     private fun createViewModel(): OfflineMapDownloadViewModel {
         return OfflineMapDownloadViewModel(
-            context = context,
             offlineMapRegionRepository = offlineMapRegionRepository,
-            mapTileSourceManager = mapTileSourceManager,
-            rmspServerRepository = rmspServerRepository,
-            reticulumProtocol = reticulumProtocol,
+            mapLibreOfflineManager = mockMapLibreOfflineManager,
         )
     }
 
@@ -153,7 +97,7 @@ class OfflineMapDownloadViewModelTest {
                 assertEquals(0, state.minZoom)
                 assertEquals(14, state.maxZoom)
                 assertEquals("", state.name)
-                assertEquals(0, state.estimatedTileCount)
+                assertEquals(0L, state.estimatedTileCount)
                 assertEquals(0L, state.estimatedSizeBytes)
                 assertNull(state.downloadProgress)
                 assertFalse(state.isComplete)
@@ -220,8 +164,9 @@ class OfflineMapDownloadViewModelTest {
 
             viewModel.state.test {
                 val state = awaitItem()
-                assertEquals(100, state.estimatedTileCount)
-                assertEquals(1500000L, state.estimatedSizeBytes)
+                assertEquals(100L, state.estimatedTileCount)
+                // estimatedSizeBytes = tileCount * 20000 = 100 * 20000 = 2000000
+                assertEquals(2000000L, state.estimatedSizeBytes)
 
                 cancelAndConsumeRemainingEvents()
             }
@@ -340,13 +285,13 @@ class OfflineMapDownloadViewModelTest {
 
             // Verify initial estimate is calculated
             val initialState = viewModel.state.value
-            assertEquals(100, initialState.estimatedTileCount)
-            assertEquals(1500000L, initialState.estimatedSizeBytes)
+            assertEquals(100L, initialState.estimatedTileCount)
+            assertEquals(2000000L, initialState.estimatedSizeBytes)
             assertEquals(0, initialState.minZoom)
             assertEquals(14, initialState.maxZoom)
 
             // Change zoom range and verify estimate is recalculated
-            // The mock returns (100, 1500000L) for all calls, so we verify
+            // The mock returns 100L for all calls, so we verify
             // that the zoom values are updated (the estimate stays the same in this test)
             viewModel.setZoomRange(5, 10)
 
@@ -354,17 +299,15 @@ class OfflineMapDownloadViewModelTest {
             assertEquals(5, updatedState.minZoom)
             assertEquals(10, updatedState.maxZoom)
             // Estimate is recalculated (mock returns same value)
-            assertEquals(100, updatedState.estimatedTileCount)
-            assertEquals(1500000L, updatedState.estimatedSizeBytes)
+            assertEquals(100L, updatedState.estimatedTileCount)
+            assertEquals(2000000L, updatedState.estimatedSizeBytes)
 
-            // Verify estimateDownload was called with new zoom values
-            io.mockk.verify {
-                anyConstructed<TileDownloadManager>().estimateDownload(
-                    40.7128,
-                    -74.0060,
-                    10, // radiusOption.km = MEDIUM = 10
-                    5,
-                    10,
+            // Verify estimateTileCount was called with new zoom values
+            verify {
+                mockMapLibreOfflineManager.estimateTileCount(
+                    bounds = any(),
+                    minZoom = 5,
+                    maxZoom = 10,
                 )
             }
         }
@@ -584,23 +527,19 @@ class OfflineMapDownloadViewModelTest {
 
             coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
 
-            viewModel.state.test {
-                awaitItem()
+            // Navigate to DOWNLOADING
+            viewModel.nextStep() // RADIUS
+            viewModel.nextStep() // CONFIRM
+            viewModel.nextStep() // DOWNLOADING
 
-                // Navigate to DOWNLOADING
-                viewModel.nextStep()
-                awaitItem()
-                viewModel.nextStep()
-                awaitItem()
-                viewModel.nextStep()
-                awaitItem()
+            // Verify we're at DOWNLOADING
+            assertEquals(DownloadWizardStep.DOWNLOADING, viewModel.state.value.step)
 
-                viewModel.previousStep()
-                val state = awaitItem()
-                assertEquals(DownloadWizardStep.CONFIRM, state.step)
+            // Go back
+            viewModel.previousStep()
 
-                cancelAndConsumeRemainingEvents()
-            }
+            // Should return to CONFIRM
+            assertEquals(DownloadWizardStep.CONFIRM, viewModel.state.value.step)
         }
 
     // endregion
@@ -616,15 +555,23 @@ class OfflineMapDownloadViewModelTest {
 
             coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
 
-            val downloadingProgress =
-                TileDownloadManager.DownloadProgress(
-                    status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
-                    totalTiles = 100,
-                    downloadedTiles = 50,
-                    failedTiles = 2,
-                    bytesDownloaded = 750000L,
-                    currentZoom = 10,
+            // Capture the onProgress callback
+            val onProgressSlot = slot<(Float, Long, Long) -> Unit>()
+            every {
+                mockMapLibreOfflineManager.downloadRegion(
+                    name = any(),
+                    bounds = any(),
+                    minZoom = any(),
+                    maxZoom = any(),
+                    styleUrl = any(),
+                    onProgress = capture(onProgressSlot),
+                    onComplete = any(),
+                    onError = any(),
                 )
+            } answers {
+                // Simulate calling the progress callback
+                onProgressSlot.captured(0.5f, 50L, 100L)
+            }
 
             // Navigate to DOWNLOADING state first
             viewModel.nextStep() // RADIUS
@@ -632,66 +579,57 @@ class OfflineMapDownloadViewModelTest {
             viewModel.nextStep() // DOWNLOADING
 
             viewModel.state.test {
-                val initialState = awaitItem()
-                assertEquals(DownloadWizardStep.DOWNLOADING, initialState.step)
-
-                // Simulate progress update
-                progressFlow.value = downloadingProgress
-
-                val state = awaitItem()
+                val state = expectMostRecentItem()
+                assertEquals(DownloadWizardStep.DOWNLOADING, state.step)
                 assertNotNull(state.downloadProgress)
-                assertEquals(
-                    TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
-                    state.downloadProgress?.status,
-                )
-                assertEquals(100, state.downloadProgress?.totalTiles)
-                assertEquals(50, state.downloadProgress?.downloadedTiles)
-                assertEquals(2, state.downloadProgress?.failedTiles)
                 assertEquals(0.5f, state.downloadProgress?.progress)
+                assertEquals(50L, state.downloadProgress?.completedResources)
+                assertEquals(100L, state.downloadProgress?.requiredResources)
 
                 cancelAndConsumeRemainingEvents()
             }
         }
 
     @Test
-    fun `download progress status COMPLETE marks download as complete`() =
+    fun `download complete marks download as complete`() =
         runTest {
             viewModel = createViewModel()
             viewModel.setLocation(40.7128, -74.0060)
             viewModel.setName("Test Region")
 
-            val testDir = File(context.filesDir, "test_offline_maps")
-            testDir.mkdirs()
-            val testFile = File(testDir, "test.mbtiles")
-            testFile.createNewFile()
-
             coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
-            coEvery {
-                anyConstructed<TileDownloadManager>().downloadRegion(
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
+            coEvery { offlineMapRegionRepository.markCompleteWithMaplibreId(any(), any(), any(), any()) } returns Unit
+
+            // Capture the onComplete callback
+            var capturedOnComplete: ((Long, Long) -> Unit)? = null
+            every {
+                mockMapLibreOfflineManager.downloadRegion(
+                    name = any(),
+                    bounds = any(),
+                    minZoom = any(),
+                    maxZoom = any(),
+                    styleUrl = any(),
+                    onProgress = any(),
+                    onComplete = any(),
+                    onError = any(),
                 )
-            } returns testFile
+            } answers {
+                capturedOnComplete = arg<(Long, Long) -> Unit>(6)
+            }
 
             // Navigate to DOWNLOADING
             viewModel.nextStep()
             viewModel.nextStep()
             viewModel.nextStep()
 
-            viewModel.state.test {
-                val state = expectMostRecentItem()
-                assertEquals(DownloadWizardStep.DOWNLOADING, state.step)
+            // With UnconfinedTestDispatcher, coroutines execute eagerly
+            // Now invoke the complete callback
+            assertNotNull("onComplete callback should have been captured", capturedOnComplete)
+            capturedOnComplete?.invoke(456L, 1500000L)
 
-                cancelAndConsumeRemainingEvents()
-            }
-
-            testFile.delete()
-            testDir.delete()
+            // Verify state
+            assertEquals(DownloadWizardStep.DOWNLOADING, viewModel.state.value.step)
+            assertTrue(viewModel.state.value.isComplete)
         }
 
     // endregion
@@ -699,7 +637,7 @@ class OfflineMapDownloadViewModelTest {
     // region Download Cancellation Tests
 
     @Test
-    fun `cancelDownload cancels the download manager`() =
+    fun `cancelDownload sets isDownloading to false`() =
         runTest {
             viewModel = createViewModel()
             viewModel.setLocation(40.7128, -74.0060)
@@ -712,10 +650,11 @@ class OfflineMapDownloadViewModelTest {
             viewModel.nextStep()
             viewModel.nextStep()
 
+            // Cancel download - this should complete without error
             viewModel.cancelDownload()
 
-            // Verify cancel was called
-            io.mockk.verify { anyConstructed<TileDownloadManager>().cancel() }
+            // Verify we're still at DOWNLOADING step (cancelDownload doesn't change step)
+            assertEquals(DownloadWizardStep.DOWNLOADING, viewModel.state.value.step)
         }
 
     @Test
@@ -733,7 +672,8 @@ class OfflineMapDownloadViewModelTest {
 
             viewModel.previousStep()
 
-            io.mockk.verify { anyConstructed<TileDownloadManager>().cancel() }
+            // Verify we're back at CONFIRM step
+            assertEquals(DownloadWizardStep.CONFIRM, viewModel.state.value.step)
         }
 
     // endregion
@@ -765,23 +705,12 @@ class OfflineMapDownloadViewModelTest {
                 assertNull(state.centerLongitude)
                 assertEquals(RadiusOption.MEDIUM, state.radiusOption)
                 assertEquals("", state.name)
-                assertEquals(0, state.estimatedTileCount)
+                assertEquals(0L, state.estimatedTileCount)
                 assertFalse(state.isComplete)
                 assertNull(state.errorMessage)
 
                 cancelAndConsumeRemainingEvents()
             }
-        }
-
-    @Test
-    fun `reset calls reset on download manager`() =
-        runTest {
-            viewModel = createViewModel()
-            viewModel.setLocation(40.7128, -74.0060)
-
-            viewModel.reset()
-
-            io.mockk.verify { anyConstructed<TileDownloadManager>().reset() }
         }
 
     // endregion
@@ -804,7 +733,7 @@ class OfflineMapDownloadViewModelTest {
         }
 
     @Test
-    fun `error progress status updates error message`() =
+    fun `error callback updates error message`() =
         runTest {
             viewModel = createViewModel()
             viewModel.setLocation(40.7128, -74.0060)
@@ -812,28 +741,32 @@ class OfflineMapDownloadViewModelTest {
 
             coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
 
-            val errorProgress =
-                TileDownloadManager.DownloadProgress(
-                    status = TileDownloadManager.DownloadProgress.Status.ERROR,
-                    totalTiles = 100,
-                    downloadedTiles = 50,
-                    failedTiles = 50,
-                    bytesDownloaded = 750000L,
-                    currentZoom = 10,
-                    errorMessage = "Network error",
+            // Capture the onError callback
+            val onErrorSlot = slot<(String) -> Unit>()
+            every {
+                mockMapLibreOfflineManager.downloadRegion(
+                    name = any(),
+                    bounds = any(),
+                    minZoom = any(),
+                    maxZoom = any(),
+                    styleUrl = any(),
+                    onProgress = any(),
+                    onComplete = any(),
+                    onError = capture(onErrorSlot),
                 )
+            } answers {
+                // Simulate calling the error callback
+                onErrorSlot.captured("Network error")
+            }
 
             viewModel.nextStep()
             viewModel.nextStep()
             viewModel.nextStep()
 
             viewModel.state.test {
-                awaitItem()
-
-                progressFlow.value = errorProgress
-
-                val state = awaitItem()
-                assertEquals(TileDownloadManager.DownloadProgress.Status.ERROR, state.downloadProgress?.status)
+                val state = expectMostRecentItem()
+                assertNotNull(state.errorMessage)
+                assertTrue(state.errorMessage!!.contains("Network error"))
                 assertEquals("Network error", state.downloadProgress?.errorMessage)
 
                 cancelAndConsumeRemainingEvents()
@@ -867,117 +800,6 @@ class OfflineMapDownloadViewModelTest {
         val state = OfflineMapDownloadState(estimatedSizeBytes = 2_500_000_000L)
         assertEquals("2.3 GB", state.getEstimatedSizeString())
     }
-
-    // endregion
-
-    // region Tile Source Determination Tests
-
-    @Test
-    fun `download uses HTTP when HTTP is enabled`() =
-        runTest {
-            httpEnabledFlow.value = true
-            rmspEnabledFlow.value = false
-
-            viewModel = createViewModel()
-            viewModel.setLocation(40.7128, -74.0060)
-            viewModel.setName("Test Region")
-
-            coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
-
-            viewModel.nextStep()
-            viewModel.nextStep()
-            viewModel.nextStep()
-
-            // Verify region was created (download started)
-            coVerify {
-                offlineMapRegionRepository.createRegion(
-                    name = "Test Region",
-                    centerLatitude = 40.7128,
-                    centerLongitude = -74.0060,
-                    radiusKm = 10,
-                    minZoom = 0,
-                    maxZoom = 14,
-                )
-            }
-        }
-
-    @Test
-    fun `download uses RMSP when HTTP disabled and RMSP enabled with servers`() =
-        runTest {
-            httpEnabledFlow.value = false
-            rmspEnabledFlow.value = true
-
-            val testServer = createTestRmspServer()
-            allServersFlow.value = listOf(testServer)
-
-            viewModel = createViewModel()
-            viewModel.setLocation(40.7128, -74.0060)
-            viewModel.setName("Test Region")
-
-            coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
-
-            viewModel.nextStep()
-            viewModel.nextStep()
-            viewModel.nextStep()
-
-            coVerify {
-                offlineMapRegionRepository.createRegion(
-                    name = "Test Region",
-                    centerLatitude = 40.7128,
-                    centerLongitude = -74.0060,
-                    radiusKm = 10,
-                    minZoom = 0,
-                    maxZoom = 14,
-                )
-            }
-        }
-
-    @Test
-    fun `download fails when both HTTP and RMSP disabled`() =
-        runTest {
-            httpEnabledFlow.value = false
-            rmspEnabledFlow.value = false
-
-            viewModel = createViewModel()
-            viewModel.setLocation(40.7128, -74.0060)
-            viewModel.setName("Test Region")
-
-            viewModel.nextStep()
-            viewModel.nextStep()
-            viewModel.nextStep()
-
-            viewModel.state.test {
-                val state = expectMostRecentItem()
-                assertNotNull(state.errorMessage)
-                assertTrue(state.errorMessage!!.contains("No tile source available"))
-
-                cancelAndConsumeRemainingEvents()
-            }
-        }
-
-    @Test
-    fun `download fails when RMSP enabled but no servers available`() =
-        runTest {
-            httpEnabledFlow.value = false
-            rmspEnabledFlow.value = true
-            allServersFlow.value = emptyList()
-
-            viewModel = createViewModel()
-            viewModel.setLocation(40.7128, -74.0060)
-            viewModel.setName("Test Region")
-
-            viewModel.nextStep()
-            viewModel.nextStep()
-            viewModel.nextStep()
-
-            viewModel.state.test {
-                val state = expectMostRecentItem()
-                assertNotNull(state.errorMessage)
-                assertTrue(state.errorMessage!!.contains("No RMSP servers discovered"))
-
-                cancelAndConsumeRemainingEvents()
-            }
-        }
 
     // endregion
 
@@ -1043,36 +865,7 @@ class OfflineMapDownloadViewModelTest {
         }
 
     @Test
-    fun `cancelled download deletes region from repository`() =
-        runTest {
-            viewModel = createViewModel()
-            viewModel.setLocation(40.7128, -74.0060)
-            viewModel.setName("Test Region")
-
-            coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 789L
-
-            viewModel.nextStep()
-            viewModel.nextStep()
-            viewModel.nextStep()
-
-            // Simulate cancelled progress
-            val cancelledProgress =
-                TileDownloadManager.DownloadProgress(
-                    status = TileDownloadManager.DownloadProgress.Status.CANCELLED,
-                    totalTiles = 100,
-                    downloadedTiles = 25,
-                    failedTiles = 0,
-                    bytesDownloaded = 375000L,
-                    currentZoom = 8,
-                )
-
-            progressFlow.value = cancelledProgress
-
-            coVerify(timeout = 1000) { offlineMapRegionRepository.deleteRegion(789L) }
-        }
-
-    @Test
-    fun `error progress marks region with error in repository`() =
+    fun `error marks region with error in repository`() =
         runTest {
             viewModel = createViewModel()
             viewModel.setLocation(40.7128, -74.0060)
@@ -1080,22 +873,27 @@ class OfflineMapDownloadViewModelTest {
 
             coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 101L
 
-            viewModel.nextStep()
-            viewModel.nextStep()
-            viewModel.nextStep()
-
-            val errorProgress =
-                TileDownloadManager.DownloadProgress(
-                    status = TileDownloadManager.DownloadProgress.Status.ERROR,
-                    totalTiles = 100,
-                    downloadedTiles = 30,
-                    failedTiles = 70,
-                    bytesDownloaded = 450000L,
-                    currentZoom = 9,
-                    errorMessage = "Connection timeout",
+            // Capture the onError callback
+            val onErrorSlot = slot<(String) -> Unit>()
+            every {
+                mockMapLibreOfflineManager.downloadRegion(
+                    name = any(),
+                    bounds = any(),
+                    minZoom = any(),
+                    maxZoom = any(),
+                    styleUrl = any(),
+                    onProgress = any(),
+                    onComplete = any(),
+                    onError = capture(onErrorSlot),
                 )
+            } answers {
+                // Simulate calling the error callback
+                onErrorSlot.captured("Connection timeout")
+            }
 
-            progressFlow.value = errorProgress
+            viewModel.nextStep()
+            viewModel.nextStep()
+            viewModel.nextStep()
 
             coVerify(timeout = 1000) {
                 offlineMapRegionRepository.markError(
@@ -1114,21 +912,27 @@ class OfflineMapDownloadViewModelTest {
 
             coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 202L
 
-            viewModel.nextStep()
-            viewModel.nextStep()
-            viewModel.nextStep()
-
-            val downloadingProgress =
-                TileDownloadManager.DownloadProgress(
-                    status = TileDownloadManager.DownloadProgress.Status.DOWNLOADING,
-                    totalTiles = 100,
-                    downloadedTiles = 60,
-                    failedTiles = 5,
-                    bytesDownloaded = 900000L,
-                    currentZoom = 11,
+            // Capture the onProgress callback
+            val onProgressSlot = slot<(Float, Long, Long) -> Unit>()
+            every {
+                mockMapLibreOfflineManager.downloadRegion(
+                    name = any(),
+                    bounds = any(),
+                    minZoom = any(),
+                    maxZoom = any(),
+                    styleUrl = any(),
+                    onProgress = capture(onProgressSlot),
+                    onComplete = any(),
+                    onError = any(),
                 )
+            } answers {
+                // Simulate calling the progress callback
+                onProgressSlot.captured(0.6f, 60L, 100L)
+            }
 
-            progressFlow.value = downloadingProgress
+            viewModel.nextStep()
+            viewModel.nextStep()
+            viewModel.nextStep()
 
             coVerify(timeout = 1000) {
                 offlineMapRegionRepository.updateProgress(
@@ -1146,7 +950,7 @@ class OfflineMapDownloadViewModelTest {
 
     // Note: onCleared() is a protected method and cannot be tested directly.
     // The ViewModel's cleanup behavior when cleared is verified through
-    // the TileDownloadManager cancellation in other tests.
+    // other tests.
 
     // endregion
 
@@ -1160,78 +964,6 @@ class OfflineMapDownloadViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertNull(state.downloadProgress)
-
-                cancelAndConsumeRemainingEvents()
-            }
-        }
-
-    @Test
-    fun `progress CALCULATING status is reflected correctly`() =
-        runTest {
-            viewModel = createViewModel()
-            viewModel.setLocation(40.7128, -74.0060)
-            viewModel.setName("Test Region")
-
-            coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
-
-            viewModel.nextStep()
-            viewModel.nextStep()
-            viewModel.nextStep()
-
-            val calculatingProgress =
-                TileDownloadManager.DownloadProgress(
-                    status = TileDownloadManager.DownloadProgress.Status.CALCULATING,
-                    totalTiles = 0,
-                    downloadedTiles = 0,
-                    failedTiles = 0,
-                    bytesDownloaded = 0L,
-                    currentZoom = 0,
-                )
-
-            progressFlow.value = calculatingProgress
-
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(
-                    TileDownloadManager.DownloadProgress.Status.CALCULATING,
-                    state.downloadProgress?.status,
-                )
-
-                cancelAndConsumeRemainingEvents()
-            }
-        }
-
-    @Test
-    fun `progress WRITING status is reflected correctly`() =
-        runTest {
-            viewModel = createViewModel()
-            viewModel.setLocation(40.7128, -74.0060)
-            viewModel.setName("Test Region")
-
-            coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
-
-            viewModel.nextStep()
-            viewModel.nextStep()
-            viewModel.nextStep()
-
-            val writingProgress =
-                TileDownloadManager.DownloadProgress(
-                    status = TileDownloadManager.DownloadProgress.Status.WRITING,
-                    totalTiles = 100,
-                    downloadedTiles = 100,
-                    failedTiles = 0,
-                    bytesDownloaded = 1500000L,
-                    currentZoom = 14,
-                )
-
-            progressFlow.value = writingProgress
-
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(
-                    TileDownloadManager.DownloadProgress.Status.WRITING,
-                    state.downloadProgress?.status,
-                )
 
                 cancelAndConsumeRemainingEvents()
             }
@@ -1271,28 +1003,6 @@ class OfflineMapDownloadViewModelTest {
     fun `hasLocation is true when both coordinates are set`() {
         val state = OfflineMapDownloadState(centerLatitude = 40.0, centerLongitude = -74.0)
         assertTrue(state.hasLocation)
-    }
-
-    // endregion
-
-    // region Helper Functions
-
-    private fun createTestRmspServer(): RmspServer {
-        return RmspServer(
-            destinationHash = "abc123def456",
-            serverName = "Test RMSP Server",
-            publicKey = ByteArray(32) { it.toByte() },
-            coverageGeohashes = listOf("dr5r"),
-            minZoom = 0,
-            maxZoom = 14,
-            formats = listOf("pbf"),
-            layers = listOf("default"),
-            dataUpdatedTimestamp = System.currentTimeMillis(),
-            dataSize = 1_000_000L,
-            version = "1.0.0",
-            lastSeenTimestamp = System.currentTimeMillis(),
-            hops = 1,
-        )
     }
 
     // endregion

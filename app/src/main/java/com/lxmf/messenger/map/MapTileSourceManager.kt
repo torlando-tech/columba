@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -105,23 +104,10 @@ class MapTileSourceManager
 
             Log.d(TAG, "Getting map style for location: $latitude, $longitude (HTTP=$httpEnabled, RMSP=$rmspEnabled)")
 
-            // Check offline source first
-            val offlineResult =
-                if (latitude != null && longitude != null) {
-                    findOfflineRegion(latitude, longitude)?.let { region ->
-                        val path = region.mbtilesPath
-                        if (path != null) {
-                            Log.d(TAG, "Found offline region: ${region.name}")
-                            val styleJson = OfflineMapStyleBuilder.buildOfflineStyle(path, region.name)
-                            MapStyleResult.Offline(styleJson, region.name)
-                        } else {
-                            null
-                        }
-                    }
-                } else {
-                    null
-                }
-            if (offlineResult != null) return offlineResult
+            // NOTE: Offline maps are now handled by MapLibre's native OfflineManager API.
+            // Tiles downloaded via OfflineManager are automatically used when offline -
+            // no explicit style switching needed. We always return the online style URL
+            // and MapLibre handles caching/offline usage transparently.
 
             // Check HTTP source, then RMSP source, then return unavailable
             return when {
@@ -144,49 +130,6 @@ class MapTileSourceManager
                 }
                 else -> MapStyleResult.Unavailable("Both HTTP and RMSP sources are disabled")
             }
-        }
-
-        /**
-         * Find an offline region that covers the given location.
-         */
-        private suspend fun findOfflineRegion(
-            latitude: Double,
-            longitude: Double,
-        ): OfflineMapRegion? {
-            val regions = offlineMapRegionRepository.getCompletedRegions().first()
-
-            return regions.find { region ->
-                val mbtilesPath = region.mbtilesPath
-                // Check file exists first (fast fail)
-                if (mbtilesPath == null || !File(mbtilesPath).exists()) return@find false
-
-                // Check if location is within bounding box (tiles are downloaded as a square region)
-                isWithinBounds(latitude, longitude, region)
-            }
-        }
-
-        /**
-         * Check if a point is within the bounding box of a region.
-         * Uses same calculation as MBTilesWriter.boundsFromCenter for consistency.
-         */
-        private fun isWithinBounds(
-            latitude: Double,
-            longitude: Double,
-            region: OfflineMapRegion,
-        ): Boolean {
-            // Approximate degrees per km at region center latitude
-            val latDegPerKm = 1.0 / 111.0
-            val lonDegPerKm = 1.0 / (111.0 * kotlin.math.cos(Math.toRadians(region.centerLatitude)))
-
-            val latOffset = region.radiusKm * latDegPerKm
-            val lonOffset = region.radiusKm * lonDegPerKm
-
-            val south = region.centerLatitude - latOffset
-            val north = region.centerLatitude + latOffset
-            val west = region.centerLongitude - lonOffset
-            val east = region.centerLongitude + lonOffset
-
-            return latitude in south..north && longitude in west..east
         }
 
         /**

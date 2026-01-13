@@ -209,12 +209,13 @@ fun MapScreen(
         val map = mapLibreMap ?: return@LaunchedEffect
         val styleResult = state.mapStyleResult ?: return@LaunchedEffect
 
-        val styleBuilder = when (styleResult) {
-            is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
-            is MapStyleResult.Offline -> Style.Builder().fromJson(styleResult.styleJson)
-            is MapStyleResult.Rmsp -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
-            is MapStyleResult.Unavailable -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
-        }
+        val styleBuilder =
+            when (styleResult) {
+                is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
+                is MapStyleResult.Offline -> Style.Builder().fromJson(styleResult.styleJson)
+                is MapStyleResult.Rmsp -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                is MapStyleResult.Unavailable -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+            }
         Log.d("MapScreen", "Applying style: ${styleResult.javaClass.simpleName}")
         map.setStyle(styleBuilder)
     }
@@ -246,20 +247,21 @@ fun MapScreen(
 
                         // Load map style based on settings (offline, HTTP, or RMSP)
                         val styleResult = state.mapStyleResult
-                        val styleBuilder = when (styleResult) {
-                            is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
-                            is MapStyleResult.Offline -> Style.Builder().fromJson(styleResult.styleJson)
-                            is MapStyleResult.Rmsp -> {
-                                // For RMSP, use default HTTP as fallback (RMSP rendering not yet implemented)
-                                Log.d("MapScreen", "RMSP style requested, using HTTP fallback")
-                                Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                        val styleBuilder =
+                            when (styleResult) {
+                                is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
+                                is MapStyleResult.Offline -> Style.Builder().fromJson(styleResult.styleJson)
+                                is MapStyleResult.Rmsp -> {
+                                    // For RMSP, use default HTTP as fallback (RMSP rendering not yet implemented)
+                                    Log.d("MapScreen", "RMSP style requested, using HTTP fallback")
+                                    Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                                }
+                                is MapStyleResult.Unavailable -> {
+                                    Log.w("MapScreen", "No map source available: ${styleResult.reason}")
+                                    Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                                }
+                                null -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
                             }
-                            is MapStyleResult.Unavailable -> {
-                                Log.w("MapScreen", "No map source available: ${styleResult.reason}")
-                                Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
-                            }
-                            null -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
-                        }
                         map.setStyle(styleBuilder) { style ->
                             Log.d("MapScreen", "Map style loaded: ${styleResult?.javaClass?.simpleName ?: "default"}")
 

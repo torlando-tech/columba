@@ -63,6 +63,7 @@ object DatabaseModule {
             MIGRATION_27_28,
             MIGRATION_28_29,
             MIGRATION_29_30,
+            MIGRATION_30_31,
         )
     }
 
@@ -1241,6 +1242,17 @@ object DatabaseModule {
         object : Migration(29, 30) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE offline_map_regions ADD COLUMN tileVersion TEXT")
+            }
+        }
+
+    // Migration from version 30 to 31: Add maplibreRegionId column for MapLibre OfflineManager API
+    // This replaces the MBTiles approach which doesn't work on MapLibre Android (mbtiles:// protocol unsupported)
+    // MapLibre's OfflineManager stores tiles in its internal database and auto-uses them when offline
+    private val MIGRATION_30_31 =
+        object : Migration(30, 31) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add maplibreRegionId column (nullable - existing regions won't have it)
+                database.execSQL("ALTER TABLE offline_map_regions ADD COLUMN maplibreRegionId INTEGER")
             }
         }
 

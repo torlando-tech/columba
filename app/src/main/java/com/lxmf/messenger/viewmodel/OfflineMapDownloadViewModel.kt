@@ -1,6 +1,5 @@
 package com.lxmf.messenger.viewmodel
 
-import android.content.Context
 import android.location.Location
 import android.util.Log
 import androidx.compose.runtime.Immutable
@@ -8,21 +7,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
-import com.lxmf.messenger.data.repository.RmspServerRepository
-import com.lxmf.messenger.map.MapTileSourceManager
-import com.lxmf.messenger.map.TileDownloadManager
-import com.lxmf.messenger.map.TileSource
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.map.MapLibreOfflineManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.File
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import javax.inject.Inject
+import kotlin.math.cos
 
 /**
  * Download wizard step.
@@ -53,6 +48,18 @@ enum class RadiusOption(val km: Int, val label: String) {
 }
 
 /**
+ * Download progress tracking for MapLibre OfflineManager.
+ */
+@Immutable
+data class DownloadProgress(
+    val progress: Float = 0f,
+    val completedResources: Long = 0L,
+    val requiredResources: Long = 0L,
+    val isComplete: Boolean = false,
+    val errorMessage: String? = null,
+)
+
+/**
  * UI state for the offline map download wizard.
  */
 @Immutable
@@ -64,13 +71,12 @@ data class OfflineMapDownloadState(
     val minZoom: Int = 0,
     val maxZoom: Int = 14,
     val name: String = "",
-    val estimatedTileCount: Int = 0,
+    val estimatedTileCount: Long = 0L,
     val estimatedSizeBytes: Long = 0L,
-    val downloadProgress: TileDownloadManager.DownloadProgress? = null,
+    val downloadProgress: DownloadProgress? = null,
     val isComplete: Boolean = false,
     val errorMessage: String? = null,
     val createdRegionId: Long? = null,
-    val usesHttpSource: Boolean = true, // true = OpenFreeMap (HTTP), false = RMSP mesh
 ) {
     /**
      * Check if the location is set.
@@ -110,20 +116,21 @@ data class OfflineMapDownloadState(
 class OfflineMapDownloadViewModel
     @Inject
     constructor(
-        @ApplicationContext private val context: Context,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
-        private val mapTileSourceManager: MapTileSourceManager,
-        private val rmspServerRepository: RmspServerRepository,
-        private val reticulumProtocol: ServiceReticulumProtocol,
+        private val mapLibreOfflineManager: MapLibreOfflineManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "OfflineMapDownloadVM"
+
+            // Rough estimate: ~20KB per tile on average (varies widely by zoom and content)
+            private const val ESTIMATED_BYTES_PER_TILE = 20_000L
         }
 
         private val _state = MutableStateFlow(OfflineMapDownloadState())
         val state: StateFlow<OfflineMapDownloadState> = _state.asStateFlow()
 
-        private var downloadManager: TileDownloadManager? = null
+        // Track if a download is in progress
+        private var isDownloading = false
 
         /**
          * Set the center location from user's current position.
@@ -231,14 +238,16 @@ class OfflineMapDownloadViewModel
          * Cancel the current download.
          */
         fun cancelDownload() {
-            downloadManager?.cancel()
+            // MapLibre doesn't support direct cancellation of in-progress downloads
+            // The region will be deleted when the user navigates away or resets
+            isDownloading = false
         }
 
         /**
          * Reset the wizard to start over.
          */
         fun reset() {
-            downloadManager?.reset()
+            isDownloading = false
             _state.value = OfflineMapDownloadState()
         }
 
@@ -254,19 +263,19 @@ class OfflineMapDownloadViewModel
             val lat = currentState.centerLatitude ?: return
             val lon = currentState.centerLongitude ?: return
 
-            val manager =
-                downloadManager ?: TileDownloadManager(context).also {
-                    downloadManager = it
-                }
+            // Calculate bounds from center and radius
+            val bounds = calculateBounds(lat, lon, currentState.radiusOption.km)
 
-            val (tileCount, estimatedSize) =
-                manager.estimateDownload(
-                    centerLat = lat,
-                    centerLon = lon,
-                    radiusKm = currentState.radiusOption.km,
+            // Estimate tile count using MapLibreOfflineManager
+            val tileCount =
+                mapLibreOfflineManager.estimateTileCount(
+                    bounds = bounds,
                     minZoom = currentState.minZoom,
                     maxZoom = currentState.maxZoom,
                 )
+
+            // Estimate size (rough: ~20KB per tile average)
+            val estimatedSize = tileCount * ESTIMATED_BYTES_PER_TILE
 
             _state.update {
                 it.copy(
@@ -276,6 +285,29 @@ class OfflineMapDownloadViewModel
             }
         }
 
+        /**
+         * Calculate LatLngBounds from center point and radius.
+         */
+        private fun calculateBounds(
+            centerLat: Double,
+            centerLon: Double,
+            radiusKm: Int,
+        ): LatLngBounds {
+            // Convert radius to degrees (approximate)
+            // 1 degree latitude ≈ 111 km
+            val latDelta = radiusKm / 111.0
+            // 1 degree longitude ≈ 111 * cos(lat) km
+            val lonDelta = radiusKm / (111.0 * cos(Math.toRadians(centerLat)))
+
+            val southwest = LatLng(centerLat - latDelta, centerLon - lonDelta)
+            val northeast = LatLng(centerLat + latDelta, centerLon + lonDelta)
+
+            return LatLngBounds.Builder()
+                .include(southwest)
+                .include(northeast)
+                .build()
+        }
+
         @Suppress("LongMethod") // Orchestrates download process - splitting would fragment cohesive flow
         private fun startDownload() {
             val currentState = _state.value
@@ -283,15 +315,18 @@ class OfflineMapDownloadViewModel
             val lon = currentState.centerLongitude ?: return
             val name = currentState.name.ifBlank { "Offline Map" }
 
+            if (isDownloading) {
+                Log.w(TAG, "Download already in progress")
+                return
+            }
+
+            isDownloading = true
+
             viewModelScope.launch {
                 try {
-                    // Determine tile source based on settings
-                    val tileSource = determineTileSource()
-                    val isHttp = tileSource is TileSource.Http
-                    Log.d(TAG, "Using tile source: ${tileSource::class.simpleName}")
-                    _state.update { it.copy(usesHttpSource = isHttp) }
+                    Log.d(TAG, "Starting MapLibre offline download for region: $name")
 
-                    // Create database record
+                    // Create database record first
                     val regionId =
                         offlineMapRegionRepository.createRegion(
                             name = name,
@@ -304,97 +339,97 @@ class OfflineMapDownloadViewModel
 
                     _state.update { it.copy(createdRegionId = regionId) }
 
-                    // Generate output file path
-                    val outputDir = TileDownloadManager.getOfflineMapsDir(context)
-                    val filename = TileDownloadManager.generateFilename(name)
-                    val outputFile = File(outputDir, filename)
+                    // Calculate bounds for the region
+                    val bounds = calculateBounds(lat, lon, currentState.radiusOption.km)
 
-                    // Create download manager with the determined tile source
-                    val manager =
-                        TileDownloadManager(context, tileSource).also {
-                            downloadManager = it
-                        }
-
-                    // Collect progress updates
-                    launch {
-                        manager.progress.collect { progress ->
-                            _state.update { it.copy(downloadProgress = progress) }
+                    // Start download using MapLibre's OfflineManager
+                    mapLibreOfflineManager.downloadRegion(
+                        name = name,
+                        bounds = bounds,
+                        minZoom = currentState.minZoom.toDouble(),
+                        maxZoom = currentState.maxZoom.toDouble(),
+                        styleUrl = MapLibreOfflineManager.DEFAULT_STYLE_URL,
+                        onProgress = { progress, completed, required ->
+                            _state.update {
+                                it.copy(
+                                    downloadProgress =
+                                        DownloadProgress(
+                                            progress = progress,
+                                            completedResources = completed,
+                                            requiredResources = required,
+                                        ),
+                                )
+                            }
 
                             // Update database with progress
-                            when (progress.status) {
-                                TileDownloadManager.DownloadProgress.Status.DOWNLOADING -> {
-                                    offlineMapRegionRepository.updateProgress(
-                                        id = regionId,
-                                        status = OfflineMapRegion.Status.DOWNLOADING,
-                                        progress = progress.progress,
-                                        tileCount = progress.downloadedTiles,
-                                    )
-                                }
-                                TileDownloadManager.DownloadProgress.Status.COMPLETE -> {
-                                    // Handled below after download completes
-                                }
-                                TileDownloadManager.DownloadProgress.Status.ERROR -> {
-                                    offlineMapRegionRepository.markError(
-                                        id = regionId,
-                                        errorMessage = progress.errorMessage ?: "Download failed",
-                                    )
-                                }
-                                TileDownloadManager.DownloadProgress.Status.CANCELLED -> {
-                                    // Delete the region if cancelled
-                                    offlineMapRegionRepository.deleteRegion(regionId)
-                                }
-                                else -> { /* Ignore other states */ }
+                            viewModelScope.launch {
+                                offlineMapRegionRepository.updateProgress(
+                                    id = regionId,
+                                    status = OfflineMapRegion.Status.DOWNLOADING,
+                                    progress = progress,
+                                    tileCount = completed.toInt(),
+                                )
                             }
-                        }
-                    }
+                        },
+                        onComplete = { maplibreRegionId, sizeBytes ->
+                            Log.d(TAG, "Download complete! MapLibre region ID: $maplibreRegionId, size: $sizeBytes bytes")
 
-                    // Start download
-                    val result =
-                        manager.downloadRegion(
-                            centerLat = lat,
-                            centerLon = lon,
-                            radiusKm = currentState.radiusOption.km,
-                            minZoom = currentState.minZoom,
-                            maxZoom = currentState.maxZoom,
-                            name = name,
-                            outputFile = outputFile,
-                        )
-
-                    if (result != null) {
-                        // Mark as complete in database
-                        try {
-                            offlineMapRegionRepository.markComplete(
-                                id = regionId,
-                                tileCount = manager.progress.value.downloadedTiles,
-                                sizeBytes = result.length(),
-                                mbtilesPath = result.absolutePath,
-                                tileVersion = manager.lastResolvedVersion,
-                            )
-                            _state.update { it.copy(isComplete = true) }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to mark region complete, attempting recovery", e)
-                            // Try immediate recovery via orphan import
-                            val recoveryResult = runCatching {
-                                offlineMapRegionRepository.deleteRegion(regionId)
-                                offlineMapRegionRepository.importOrphanedFile(result)
-                            }
-                            recoveryResult.onSuccess { recoveredId ->
-                                Log.i(TAG, "Recovered download as region $recoveredId")
-                                _state.update { it.copy(isComplete = true, createdRegionId = recoveredId) }
-                            }.onFailure { recoveryError ->
-                                Log.e(TAG, "Recovery failed, file preserved at: ${result.absolutePath}", recoveryError)
-                                _state.update {
-                                    it.copy(
-                                        errorMessage = "Database error: ${e.message}. " +
-                                            "Recovery failed: ${recoveryError.message}. " +
-                                            "File saved at: ${result.absolutePath}",
+                            viewModelScope.launch {
+                                try {
+                                    // Mark as complete in database with MapLibre region ID
+                                    offlineMapRegionRepository.markCompleteWithMaplibreId(
+                                        id = regionId,
+                                        tileCount = _state.value.downloadProgress?.completedResources?.toInt() ?: 0,
+                                        sizeBytes = sizeBytes,
+                                        maplibreRegionId = maplibreRegionId,
                                     )
+
+                                    _state.update {
+                                        it.copy(
+                                            isComplete = true,
+                                            downloadProgress = it.downloadProgress?.copy(isComplete = true),
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to mark region complete in database", e)
+                                    _state.update {
+                                        it.copy(
+                                            errorMessage =
+                                                "Database error: ${e.message}. " +
+                                                    "MapLibre region saved but database update failed.",
+                                        )
+                                    }
                                 }
                             }
-                        }
-                    }
+
+                            isDownloading = false
+                        },
+                        onError = { errorMessage ->
+                            Log.e(TAG, "Download failed: $errorMessage")
+
+                            viewModelScope.launch {
+                                offlineMapRegionRepository.markError(
+                                    id = regionId,
+                                    errorMessage = errorMessage,
+                                )
+                            }
+
+                            _state.update {
+                                it.copy(
+                                    errorMessage = "Download failed: $errorMessage",
+                                    downloadProgress =
+                                        (it.downloadProgress ?: DownloadProgress()).copy(
+                                            errorMessage = errorMessage,
+                                        ),
+                                )
+                            }
+
+                            isDownloading = false
+                        },
+                    )
                 } catch (e: Exception) {
-                    downloadManager = null // Reset for potential retry
+                    Log.e(TAG, "Failed to start download", e)
+                    isDownloading = false
                     _state.update {
                         it.copy(errorMessage = "Download failed: ${e.message}")
                     }
@@ -402,73 +437,8 @@ class OfflineMapDownloadViewModel
             }
         }
 
-        /**
-         * Determine which tile source to use based on settings.
-         *
-         * Priority:
-         * 1. If HTTP is enabled, use HTTP
-         * 2. If HTTP is disabled but RMSP is enabled, use RMSP via service
-         * 3. Otherwise, throw an error
-         */
-        private suspend fun determineTileSource(): TileSource {
-            val httpEnabled = mapTileSourceManager.httpEnabledFlow.first()
-            val rmspEnabled = mapTileSourceManager.rmspEnabledFlow.first()
-
-            Log.d(TAG, "Determining tile source: HTTP=$httpEnabled, RMSP=$rmspEnabled")
-
-            // If HTTP is enabled, use it
-            if (httpEnabled) {
-                Log.d(TAG, "Using HTTP tile source")
-                return TileSource.Http()
-            }
-
-            // If RMSP is enabled, find a server and use it
-            if (rmspEnabled) {
-                val servers = rmspServerRepository.getAllServers().first()
-                if (servers.isEmpty()) {
-                    error(
-                        "No RMSP servers discovered. Connect to the mesh network and wait for server announces.",
-                    )
-                }
-
-                // Use the nearest server (lowest hop count)
-                val server = servers.minByOrNull { it.hops } ?: servers.first()
-                Log.d(TAG, "Using RMSP server: ${server.serverName} (hops: ${server.hops})")
-
-                // Capture server public key for the lambda
-                val serverPublicKey = server.publicKey
-
-                return TileSource.Rmsp(
-                    serverHash = server.destinationHash,
-                    fetchTiles = { geohash, zoomRange ->
-                        try {
-                            val zoomMin = zoomRange.minOrNull() ?: 0
-                            val zoomMax = zoomRange.maxOrNull() ?: 14
-                            reticulumProtocol.fetchRmspTiles(
-                                destinationHashHex = server.destinationHash,
-                                publicKey = serverPublicKey,
-                                geohash = geohash,
-                                zoomMin = zoomMin,
-                                zoomMax = zoomMax,
-                                // 1 hour timeout for large downloads
-                                timeoutMs = 3600_000L,
-                            )
-                        } catch (e: Exception) {
-                            Log.w(TAG, "RMSP fetch failed for geohash $geohash: ${e.message}")
-                            null // Allow download to continue with other geohashes
-                        }
-                    },
-                )
-            }
-
-            // No valid source
-            error(
-                "No tile source available. Please enable HTTP or RMSP in Settings > Map Sources.",
-            )
-        }
-
         override fun onCleared() {
             super.onCleared()
-            downloadManager?.cancel()
+            isDownloading = false
         }
     }

@@ -104,6 +104,6 @@ interface InterfaceDao {
      *
      * @return Flow emitting true if any BLE/RNode interface is enabled
      */
-    @Query("SELECT EXISTS(SELECT 1 FROM interfaces WHERE enabled = 1 AND (type = 'AndroidBLE' OR type = 'RNode'))")
+    @Query("SELECT EXISTS(SELECT 1 FROM interfaces WHERE enabled = 1 AND (type = 'AndroidBLE' OR (type = 'RNode' AND configJson NOT LIKE '%\"connection_mode\":\"tcp\"%')))")
     fun hasEnabledBluetoothInterface(): Flow<Boolean>
 }

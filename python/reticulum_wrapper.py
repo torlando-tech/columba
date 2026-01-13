@@ -2320,6 +2320,11 @@ class ReticulumWrapper:
                         'content_length': len(lxmf_message.content) if lxmf_message.content else 0,
                         'icon_appearance': icon_appearance
                     }
+                    # Add hop count and receiving interface if captured
+                    if hasattr(lxmf_message, '_columba_hops'):
+                        message_event['hops'] = lxmf_message._columba_hops
+                    if hasattr(lxmf_message, '_columba_interface'):
+                        message_event['receiving_interface'] = lxmf_message._columba_interface
 
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                              "Invoking Kotlin callback for instant notification...")

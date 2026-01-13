@@ -629,8 +629,9 @@ class MessagingViewModel
                                 Log.e(TAG, "Error handling delivery status update", e)
                             }
                         }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
-                        if (e is kotlinx.coroutines.CancellationException) throw e
                         Log.e(TAG, "Error collecting delivery status updates", e)
                     }
                 }
@@ -645,8 +646,9 @@ class MessagingViewModel
                                 Log.e(TAG, "Error handling incoming reaction", e)
                             }
                         }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
-                        if (e is kotlinx.coroutines.CancellationException) throw e
                         Log.e(TAG, "Error collecting reactions", e)
                     }
                 }
@@ -655,8 +657,9 @@ class MessagingViewModel
                 viewModelScope.launch {
                     try {
                         loadIdentityIfNeeded()
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
-                        if (e is kotlinx.coroutines.CancellationException) throw e
                         Log.e(TAG, "Error pre-loading identity in init", e)
                     }
                 }

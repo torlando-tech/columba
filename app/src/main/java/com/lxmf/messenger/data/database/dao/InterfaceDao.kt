@@ -97,4 +97,13 @@ interface InterfaceDao {
      */
     @Query("SELECT COUNT(*) FROM interfaces")
     fun getTotalInterfaceCount(): Flow<Int>
+
+    /**
+     * Check if any Bluetooth-requiring interface is enabled.
+     * This includes AndroidBLE and RNode interfaces.
+     *
+     * @return Flow emitting true if any BLE/RNode interface is enabled
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM interfaces WHERE enabled = 1 AND (type = 'AndroidBLE' OR type = 'RNode'))")
+    fun hasEnabledBluetoothInterface(): Flow<Boolean>
 }

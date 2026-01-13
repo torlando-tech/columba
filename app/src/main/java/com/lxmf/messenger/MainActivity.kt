@@ -56,6 +56,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lxmf.messenger.notifications.NotificationHelper
+import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.service.ReticulumService
@@ -101,6 +102,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var interfaceRepository: InterfaceRepository
+
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
 
@@ -140,7 +144,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            ColumbaNavigation(pendingNavigation = pendingNavigation)
+            ColumbaNavigation(
+                pendingNavigation = pendingNavigation,
+                interfaceRepository = interfaceRepository,
+            )
         }
     }
 
@@ -211,7 +218,10 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
+fun ColumbaNavigation(
+    pendingNavigation: MutableState<PendingNavigation?>,
+    interfaceRepository: InterfaceRepository,
+) {
     val context = LocalContext.current
     val navController = rememberNavController()
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -333,9 +343,16 @@ fun ColumbaNavigation(pendingNavigation: MutableState<PendingNavigation?>) {
         }
 
     // Check BLE permissions after onboarding is completed.
+    // Only show if a Bluetooth-requiring interface (AndroidBLE or RNode) is enabled.
     // Don't show during onboarding - it's handled in OnboardingPagerScreen.
-    LaunchedEffect(onboardingState.hasCompletedOnboarding) {
-        if (onboardingState.hasCompletedOnboarding && !BlePermissionManager.hasAllPermissions(context)) {
+    val hasEnabledBluetoothInterface by interfaceRepository.hasEnabledBluetoothInterface.collectAsState(
+        initial = false,
+    )
+    LaunchedEffect(onboardingState.hasCompletedOnboarding, hasEnabledBluetoothInterface) {
+        if (onboardingState.hasCompletedOnboarding &&
+            hasEnabledBluetoothInterface &&
+            !BlePermissionManager.hasAllPermissions(context)
+        ) {
             showPermissionBottomSheet = true
         }
     }

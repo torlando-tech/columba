@@ -69,6 +69,11 @@ class InterfaceRepository
         val totalInterfaceCount: Flow<Int> = interfaceDao.getTotalInterfaceCount()
 
         /**
+         * Check if any Bluetooth-requiring interface (AndroidBLE or RNode) is enabled.
+         */
+        val hasEnabledBluetoothInterface: Flow<Boolean> = interfaceDao.hasEnabledBluetoothInterface()
+
+        /**
          * Get a specific interface by ID.
          */
         fun getInterfaceById(id: Long): Flow<InterfaceEntity?> {

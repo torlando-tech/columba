@@ -1632,7 +1632,12 @@ class ReticulumWrapper:
                         if packet and hasattr(packet, 'receiving_interface'):
                             interface_obj = packet.receiving_interface
                             if interface_obj:
-                                receiving_interface = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
+                                # Use class name to identify interface type (reliable, not user-configured)
+                                class_name = type(interface_obj).__name__
+                                if "AutoInterface" in class_name:
+                                    receiving_interface = "AutoInterface"
+                                else:
+                                    receiving_interface = class_name
             except Exception as e:
                 log_debug("ReticulumWrapper", "_announce_handler",
                          f"Could not extract interface: {e}")
@@ -2284,13 +2289,17 @@ class ReticulumWrapper:
                     # Only use if it's a real interface (has string name), not a Mock auto-attribute
                     receiving_interface = getattr(lxmf_message, 'receiving_interface', None)
                     if receiving_interface is not None:
-                        # Get interface name - only use if it's a real string (not Mock)
-                        raw_name = getattr(receiving_interface, 'name', None)
-                        if isinstance(raw_name, str) and raw_name:
-                            lxmf_message._columba_interface = raw_name
-                            captured_interface = True
-                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                     f"📡 Got interface from LXMF message (opportunistic): {raw_name}")
+                        # Use class name to identify interface type (reliable, not user-configured)
+                        class_name = type(receiving_interface).__name__
+                        # AutoInterfacePeer -> AutoInterface, otherwise use class name directly
+                        if "AutoInterface" in class_name:
+                            interface_type = "AutoInterface"
+                        else:
+                            interface_type = class_name
+                        lxmf_message._columba_interface = interface_type
+                        captured_interface = True
+                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                 f"📡 Got interface from LXMF message (opportunistic): {interface_type}")
 
                     receiving_hops = getattr(lxmf_message, 'receiving_hops', None)
                     if isinstance(receiving_hops, int):
@@ -2316,16 +2325,16 @@ class ReticulumWrapper:
                                 path_entry = RNS.Transport.path_table.get(source_hash)
                                 if path_entry is not None and len(path_entry) > 5 and path_entry[5] is not None:
                                     interface_obj = path_entry[5]
-                                    raw_name = getattr(interface_obj, 'name', None)
-                                    if isinstance(raw_name, str) and raw_name:
-                                        interface_name = raw_name
+                                    # Use class name to identify interface type (reliable, not user-configured)
+                                    class_name = type(interface_obj).__name__
+                                    if "AutoInterface" in class_name:
+                                        interface_type = "AutoInterface"
                                     else:
-                                        interface_name = str(interface_obj)
-                                    if interface_name and interface_name != "None":
-                                        lxmf_message._columba_interface = interface_name
-                                        captured_interface = True
-                                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                                 f"📡 Captured interface from path_table: {interface_name}")
+                                        interface_type = class_name
+                                    lxmf_message._columba_interface = interface_type
+                                    captured_interface = True
+                                    log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                             f"📡 Captured interface from path_table: {interface_type}")
                 except Exception as e:
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                              f"⚠️ Could not capture hop count/interface: {e}")
@@ -2546,7 +2555,12 @@ class ReticulumWrapper:
                         if packet and hasattr(packet, 'receiving_interface'):
                             interface_obj = packet.receiving_interface
                             if interface_obj:
-                                receiving_interface = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
+                                # Use class name to identify interface type (reliable, not user-configured)
+                                class_name = type(interface_obj).__name__
+                                if "AutoInterface" in class_name:
+                                    receiving_interface = "AutoInterface"
+                                else:
+                                    receiving_interface = class_name
                 except Exception as e:
                     log_debug("ReticulumWrapper", "poll_received_announces",
                              f"Could not extract interface: {e}")

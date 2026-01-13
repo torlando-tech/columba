@@ -88,9 +88,10 @@ class TestPollReceivedAnnounces(unittest.TestCase):
         mock_identity.hash = b'\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x20'
         mock_identity.get_public_key = MagicMock(return_value=b'mock_public_key_data')
 
-        mock_interface = MagicMock()
-        mock_interface.name = "TCPInterface[127.0.0.1:4242]"
-        mock_interface.__str__ = MagicMock(return_value="TCPInterface[127.0.0.1:4242]")
+        # Create interface with proper class name (we use type().__name__ now)
+        class TCPClientInterface:
+            pass
+        mock_interface = TCPClientInterface()
         mock_packet = MagicMock()
         mock_packet.receiving_interface = mock_interface
 
@@ -111,7 +112,7 @@ class TestPollReceivedAnnounces(unittest.TestCase):
         self.assertEqual(announce['public_key'], b'mock_public_key_data')
         self.assertEqual(announce['app_data'], b'app_data_content')
         self.assertEqual(announce['hops'], 3)
-        self.assertEqual(announce['interface'], "TCPInterface[127.0.0.1:4242]")
+        self.assertEqual(announce['interface'], "TCPClientInterface")
         self.assertIn('timestamp', announce)
         self.assertIsInstance(announce['timestamp'], int)
 
@@ -467,19 +468,18 @@ class TestPollReceivedAnnounces(unittest.TestCase):
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
     @patch('reticulum_wrapper.RNS')
-    def test_interface_string_conversion(self, mock_rns):
-        """Test that interface object is properly converted to string"""
+    def test_interface_class_name_extraction(self, mock_rns):
+        """Test that interface type is identified by class name"""
         dest_hash = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
 
         mock_identity = MagicMock()
         mock_identity.hash = dest_hash
         mock_identity.get_public_key = MagicMock(return_value=b'')
 
-        # Create mock interface with custom name and __str__
-        mock_interface = MagicMock()
-        interface_name = "UDPInterface[0.0.0.0:4242/AutoInterface]"
-        mock_interface.name = interface_name
-        mock_interface.__str__ = MagicMock(return_value=interface_name)
+        # Create interface with proper class name (we use type().__name__ now)
+        class UDPInterface:
+            pass
+        mock_interface = UDPInterface()
 
         mock_packet = MagicMock()
         mock_packet.receiving_interface = mock_interface
@@ -493,7 +493,7 @@ class TestPollReceivedAnnounces(unittest.TestCase):
         result = self.wrapper.poll_received_announces()
 
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]['interface'], interface_name)
+        self.assertEqual(result[0]['interface'], "UDPInterface")
         self.assertIsInstance(result[0]['interface'], str)
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)

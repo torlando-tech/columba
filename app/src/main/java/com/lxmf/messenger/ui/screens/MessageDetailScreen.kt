@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.ui.util.getReceivingInterfaceInfo
 import com.lxmf.messenger.viewmodel.MessageDetailViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -372,56 +373,6 @@ private fun getHopCountInfo(hops: Int): HopCountInfo {
             HopCountInfo(
                 text = "$hops hops",
                 subtitle = "Message traveled through $hops relays",
-            )
-    }
-}
-
-private data class ReceivingInterfaceInfo(
-    val icon: ImageVector,
-    val text: String,
-    val subtitle: String,
-)
-
-private fun getReceivingInterfaceInfo(interfaceName: String): ReceivingInterfaceInfo {
-    return when {
-        interfaceName.contains("AutoInterface", ignoreCase = true) ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.Wifi,
-                text = "Local Network",
-                subtitle = "Received via automatic local network discovery",
-            )
-        interfaceName.contains("TCP", ignoreCase = true) ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.Cloud,
-                text = "TCP/IP",
-                subtitle = "Received via TCP network connection",
-            )
-        interfaceName.contains("BLE", ignoreCase = true) ||
-            interfaceName.contains("Bluetooth", ignoreCase = true) ||
-            interfaceName.contains("AndroidBle", ignoreCase = true) ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.Bluetooth,
-                text = "Bluetooth",
-                subtitle = "Received via Bluetooth Low Energy",
-            )
-        interfaceName.contains("RNode", ignoreCase = true) ||
-            interfaceName.contains("LoRa", ignoreCase = true) ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.CellTower,
-                text = "LoRa Radio",
-                subtitle = "Received via RNode LoRa radio",
-            )
-        interfaceName.contains("Serial", ignoreCase = true) ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.SettingsInputAntenna,
-                text = "Serial",
-                subtitle = "Received via serial interface",
-            )
-        else ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.SettingsInputAntenna,
-                text = interfaceName.take(30),
-                subtitle = "Received via network interface",
             )
     }
 }

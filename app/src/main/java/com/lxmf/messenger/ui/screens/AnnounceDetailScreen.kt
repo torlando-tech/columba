@@ -21,7 +21,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Label
@@ -29,11 +32,14 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Router
+import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
+import com.lxmf.messenger.ui.util.getReceivingInterfaceInfo
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -319,11 +325,12 @@ fun AnnounceDetailScreen(
 
                 // Show interface information if available
                 announceNonNull.receivingInterface?.let { interfaceName ->
+                    val interfaceInfo = getReceivingInterfaceInfo(interfaceName)
                     InfoCard(
-                        icon = Icons.Default.NetworkCheck,
-                        title = "Receiving Interface",
-                        content = interfaceName,
-                        subtitle = "Connection type",
+                        icon = interfaceInfo.icon,
+                        title = "Received Via",
+                        content = interfaceInfo.text,
+                        subtitle = interfaceInfo.subtitle,
                     )
                 }
 

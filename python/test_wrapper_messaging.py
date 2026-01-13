@@ -1809,6 +1809,40 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')
+    def test_delivery_captures_interface_from_lxmf_directly(self, mock_rns, mock_lxmf):
+        """Test interface captured when LXMF provides receiving_interface directly (opportunistic messages)"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        # Create interface with proper class name (AutoInterfacePeer -> AutoInterface)
+        class AutoInterfacePeer:
+            pass
+        mock_interface = AutoInterfacePeer()
+
+        mock_message = Mock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345678f'
+        # LXMF provides receiving_interface directly (opportunistic message scenario)
+        mock_message.receiving_interface = mock_interface
+        mock_message.receiving_hops = None
+
+        # Mock RNS.Transport - path_table should NOT be checked when LXMF provides interface
+        mock_rns.Transport.has_path.return_value = False
+        mock_rns.Transport.path_table = {}
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify interface was captured from LXMF directly (AutoInterfacePeer -> AutoInterface)
+        self.assertEqual(mock_message._columba_interface, "AutoInterface")
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
     def test_delivery_captures_interface_for_direct_message(self, mock_rns, mock_lxmf):
         """Test interface captured when hops=0 and path table entry exists"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)

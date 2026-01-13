@@ -33,9 +33,16 @@ class InterfaceTypeTest {
     }
 
     @Test
-    fun `fromInterfaceName returns ANDROID_BLE for Bluetooth interface names`() {
-        assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("Bluetooth Low Energy"))
-        assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("MyBluetoothDevice"))
+    fun `fromInterfaceName returns ANDROID_BLE for AndroidBLE interface names`() {
+        assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("AndroidBLEInterface"))
+        assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("MyAndroidBLEDevice"))
+    }
+
+    @Test
+    fun `fromInterfaceName returns ANDROID_BLE for BLEPeerInterface names`() {
+        // BLEPeerInterface is a spawned interface from BLEInterface - contains "ble"
+        assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("BLEPeerInterface[AA:BB:CC:DD:EE:FF]"))
+        assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("BLEPeerInterface[RNS-1b85e7]"))
     }
 
     @Test
@@ -78,9 +85,20 @@ class InterfaceTypeTest {
         assertEquals(InterfaceType.TCP_CLIENT, InterfaceType.fromInterfaceName("TCPINTERFACE"))
         assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("BLE"))
         assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("ble"))
-        assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("BLUETOOTH"))
+        assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("ANDROIDBLE"))
+        assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("androidble"))
         assertEquals(InterfaceType.RNODE, InterfaceType.fromInterfaceName("rnode"))
         assertEquals(InterfaceType.RNODE, InterfaceType.fromInterfaceName("RNODE"))
+    }
+
+    @Test
+    fun `fromInterfaceName detects embedded interface type names`() {
+        // Interface names may be embedded in longer strings (e.g., peer interfaces)
+        assertEquals(InterfaceType.AUTO_INTERFACE, InterfaceType.fromInterfaceName("PeerAutoInterface[local]"))
+        assertEquals(InterfaceType.TCP_CLIENT, InterfaceType.fromInterfaceName("PeerTCPClientInterface[host]"))
+        assertEquals(InterfaceType.TCP_CLIENT, InterfaceType.fromInterfaceName("PeerTCPInterface[host]"))
+        assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("PeerBLEInterface[addr]"))
+        assertEquals(InterfaceType.RNODE, InterfaceType.fromInterfaceName("PeerRNodeInterface[dev]"))
     }
 
     @Test

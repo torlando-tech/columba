@@ -597,17 +597,83 @@ fun loadFileAttachmentMetadata(
 }
 
 /**
+ * Load image data (raw bytes) from a message's fields JSON.
+ *
+ * Supports two formats:
+ * 1. Inline hex string: "6": "ffda8e..." (original format)
+ * 2. File reference: "6": {"_file_ref": "/path/to/file"} (large attachments saved to disk)
+ *
+ * IMPORTANT: This performs disk I/O. Must be called from a background thread.
+ *
+ * @param fieldsJson The message's fields JSON containing image data (field 6)
+ * @return Raw image bytes, or null if not found or loading fails
+ */
+fun loadImageData(fieldsJson: String?): ByteArray? {
+    return extractImageBytes(fieldsJson)
+}
+
+/**
+ * Get image metadata for save operations.
+ *
+ * Detects the actual image format from magic bytes:
+ * - JPEG: FF D8 FF
+ * - PNG: 89 50 4E 47
+ * - GIF: 47 49 46
+ * - WebP: 52 49 46 46 (RIFF header)
+ *
+ * @param fieldsJson The message's fields JSON containing image data (field 6)
+ * @return Pair of (mimeType, fileExtension) based on image format, or null if no image
+ */
+fun getImageMetadata(fieldsJson: String?): Pair<String, String>? {
+    val bytes = extractImageBytes(fieldsJson) ?: return null
+    if (bytes.size < 4) return null // Need at least 4 bytes for PNG detection
+    return detectImageFormat(bytes)
+}
+
+/**
+ * Detect image format from magic bytes.
+ */
+private fun detectImageFormat(bytes: ByteArray): Pair<String, String> =
+    when {
+        ImageUtils.isAnimatedGif(bytes) -> "image/gif" to "gif"
+        isJpeg(bytes) -> "image/jpeg" to "jpg"
+        isPng(bytes) -> "image/png" to "png"
+        isGif(bytes) -> "image/gif" to "gif"
+        isWebP(bytes) -> "image/webp" to "webp"
+        else -> "application/octet-stream" to "bin"
+    }
+
+private fun isJpeg(bytes: ByteArray): Boolean = bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()
+
+private fun isPng(bytes: ByteArray): Boolean =
+    bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() &&
+        bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()
+
+private fun isGif(bytes: ByteArray): Boolean = bytes[0] == 0x47.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 0x46.toByte()
+
+private fun isWebP(bytes: ByteArray): Boolean =
+    bytes.size >= 12 &&
+        bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&
+        bytes[2] == 0x46.toByte() && bytes[3] == 0x46.toByte() &&
+        bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte() &&
+        bytes[10] == 0x42.toByte() && bytes[11] == 0x50.toByte()
+
+/**
  * Efficiently convert a hex string to byte array.
  * Uses direct array allocation and character arithmetic instead of
  * chunked/map which creates many intermediate objects.
+ *
+ * @throws IllegalArgumentException if hex string has odd length or invalid characters
  */
 private fun hexStringToByteArray(hex: String): ByteArray {
     val len = hex.length
+    require(len % 2 == 0) { "Hex string must have even length, got: $len" }
     val result = ByteArray(len / 2)
     var i = 0
     while (i < len) {
         val high = Character.digit(hex[i], 16)
         val low = Character.digit(hex[i + 1], 16)
+        require(high != -1 && low != -1) { "Invalid hex character at position $i" }
         result[i / 2] = ((high shl 4) or low).toByte()
         i += 2
     }

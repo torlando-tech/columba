@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -68,6 +69,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.AlertDialog
@@ -137,6 +139,7 @@ import com.lxmf.messenger.ui.components.FileAttachmentCard
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
 import com.lxmf.messenger.ui.components.FullEmojiPickerDialog
+import com.lxmf.messenger.ui.components.ImageOptionsSheet
 import com.lxmf.messenger.ui.components.ImageQualitySelectionDialog
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.QuickShareLocationBottomSheet
@@ -365,6 +368,33 @@ fun MessagingScreen(
                 }
             }
             pendingFileSave = null
+        }
+
+    // State for image options bottom sheet
+    var showImageOptionsSheet by remember { mutableStateOf(false) }
+    var selectedImageMessageId by remember { mutableStateOf<String?>(null) }
+    var selectedImageForOptionsIsAnimated by remember { mutableStateOf(false) }
+
+    // State for saving images
+    var pendingImageSave by remember { mutableStateOf<Pair<String, String>?>(null) } // messageId, extension
+
+    // Image save launcher (CreateDocument)
+    val imageSaveLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument("*/*"),
+        ) { uri ->
+            uri?.let { destinationUri ->
+                pendingImageSave?.let { (messageId, _) ->
+                    scope.launch(Dispatchers.IO) {
+                        val success = viewModel.saveImage(context, messageId, destinationUri)
+                        withContext(Dispatchers.Main) {
+                            val message = if (success) "Image saved" else "Failed to save image"
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+            pendingImageSave = null
         }
 
     // Clipboard for copy functionality
@@ -772,6 +802,11 @@ fun MessagingScreen(
                                             onFetchPendingFile = { fileSizeBytes ->
                                                 viewModel.fetchPendingFile(fileSizeBytes)
                                             },
+                                            onImageOptionsTap = { messageId, isAnimated ->
+                                                selectedImageMessageId = messageId
+                                                selectedImageForOptionsIsAnimated = isAnimated
+                                                showImageOptionsSheet = true
+                                            },
                                             onLongPress = { msgId, fromMe, failed, bitmap, x, y, width, height ->
                                                 // Dismiss keyboard before entering reaction mode
                                                 keyboardController?.hide()
@@ -938,6 +973,52 @@ fun MessagingScreen(
         )
     }
 
+    // Image options bottom sheet
+    if (showImageOptionsSheet && selectedImageMessageId != null) {
+        val messageId = selectedImageMessageId!!
+        ImageOptionsSheet(
+            onSaveToDevice = {
+                showImageOptionsSheet = false
+                scope.launch {
+                    val extension = viewModel.getImageExtension(messageId)
+                    pendingImageSave = Pair(messageId, extension)
+                    imageSaveLauncher.launch("image.$extension")
+                }
+            },
+            onShare = {
+                showImageOptionsSheet = false
+                scope.launch {
+                    val result = viewModel.getImageShareUri(context, messageId)
+                    if (result != null) {
+                        val (uri, mimeType) = result
+                        val intent =
+                            Intent(Intent.ACTION_SEND).apply {
+                                type = mimeType
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                        @Suppress("SwallowedException") // User is notified via Toast
+                        try {
+                            context.startActivity(Intent.createChooser(intent, "Share image"))
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "No app found to share", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Failed to load image", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            },
+            onDismiss = {
+                showImageOptionsSheet = false
+                selectedImageMessageId = null
+            },
+        )
+    }
+
     // Location permission bottom sheet
     if (showLocationPermissionSheet) {
         LocationPermissionBottomSheet(
@@ -1040,6 +1121,7 @@ fun MessageBubble(
     onReplyPreviewClick: (replyToMessageId: String) -> Unit = {},
     onReact: (emoji: String) -> Unit = {},
     onFetchPendingFile: (fileSizeBytes: Long) -> Unit = {},
+    onImageOptionsTap: (messageId: String, isAnimated: Boolean) -> Unit = { _, _ -> },
     onLongPress: (
         messageId: String,
         isFromMe: Boolean,
@@ -1219,6 +1301,10 @@ fun MessageBubble(
                 FullscreenAnimatedImageDialog(
                     imageData = message.imageData,
                     onDismiss = { showFullscreenImage = false },
+                    onShowOptions = {
+                        showFullscreenImage = false
+                        onImageOptionsTap(message.id, true)
+                    },
                 )
             }
         } else {
@@ -1407,11 +1493,19 @@ fun MessageBubble(
                                 FullscreenAnimatedImageDialog(
                                     imageData = imageData,
                                     onDismiss = { showFullscreenImage = false },
+                                    onShowOptions = {
+                                        showFullscreenImage = false
+                                        onImageOptionsTap(message.id, true)
+                                    },
                                 )
                             } else if (imageBitmap != null) {
                                 FullscreenImageDialog(
                                     bitmap = imageBitmap,
                                     onDismiss = { showFullscreenImage = false },
+                                    onShowOptions = {
+                                        showFullscreenImage = false
+                                        onImageOptionsTap(message.id, false)
+                                    },
                                 )
                             }
                         }
@@ -1921,6 +2015,7 @@ private fun formatTimestamp(timestamp: Long): String {
 private fun FullscreenImageDialog(
     bitmap: androidx.compose.ui.graphics.ImageBitmap,
     onDismiss: () -> Unit,
+    onShowOptions: () -> Unit,
 ) {
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
@@ -1964,6 +2059,25 @@ private fun FullscreenImageDialog(
                         ),
                 contentScale = ContentScale.Fit,
             )
+
+            // Top right action button with save/share options
+            IconButton(
+                onClick = { onShowOptions() },
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(8.dp),
+                colors =
+                    IconButtonDefaults.iconButtonColors(
+                        contentColor = Color.White,
+                    ),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More options",
+                )
+            }
         }
     }
 }
@@ -1972,6 +2086,7 @@ private fun FullscreenImageDialog(
 private fun FullscreenAnimatedImageDialog(
     imageData: ByteArray,
     onDismiss: () -> Unit,
+    onShowOptions: () -> Unit,
 ) {
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
@@ -2021,6 +2136,25 @@ private fun FullscreenAnimatedImageDialog(
                         ),
                 contentScale = ContentScale.Fit,
             )
+
+            // Top right action button with save/share options
+            IconButton(
+                onClick = { onShowOptions() },
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(8.dp),
+                colors =
+                    IconButtonDefaults.iconButtonColors(
+                        contentColor = Color.White,
+                    ),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More options",
+                )
+            }
         }
     }
 }

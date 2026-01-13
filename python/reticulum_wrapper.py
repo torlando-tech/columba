@@ -2421,8 +2421,8 @@ class ReticulumWrapper:
                 # Get receiving interface from announce_table packet
                 receiving_interface = None
                 try:
-                    announce_entry = RNS.Transport.announce_table[dest_hash]
-                    if len(announce_entry) > 5:
+                    announce_entry = RNS.Transport.announce_table.get(dest_hash)
+                    if announce_entry is not None and len(announce_entry) > 5:
                         packet = announce_entry[5]  # IDX_AT_PACKET
                         if packet and hasattr(packet, 'receiving_interface'):
                             interface_obj = packet.receiving_interface
@@ -2698,9 +2698,9 @@ class ReticulumWrapper:
                 log_debug("ReticulumWrapper", "send_lxmf_message", f"Target LXMF dest hash: {dest_lxmf_hash.hex()[:16]}...")
                 log_debug("ReticulumWrapper", "send_lxmf_message", f"Path table has {len(path_table)} entries")
 
-                if dest_lxmf_hash in path_table:
+                path_info = path_table.get(dest_lxmf_hash)
+                if path_info is not None:
                     has_path = True
-                    path_info = path_table[dest_lxmf_hash]
                     log_info("ReticulumWrapper", "send_lxmf_message", f"✅ Path exists to {dest_lxmf_hash.hex()[:16]} - will send via path-based routing")
                     log_debug("ReticulumWrapper", "send_lxmf_message", f"   Path info: {path_info}")
                 else:

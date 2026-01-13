@@ -93,6 +93,7 @@ data class OfflineMapDownloadState(
     val isComplete: Boolean = false,
     val errorMessage: String? = null,
     val createdRegionId: Long? = null,
+    val maplibreRegionId: Long? = null,
     // Address search fields
     val addressQuery: String = "",
     val addressSearchResults: List<AddressSearchResult> = emptyList(),
@@ -361,12 +362,39 @@ class OfflineMapDownloadViewModel
         }
 
         /**
-         * Cancel the current download.
+         * Cancel the current download and clean up.
          */
         fun cancelDownload() {
-            // MapLibre doesn't support direct cancellation of in-progress downloads
-            // The region will be deleted when the user navigates away or resets
+            val currentState = _state.value
+            val maplibreId = currentState.maplibreRegionId
+            val dbRegionId = currentState.createdRegionId
+
+            // Delete MapLibre region if it exists
+            if (maplibreId != null) {
+                mapLibreOfflineManager.deleteRegion(maplibreId) { success ->
+                    Log.d(TAG, "MapLibre region deletion: $success")
+                }
+            }
+
+            // Delete database record if it exists
+            if (dbRegionId != null) {
+                viewModelScope.launch {
+                    try {
+                        offlineMapRegionRepository.deleteRegion(dbRegionId)
+                        Log.d(TAG, "Database region deleted: $dbRegionId")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to delete database region", e)
+                    }
+                }
+            }
+
             isDownloading = false
+            _state.update {
+                it.copy(
+                    maplibreRegionId = null,
+                    createdRegionId = null,
+                )
+            }
         }
 
         /**
@@ -475,6 +503,9 @@ class OfflineMapDownloadViewModel
                         minZoom = currentState.minZoom.toDouble(),
                         maxZoom = currentState.maxZoom.toDouble(),
                         styleUrl = MapLibreOfflineManager.DEFAULT_STYLE_URL,
+                        onCreated = { maplibreId ->
+                            _state.update { it.copy(maplibreRegionId = maplibreId) }
+                        },
                         onProgress = { progress, completed, required ->
                             _state.update {
                                 it.copy(

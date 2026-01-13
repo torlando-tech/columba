@@ -59,6 +59,7 @@ class MapLibreOfflineManager
          * @param minZoom Minimum zoom level to download
          * @param maxZoom Maximum zoom level to download
          * @param styleUrl URL of the map style (default: OpenFreeMap Liberty)
+         * @param onCreated Callback when MapLibre region is created (before download starts)
          * @param onProgress Callback for download progress (0.0 to 1.0)
          * @param onComplete Callback when download completes with MapLibre region ID
          * @param onError Callback for download errors
@@ -70,6 +71,8 @@ class MapLibreOfflineManager
             minZoom: Double,
             maxZoom: Double,
             styleUrl: String = DEFAULT_STYLE_URL,
+            // MapLibre region ID - called immediately when region is created
+            onCreated: (Long) -> Unit = {},
             // progress, completedResources, requiredResources
             onProgress: (Float, Long, Long) -> Unit,
             // regionId, sizeBytes
@@ -98,6 +101,9 @@ class MapLibreOfflineManager
                 object : OfflineManager.CreateOfflineRegionCallback {
                     override fun onCreate(offlineRegion: OfflineRegion) {
                         Log.d(TAG, "Region created with ID: ${offlineRegion.id}")
+
+                        // Notify caller of region ID immediately (for cancellation support)
+                        onCreated(offlineRegion.id)
 
                         // Set up download observer
                         offlineRegion.setObserver(

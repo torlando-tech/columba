@@ -49,4 +49,8 @@ data class MessageEntity(
     val errorMessage: String? = null,
     // ID of message this is a reply to (extracted from LXMF field 16 "reply_to")
     val replyToMessageId: String? = null,
+    // Hop count when message was received (null for sent messages or pre-feature messages)
+    val receivedHopCount: Int? = null,
+    // Interface name through which message was received (null for sent messages or pre-feature messages)
+    val receivedInterface: String? = null,
 )

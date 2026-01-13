@@ -65,6 +65,9 @@ sys.excepthook = _global_exception_handler
 FIELD_TELEMETRY = 0x02        # Standard telemetry field for Sideband interoperability
 FIELD_COLUMBA_META = 0x70     # Custom field for Columba-specific metadata (cease signals, etc.)
 FIELD_ICON_APPEARANCE = 0x04  # Icon appearance [name, fg_bytes(3), bg_bytes(3)] for Sideband/MeshChat interoperability
+FIELD_FILE_ATTACHMENTS = 0x05 # LXMF standard field for file attachments
+FIELD_IMAGE = 0x06            # LXMF standard field for images
+FIELD_AUDIO = 0x07            # LXMF standard field for audio
 LEGACY_LOCATION_FIELD = 7     # Legacy field ID for backwards compatibility
 
 # Sensor IDs (from Sideband sense.py)
@@ -1629,7 +1632,7 @@ class ReticulumWrapper:
                         if packet and hasattr(packet, 'receiving_interface'):
                             interface_obj = packet.receiving_interface
                             if interface_obj:
-                                receiving_interface = str(interface_obj)
+                                receiving_interface = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
             except Exception as e:
                 log_debug("ReticulumWrapper", "_announce_handler",
                          f"Could not extract interface: {e}")
@@ -2247,9 +2250,9 @@ class ReticulumWrapper:
             # These have no text content and no meaningful fields (image, file, telemetry, etc.)
             meaningful_fields = {
                 FIELD_TELEMETRY,           # 0x02 - Location/sensor data
-                LXMF.FIELD_FILE_ATTACHMENTS,  # 0x05
-                LXMF.FIELD_IMAGE,             # 0x06
-                LXMF.FIELD_AUDIO,             # 0x07
+                FIELD_FILE_ATTACHMENTS,    # 0x05
+                FIELD_IMAGE,               # 0x06
+                FIELD_AUDIO,               # 0x07
             }
             has_meaningful_fields = False
             if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
@@ -2266,6 +2269,67 @@ class ReticulumWrapper:
                 self.router.pending_inbound = []
 
             if lxmf_message not in self.router.pending_inbound:
+                # Capture hop count and receiving interface at delivery time
+                # For opportunistic messages: LXMF captures from packet directly (path_table may not exist)
+                # For link-based messages: use path_table lookup (always populated during link setup)
+                try:
+                    source_hash = lxmf_message.source_hash
+
+                    # Track whether we captured hops and interface
+                    captured_hops = False
+                    captured_interface = False
+
+                    # First check if LXMF captured receiving_interface and hops from the packet
+                    # (set by our patched delivery_packet for opportunistic messages)
+                    # Only use if it's a real interface (has string name), not a Mock auto-attribute
+                    receiving_interface = getattr(lxmf_message, 'receiving_interface', None)
+                    if receiving_interface is not None:
+                        # Get interface name - only use if it's a real string (not Mock)
+                        raw_name = getattr(receiving_interface, 'name', None)
+                        if isinstance(raw_name, str) and raw_name:
+                            lxmf_message._columba_interface = raw_name
+                            captured_interface = True
+                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"📡 Got interface from LXMF message (opportunistic): {raw_name}")
+
+                    receiving_hops = getattr(lxmf_message, 'receiving_hops', None)
+                    if isinstance(receiving_hops, int):
+                        lxmf_message._columba_hops = receiving_hops
+                        captured_hops = True
+                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                 f"📡 Got hops from LXMF message (opportunistic): {receiving_hops}")
+
+                    # Fallback to path_table for link-based messages or if LXMF didn't capture
+                    if not captured_interface or not captured_hops:
+                        if RNS.Transport.has_path(source_hash):
+                            # Only capture hops from path_table if we don't already have them
+                            if not captured_hops:
+                                hops = RNS.Transport.hops_to(source_hash)
+                                if hops is not None and hops >= 0:
+                                    lxmf_message._columba_hops = hops
+                                    captured_hops = True
+                                    log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                             f"📡 Captured hop count from path_table: {hops}")
+
+                            # Only capture interface from path_table if we don't already have it
+                            if not captured_interface:
+                                path_entry = RNS.Transport.path_table.get(source_hash)
+                                if path_entry is not None and len(path_entry) > 5 and path_entry[5] is not None:
+                                    interface_obj = path_entry[5]
+                                    raw_name = getattr(interface_obj, 'name', None)
+                                    if isinstance(raw_name, str) and raw_name:
+                                        interface_name = raw_name
+                                    else:
+                                        interface_name = str(interface_obj)
+                                    if interface_name and interface_name != "None":
+                                        lxmf_message._columba_interface = interface_name
+                                        captured_interface = True
+                                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                                 f"📡 Captured interface from path_table: {interface_name}")
+                except Exception as e:
+                    log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                             f"⚠️ Could not capture hop count/interface: {e}")
+
                 self.router.pending_inbound.append(lxmf_message)
                 log_info("ReticulumWrapper", "_on_lxmf_delivery", f"✅ Added message to pending_inbound queue (now has {len(self.router.pending_inbound)} messages)")
             else:
@@ -2287,24 +2351,79 @@ class ReticulumWrapper:
                 except Exception as e:
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Failed to parse icon appearance: {e}")
 
-            # ✅ PHASE 2.2: Invoke Kotlin callback for instant notification (event-driven)
-            # Same pattern as delivery status callbacks which work reliably
+            # ✅ PHASE 2.2: Invoke Kotlin callback with FULL message data (truly event-driven)
+            # Send complete message so Kotlin doesn't need to poll
             if self.kotlin_message_received_callback:
                 try:
+                    # Build full message event with all data
+                    content = lxmf_message.content.decode('utf-8') if isinstance(lxmf_message.content, bytes) else str(lxmf_message.content)
                     message_event = {
                         'message_hash': lxmf_message.hash.hex() if lxmf_message.hash else "unknown",
+                        'content': content,
                         'source_hash': lxmf_message.source_hash.hex(),
                         'destination_hash': lxmf_message.destination_hash.hex(),
-                        'timestamp': int(time.time() * 1000),
-                        'content_length': len(lxmf_message.content) if lxmf_message.content else 0,
-                        'icon_appearance': icon_appearance
+                        'timestamp': int(lxmf_message.timestamp * 1000) if lxmf_message.timestamp else int(time.time() * 1000),
+                        'icon_appearance': icon_appearance,
+                        'full_message': True,  # Flag indicating this has full data, no polling needed
                     }
+                    # Add hop count and receiving interface if captured
+                    # Use getattr with explicit default to avoid MagicMock issues in tests
+                    columba_hops = getattr(lxmf_message, '_columba_hops', None)
+                    if isinstance(columba_hops, int):
+                        message_event['hops'] = columba_hops
+                    columba_interface = getattr(lxmf_message, '_columba_interface', None)
+                    if isinstance(columba_interface, str):
+                        message_event['receiving_interface'] = columba_interface
+
+                    # Get sender's public key from RNS identity cache
+                    try:
+                        source_identity = RNS.Identity.recall(lxmf_message.source_hash)
+                        if source_identity is not None:
+                            public_key = source_identity.get_public_key()
+                            # Only add if it's actual bytes (not a Mock object)
+                            if isinstance(public_key, bytes):
+                                message_event['public_key'] = public_key.hex()
+                    except Exception as e:
+                        log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Could not get public key: {e}")
+
+                    # Extract LXMF fields (attachments, reactions, etc.)
+                    if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
+                        fields_serialized = {}
+                        for key, value in lxmf_message.fields.items():
+                            if key == 5 and isinstance(value, list):
+                                # Field 5: file attachments
+                                serialized_attachments = []
+                                for attachment in value:
+                                    if isinstance(attachment, (list, tuple)) and len(attachment) >= 2:
+                                        filename, file_data = attachment[0], attachment[1]
+                                        if isinstance(file_data, bytes):
+                                            serialized_attachments.append({
+                                                'filename': str(filename),
+                                                'data': file_data.hex(),
+                                                'size': len(file_data)
+                                            })
+                                if serialized_attachments:
+                                    fields_serialized['5'] = serialized_attachments
+                            elif key == 16 and isinstance(value, dict):
+                                # Field 16: app extensions (reactions, replies)
+                                fields_serialized['16'] = value
+                            elif key == 4 and isinstance(value, list) and len(value) >= 3:
+                                # Field 4: icon appearance (already parsed above)
+                                pass
+                            elif key in (6, 7) and isinstance(value, (list, tuple)) and len(value) >= 2:
+                                # Field 6/7: image/audio
+                                if isinstance(value[1], bytes):
+                                    fields_serialized[str(key)] = [value[0], value[1].hex()]
+                            else:
+                                fields_serialized[str(key)] = str(value)
+                        if fields_serialized:
+                            message_event['fields'] = json.dumps(fields_serialized)
 
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                             "Invoking Kotlin callback for instant notification...")
+                             f"Invoking Kotlin callback with full message data ({len(content)} chars)...")
                     self.kotlin_message_received_callback(json.dumps(message_event))
                     log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                            "✅ Kotlin callback invoked successfully (event-driven notification sent)")
+                            "✅ Kotlin callback invoked with full message (event-driven)")
                 except Exception as e:
                     log_error("ReticulumWrapper", "_on_lxmf_delivery",
                              f"⚠️ Error invoking Kotlin callback: {e}")
@@ -2427,7 +2546,7 @@ class ReticulumWrapper:
                         if packet and hasattr(packet, 'receiving_interface'):
                             interface_obj = packet.receiving_interface
                             if interface_obj:
-                                receiving_interface = str(interface_obj)
+                                receiving_interface = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
                 except Exception as e:
                     log_debug("ReticulumWrapper", "poll_received_announces",
                              f"Could not extract interface: {e}")
@@ -3308,10 +3427,10 @@ class ReticulumWrapper:
             if image_data and image_format:
                 if hasattr(image_data, '__iter__') and not isinstance(image_data, (bytes, bytearray)):
                     image_data = bytes(image_data)
-                fields = {LXMF.FIELD_IMAGE: [image_format, image_data]}
+                fields = {FIELD_IMAGE: [image_format, image_data]}
                 log_info("ReticulumWrapper", "send_lxmf_message_with_method",
                         f"📎 Attaching image: {len(image_data)} bytes, format={image_format}, "
-                        f"field_key={LXMF.FIELD_IMAGE}, format_type={type(image_format).__name__}, "
+                        f"field_key={FIELD_IMAGE}, format_type={type(image_format).__name__}, "
                         f"data_type={type(image_data).__name__}")
 
             # Add file attachments to Field 5 if provided
@@ -4839,6 +4958,17 @@ class ReticulumWrapper:
                             'destination_hash': lxmf_message.destination_hash,
                             'timestamp': int(lxmf_message.timestamp * 1000) if lxmf_message.timestamp else int(time.time() * 1000)
                         }
+
+                        # Use hop count and interface captured at delivery time
+                        # (values are stored on message object in _on_lxmf_delivery)
+                        if hasattr(lxmf_message, '_columba_hops'):
+                            message_event['hops'] = lxmf_message._columba_hops
+                            log_debug("ReticulumWrapper", "poll_received_messages",
+                                     f"📡 Hop count (captured at delivery): {lxmf_message._columba_hops}")
+                        if hasattr(lxmf_message, '_columba_interface'):
+                            message_event['receiving_interface'] = lxmf_message._columba_interface
+                            log_debug("ReticulumWrapper", "poll_received_messages",
+                                     f"📡 Receiving interface (captured at delivery): {lxmf_message._columba_interface}")
 
                         # Try to get sender's public key from RNS identity cache
                         try:

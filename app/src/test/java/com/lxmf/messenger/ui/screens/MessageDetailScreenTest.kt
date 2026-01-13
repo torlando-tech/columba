@@ -598,4 +598,271 @@ class MessageDetailScreenTest {
         composeTestRule.onNodeWithText("Delivery Method").assertDoesNotExist()
         composeTestRule.onNodeWithText("Error Details").assertDoesNotExist()
     }
+
+    // ========== Hop Count Card Tests ==========
+
+    @Test
+    fun `hop count card displays Direct for zero hops`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 0),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Hop Count").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Direct").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Message received directly from sender").assertIsDisplayed()
+    }
+
+    @Test
+    fun `hop count card displays singular hop for one hop`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 1),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Hop Count").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 hop").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Message traveled through 1 relay").assertIsDisplayed()
+    }
+
+    @Test
+    fun `hop count card displays plural hops for multiple hops`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 3),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Hop Count").assertIsDisplayed()
+        composeTestRule.onNodeWithText("3 hops").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Message traveled through 3 relays").assertIsDisplayed()
+    }
+
+    @Test
+    fun `hop count card not displayed when hop count is null`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = null),
+            )
+
+        composeTestRule.setContent {
+            MessageDetailScreen(
+                messageId = "test-id",
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Hop Count").assertDoesNotExist()
+    }
+
+    // ========== Receiving Interface Card Tests ==========
+
+    @Test
+    fun `receiving interface card displays Local Network for AutoInterface`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = "AutoInterface"),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Local Network").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Received via automatic local network discovery")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `receiving interface card displays TCP for TCPClient`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = "TCPClientInterface"),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("TCP/IP").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Received via TCP network connection")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `receiving interface card displays Bluetooth for BLE interface`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = "AndroidBleInterface"),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Bluetooth").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Received via Bluetooth Low Energy")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `receiving interface card displays LoRa Radio for RNode`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = "RNodeInterface"),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("LoRa Radio").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Received via RNode LoRa radio")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `receiving interface card displays Serial for serial interface`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = "SerialInterface"),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Serial").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Received via serial interface")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `receiving interface card displays truncated name for unknown interface`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(
+                    hopCount = 0,
+                    interfaceName = "CustomUnknownInterfaceWithVeryLongName",
+                ),
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MessageDetailScreen(
+                    messageId = "test-id",
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
+        // Should truncate to first 30 characters
+        composeTestRule.onNodeWithText("CustomUnknownInterfaceWithVery")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Received via network interface")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `receiving interface card not displayed when interface is null`() {
+        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        every { mockViewModel.message } returns
+            MutableStateFlow(
+                MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = null),
+            )
+
+        composeTestRule.setContent {
+            MessageDetailScreen(
+                messageId = "test-id",
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Received Via").assertDoesNotExist()
+    }
 }

@@ -92,6 +92,18 @@ data class MessageUi(
      * Parsed from LXMF Field 16 {"reactions": {"👍": ["sender1", "sender2"], ...}}.
      */
     val reactions: List<ReactionUi> = emptyList(),
+    /**
+     * Hop count when message was received.
+     * Null for sent messages or messages received before this feature was added.
+     * 0 means direct delivery, higher numbers indicate multi-hop routing.
+     */
+    val receivedHopCount: Int? = null,
+    /**
+     * Interface name through which message was received.
+     * Examples: "AutoInterface", "TCPClient", "AndroidBle", "RNodeInterface".
+     * Null for sent messages or messages received before this feature was added.
+     */
+    val receivedInterface: String? = null,
 ) {
     /**
      * Whether this message should be displayed as a standalone media item without a bubble.

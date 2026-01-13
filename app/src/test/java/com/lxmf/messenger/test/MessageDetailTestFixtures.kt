@@ -22,6 +22,8 @@ object MessageDetailTestFixtures {
         val status: String = "sent",
         val deliveryMethod: String? = null,
         val errorMessage: String? = null,
+        val receivedHopCount: Int? = null,
+        val receivedInterface: String? = null,
     )
 
     /**
@@ -38,6 +40,8 @@ object MessageDetailTestFixtures {
             decodedImage = null,
             deliveryMethod = config.deliveryMethod,
             errorMessage = config.errorMessage,
+            receivedHopCount = config.receivedHopCount,
+            receivedInterface = config.receivedInterface,
         )
 
     fun deliveredMessage() =
@@ -111,6 +115,16 @@ object MessageDetailTestFixtures {
                 status = "failed",
                 deliveryMethod = "direct",
                 errorMessage = null,
+            ),
+        )
+
+    fun receivedMessage(hopCount: Int? = null, interfaceName: String? = null) =
+        createMessageUi(
+            MessageConfig(
+                isFromMe = false,
+                status = "received",
+                receivedHopCount = hopCount,
+                receivedInterface = interfaceName,
             ),
         )
 }

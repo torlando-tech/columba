@@ -48,6 +48,8 @@ data class Message(
     val deliveryMethod: String? = null,
     val errorMessage: String? = null,
     val replyToMessageId: String? = null,
+    val receivedHopCount: Int? = null,
+    val receivedInterface: String? = null,
 )
 
 /**
@@ -465,6 +467,8 @@ class ConversationRepository
                 deliveryMethod = deliveryMethod,
                 errorMessage = errorMessage,
                 replyToMessageId = replyToMessageId,
+                receivedHopCount = receivedHopCount,
+                receivedInterface = receivedInterface,
             )
 
         /**

@@ -72,6 +72,8 @@ fun Message.toMessageUi(): MessageUi {
         replyToMessageId = replyId,
         // Note: replyPreview is loaded asynchronously by the ViewModel
         reactions = reactionsList,
+        receivedHopCount = receivedHopCount,
+        receivedInterface = receivedInterface,
     )
 }
 

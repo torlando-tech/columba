@@ -2351,6 +2351,10 @@ class ServiceReticulumProtocol(
                 }
             }
 
+        // Extract hop count and receiving interface (routing info)
+        val hops = json.optInt("hops", -1).takeIf { it >= 0 }
+        val receivingInterface = json.optString("receiving_interface", "").takeIf { it.isNotEmpty() }
+
         return ReceivedMessage(
             messageHash = messageHash,
             content = content,
@@ -2360,6 +2364,8 @@ class ServiceReticulumProtocol(
             fieldsJson = fieldsJson,
             publicKey = publicKey,
             iconAppearance = iconAppearance,
+            receivedHopCount = hops,
+            receivedInterface = receivingInterface,
         )
     }
 

@@ -132,6 +132,9 @@ class MessageCollector
                                 status = "delivered",
                                 // LXMF attachments
                                 fieldsJson = receivedMessage.fieldsJson,
+                                // Routing info (hop count and receiving interface)
+                                receivedHopCount = receivedMessage.receivedHopCount,
+                                receivedInterface = receivedMessage.receivedInterface,
                             )
 
                         // Get peer name from cache, existing conversation, or use formatted hash

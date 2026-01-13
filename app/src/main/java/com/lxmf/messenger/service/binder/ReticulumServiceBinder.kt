@@ -247,6 +247,20 @@ class ReticulumServiceBinder(
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set stamp generator callback before init: ${e.message}", e)
         }
+
+        // Setup message received callback BEFORE Python initialization
+        // This is CRITICAL: messages can arrive immediately after LXMF router starts,
+        // so the callback must be registered before initialize() to avoid missing messages
+        // or falling back to polling (which doesn't get hop count/interface data)
+        try {
+            val messageCallback: (String) -> Unit = { messageJson ->
+                eventHandler.handleMessageReceivedEvent(messageJson)
+            }
+            wrapper.callAttr("set_message_received_callback", messageCallback)
+            Log.d(TAG, "Message received callback set before Python initialization")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set message received callback before init: ${e.message}", e)
+        }
     }
 
     override fun shutdown() {
@@ -1004,15 +1018,8 @@ class ReticulumServiceBinder(
         }
 
         // Note: Delivery status callback is set in beforeInit block to catch early messages
-
-        // Setup message received callback
-        try {
-            wrapperManager.setMessageReceivedCallback { messageJson ->
-                eventHandler.handleMessageReceivedEvent(messageJson)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to set message received callback: ${e.message}", e)
-        }
+        // Note: Message received callback is set in beforeInit block to catch early messages
+        //       (messages can arrive immediately after LXMF router starts)
 
         // Setup alternative relay callback for propagation failover
         try {

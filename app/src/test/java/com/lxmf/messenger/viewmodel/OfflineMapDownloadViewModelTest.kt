@@ -569,6 +569,7 @@ class OfflineMapDownloadViewModelTest {
                     minZoom = any(),
                     maxZoom = any(),
                     styleUrl = any(),
+                    onCreated = any(),
                     onProgress = capture(onProgressSlot),
                     onComplete = any(),
                     onError = any(),
@@ -614,12 +615,13 @@ class OfflineMapDownloadViewModelTest {
                     minZoom = any(),
                     maxZoom = any(),
                     styleUrl = any(),
+                    onCreated = any(),
                     onProgress = any(),
                     onComplete = any(),
                     onError = any(),
                 )
             } answers {
-                capturedOnComplete = arg<(Long, Long) -> Unit>(6)
+                capturedOnComplete = arg<(Long, Long) -> Unit>(7)
             }
 
             // Navigate to DOWNLOADING
@@ -755,6 +757,7 @@ class OfflineMapDownloadViewModelTest {
                     minZoom = any(),
                     maxZoom = any(),
                     styleUrl = any(),
+                    onCreated = any(),
                     onProgress = any(),
                     onComplete = any(),
                     onError = capture(onErrorSlot),
@@ -887,6 +890,7 @@ class OfflineMapDownloadViewModelTest {
                     minZoom = any(),
                     maxZoom = any(),
                     styleUrl = any(),
+                    onCreated = any(),
                     onProgress = any(),
                     onComplete = any(),
                     onError = capture(onErrorSlot),
@@ -926,6 +930,7 @@ class OfflineMapDownloadViewModelTest {
                     minZoom = any(),
                     maxZoom = any(),
                     styleUrl = any(),
+                    onCreated = any(),
                     onProgress = capture(onProgressSlot),
                     onComplete = any(),
                     onError = any(),

@@ -1,4 +1,0 @@
-{
-  "task_description": "I want to add signal-style emoji reactions to columba messages. there is a recently added reply feature that uses extended lxmf fields to achieve a reply ui. this extended fields is a dictionary and should be able to support a reactions field as well",
-  "workflow_type": "feature"
-}

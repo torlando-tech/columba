@@ -97,3 +97,4 @@ release/.envrc
 python/ble_modules/BLEAgent.py
 python/ble_modules/BLEFragmentation.py
 .letta/
+LINK_SPEED_PROBE_DESIGN.md

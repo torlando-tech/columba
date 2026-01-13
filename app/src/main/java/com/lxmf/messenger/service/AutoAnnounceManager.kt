@@ -8,7 +8,6 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -151,8 +150,9 @@ class AutoAnnounceManager
 
                 // Calculate randomized delay with minute precision: base interval +/- 1 hour
                 val randomOffsetMinutes = Random.nextInt(-RANDOMIZATION_RANGE_MINUTES, RANDOMIZATION_RANGE_MINUTES + 1)
-                val actualDelayMinutes = (baseIntervalMinutes + randomOffsetMinutes)
-                    .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
+                val actualDelayMinutes =
+                    (baseIntervalMinutes + randomOffsetMinutes)
+                        .coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
                 val delayMillis = actualDelayMinutes.minutes.inWholeMilliseconds
 
                 // Save the scheduled next announce time for UI display
@@ -165,10 +165,11 @@ class AutoAnnounceManager
 
                 // Wait for the randomized interval, or reset if network change occurs
                 // withTimeoutOrNull returns null on timeout, or the signal value if reset signal received
-                val wasReset = withTimeoutOrNull(delayMillis) {
-                    resetTimerSignal.first()
-                    true
-                } ?: false
+                val wasReset =
+                    withTimeoutOrNull(delayMillis) {
+                        resetTimerSignal.first()
+                        true
+                    } ?: false
 
                 if (wasReset) {
                     Log.d(TAG, "Timer was reset by network change, restarting delay loop")

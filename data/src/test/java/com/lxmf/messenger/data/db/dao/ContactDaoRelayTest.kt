@@ -120,11 +120,12 @@ class ContactDaoRelayTest {
             val identity = createTestIdentity(hash = "identity_2")
             localIdentityDao.insert(identity)
 
+            // Already pinned
             val contact =
                 createTestContact(
                     destinationHash = "relay_dest_hash_2",
                     identityHash = identity.identityHash,
-                    isPinned = true, // Already pinned
+                    isPinned = true,
                     isMyRelay = false,
                 )
             contactDao.insertContact(contact)
@@ -148,11 +149,12 @@ class ContactDaoRelayTest {
             val identity = createTestIdentity(hash = "identity_3")
             localIdentityDao.insert(identity)
 
+            // Also pinned
             val relayContact =
                 createTestContact(
                     destinationHash = "old_relay_hash",
                     identityHash = identity.identityHash,
-                    isPinned = true, // Also pinned
+                    isPinned = true,
                     isMyRelay = true,
                 )
             contactDao.insertContact(relayContact)
@@ -212,11 +214,12 @@ class ContactDaoRelayTest {
             val identity = createTestIdentity(hash = "identity_5")
             localIdentityDao.insert(identity)
 
+            // Also pinned
             val oldRelay =
                 createTestContact(
                     destinationHash = "old_relay",
                     identityHash = identity.identityHash,
-                    isPinned = true, // Also pinned
+                    isPinned = true,
                     isMyRelay = true,
                 )
             val newRelay =

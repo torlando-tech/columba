@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.ShareLocation
@@ -64,6 +65,8 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.lxmf.messenger.map.MapStyleResult
+import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.ui.components.ContactLocationBottomSheet
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.ShareLocationBottomSheet
@@ -110,6 +113,7 @@ import org.maplibre.geojson.Point
 fun MapScreen(
     viewModel: MapViewModel = hiltViewModel(),
     onNavigateToConversation: (destinationHash: String) -> Unit = {},
+    onNavigateToOfflineMaps: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
@@ -156,12 +160,11 @@ fun MapScreen(
         // Permission sheet visibility is now managed by ViewModel state
     }
 
-    // Track whether we've done the initial center on user location
+    // Center map on user location once when both map and location are ready
+    // Key on both so we catch whichever becomes available last, but only center once
     var hasInitiallyCentered by remember { mutableStateOf(false) }
-
-    // Center map on user location only on first location fix, not on every update
-    LaunchedEffect(state.userLocation) {
-        if (!hasInitiallyCentered && state.userLocation != null) {
+    LaunchedEffect(mapLibreMap, state.userLocation != null) {
+        if (!hasInitiallyCentered && mapLibreMap != null && state.userLocation != null) {
             state.userLocation?.let { location ->
                 mapLibreMap?.let { map ->
                     val cameraPosition =
@@ -199,6 +202,23 @@ fun MapScreen(
         }
     }
 
+    // Reload map style when mapStyleResult changes (e.g., after offline map download)
+    // No mapStyleLoaded guard needed - setStyle can be called anytime and replaces any loading style
+    LaunchedEffect(state.mapStyleResult, mapLibreMap) {
+        val map = mapLibreMap ?: return@LaunchedEffect
+        val styleResult = state.mapStyleResult ?: return@LaunchedEffect
+
+        val styleBuilder =
+            when (styleResult) {
+                is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
+                is MapStyleResult.Offline -> Style.Builder().fromJson(styleResult.styleJson)
+                is MapStyleResult.Rmsp -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                is MapStyleResult.Unavailable -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+            }
+        Log.d("MapScreen", "Applying style: ${styleResult.javaClass.simpleName}")
+        map.setStyle(styleBuilder)
+    }
+
     // Cleanup when leaving screen
     DisposableEffect(Unit) {
         onDispose {
@@ -224,13 +244,25 @@ fun MapScreen(
                     getMapAsync { map ->
                         mapLibreMap = map
 
-                        // Use OpenFreeMap tiles (free, no API key required)
-                        // https://openfreemap.org - OpenStreetMap data with good detail
-                        map.setStyle(
-                            Style.Builder()
-                                .fromUri("https://tiles.openfreemap.org/styles/liberty"),
-                        ) { style ->
-                            Log.d("MapScreen", "Map style loaded")
+                        // Load map style based on settings (offline, HTTP, or RMSP)
+                        val styleResult = state.mapStyleResult
+                        val styleBuilder =
+                            when (styleResult) {
+                                is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
+                                is MapStyleResult.Offline -> Style.Builder().fromJson(styleResult.styleJson)
+                                is MapStyleResult.Rmsp -> {
+                                    // For RMSP, use default HTTP as fallback (RMSP rendering not yet implemented)
+                                    Log.d("MapScreen", "RMSP style requested, using HTTP fallback")
+                                    Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                                }
+                                is MapStyleResult.Unavailable -> {
+                                    Log.w("MapScreen", "No map source available: ${styleResult.reason}")
+                                    Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                                }
+                                null -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                            }
+                        map.setStyle(styleBuilder) { style ->
+                            Log.d("MapScreen", "Map style loaded: ${styleResult?.javaClass?.simpleName ?: "default"}")
 
                             // Add dashed circle bitmaps for stale markers
                             val density = ctx.resources.displayMetrics.density
@@ -536,6 +568,15 @@ fun MapScreen(
                     // Account for bottom navigation bar
                     .padding(bottom = 80.dp),
         ) {
+            // Offline Maps button
+            SmallFloatingActionButton(
+                onClick = onNavigateToOfflineMaps,
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            ) {
+                Icon(Icons.Default.Download, contentDescription = "Offline Maps")
+            }
+
             // My Location button
             SmallFloatingActionButton(
                 onClick = {

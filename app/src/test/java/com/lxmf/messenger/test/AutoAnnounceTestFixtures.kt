@@ -52,29 +52,35 @@ object AutoAnnounceTestFixtures {
 
     fun noNextAnnounceState() = CardConfig(nextAnnounceTime = null)
 
-    fun justAnnouncedState() = CardConfig(
-        lastAnnounceTime = System.currentTimeMillis() - 30_000L, // 30 seconds ago
-    )
+    fun justAnnouncedState() =
+        CardConfig(
+            lastAnnounceTime = System.currentTimeMillis() - 30_000L, // 30 seconds ago
+        )
 
-    fun announcedMinutesAgoState(minutes: Int = 15) = CardConfig(
-        lastAnnounceTime = System.currentTimeMillis() - (minutes * 60 * 1000L),
-    )
+    fun announcedMinutesAgoState(minutes: Int = 15) =
+        CardConfig(
+            lastAnnounceTime = System.currentTimeMillis() - (minutes * 60 * 1000L),
+        )
 
-    fun announcedHoursAgoState(hours: Int = 2) = CardConfig(
-        lastAnnounceTime = System.currentTimeMillis() - (hours * 60 * 60 * 1000L),
-    )
+    fun announcedHoursAgoState(hours: Int = 2) =
+        CardConfig(
+            lastAnnounceTime = System.currentTimeMillis() - (hours * 60 * 60 * 1000L),
+        )
 
-    fun nextAnnounceInMinutesState(minutes: Int = 30) = CardConfig(
-        nextAnnounceTime = System.currentTimeMillis() + (minutes * 60 * 1000L),
-    )
+    fun nextAnnounceInMinutesState(minutes: Int = 30) =
+        CardConfig(
+            nextAnnounceTime = System.currentTimeMillis() + (minutes * 60 * 1000L),
+        )
 
-    fun nextAnnounceInHoursState(hours: Int = 2) = CardConfig(
-        nextAnnounceTime = System.currentTimeMillis() + (hours * 60 * 60 * 1000L),
-    )
+    fun nextAnnounceInHoursState(hours: Int = 2) =
+        CardConfig(
+            nextAnnounceTime = System.currentTimeMillis() + (hours * 60 * 60 * 1000L),
+        )
 
-    fun nextAnnounceSoonState() = CardConfig(
-        nextAnnounceTime = System.currentTimeMillis() - 1000L, // In the past = "soon"
-    )
+    fun nextAnnounceSoonState() =
+        CardConfig(
+            nextAnnounceTime = System.currentTimeMillis() - 1000L, // In the past = "soon"
+        )
 
     // ========== Manual Announce States ==========
 
@@ -82,19 +88,22 @@ object AutoAnnounceTestFixtures {
 
     fun manualAnnounceSuccessState() = CardConfig(showManualAnnounceSuccess = true)
 
-    fun manualAnnounceErrorState(error: String = "Network error") = CardConfig(
-        manualAnnounceError = error,
-    )
+    fun manualAnnounceErrorState(error: String = "Network error") =
+        CardConfig(
+            manualAnnounceError = error,
+        )
 
     // ========== Edge Case States ==========
 
-    fun allNullTimestampsState() = CardConfig(
-        lastAnnounceTime = null,
-        nextAnnounceTime = null,
-    )
+    fun allNullTimestampsState() =
+        CardConfig(
+            lastAnnounceTime = null,
+            nextAnnounceTime = null,
+        )
 
-    fun disabledWithCustomIntervalState() = CardConfig(
-        enabled = false,
-        intervalHours = Constants.CUSTOM_INTERVAL_HOURS,
-    )
+    fun disabledWithCustomIntervalState() =
+        CardConfig(
+            enabled = false,
+            intervalHours = Constants.CUSTOM_INTERVAL_HOURS,
+        )
 }

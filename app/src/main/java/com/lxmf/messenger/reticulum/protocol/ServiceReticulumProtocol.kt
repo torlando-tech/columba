@@ -760,6 +760,12 @@ class ServiceReticulumProtocol(
                 service?.unregisterCallback(serviceCallback)
                 context.unbindService(serviceConnection)
                 isBound = false
+                // Reset ready flag to ensure fresh bind waits for new service callback
+                // Without this, a subsequent bindService() may see the stale flag and
+                // resume immediately with a dead binder reference (DeadObjectException)
+                synchronized(bindLock) {
+                    serviceReadyBeforeContinuationSet = false
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error unbinding service", e)

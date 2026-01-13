@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -2059,31 +2060,23 @@ private fun FullscreenImageDialog(
                 contentScale = ContentScale.Fit,
             )
 
-            // Bottom action bar with save/share button
-            Row(
+            // Top right action button with save/share options
+            IconButton(
+                onClick = { onShowOptions() },
                 modifier =
                     Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(16.dp)
-                        .navigationBarsPadding(),
-                horizontalArrangement = Arrangement.Center,
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(8.dp),
+                colors =
+                    IconButtonDefaults.iconButtonColors(
+                        contentColor = Color.White,
+                    ),
             ) {
-                IconButton(
-                    onClick = {
-                        onShowOptions()
-                    },
-                    colors =
-                        IconButtonDefaults.iconButtonColors(
-                            contentColor = Color.White,
-                        ),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More options",
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More options",
+                )
             }
         }
     }
@@ -2144,31 +2137,23 @@ private fun FullscreenAnimatedImageDialog(
                 contentScale = ContentScale.Fit,
             )
 
-            // Bottom action bar with save/share button
-            Row(
+            // Top right action button with save/share options
+            IconButton(
+                onClick = { onShowOptions() },
                 modifier =
                     Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(16.dp)
-                        .navigationBarsPadding(),
-                horizontalArrangement = Arrangement.Center,
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(8.dp),
+                colors =
+                    IconButtonDefaults.iconButtonColors(
+                        contentColor = Color.White,
+                    ),
             ) {
-                IconButton(
-                    onClick = {
-                        onShowOptions()
-                    },
-                    colors =
-                        IconButtonDefaults.iconButtonColors(
-                            contentColor = Color.White,
-                        ),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More options",
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More options",
+                )
             }
         }
     }

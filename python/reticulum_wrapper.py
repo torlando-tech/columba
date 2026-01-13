@@ -2267,24 +2267,25 @@ class ReticulumWrapper:
 
             if lxmf_message not in self.router.pending_inbound:
                 # Capture hop count and receiving interface at delivery time
-                # (path table values may change after reception, so capture now)
+                # This info is only available when a path exists in the path_table
+                # (opportunistic messages without an established path won't have this info)
                 try:
-                    if RNS.Transport.has_path(lxmf_message.source_hash):
-                        hops = RNS.Transport.hops_to(lxmf_message.source_hash)
+                    source_hash = lxmf_message.source_hash
+                    if RNS.Transport.has_path(source_hash):
+                        hops = RNS.Transport.hops_to(source_hash)
                         if hops is not None and hops >= 0:
                             lxmf_message._columba_hops = hops
                             log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                                      f"📡 Captured hop count at delivery: {hops}")
-                        # Capture receiving interface (the interface through which we received this message)
-                        path_entry = RNS.Transport.path_table.get(lxmf_message.source_hash)
+
+                        # Capture receiving interface from path_table
+                        path_entry = RNS.Transport.path_table.get(source_hash)
                         if path_entry is not None and len(path_entry) > 5 and path_entry[5] is not None:
                             interface_obj = path_entry[5]
-                            # Use interface.name if available and not None, otherwise use str(interface)
                             if hasattr(interface_obj, 'name') and interface_obj.name:
                                 interface_name = str(interface_obj.name)
                             else:
                                 interface_name = str(interface_obj)
-                            # Skip if we just got "None" as string
                             if interface_name and interface_name != "None":
                                 lxmf_message._columba_interface = interface_name
                                 log_debug("ReticulumWrapper", "_on_lxmf_delivery",

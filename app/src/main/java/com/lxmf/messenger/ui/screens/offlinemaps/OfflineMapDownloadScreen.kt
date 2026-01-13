@@ -18,12 +18,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -56,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -63,6 +67,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.lxmf.messenger.map.TileDownloadManager
+import com.lxmf.messenger.viewmodel.AddressSearchResult
 import com.lxmf.messenger.viewmodel.DownloadProgress
 import com.lxmf.messenger.viewmodel.DownloadWizardStep
 import com.lxmf.messenger.viewmodel.OfflineMapDownloadViewModel
@@ -154,10 +159,17 @@ fun OfflineMapDownloadScreen(
                         hasLocation = state.hasLocation,
                         latitude = state.centerLatitude,
                         longitude = state.centerLongitude,
+                        addressQuery = state.addressQuery,
+                        addressSearchResults = state.addressSearchResults,
+                        isSearchingAddress = state.isSearchingAddress,
+                        addressSearchError = state.addressSearchError,
                         onLocationSet = { lat, lon -> viewModel.setLocation(lat, lon) },
                         onCurrentLocationRequest = { location ->
                             viewModel.setLocationFromCurrent(location)
                         },
+                        onAddressQueryChange = { viewModel.setAddressQuery(it) },
+                        onSearchAddress = { viewModel.searchAddress() },
+                        onSelectAddressResult = { viewModel.selectAddressResult(it) },
                         onNext = { viewModel.nextStep() },
                     )
 
@@ -231,8 +243,15 @@ fun LocationSelectionStep(
     hasLocation: Boolean,
     latitude: Double?,
     longitude: Double?,
+    addressQuery: String,
+    addressSearchResults: List<AddressSearchResult>,
+    isSearchingAddress: Boolean,
+    addressSearchError: String?,
     onLocationSet: (Double, Double) -> Unit,
     onCurrentLocationRequest: (Location) -> Unit,
+    onAddressQueryChange: (String) -> Unit,
+    onSearchAddress: () -> Unit,
+    onSelectAddressResult: (AddressSearchResult) -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -358,6 +377,74 @@ fun LocationSelectionStep(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "- or -",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Address/City search
+        OutlinedTextField(
+            value = addressQuery,
+            onValueChange = onAddressQueryChange,
+            label = { Text("Search City or Address") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearchAddress() }),
+            trailingIcon = {
+                if (isSearchingAddress) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else if (addressQuery.isNotEmpty()) {
+                    IconButton(onClick = onSearchAddress) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                        )
+                    }
+                }
+            },
+            supportingText = {
+                addressSearchError?.let { error ->
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
+            },
+            isError = addressSearchError != null,
+        )
+
+        // Search results
+        if (addressSearchResults.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    addressSearchResults.forEach { result ->
+                        TextButton(
+                            onClick = { onSelectAddressResult(result) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = result.displayName,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

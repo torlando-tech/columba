@@ -1,5 +1,6 @@
 package com.lxmf.messenger.viewmodel
 
+import android.content.Context
 import android.location.Location
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
@@ -30,6 +31,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
 /**
  * Unit tests for OfflineMapDownloadViewModel.
@@ -54,6 +56,7 @@ class OfflineMapDownloadViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
+    private lateinit var context: Context
     private lateinit var offlineMapRegionRepository: OfflineMapRegionRepository
     private val mockMapLibreOfflineManager: MapLibreOfflineManager = mockk(relaxed = true)
     private lateinit var viewModel: OfflineMapDownloadViewModel
@@ -62,6 +65,7 @@ class OfflineMapDownloadViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
+        context = RuntimeEnvironment.getApplication()
         offlineMapRegionRepository = mockk(relaxed = true)
 
         // Setup MapLibreOfflineManager mock behavior
@@ -76,6 +80,7 @@ class OfflineMapDownloadViewModelTest {
 
     private fun createViewModel(): OfflineMapDownloadViewModel {
         return OfflineMapDownloadViewModel(
+            context = context,
             offlineMapRegionRepository = offlineMapRegionRepository,
             mapLibreOfflineManager = mockMapLibreOfflineManager,
         )
@@ -1004,6 +1009,142 @@ class OfflineMapDownloadViewModelTest {
         val state = OfflineMapDownloadState(centerLatitude = 40.0, centerLongitude = -74.0)
         assertTrue(state.hasLocation)
     }
+
+    // endregion
+
+    // region Address Search Tests
+
+    @Test
+    fun `initial state has empty address search fields`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals("", state.addressQuery)
+                assertTrue(state.addressSearchResults.isEmpty())
+                assertFalse(state.isSearchingAddress)
+                assertNull(state.addressSearchError)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setAddressQuery updates state`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setAddressQuery("New York")
+
+                val state = awaitItem()
+                assertEquals("New York", state.addressQuery)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `searchAddress does nothing when query is blank`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.searchAddress()
+
+                // Should not emit new state since query is blank
+                expectNoEvents()
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `searchAddress does nothing when query is only whitespace`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setAddressQuery("   ")
+                awaitItem() // Query updated
+
+                viewModel.searchAddress()
+
+                // Should not emit new state since trimmed query is blank
+                expectNoEvents()
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `selectAddressResult sets location and clears search`() =
+        runTest {
+            viewModel = createViewModel()
+
+            // Set up some search state first
+            viewModel.setAddressQuery("Dallas")
+
+            // Select a result
+            val result =
+                AddressSearchResult(
+                    displayName = "Dallas, TX, USA",
+                    latitude = 32.7767,
+                    longitude = -96.7970,
+                )
+            viewModel.selectAddressResult(result)
+
+            // Verify the final state after all updates
+            val state = viewModel.state.value
+            assertEquals(32.7767, state.centerLatitude!!, 0.0001)
+            assertEquals(-96.7970, state.centerLongitude!!, 0.0001)
+            assertEquals("", state.addressQuery)
+            assertTrue(state.addressSearchResults.isEmpty())
+            assertNull(state.addressSearchError)
+        }
+
+    @Test
+    fun `clearAddressSearch resets all address search state`() =
+        runTest {
+            viewModel = createViewModel()
+
+            // Set up some search state
+            viewModel.setAddressQuery("Chicago")
+
+            // Clear search
+            viewModel.clearAddressSearch()
+
+            // Verify final state
+            val state = viewModel.state.value
+            assertEquals("", state.addressQuery)
+            assertTrue(state.addressSearchResults.isEmpty())
+            assertNull(state.addressSearchError)
+        }
+
+    @Test
+    fun `selectAddressResult updates hasLocation to true`() =
+        runTest {
+            viewModel = createViewModel()
+
+            assertFalse(viewModel.state.value.hasLocation)
+
+            val result =
+                AddressSearchResult(
+                    displayName = "Los Angeles, CA, USA",
+                    latitude = 34.0522,
+                    longitude = -118.2437,
+                )
+            viewModel.selectAddressResult(result)
+
+            assertTrue(viewModel.state.value.hasLocation)
+        }
 
     // endregion
 }

@@ -160,12 +160,11 @@ fun MapScreen(
         // Permission sheet visibility is now managed by ViewModel state
     }
 
-    // Track whether we've done the initial center on user location
+    // Center map on user location once when both map and location are ready
+    // Key on both so we catch whichever becomes available last, but only center once
     var hasInitiallyCentered by remember { mutableStateOf(false) }
-
-    // Center map on user location only on first location fix, not on every update
-    LaunchedEffect(state.userLocation) {
-        if (!hasInitiallyCentered && state.userLocation != null) {
+    LaunchedEffect(mapLibreMap, state.userLocation != null) {
+        if (!hasInitiallyCentered && mapLibreMap != null && state.userLocation != null) {
             state.userLocation?.let { location ->
                 mapLibreMap?.let { map ->
                     val cameraPosition =

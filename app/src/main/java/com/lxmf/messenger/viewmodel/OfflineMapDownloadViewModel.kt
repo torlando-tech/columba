@@ -1,5 +1,8 @@
 package com.lxmf.messenger.viewmodel
 
+import android.content.Context
+import android.location.Address
+import android.location.Geocoder
 import android.location.Location
 import android.util.Log
 import androidx.compose.runtime.Immutable
@@ -9,6 +12,8 @@ import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapLibreOfflineManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
+import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.cos
 
@@ -60,6 +66,16 @@ data class DownloadProgress(
 )
 
 /**
+ * Address search result for display in the UI.
+ */
+@Immutable
+data class AddressSearchResult(
+    val displayName: String,
+    val latitude: Double,
+    val longitude: Double,
+)
+
+/**
  * UI state for the offline map download wizard.
  */
 @Immutable
@@ -77,6 +93,11 @@ data class OfflineMapDownloadState(
     val isComplete: Boolean = false,
     val errorMessage: String? = null,
     val createdRegionId: Long? = null,
+    // Address search fields
+    val addressQuery: String = "",
+    val addressSearchResults: List<AddressSearchResult> = emptyList(),
+    val isSearchingAddress: Boolean = false,
+    val addressSearchError: String? = null,
 ) {
     /**
      * Check if the location is set.
@@ -112,10 +133,12 @@ data class OfflineMapDownloadState(
  * 3. Naming and confirming the download
  * 4. Monitoring download progress
  */
+@Suppress("TooManyFunctions") // ViewModel with address search adds necessary additional functions
 @HiltViewModel
 class OfflineMapDownloadViewModel
     @Inject
     constructor(
+        @ApplicationContext private val context: Context,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
         private val mapLibreOfflineManager: MapLibreOfflineManager,
     ) : ViewModel() {
@@ -162,6 +185,109 @@ class OfflineMapDownloadViewModel
                 )
             }
             updateEstimate()
+        }
+
+        /**
+         * Set the address search query.
+         */
+        fun setAddressQuery(query: String) {
+            _state.update { it.copy(addressQuery = query) }
+        }
+
+        /**
+         * Search for addresses matching the current query.
+         */
+        @Suppress("DEPRECATION") // Geocoder.getFromLocationName is deprecated but replacement requires API 33+
+        fun searchAddress() {
+            val query = _state.value.addressQuery.trim()
+            if (query.isBlank()) return
+
+            viewModelScope.launch(Dispatchers.IO) {
+                _state.update {
+                    it.copy(
+                        isSearchingAddress = true,
+                        addressSearchError = null,
+                        addressSearchResults = emptyList(),
+                    )
+                }
+
+                try {
+                    val geocoder = Geocoder(context, Locale.getDefault())
+                    val addresses = geocoder.getFromLocationName(query, 5) ?: emptyList()
+
+                    val results =
+                        addresses.mapNotNull { address ->
+                            if (address.hasLatitude() && address.hasLongitude()) {
+                                AddressSearchResult(
+                                    displayName = formatAddress(address),
+                                    latitude = address.latitude,
+                                    longitude = address.longitude,
+                                )
+                            } else {
+                                null
+                            }
+                        }
+
+                    _state.update {
+                        it.copy(
+                            addressSearchResults = results,
+                            isSearchingAddress = false,
+                            addressSearchError = if (results.isEmpty()) "No results found" else null,
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Address search failed", e)
+                    _state.update {
+                        it.copy(
+                            isSearchingAddress = false,
+                            addressSearchError = "Search failed: ${e.message}",
+                        )
+                    }
+                }
+            }
+        }
+
+        /**
+         * Select an address from the search results.
+         */
+        fun selectAddressResult(result: AddressSearchResult) {
+            setLocation(result.latitude, result.longitude)
+            _state.update {
+                it.copy(
+                    addressQuery = "",
+                    addressSearchResults = emptyList(),
+                    addressSearchError = null,
+                )
+            }
+        }
+
+        /**
+         * Clear address search results.
+         */
+        fun clearAddressSearch() {
+            _state.update {
+                it.copy(
+                    addressQuery = "",
+                    addressSearchResults = emptyList(),
+                    addressSearchError = null,
+                )
+            }
+        }
+
+        private fun formatAddress(address: Address): String {
+            // Try to build a readable address string
+            val parts = mutableListOf<String>()
+
+            address.locality?.let { parts.add(it) } // City
+            address.adminArea?.let { parts.add(it) } // State/Province
+            address.countryName?.let { parts.add(it) } // Country
+
+            return if (parts.isNotEmpty()) {
+                parts.joinToString(", ")
+            } else {
+                // Fallback to full address line
+                address.getAddressLine(0) ?: "Unknown location"
+            }
         }
 
         /**

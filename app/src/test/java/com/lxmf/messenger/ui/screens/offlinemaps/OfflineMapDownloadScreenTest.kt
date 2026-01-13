@@ -5,10 +5,12 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.lxmf.messenger.test.RegisterComponentActivityRule
+import com.lxmf.messenger.viewmodel.AddressSearchResult
 import com.lxmf.messenger.viewmodel.DownloadProgress
 import com.lxmf.messenger.viewmodel.RadiusOption
 import org.junit.Rule
@@ -48,8 +50,15 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
                 onLocationSet = { _, _ -> },
                 onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
                 onNext = {},
             )
         }
@@ -65,8 +74,15 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
                 onLocationSet = { _, _ -> },
                 onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
                 onNext = {},
             )
         }
@@ -81,8 +97,15 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
                 onLocationSet = { _, _ -> },
                 onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
                 onNext = {},
             )
         }
@@ -97,8 +120,15 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
                 onLocationSet = { _, _ -> },
                 onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
                 onNext = {},
             )
         }
@@ -113,8 +143,15 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
                 onLocationSet = { _, _ -> },
                 onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
                 onNext = {},
             )
         }
@@ -130,8 +167,15 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
                 onLocationSet = { _, _ -> },
                 onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
                 onNext = {},
             )
         }
@@ -146,8 +190,15 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = true,
                 latitude = 37.7749,
                 longitude = -122.4194,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
                 onLocationSet = { _, _ -> },
                 onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
                 onNext = {},
             )
         }
@@ -162,13 +213,122 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = true,
                 latitude = 37.7749,
                 longitude = -122.4194,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
                 onLocationSet = { _, _ -> },
                 onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
                 onNext = {},
             )
         }
 
         composeTestRule.onNodeWithText("Location set", substring = true).assertExists()
+    }
+
+    @Test
+    fun locationStep_displaysAddressSearchField() {
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
+                onLocationSet = { _, _ -> },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                onNext = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Search City or Address").assertExists()
+    }
+
+    @Test
+    fun locationStep_displaysAddressSearchResults() {
+        val searchResults =
+            listOf(
+                AddressSearchResult("Dallas, TX, USA", 32.7767, -96.7970),
+                AddressSearchResult("Dallas, OR, USA", 44.9193, -123.3172),
+            )
+
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                addressQuery = "Dallas",
+                addressSearchResults = searchResults,
+                isSearchingAddress = false,
+                addressSearchError = null,
+                onLocationSet = { _, _ -> },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                onNext = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Dallas, TX, USA").assertExists()
+        composeTestRule.onNodeWithText("Dallas, OR, USA").assertExists()
+    }
+
+    @Test
+    fun locationStep_displaysAddressSearchError() {
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                addressQuery = "xyz123",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = "No results found",
+                onLocationSet = { _, _ -> },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                onNext = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("No results found").assertExists()
+    }
+
+    @Test
+    fun locationStep_showsLoadingIndicatorDuringSearch() {
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                addressQuery = "New York",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = true,
+                addressSearchError = null,
+                onLocationSet = { _, _ -> },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                onNext = {},
+            )
+        }
+
+        // The CircularProgressIndicator should be displayed when isSearchingAddress is true
+        // We can't easily test for CircularProgressIndicator directly, but we can verify
+        // the search icon is NOT displayed when searching
+        composeTestRule.onNodeWithContentDescription("Search").assertDoesNotExist()
     }
 
     // ========== RadiusSelectionStep Tests ==========

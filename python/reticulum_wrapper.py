@@ -2267,29 +2267,50 @@ class ReticulumWrapper:
 
             if lxmf_message not in self.router.pending_inbound:
                 # Capture hop count and receiving interface at delivery time
-                # This info is only available when a path exists in the path_table
-                # (opportunistic messages without an established path won't have this info)
+                # For opportunistic messages: LXMF captures from packet directly (path_table may not exist)
+                # For link-based messages: use path_table lookup (always populated during link setup)
                 try:
                     source_hash = lxmf_message.source_hash
-                    if RNS.Transport.has_path(source_hash):
-                        hops = RNS.Transport.hops_to(source_hash)
-                        if hops is not None and hops >= 0:
-                            lxmf_message._columba_hops = hops
-                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                     f"📡 Captured hop count at delivery: {hops}")
 
-                        # Capture receiving interface from path_table
-                        path_entry = RNS.Transport.path_table.get(source_hash)
-                        if path_entry is not None and len(path_entry) > 5 and path_entry[5] is not None:
-                            interface_obj = path_entry[5]
-                            if hasattr(interface_obj, 'name') and interface_obj.name:
-                                interface_name = str(interface_obj.name)
-                            else:
-                                interface_name = str(interface_obj)
-                            if interface_name and interface_name != "None":
-                                lxmf_message._columba_interface = interface_name
-                                log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                         f"📡 Captured receiving interface: {interface_name}")
+                    # First check if LXMF captured receiving_interface and hops from the packet
+                    # (set by our patched delivery_packet for opportunistic messages)
+                    if hasattr(lxmf_message, 'receiving_interface') and lxmf_message.receiving_interface:
+                        interface = lxmf_message.receiving_interface
+                        interface_name = getattr(interface, 'name', None) or str(interface)
+                        if interface_name and interface_name != "None":
+                            lxmf_message._columba_interface = interface_name
+                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"📡 Got interface from LXMF message (opportunistic): {interface_name}")
+
+                    if hasattr(lxmf_message, 'receiving_hops') and lxmf_message.receiving_hops is not None:
+                        lxmf_message._columba_hops = lxmf_message.receiving_hops
+                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                 f"📡 Got hops from LXMF message (opportunistic): {lxmf_message.receiving_hops}")
+
+                    # Fallback to path_table for link-based messages or if LXMF didn't capture
+                    if not hasattr(lxmf_message, '_columba_interface') or not hasattr(lxmf_message, '_columba_hops'):
+                        if RNS.Transport.has_path(source_hash):
+                            # Only capture hops from path_table if we don't already have them
+                            if not hasattr(lxmf_message, '_columba_hops'):
+                                hops = RNS.Transport.hops_to(source_hash)
+                                if hops is not None and hops >= 0:
+                                    lxmf_message._columba_hops = hops
+                                    log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                             f"📡 Captured hop count from path_table: {hops}")
+
+                            # Only capture interface from path_table if we don't already have it
+                            if not hasattr(lxmf_message, '_columba_interface'):
+                                path_entry = RNS.Transport.path_table.get(source_hash)
+                                if path_entry is not None and len(path_entry) > 5 and path_entry[5] is not None:
+                                    interface_obj = path_entry[5]
+                                    if hasattr(interface_obj, 'name') and interface_obj.name:
+                                        interface_name = str(interface_obj.name)
+                                    else:
+                                        interface_name = str(interface_obj)
+                                    if interface_name and interface_name != "None":
+                                        lxmf_message._columba_interface = interface_name
+                                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                                 f"📡 Captured interface from path_table: {interface_name}")
                 except Exception as e:
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                              f"⚠️ Could not capture hop count/interface: {e}")

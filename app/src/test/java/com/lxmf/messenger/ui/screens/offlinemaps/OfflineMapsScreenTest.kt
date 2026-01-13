@@ -362,10 +362,11 @@ class OfflineMapsScreenTest {
 
     @Test
     fun regionCard_displaysCompletedDate() {
+        // Dec 31, 2023
         val region =
             createTestRegion(
                 status = OfflineMapRegion.Status.COMPLETE,
-                completedAt = 1703980800000L, // Dec 31, 2023
+                completedAt = 1703980800000L,
             )
 
         composeTestRule.setContent {
@@ -400,6 +401,269 @@ class OfflineMapsScreenTest {
         composeTestRule.onNodeWithText("Downloaded", substring = true).assertDoesNotExist()
     }
 
+    // ========== Update Check UI Tests ==========
+
+    @Test
+    fun regionCard_displaysCheckForUpdatesButton() {
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+                updateCheckResult = null,
+                onCheckForUpdates = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun regionCard_displaysCheckingState() {
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val updateResult =
+            com.lxmf.messenger.viewmodel.UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = "v1",
+                latestVersion = null,
+                isChecking = true,
+            )
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+                updateCheckResult = updateResult,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Checking...", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun regionCard_displaysUpdateAvailableState() {
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val updateResult =
+            com.lxmf.messenger.viewmodel.UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = "v1",
+                latestVersion = "v2",
+                isChecking = false,
+            )
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+                updateCheckResult = updateResult,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Update available", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Update Now", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun regionCard_displaysUpToDateState() {
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val updateResult =
+            com.lxmf.messenger.viewmodel.UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = "v1",
+                latestVersion = "v1",
+                isChecking = false,
+            )
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+                updateCheckResult = updateResult,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Up to date", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun regionCard_checkForUpdatesCallsCallback() {
+        var callbackCalled = false
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+                updateCheckResult = null,
+                onCheckForUpdates = { callbackCalled = true },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).performClick()
+
+        assert(callbackCalled) { "onCheckForUpdates should have been called" }
+    }
+
+    @Test
+    fun regionCard_showsUpdateDialogOnUpdateNowClick() {
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, name = "Test Region")
+        val updateResult =
+            com.lxmf.messenger.viewmodel.UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = "v1",
+                latestVersion = "v2",
+                isChecking = false,
+            )
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+                updateCheckResult = updateResult,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Update Now", useUnmergedTree = true).performClick()
+
+        composeTestRule.onNodeWithText("Update Offline Map").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Download the latest map data", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun regionCard_updateDialogCancelDismisses() {
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val updateResult =
+            com.lxmf.messenger.viewmodel.UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = "v1",
+                latestVersion = "v2",
+                isChecking = false,
+            )
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+                updateCheckResult = updateResult,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Update Now", useUnmergedTree = true).performClick()
+        composeTestRule.onNodeWithText("Update Offline Map").assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Cancel").performClick()
+
+        composeTestRule.onNodeWithText("Update Offline Map").assertDoesNotExist()
+    }
+
+    @Test
+    fun regionCard_updateDialogConfirmCallsCallback() {
+        var callbackCalled = false
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val updateResult =
+            com.lxmf.messenger.viewmodel.UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = "v1",
+                latestVersion = "v2",
+                isChecking = false,
+            )
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+                updateCheckResult = updateResult,
+                onUpdateNow = { callbackCalled = true },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Update Now", useUnmergedTree = true).performClick()
+        composeTestRule.onNodeWithText("Update", useUnmergedTree = true).performClick()
+
+        assert(callbackCalled) { "onUpdateNow should have been called" }
+    }
+
+    @Test
+    fun regionCard_displaysTileVersion() {
+        val region =
+            createTestRegion(
+                status = OfflineMapRegion.Status.COMPLETE,
+                tileVersion = "20260107_001001_pt",
+            )
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Map data: 2026-01-07", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun regionCard_pendingStatusNoCheckForUpdates() {
+        val region = createTestRegion(status = OfflineMapRegion.Status.PENDING)
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun regionCard_downloadingStatusNoCheckForUpdates() {
+        val region =
+            createTestRegion(
+                status = OfflineMapRegion.Status.DOWNLOADING,
+                downloadProgress = 0.5f,
+            )
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun regionCard_errorStatusNoCheckForUpdates() {
+        val region =
+            createTestRegion(
+                status = OfflineMapRegion.Status.ERROR,
+                errorMessage = "Test error",
+            )
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).assertDoesNotExist()
+    }
+
     // ========== Helper Functions ==========
 
     @Suppress("LongParameterList")
@@ -407,7 +671,8 @@ class OfflineMapsScreenTest {
         id: Long = 1L,
         name: String = "Test Region",
         status: OfflineMapRegion.Status = OfflineMapRegion.Status.COMPLETE,
-        sizeBytes: Long = 15 * 1024 * 1024L, // 15 MB
+        // 15 MB
+        sizeBytes: Long = 15 * 1024 * 1024L,
         radiusKm: Int = 10,
         minZoom: Int = 5,
         maxZoom: Int = 14,

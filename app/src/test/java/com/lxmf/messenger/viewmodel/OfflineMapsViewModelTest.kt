@@ -866,4 +866,273 @@ class OfflineMapsViewModelTest {
         }
 
     // endregion
+
+    // region Check For Updates Tests
+
+    @Test
+    fun `checkForUpdates sets isChecking to true initially`() =
+        runTest {
+            val testRegion = createTestRegion(TestRegionConfig(id = 42L, name = "Test Region"))
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                // Initial state
+                awaitItem()
+
+                viewModel.checkForUpdates(testRegion)
+
+                // After calling checkForUpdates, we should see the update check result
+                val state = expectMostRecentItem()
+                assertTrue(state.updateCheckResults.containsKey(42L))
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `checkForUpdates stores current version from region`() =
+        runTest {
+            val testRegion = createTestRegion(TestRegionConfig(id = 42L))
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.checkForUpdates(testRegion)
+
+                val state = expectMostRecentItem()
+                val result = state.updateCheckResults[42L]
+                assertNotNull(result)
+                assertEquals(42L, result!!.regionId)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `checkForUpdates can be called for multiple regions`() =
+        runTest {
+            val region1 = createTestRegion(TestRegionConfig(id = 1L, name = "Region 1"))
+            val region2 = createTestRegion(TestRegionConfig(id = 2L, name = "Region 2"))
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.checkForUpdates(region1)
+                viewModel.checkForUpdates(region2)
+
+                val state = expectMostRecentItem()
+                assertTrue(state.updateCheckResults.containsKey(1L))
+                assertTrue(state.updateCheckResults.containsKey(2L))
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `clearUpdateCheckResult removes the result for a region`() =
+        runTest {
+            val testRegion = createTestRegion(TestRegionConfig(id = 42L))
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                // First trigger a check
+                viewModel.checkForUpdates(testRegion)
+                var state = expectMostRecentItem()
+
+                // Verify it's there
+                assertTrue(state.updateCheckResults.containsKey(42L))
+
+                // Clear it
+                viewModel.clearUpdateCheckResult(42L)
+                state = awaitItem()
+
+                // Verify it's gone
+                assertFalse(state.updateCheckResults.containsKey(42L))
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `clearUpdateCheckResult does nothing for non-existent region`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val state = awaitItem()
+
+                // Should not throw
+                viewModel.clearUpdateCheckResult(999L)
+
+                assertTrue(state.updateCheckResults.isEmpty())
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `clearUpdateCheckResult only removes specified region`() =
+        runTest {
+            val region1 = createTestRegion(TestRegionConfig(id = 1L))
+            val region2 = createTestRegion(TestRegionConfig(id = 2L))
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.checkForUpdates(region1)
+                viewModel.checkForUpdates(region2)
+
+                var state = expectMostRecentItem()
+                assertEquals(2, state.updateCheckResults.size)
+
+                viewModel.clearUpdateCheckResult(1L)
+
+                state = awaitItem()
+                assertEquals(1, state.updateCheckResults.size)
+                assertFalse(state.updateCheckResults.containsKey(1L))
+                assertTrue(state.updateCheckResults.containsKey(2L))
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    // endregion
+
+    // region UpdateCheckResult Tests
+
+    @Test
+    fun `UpdateCheckResult hasUpdate is false when latestVersion is null`() {
+        val result =
+            UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = "v1",
+                latestVersion = null,
+            )
+
+        assertFalse(result.hasUpdate)
+    }
+
+    @Test
+    fun `UpdateCheckResult hasUpdate is false when currentVersion is null`() {
+        val result =
+            UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = null,
+                latestVersion = "v2",
+            )
+
+        assertFalse(result.hasUpdate)
+    }
+
+    @Test
+    fun `UpdateCheckResult hasUpdate is false when versions are equal`() {
+        val result =
+            UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = "v1",
+                latestVersion = "v1",
+            )
+
+        assertFalse(result.hasUpdate)
+    }
+
+    @Test
+    fun `UpdateCheckResult hasUpdate is true when versions differ`() {
+        val result =
+            UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = "v1",
+                latestVersion = "v2",
+            )
+
+        assertTrue(result.hasUpdate)
+    }
+
+    @Test
+    fun `UpdateCheckResult defaults`() {
+        val result =
+            UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = null,
+                latestVersion = null,
+            )
+
+        assertFalse(result.isChecking)
+        assertNull(result.error)
+    }
+
+    @Test
+    fun `UpdateCheckResult copy preserves all fields`() {
+        val original =
+            UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = "v1",
+                latestVersion = "v2",
+                isChecking = true,
+                error = "test error",
+            )
+
+        val copied = original.copy(isChecking = false)
+
+        assertEquals(1L, copied.regionId)
+        assertEquals("v1", copied.currentVersion)
+        assertEquals("v2", copied.latestVersion)
+        assertFalse(copied.isChecking)
+        assertEquals("test error", copied.error)
+    }
+
+    @Test
+    fun `UpdateCheckResult equality works correctly`() {
+        val result1 = UpdateCheckResult(1L, "v1", "v2", false, null)
+        val result2 = UpdateCheckResult(1L, "v1", "v2", false, null)
+        val result3 = UpdateCheckResult(2L, "v1", "v2", false, null)
+
+        assertEquals(result1, result2)
+        assertTrue(result1 != result3)
+    }
+
+    // endregion
+
+    // region MapLibre Region Deletion Tests
+
+    @Test
+    fun `deleteRegion calls mapLibreOfflineManager for regions with maplibreRegionId`() =
+        runTest {
+            val testRegion =
+                createTestRegion(TestRegionConfig(id = 1L)).copy(
+                    maplibreRegionId = 100L,
+                )
+            coEvery { offlineMapRegionRepository.deleteRegion(1L) } just Runs
+            viewModel = createViewModel()
+
+            viewModel.deleteRegion(testRegion)
+
+            // Verify MapLibre deletion was called
+            io.mockk.verify { mockMapLibreOfflineManager.deleteRegion(100L, any()) }
+            coVerify { offlineMapRegionRepository.deleteRegion(1L) }
+        }
+
+    @Test
+    fun `deleteRegion does not call mapLibreOfflineManager when maplibreRegionId is null`() =
+        runTest {
+            val testRegion =
+                createTestRegion(TestRegionConfig(id = 1L)).copy(
+                    maplibreRegionId = null,
+                )
+            coEvery { offlineMapRegionRepository.deleteRegion(1L) } just Runs
+            viewModel = createViewModel()
+
+            viewModel.deleteRegion(testRegion)
+
+            // Verify MapLibre deletion was NOT called (no maplibreRegionId)
+            io.mockk.verify(exactly = 0) { mockMapLibreOfflineManager.deleteRegion(any(), any()) }
+            coVerify { offlineMapRegionRepository.deleteRegion(1L) }
+        }
+
+    // endregion
 }

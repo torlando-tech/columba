@@ -2279,10 +2279,16 @@ class ReticulumWrapper:
                         path_entry = RNS.Transport.path_table.get(lxmf_message.source_hash)
                         if path_entry is not None and len(path_entry) > 5 and path_entry[5] is not None:
                             interface_obj = path_entry[5]
-                            interface_name = str(interface_obj.name) if hasattr(interface_obj, 'name') else str(interface_obj)
-                            lxmf_message._columba_interface = interface_name
-                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                     f"📡 Captured receiving interface: {interface_name}")
+                            # Use interface.name if available and not None, otherwise use str(interface)
+                            if hasattr(interface_obj, 'name') and interface_obj.name:
+                                interface_name = str(interface_obj.name)
+                            else:
+                                interface_name = str(interface_obj)
+                            # Skip if we just got "None" as string
+                            if interface_name and interface_name != "None":
+                                lxmf_message._columba_interface = interface_name
+                                log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                         f"📡 Captured receiving interface: {interface_name}")
                 except Exception as e:
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                              f"⚠️ Could not capture hop count/interface: {e}")

@@ -157,7 +157,8 @@ private fun hasImageField(fieldsJson: String?): Boolean {
             field6 is JSONObject && field6.has(FILE_REF_KEY) -> true
             field6 is String && field6.isNotEmpty() -> true
             // Handle array format from Python: ["format", "hex_data"]
-            field6 is JSONArray && field6.length() >= 2 -> true
+            field6 is JSONArray && field6.length() >= 2 &&
+                (field6.opt(1) as? String)?.isNotEmpty() == true -> true
             else -> false
         }
     } catch (e: Exception) {

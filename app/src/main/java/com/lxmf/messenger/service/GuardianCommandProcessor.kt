@@ -6,6 +6,7 @@ import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.reticulum.protocol.ReceivedMessage
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,6 +42,7 @@ class GuardianCommandProcessor
         private val guardianRepository: GuardianRepository,
         private val announceRepository: AnnounceRepository,
         private val contactRepository: ContactRepository,
+        private val reticulumProtocol: ReticulumProtocol,
     ) {
         companion object {
             private const val TAG = "GuardianCommandProcessor"
@@ -195,6 +197,12 @@ class GuardianCommandProcessor
                     // Record command as processed (anti-replay)
                     guardianRepository.recordProcessedCommand(nonceHex, timestamp)
                     Log.i(TAG, "Command $cmd executed successfully")
+
+                    // Sync guardian config to Python for link filtering
+                    // Only for state-changing commands (not STATUS_REQUEST)
+                    if (cmd in listOf(CMD_LOCK, CMD_UNLOCK, CMD_ALLOW_ADD, CMD_ALLOW_REMOVE, CMD_ALLOW_SET)) {
+                        syncGuardianConfigToPython()
+                    }
                 }
 
                 return success
@@ -293,6 +301,39 @@ class GuardianCommandProcessor
             val isLocked = guardianRepository.isLocked()
             Log.i(TAG, "Status requested - isLocked: $isLocked")
             return true
+        }
+
+        /**
+         * Sync current guardian config to Python layer for link filtering.
+         *
+         * When the device is locked, the Python layer will reject links from
+         * non-allowed peers to prevent revealing online status.
+         *
+         * This should be called:
+         * - After processing LOCK/UNLOCK/ALLOW_* commands
+         * - On app startup to sync current state
+         */
+        suspend fun syncGuardianConfigToPython() {
+            try {
+                val isLocked = guardianRepository.isLocked()
+                val guardianHash = guardianRepository.getGuardianDestinationHash()
+                val allowedHashes = guardianRepository.getAllowedContactHashesSync()
+
+                val success = reticulumProtocol.updateGuardianConfig(
+                    isLocked = isLocked,
+                    guardianHash = guardianHash,
+                    allowedHashes = allowedHashes,
+                )
+
+                if (success) {
+                    Log.d(TAG, "Synced guardian config to Python: locked=$isLocked, " +
+                        "guardian=$guardianHash, allowed=${allowedHashes.size} contacts")
+                } else {
+                    Log.w(TAG, "Failed to sync guardian config to Python")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error syncing guardian config to Python", e)
+            }
         }
 
         // ==================== Parent Side Processing ====================

@@ -10,6 +10,7 @@ import com.lxmf.messenger.reticulum.model.LogLevel
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.service.GuardianCommandProcessor
 import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.MessageCollector
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -74,6 +75,9 @@ class ColumbaApplication : Application() {
 
     @Inject
     lateinit var propagationNodeManager: PropagationNodeManager
+
+    @Inject
+    lateinit var guardianCommandProcessor: GuardianCommandProcessor
 
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Main for lifecycle operations and UI coordination
@@ -247,6 +251,10 @@ class ColumbaApplication : Application() {
                             autoAnnounceManager.start()
                             identityResolutionManager.start(applicationScope)
                             propagationNodeManager.start()
+
+                            // Sync guardian config to Python for link filtering
+                            guardianCommandProcessor.syncGuardianConfigToPython()
+
                             android.util.Log.d(
                                 "ColumbaApplication",
                                 "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started",
@@ -379,6 +387,12 @@ class ColumbaApplication : Application() {
                             autoAnnounceManager.start()
                             identityResolutionManager.start(applicationScope)
                             propagationNodeManager.start()
+
+                            // Sync guardian config to Python for link filtering
+                            applicationScope.launch {
+                                guardianCommandProcessor.syncGuardianConfigToPython()
+                            }
+
                             android.util.Log.d(
                                 "ColumbaApplication",
                                 "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started",
@@ -582,6 +596,12 @@ class ColumbaApplication : Application() {
                     autoAnnounceManager.start()
                     identityResolutionManager.start(applicationScope)
                     propagationNodeManager.start()
+
+                    // Sync guardian config to Python for link filtering
+                    applicationScope.launch {
+                        guardianCommandProcessor.syncGuardianConfigToPython()
+                    }
+
                     android.util.Log.d(
                         "ColumbaApplication",
                         "initializeReticulumService: MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started",

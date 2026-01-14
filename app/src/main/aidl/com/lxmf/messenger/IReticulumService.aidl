@@ -499,4 +499,15 @@ interface IReticulumService {
      * @return JSON: {"success": true} or {"success": false, "error": "message"}
      */
     String guardianSendCommand(String destinationHash, String command, String payloadJson);
+
+    /**
+     * Update guardian/parental control configuration in Python.
+     * When locked, incoming links from non-allowed peers will be rejected.
+     *
+     * @param isLocked Whether the device is locked (filtering enabled)
+     * @param guardianHash Destination hash of the guardian (always allowed), or null
+     * @param allowedHashes List of allowed contact destination hashes (hex strings)
+     * @return JSON: {"success": true} or {"success": false, "error": "message"}
+     */
+    String updateGuardianConfig(boolean isLocked, String guardianHash, in List<String> allowedHashes);
 }

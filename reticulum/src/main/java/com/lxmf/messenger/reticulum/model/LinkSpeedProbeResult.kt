@@ -50,8 +50,9 @@ data class LinkSpeedProbeResult(
                 return expectedRateBps
             }
             // Fall back to max of establishment_rate and interface bitrate
-            val rates = listOfNotNull(establishmentRateBps, nextHopBitrateBps)
-                .filter { it > 0 }
+            val rates =
+                listOfNotNull(establishmentRateBps, nextHopBitrateBps)
+                    .filter { it > 0 }
             return rates.maxOrNull()
         }
 

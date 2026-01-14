@@ -118,13 +118,15 @@ object MessageDetailTestFixtures {
             ),
         )
 
-    fun receivedMessage(hopCount: Int? = null, interfaceName: String? = null) =
-        createMessageUi(
-            MessageConfig(
-                isFromMe = false,
-                status = "received",
-                receivedHopCount = hopCount,
-                receivedInterface = interfaceName,
-            ),
-        )
+    fun receivedMessage(
+        hopCount: Int? = null,
+        interfaceName: String? = null,
+    ) = createMessageUi(
+        MessageConfig(
+            isFromMe = false,
+            status = "received",
+            receivedHopCount = hopCount,
+            receivedInterface = interfaceName,
+        ),
+    )
 }

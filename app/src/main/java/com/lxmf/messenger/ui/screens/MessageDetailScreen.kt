@@ -20,13 +20,8 @@ import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.CellTower
-import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.SettingsInputAntenna
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api

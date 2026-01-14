@@ -228,24 +228,26 @@ class EventHandler(
 
             // Parse public key from hex string
             val publicKeyHex = json.optString("public_key", "")
-            val publicKey = if (publicKeyHex.isNotEmpty()) {
-                publicKeyHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-            } else {
-                null
-            }
+            val publicKey =
+                if (publicKeyHex.isNotEmpty()) {
+                    publicKeyHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                } else {
+                    null
+                }
 
             // Parse fields JSON if present
             val fieldsStr = json.optString("fields", "")
-            var fieldsJson = if (fieldsStr.isNotEmpty()) {
-                try {
-                    JSONObject(fieldsStr)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Could not parse fields: ${e.message}")
+            var fieldsJson =
+                if (fieldsStr.isNotEmpty()) {
+                    try {
+                        JSONObject(fieldsStr)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Could not parse fields: ${e.message}")
+                        null
+                    }
+                } else {
                     null
                 }
-            } else {
-                null
-            }
 
             // Check if message has file attachments
             val hasFileAttachments = fieldsJson?.optJSONArray("5")?.let { it.length() > 0 } ?: false
@@ -560,72 +562,84 @@ class EventHandler(
 
         while (keys.hasNext()) {
             val key = keys.next()
-
-            // Special handling for field 5 (file attachments array)
-            // Extract each file's data separately, keep metadata inline
-            if (key == "5") {
-                val field5 = fields.optJSONArray("5")
-                if (field5 != null) {
-                    val extractedArray = extractFileAttachmentsData(messageHash, field5)
-                    modifiedFields.put("5", extractedArray)
-                    continue
-                }
-            }
-
-            // Special handling for field 6 and 7 (image/audio)
-            // Format from Python: ["format", "hex_data"] - extract just the hex data
-            if (key == "6" || key == "7") {
-                val fieldArray = fields.optJSONArray(key)
-                if (fieldArray != null && fieldArray.length() >= 2) {
-                    val hexData = fieldArray.optString(1, "")
-                    if (hexData.length > AttachmentStorageManager.SIZE_THRESHOLD) {
-                        val filePath = attachmentStorage.saveAttachment(messageHash, key, hexData)
-                        if (filePath != null) {
-                            val refObj =
-                                JSONObject().apply {
-                                    put(AttachmentStorageManager.FILE_REF_KEY, filePath)
-                                }
-                            modifiedFields.put(key, refObj)
-                            Log.i(TAG, "Extracted field '$key' (${hexData.length} chars) to disk: $filePath")
-                        } else {
-                            modifiedFields.put(key, fieldArray)
-                            Log.w(TAG, "Failed to extract field '$key', keeping inline")
-                        }
-                    } else {
-                        // Small enough to keep inline, but convert to just hex string for consistency
-                        modifiedFields.put(key, hexData)
-                    }
-                    continue
-                }
-            }
-
-            val value = fields.optString(key, "")
-
-            if (value.length > AttachmentStorageManager.SIZE_THRESHOLD) {
-                // Save large field to disk
-                val filePath = attachmentStorage.saveAttachment(messageHash, key, value)
-                if (filePath != null) {
-                    // Replace with file reference
-                    val refObj =
-                        JSONObject().apply {
-                            put(AttachmentStorageManager.FILE_REF_KEY, filePath)
-                        }
-                    modifiedFields.put(key, refObj)
-                    Log.i(TAG, "Extracted field '$key' (${value.length} chars) to disk: $filePath")
-                } else {
-                    // Save failed, keep original (may still fail at AIDL, but at least try)
-                    modifiedFields.put(key, value)
-                    Log.w(TAG, "Failed to extract field '$key', keeping inline")
-                }
-            } else {
-                // Keep small fields inline
-                modifiedFields.put(key, value)
-            }
+            extractField(messageHash, fields, key, modifiedFields)
         }
 
         val newSize = modifiedFields.toString().length
         Log.d(TAG, "Fields size reduced from $totalSize to $newSize chars")
         return modifiedFields
+    }
+
+    private fun extractField(
+        messageHash: String,
+        fields: JSONObject,
+        key: String,
+        modifiedFields: JSONObject,
+    ) {
+        // Field 5: file attachments array
+        if (key == "5") {
+            fields.optJSONArray("5")?.let { field5 ->
+                modifiedFields.put("5", extractFileAttachmentsData(messageHash, field5))
+                return
+            }
+        }
+
+        // Fields 6 and 7: image/audio in ["format", "hex_data"] format
+        if (key == "6" || key == "7") {
+            fields.optJSONArray(key)?.takeIf { it.length() >= 2 }?.let { fieldArray ->
+                extractMediaField(messageHash, key, fieldArray, modifiedFields)
+                return
+            }
+        }
+
+        // Generic string field
+        extractStringField(messageHash, fields, key, modifiedFields)
+    }
+
+    private fun extractMediaField(
+        messageHash: String,
+        key: String,
+        fieldArray: JSONArray,
+        modifiedFields: JSONObject,
+    ) {
+        val hexData = fieldArray.optString(1, "")
+        if (hexData.length <= AttachmentStorageManager.SIZE_THRESHOLD) {
+            modifiedFields.put(key, hexData)
+            return
+        }
+
+        val filePath = attachmentStorage?.saveAttachment(messageHash, key, hexData)
+        if (filePath != null) {
+            val refObj = JSONObject().apply { put(AttachmentStorageManager.FILE_REF_KEY, filePath) }
+            modifiedFields.put(key, refObj)
+            Log.i(TAG, "Extracted field '$key' (${hexData.length} chars) to disk: $filePath")
+        } else {
+            modifiedFields.put(key, fieldArray)
+            Log.w(TAG, "Failed to extract field '$key', keeping inline")
+        }
+    }
+
+    private fun extractStringField(
+        messageHash: String,
+        fields: JSONObject,
+        key: String,
+        modifiedFields: JSONObject,
+    ) {
+        val value = fields.optString(key, "")
+        if (value.length <= AttachmentStorageManager.SIZE_THRESHOLD) {
+            modifiedFields.put(key, value)
+            return
+        }
+
+        val filePath = attachmentStorage?.saveAttachment(messageHash, key, value)
+        if (filePath != null) {
+            val refObj = JSONObject().apply { put(AttachmentStorageManager.FILE_REF_KEY, filePath) }
+            modifiedFields.put(key, refObj)
+            Log.i(TAG, "Extracted field '$key' (${value.length} chars) to disk: $filePath")
+        } else {
+            modifiedFields.put(key, value)
+            Log.w(TAG, "Failed to extract field '$key', keeping inline")
+        }
     }
 
     /**

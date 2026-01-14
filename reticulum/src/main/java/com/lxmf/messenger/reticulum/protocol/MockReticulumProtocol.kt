@@ -514,4 +514,13 @@ class MockReticulumProtocol : ReticulumProtocol {
         // Mock implementation - always succeed
         return true
     }
+
+    override suspend fun updateGuardianConfig(
+        isLocked: Boolean,
+        guardianHash: String?,
+        allowedHashes: List<String>,
+    ): Boolean {
+        // Mock implementation - always succeed
+        return true
+    }
 }

@@ -166,12 +166,13 @@ fun SettingsScreen(
 
     // Refresh background permission state on lifecycle resume (e.g. returning from system settings)
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                hasForegroundPermission = LocationPermissionManager.hasPermission(context)
-                hasBackgroundPermission = LocationPermissionManager.hasBackgroundLocationPermission(context)
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    hasForegroundPermission = LocationPermissionManager.hasPermission(context)
+                    hasBackgroundPermission = LocationPermissionManager.hasBackgroundLocationPermission(context)
+                }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
@@ -264,6 +265,7 @@ fun SettingsScreen(
                     sharedInstanceOnline = state.sharedInstanceOnline,
                     transportNodeEnabled = state.transportNodeEnabled,
                     onTransportNodeToggle = { viewModel.setTransportNodeEnabled(it) },
+                    isLocked = state.isGuardianLocked,
                 )
 
                 IdentityCard(
@@ -271,6 +273,7 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.IDENTITY, it) },
                     onViewIdentity = onNavigateToIdentity,
                     onManageIdentities = onNavigateToIdentityManager,
+                    isLocked = state.isGuardianLocked,
                 )
 
                 GuardianCard(
@@ -390,15 +393,17 @@ fun SettingsScreen(
                     onBackgroundPermissionClick = {
                         if (hasBackgroundPermission) {
                             // Already granted — open app info, guide user to Permissions > Location
-                            Toast.makeText(
-                                context,
-                                "Go to Permissions > Location to change",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                            val intent = Intent(
-                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                Uri.fromParts("package", context.packageName, null),
-                            )
+                            Toast
+                                .makeText(
+                                    context,
+                                    "Go to Permissions > Location to change",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            val intent =
+                                Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", context.packageName, null),
+                                )
                             context.startActivity(intent)
                         } else if (LocationPermissionManager.hasPermission(context)) {
                             // Foreground granted but not background — show our custom sheet
@@ -409,6 +414,7 @@ fun SettingsScreen(
                             showTelemetryPermissionSheet = true
                         }
                     },
+                    isLocked = state.isGuardianLocked,
                 )
 
                 MapSourcesCard(

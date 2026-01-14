@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
@@ -79,6 +80,7 @@ class ContactsViewModel
         private val contactRepository: ContactRepository,
         private val propagationNodeManager: PropagationNodeManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
+        private val guardianRepository: GuardianRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "ContactsViewModel"
@@ -87,6 +89,16 @@ class ContactsViewModel
         // Search query state
         private val _searchQuery = MutableStateFlow("")
         val searchQuery: StateFlow<String> = _searchQuery
+
+        // Guardian lock state - when locked, Network tab is hidden
+        val isLocked: StateFlow<Boolean> =
+            guardianRepository
+                .isLockedFlow()
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = false,
+                )
 
         // Current relay info (includes isAutoSelected for showing "(auto)" badge)
         val currentRelayInfo: StateFlow<RelayInfo?> = propagationNodeManager.currentRelay
@@ -534,6 +546,5 @@ class ContactsViewModel
          * Get the latest known, non-expired location for a peer.
          * Returns a Pair(latitude, longitude) or null if no valid location is known.
          */
-        suspend fun getContactLocation(destinationHash: String): Pair<Double, Double>? =
-            receivedLocationRepository.getContactLocation(destinationHash)
+        suspend fun getContactLocation(destinationHash: String): Pair<Double, Double>? = receivedLocationRepository.getContactLocation(destinationHash)
     }

@@ -12,6 +12,7 @@ import com.lxmf.messenger.data.db.dao.GuardianConfigDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
+import com.lxmf.messenger.data.db.dao.PairedChildDao
 import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
@@ -26,6 +27,7 @@ import com.lxmf.messenger.data.db.entity.GuardianConfigEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.OfflineMapRegionEntity
+import com.lxmf.messenger.data.db.entity.PairedChildEntity
 import com.lxmf.messenger.data.db.entity.PeerIconEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
@@ -47,6 +49,7 @@ import com.lxmf.messenger.data.db.entity.RmspServerEntity
         DraftEntity::class,
         GuardianConfigEntity::class,
         AllowedContactEntity::class,
+        PairedChildEntity::class,
     ],
     version = 41,
     exportSchema = false,
@@ -79,4 +82,6 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun guardianConfigDao(): GuardianConfigDao
 
     abstract fun allowedContactDao(): AllowedContactDao
+
+    abstract fun pairedChildDao(): PairedChildDao
 }

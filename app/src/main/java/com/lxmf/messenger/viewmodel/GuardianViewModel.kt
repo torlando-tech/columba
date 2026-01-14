@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import com.lxmf.messenger.data.db.entity.PairedChildEntity
 import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
@@ -21,6 +22,7 @@ import javax.inject.Inject
 private const val TAG = "GuardianViewModel"
 
 data class GuardianState(
+    // Child side state
     val isLoading: Boolean = true,
     val hasGuardian: Boolean = false,
     val guardianName: String? = null,
@@ -28,8 +30,13 @@ data class GuardianState(
     val isLocked: Boolean = false,
     val lockedTimestamp: Long = 0,
     val allowedContacts: List<Pair<String, String?>> = emptyList(),
+    // QR generation state
     val qrCodeBitmap: Bitmap? = null,
     val isGeneratingQr: Boolean = false,
+    // Parent side state
+    val pairedChildren: List<PairedChildEntity> = emptyList(),
+    val isSendingCommand: Boolean = false,
+    // Common
     val error: String? = null,
 )
 
@@ -44,14 +51,26 @@ class GuardianViewModel
         private val _state = MutableStateFlow(GuardianState())
         val state: StateFlow<GuardianState> = _state.asStateFlow()
 
+        init {
+            // Continuously observe paired children so UI updates immediately when PAIR_ACK is received
+            viewModelScope.launch {
+                guardianRepository.getPairedChildren().collect { children ->
+                    Log.d(TAG, "Paired children updated: ${children.size} children")
+                    _state.update { it.copy(pairedChildren = children) }
+                }
+            }
+        }
+
         /**
          * Load the current guardian state from the repository.
+         * Loads both child-side state (guardian config) and parent-side state (paired children).
          */
         fun loadGuardianState() {
             viewModelScope.launch {
                 _state.update { it.copy(isLoading = true) }
 
                 try {
+                    // Load child-side state
                     val config = guardianRepository.getGuardianConfig()
                     val allowedContacts =
                         if (config?.hasGuardian() == true) {
@@ -62,6 +81,9 @@ class GuardianViewModel
                             emptyList()
                         }
 
+                    // Load parent-side state (paired children)
+                    val pairedChildren = guardianRepository.getPairedChildren().first()
+
                     _state.update {
                         it.copy(
                             isLoading = false,
@@ -71,6 +93,7 @@ class GuardianViewModel
                             isLocked = config?.isLocked == true,
                             lockedTimestamp = config?.lockedTimestamp ?: 0,
                             allowedContacts = allowedContacts,
+                            pairedChildren = pairedChildren,
                         )
                     }
                 } catch (e: Exception) {
@@ -148,6 +171,7 @@ class GuardianViewModel
 
         /**
          * Parse and validate a scanned guardian QR code, then pair with the guardian.
+         * Also sends a PAIR_ACK message to the guardian so they know pairing succeeded.
          */
         suspend fun pairWithGuardian(qrData: String): Boolean {
             Log.d(TAG, "pairWithGuardian called with qrData: ${qrData.take(50)}...")
@@ -172,6 +196,23 @@ class GuardianViewModel
                 )
 
                 Log.i(TAG, "Paired with guardian: $guardianDestHash")
+
+                // Send PAIR_ACK to guardian so they know we paired
+                try {
+                    val sent = reticulumProtocol.sendGuardianCommand(
+                        destinationHash = guardianDestHash,
+                        command = "PAIR_ACK",
+                        payload = emptyMap(),
+                    )
+                    if (sent) {
+                        Log.i(TAG, "Sent PAIR_ACK to guardian")
+                    } else {
+                        Log.w(TAG, "Failed to send PAIR_ACK to guardian (non-fatal)")
+                    }
+                } catch (e: Exception) {
+                    // Non-fatal - pairing is still valid
+                    Log.w(TAG, "Failed to send PAIR_ACK: ${e.message}")
+                }
 
                 // Refresh state
                 loadGuardianState()
@@ -223,6 +264,135 @@ class GuardianViewModel
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to remove allowed contact", e)
                 _state.update { it.copy(error = e.message) }
+            }
+        }
+
+        // ========== Parent Side Methods ==========
+
+        /**
+         * Lock a paired child's device.
+         */
+        fun lockChild(childDestHash: String) {
+            viewModelScope.launch {
+                _state.update { it.copy(isSendingCommand = true, error = null) }
+                try {
+                    val sent = reticulumProtocol.sendGuardianCommand(
+                        destinationHash = childDestHash,
+                        command = "LOCK",
+                        payload = emptyMap(),
+                    )
+                    if (sent) {
+                        guardianRepository.updateChildLockState(childDestHash, true)
+                        Log.i(TAG, "Sent LOCK command to $childDestHash")
+                        loadGuardianState()
+                    } else {
+                        _state.update { it.copy(error = "Failed to send lock command") }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to lock child", e)
+                    _state.update { it.copy(error = e.message) }
+                } finally {
+                    _state.update { it.copy(isSendingCommand = false) }
+                }
+            }
+        }
+
+        /**
+         * Unlock a paired child's device.
+         */
+        fun unlockChild(childDestHash: String) {
+            viewModelScope.launch {
+                _state.update { it.copy(isSendingCommand = true, error = null) }
+                try {
+                    val sent = reticulumProtocol.sendGuardianCommand(
+                        destinationHash = childDestHash,
+                        command = "UNLOCK",
+                        payload = emptyMap(),
+                    )
+                    if (sent) {
+                        guardianRepository.updateChildLockState(childDestHash, false)
+                        Log.i(TAG, "Sent UNLOCK command to $childDestHash")
+                        loadGuardianState()
+                    } else {
+                        _state.update { it.copy(error = "Failed to send unlock command") }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to unlock child", e)
+                    _state.update { it.copy(error = e.message) }
+                } finally {
+                    _state.update { it.copy(isSendingCommand = false) }
+                }
+            }
+        }
+
+        /**
+         * Add a contact to a child's allow list.
+         */
+        fun addChildAllowedContact(childDestHash: String, contactHash: String, displayName: String?) {
+            viewModelScope.launch {
+                _state.update { it.copy(isSendingCommand = true, error = null) }
+                try {
+                    val payload = mutableMapOf<String, Any>("contact_hash" to contactHash)
+                    displayName?.let { payload["display_name"] = it }
+
+                    val sent = reticulumProtocol.sendGuardianCommand(
+                        destinationHash = childDestHash,
+                        command = "ALLOW_ADD",
+                        payload = payload,
+                    )
+                    if (sent) {
+                        Log.i(TAG, "Sent ALLOW_ADD command to $childDestHash for $contactHash")
+                    } else {
+                        _state.update { it.copy(error = "Failed to send allow add command") }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to add allowed contact on child", e)
+                    _state.update { it.copy(error = e.message) }
+                } finally {
+                    _state.update { it.copy(isSendingCommand = false) }
+                }
+            }
+        }
+
+        /**
+         * Remove a contact from a child's allow list.
+         */
+        fun removeChildAllowedContact(childDestHash: String, contactHash: String) {
+            viewModelScope.launch {
+                _state.update { it.copy(isSendingCommand = true, error = null) }
+                try {
+                    val sent = reticulumProtocol.sendGuardianCommand(
+                        destinationHash = childDestHash,
+                        command = "ALLOW_REMOVE",
+                        payload = mapOf("contact_hash" to contactHash),
+                    )
+                    if (sent) {
+                        Log.i(TAG, "Sent ALLOW_REMOVE command to $childDestHash for $contactHash")
+                    } else {
+                        _state.update { it.copy(error = "Failed to send allow remove command") }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to remove allowed contact on child", e)
+                    _state.update { it.copy(error = e.message) }
+                } finally {
+                    _state.update { it.copy(isSendingCommand = false) }
+                }
+            }
+        }
+
+        /**
+         * Remove a paired child (unpair from parent side).
+         */
+        fun removePairedChild(childDestHash: String) {
+            viewModelScope.launch {
+                try {
+                    guardianRepository.removePairedChild(childDestHash)
+                    Log.i(TAG, "Removed paired child: $childDestHash")
+                    loadGuardianState()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to remove paired child", e)
+                    _state.update { it.copy(error = e.message) }
+                }
             }
         }
 

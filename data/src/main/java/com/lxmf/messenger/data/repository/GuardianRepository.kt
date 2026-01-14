@@ -3,8 +3,10 @@ package com.lxmf.messenger.data.repository
 import com.lxmf.messenger.data.db.dao.AllowedContactDao
 import com.lxmf.messenger.data.db.dao.GuardianConfigDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
+import com.lxmf.messenger.data.db.dao.PairedChildDao
 import com.lxmf.messenger.data.db.entity.AllowedContactEntity
 import com.lxmf.messenger.data.db.entity.GuardianConfigEntity
+import com.lxmf.messenger.data.db.entity.PairedChildEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -16,10 +18,11 @@ import javax.inject.Singleton
  * Repository for managing parental control (guardian) functionality.
  *
  * Provides methods for:
- * - Guardian pairing and configuration
+ * - Guardian pairing and configuration (child side)
  * - Lock state management
  * - Allow list management
  * - Contact filtering checks for message blocking
+ * - Paired children management (parent side)
  */
 @Singleton
 class GuardianRepository
@@ -28,6 +31,7 @@ class GuardianRepository
         private val guardianConfigDao: GuardianConfigDao,
         private val allowedContactDao: AllowedContactDao,
         private val localIdentityDao: LocalIdentityDao,
+        private val pairedChildDao: PairedChildDao,
     ) {
         companion object {
             // Commands older than this are rejected (anti-replay)
@@ -287,5 +291,94 @@ class GuardianRepository
         suspend fun recordProcessedCommand(nonce: String, timestamp: Long) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
             guardianConfigDao.updateLastCommand(activeIdentity.identityHash, nonce, timestamp)
+        }
+
+        // ========== Paired Children (Parent Side) ==========
+
+        /**
+         * Get all paired children for the active identity (as guardian).
+         */
+        fun getPairedChildren(): Flow<List<PairedChildEntity>> {
+            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+                if (identity == null) {
+                    flowOf(emptyList())
+                } else {
+                    pairedChildDao.getPairedChildrenForIdentity(identity.identityHash)
+                }
+            }
+        }
+
+        /**
+         * Get paired children count for the active identity.
+         */
+        suspend fun getPairedChildrenCount(): Int {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return 0
+            return pairedChildDao.countChildrenForIdentity(activeIdentity.identityHash)
+        }
+
+        /**
+         * Add a paired child when they acknowledge pairing.
+         */
+        suspend fun addPairedChild(childDestinationHash: String, displayName: String? = null) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            val child = PairedChildEntity(
+                childDestinationHash = childDestinationHash,
+                displayName = displayName,
+                isLocked = false,
+                lockChangedTimestamp = 0,
+                pairedTimestamp = System.currentTimeMillis(),
+                lastSeenTimestamp = System.currentTimeMillis(),
+                guardianIdentityHash = activeIdentity.identityHash,
+            )
+            pairedChildDao.insertOrUpdate(child)
+        }
+
+        /**
+         * Update a child's lock state (parent side tracking).
+         */
+        suspend fun updateChildLockState(childHash: String, isLocked: Boolean) {
+            pairedChildDao.updateLockStatus(childHash, isLocked, System.currentTimeMillis())
+        }
+
+        /**
+         * Update a child's display name.
+         */
+        suspend fun updateChildDisplayName(childHash: String, displayName: String?) {
+            pairedChildDao.updateDisplayName(childHash, displayName)
+        }
+
+        /**
+         * Update a child's last seen timestamp.
+         */
+        suspend fun updateChildLastSeen(childHash: String) {
+            pairedChildDao.updateLastSeen(childHash, System.currentTimeMillis())
+        }
+
+        /**
+         * Get a specific paired child.
+         */
+        suspend fun getPairedChild(childHash: String): PairedChildEntity? {
+            return pairedChildDao.getPairedChild(childHash)
+        }
+
+        /**
+         * Remove a paired child.
+         */
+        suspend fun removePairedChild(childHash: String) {
+            pairedChildDao.delete(childHash)
+        }
+
+        /**
+         * Check if a message sender is a paired child.
+         */
+        suspend fun isPairedChild(senderHash: String): Boolean {
+            return pairedChildDao.getPairedChild(senderHash) != null
+        }
+
+        /**
+         * Get the current identity hash (for signing commands)
+         */
+        suspend fun getCurrentIdentityHash(): String? {
+            return localIdentityDao.getActiveIdentitySync()?.identityHash
         }
     }

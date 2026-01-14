@@ -44,7 +44,7 @@ class GuardianCommandProcessor
             // LXMF field type for parental control commands
             const val FIELD_PARENTAL_CONTROL = 0x80
 
-            // Command types
+            // Command types (guardian -> child)
             const val CMD_LOCK = "LOCK"
             const val CMD_UNLOCK = "UNLOCK"
             const val CMD_ALLOW_ADD = "ALLOW_ADD"
@@ -52,8 +52,14 @@ class GuardianCommandProcessor
             const val CMD_ALLOW_SET = "ALLOW_SET"
             const val CMD_STATUS_REQUEST = "STATUS_REQUEST"
 
+            // Command types (child -> guardian)
+            const val CMD_PAIR_ACK = "PAIR_ACK"
+
             // Command timestamp window (5 minutes)
             const val COMMAND_WINDOW_MS = 5 * 60 * 1000L
+
+            // Prefix for guardian commands embedded in message content
+            private const val GUARDIAN_CMD_PREFIX = "__GUARDIAN_CMD__:"
         }
 
         // Coroutine scope for background processing
@@ -242,5 +248,95 @@ class GuardianCommandProcessor
             val isLocked = guardianRepository.isLocked()
             Log.i(TAG, "Status requested - isLocked: $isLocked")
             return true
+        }
+
+        // ==================== Parent Side Processing ====================
+
+        /**
+         * Check if a message contains a PAIR_ACK from a child device.
+         * This is used on the parent side to receive pairing acknowledgments.
+         *
+         * Commands can be in two formats:
+         * 1. In message content with "__GUARDIAN_CMD__:" prefix
+         * 2. In LXMF field 0x80 (legacy format)
+         */
+        fun isPairAckMessage(message: ReceivedMessage): Boolean {
+            // First check for command embedded in content
+            if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
+                return try {
+                    val commandJson = message.content.removePrefix(GUARDIAN_CMD_PREFIX)
+                    val commandData = JSONObject(commandJson)
+                    commandData.optString("cmd") == CMD_PAIR_ACK
+                } catch (e: Exception) {
+                    Log.d(TAG, "Failed to parse guardian command from content", e)
+                    false
+                }
+            }
+
+            // Fall back to LXMF field 0x80 (legacy format)
+            val fieldsJson = message.fieldsJson ?: return false
+            return try {
+                val fields = JSONObject(fieldsJson)
+                val commandDataStr = fields.optString(FIELD_PARENTAL_CONTROL.toString())
+                    .ifEmpty { fields.optString("128") }
+
+                if (commandDataStr.isEmpty()) return false
+
+                val commandData = JSONObject(commandDataStr)
+                commandData.optString("cmd") == CMD_PAIR_ACK
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        /**
+         * Process a PAIR_ACK message from a child device.
+         * Adds the sender to our list of paired children.
+         *
+         * @param message The received LXMF message containing PAIR_ACK
+         * @return True if the child was successfully registered
+         */
+        suspend fun processPairAck(message: ReceivedMessage): Boolean {
+            try {
+                val senderHash = message.sourceHash.joinToString("") { "%02x".format(it) }
+                Log.i(TAG, "Processing PAIR_ACK from: $senderHash")
+
+                // Extract any display name from the message payload
+                var displayName: String? = null
+                try {
+                    // First try content-based format
+                    if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
+                        val commandJson = message.content.removePrefix(GUARDIAN_CMD_PREFIX)
+                        val commandData = JSONObject(commandJson)
+                        val payload = commandData.optJSONObject("payload")
+                        displayName = payload?.optString("display_name")?.ifEmpty { null }
+                    } else {
+                        // Fall back to LXMF field 0x80 (legacy format)
+                        val fieldsJson = message.fieldsJson
+                        if (fieldsJson != null) {
+                            val fields = JSONObject(fieldsJson)
+                            val commandDataStr = fields.optString(FIELD_PARENTAL_CONTROL.toString())
+                                .ifEmpty { fields.optString("128") }
+                            if (commandDataStr.isNotEmpty()) {
+                                val commandData = JSONObject(commandDataStr)
+                                val payload = commandData.optJSONObject("payload")
+                                displayName = payload?.optString("display_name")?.ifEmpty { null }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Non-fatal - just won't have display name
+                    Log.d(TAG, "Could not extract display name from PAIR_ACK")
+                }
+
+                // Add the child to our paired children list
+                guardianRepository.addPairedChild(senderHash, displayName)
+                Log.i(TAG, "Added paired child: $senderHash (name: $displayName)")
+
+                return true
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing PAIR_ACK", e)
+                return false
+            }
         }
     }

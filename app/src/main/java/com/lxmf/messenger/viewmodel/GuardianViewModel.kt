@@ -7,14 +7,18 @@ import androidx.lifecycle.viewModelScope
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.lxmf.messenger.data.db.entity.PairedChildEntity
+import com.lxmf.messenger.data.model.EnrichedContact
+import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -47,9 +51,20 @@ class GuardianViewModel
         private val guardianRepository: GuardianRepository,
         private val identityRepository: IdentityRepository,
         private val reticulumProtocol: ReticulumProtocol,
+        private val contactRepository: ContactRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow(GuardianState())
         val state: StateFlow<GuardianState> = _state.asStateFlow()
+
+        // Parent's saved contacts - for picking contacts to add to child's allow list
+        val parentContacts: StateFlow<List<EnrichedContact>> =
+            contactRepository
+                .getEnrichedContacts()
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = emptyList(),
+                )
 
         init {
             // Continuously observe paired children so UI updates immediately when PAIR_ACK is received
@@ -332,8 +347,13 @@ class GuardianViewModel
             viewModelScope.launch {
                 _state.update { it.copy(isSendingCommand = true, error = null) }
                 try {
-                    val payload = mutableMapOf<String, Any>("contact_hash" to contactHash)
-                    displayName?.let { payload["display_name"] = it }
+                    // Build contact object with hash and optional name
+                    val contact = mutableMapOf<String, Any>("hash" to contactHash)
+                    displayName?.let { contact["name"] = it }
+
+                    // Payload format expected by GuardianCommandProcessor.executeAllowAdd:
+                    // { "contacts": [{"hash": "...", "name": "..."}] }
+                    val payload = mapOf("contacts" to listOf(contact))
 
                     val sent = reticulumProtocol.sendGuardianCommand(
                         destinationHash = childDestHash,
@@ -361,10 +381,14 @@ class GuardianViewModel
             viewModelScope.launch {
                 _state.update { it.copy(isSendingCommand = true, error = null) }
                 try {
+                    // Payload format expected by GuardianCommandProcessor.executeAllowRemove:
+                    // { "contacts": ["hash1", "hash2"] }
+                    val payload = mapOf("contacts" to listOf(contactHash))
+
                     val sent = reticulumProtocol.sendGuardianCommand(
                         destinationHash = childDestHash,
                         command = "ALLOW_REMOVE",
-                        payload = mapOf("contact_hash" to contactHash),
+                        payload = payload,
                     )
                     if (sent) {
                         Log.i(TAG, "Sent ALLOW_REMOVE command to $childDestHash for $contactHash")

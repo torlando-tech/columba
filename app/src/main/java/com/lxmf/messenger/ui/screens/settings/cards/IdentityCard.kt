@@ -27,10 +27,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+/**
+ * Identity settings card for viewing identity and managing multiple identities.
+ *
+ * @param onViewIdentity Callback when "View My Identity" is clicked
+ * @param onManageIdentities Callback when "Manage Identities" is clicked
+ * @param isLocked When true, identity management is disabled due to parental controls
+ */
 @Composable
 fun IdentityCard(
     onViewIdentity: () -> Unit,
     onManageIdentities: () -> Unit,
+    isLocked: Boolean = false,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -96,10 +104,11 @@ fun IdentityCard(
                 Text("View My Identity")
             }
 
-            // Secondary action - Manage Identities
+            // Secondary action - Manage Identities (disabled when locked)
             OutlinedButton(
                 onClick = onManageIdentities,
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !isLocked,
             ) {
                 Icon(
                     imageVector = Icons.Default.Settings,
@@ -107,7 +116,7 @@ fun IdentityCard(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Manage Identities")
+                Text(if (isLocked) "Identity Switching Disabled" else "Manage Identities")
             }
         }
     }

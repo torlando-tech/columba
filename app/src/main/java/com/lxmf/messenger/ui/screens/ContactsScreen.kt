@@ -133,10 +133,18 @@ fun ContactsScreen(
     val contactCount by viewModel.contactCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
+    val isLocked by viewModel.isLocked.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
 
-    // Tab selection state
+    // Tab selection state - force MY_CONTACTS when locked
     var selectedTab by remember { mutableStateOf(ContactsTab.MY_CONTACTS) }
+
+    // When locked, always show MY_CONTACTS tab
+    LaunchedEffect(isLocked) {
+        if (isLocked) {
+            selectedTab = ContactsTab.MY_CONTACTS
+        }
+    }
 
     // Network tab state
     val selectedNodeTypes by announceViewModel.selectedNodeTypes.collectAsState()
@@ -350,20 +358,22 @@ fun ContactsScreen(
                     )
                 }
 
-                // Tab selector
-                SingleChoiceSegmentedButtonRow(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                ) {
-                    ContactsTab.entries.forEachIndexed { index, tab ->
-                        SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = ContactsTab.entries.size),
-                            onClick = { selectedTab = tab },
-                            selected = selectedTab == tab,
-                        ) {
-                            Text(tab.displayName)
+                // Tab selector - hidden when locked (child can only see My Contacts)
+                if (!isLocked) {
+                    SingleChoiceSegmentedButtonRow(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        ContactsTab.entries.forEachIndexed { index, tab ->
+                            SegmentedButton(
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = ContactsTab.entries.size),
+                                onClick = { selectedTab = tab },
+                                selected = selectedTab == tab,
+                            ) {
+                                Text(tab.displayName)
+                            }
                         }
                     }
                 }

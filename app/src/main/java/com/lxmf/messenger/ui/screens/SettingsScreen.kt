@@ -151,11 +151,13 @@ fun SettingsScreen(
                     sharedInstanceOnline = state.sharedInstanceOnline,
                     transportNodeEnabled = state.transportNodeEnabled,
                     onTransportNodeToggle = { viewModel.setTransportNodeEnabled(it) },
+                    isLocked = state.isGuardianLocked,
                 )
 
                 IdentityCard(
                     onViewIdentity = onNavigateToIdentity,
                     onManageIdentities = onNavigateToIdentityManager,
+                    isLocked = state.isGuardianLocked,
                 )
 
                 GuardianCard(
@@ -193,6 +195,7 @@ fun SettingsScreen(
                     onDefaultDurationChange = { viewModel.setDefaultSharingDuration(it) },
                     locationPrecisionRadius = state.locationPrecisionRadius,
                     onLocationPrecisionRadiusChange = { viewModel.setLocationPrecisionRadius(it) },
+                    isLocked = state.isGuardianLocked,
                 )
 
                 MapSourcesCard(

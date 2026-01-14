@@ -3,6 +3,7 @@ package com.lxmf.messenger.service
 import android.util.Log
 import com.lxmf.messenger.data.db.entity.GuardianConfigEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
+import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.reticulum.protocol.ReceivedMessage
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +40,7 @@ class GuardianCommandProcessor
     constructor(
         private val guardianRepository: GuardianRepository,
         private val announceRepository: AnnounceRepository,
+        private val contactRepository: ContactRepository,
     ) {
         companion object {
             private const val TAG = "GuardianCommandProcessor"
@@ -229,8 +231,30 @@ class GuardianCommandProcessor
                 return false
             }
 
+            // Add to allowed contacts list (for message filtering)
             guardianRepository.addAllowedContacts(contacts)
             Log.i(TAG, "Added ${contacts.size} contacts to allow list")
+
+            // Also add to child's contacts list so they can see and message them
+            for ((hash, name) in contacts) {
+                try {
+                    // Check if contact already exists
+                    if (!contactRepository.hasContact(hash)) {
+                        val result = contactRepository.addPendingContact(hash, name)
+                        if (result.isSuccess) {
+                            Log.i(TAG, "Added contact $hash to contacts list (guardian ALLOW_ADD)")
+                        } else {
+                            Log.w(TAG, "Failed to add contact $hash to contacts list: ${result.exceptionOrNull()?.message}")
+                        }
+                    } else {
+                        Log.d(TAG, "Contact $hash already exists in contacts list")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error adding contact $hash to contacts list", e)
+                    // Continue with other contacts even if one fails
+                }
+            }
+
             return true
         }
 

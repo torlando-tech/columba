@@ -48,6 +48,8 @@ import com.lxmf.messenger.ui.model.SharingDuration
  * - Stop all sharing button
  * - Default duration picker
  * - Location precision picker
+ *
+ * @param isLocked When true, the toggle is disabled due to parental controls
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -61,6 +63,7 @@ fun LocationSharingCard(
     onDefaultDurationChange: (String) -> Unit,
     locationPrecisionRadius: Int,
     onLocationPrecisionRadiusChange: (Int) -> Unit,
+    isLocked: Boolean = false,
 ) {
     var showDurationPicker by remember { mutableStateOf(false) }
     var showPrecisionPicker by remember { mutableStateOf(false) }
@@ -105,14 +108,19 @@ fun LocationSharingCard(
                 Switch(
                     checked = enabled,
                     onCheckedChange = onEnabledChange,
+                    enabled = !isLocked,
                 )
             }
 
             // Description
             Text(
                 text =
-                    "Share your real-time location with contacts. " +
-                        "When disabled, all active sharing sessions will be stopped.",
+                    if (isLocked) {
+                        "Location sharing settings are controlled by your guardian."
+                    } else {
+                        "Share your real-time location with contacts. " +
+                            "When disabled, all active sharing sessions will be stopped."
+                    },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

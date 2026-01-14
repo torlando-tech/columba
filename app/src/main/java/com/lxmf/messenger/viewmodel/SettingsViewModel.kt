@@ -136,11 +136,28 @@ class SettingsViewModel
             internal var enableMonitors = true
         }
 
+        // Load initial guardian state synchronously to ensure feature restrictions
+        // (like hiding Map nav button) are applied BEFORE the first UI render.
+        // This MUST happen during property initialization, not in init{}, because
+        // Compose can observe the StateFlow before init{} completes.
+        private val initialGuardianConfig = kotlinx.coroutines.runBlocking {
+            try {
+                guardianRepository.getGuardianConfig()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading initial guardian config", e)
+                null
+            }
+        }
+
         private val _state =
             MutableStateFlow(
                 SettingsState(
                     // Start with default theme - actual theme loads asynchronously in loadSettings()
                     selectedTheme = PresetTheme.VIBRANT,
+                    // Guardian state loaded synchronously to prevent nav bar flicker
+                    hasGuardian = initialGuardianConfig?.hasGuardian() ?: false,
+                    isGuardianLocked = initialGuardianConfig?.isLocked ?: false,
+                    guardianName = initialGuardianConfig?.guardianName,
                 ),
             )
         val state: StateFlow<SettingsState> = _state.asStateFlow()
@@ -324,6 +341,11 @@ class SettingsViewModel
                             mapSourceRmspEnabled = _state.value.mapSourceRmspEnabled,
                             rmspServerCount = _state.value.rmspServerCount,
                             hasOfflineMaps = _state.value.hasOfflineMaps,
+                            // Preserve guardian state from loadGuardianSettings()
+                            hasGuardian = _state.value.hasGuardian,
+                            isGuardianLocked = _state.value.isGuardianLocked,
+                            guardianName = _state.value.guardianName,
+                            allowedContactCount = _state.value.allowedContactCount,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value
@@ -1453,9 +1475,16 @@ class SettingsViewModel
 
         /**
          * Load guardian settings from the repository.
+         *
+         * NOTE: Initial guardian state is loaded synchronously during property initialization
+         * (see initialGuardianConfig) to ensure feature restrictions are applied before
+         * the first UI render. This method sets up Flow collectors for ongoing updates.
          */
         private fun loadGuardianSettings() {
-            // Observe guardian config changes
+            Log.d(TAG, "Guardian state initialized: hasGuardian=${initialGuardianConfig?.hasGuardian()}, " +
+                "locked=${initialGuardianConfig?.isLocked}")
+
+            // Observe guardian config changes for ongoing updates
             viewModelScope.launch {
                 guardianRepository.getGuardianConfigFlow().collect { config ->
                     _state.update {

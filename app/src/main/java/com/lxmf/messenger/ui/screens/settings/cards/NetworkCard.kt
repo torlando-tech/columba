@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
  *                             switched to its own instance and interfaces can be managed.
  * @param transportNodeEnabled Whether transport node mode is enabled (forwards mesh traffic)
  * @param onTransportNodeToggle Callback when transport node toggle is changed
+ * @param isLocked When true, interface management is disabled due to parental controls
  */
 @Composable
 fun NetworkCard(
@@ -51,10 +52,10 @@ fun NetworkCard(
     sharedInstanceOnline: Boolean = true,
     transportNodeEnabled: Boolean = true,
     onTransportNodeToggle: (Boolean) -> Unit = {},
+    isLocked: Boolean = false,
 ) {
-    // Interface management is only disabled when actively using a shared instance
-    // If shared instance went offline, we're now using our own instance
-    val interfacesDisabled = isSharedInstance && sharedInstanceOnline
+    // Interface management is disabled when using a shared instance or when locked by parental controls
+    val interfacesDisabled = isLocked || (isSharedInstance && sharedInstanceOnline)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -94,13 +95,13 @@ fun NetworkCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            // Description for Manage Interfaces (changes when using shared instance)
+            // Description for Manage Interfaces (changes when using shared instance or locked)
             Text(
                 text =
-                    if (interfacesDisabled) {
-                        "Interface management is disabled while using a shared system instance."
-                    } else {
-                        "Configure how your device connects to the Reticulum network. " +
+                    when {
+                        isLocked -> "Interface management is disabled by parental controls."
+                        interfacesDisabled -> "Interface management is disabled while using a shared system instance."
+                        else -> "Configure how your device connects to the Reticulum network. " +
                             "Add TCP connections, auto-discovery, LoRa (via RNode), or BLE interfaces."
                     },
                 style = MaterialTheme.typography.bodyMedium,

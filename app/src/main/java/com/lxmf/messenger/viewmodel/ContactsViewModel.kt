@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.util.IdentityQrCodeUtils
@@ -63,6 +64,7 @@ class ContactsViewModel
     constructor(
         private val contactRepository: ContactRepository,
         private val propagationNodeManager: PropagationNodeManager,
+        private val guardianRepository: GuardianRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "ContactsViewModel"
@@ -71,6 +73,16 @@ class ContactsViewModel
         // Search query state
         private val _searchQuery = MutableStateFlow("")
         val searchQuery: StateFlow<String> = _searchQuery
+
+        // Guardian lock state - when locked, Network tab is hidden
+        val isLocked: StateFlow<Boolean> =
+            guardianRepository
+                .isLockedFlow()
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = false,
+                )
 
         // Current relay info (includes isAutoSelected for showing "(auto)" badge)
         val currentRelayInfo: StateFlow<RelayInfo?> = propagationNodeManager.currentRelay

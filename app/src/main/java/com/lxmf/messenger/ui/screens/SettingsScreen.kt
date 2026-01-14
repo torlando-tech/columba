@@ -214,6 +214,7 @@ fun SettingsScreen(
                     sharedInstanceOnline = state.sharedInstanceOnline,
                     transportNodeEnabled = state.transportNodeEnabled,
                     onTransportNodeToggle = { viewModel.setTransportNodeEnabled(it) },
+                    isLocked = state.isGuardianLocked,
                 )
 
                 IdentityCard(
@@ -221,6 +222,7 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.IDENTITY, it) },
                     onViewIdentity = onNavigateToIdentity,
                     onManageIdentities = onNavigateToIdentityManager,
+                    isLocked = state.isGuardianLocked,
                 )
 
                 GuardianCard(
@@ -331,6 +333,7 @@ fun SettingsScreen(
                     localIconName = state.iconName,
                     localIconForegroundColor = state.iconForegroundColor,
                     localIconBackgroundColor = state.iconBackgroundColor,
+                    isLocked = state.isGuardianLocked,
                 )
 
                 MapSourcesCard(

@@ -71,6 +71,8 @@ import kotlinx.coroutines.delay
  * - Default duration picker
  * - Location precision picker
  * - Telemetry collector configuration
+ *
+ * @param isLocked When true, the toggle is disabled due to parental controls
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -117,6 +119,7 @@ fun LocationSharingCard(
     localIconName: String? = null,
     localIconForegroundColor: String? = null,
     localIconBackgroundColor: String? = null,
+    isLocked: Boolean = false,
 ) {
     var showDurationPicker by remember { mutableStateOf(false) }
     var showPrecisionPicker by remember { mutableStateOf(false) }
@@ -130,14 +133,19 @@ fun LocationSharingCard(
             Switch(
                 checked = enabled,
                 onCheckedChange = onEnabledChange,
+                enabled = !isLocked,
             )
         },
     ) {
         // Description
         Text(
             text =
-                "Share your real-time location with contacts. " +
-                    "When disabled, all active sharing sessions will be stopped.",
+                if (isLocked) {
+                    "Location sharing settings are controlled by your guardian."
+                } else {
+                    "Share your real-time location with contacts. " +
+                        "When disabled, all active sharing sessions will be stopped."
+                },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +29,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.QrCode
@@ -68,6 +72,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.db.entity.PairedChildEntity
+import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.viewmodel.GuardianViewModel
 import kotlinx.coroutines.launch
 
@@ -87,6 +92,9 @@ fun GuardianScreen(
     var showAddContactDialog by remember { mutableStateOf(false) }
     var showRemoveContactDialog by remember { mutableStateOf<String?>(null) }
     var newContactHash by remember { mutableStateOf("") }
+
+    // Parent-side: manage contacts dialog state (childHash or null)
+    var manageContactsChildHash by remember { mutableStateOf<String?>(null) }
 
     // Load state on first composition
     LaunchedEffect(Unit) {
@@ -162,6 +170,7 @@ fun GuardianScreen(
                         onLockChild = { childHash -> viewModel.lockChild(childHash) },
                         onUnlockChild = { childHash -> viewModel.unlockChild(childHash) },
                         onRemoveChild = { childHash -> viewModel.removePairedChild(childHash) },
+                        onManageContacts = { childHash -> manageContactsChildHash = childHash },
                     )
                 }
 
@@ -296,6 +305,143 @@ fun GuardianScreen(
                 },
             )
         }
+
+        // Parent-side: Manage contacts dialog for a child
+        manageContactsChildHash?.let { childHash ->
+            val parentContacts by viewModel.parentContacts.collectAsState()
+            val childEntity = state.pairedChildren.find { it.childDestinationHash == childHash }
+
+            ManageChildContactsDialog(
+                childName = childEntity?.displayName ?: "Child Device",
+                parentContacts = parentContacts,
+                isSendingCommand = state.isSendingCommand,
+                onAddContact = { contact ->
+                    viewModel.addChildAllowedContact(
+                        childDestHash = childHash,
+                        contactHash = contact.destinationHash,
+                        displayName = contact.displayName,
+                    )
+                },
+                onDismiss = { manageContactsChildHash = null },
+            )
+        }
+    }
+}
+
+/**
+ * Dialog for parent to manage contacts on a child's allow list.
+ * Shows parent's saved contacts and allows adding them to the child.
+ */
+@Composable
+private fun ManageChildContactsDialog(
+    childName: String,
+    parentContacts: List<EnrichedContact>,
+    isSendingCommand: Boolean,
+    onAddContact: (EnrichedContact) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.People,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        },
+        title = { Text("Add Allowed Contact") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp),
+            ) {
+                Text(
+                    text = "Select a contact to allow messaging with $childName:",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (parentContacts.isEmpty()) {
+                    Text(
+                        text = "No saved contacts. Add contacts first, then you can add them to this child's allow list.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(parentContacts) { contact ->
+                            ContactPickerItem(
+                                contact = contact,
+                                isSendingCommand = isSendingCommand,
+                                onSelect = { onAddContact(contact) },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Done")
+            }
+        },
+    )
+}
+
+@Composable
+private fun ContactPickerItem(
+    contact: EnrichedContact,
+    isSendingCommand: Boolean,
+    onSelect: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = contact.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = contact.destinationHash.take(12) + "...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            OutlinedButton(
+                onClick = onSelect,
+                enabled = !isSendingCommand,
+            ) {
+                if (isSendingCommand) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Add")
+                }
+            }
+        }
     }
 }
 
@@ -405,21 +551,32 @@ private fun ChildDeviceSection(
         }
     }
 
-    // Unpair button
-    OutlinedButton(
-        onClick = onUnpairClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = MaterialTheme.colorScheme.error,
-        ),
-    ) {
-        Icon(
-            imageVector = Icons.Default.Delete,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
+    // Unpair button - only visible when device is unlocked
+    // When locked, child cannot remove parental controls
+    if (!isLocked) {
+        OutlinedButton(
+            onClick = onUnpairClick,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.error,
+            ),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Remove Parental Controls")
+        }
+    } else {
+        // Show locked message instead
+        Text(
+            text = "Parental controls can only be removed when device is unlocked.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text("Remove Parental Controls")
     }
 }
 
@@ -434,6 +591,7 @@ private fun ParentDeviceSection(
     onLockChild: (String) -> Unit,
     onUnlockChild: (String) -> Unit,
     onRemoveChild: (String) -> Unit,
+    onManageContacts: (String) -> Unit,
 ) {
     // Show paired children first (if any)
     if (pairedChildren.isNotEmpty()) {
@@ -478,6 +636,7 @@ private fun ParentDeviceSection(
                         onLock = { onLockChild(child.childDestinationHash) },
                         onUnlock = { onUnlockChild(child.childDestinationHash) },
                         onRemove = { onRemoveChild(child.childDestinationHash) },
+                        onManageContacts = { onManageContacts(child.childDestinationHash) },
                     )
                 }
             }
@@ -687,6 +846,7 @@ private fun PairedChildItem(
     onLock: () -> Unit,
     onUnlock: () -> Unit,
     onRemove: () -> Unit,
+    onManageContacts: () -> Unit,
 ) {
     var showRemoveDialog by remember { mutableStateOf(false) }
 
@@ -805,6 +965,18 @@ private fun PairedChildItem(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Lock")
                     }
+                }
+
+                // Manage Contacts button
+                OutlinedButton(
+                    onClick = onManageContacts,
+                    enabled = !isSendingCommand,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.People,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
                 }
 
                 OutlinedButton(

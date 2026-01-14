@@ -41,6 +41,7 @@ import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
  *                             switched to its own instance and interfaces can be managed.
  * @param transportNodeEnabled Whether transport node mode is enabled (forwards mesh traffic)
  * @param onTransportNodeToggle Callback when transport node toggle is changed
+ * @param isLocked When true, interface management is disabled due to parental controls
  */
 @Composable
 fun NetworkCard(
@@ -52,10 +53,10 @@ fun NetworkCard(
     sharedInstanceOnline: Boolean = true,
     transportNodeEnabled: Boolean = true,
     onTransportNodeToggle: (Boolean) -> Unit = {},
+    isLocked: Boolean = false,
 ) {
-    // Interface management is only disabled when actively using a shared instance
-    // If shared instance went offline, we're now using our own instance
-    val interfacesDisabled = isSharedInstance && sharedInstanceOnline
+    // Interface management is disabled when using a shared instance or when locked by parental controls
+    val interfacesDisabled = isLocked || (isSharedInstance && sharedInstanceOnline)
     CollapsibleSettingsCard(
         title = "Network",
         icon = Icons.Default.Sensors,

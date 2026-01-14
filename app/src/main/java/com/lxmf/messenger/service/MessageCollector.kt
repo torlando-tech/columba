@@ -83,6 +83,22 @@ class MessageCollector
             scope.launch {
                 try {
                     reticulumProtocol.observeMessages().collect { receivedMessage ->
+                        // ============ PAIR_ACK CHECK (must run before duplicate check) ============
+                        // PAIR_ACK messages may be persisted by ServicePersistenceManager first,
+                        // so we need to check and process them before the duplicate check skips them.
+                        if (guardianCommandProcessor.isPairAckMessage(receivedMessage)) {
+                            val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
+                            // Only process if we haven't already (check in-memory cache)
+                            if (receivedMessage.messageHash !in processedMessageIds) {
+                                Log.d(TAG, "Processing PAIR_ACK from $sourceHash")
+                                guardianCommandProcessor.processPairAck(receivedMessage)
+                                processedMessageIds.add(receivedMessage.messageHash)
+                            }
+                            // Don't store PAIR_ACK messages in the regular message list
+                            return@collect
+                        }
+                        // ============ END PAIR_ACK CHECK ============
+
                         // De-duplicate: Skip if we've already processed this message in-memory
                         if (receivedMessage.messageHash in processedMessageIds) {
                             Log.d(TAG, "Skipping duplicate message ${receivedMessage.messageHash.take(16)} (in-memory cache)")
@@ -130,6 +146,8 @@ class MessageCollector
                             // Continue processing - guardian messages are also saved as regular messages
                             // so the parent can see their own commands in the chat history
                         }
+
+                        // Note: PAIR_ACK check moved to top of collect block (before duplicate check)
 
                         // Apply allow-list filtering when device is locked
                         if (guardianConfig != null && guardianConfig.hasGuardian() && guardianConfig.isLocked) {

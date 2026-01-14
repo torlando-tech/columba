@@ -488,4 +488,15 @@ interface IReticulumService {
      * @return JSON string: {"success": true, "signature": "base64..."} or {"success": false, "error": "..."}
      */
     String guardianSignCommand(String commandJson);
+
+    /**
+     * Send a guardian command to a child device via LXMF.
+     * Creates, signs, and sends the command.
+     *
+     * @param destinationHash The child's destination hash
+     * @param command The command type (LOCK, UNLOCK, ALLOW_ADD, ALLOW_REMOVE, ALLOW_SET, PAIR_ACK)
+     * @param payloadJson JSON string of additional payload
+     * @return JSON: {"success": true} or {"success": false, "error": "message"}
+     */
+    String guardianSendCommand(String destinationHash, String command, String payloadJson);
 }

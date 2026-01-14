@@ -14,6 +14,7 @@ import com.lxmf.messenger.data.db.dao.GuardianConfigDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
+import com.lxmf.messenger.data.db.dao.PairedChildDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.dao.RmspServerDao
@@ -66,6 +67,7 @@ object DatabaseModule {
             MIGRATION_28_29,
             MIGRATION_29_30,
             MIGRATION_30_31,
+            MIGRATION_31_32,
         )
     }
 
@@ -1295,6 +1297,29 @@ object DatabaseModule {
             }
         }
 
+    // Migration from version 31 to 32: Add paired_children table for parent/guardian tracking
+    // Stores information about children paired with this device when acting as guardian
+    private val MIGRATION_31_32 =
+        object : Migration(31, 32) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Create paired_children table
+                // Note: No foreign key constraint - matches Room entity definition
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS paired_children (
+                        childDestinationHash TEXT NOT NULL PRIMARY KEY,
+                        displayName TEXT,
+                        isLocked INTEGER NOT NULL DEFAULT 0,
+                        lockChangedTimestamp INTEGER NOT NULL DEFAULT 0,
+                        pairedTimestamp INTEGER NOT NULL,
+                        lastSeenTimestamp INTEGER NOT NULL DEFAULT 0,
+                        guardianIdentityHash TEXT NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
     @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization
     @Provides
     @Singleton
@@ -1369,6 +1394,11 @@ object DatabaseModule {
     @Provides
     fun provideAllowedContactDao(database: ColumbaDatabase): AllowedContactDao {
         return database.allowedContactDao()
+    }
+
+    @Provides
+    fun providePairedChildDao(database: ColumbaDatabase): PairedChildDao {
+        return database.pairedChildDao()
     }
 
     @Provides

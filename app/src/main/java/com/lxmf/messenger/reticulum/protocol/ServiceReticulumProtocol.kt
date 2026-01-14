@@ -2655,6 +2655,37 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun sendGuardianCommand(
+        destinationHash: String,
+        command: String,
+        payload: Map<String, Any>,
+    ): Boolean {
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+
+                // Convert payload map to JSON
+                val payloadJson = JSONObject(payload).toString()
+
+                val resultJson = service.guardianSendCommand(destinationHash, command, payloadJson)
+                val result = JSONObject(resultJson)
+
+                if (result.optBoolean("success", false)) {
+                    Log.i(TAG, "Guardian command $command sent to $destinationHash")
+                    true
+                } else {
+                    Log.e(TAG, "Failed to send guardian command: ${result.optString("error")}")
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error sending guardian command", e)
+                false
+            }
+        }
+    }
+
     // Helper extension functions
     private fun String.toByteArrayFromBase64(): ByteArray? {
         return try {

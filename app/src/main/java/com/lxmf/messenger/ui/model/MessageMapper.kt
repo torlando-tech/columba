@@ -156,6 +156,9 @@ private fun hasImageField(fieldsJson: String?): Boolean {
         when {
             field6 is JSONObject && field6.has(FILE_REF_KEY) -> true
             field6 is String && field6.isNotEmpty() -> true
+            // Handle array format from Python: ["format", "hex_data"]
+            field6 is JSONArray && field6.length() >= 2 &&
+                (field6.opt(1) as? String)?.isNotEmpty() == true -> true
             else -> false
         }
     } catch (e: Exception) {
@@ -317,9 +320,12 @@ private fun extractImageBytes(fieldsJson: String?): ByteArray? {
                     loadAttachmentFromDisk(filePath) ?: return null
                 }
                 field6 is String && field6.isNotEmpty() -> field6
+                // Handle array format from Python: ["format", "hex_data"]
+                field6 is JSONArray && field6.length() >= 2 -> field6.optString(1, "")
                 else -> return null
             }
 
+        if (hexImageData.isEmpty()) return null
         hexStringToByteArray(hexImageData)
     } catch (e: Exception) {
         Log.e(TAG, "Failed to extract image bytes", e)
@@ -330,9 +336,10 @@ private fun extractImageBytes(fieldsJson: String?): ByteArray? {
 /**
  * Decodes LXMF image field (type 6) from hex string to ImageBitmap.
  *
- * Supports two formats:
+ * Supports three formats:
  * 1. Inline hex string: "6": "ffda8e..." (original format)
  * 2. File reference: "6": {"_file_ref": "/path/to/file"} (large attachments saved to disk)
+ * 3. Array format from Python: "6": ["format", "hex_data"] (LXMF standard format)
  *
  * IMPORTANT: This performs disk I/O and CPU-intensive decoding.
  * Must be called from a background thread.
@@ -345,7 +352,7 @@ private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap? {
     return try {
         val fields = JSONObject(fieldsJson)
 
-        // Get field 6 (IMAGE) - could be string or object with file reference
+        // Get field 6 (IMAGE) - could be string, object with file reference, or array
         val field6 = fields.opt("6") ?: return null
 
         val hexImageData: String =
@@ -357,8 +364,12 @@ private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap? {
                 }
                 // Inline hex string
                 field6 is String && field6.isNotEmpty() -> field6
+                // Array format from Python: ["format", "hex_data"]
+                field6 is JSONArray && field6.length() >= 2 -> field6.optString(1, "")
                 else -> return null
             }
+
+        if (hexImageData.isEmpty()) return null
 
         // Convert hex string to bytes
         val imageBytes =

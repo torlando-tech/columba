@@ -1809,6 +1809,40 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')
+    def test_delivery_captures_interface_from_lxmf_directly(self, mock_rns, mock_lxmf):
+        """Test interface captured when LXMF provides receiving_interface directly (opportunistic messages)"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        # Create interface with proper class name (AutoInterfacePeer -> AutoInterface)
+        class AutoInterfacePeer:
+            pass
+        mock_interface = AutoInterfacePeer()
+
+        mock_message = Mock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345678f'
+        # LXMF provides receiving_interface directly (opportunistic message scenario)
+        mock_message.receiving_interface = mock_interface
+        mock_message.receiving_hops = None
+
+        # Mock RNS.Transport - path_table should NOT be checked when LXMF provides interface
+        mock_rns.Transport.has_path.return_value = False
+        mock_rns.Transport.path_table = {}
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify interface was captured from LXMF directly (AutoInterfacePeer -> AutoInterface)
+        self.assertEqual(mock_message._columba_interface, "AutoInterface")
+
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
     def test_delivery_captures_interface_for_direct_message(self, mock_rns, mock_lxmf):
         """Test interface captured when hops=0 and path table entry exists"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -1823,10 +1857,13 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
         mock_message.timestamp = 1234567890
         mock_message.fields = None
         mock_message.hash = b'msghash12345678b'
+        mock_message.receiving_interface = None  # Force path_table lookup
+        mock_message.receiving_hops = None
 
-        # Mock interface object
-        mock_interface = Mock()
-        mock_interface.name = "AutoInterface"
+        # Create interface with proper class name (we use type().__name__ now)
+        class AutoInterfacePeer:
+            pass
+        mock_interface = AutoInterfacePeer()
 
         # Mock RNS.Transport for direct delivery (0 hops) with interface in path table
         mock_rns.Transport.has_path.return_value = True
@@ -1837,7 +1874,7 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
         wrapper._on_lxmf_delivery(mock_message)
 
-        # Verify both hop count and interface were captured
+        # Verify both hop count and interface were captured (AutoInterfacePeer -> AutoInterface)
         self.assertEqual(mock_message._columba_hops, 0)
         self.assertEqual(mock_message._columba_interface, "AutoInterface")
 
@@ -1857,9 +1894,13 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
         mock_message.timestamp = 1234567890
         mock_message.fields = None
         mock_message.hash = b'msghash12345678c'
+        mock_message.receiving_interface = None  # Force path_table lookup
+        mock_message.receiving_hops = None
 
-        mock_interface = Mock()
-        mock_interface.name = "AutoInterface"
+        # Create interface with proper class name (we use type().__name__ now)
+        class AutoInterfacePeer:
+            pass
+        mock_interface = AutoInterfacePeer()
 
         # Mock RNS.Transport for multi-hop delivery (3 hops)
         mock_rns.Transport.has_path.return_value = True
@@ -1876,8 +1917,8 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')
-    def test_delivery_uses_interface_name_attribute(self, mock_rns, mock_lxmf):
-        """Test interface.name is used when available"""
+    def test_delivery_uses_interface_class_name(self, mock_rns, mock_lxmf):
+        """Test interface type is identified by class name"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
         wrapper.router = Mock()
@@ -1890,10 +1931,13 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
         mock_message.timestamp = 1234567890
         mock_message.fields = None
         mock_message.hash = b'msghash12345678d'
+        mock_message.receiving_interface = None  # Force path_table lookup
+        mock_message.receiving_hops = None
 
-        # Interface with name attribute
-        mock_interface = Mock()
-        mock_interface.name = "TCPClientInterface[192.168.1.1:4242]"
+        # Create interface with proper class name (we use type().__name__ now)
+        class TCPClientInterface:
+            pass
+        mock_interface = TCPClientInterface()
 
         mock_rns.Transport.has_path.return_value = True
         mock_rns.Transport.hops_to.return_value = 0
@@ -1903,12 +1947,12 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
         wrapper._on_lxmf_delivery(mock_message)
 
-        self.assertEqual(mock_message._columba_interface, "TCPClientInterface[192.168.1.1:4242]")
+        self.assertEqual(mock_message._columba_interface, "TCPClientInterface")
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')
-    def test_delivery_falls_back_to_str_without_name_attribute(self, mock_rns, mock_lxmf):
-        """Test str(interface) used when no name attribute"""
+    def test_delivery_uses_class_name_directly(self, mock_rns, mock_lxmf):
+        """Test class name is used to identify interface type"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
         wrapper.router = Mock()
@@ -1921,13 +1965,13 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
         mock_message.timestamp = 1234567890
         mock_message.fields = None
         mock_message.hash = b'msghash12345678e'
+        mock_message.receiving_interface = None  # Force path_table lookup
+        mock_message.receiving_hops = None
 
-        # Interface WITHOUT name attribute (uses __str__)
-        # Create a simple class with only __str__, no name attribute
-        class InterfaceWithoutName:
-            def __str__(self):
-                return "CustomInterface[test]"
-        mock_interface = InterfaceWithoutName()
+        # Create a custom interface class - class name is used directly
+        class CustomSerialInterface:
+            pass
+        mock_interface = CustomSerialInterface()
 
         mock_rns.Transport.has_path.return_value = True
         mock_rns.Transport.hops_to.return_value = 0
@@ -1937,7 +1981,7 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
         wrapper._on_lxmf_delivery(mock_message)
 
-        self.assertEqual(mock_message._columba_interface, "CustomInterface[test]")
+        self.assertEqual(mock_message._columba_interface, "CustomSerialInterface")
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')

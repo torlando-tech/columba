@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Share
@@ -65,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.ui.components.NodeTypeBadge
 import com.lxmf.messenger.ui.components.ProfileIcon
+import com.lxmf.messenger.ui.util.getReceivingInterfaceInfo
 import com.lxmf.messenger.util.formatTimeSince
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 
@@ -319,11 +319,12 @@ fun AnnounceDetailScreen(
 
                 // Show interface information if available
                 announceNonNull.receivingInterface?.let { interfaceName ->
+                    val interfaceInfo = getReceivingInterfaceInfo(interfaceName)
                     InfoCard(
-                        icon = Icons.Default.NetworkCheck,
-                        title = "Receiving Interface",
-                        content = interfaceName,
-                        subtitle = "Connection type",
+                        icon = interfaceInfo.icon,
+                        title = "Received Via",
+                        content = interfaceInfo.text,
+                        subtitle = interfaceInfo.subtitle,
                     )
                 }
 

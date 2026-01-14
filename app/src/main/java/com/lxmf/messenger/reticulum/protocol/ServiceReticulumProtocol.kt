@@ -2544,6 +2544,117 @@ class ServiceReticulumProtocol(
         }
     }
 
+    // ==================== Guardian/Parental Control ====================
+
+    override suspend fun generateGuardianPairingQr(): String? {
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+
+                val resultJson = service.guardianGeneratePairingQr()
+                val result = JSONObject(resultJson)
+
+                if (result.optBoolean("success", false)) {
+                    result.optString("qr_data", null)
+                } else {
+                    Log.e(TAG, "Failed to generate guardian QR: ${result.optString("error")}")
+                    null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error generating guardian pairing QR", e)
+                null
+            }
+        }
+    }
+
+    override suspend fun parseGuardianPairingQr(qrData: String): Pair<String, ByteArray>? {
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+
+                val resultJson = service.guardianParsePairingQr(qrData)
+                val result = JSONObject(resultJson)
+
+                if (result.optBoolean("valid", false)) {
+                    val destHash = result.optString("guardian_dest_hash", null)
+                    val pubKeyBase64 = result.optString("guardian_public_key", null)
+
+                    if (destHash != null && pubKeyBase64 != null) {
+                        val pubKey = pubKeyBase64.toByteArrayFromBase64()
+                        if (pubKey != null) {
+                            Pair(destHash, pubKey)
+                        } else {
+                            Log.e(TAG, "Failed to decode guardian public key")
+                            null
+                        }
+                    } else {
+                        Log.e(TAG, "Missing guardian pairing data in response")
+                        null
+                    }
+                } else {
+                    Log.e(TAG, "Invalid guardian QR: ${result.optString("error")}")
+                    null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing guardian pairing QR", e)
+                null
+            }
+        }
+    }
+
+    override suspend fun verifyGuardianCommand(
+        commandJson: String,
+        signature: ByteArray,
+        guardianPublicKey: ByteArray,
+    ): Boolean {
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+
+                val signatureBase64 = signature.toBase64() ?: return@withContext false
+                val pubKeyBase64 = guardianPublicKey.toBase64() ?: return@withContext false
+
+                val resultJson = service.guardianVerifyCommand(commandJson, signatureBase64, pubKeyBase64)
+                val result = JSONObject(resultJson)
+
+                result.optBoolean("valid", false)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error verifying guardian command", e)
+                false
+            }
+        }
+    }
+
+    override suspend fun signGuardianCommand(commandJson: String): ByteArray? {
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+
+                val resultJson = service.guardianSignCommand(commandJson)
+                val result = JSONObject(resultJson)
+
+                if (result.optBoolean("success", false)) {
+                    val signatureBase64 = result.optString("signature", null)
+                    signatureBase64?.toByteArrayFromBase64()
+                } else {
+                    Log.e(TAG, "Failed to sign guardian command: ${result.optString("error")}")
+                    null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error signing guardian command", e)
+                null
+            }
+        }
+    }
+
     // Helper extension functions
     private fun String.toByteArrayFromBase64(): ByteArray? {
         return try {

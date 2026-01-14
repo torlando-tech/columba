@@ -38,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
 import com.lxmf.messenger.ui.screens.settings.cards.DataMigrationCard
+import com.lxmf.messenger.ui.screens.settings.cards.GuardianCard
 import com.lxmf.messenger.ui.screens.settings.cards.IdentityCard
 import com.lxmf.messenger.ui.screens.settings.cards.ImageCompressionCard
 import com.lxmf.messenger.ui.screens.settings.cards.LocationSharingCard
@@ -64,6 +65,7 @@ fun SettingsScreen(
     onNavigateToCustomThemes: () -> Unit = {},
     onNavigateToMigration: () -> Unit = {},
     onNavigateToAnnounces: (filterType: String?) -> Unit = {},
+    onNavigateToGuardian: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
@@ -154,6 +156,14 @@ fun SettingsScreen(
                 IdentityCard(
                     onViewIdentity = onNavigateToIdentity,
                     onManageIdentities = onNavigateToIdentityManager,
+                )
+
+                GuardianCard(
+                    hasGuardian = state.hasGuardian,
+                    isLocked = state.isGuardianLocked,
+                    guardianName = state.guardianName,
+                    allowedContactCount = state.allowedContactCount,
+                    onManageClick = onNavigateToGuardian,
                 )
 
                 NotificationSettingsCard(

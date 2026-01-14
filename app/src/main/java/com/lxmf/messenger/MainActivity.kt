@@ -66,6 +66,8 @@ import com.lxmf.messenger.ui.screens.AnnounceStreamScreen
 import com.lxmf.messenger.ui.screens.BleConnectionStatusScreen
 import com.lxmf.messenger.ui.screens.ChatsScreen
 import com.lxmf.messenger.ui.screens.ContactsScreen
+import com.lxmf.messenger.ui.screens.GuardianQrScannerScreen
+import com.lxmf.messenger.ui.screens.GuardianScreen
 import com.lxmf.messenger.ui.screens.IdentityManagerScreen
 import com.lxmf.messenger.ui.screens.IdentityScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
@@ -397,13 +399,22 @@ fun ColumbaNavigation(
             currentRoute !in hideBottomNavScreens &&
             hideBottomNavPrefixes.none { currentRoute.startsWith(it) }
 
-    val screens =
+    // Filter screens based on guardian lock state
+    // When locked by parental controls, hide Map to prevent location access
+    val screens = if (settingsState.isGuardianLocked) {
+        listOf(
+            Screen.Chats,
+            Screen.Contacts,
+            Screen.Settings,
+        )
+    } else {
         listOf(
             Screen.Chats,
             Screen.Contacts,
             Screen.Map,
             Screen.Settings,
         )
+    }
 
     ColumbaTheme(selectedTheme = settingsState.selectedTheme) {
         Surface(
@@ -473,6 +484,7 @@ fun ColumbaNavigation(
                                 val encodedHash = Uri.encode(peerHash)
                                 navController.navigate("announce_detail/$encodedHash")
                             },
+                            isGuardianLocked = settingsState.isGuardianLocked,
                         )
                     }
 
@@ -580,6 +592,11 @@ fun ColumbaNavigation(
                                 navController.navigate("migration")
                             },
                             onNavigateToAnnounces = { filterType ->
+                                // Block navigation to Announces when locked by parental controls
+                                if (settingsState.isGuardianLocked) {
+                                    Log.d("MainActivity", "Blocked navigation to Announces - device locked by guardian")
+                                    return@SettingsScreen
+                                }
                                 selectedTab = 1 // Announces tab
                                 val route =
                                     if (filterType != null) {
@@ -594,6 +611,9 @@ fun ColumbaNavigation(
                                     launchSingleTop = true
                                     restoreState = false // Don't restore state so filter applies
                                 }
+                            },
+                            onNavigateToGuardian = {
+                                navController.navigate("guardian")
                             },
                         )
                     }
@@ -650,6 +670,25 @@ fun ColumbaNavigation(
                     composable("notification_settings") {
                         NotificationSettingsScreen(
                             onNavigateBack = { navController.popBackStack() },
+                        )
+                    }
+
+                    composable("guardian") {
+                        GuardianScreen(
+                            onBackClick = { navController.popBackStack() },
+                            onScanQrCode = {
+                                navController.navigate("guardian_qr_scanner")
+                            },
+                        )
+                    }
+
+                    composable("guardian_qr_scanner") {
+                        GuardianQrScannerScreen(
+                            onBackClick = { navController.popBackStack() },
+                            onPaired = {
+                                // After successful pairing, go back to guardian screen
+                                navController.popBackStack()
+                            },
                         )
                     }
 

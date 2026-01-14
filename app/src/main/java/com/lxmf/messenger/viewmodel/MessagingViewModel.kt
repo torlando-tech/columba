@@ -13,6 +13,7 @@ import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ConversationLinkManager
@@ -81,6 +82,7 @@ class MessagingViewModel
         private val locationSharingManager: LocationSharingManager,
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         private val conversationLinkManager: ConversationLinkManager,
+        private val guardianRepository: GuardianRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -884,6 +886,14 @@ class MessagingViewModel
                             Log.e(TAG, "Failed to load source identity")
                             return@launch
                         }
+
+                    // ============ PARENTAL CONTROL: Block sends to non-allowed contacts ============
+                    if (!guardianRepository.isContactAllowed(destinationHash)) {
+                        Log.w(TAG, "Blocked send to non-allowed contact: $destinationHash (device locked)")
+                        // TODO: Show UI indicator when sending is blocked by parental controls
+                        return@launch
+                    }
+                    // ============ END PARENTAL CONTROL ============
 
                     val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
                     val defaultMethod = settingsRepository.getDefaultDeliveryMethod()

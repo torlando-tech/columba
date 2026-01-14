@@ -450,4 +450,42 @@ interface IReticulumService {
      * @return Raw tile data bytes in RMSP format, or null on failure
      */
     byte[] fetchRmspTiles(String destinationHashHex, in byte[] publicKey, String geohash, int zoomMin, int zoomMax, long timeoutMs);
+
+    // ==================== GUARDIAN/PARENTAL CONTROL ====================
+
+    /**
+     * Generate a QR code data string for guardian pairing.
+     * Creates a signed payload with the current identity's destination hash and public key.
+     *
+     * @return JSON string: {"success": true, "qr_data": "lxmf-guardian://..."} or {"success": false, "error": "..."}
+     */
+    String guardianGeneratePairingQr();
+
+    /**
+     * Parse and validate a guardian pairing QR code.
+     * Validates the signature and timestamp.
+     *
+     * @param qrData The scanned QR code data
+     * @return JSON string: {"valid": true, "guardian_dest_hash": "...", "guardian_public_key": "base64..."}
+     *         or {"valid": false, "error": "..."}
+     */
+    String guardianParsePairingQr(String qrData);
+
+    /**
+     * Verify a guardian command signature.
+     *
+     * @param commandJson The command JSON string
+     * @param signatureBase64 The signature bytes as base64
+     * @param publicKeyBase64 The guardian's public key as base64
+     * @return JSON string: {"valid": true/false}
+     */
+    String guardianVerifyCommand(String commandJson, String signatureBase64, String publicKeyBase64);
+
+    /**
+     * Sign a guardian command for sending to a child device.
+     *
+     * @param commandJson The command JSON string to sign
+     * @return JSON string: {"success": true, "signature": "base64..."} or {"success": false, "error": "..."}
+     */
+    String guardianSignCommand(String commandJson);
 }

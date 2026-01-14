@@ -1095,4 +1095,160 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error announcing LXMF destination", e)
         }
     }
+
+    // ===========================================
+    // Guardian/Parental Control Methods
+    // ===========================================
+
+    override fun guardianGeneratePairingQr(): String {
+        return try {
+            // Generate QR using the wrapper's current active identity
+            val result =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr("guardian_generate_pairing_qr")
+                }
+
+            if (result != null) {
+                val success = result.getDictValue("success")?.toBoolean() ?: false
+                if (success) {
+                    val qrData = result.getDictValue("qr_string")?.toString()
+                    JSONObject().apply {
+                        put("success", true)
+                        put("qr_data", qrData)
+                    }.toString()
+                } else {
+                    val error = result.getDictValue("error")?.toString() ?: "Unknown error"
+                    JSONObject().apply {
+                        put("success", false)
+                        put("error", error)
+                    }.toString()
+                }
+            } else {
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", "No wrapper response")
+                }.toString()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error generating guardian QR", e)
+            JSONObject().apply {
+                put("success", false)
+                put("error", e.message ?: "Unknown error")
+            }.toString()
+        }
+    }
+
+    override fun guardianParsePairingQr(qrData: String): String {
+        return try {
+            val result =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr("guardian_parse_pairing_qr", qrData)
+                }
+
+            if (result != null) {
+                // Python returns "success", "destination_hash" (hex), "public_key" (hex)
+                val success = result.getDictValue("success")?.toBoolean() ?: false
+                if (success) {
+                    val destHash = result.getDictValue("destination_hash")?.toString()
+                    val pubKeyHex = result.getDictValue("public_key")?.toString()
+
+                    // Convert hex string to bytes then to base64 for transport
+                    val pubKeyBase64 = pubKeyHex?.let { hex ->
+                        val bytes = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                        android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    }
+
+                    JSONObject().apply {
+                        put("valid", true)
+                        put("guardian_dest_hash", destHash)
+                        put("guardian_public_key", pubKeyBase64)
+                    }.toString()
+                } else {
+                    val error = result.getDictValue("error")?.toString() ?: "Invalid QR code"
+                    JSONObject().apply {
+                        put("valid", false)
+                        put("error", error)
+                    }.toString()
+                }
+            } else {
+                JSONObject().apply {
+                    put("valid", false)
+                    put("error", "No wrapper response")
+                }.toString()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing guardian QR", e)
+            JSONObject().apply {
+                put("valid", false)
+                put("error", e.message ?: "Unknown error")
+            }.toString()
+        }
+    }
+
+    override fun guardianVerifyCommand(
+        commandJson: String,
+        signatureBase64: String,
+        publicKeyBase64: String,
+    ): String {
+        return try {
+            val signature = android.util.Base64.decode(signatureBase64, android.util.Base64.NO_WRAP)
+            val publicKey = android.util.Base64.decode(publicKeyBase64, android.util.Base64.NO_WRAP)
+
+            val result =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr("guardian_verify_command", commandJson, signature, publicKey)
+                }
+
+            val valid = result?.getDictValue("valid")?.toBoolean() ?: false
+            JSONObject().apply {
+                put("valid", valid)
+            }.toString()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error verifying guardian command", e)
+            JSONObject().apply {
+                put("valid", false)
+            }.toString()
+        }
+    }
+
+    override fun guardianSignCommand(commandJson: String): String {
+        return try {
+            val result =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr("guardian_sign_command", commandJson)
+                }
+
+            if (result != null) {
+                val success = result.getDictValue("success")?.toBoolean() ?: false
+                if (success) {
+                    val signatureBytes = result.getDictValue("signature")?.toJava(ByteArray::class.java) as? ByteArray
+                    val signatureBase64 = signatureBytes?.let {
+                        android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP)
+                    }
+
+                    JSONObject().apply {
+                        put("success", true)
+                        put("signature", signatureBase64)
+                    }.toString()
+                } else {
+                    val error = result.getDictValue("error")?.toString() ?: "Unknown error"
+                    JSONObject().apply {
+                        put("success", false)
+                        put("error", error)
+                    }.toString()
+                }
+            } else {
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", "No wrapper response")
+                }.toString()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error signing guardian command", e)
+            JSONObject().apply {
+                put("success", false)
+                put("error", e.message ?: "Unknown error")
+            }.toString()
+        }
+    }
 }

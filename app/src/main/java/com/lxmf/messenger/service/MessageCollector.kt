@@ -6,6 +6,7 @@ import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
@@ -43,6 +44,8 @@ class MessageCollector
         private val announceRepository: AnnounceRepository,
         private val contactRepository: ContactRepository,
         private val identityRepository: IdentityRepository,
+        private val guardianRepository: GuardianRepository,
+        private val guardianCommandProcessor: GuardianCommandProcessor,
         private val notificationHelper: NotificationHelper,
     ) {
         companion object {
@@ -113,10 +116,37 @@ class MessageCollector
                             return@collect
                         }
 
+                        // ============ PARENTAL CONTROL FILTERING ============
+                        val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
+                        val guardianConfig = guardianRepository.getGuardianConfig()
+
+                        // Check if this is a guardian command message
+                        if (guardianCommandProcessor.isGuardianCommand(receivedMessage, guardianConfig)) {
+                            Log.d(TAG, "Processing guardian command from $sourceHash")
+                            val success = guardianCommandProcessor.processCommand(receivedMessage, guardianConfig!!)
+                            if (!success) {
+                                Log.w(TAG, "Failed to process guardian command")
+                            }
+                            // Continue processing - guardian messages are also saved as regular messages
+                            // so the parent can see their own commands in the chat history
+                        }
+
+                        // Apply allow-list filtering when device is locked
+                        if (guardianConfig != null && guardianConfig.hasGuardian() && guardianConfig.isLocked) {
+                            // Guardian is always allowed
+                            if (sourceHash != guardianConfig.guardianDestinationHash) {
+                                // Check if sender is in the allow list
+                                if (!guardianRepository.isContactAllowed(sourceHash)) {
+                                    Log.d(TAG, "Blocked message from non-allowed contact: $sourceHash (device locked)")
+                                    return@collect // Silently drop
+                                }
+                            }
+                        }
+                        // ============ END PARENTAL CONTROL FILTERING ============
+
                         processedMessageIds.add(receivedMessage.messageHash)
                         _messagesCollected.value++
 
-                        val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
                         Log.d(TAG, "Received new message #${_messagesCollected.value} from $sourceHash")
 
                         // Create data message for storage

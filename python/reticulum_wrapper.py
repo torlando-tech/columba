@@ -345,6 +345,13 @@ class ReticulumWrapper:
         # Shared instance state
         self.is_shared_instance = False  # True if connected to external shared RNS instance
 
+        # Guardian/parental control state (for link filtering)
+        # When locked, only allow links from guardian and allowed contacts
+        self._guardian_is_locked = False
+        self._guardian_hash = None  # Guardian's destination hash (hex string)
+        self._guardian_allowed_hashes = set()  # Set of allowed contact hashes (hex strings)
+        self._guardian_lock = threading.Lock()  # Protects guardian state
+
         # Don't initialize here - wait for explicit initialize() call
         log_info("ReticulumWrapper", "__init__", f"Created with storage path: {storage_path}")
 
@@ -410,6 +417,134 @@ class ReticulumWrapper:
         """
         self.kotlin_reticulum_bridge = bridge
         log_info("ReticulumWrapper", "set_reticulum_bridge", "KotlinReticulumBridge instance set")
+
+    def update_guardian_config(self, is_locked: bool, guardian_hash: str, allowed_hashes: list) -> Dict:
+        """
+        Update the guardian/parental control configuration.
+        Called from Kotlin when guardian state changes.
+
+        When locked, incoming links from non-allowed peers will be rejected.
+
+        Args:
+            is_locked: Whether the device is locked (filtering enabled)
+            guardian_hash: Destination hash of the guardian (always allowed), or None
+            allowed_hashes: List of allowed contact destination hashes (hex strings)
+
+        Returns:
+            Dict with success status
+        """
+        try:
+            with self._guardian_lock:
+                self._guardian_is_locked = is_locked
+                self._guardian_hash = guardian_hash
+                self._guardian_allowed_hashes = set(allowed_hashes) if allowed_hashes else set()
+
+            log_info("ReticulumWrapper", "update_guardian_config",
+                     f"Guardian config updated: locked={is_locked}, "
+                     f"guardian={guardian_hash[:16] if guardian_hash else 'None'}, "
+                     f"allowed_count={len(self._guardian_allowed_hashes)}")
+            return {"success": True}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "update_guardian_config", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _on_lxmf_link_established(self, link):
+        """
+        Callback when an incoming LXMF link is established.
+
+        KNOWN LIMITATION (2025-01-14):
+        Link-level filtering for parental controls is not fully effective because:
+        1. RNS links don't reveal the initiator's identity at establishment time
+        2. The remote_identified_callback only fires if the peer explicitly calls
+           link.identify(), which LXMF doesn't do during normal messaging
+        3. Identity is only revealed in the LXMF message itself (after link established)
+
+        This means a blocked contact can still establish a link (revealing "online"
+        status briefly) before we can identify and block them. Message blocking still
+        works correctly - the message content is filtered at the LXMF layer.
+
+        Future options to consider:
+        - Tear down link immediately after receiving a blocked message
+        - Block ALL incoming links when locked (would also block allowed contacts)
+        - Custom LXMF modifications to require identity proof before link acceptance
+
+        For now, we register the identity callback in case the peer does identify,
+        but this is unlikely to trigger in practice.
+
+        Args:
+            link: The RNS Link that was established
+        """
+        try:
+            # Check if we need to filter at all
+            with self._guardian_lock:
+                if not self._guardian_is_locked:
+                    # Not locked, no need to filter
+                    log_debug("ReticulumWrapper", "_on_lxmf_link_established",
+                              "Link established - device not locked, allowing")
+                    return
+
+            log_debug("ReticulumWrapper", "_on_lxmf_link_established",
+                      "Link established - device locked, registering identity callback")
+
+            # Register a callback for when the remote identity is identified
+            # This fires after the identity proof exchange completes
+            link.set_remote_identified_callback(self._on_link_remote_identified)
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "_on_lxmf_link_established",
+                      f"Error in link callback: {e}")
+
+    def _on_link_remote_identified(self, link, identity):
+        """
+        Callback when the remote peer's identity has been verified on a link.
+        This is where we can check if the peer is allowed and tear down if not.
+
+        Args:
+            link: The RNS Link
+            identity: The verified remote Identity
+        """
+        try:
+            remote_hash = identity.hash.hex()
+            log_debug("ReticulumWrapper", "_on_link_remote_identified",
+                      f"Remote identity verified: {remote_hash[:16]}")
+
+            # Check guardian filtering
+            with self._guardian_lock:
+                if not self._guardian_is_locked:
+                    # Not locked anymore, allow
+                    log_debug("ReticulumWrapper", "_on_link_remote_identified",
+                              "Device no longer locked - allowing link")
+                    return
+
+                # Check if this is the guardian
+                if self._guardian_hash and remote_hash == self._guardian_hash:
+                    log_debug("ReticulumWrapper", "_on_link_remote_identified",
+                              "Link from guardian - allowed")
+                    return
+
+                # Check if in allowed list
+                if remote_hash in self._guardian_allowed_hashes:
+                    log_debug("ReticulumWrapper", "_on_link_remote_identified",
+                              f"Link from allowed contact {remote_hash[:16]} - allowed")
+                    return
+
+                # Not allowed - tear down the link
+                log_info("ReticulumWrapper", "_on_link_remote_identified",
+                         f"Rejecting link from non-allowed peer: {remote_hash[:16]} (device locked)")
+
+            # Tear down the link (outside lock to avoid deadlock)
+            try:
+                link.teardown()
+                log_info("ReticulumWrapper", "_on_link_remote_identified",
+                         f"Link torn down for non-allowed peer: {remote_hash[:16]}")
+            except Exception as e:
+                log_warning("ReticulumWrapper", "_on_link_remote_identified",
+                            f"Error tearing down link: {e}")
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "_on_link_remote_identified",
+                      f"Error in remote identified callback: {e}")
 
     def set_delivery_status_callback(self, callback):
         """
@@ -1476,6 +1611,14 @@ class ReticulumWrapper:
             log_info("ReticulumWrapper", "initialize", "Registering delivery callback for incoming messages")
             self.router.register_delivery_callback(self._on_lxmf_delivery)
             log_info("ReticulumWrapper", "initialize", "✅ Delivery callback registered")
+
+            # Register link established callback for parental control filtering
+            # This allows us to reject links from non-allowed peers when device is locked
+            try:
+                self.local_lxmf_destination.set_link_established_callback(self._on_lxmf_link_established)
+                log_info("ReticulumWrapper", "initialize", "✅ Link established callback registered for guardian filtering")
+            except Exception as e:
+                log_warning("ReticulumWrapper", "initialize", f"Could not set link callback: {e}")
 
             # Add LXMF destination to tracking dict so it can be announced
             self.destinations[self.local_lxmf_destination.hexhash] = self.local_lxmf_destination

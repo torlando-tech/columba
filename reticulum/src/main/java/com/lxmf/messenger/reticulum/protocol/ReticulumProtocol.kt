@@ -361,6 +361,24 @@ interface ReticulumProtocol {
         command: String,
         payload: Map<String, Any> = emptyMap(),
     ): Boolean
+
+    /**
+     * Update guardian config in the Python layer for link filtering.
+     *
+     * When the device is locked, links from non-allowed peers should be rejected
+     * to prevent revealing online status. This method syncs the current guardian
+     * state to the Python layer so it can filter incoming link requests.
+     *
+     * @param isLocked Whether the device is currently locked
+     * @param guardianHash The guardian's destination hash (hex string), or null if no guardian
+     * @param allowedHashes List of allowed contact destination hashes
+     * @return True if the config was updated successfully
+     */
+    suspend fun updateGuardianConfig(
+        isLocked: Boolean,
+        guardianHash: String?,
+        allowedHashes: List<String>,
+    ): Boolean
 }
 
 /**

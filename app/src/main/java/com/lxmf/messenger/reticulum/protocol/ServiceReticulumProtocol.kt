@@ -2686,6 +2686,35 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun updateGuardianConfig(
+        isLocked: Boolean,
+        guardianHash: String?,
+        allowedHashes: List<String>,
+    ): Boolean {
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+
+                val resultJson = service.updateGuardianConfig(isLocked, guardianHash, allowedHashes)
+                val result = JSONObject(resultJson)
+
+                if (result.optBoolean("success", false)) {
+                    Log.d(TAG, "Guardian config updated: locked=$isLocked, guardian=$guardianHash, " +
+                        "allowed=${allowedHashes.size} contacts")
+                    true
+                } else {
+                    Log.e(TAG, "Failed to update guardian config: ${result.optString("error")}")
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating guardian config", e)
+                false
+            }
+        }
+    }
+
     // Helper extension functions
     private fun String.toByteArrayFromBase64(): ByteArray? {
         return try {

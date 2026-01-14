@@ -1299,4 +1299,52 @@ class ReticulumServiceBinder(
             }.toString()
         }
     }
+
+    override fun updateGuardianConfig(
+        isLocked: Boolean,
+        guardianHash: String?,
+        allowedHashes: List<String>?,
+    ): String {
+        return try {
+            Log.d(TAG, "updateGuardianConfig: locked=$isLocked, guardian=${guardianHash?.take(16)}, allowed=${allowedHashes?.size ?: 0}")
+
+            val result =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr(
+                        "update_guardian_config",
+                        isLocked,
+                        guardianHash ?: "",
+                        allowedHashes?.toTypedArray() ?: emptyArray<String>(),
+                    )
+                }
+
+            if (result != null) {
+                val success = result.getDictValue("success")?.toBoolean() ?: false
+                if (success) {
+                    Log.i(TAG, "Guardian config updated in Python")
+                    JSONObject().apply {
+                        put("success", true)
+                    }.toString()
+                } else {
+                    val error = result.getDictValue("error")?.toString() ?: "Unknown error"
+                    Log.e(TAG, "Failed to update guardian config: $error")
+                    JSONObject().apply {
+                        put("success", false)
+                        put("error", error)
+                    }.toString()
+                }
+            } else {
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", "No wrapper response")
+                }.toString()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating guardian config", e)
+            JSONObject().apply {
+                put("success", false)
+                put("error", e.message ?: "Unknown error")
+            }.toString()
+        }
+    }
 }

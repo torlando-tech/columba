@@ -346,6 +346,21 @@ interface ReticulumProtocol {
      * @return The signature bytes or null if signing fails
      */
     suspend fun signGuardianCommand(commandJson: String): ByteArray?
+
+    /**
+     * Send a guardian command to a child device via LXMF.
+     * Creates, signs, and sends a guardian command message.
+     *
+     * @param destinationHash The child's destination hash
+     * @param command The command type (LOCK, UNLOCK, ALLOW_ADD, ALLOW_REMOVE, ALLOW_SET, PAIR_ACK)
+     * @param payload Additional command payload (e.g., contact_hash for ALLOW_ADD)
+     * @return True if the message was sent successfully
+     */
+    suspend fun sendGuardianCommand(
+        destinationHash: String,
+        command: String,
+        payload: Map<String, Any> = emptyMap(),
+    ): Boolean
 }
 
 /**

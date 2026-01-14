@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.data.db.entity.PairedChildEntity
 import com.lxmf.messenger.viewmodel.GuardianViewModel
 import kotlinx.coroutines.launch
 
@@ -151,11 +152,16 @@ fun GuardianScreen(
                     ParentDeviceSection(
                         qrCodeBitmap = state.qrCodeBitmap,
                         isGeneratingQr = state.isGeneratingQr,
+                        isSendingCommand = state.isSendingCommand,
+                        pairedChildren = state.pairedChildren,
                         onGenerateQr = {
                             Log.d("GuardianScreen", "onGenerateQr clicked!")
                             viewModel.generatePairingQr()
                         },
                         onScanChildQr = onScanQrCode,
+                        onLockChild = { childHash -> viewModel.lockChild(childHash) },
+                        onUnlockChild = { childHash -> viewModel.unlockChild(childHash) },
+                        onRemoveChild = { childHash -> viewModel.removePairedChild(childHash) },
                     )
                 }
 
@@ -421,9 +427,65 @@ private fun ChildDeviceSection(
 private fun ParentDeviceSection(
     qrCodeBitmap: Bitmap?,
     isGeneratingQr: Boolean,
+    isSendingCommand: Boolean,
+    pairedChildren: List<PairedChildEntity>,
     onGenerateQr: () -> Unit,
     onScanChildQr: () -> Unit,
+    onLockChild: (String) -> Unit,
+    onUnlockChild: (String) -> Unit,
+    onRemoveChild: (String) -> Unit,
 ) {
+    // Show paired children first (if any)
+    if (pairedChildren.isNotEmpty()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp),
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Managed Devices",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "${pairedChildren.size} child device(s) paired",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+
+                // List each paired child
+                pairedChildren.forEach { child ->
+                    PairedChildItem(
+                        child = child,
+                        isSendingCommand = isSendingCommand,
+                        onLock = { onLockChild(child.childDestinationHash) },
+                        onUnlock = { onUnlockChild(child.childDestinationHash) },
+                        onRemove = { onRemoveChild(child.childDestinationHash) },
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+
     // No guardian configured - show pairing options
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -616,4 +678,183 @@ private fun HelpCard() {
 
     // Bottom spacing
     Spacer(modifier = Modifier.height(80.dp))
+}
+
+@Composable
+private fun PairedChildItem(
+    child: PairedChildEntity,
+    isSendingCommand: Boolean,
+    onLock: () -> Unit,
+    onUnlock: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    var showRemoveDialog by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (child.isLocked) {
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            },
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = if (child.isLocked) Icons.Default.Lock else Icons.Default.Person,
+                        contentDescription = null,
+                        tint = if (child.isLocked) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        modifier = Modifier.size(24.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = child.displayName ?: "Child Device",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = child.childDestinationHash.take(12) + "...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                // Status badge
+                Text(
+                    text = if (child.isLocked) "LOCKED" else "UNLOCKED",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (child.isLocked) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+            // Action buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (child.isLocked) {
+                    Button(
+                        onClick = onUnlock,
+                        modifier = Modifier.weight(1f),
+                        enabled = !isSendingCommand,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    ) {
+                        if (isSendingCommand) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.LockOpen,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Unlock")
+                    }
+                } else {
+                    Button(
+                        onClick = onLock,
+                        modifier = Modifier.weight(1f),
+                        enabled = !isSendingCommand,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                        ),
+                    ) {
+                        if (isSendingCommand) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onError,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Lock")
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = { showRemoveDialog = true },
+                    enabled = !isSendingCommand,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    // Remove confirmation dialog
+    if (showRemoveDialog) {
+        AlertDialog(
+            onDismissRequest = { showRemoveDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            title = { Text("Remove Paired Device?") },
+            text = {
+                Text("This will remove this device from your managed devices. " +
+                    "You will need to re-pair if you want to manage it again.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onRemove()
+                        showRemoveDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text("Remove")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
 }

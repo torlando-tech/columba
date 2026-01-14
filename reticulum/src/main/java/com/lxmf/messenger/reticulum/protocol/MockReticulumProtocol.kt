@@ -429,4 +429,13 @@ class MockReticulumProtocol : ReticulumProtocol {
         // Mock implementation - return fake signature
         return ByteArray(64) { it.toByte() }
     }
+
+    override suspend fun sendGuardianCommand(
+        destinationHash: String,
+        command: String,
+        payload: Map<String, Any>,
+    ): Boolean {
+        // Mock implementation - always succeed
+        return true
+    }
 }

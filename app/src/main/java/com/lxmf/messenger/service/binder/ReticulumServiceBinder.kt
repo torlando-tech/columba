@@ -1251,4 +1251,52 @@ class ReticulumServiceBinder(
             }.toString()
         }
     }
+
+    override fun guardianSendCommand(
+        destinationHash: String,
+        command: String,
+        payloadJson: String,
+    ): String {
+        return try {
+            Log.d(TAG, "guardianSendCommand: $command to $destinationHash")
+
+            val result =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr(
+                        "guardian_send_command",
+                        destinationHash,
+                        command,
+                        payloadJson,
+                    )
+                }
+
+            if (result != null) {
+                val success = result.getDictValue("success")?.toBoolean() ?: false
+                if (success) {
+                    Log.i(TAG, "Guardian command $command sent successfully")
+                    JSONObject().apply {
+                        put("success", true)
+                    }.toString()
+                } else {
+                    val error = result.getDictValue("error")?.toString() ?: "Unknown error"
+                    Log.e(TAG, "Failed to send guardian command: $error")
+                    JSONObject().apply {
+                        put("success", false)
+                        put("error", error)
+                    }.toString()
+                }
+            } else {
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", "No wrapper response")
+                }.toString()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending guardian command", e)
+            JSONObject().apply {
+                put("success", false)
+                put("error", e.message ?: "Unknown error")
+            }.toString()
+        }
+    }
 }

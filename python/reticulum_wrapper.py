@@ -6933,3 +6933,91 @@ class ReticulumWrapper:
         except Exception as e:
             log_error("ReticulumWrapper", "guardian_sign_command", f"Error: {e}")
             return {"success": False, "error": str(e)}
+
+    def guardian_send_command(
+        self,
+        destination_hash: str,
+        command: str,
+        payload_json: str,
+    ) -> Dict:
+        """
+        Send a guardian control command to a child device via LXMF.
+
+        Args:
+            destination_hash: Child's destination hash (hex)
+            command: Command type (LOCK, UNLOCK, ALLOW_ADD, ALLOW_REMOVE, ALLOW_SET, PAIR_ACK)
+            payload_json: JSON string of additional payload
+
+        Returns:
+            Dict with {"success": True} or {"success": False, "error": "..."}
+        """
+        try:
+            log_info("ReticulumWrapper", "guardian_send_command", f"Sending {command} to {destination_hash}")
+
+            if not self.local_lxmf_destination:
+                return {"success": False, "error": "No active LXMF destination"}
+
+            identity = self.local_lxmf_destination.identity
+            if not identity:
+                return {"success": False, "error": "No identity on destination"}
+
+            # Parse payload JSON
+            import json
+            try:
+                payload_dict = json.loads(payload_json) if payload_json else {}
+            except json.JSONDecodeError:
+                payload_dict = {}
+
+            # Generate nonce and timestamp
+            nonce = guardian_crypto.generate_nonce()
+            timestamp = int(time.time() * 1000)
+
+            # Build command data for signing - use JSON-encoded payload bytes
+            payload_bytes = json.dumps(payload_dict).encode('utf-8') if payload_dict else b""
+
+            # Sign the command
+            signature = guardian_crypto.sign_command(identity, command, nonce, timestamp, payload_bytes)
+            if signature is None:
+                return {"success": False, "error": "Failed to sign command"}
+
+            # Build the full command structure for LXMF field 0x80
+            # Use JSON encoding instead of msgpack for compatibility
+            command_data = {
+                "cmd": command,
+                "nonce": nonce.hex(),
+                "timestamp": timestamp,
+                "payload": payload_dict,
+                "signature": signature.hex(),
+            }
+
+            # Build the command JSON
+            command_json = json.dumps(command_data)
+
+            # Get destination hash as bytes
+            dest_hash_bytes = bytes.fromhex(destination_hash)
+
+            # Get the identity's private key for signing the LXMF message
+            prv_bytes = identity.get_private_key()
+
+            # Send message with command JSON embedded in content
+            # Format: __GUARDIAN_CMD__:<json>
+            # The receiver will parse this and process the command
+            content = f"__GUARDIAN_CMD__:{command_json}"
+
+            result = self.send_lxmf_message(
+                dest_hash=dest_hash_bytes,
+                content=content,
+                source_identity_private_key=prv_bytes,
+            )
+
+            if result.get("success"):
+                log_info("ReticulumWrapper", "guardian_send_command", f"Command {command} sent successfully")
+                return {"success": True}
+            else:
+                return {"success": False, "error": result.get("error", "Failed to send message")}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "guardian_send_command", f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}

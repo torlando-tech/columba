@@ -301,6 +301,51 @@ interface ReticulumProtocol {
         emoji: String,
         sourceIdentity: Identity,
     ): Result<MessageReceipt>
+
+    // ==================== Guardian/Parental Control ====================
+
+    /**
+     * Generate a QR code data string for guardian pairing.
+     * This creates a signed payload containing the current identity's destination hash
+     * and public key, which a child device can scan to establish parental control.
+     *
+     * @return QR code data string in format "lxmf-guardian://<dest_hash>:<pubkey>:<timestamp>:<signature>"
+     *         or null if generation fails
+     */
+    suspend fun generateGuardianPairingQr(): String?
+
+    /**
+     * Parse and validate a guardian pairing QR code.
+     * Validates the signature and timestamp to ensure the QR is authentic and not expired.
+     *
+     * @param qrData The scanned QR code data
+     * @return Pair of (guardianDestHash, guardianPublicKey) or null if invalid
+     */
+    suspend fun parseGuardianPairingQr(qrData: String): Pair<String, ByteArray>?
+
+    /**
+     * Verify a guardian command signature.
+     * Used to validate incoming control commands from the guardian.
+     *
+     * @param commandJson The command JSON string
+     * @param signature The signature bytes
+     * @param guardianPublicKey The guardian's public key
+     * @return true if signature is valid
+     */
+    suspend fun verifyGuardianCommand(
+        commandJson: String,
+        signature: ByteArray,
+        guardianPublicKey: ByteArray,
+    ): Boolean
+
+    /**
+     * Sign a guardian command for sending to a child device.
+     * Used by the guardian/parent to create signed control commands.
+     *
+     * @param commandJson The command JSON string to sign
+     * @return The signature bytes or null if signing fails
+     */
+    suspend fun signGuardianCommand(commandJson: String): ByteArray?
 }
 
 /**

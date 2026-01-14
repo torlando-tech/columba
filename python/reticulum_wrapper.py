@@ -15,6 +15,7 @@ import importlib
 import importlib.util
 import traceback
 from logging_utils import log_debug, log_info, log_warning, log_error, log_separator
+import guardian_crypto
 
 # umsgpack is available via RNS dependencies (bundled with Chaquopy on Android)
 try:
@@ -6745,3 +6746,190 @@ class ReticulumWrapper:
                 log_info("ReticulumWrapper", "clear_rmsp_servers", "Cleared all RMSP servers")
         except Exception as e:
             log_error("ReticulumWrapper", "clear_rmsp_servers", f"Error: {e}")
+
+    # ========================================================================
+    # Guardian (Parental Control) Methods
+    # ========================================================================
+    # These delegate to guardian_crypto module to keep this file manageable
+
+    def guardian_generate_pairing_qr(self) -> Dict:
+        """
+        Generate a guardian pairing QR code for the current active identity.
+
+        Returns:
+            Dict with QR data or error:
+            {
+                "success": True,
+                "qr_string": "lxmf-guardian://...",
+                "destination_hash": "hex...",
+                "public_key": "hex...",
+                "timestamp": 1234567890000
+            }
+        """
+        try:
+            # Use current active LXMF destination
+            if not self.local_lxmf_destination:
+                return {"success": False, "error": "No active LXMF destination"}
+
+            # Get identity from the destination
+            identity = self.local_lxmf_destination.identity
+            if not identity:
+                return {"success": False, "error": "No identity on destination"}
+
+            # Use the destination hash directly
+            dest_hash = self.local_lxmf_destination.hash
+
+            # Generate QR data
+            result = guardian_crypto.generate_pairing_qr_data(identity, dest_hash)
+            if result is None:
+                return {"success": False, "error": "Failed to generate pairing QR"}
+
+            return {
+                "success": True,
+                "qr_string": result["qr_string"],
+                "destination_hash": result["destination_hash"].hex(),
+                "public_key": result["public_key"].hex(),
+                "timestamp": result["timestamp"],
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "guardian_generate_pairing_qr", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def guardian_parse_pairing_qr(self, qr_string: str) -> Dict:
+        """
+        Parse and validate a guardian pairing QR code.
+
+        Args:
+            qr_string: QR code content
+
+        Returns:
+            Dict with parsed data or error:
+            {
+                "success": True,
+                "destination_hash": "hex...",
+                "public_key": "hex...",
+                "timestamp": 1234567890000
+            }
+        """
+        try:
+            log_info("ReticulumWrapper", "guardian_parse_pairing_qr", f"Parsing QR: {qr_string[:60]}...")
+
+            # Parse QR
+            parsed = guardian_crypto.parse_pairing_qr_data(qr_string)
+            if parsed is None:
+                log_error("ReticulumWrapper", "guardian_parse_pairing_qr", "Failed to parse QR format")
+                return {"success": False, "error": "Invalid QR code format"}
+
+            log_info("ReticulumWrapper", "guardian_parse_pairing_qr", f"Parsed successfully, validating...")
+
+            # Validate (signature + timestamp freshness)
+            is_valid, error_msg = guardian_crypto.validate_pairing_qr(parsed)
+            if not is_valid:
+                log_error("ReticulumWrapper", "guardian_parse_pairing_qr", f"Validation failed: {error_msg}")
+                return {"success": False, "error": error_msg}
+
+            return {
+                "success": True,
+                "destination_hash": parsed["destination_hash"].hex(),
+                "public_key": parsed["public_key"].hex(),
+                "timestamp": parsed["timestamp"],
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "guardian_parse_pairing_qr", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def guardian_verify_command(
+        self,
+        public_key_hex: str,
+        signature_hex: str,
+        cmd: str,
+        nonce_hex: str,
+        timestamp: int,
+        payload_hex: str,
+    ) -> Dict:
+        """
+        Verify a parental control command signature.
+
+        Args:
+            public_key_hex: Guardian's public key (hex)
+            signature_hex: Command signature (hex)
+            cmd: Command type (LOCK, UNLOCK, etc.)
+            nonce_hex: Command nonce (hex)
+            timestamp: Command timestamp (ms)
+            payload_hex: msgpack payload (hex)
+
+        Returns:
+            Dict with result:
+            {"success": True, "valid": True/False}
+        """
+        try:
+            public_key = bytes.fromhex(public_key_hex)
+            signature = bytes.fromhex(signature_hex)
+            nonce = bytes.fromhex(nonce_hex)
+            payload = bytes.fromhex(payload_hex)
+
+            is_valid = guardian_crypto.verify_command(
+                public_key, signature, cmd, nonce, timestamp, payload
+            )
+
+            return {"success": True, "valid": is_valid}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "guardian_verify_command", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def guardian_sign_command(
+        self,
+        identity_hash: str,
+        cmd: str,
+        payload_hex: str,
+    ) -> Dict:
+        """
+        Sign a parental control command (for parent device).
+
+        Args:
+            identity_hash: Guardian's identity hash
+            cmd: Command type
+            payload_hex: msgpack payload (hex)
+
+        Returns:
+            Dict with signed command data:
+            {
+                "success": True,
+                "nonce": "hex...",
+                "timestamp": 1234567890000,
+                "signature": "hex..."
+            }
+        """
+        try:
+            # Resolve identity
+            identity_path = self._resolve_identity_file_path(identity_hash)
+            if not identity_path:
+                return {"success": False, "error": f"Identity not found: {identity_hash}"}
+
+            identity = RNS.Identity.from_file(identity_path)
+            if not identity:
+                return {"success": False, "error": "Failed to load identity"}
+
+            # Generate nonce and timestamp
+            nonce = guardian_crypto.generate_nonce()
+            timestamp = int(time.time() * 1000)
+            payload = bytes.fromhex(payload_hex)
+
+            # Sign
+            signature = guardian_crypto.sign_command(identity, cmd, nonce, timestamp, payload)
+            if signature is None:
+                return {"success": False, "error": "Failed to sign command"}
+
+            return {
+                "success": True,
+                "nonce": nonce.hex(),
+                "timestamp": timestamp,
+                "signature": signature.hex(),
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "guardian_sign_command", f"Error: {e}")
+            return {"success": False, "error": str(e)}

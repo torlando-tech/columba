@@ -399,4 +399,34 @@ class MockReticulumProtocol : ReticulumProtocol {
             ),
         )
     }
+
+    // ==================== Guardian/Parental Control ====================
+
+    override suspend fun generateGuardianPairingQr(): String? {
+        // Mock implementation - return a fake QR data string
+        return "lxmf-guardian://0123456789abcdef:mock_pubkey:${System.currentTimeMillis()}:mock_signature"
+    }
+
+    override suspend fun parseGuardianPairingQr(qrData: String): Pair<String, ByteArray>? {
+        // Mock implementation - parse and return mock data
+        return if (qrData.startsWith("lxmf-guardian://")) {
+            Pair("0123456789abcdef", ByteArray(32) { it.toByte() })
+        } else {
+            null
+        }
+    }
+
+    override suspend fun verifyGuardianCommand(
+        commandJson: String,
+        signature: ByteArray,
+        guardianPublicKey: ByteArray,
+    ): Boolean {
+        // Mock implementation - always return true
+        return true
+    }
+
+    override suspend fun signGuardianCommand(commandJson: String): ByteArray? {
+        // Mock implementation - return fake signature
+        return ByteArray(64) { it.toByte() }
+    }
 }

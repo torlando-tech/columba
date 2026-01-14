@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
@@ -81,6 +82,7 @@ import java.util.Locale
 fun ChatsScreen(
     onChatClick: (peerHash: String, peerName: String) -> Unit = { _, _ -> },
     onViewPeerDetails: (peerHash: String) -> Unit = {},
+    isGuardianLocked: Boolean = false,
     viewModel: ChatsViewModel = hiltViewModel(),
 ) {
     val conversations by viewModel.conversations.collectAsState()
@@ -130,6 +132,15 @@ fun ChatsScreen(
                 onSearchToggle = { isSearching = !isSearching },
                 searchPlaceholder = "Search conversations...",
                 additionalActions = {
+                    // Guardian lock indicator
+                    if (isGuardianLocked) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Parental controls active",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                        )
+                    }
                     // Sync button - shows spinner during sync, tapping opens status sheet
                     IconButton(
                         onClick = {

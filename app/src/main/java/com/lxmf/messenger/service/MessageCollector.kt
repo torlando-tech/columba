@@ -140,11 +140,13 @@ class MessageCollector
                         if (guardianCommandProcessor.isGuardianCommand(receivedMessage, guardianConfig)) {
                             Log.d(TAG, "Processing guardian command from $sourceHash")
                             val success = guardianCommandProcessor.processCommand(receivedMessage, guardianConfig!!)
-                            if (!success) {
+                            if (success) {
+                                Log.i(TAG, "Guardian command processed successfully")
+                            } else {
                                 Log.w(TAG, "Failed to process guardian command")
                             }
-                            // Continue processing - guardian messages are also saved as regular messages
-                            // so the parent can see their own commands in the chat history
+                            // Don't persist guardian commands as regular chat messages
+                            return@collect
                         }
 
                         // Note: PAIR_ACK check moved to top of collect block (before duplicate check)

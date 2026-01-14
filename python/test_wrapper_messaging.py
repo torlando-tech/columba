@@ -1403,9 +1403,11 @@ class TestOnLXMFDelivery(unittest.TestCase):
         call_arg = mock_kotlin_callback.call_args[0][0]
 
         # Parse JSON
+        import base64
         event = json.loads(call_arg)
-        self.assertEqual(event['source_hash'], mock_message.source_hash.hex())
-        self.assertEqual(event['destination_hash'], mock_message.destination_hash.hex())
+        # Source hash and destination hash are now base64 encoded (not hex)
+        self.assertEqual(event['source_hash'], base64.b64encode(mock_message.source_hash).decode('ascii'))
+        self.assertEqual(event['destination_hash'], base64.b64encode(mock_message.destination_hash).decode('ascii'))
 
 
 class TestPollReceivedMessages(unittest.TestCase):

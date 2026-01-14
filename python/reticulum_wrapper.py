@@ -2188,7 +2188,9 @@ class ReticulumWrapper:
                                 f"📍 Location-only message detected ({telemetry_source}), skipping message queue")
 
                     # Add source hash and invoke callback
-                    location_event['source_hash'] = lxmf_message.source_hash.hex()
+                    # Use base64 encoding for binary data - Kotlin expects base64, not hex!
+                    import base64
+                    location_event['source_hash'] = base64.b64encode(lxmf_message.source_hash).decode('ascii')
 
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                              f"Location: lat={location_event.get('lat')}, lng={location_event.get('lng')}, cease={location_event.get('cease', False)}")
@@ -2219,11 +2221,13 @@ class ReticulumWrapper:
 
                         # Process reaction
                         try:
+                            # Use base64 encoding for binary data - Kotlin expects base64, not hex!
+                            import base64
                             reaction_event = {
                                 'reaction_to': field_16.get('reaction_to', ''),
                                 'emoji': field_16.get('emoji', ''),
                                 'sender': field_16.get('sender', ''),
-                                'source_hash': lxmf_message.source_hash.hex(),
+                                'source_hash': base64.b64encode(lxmf_message.source_hash).decode('ascii'),
                                 'timestamp': int(time.time() * 1000)
                             }
 
@@ -2366,12 +2370,14 @@ class ReticulumWrapper:
             if self.kotlin_message_received_callback:
                 try:
                     # Build full message event with all data
+                    # NOTE: Use base64 encoding for binary data - Kotlin expects base64, not hex!
+                    import base64
                     content = lxmf_message.content.decode('utf-8') if isinstance(lxmf_message.content, bytes) else str(lxmf_message.content)
                     message_event = {
                         'message_hash': lxmf_message.hash.hex() if lxmf_message.hash else "unknown",
                         'content': content,
-                        'source_hash': lxmf_message.source_hash.hex(),
-                        'destination_hash': lxmf_message.destination_hash.hex(),
+                        'source_hash': base64.b64encode(lxmf_message.source_hash).decode('ascii'),
+                        'destination_hash': base64.b64encode(lxmf_message.destination_hash).decode('ascii'),
                         'timestamp': int(lxmf_message.timestamp * 1000) if lxmf_message.timestamp else int(time.time() * 1000),
                         'icon_appearance': icon_appearance,
                         'full_message': True,  # Flag indicating this has full data, no polling needed
@@ -2391,8 +2397,9 @@ class ReticulumWrapper:
                         if source_identity is not None:
                             public_key = source_identity.get_public_key()
                             # Only add if it's actual bytes (not a Mock object)
+                            # Use base64 encoding - Kotlin expects base64, not hex!
                             if isinstance(public_key, bytes):
-                                message_event['public_key'] = public_key.hex()
+                                message_event['public_key'] = base64.b64encode(public_key).decode('ascii')
                     except Exception as e:
                         log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Could not get public key: {e}")
 

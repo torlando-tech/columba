@@ -221,15 +221,32 @@ class EventHandler(
         try {
             val messageHash = json.optString("message_hash", "")
             val content = json.optString("content", "")
-            val sourceHashHex = json.optString("source_hash", "")
+            // source_hash is now base64 encoded - decode and convert to hex for persistence
+            val sourceHashB64 = json.optString("source_hash", "")
+            val sourceHashHex = if (sourceHashB64.isNotEmpty()) {
+                try {
+                    val bytes = android.util.Base64.decode(sourceHashB64, android.util.Base64.NO_WRAP)
+                    bytes.joinToString("") { "%02x".format(it) }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not decode source_hash: ${e.message}")
+                    ""
+                }
+            } else {
+                ""
+            }
             val timestamp = json.optLong("timestamp", System.currentTimeMillis())
             val receivedHopCount = json.optInt("hops", -1).takeIf { it >= 0 }
             val receivedInterface = json.optString("receiving_interface", "").takeIf { it.isNotEmpty() }
 
-            // Parse public key from hex string
-            val publicKeyHex = json.optString("public_key", "")
-            val publicKey = if (publicKeyHex.isNotEmpty()) {
-                publicKeyHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            // Parse public key from base64 string (Python sends base64, not hex)
+            val publicKeyB64 = json.optString("public_key", "")
+            val publicKey = if (publicKeyB64.isNotEmpty()) {
+                try {
+                    android.util.Base64.decode(publicKeyB64, android.util.Base64.NO_WRAP)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not decode public key: ${e.message}")
+                    null
+                }
             } else {
                 null
             }
@@ -256,8 +273,15 @@ class EventHandler(
             // Extract reply_to_message_id from fields
             val replyToMessageId = fieldsJson?.optString("9")?.takeIf { it.isNotBlank() }
 
-            // Persist to database
-            if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
+            // Skip persistence for guardian commands - these are processed by MessageCollector
+            // and should NOT be stored as regular chat messages
+            val isGuardianCommand = content.startsWith("__GUARDIAN_CMD__:")
+            if (isGuardianCommand) {
+                Log.d(TAG, "Guardian command detected - skipping persistence, will broadcast for processing")
+            }
+
+            // Persist to database (skip for guardian commands)
+            if (!isGuardianCommand && persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
                 persistenceManager.persistMessage(
                     messageHash = messageHash,
                     content = content,
@@ -495,8 +519,15 @@ class EventHandler(
             val receivedHopCount = event.getDictValue("hops").toIntOrNull()
             val receivedInterface = event.getDictValue("receiving_interface")?.toString()?.takeIf { it != "None" }
 
-            // Persist to database first (survives app process death)
-            if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
+            // Skip persistence for guardian commands - these are processed by MessageCollector
+            // and should NOT be stored as regular chat messages
+            val isGuardianCommand = content.startsWith("__GUARDIAN_CMD__:")
+            if (isGuardianCommand) {
+                Log.d(TAG, "Guardian command detected in PyObject path - skipping persistence")
+            }
+
+            // Persist to database first (survives app process death, but skip guardian commands)
+            if (!isGuardianCommand && persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
                 persistenceManager.persistMessage(
                     messageHash = messageHash,
                     content = content,

@@ -2,6 +2,7 @@ package com.lxmf.messenger.service
 
 import android.util.Log
 import com.lxmf.messenger.data.db.entity.GuardianConfigEntity
+import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.reticulum.protocol.ReceivedMessage
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +38,7 @@ class GuardianCommandProcessor
     @Inject
     constructor(
         private val guardianRepository: GuardianRepository,
+        private val announceRepository: AnnounceRepository,
     ) {
         companion object {
             private const val TAG = "GuardianCommandProcessor"
@@ -70,7 +72,7 @@ class GuardianCommandProcessor
          *
          * A message is a guardian command if:
          * 1. The sender is the configured guardian
-         * 2. The message contains the FIELD_PARENTAL_CONTROL field
+         * 2. The message contains the FIELD_PARENTAL_CONTROL field OR starts with __GUARDIAN_CMD__:
          *
          * @param message The received LXMF message
          * @param guardianConfig Current guardian config (or null if none)
@@ -84,16 +86,26 @@ class GuardianCommandProcessor
             // Check if sender is the guardian
             val senderHash = message.sourceHash.joinToString("") { "%02x".format(it) }
             if (senderHash != guardianConfig.guardianDestinationHash) {
+                Log.d(TAG, "Message sender $senderHash doesn't match guardian ${guardianConfig.guardianDestinationHash}")
                 return false
             }
 
-            // Check for parental control field in LXMF fields
-            // The field key is stored as a string in fieldsJson
+            // Check for command embedded in content (new format)
+            if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
+                Log.d(TAG, "Found guardian command in content from ${senderHash.take(16)}")
+                return true
+            }
+
+            // Check for parental control field in LXMF fields (legacy format)
             val fieldsJson = message.fieldsJson ?: return false
             return try {
                 val fields = JSONObject(fieldsJson)
-                fields.has(FIELD_PARENTAL_CONTROL.toString()) ||
+                val hasField = fields.has(FIELD_PARENTAL_CONTROL.toString()) ||
                     fields.has("128") // Decimal representation of 0x80
+                if (hasField) {
+                    Log.d(TAG, "Found guardian command in LXMF field 0x80 from ${senderHash.take(16)}")
+                }
+                hasField
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing fields JSON", e)
                 false
@@ -112,15 +124,24 @@ class GuardianCommandProcessor
             guardianConfig: GuardianConfigEntity,
         ): Boolean {
             try {
-                val fieldsJson = message.fieldsJson ?: return false
-                val fields = JSONObject(fieldsJson)
-
-                // Extract command data from field 0x80 (or "128")
-                val commandDataStr = fields.optString(FIELD_PARENTAL_CONTROL.toString())
-                    .ifEmpty { fields.optString("128") }
+                // Extract command data from content (new format) or LXMF field 0x80 (legacy)
+                val commandDataStr: String = if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
+                    // New format: command JSON in message content
+                    message.content.removePrefix(GUARDIAN_CMD_PREFIX)
+                } else {
+                    // Legacy format: command in LXMF field 0x80
+                    val fieldsJson = message.fieldsJson
+                    if (fieldsJson == null) {
+                        Log.e(TAG, "No fields JSON and no command in content")
+                        return false
+                    }
+                    val fields = JSONObject(fieldsJson)
+                    fields.optString(FIELD_PARENTAL_CONTROL.toString())
+                        .ifEmpty { fields.optString("128") }
+                }
 
                 if (commandDataStr.isEmpty()) {
-                    Log.e(TAG, "No command data in parental control field")
+                    Log.e(TAG, "No command data found in message")
                     return false
                 }
 
@@ -298,8 +319,9 @@ class GuardianCommandProcessor
          */
         suspend fun processPairAck(message: ReceivedMessage): Boolean {
             try {
+                // sourceHash is now correctly 16 bytes (32 hex chars) after fixing the base64/hex encoding mismatch
                 val senderHash = message.sourceHash.joinToString("") { "%02x".format(it) }
-                Log.i(TAG, "Processing PAIR_ACK from: $senderHash")
+                Log.i(TAG, "Processing PAIR_ACK from: $senderHash (${message.sourceHash.size} bytes)")
 
                 // Extract any display name from the message payload
                 var displayName: String? = null

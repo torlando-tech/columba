@@ -220,6 +220,16 @@ class GuardianRepository
             allowedContactDao.replaceAllowList(activeIdentity.identityHash, entities)
         }
 
+        /**
+         * Get all allowed contact hashes for the active identity (synchronous).
+         * Used for syncing guardian config to Python layer.
+         */
+        suspend fun getAllowedContactHashesSync(): List<String> {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
+            return allowedContactDao.getAllowedContactsSync(activeIdentity.identityHash)
+                .map { it.contactHash }
+        }
+
         // ========== Message Filtering ==========
 
         /**

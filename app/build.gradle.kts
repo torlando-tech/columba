@@ -75,7 +75,8 @@ android {
 
         ndk {
             // Python 3.13 only supports 64-bit ABIs
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            // x86_64 temporarily disabled - wheel resolution issue
+            abiFilters += listOf("arm64-v8a")
         }
     }
 

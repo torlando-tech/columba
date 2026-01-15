@@ -1375,7 +1375,35 @@ class ReticulumWrapper:
 
                     def _patched_interface_name_to_index(self, ifname):
                         """Use netinfo fallback when socket.if_nametoindex() is unavailable."""
-                        return self.netinfo.interface_names_to_indexes()[ifname]
+                        # First try netinfo
+                        indexes = self.netinfo.interface_names_to_indexes()
+                        if ifname in indexes and indexes[ifname] is not None:
+                            return indexes[ifname]
+
+                        # Fallback: read from /sys/class/net/<ifname>/ifindex on Linux/Android
+                        try:
+                            with open(f"/sys/class/net/{ifname}/ifindex", "r") as f:
+                                return int(f.read().strip())
+                        except (FileNotFoundError, ValueError, IOError, PermissionError):
+                            pass
+
+                        # On Android, we can't get interface indexes without root
+                        # Clean up adopted_interfaces to prevent final_init() from failing later
+                        # (AutoInterface adds interface to adopted_interfaces before calling this)
+                        if hasattr(self, 'adopted_interfaces') and ifname in self.adopted_interfaces:
+                            del self.adopted_interfaces[ifname]
+                        if hasattr(self, 'link_local_addresses'):
+                            # Also clean up link_local_addresses if present
+                            try:
+                                addr = None
+                                for addr in list(self.link_local_addresses):
+                                    if addr.startswith("fe80:"):
+                                        self.link_local_addresses.remove(addr)
+                                        break
+                            except (ValueError, AttributeError):
+                                pass
+                        # Raise exception so AutoInterface gracefully skips this interface
+                        raise OSError(f"Cannot determine interface index for {ifname} (Android restriction)")
 
                     AutoInterface.AutoInterface.interface_name_to_index = _patched_interface_name_to_index
                     log_info("ReticulumWrapper", "initialize",

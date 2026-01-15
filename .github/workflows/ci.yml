@@ -192,7 +192,7 @@ jobs:
           cache: 'pip'
 
       - name: Install Python build dependencies
-        run: pip install build pytest pytest-cov u-msgpack-python
+        run: pip install build pytest pytest-cov u-msgpack-python numpy
 
       - name: Run Python unit tests with coverage
         run: |

@@ -16,8 +16,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            // Python 3.13 only supports 64-bit ABIs
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            // Python 3.11 supports 64-bit ABIs
+            // TODO: x86_64 disabled until pycodec2 wheel resolution issue is fixed
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
@@ -47,7 +48,7 @@ android {
 
 chaquopy {
     defaultConfig {
-        version = "3.13"
+        version = "3.11"
     }
 }
 

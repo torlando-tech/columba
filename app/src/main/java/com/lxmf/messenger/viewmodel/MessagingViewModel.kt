@@ -101,13 +101,21 @@ class MessagingViewModel
         private val _currentConversation = MutableStateFlow<String?>(null)
         private var currentPeerName: String = "Unknown"
 
+        // Refresh trigger for forcing PagingData refresh when delivery status updates
+        // Room's automatic invalidation sometimes doesn't trigger UI refresh with cachedIn()
+        private val _messagesRefreshTrigger = MutableStateFlow(0)
+
         // Messages automatically update when conversation changes OR database changes
         // Uses Paging3 for efficient infinite scroll: loads 30 messages initially,
         // then loads more in background as user scrolls up
         // PERFORMANCE: toMessageUi() is now fast (cache lookup only, no disk I/O)
         // Image decoding happens asynchronously via loadImageAsync()
+        // Combined with refresh trigger to force refresh on delivery status updates
         val messages: Flow<PagingData<MessageUi>> =
-            _currentConversation
+            kotlinx.coroutines.flow.combine(
+                _currentConversation,
+                _messagesRefreshTrigger,
+            ) { peerHash, _ -> peerHash }
                 .flatMapLatest { peerHash ->
                     Log.d(TAG, "Flow: Switching to conversation $peerHash")
                     if (peerHash != null) {
@@ -753,6 +761,9 @@ class MessagingViewModel
                             errorMessage = null,
                         )
                     }
+
+                    // Trigger refresh to ensure UI updates (Room invalidation doesn't always propagate with cachedIn)
+                    _messagesRefreshTrigger.value++
 
                     Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status}")
                 } else {

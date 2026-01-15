@@ -239,6 +239,7 @@ class ServiceReticulumProtocol(
     }
 
     // Service callback implementation
+    @Suppress("TooManyFunctions") // AIDL callback interface requires implementing all methods
     private val serviceCallback =
         object : IReticulumServiceCallback.Stub() {
             @Suppress("LongMethod")
@@ -2639,14 +2640,15 @@ class ServiceReticulumProtocol(
     // Voice Call Methods (LXST)
     // ===========================================
 
-    override suspend fun initiateCall(destinationHash: String): Result<Unit> {
+    override suspend fun initiateCall(destinationHash: String, profileCode: Int?): Result<Unit> {
         // Use IO dispatcher for blocking AIDL call - LXST may block for path discovery
         return kotlinx.coroutines.withContext(Dispatchers.IO) {
             runCatching {
                 val svc = this@ServiceReticulumProtocol.service
                     ?: throw IllegalStateException("Service not bound")
-                Log.i(TAG, "📞 Initiating call to ${destinationHash.take(16)}...")
-                val resultJson = svc.initiateCall(destinationHash)
+                Log.i(TAG, "📞 Initiating call to ${destinationHash.take(16)} with profile=${profileCode ?: "default"}...")
+                // AIDL uses -1 to indicate "use default profile"
+                val resultJson = svc.initiateCall(destinationHash, profileCode ?: -1)
                 val result = JSONObject(resultJson)
                 if (!result.optBoolean("success", false)) {
                     val error = result.optString("error", "Unknown error")

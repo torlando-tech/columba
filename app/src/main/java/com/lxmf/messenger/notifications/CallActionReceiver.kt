@@ -6,8 +6,8 @@ import android.content.Intent
 import android.util.Log
 import com.lxmf.messenger.ColumbaApplication
 import com.lxmf.messenger.MainActivity
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
 /**
@@ -20,7 +20,8 @@ import kotlinx.coroutines.launch
  *
  * Note: Call actions require IPC to the service process where Python runs.
  * Answer opens the VoiceCallScreen which handles the IPC properly.
- * Decline/End use the ColumbaApplication's protocol for IPC.
+ * Decline/End use goAsync() to ensure the coroutine completes before Android
+ * kills the BroadcastReceiver process.
  */
 class CallActionReceiver : BroadcastReceiver() {
     companion object {
@@ -54,30 +55,43 @@ class CallActionReceiver : BroadcastReceiver() {
             }
             CallNotificationHelper.ACTION_DECLINE_CALL -> {
                 Log.i(TAG, "Declining call from notification")
-                // Use application's protocol for IPC
-                val app = context.applicationContext as? ColumbaApplication
-                app?.let {
-                    GlobalScope.launch(Dispatchers.IO) {
-                        try {
-                            it.reticulumProtocol.hangupCall()
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to decline call", e)
-                        }
-                    }
-                }
+                performAsyncHangup(context, "decline")
             }
             CallNotificationHelper.ACTION_END_CALL -> {
                 Log.i(TAG, "Ending call from notification")
-                val app = context.applicationContext as? ColumbaApplication
-                app?.let {
-                    GlobalScope.launch(Dispatchers.IO) {
-                        try {
-                            it.reticulumProtocol.hangupCall()
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to end call", e)
-                        }
-                    }
-                }
+                performAsyncHangup(context, "end")
+            }
+        }
+    }
+
+    /**
+     * Perform hangup asynchronously using goAsync() to prevent process termination.
+     *
+     * BroadcastReceiver.onReceive() is synchronous - once it returns, Android may kill
+     * the process immediately. goAsync() signals that we need more time to complete
+     * background work, and finish() must be called when done.
+     */
+    private fun performAsyncHangup(
+        context: Context,
+        actionType: String,
+    ) {
+        val pendingResult = goAsync()
+        val app = context.applicationContext as? ColumbaApplication
+
+        if (app == null) {
+            Log.e(TAG, "Failed to $actionType call: Application not available")
+            pendingResult.finish()
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                app.reticulumProtocol.hangupCall()
+                Log.d(TAG, "Successfully sent hangup for $actionType action")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to $actionType call", e)
+            } finally {
+                pendingResult.finish()
             }
         }
     }

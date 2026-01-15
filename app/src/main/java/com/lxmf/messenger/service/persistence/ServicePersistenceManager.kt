@@ -354,6 +354,7 @@ class ServicePersistenceManager(
      * 2. Announce peer name (from network)
      * 3. null (caller should use formatted hash as fallback)
      */
+    @Suppress("ReturnCount") // Cascading lookup with early returns is clearer than alternatives
     suspend fun lookupDisplayName(destinationHash: String): String? {
         return try {
             Log.d(TAG, "Looking up display name for: $destinationHash")

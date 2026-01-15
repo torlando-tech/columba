@@ -866,9 +866,9 @@ fun ColumbaNavigation(
                                 val encodedId = Uri.encode(messageId)
                                 navController.navigate("message_detail/$encodedId")
                             },
-                            onVoiceCall = {
+                            onVoiceCall = { profileCode ->
                                 val encodedHash = Uri.encode(destinationHash)
-                                navController.navigate("voice_call/$encodedHash")
+                                navController.navigate("voice_call/$encodedHash?profileCode=$profileCode")
                             },
                         )
                     }
@@ -936,7 +936,7 @@ fun ColumbaNavigation(
 
                     // Voice Call Screen (outgoing/active call)
                     composable(
-                        route = "voice_call/{destinationHash}?autoAnswer={autoAnswer}",
+                        route = "voice_call/{destinationHash}?autoAnswer={autoAnswer}&profileCode={profileCode}",
                         arguments =
                             listOf(
                                 navArgument("destinationHash") { type = NavType.StringType },
@@ -944,15 +944,22 @@ fun ColumbaNavigation(
                                     type = NavType.BoolType
                                     defaultValue = false
                                 },
+                                navArgument("profileCode") {
+                                    type = NavType.IntType
+                                    defaultValue = -1 // -1 means use default
+                                },
                             ),
                     ) { backStackEntry ->
                         val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
                         val autoAnswer = backStackEntry.arguments?.getBoolean("autoAnswer") ?: false
+                        val profileCodeArg = backStackEntry.arguments?.getInt("profileCode") ?: -1
+                        val profileCode = if (profileCodeArg == -1) null else profileCodeArg
 
                         VoiceCallScreen(
                             destinationHash = destinationHash,
                             onEndCall = { navController.popBackStack() },
                             autoAnswer = autoAnswer,
+                            profileCode = profileCode,
                         )
                     }
 

@@ -74,8 +74,8 @@ android {
         }
 
         ndk {
-            // Chaquopy supports these architectures
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            // Python 3.13 only supports 64-bit ABIs
+            abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
 
@@ -211,9 +211,16 @@ android {
 
 chaquopy {
     defaultConfig {
-        version = "3.11"
+        version = "3.13"
 
         pip {
+            // Install pre-built Android wheels for native extensions
+            // Both arm64 and x86_64 versions to support all target ABIs
+            install("https://github.com/torlando-tech/android-python-wheels/releases/download/v1.0.7/audioop_lts-0.2.2-cp313-abi3-android_21_arm64_v8a.whl")
+            install("https://github.com/torlando-tech/android-python-wheels/releases/download/v1.0.7/audioop_lts-0.2.2-cp313-abi3-android_21_x86_64.whl")
+            install("https://github.com/torlando-tech/android-python-wheels/releases/download/v1.0.7/pycodec2-4.1.1-cp313-cp313-android_21_arm64_v8a.whl")
+            install("https://github.com/torlando-tech/android-python-wheels/releases/download/v1.0.7/pycodec2-4.1.1-cp313-cp313-android_21_x86_64.whl")
+
             // Install ble-reticulum from GitHub
             install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
 

@@ -16,8 +16,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            // Chaquopy supports these architectures
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            // Python 3.13 only supports 64-bit ABIs
+            abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
 
@@ -47,7 +47,7 @@ android {
 
 chaquopy {
     defaultConfig {
-        version = "3.11"
+        version = "3.13"
     }
 }
 

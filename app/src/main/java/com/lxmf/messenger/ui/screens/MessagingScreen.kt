@@ -136,6 +136,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.ui.components.CodecSelectionDialog
 import com.lxmf.messenger.ui.components.FileAttachmentCard
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
@@ -178,7 +179,7 @@ fun MessagingScreen(
     onBackClick: () -> Unit,
     onPeerClick: () -> Unit = {},
     onViewMessageDetails: (messageId: String) -> Unit = {},
-    onVoiceCall: () -> Unit = {},
+    onVoiceCall: (profileCode: Int) -> Unit = {},
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
@@ -217,6 +218,9 @@ fun MessagingScreen(
     var showLocationPermissionSheet by remember { mutableStateOf(false) }
     val locationPermissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showStopSharingDialog by remember { mutableStateOf(false) }
+
+    // Codec selection dialog state
+    var showCodecSelectionDialog by remember { mutableStateOf(false) }
 
     // Location permission launcher
     val locationPermissionLauncher =
@@ -597,7 +601,7 @@ fun MessagingScreen(
                 actions = {
                     // Voice call button
                     IconButton(
-                        onClick = onVoiceCall,
+                        onClick = { showCodecSelectionDialog = true },
                     ) {
                         Icon(
                             imageVector = Icons.Default.Call,
@@ -1112,6 +1116,17 @@ fun MessagingScreen(
             transferTimeEstimates = state.transferTimeEstimates,
             onSelect = { preset -> viewModel.selectImageQuality(preset) },
             onDismiss = { viewModel.dismissQualitySelection() },
+        )
+    }
+
+    // Codec selection dialog for voice calls
+    if (showCodecSelectionDialog) {
+        CodecSelectionDialog(
+            onDismiss = { showCodecSelectionDialog = false },
+            onProfileSelected = { profile ->
+                showCodecSelectionDialog = false
+                onVoiceCall(profile.code)
+            },
         )
     }
 }

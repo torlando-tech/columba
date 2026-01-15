@@ -151,9 +151,12 @@ class CallViewModel
          * Initiate an outgoing call.
          * Uses ReticulumProtocol for IPC to service process where Python runs.
          * Retries if CallManager not yet initialized (can take time after app install).
+         *
+         * @param destinationHash Hex string of destination identity hash
+         * @param profileCode LXST codec profile code (0x10-0x80), or null to use default
          */
-        fun initiateCall(destinationHash: String) {
-            Log.w(TAG, "📞📞📞 initiateCall() CALLED - destHash=${destinationHash.take(16)}...")
+        fun initiateCall(destinationHash: String, profileCode: Int? = null) {
+            Log.w(TAG, "📞📞📞 initiateCall() CALLED - destHash=${destinationHash.take(16)}, profile=${profileCode ?: "default"}...")
             Log.w(TAG, "📞 Current callState=${callState.value}")
             _isConnecting.value = true
             resolvePeerNameSync(destinationHash)
@@ -169,7 +172,7 @@ class CallViewModel
 
                 while (retryCount < maxRetries) {
                     Log.w(TAG, "📞 Calling protocol.initiateCall() (attempt ${retryCount + 1}/$maxRetries)...")
-                    val result = protocol.initiateCall(destinationHash)
+                    val result = protocol.initiateCall(destinationHash, profileCode)
                     Log.w(TAG, "📞 protocol.initiateCall() returned: success=${result.isSuccess}")
 
                     if (result.isSuccess) {

@@ -63,6 +63,7 @@ fun VoiceCallScreen(
     destinationHash: String,
     onEndCall: () -> Unit,
     autoAnswer: Boolean = false,
+    profileCode: Int? = null,
     viewModel: CallViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -89,7 +90,7 @@ fun VoiceCallScreen(
             hasAudioPermission = isGranted
             if (isGranted && callState is CallState.Idle) {
                 android.util.Log.w("VoiceCallScreen", "📞 Permission granted, initiating call...")
-                viewModel.initiateCall(destinationHash)
+                viewModel.initiateCall(destinationHash, profileCode)
             } else if (!isGranted) {
                 android.util.Log.w("VoiceCallScreen", "📞 Permission denied, cannot make call")
             }
@@ -110,7 +111,7 @@ fun VoiceCallScreen(
         if (callState is CallState.Idle) {
             if (hasAudioPermission) {
                 android.util.Log.w("VoiceCallScreen", "📞 Permission already granted, calling initiateCall()...")
-                viewModel.initiateCall(destinationHash)
+                viewModel.initiateCall(destinationHash, profileCode)
             } else if (!permissionRequested) {
                 android.util.Log.w("VoiceCallScreen", "📞 Requesting microphone permission...")
                 permissionRequested = true

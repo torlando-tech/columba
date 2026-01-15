@@ -476,9 +476,10 @@ interface IReticulumService {
     /**
      * Initiate an outgoing voice call to a destination.
      * @param destHash Destination hash hex string (32 chars)
+     * @param profileCode LXST codec profile code (0x10-0x80), or -1 to use default
      * @return JSON string with result: {"success": true/false, "error": "..."}
      */
-    String initiateCall(String destHash);
+    String initiateCall(String destHash, int profileCode);
 
     /**
      * Answer an incoming voice call.

@@ -347,101 +347,120 @@ class KotlinAudioBridge(
         recordChannels = channels
         recordFrameSize = samplesPerFrame
 
-        val channelConfig =
-            if (channels == 1) {
-                AudioFormat.CHANNEL_IN_MONO
-            } else {
-                AudioFormat.CHANNEL_IN_STEREO
-            }
-
-        val bufferSize =
-            AudioRecord.getMinBufferSize(
-                sampleRate,
-                channelConfig,
-                AudioFormat.ENCODING_PCM_16BIT,
-            )
-
-        if (bufferSize <= 0) {
-            Log.e(TAG, "Invalid buffer size: $bufferSize")
-            onRecordingError?.callAttr("__call__", "Invalid buffer size: $bufferSize")
-            return
-        }
+        val channelConfig = if (channels == 1) AudioFormat.CHANNEL_IN_MONO else AudioFormat.CHANNEL_IN_STEREO
+        val minBufferSize = calculateMinBufferSize(sampleRate, channelConfig) ?: return
 
         try {
-            // IMPORTANT: Set audio mode BEFORE creating AudioRecord
-            // On Samsung devices, mic routing depends on mode being set first
-            val previousMode = audioManager.mode
-            if (previousMode != AudioManager.MODE_IN_COMMUNICATION) {
-                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-                Log.i(TAG, "📞 Pre-recording: Audio mode $previousMode -> ${audioManager.mode}")
-            }
-
-            // Use MIC source - VOICE_COMMUNICATION may not be available on all devices
-            // The key fix is setting MODE_IN_COMMUNICATION before creating AudioRecord
-            val audioSource = MediaRecorder.AudioSource.MIC
-            Log.i(TAG, "📞 Using audio source: $audioSource (MIC=${MediaRecorder.AudioSource.MIC}, VOICE_COMM=${MediaRecorder.AudioSource.VOICE_COMMUNICATION})")
-
-            audioRecord =
-                AudioRecord(
-                    audioSource,
-                    sampleRate,
-                    channelConfig,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    // At least 2 frames buffer
-                    maxOf(bufferSize, samplesPerFrame * channels * 2 * 2),
-                )
-
-            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                Log.e(TAG, "AudioRecord failed to initialize, state=${audioRecord?.state}")
-                onRecordingError?.callAttr("__call__", "AudioRecord failed to initialize")
-                audioRecord?.release()
-                audioRecord = null
-                return
-            }
-
-            // On Android 6+, try to set preferred input device to built-in mic
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val inputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
-                val builtinMic = inputDevices.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC }
-                if (builtinMic != null) {
-                    val success = audioRecord?.setPreferredDevice(builtinMic)
-                    Log.i(TAG, "📞 Set preferred input device to ${builtinMic.productName}: $success")
-                } else {
-                    Log.w(TAG, "📞 No built-in mic found in ${inputDevices.map { "${it.type}:${it.productName}" }}")
-                }
-            }
-
-            audioRecord?.startRecording()
-            val recordingState = audioRecord?.recordingState
-            Log.i(TAG, "📞 AudioRecord state after startRecording: $recordingState (RECORDSTATE_RECORDING=${AudioRecord.RECORDSTATE_RECORDING})")
-
-            // Log audio routing state for debugging
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val commDevice = audioManager.communicationDevice
-                Log.i(TAG, "📞 Communication device for recording: ${commDevice?.productName} (type=${commDevice?.type})")
-                val availableInputs = audioManager.availableCommunicationDevices.filter { !it.isSink }
-                Log.i(TAG, "📞 Available input devices: ${availableInputs.map { "${it.type}:${it.productName}" }}")
-            }
-
-            // Check and fix mic mute state
-            if (audioManager.isMicrophoneMute) {
-                Log.w(TAG, "📞 System mic was MUTED! Unmuting...")
-                audioManager.isMicrophoneMute = false
-            }
-            Log.i(TAG, "📞 System mic mute: ${audioManager.isMicrophoneMute}, mode: ${audioManager.mode}")
-
-            isRecording.set(true)
-            recordBuffer.clear()
-
-            // Start background recording thread
-            scope.launch {
-                recordingLoop()
-            }
-
+            ensureAudioModeForRecording()
+            val record = createAudioRecord(sampleRate, channelConfig, minBufferSize, samplesPerFrame, channels) ?: return
+            audioRecord = record
+            configurePreferredInputDevice(record)
+            startRecordingAndLaunchLoop(record)
             Log.i(TAG, "Recording started successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start recording", e)
             onRecordingError?.callAttr("__call__", e.message ?: "Unknown error")
+        }
+    }
+
+    /** Calculate minimum buffer size for AudioRecord, returns null on error. */
+    private fun calculateMinBufferSize(sampleRate: Int, channelConfig: Int): Int? {
+        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT)
+        if (bufferSize <= 0) {
+            Log.e(TAG, "Invalid buffer size: $bufferSize")
+            onRecordingError?.callAttr("__call__", "Invalid buffer size: $bufferSize")
+            return null
+        }
+        return bufferSize
+    }
+
+    /**
+     * Set audio mode before creating AudioRecord.
+     * On Samsung devices, mic routing depends on mode being set first.
+     */
+    private fun ensureAudioModeForRecording() {
+        val previousMode = audioManager.mode
+        if (previousMode != AudioManager.MODE_IN_COMMUNICATION) {
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            Log.i(TAG, "📞 Pre-recording: Audio mode $previousMode -> ${audioManager.mode}")
+        }
+    }
+
+    /** Create and initialize AudioRecord, returns null on error. */
+    private fun createAudioRecord(
+        sampleRate: Int,
+        channelConfig: Int,
+        minBufferSize: Int,
+        samplesPerFrame: Int,
+        channels: Int,
+    ): AudioRecord? {
+        // Use MIC source - VOICE_COMMUNICATION may not be available on all devices
+        // The key fix is setting MODE_IN_COMMUNICATION before creating AudioRecord
+        val audioSource = MediaRecorder.AudioSource.MIC
+        Log.i(TAG, "📞 Using audio source: $audioSource (MIC=${MediaRecorder.AudioSource.MIC}, VOICE_COMM=${MediaRecorder.AudioSource.VOICE_COMMUNICATION})")
+
+        val record = AudioRecord(
+            audioSource,
+            sampleRate,
+            channelConfig,
+            AudioFormat.ENCODING_PCM_16BIT,
+            // At least 2 frames buffer
+            maxOf(minBufferSize, samplesPerFrame * channels * 2 * 2),
+        )
+
+        if (record.state != AudioRecord.STATE_INITIALIZED) {
+            Log.e(TAG, "AudioRecord failed to initialize, state=${record.state}")
+            onRecordingError?.callAttr("__call__", "AudioRecord failed to initialize")
+            record.release()
+            return null
+        }
+        return record
+    }
+
+    /** On Android 6+, set preferred input device to built-in mic. */
+    private fun configurePreferredInputDevice(record: AudioRecord) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val inputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+            val builtinMic = inputDevices.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC }
+            if (builtinMic != null) {
+                val success = record.setPreferredDevice(builtinMic)
+                Log.i(TAG, "📞 Set preferred input device to ${builtinMic.productName}: $success")
+            } else {
+                Log.w(TAG, "📞 No built-in mic found in ${inputDevices.map { "${it.type}:${it.productName}" }}")
+            }
+        }
+    }
+
+    /** Start the AudioRecord and launch the recording loop coroutine. */
+    private fun startRecordingAndLaunchLoop(record: AudioRecord) {
+        record.startRecording()
+        Log.i(TAG, "📞 AudioRecord state after startRecording: ${record.recordingState} (RECORDSTATE_RECORDING=${AudioRecord.RECORDSTATE_RECORDING})")
+
+        logAudioRoutingState()
+
+        // Check and fix mic mute state
+        if (audioManager.isMicrophoneMute) {
+            Log.w(TAG, "📞 System mic was MUTED! Unmuting...")
+            audioManager.isMicrophoneMute = false
+        }
+        Log.i(TAG, "📞 System mic mute: ${audioManager.isMicrophoneMute}, mode: ${audioManager.mode}")
+
+        isRecording.set(true)
+        recordBuffer.clear()
+
+        // Start background recording thread
+        scope.launch {
+            recordingLoop()
+        }
+    }
+
+    /** Log audio routing state for debugging (Android S+). */
+    private fun logAudioRoutingState() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val commDevice = audioManager.communicationDevice
+            Log.i(TAG, "📞 Communication device for recording: ${commDevice?.productName} (type=${commDevice?.type})")
+            val availableInputs = audioManager.availableCommunicationDevices.filter { !it.isSink }
+            Log.i(TAG, "📞 Available input devices: ${availableInputs.map { "${it.type}:${it.productName}" }}")
         }
     }
 
@@ -453,7 +472,7 @@ class KotlinAudioBridge(
     private var recordFrameCount = 0L
     private var recordNonZeroCount = 0L
 
-    @Suppress("LoopWithTooManyJumpStatements")
+    @Suppress("LoopWithTooManyJumpStatements", "CyclomaticComplexMethod", "NestedBlockDepth")
     private fun recordingLoop() {
         val frameBytes = recordFrameSize * recordChannels * 2 // 16-bit = 2 bytes per sample
         val buffer = ByteArray(frameBytes)

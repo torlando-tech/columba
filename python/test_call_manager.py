@@ -379,8 +379,13 @@ class TestCallManagerMuteMicrophone:
 
         mock_telephone.mute_transmit.assert_called_once()
 
-    def test_mute_microphone_false_calls_unmute_transmit(self):
-        """mute_microphone(False) should call unmute_transmit()."""
+    def test_mute_microphone_false_calls_mute_transmit_with_false(self):
+        """mute_microphone(False) should call mute_transmit(False).
+
+        Note: We use mute_transmit(False) instead of unmute_transmit() because
+        LXST's Mixer.unmute() has a bug where unmute(True) sets muted=True
+        instead of muted=False (inverted logic).
+        """
         mock_identity = MagicMock()
         manager = CallManager(mock_identity)
         manager._initialized = True
@@ -389,7 +394,7 @@ class TestCallManagerMuteMicrophone:
 
         manager.mute_microphone(False)
 
-        mock_telephone.unmute_transmit.assert_called_once()
+        mock_telephone.mute_transmit.assert_called_once_with(False)
 
 
 class TestCallManagerSetSpeaker:

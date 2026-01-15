@@ -1,16 +1,12 @@
 package com.lxmf.messenger.viewmodel
 
 import com.lxmf.messenger.data.db.entity.ContactEntity
+import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.reticulum.call.bridge.CallBridge
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.call.bridge.CallState
-import io.mockk.clearAllMocks
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkObject
-import io.mockk.unmockkObject
-import io.mockk.verify
+import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +31,8 @@ import org.junit.Test
 class CallViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var mockContactRepository: ContactRepository
+    private lateinit var mockAnnounceRepository: AnnounceRepository
+    private lateinit var mockProtocol: ReticulumProtocol
     private lateinit var mockCallBridge: CallBridge
     private lateinit var viewModel: CallViewModel
 
@@ -48,6 +46,8 @@ class CallViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         mockContactRepository = mockk(relaxed = true)
+        mockAnnounceRepository = mockk(relaxed = true)
+        mockProtocol = mockk(relaxed = true)
         mockCallBridge = mockk(relaxed = true)
 
         // Initialize state flows
@@ -74,7 +74,7 @@ class CallViewModelTest {
             }
         }
 
-        viewModel = CallViewModel(mockContactRepository)
+        viewModel = CallViewModel(mockContactRepository, mockAnnounceRepository, mockProtocol)
     }
 
     @After
@@ -131,40 +131,45 @@ class CallViewModelTest {
     // ========== UI Action Tests ==========
 
     @Test
-    fun `initiateCall forwards to CallBridge`() = runTest {
+    fun `initiateCall updates bridge and forwards to protocol`() = runTest {
         val testHash = "abc123def456789012345678901234567890"
         viewModel.initiateCall(testHash)
-        verify { mockCallBridge.initiateCall(testHash) }
+        verify { mockCallBridge.setConnecting(testHash) }
+        coVerify { mockProtocol.initiateCall(testHash, null) }
     }
 
     @Test
-    fun `answerCall forwards to CallBridge`() = runTest {
+    fun `answerCall forwards to protocol`() = runTest {
         viewModel.answerCall()
-        verify { mockCallBridge.answerCall() }
+        coVerify { mockProtocol.answerCall() }
     }
 
     @Test
-    fun `endCall forwards to CallBridge`() = runTest {
+    fun `endCall forwards to protocol and updates bridge`() = runTest {
         viewModel.endCall()
-        verify { mockCallBridge.endCall() }
+        coVerify { mockProtocol.hangupCall() }
+        verify { mockCallBridge.setEnded() }
     }
 
     @Test
-    fun `declineCall forwards to CallBridge`() = runTest {
+    fun `declineCall forwards to protocol and updates bridge`() = runTest {
         viewModel.declineCall()
-        verify { mockCallBridge.declineCall() }
+        coVerify { mockProtocol.hangupCall() }
+        verify { mockCallBridge.setEnded() }
     }
 
     @Test
-    fun `toggleMute forwards to CallBridge`() = runTest {
+    fun `toggleMute updates bridge and forwards to protocol`() = runTest {
         viewModel.toggleMute()
-        verify { mockCallBridge.toggleMute() }
+        verify { mockCallBridge.setMutedLocally(any()) }
+        coVerify { mockProtocol.setCallMuted(any()) }
     }
 
     @Test
-    fun `toggleSpeaker forwards to CallBridge`() = runTest {
+    fun `toggleSpeaker updates bridge and forwards to protocol`() = runTest {
         viewModel.toggleSpeaker()
-        verify { mockCallBridge.toggleSpeaker() }
+        verify { mockCallBridge.setSpeakerLocally(any()) }
+        coVerify { mockProtocol.setCallSpeaker(any()) }
     }
 
     // ========== hasActiveCall Tests ==========

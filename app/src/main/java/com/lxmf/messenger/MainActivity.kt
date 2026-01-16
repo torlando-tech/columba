@@ -3,7 +3,6 @@ package com.lxmf.messenger
 import android.Manifest
 import android.content.Context
 import android.content.Intent
-import com.lxmf.messenger.notifications.CallNotificationHelper
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -56,6 +55,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
@@ -71,6 +71,7 @@ import com.lxmf.messenger.ui.screens.ChatsScreen
 import com.lxmf.messenger.ui.screens.ContactsScreen
 import com.lxmf.messenger.ui.screens.IdentityManagerScreen
 import com.lxmf.messenger.ui.screens.IdentityScreen
+import com.lxmf.messenger.ui.screens.IncomingCallScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
 import com.lxmf.messenger.ui.screens.MapScreen
 import com.lxmf.messenger.ui.screens.MessageDetailScreen
@@ -83,7 +84,6 @@ import com.lxmf.messenger.ui.screens.SettingsScreen
 import com.lxmf.messenger.ui.screens.ThemeEditorScreen
 import com.lxmf.messenger.ui.screens.ThemeManagementScreen
 import com.lxmf.messenger.ui.screens.VoiceCallScreen
-import com.lxmf.messenger.ui.screens.IncomingCallScreen
 import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapDownloadScreen
 import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapsScreen
 import com.lxmf.messenger.ui.screens.onboarding.OnboardingPagerScreen
@@ -439,8 +439,9 @@ fun ColumbaNavigation(
                 Log.i("MainActivity", "📞 Incoming call detected, currentRoute=$currentRoute, isAnsweringCall=$isAnsweringCall")
                 val encodedHash = Uri.encode(identityHash)
                 // Only navigate if not already on a call screen and not answering from notification
-                val isOnCallScreen = currentRoute?.startsWith("incoming_call/") == true ||
-                    currentRoute?.startsWith("voice_call/") == true
+                val isOnCallScreen =
+                    currentRoute?.startsWith("incoming_call/") == true ||
+                        currentRoute?.startsWith("voice_call/") == true
                 if (!isOnCallScreen && !isAnsweringCall) {
                     Log.i("MainActivity", "📞 Navigating to IncomingCallScreen: $identityHash")
                     navController.navigate("incoming_call/$encodedHash")

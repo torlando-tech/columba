@@ -93,9 +93,10 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+            )
         assertNotNull("Should post notification with incoming call ID", notification)
     }
 
@@ -110,9 +111,10 @@ class CallNotificationHelperTest {
 
         // Verify notification is posted
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+            )
         assertNotNull("Should post notification", notification)
     }
 
@@ -132,9 +134,10 @@ class CallNotificationHelperTest {
 
         // Should not post notification without permission
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+            )
         assertNull("Should not post notification without permission", notification)
     }
 
@@ -149,9 +152,10 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+            )
         assertNotNull("Should post notification with ongoing call ID", notification)
     }
 
@@ -166,9 +170,10 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+            )
         assertNotNull("Should post notification", notification)
     }
 
@@ -188,9 +193,10 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+            )
         assertNull("Should not post notification without permission", notification)
     }
 
@@ -340,9 +346,10 @@ class CallNotificationHelperTest {
 
         // Verify notification is posted (duration formatting is internal)
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+            )
         assertNotNull("Should post notification", notification)
     }
 
@@ -355,24 +362,27 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+            )
         assertNotNull("Should post notification", notification)
     }
 
     @Test
     fun `ongoing notification formats hour plus duration correctly`() {
+        // 1 hour, 1 minute, 1 second
         helper.showOngoingCallNotification(
             identityHash = "abc123",
             peerName = "Test",
-            duration = 3661, // 1 hour, 1 minute, 1 second
+            duration = 3661,
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+            )
         assertNotNull("Should post notification", notification)
     }
 
@@ -388,9 +398,10 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+            )
         assertNotNull("Should post notification", notification)
     }
 
@@ -404,9 +415,10 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+            )
         assertNotNull("Should post notification", notification)
     }
 
@@ -420,9 +432,10 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+            )
         assertNotNull("Notification should exist", notification)
 
         // Verify notification title
@@ -438,9 +451,10 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+            )
         assertNotNull("Notification should exist", notification)
 
         val shadowNotification = shadowOf(notification)
@@ -456,9 +470,10 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+            )
         assertNotNull("Notification should exist", notification)
 
         val shadowNotification = shadowOf(notification)
@@ -467,16 +482,18 @@ class CallNotificationHelperTest {
 
     @Test
     fun `ongoing call notification shows peer name and duration`() {
+        // 90 seconds = 1:30
         helper.showOngoingCallNotification(
             identityHash = "abc123",
             peerName = "Jane Doe",
-            duration = 90, // 1:30
+            duration = 90,
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+            )
         assertNotNull("Notification should exist", notification)
 
         val shadowNotification = shadowOf(notification)
@@ -491,9 +508,10 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+            )
         assertNotNull("Notification should exist", notification)
 
         assertTrue(
@@ -511,9 +529,10 @@ class CallNotificationHelperTest {
         )
 
         val shadowNotificationManager = shadowOf(notificationManager)
-        val notification = shadowNotificationManager.getNotification(
-            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-        )
+        val notification =
+            shadowNotificationManager.getNotification(
+                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+            )
         assertNotNull("Notification should exist", notification)
 
         assertTrue(

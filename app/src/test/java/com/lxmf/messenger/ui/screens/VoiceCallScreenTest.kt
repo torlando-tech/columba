@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CallEnd
@@ -1024,6 +1022,7 @@ class VoiceCallScreenTest {
  * Simplified layout for testing - uses a single scrollable Column to ensure
  * all elements are visible in the test environment.
  */
+@Suppress("UnusedParameter") // callDuration passed for API completeness; real UI shows it via callStatus when Active
 @Composable
 private fun TestVoiceCallScreen(
     peerName: String,
@@ -1073,7 +1072,7 @@ private fun TestVoiceCallScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Call status or duration
+            // Call status (in the real UI, this shows duration when call is active)
             Text(
                 text = callStatus,
                 style = MaterialTheme.typography.bodyLarge,

@@ -155,7 +155,10 @@ class CallViewModel
          * @param destinationHash Hex string of destination identity hash
          * @param profileCode LXST codec profile code (0x10-0x80), or null to use default
          */
-        fun initiateCall(destinationHash: String, profileCode: Int? = null) {
+        fun initiateCall(
+            destinationHash: String,
+            profileCode: Int? = null,
+        ) {
             Log.w(TAG, "📞📞📞 initiateCall() CALLED - destHash=${destinationHash.take(16)}, profile=${profileCode ?: "default"}...")
             Log.w(TAG, "📞 Current callState=${callState.value}")
             _isConnecting.value = true

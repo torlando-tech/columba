@@ -106,7 +106,7 @@ class KotlinAudioBridge(
 
     // Audio routing
     @Volatile
-    private var speakerphoneOn = false  // Default to earpiece
+    private var speakerphoneOn = false // Default to earpiece
 
     @Volatile
     private var microphoneMuted = false
@@ -281,7 +281,10 @@ class KotlinAudioBridge(
                     AudioTrack.WRITE_BLOCKING,
                 )
             if (written < 0) {
-                Log.w(TAG, "📞 AudioTrack write error: $written (ERROR_INVALID_OPERATION=${AudioTrack.ERROR_INVALID_OPERATION}, ERROR_BAD_VALUE=${AudioTrack.ERROR_BAD_VALUE})")
+                Log.w(
+                    TAG,
+                    "📞 AudioTrack write error: $written (ERROR_INVALID_OPERATION=${AudioTrack.ERROR_INVALID_OPERATION}, ERROR_BAD_VALUE=${AudioTrack.ERROR_BAD_VALUE})",
+                )
             } else if (writeAudioCount % 100L == 1L) {
                 Log.d(TAG, "📞 writeAudio #$writeAudioCount: wrote $written bytes successfully")
             }
@@ -364,7 +367,10 @@ class KotlinAudioBridge(
     }
 
     /** Calculate minimum buffer size for AudioRecord, returns null on error. */
-    private fun calculateMinBufferSize(sampleRate: Int, channelConfig: Int): Int? {
+    private fun calculateMinBufferSize(
+        sampleRate: Int,
+        channelConfig: Int,
+    ): Int? {
         val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT)
         if (bufferSize <= 0) {
             Log.e(TAG, "Invalid buffer size: $bufferSize")
@@ -399,14 +405,15 @@ class KotlinAudioBridge(
         val audioSource = MediaRecorder.AudioSource.MIC
         Log.i(TAG, "📞 Using audio source: $audioSource (MIC=${MediaRecorder.AudioSource.MIC}, VOICE_COMM=${MediaRecorder.AudioSource.VOICE_COMMUNICATION})")
 
-        val record = AudioRecord(
-            audioSource,
-            sampleRate,
-            channelConfig,
-            AudioFormat.ENCODING_PCM_16BIT,
-            // At least 2 frames buffer
-            maxOf(minBufferSize, samplesPerFrame * channels * 2 * 2),
-        )
+        val record =
+            AudioRecord(
+                audioSource,
+                sampleRate,
+                channelConfig,
+                AudioFormat.ENCODING_PCM_16BIT,
+                // At least 2 frames buffer
+                maxOf(minBufferSize, samplesPerFrame * channels * 2 * 2),
+            )
 
         if (record.state != AudioRecord.STATE_INITIALIZED) {
             Log.e(TAG, "AudioRecord failed to initialize, state=${record.state}")
@@ -639,11 +646,12 @@ class KotlinAudioBridge(
             val availableDevices = audioManager.availableCommunicationDevices
             Log.i(TAG, "📞 Available communication devices: ${availableDevices.map { "${it.type}:${it.productName}" }}")
 
-            val targetType = if (useSpeaker) {
-                AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
-            } else {
-                AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
-            }
+            val targetType =
+                if (useSpeaker) {
+                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                } else {
+                    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+                }
 
             val targetDevice = availableDevices.find { it.type == targetType }
 

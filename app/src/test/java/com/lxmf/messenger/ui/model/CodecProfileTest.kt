@@ -7,7 +7,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CodecProfileTest {
-
     @Test
     fun `fromCode returns BANDWIDTH_ULTRA_LOW for code 0x10`() {
         assertEquals(CodecProfile.BANDWIDTH_ULTRA_LOW, CodecProfile.fromCode(0x10))
@@ -78,7 +77,7 @@ class CodecProfileTest {
         CodecProfile.entries.forEach { profile ->
             assertTrue(
                 "Profile ${profile.name} should have non-empty displayName",
-                profile.displayName.isNotEmpty()
+                profile.displayName.isNotEmpty(),
             )
         }
     }
@@ -88,7 +87,7 @@ class CodecProfileTest {
         CodecProfile.entries.forEach { profile ->
             assertTrue(
                 "Profile ${profile.name} should have non-empty description",
-                profile.description.isNotEmpty()
+                profile.description.isNotEmpty(),
             )
         }
     }
@@ -100,28 +99,29 @@ class CodecProfileTest {
         assertEquals(
             "All profile codes should be unique",
             codes.size,
-            uniqueCodes.size
+            uniqueCodes.size,
         )
     }
 
     @Test
     fun `all expected profiles exist`() {
-        val expectedProfiles = listOf(
-            "BANDWIDTH_ULTRA_LOW",
-            "BANDWIDTH_VERY_LOW",
-            "BANDWIDTH_LOW",
-            "QUALITY_MEDIUM",
-            "QUALITY_HIGH",
-            "QUALITY_MAX",
-            "LATENCY_ULTRA_LOW",
-            "LATENCY_LOW"
-        )
+        val expectedProfiles =
+            listOf(
+                "BANDWIDTH_ULTRA_LOW",
+                "BANDWIDTH_VERY_LOW",
+                "BANDWIDTH_LOW",
+                "QUALITY_MEDIUM",
+                "QUALITY_HIGH",
+                "QUALITY_MAX",
+                "LATENCY_ULTRA_LOW",
+                "LATENCY_LOW",
+            )
         val actualProfiles = CodecProfile.entries.map { it.name }
         assertEquals(expectedProfiles.size, actualProfiles.size)
         expectedProfiles.forEach { expected ->
             assertTrue(
                 "Profile $expected should exist",
-                actualProfiles.contains(expected)
+                actualProfiles.contains(expected),
             )
         }
     }
@@ -134,7 +134,7 @@ class CodecProfileTest {
             assertEquals(
                 "fromCode should return the same profile for code ${profile.code}",
                 profile,
-                retrieved
+                retrieved,
             )
         }
     }

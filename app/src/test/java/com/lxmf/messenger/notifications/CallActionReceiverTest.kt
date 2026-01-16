@@ -65,13 +65,17 @@ class CallActionReceiverTest {
      * Simulates the answer call action logic without relying on goAsync().
      * This tests the intent building and activity start behavior.
      */
-    private fun simulateAnswerCallAction(context: Context, identityHash: String?) {
-        val answerIntent = Intent(context, MainActivity::class.java).apply {
-            action = CallNotificationHelper.ACTION_ANSWER_CALL
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
-            putExtra(CallActionReceiver.EXTRA_AUTO_ANSWER, true)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
+    private fun simulateAnswerCallAction(
+        context: Context,
+        identityHash: String?,
+    ) {
+        val answerIntent =
+            Intent(context, MainActivity::class.java).apply {
+                action = CallNotificationHelper.ACTION_ANSWER_CALL
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
+                putExtra(CallActionReceiver.EXTRA_AUTO_ANSWER, true)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
         context.startActivity(answerIntent)
     }
 
@@ -214,11 +218,12 @@ class CallActionReceiverTest {
         // processing the action. This test verifies that all known actions
         // would reach the notification cancellation point.
 
-        val actions = listOf(
-            CallNotificationHelper.ACTION_ANSWER_CALL,
-            CallNotificationHelper.ACTION_DECLINE_CALL,
-            CallNotificationHelper.ACTION_END_CALL,
-        )
+        val actions =
+            listOf(
+                CallNotificationHelper.ACTION_ANSWER_CALL,
+                CallNotificationHelper.ACTION_DECLINE_CALL,
+                CallNotificationHelper.ACTION_END_CALL,
+            )
 
         // All actions should be valid and processed (notification cancellation
         // happens before the when block, so all actions trigger it)
@@ -294,44 +299,47 @@ class CallActionReceiverTest {
     }
 
     @Test
-    fun `performAsyncHangup handles null application context gracefully for decline`() = runTest {
-        // The receiver's performAsyncHangup method has null safety:
-        // val app = context.applicationContext as? ColumbaApplication
-        // if (app == null) { ... return }
+    fun `performAsyncHangup handles null application context gracefully for decline`() =
+        runTest {
+            // The receiver's performAsyncHangup method has null safety:
+            // val app = context.applicationContext as? ColumbaApplication
+            // if (app == null) { ... return }
 
-        // Verify the action type is set correctly regardless of app context
-        val action = CallNotificationHelper.ACTION_DECLINE_CALL
-        assertTrue(shouldTriggerHangup(action))
-        assertEquals("decline", getHangupActionType(action))
-    }
-
-    @Test
-    fun `performAsyncHangup handles null application context gracefully for end call`() = runTest {
-        // Verify the action type is set correctly regardless of app context
-        val action = CallNotificationHelper.ACTION_END_CALL
-        assertTrue(shouldTriggerHangup(action))
-        assertEquals("end", getHangupActionType(action))
-    }
+            // Verify the action type is set correctly regardless of app context
+            val action = CallNotificationHelper.ACTION_DECLINE_CALL
+            assertTrue(shouldTriggerHangup(action))
+            assertEquals("decline", getHangupActionType(action))
+        }
 
     @Test
-    fun `performAsyncHangup calls protocol hangupCall`() = runTest {
-        // This test documents that performAsyncHangup should call protocol.hangupCall()
-        // The actual IPC call is tested via integration tests, but we verify
-        // the action routing is correct
+    fun `performAsyncHangup handles null application context gracefully for end call`() =
+        runTest {
+            // Verify the action type is set correctly regardless of app context
+            val action = CallNotificationHelper.ACTION_END_CALL
+            assertTrue(shouldTriggerHangup(action))
+            assertEquals("end", getHangupActionType(action))
+        }
 
-        val declineAction = CallNotificationHelper.ACTION_DECLINE_CALL
-        val endAction = CallNotificationHelper.ACTION_END_CALL
+    @Test
+    fun `performAsyncHangup calls protocol hangupCall`() =
+        runTest {
+            // This test documents that performAsyncHangup should call protocol.hangupCall()
+            // The actual IPC call is tested via integration tests, but we verify
+            // the action routing is correct
 
-        // Both actions should trigger hangup
-        assertTrue(
-            "Decline should trigger hangup call",
-            shouldTriggerHangup(declineAction),
-        )
-        assertTrue(
-            "End should trigger hangup call",
-            shouldTriggerHangup(endAction),
-        )
-    }
+            val declineAction = CallNotificationHelper.ACTION_DECLINE_CALL
+            val endAction = CallNotificationHelper.ACTION_END_CALL
+
+            // Both actions should trigger hangup
+            assertTrue(
+                "Decline should trigger hangup call",
+                shouldTriggerHangup(declineAction),
+            )
+            assertTrue(
+                "End should trigger hangup call",
+                shouldTriggerHangup(endAction),
+            )
+        }
 
     // ========== Identity Hash Extraction Tests ==========
 

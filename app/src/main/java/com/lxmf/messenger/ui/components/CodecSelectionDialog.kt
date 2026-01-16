@@ -99,10 +99,11 @@ private fun CodecProfileItem(
     onSelect: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onSelect)
+                .padding(vertical = 8.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(
@@ -111,9 +112,10 @@ private fun CodecProfileItem(
         )
 
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 8.dp),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

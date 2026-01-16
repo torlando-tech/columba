@@ -2640,12 +2640,16 @@ class ServiceReticulumProtocol(
     // Voice Call Methods (LXST)
     // ===========================================
 
-    override suspend fun initiateCall(destinationHash: String, profileCode: Int?): Result<Unit> {
+    override suspend fun initiateCall(
+        destinationHash: String,
+        profileCode: Int?,
+    ): Result<Unit> {
         // Use IO dispatcher for blocking AIDL call - LXST may block for path discovery
         return kotlinx.coroutines.withContext(Dispatchers.IO) {
             runCatching {
-                val svc = this@ServiceReticulumProtocol.service
-                    ?: throw IllegalStateException("Service not bound")
+                val svc =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
                 Log.i(TAG, "📞 Initiating call to ${destinationHash.take(16)} with profile=${profileCode ?: "default"}...")
                 // AIDL uses -1 to indicate "use default profile"
                 val resultJson = svc.initiateCall(destinationHash, profileCode ?: -1)
@@ -2662,8 +2666,9 @@ class ServiceReticulumProtocol(
         // Use IO dispatcher for blocking AIDL call
         return kotlinx.coroutines.withContext(Dispatchers.IO) {
             runCatching {
-                val svc = this@ServiceReticulumProtocol.service
-                    ?: throw IllegalStateException("Service not bound")
+                val svc =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
                 Log.i(TAG, "📞 Answering call")
                 val resultJson = svc.answerCall()
                 val result = JSONObject(resultJson)

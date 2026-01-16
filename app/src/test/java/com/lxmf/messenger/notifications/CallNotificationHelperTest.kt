@@ -1,31 +1,19 @@
 package com.lxmf.messenger.notifications
 
 import android.Manifest
-import android.app.NotificationChannel
+import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
-import io.mockk.Runs
-import io.mockk.clearAllMocks
-import io.mockk.every
-import io.mockk.just
-import io.mockk.mockk
-import io.mockk.mockkObject
-import io.mockk.mockkStatic
-import io.mockk.slot
-import io.mockk.unmockkAll
-import io.mockk.verify
-import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -34,75 +22,65 @@ import org.robolectric.annotation.Config
  * Tests notification channel creation, incoming call notifications,
  * ongoing call notifications, and notification cancellation.
  *
- * TODO: These tests have issues with MockK static mocking + Robolectric.
- * The UnsupportedOperationException occurs when MockK tries to retransform
- * classes that Robolectric has already instrumented. Need to refactor to
- * use Robolectric's shadow system instead of MockK static mocking.
+ * Uses Robolectric's shadow system for Android component testing.
  */
-@Ignore("MockK static mocking conflicts with Robolectric instrumentation - needs refactoring")
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], application = Application::class)
 class CallNotificationHelperTest {
-    private lateinit var mockContext: Context
-    private lateinit var mockNotificationManager: NotificationManager
-    private lateinit var mockNotificationManagerCompat: NotificationManagerCompat
+    private lateinit var context: Context
+    private lateinit var notificationManager: NotificationManager
     private lateinit var helper: CallNotificationHelper
 
     @Before
     fun setup() {
-        mockContext = mockk(relaxed = true)
-        mockNotificationManager = mockk(relaxed = true)
-        mockNotificationManagerCompat = mockk(relaxed = true)
+        context = RuntimeEnvironment.getApplication()
+        notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        every { mockContext.getSystemService(Context.NOTIFICATION_SERVICE) } returns mockNotificationManager
-        every { mockContext.applicationContext } returns mockContext
+        // Grant POST_NOTIFICATIONS permission for tests
+        val app = shadowOf(context as Application)
+        app.grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
-        // Mock NotificationManagerCompat.from()
-        mockkStatic(NotificationManagerCompat::class)
-        every { NotificationManagerCompat.from(any()) } returns mockNotificationManagerCompat
-
-        // Mock ContextCompat.checkSelfPermission for notifications
-        // Must mock ContextCompat (not ActivityCompat) because ActivityCompat delegates to ContextCompat
-        mockkStatic(ContextCompat::class)
-        every {
-            ContextCompat.checkSelfPermission(
-                any(),
-                Manifest.permission.POST_NOTIFICATIONS,
-            )
-        } returns PackageManager.PERMISSION_GRANTED
-
-        helper = CallNotificationHelper(mockContext)
-    }
-
-    @After
-    fun tearDown() {
-        unmockkAll()
-        clearAllMocks()
+        helper = CallNotificationHelper(context)
     }
 
     // ========== Notification Channel Tests ==========
 
     @Test
     fun `creates incoming call notification channel`() {
-        val channelSlot = slot<NotificationChannel>()
-        every { mockNotificationManager.createNotificationChannel(capture(channelSlot)) } just Runs
-
         // Re-instantiate to trigger channel creation
-        helper = CallNotificationHelper(mockContext)
+        helper = CallNotificationHelper(context)
 
-        // Verify at least one channel was created
-        verify(atLeast = 1) { mockNotificationManager.createNotificationChannel(any()) }
+        // Verify incoming call channel was created
+        val channels = notificationManager.notificationChannels
+        assertTrue(
+            "Should create incoming call channel",
+            channels.any { it.id == "incoming_calls" },
+        )
     }
 
     @Test
     fun `creates ongoing call notification channel`() {
-        val channels = mutableListOf<NotificationChannel>()
-        every { mockNotificationManager.createNotificationChannel(capture(channels)) } just Runs
+        helper = CallNotificationHelper(context)
 
-        helper = CallNotificationHelper(mockContext)
+        // Verify ongoing call channel was created
+        val channels = notificationManager.notificationChannels
+        assertTrue(
+            "Should create ongoing call channel",
+            channels.any { it.id == "ongoing_calls" },
+        )
+    }
 
-        // Should create two channels
-        verify(exactly = 2) { mockNotificationManager.createNotificationChannel(any()) }
+    @Test
+    fun `creates both notification channels`() {
+        helper = CallNotificationHelper(context)
+
+        // Should create exactly 2 channels
+        val channels = notificationManager.notificationChannels
+        assertEquals(
+            "Should have created 2 channels",
+            2,
+            channels.size,
+        )
     }
 
     // ========== Incoming Call Notification Tests ==========
@@ -114,12 +92,11 @@ class CallNotificationHelperTest {
             callerName = "Test Caller",
         )
 
-        verify {
-            mockNotificationManagerCompat.notify(
-                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-                any(),
-            )
-        }
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+        )
+        assertNotNull("Should post notification with incoming call ID", notification)
     }
 
     @Test
@@ -132,22 +109,21 @@ class CallNotificationHelperTest {
         )
 
         // Verify notification is posted
-        verify {
-            mockNotificationManagerCompat.notify(
-                CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
-                any(),
-            )
-        }
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+        )
+        assertNotNull("Should post notification", notification)
     }
 
     @Test
     fun `showIncomingCallNotification respects permission`() {
-        every {
-            ContextCompat.checkSelfPermission(
-                any(),
-                Manifest.permission.POST_NOTIFICATIONS,
-            )
-        } returns PackageManager.PERMISSION_DENIED
+        // Revoke the permission
+        val app = shadowOf(context as Application)
+        app.denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
+
+        // Create a new helper after permission change
+        helper = CallNotificationHelper(context)
 
         helper.showIncomingCallNotification(
             identityHash = "abc123",
@@ -155,7 +131,11 @@ class CallNotificationHelperTest {
         )
 
         // Should not post notification without permission
-        verify(exactly = 0) { mockNotificationManagerCompat.notify(any(), any()) }
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+        )
+        assertNull("Should not post notification without permission", notification)
     }
 
     // ========== Ongoing Call Notification Tests ==========
@@ -168,12 +148,11 @@ class CallNotificationHelperTest {
             duration = 120,
         )
 
-        verify {
-            mockNotificationManagerCompat.notify(
-                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-                any(),
-            )
-        }
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+        )
+        assertNotNull("Should post notification with ongoing call ID", notification)
     }
 
     @Test
@@ -186,22 +165,21 @@ class CallNotificationHelperTest {
             duration = 60,
         )
 
-        verify {
-            mockNotificationManagerCompat.notify(
-                CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
-                any(),
-            )
-        }
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+        )
+        assertNotNull("Should post notification", notification)
     }
 
     @Test
     fun `showOngoingCallNotification respects permission`() {
-        every {
-            ContextCompat.checkSelfPermission(
-                any(),
-                Manifest.permission.POST_NOTIFICATIONS,
-            )
-        } returns PackageManager.PERMISSION_DENIED
+        // Revoke the permission
+        val app = shadowOf(context as Application)
+        app.denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
+
+        // Create a new helper after permission change
+        helper = CallNotificationHelper(context)
 
         helper.showOngoingCallNotification(
             identityHash = "abc123",
@@ -209,31 +187,99 @@ class CallNotificationHelperTest {
             duration = 0,
         )
 
-        verify(exactly = 0) { mockNotificationManagerCompat.notify(any(), any()) }
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+        )
+        assertNull("Should not post notification without permission", notification)
     }
 
     // ========== Cancel Notification Tests ==========
 
     @Test
     fun `cancelIncomingCallNotification cancels correct notification`() {
+        // First, post a notification
+        helper.showIncomingCallNotification(
+            identityHash = "abc123",
+            callerName = "Test",
+        )
+
+        val shadowNotificationManager = shadowOf(notificationManager)
+        assertNotNull(
+            "Notification should exist before cancel",
+            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL),
+        )
+
+        // Cancel it
         helper.cancelIncomingCallNotification()
 
-        verify { mockNotificationManagerCompat.cancel(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL) }
+        assertNull(
+            "Notification should be cancelled",
+            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL),
+        )
     }
 
     @Test
     fun `cancelOngoingCallNotification cancels correct notification`() {
+        // First, post a notification
+        helper.showOngoingCallNotification(
+            identityHash = "abc123",
+            peerName = "Test",
+            duration = 0,
+        )
+
+        val shadowNotificationManager = shadowOf(notificationManager)
+        assertNotNull(
+            "Notification should exist before cancel",
+            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL),
+        )
+
+        // Cancel it
         helper.cancelOngoingCallNotification()
 
-        verify { mockNotificationManagerCompat.cancel(CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL) }
+        assertNull(
+            "Notification should be cancelled",
+            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL),
+        )
     }
 
     @Test
     fun `cancelAllCallNotifications cancels both notifications`() {
+        // Post both notifications
+        helper.showIncomingCallNotification(
+            identityHash = "abc123",
+            callerName = "Test",
+        )
+        helper.showOngoingCallNotification(
+            identityHash = "abc123",
+            peerName = "Test",
+            duration = 0,
+        )
+
+        val shadowNotificationManager = shadowOf(notificationManager)
+
+        // Verify both exist
+        assertNotNull(
+            "Incoming notification should exist",
+            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL),
+        )
+        assertNotNull(
+            "Ongoing notification should exist",
+            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL),
+        )
+
+        // Cancel all
         helper.cancelAllCallNotifications()
 
-        verify { mockNotificationManagerCompat.cancel(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL) }
-        verify { mockNotificationManagerCompat.cancel(CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL) }
+        // Verify both are cancelled
+        assertNull(
+            "Incoming notification should be cancelled",
+            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL),
+        )
+        assertNull(
+            "Ongoing notification should be cancelled",
+            shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL),
+        )
     }
 
     // ========== Notification ID Constants Tests ==========
@@ -293,7 +339,11 @@ class CallNotificationHelperTest {
         )
 
         // Verify notification is posted (duration formatting is internal)
-        verify { mockNotificationManagerCompat.notify(any(), any()) }
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+        )
+        assertNotNull("Should post notification", notification)
     }
 
     @Test
@@ -304,7 +354,11 @@ class CallNotificationHelperTest {
             duration = 60,
         )
 
-        verify { mockNotificationManagerCompat.notify(any(), any()) }
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+        )
+        assertNotNull("Should post notification", notification)
     }
 
     @Test
@@ -315,7 +369,11 @@ class CallNotificationHelperTest {
             duration = 3661, // 1 hour, 1 minute, 1 second
         )
 
-        verify { mockNotificationManagerCompat.notify(any(), any()) }
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+        )
+        assertNotNull("Should post notification", notification)
     }
 
     // ========== Identity Hash Formatting Tests ==========
@@ -329,7 +387,11 @@ class CallNotificationHelperTest {
             callerName = null,
         )
 
-        verify { mockNotificationManagerCompat.notify(any(), any()) }
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+        )
+        assertNotNull("Should post notification", notification)
     }
 
     @Test
@@ -341,6 +403,122 @@ class CallNotificationHelperTest {
             callerName = null,
         )
 
-        verify { mockNotificationManagerCompat.notify(any(), any()) }
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+        )
+        assertNotNull("Should post notification", notification)
+    }
+
+    // ========== Notification Content Tests ==========
+
+    @Test
+    fun `incoming call notification has correct title`() {
+        helper.showIncomingCallNotification(
+            identityHash = "abc123",
+            callerName = "Test Caller",
+        )
+
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+        )
+        assertNotNull("Notification should exist", notification)
+
+        // Verify notification title
+        val shadowNotification = shadowOf(notification)
+        assertEquals("Incoming Voice Call", shadowNotification.contentTitle)
+    }
+
+    @Test
+    fun `incoming call notification has caller name as content`() {
+        helper.showIncomingCallNotification(
+            identityHash = "abc123",
+            callerName = "John Doe",
+        )
+
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+        )
+        assertNotNull("Notification should exist", notification)
+
+        val shadowNotification = shadowOf(notification)
+        assertEquals("John Doe", shadowNotification.contentText)
+    }
+
+    @Test
+    fun `ongoing call notification has correct title`() {
+        helper.showOngoingCallNotification(
+            identityHash = "abc123",
+            peerName = "Test Peer",
+            duration = 60,
+        )
+
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+        )
+        assertNotNull("Notification should exist", notification)
+
+        val shadowNotification = shadowOf(notification)
+        assertEquals("Voice Call", shadowNotification.contentTitle)
+    }
+
+    @Test
+    fun `ongoing call notification shows peer name and duration`() {
+        helper.showOngoingCallNotification(
+            identityHash = "abc123",
+            peerName = "Jane Doe",
+            duration = 90, // 1:30
+        )
+
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+        )
+        assertNotNull("Notification should exist", notification)
+
+        val shadowNotification = shadowOf(notification)
+        assertEquals("Jane Doe - 01:30", shadowNotification.contentText)
+    }
+
+    @Test
+    fun `incoming call notification is ongoing`() {
+        helper.showIncomingCallNotification(
+            identityHash = "abc123",
+            callerName = "Test",
+        )
+
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_INCOMING_CALL,
+        )
+        assertNotNull("Notification should exist", notification)
+
+        assertTrue(
+            "Incoming call notification should be ongoing",
+            notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0,
+        )
+    }
+
+    @Test
+    fun `ongoing call notification is ongoing`() {
+        helper.showOngoingCallNotification(
+            identityHash = "abc123",
+            peerName = "Test",
+            duration = 0,
+        )
+
+        val shadowNotificationManager = shadowOf(notificationManager)
+        val notification = shadowNotificationManager.getNotification(
+            CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL,
+        )
+        assertNotNull("Notification should exist", notification)
+
+        assertTrue(
+            "Ongoing call notification should be ongoing",
+            notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0,
+        )
     }
 }

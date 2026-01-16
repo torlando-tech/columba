@@ -1140,6 +1140,9 @@ class MessagingViewModelTest {
                     activeConversationManager,
                     settingsRepository,
                     propagationNodeManager,
+                    locationSharingManager,
+                    identityRepository,
+                    conversationLinkManager,
                 )
             advanceUntilIdle()
 
@@ -1158,8 +1161,6 @@ class MessagingViewModelTest {
                 conversationRepository.updateMessageStatus(testMessageHash, "failed")
             }
 
-            // Cleanup
-            testViewModel.viewModelScope.cancel()
         }
 
     @Test
@@ -1194,6 +1195,9 @@ class MessagingViewModelTest {
                     activeConversationManager,
                     settingsRepository,
                     propagationNodeManager,
+                    locationSharingManager,
+                    identityRepository,
+                    conversationLinkManager,
                 )
             advanceUntilIdle()
 
@@ -1212,8 +1216,6 @@ class MessagingViewModelTest {
                 conversationRepository.updateMessageStatus(testMessageHash, "failed")
             }
 
-            // Cleanup
-            testViewModel.viewModelScope.cancel()
         }
 
     @Test
@@ -1248,6 +1250,9 @@ class MessagingViewModelTest {
                     activeConversationManager,
                     settingsRepository,
                     propagationNodeManager,
+                    locationSharingManager,
+                    identityRepository,
+                    conversationLinkManager,
                 )
             advanceUntilIdle()
 
@@ -1266,8 +1271,6 @@ class MessagingViewModelTest {
                 conversationRepository.updateMessageStatus(testMessageHash, "failed")
             }
 
-            // Cleanup
-            testViewModel.viewModelScope.cancel()
         }
 
     @Test
@@ -1302,6 +1305,9 @@ class MessagingViewModelTest {
                     activeConversationManager,
                     settingsRepository,
                     propagationNodeManager,
+                    locationSharingManager,
+                    identityRepository,
+                    conversationLinkManager,
                 )
             advanceUntilIdle()
 
@@ -1320,8 +1326,6 @@ class MessagingViewModelTest {
                 conversationRepository.updateMessageStatus(testMessageHash, "failed")
             }
 
-            // Cleanup
-            testViewModel.viewModelScope.cancel()
         }
 
     @Test
@@ -1356,6 +1360,9 @@ class MessagingViewModelTest {
                     activeConversationManager,
                     settingsRepository,
                     propagationNodeManager,
+                    locationSharingManager,
+                    identityRepository,
+                    conversationLinkManager,
                 )
             advanceUntilIdle()
 
@@ -1374,8 +1381,6 @@ class MessagingViewModelTest {
                 conversationRepository.updateMessageStatus(testMessageHash, "delivered")
             }
 
-            // Cleanup
-            testViewModel.viewModelScope.cancel()
         }
 
     // ========== CONTACT TOGGLE TESTS ==========

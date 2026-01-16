@@ -731,6 +731,17 @@ class MessagingViewModel
                 }
 
                 if (message != null) {
+                    // Guard: Don't degrade from terminal success states to failed (Issue #257 fix)
+                    // This provides defense-in-depth in case Python layer misses the spurious callback
+                    if (update.status == "failed" && isTerminalSuccessStatus(message.status)) {
+                        Log.w(
+                            TAG,
+                            "Blocking status degradation from '${message.status}' to 'failed' " +
+                                "for message ${update.messageHash.take(16)}...",
+                        )
+                        return
+                    }
+
                     // Update status
                     conversationRepository.updateMessageStatus(update.messageHash, update.status)
 
@@ -795,6 +806,17 @@ class MessagingViewModel
             } catch (e: Exception) {
                 Log.e(TAG, "Error handling incoming reaction: ${e.message}", e)
             }
+        }
+
+        /**
+         * Check if a message status represents a terminal success state.
+         * Terminal success states should never degrade to "failed" (Issue #257 fix).
+         *
+         * @param status The current message status
+         * @return true if this is a terminal success status that shouldn't be degraded
+         */
+        private fun isTerminalSuccessStatus(status: String): Boolean {
+            return status in setOf("sent", "propagated", "delivered")
         }
 
         private suspend fun saveMessageToDatabase(

@@ -298,9 +298,17 @@ class ReticulumWrapper:
         self._pending_relay_fallback_messages = {}  # {msg_hash_hex: lxmf_message} - waiting for alternative
         self._max_relay_retries = 3  # Maximum number of alternative relays to try
 
-        # Pending file notifications - sent only after propagation succeeds
-        # When direct delivery fails for file attachments and we fall back to propagation,
-        # we track the message here. The notification is sent only when propagation succeeds.
+        # Successfully propagated message tracking (Issue #257 fix)
+        # LXMF may call the failure callback spuriously for propagated messages because it
+        # expects delivery confirmation that will never come from the relay. We track messages
+        # that successfully reached SENT state with PROPAGATED method, and ignore any
+        # subsequent failure callbacks for these messages.
+        self._successfully_propagated = {}  # {msg_hash_hex: timestamp} - messages that reached relay
+        self._propagated_tracking_ttl_seconds = 86400  # 24 hours - cleanup old entries
+
+        # Pending file notifications for propagated messages with attachments
+        # When a message with file attachments is retried via propagation, we track it here
+        # and send the notification only after propagation succeeds
         self._pending_file_notifications = {}  # {msg_hash_hex: lxmf_message}
 
         # Native stamp generator callback (Kotlin)
@@ -3848,6 +3856,15 @@ class ReticulumWrapper:
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
 
+            # CRITICAL FIX for issue #257: Guard against spurious failure callbacks
+            # LXMF may call failure callback for propagated messages because it expects
+            # delivery confirmation that will never come from the relay. If this message
+            # already successfully reached 'propagated' status, ignore this failure callback.
+            if msg_hash in self._successfully_propagated:
+                log_info("ReticulumWrapper", "_on_message_failed",
+                        f"⚠️ Message {msg_hash[:16]}... already propagated, ignoring spurious failure callback")
+                return  # Do NOT fail - already delivered to relay
+
             # Remove from opportunistic tracking (if it was being tracked)
             if msg_hash in self._opportunistic_messages:
                 del self._opportunistic_messages[msg_hash]
@@ -4247,6 +4264,12 @@ class ReticulumWrapper:
                     log_info("ReticulumWrapper", "_on_message_sent",
                             f"📬 Sending pending file notification now that propagation confirmed")
                     self._send_pending_file_notification(tracked_message)
+
+                # Track this message as successfully propagated (Issue #257 fix)
+                # This prevents spurious failure callbacks from degrading the status
+                self._successfully_propagated[msg_hash] = time.time()
+                log_debug("ReticulumWrapper", "_on_message_sent",
+                         f"Tracking {msg_hash[:16]}... as successfully propagated")
             else:
                 status = 'sent'
                 log_info("ReticulumWrapper", "_on_message_sent",
@@ -4298,12 +4321,23 @@ class ReticulumWrapper:
         """
         Background loop that periodically checks for timed-out opportunistic messages.
         Runs every _opportunistic_check_interval seconds while self.initialized is True.
+        Also performs periodic cleanup of stale propagated message tracking entries.
         """
         log_debug("ReticulumWrapper", "_opportunistic_timeout_loop", "Timeout loop started")
+        last_propagated_cleanup = time.time()
+        propagated_cleanup_interval = 3600  # Run cleanup every hour
+
         while self.initialized:
             time.sleep(self._opportunistic_check_interval)
             if self._opportunistic_messages:  # Only check if there are messages to track
                 self._check_opportunistic_timeouts()
+
+            # Periodically cleanup stale propagated tracking entries (Issue #257)
+            now = time.time()
+            if now - last_propagated_cleanup >= propagated_cleanup_interval:
+                self._cleanup_stale_propagated_tracking()
+                last_propagated_cleanup = now
+
         log_debug("ReticulumWrapper", "_opportunistic_timeout_loop", "Timeout loop exiting (not initialized)")
 
     def _check_opportunistic_timeouts(self):
@@ -4518,6 +4552,30 @@ class ReticulumWrapper:
         # 2. Attempt to recreate the interface
         # 3. On success, add to RNS.Transport.interfaces
         # 4. On failure, keep in failed_interfaces for next retry
+
+    def _cleanup_stale_propagated_tracking(self):
+        """
+        Remove entries from _successfully_propagated that are older than TTL.
+        This prevents memory leaks in long-running service.
+
+        Called periodically from _opportunistic_timeout_loop (Issue #257 fix).
+        """
+        if not self._successfully_propagated:
+            return  # Nothing to clean up
+
+        now = time.time()
+        stale = []
+
+        for msg_hash, timestamp in list(self._successfully_propagated.items()):
+            age = now - timestamp
+            if age >= self._propagated_tracking_ttl_seconds:
+                stale.append(msg_hash)
+
+        if stale:
+            for msg_hash in stale:
+                del self._successfully_propagated[msg_hash]
+            log_debug("ReticulumWrapper", "_cleanup_stale_propagated_tracking",
+                     f"Cleaned up {len(stale)} stale propagated tracking entries")
 
     def get_transport_identity_hash(self) -> bytes:
         """

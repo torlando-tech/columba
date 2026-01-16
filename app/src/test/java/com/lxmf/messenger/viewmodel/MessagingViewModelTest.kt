@@ -1003,7 +1003,9 @@ class MessagingViewModelTest {
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
 
-            // Mock the message exists in database
+            // Mock the message exists in database with "pending" status (non-terminal)
+            // Note: Issue #257 fix prevents status degradation from terminal states
+            // (sent/propagated/delivered) to failed, so we use "pending" here
             val testMessageHash = "failed_message_hash"
             val existingMessage =
                 MessageEntity(
@@ -1013,7 +1015,7 @@ class MessagingViewModelTest {
                     content = "Test message",
                     timestamp = 1000L,
                     isFromMe = true,
-                    status = "sent",
+                    status = "pending",
                 )
             coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
@@ -1102,6 +1104,278 @@ class MessagingViewModelTest {
             }
 
             // Verify: No crash occurred - test completes successfully
+        }
+
+    // ========== STATUS DEGRADATION PROTECTION TESTS (Issue #257) ==========
+
+    @Test
+    fun `failed status is blocked when message is already propagated`() =
+        runTest {
+            // Setup: Create a flow that emits a failed status update
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            // Mock the message exists in database with 'propagated' status
+            val testMessageHash = "propagated_msg_spurious_fail"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "propagated", // Already in terminal success state
+                )
+            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            // Create a new ViewModel to pick up the mocked flow
+            val testViewModel =
+                MessagingViewModel(
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    contactRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                )
+            advanceUntilIdle()
+
+            // Emit a 'failed' status update (this is the spurious callback we want to block)
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = testMessageHash,
+                    status = "failed",
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+            advanceUntilIdle()
+
+            // Verify: updateMessageStatus was NOT called (status degradation blocked)
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageStatus(testMessageHash, "failed")
+            }
+
+            // Cleanup
+            testViewModel.viewModelScope.cancel()
+        }
+
+    @Test
+    fun `failed status is blocked when message is already sent`() =
+        runTest {
+            // Setup: Create a flow that emits a failed status update
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            // Mock the message exists in database with 'sent' status
+            val testMessageHash = "sent_msg_spurious_fail"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "sent", // Already in terminal success state
+                )
+            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            // Create a new ViewModel to pick up the mocked flow
+            val testViewModel =
+                MessagingViewModel(
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    contactRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                )
+            advanceUntilIdle()
+
+            // Emit a 'failed' status update
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = testMessageHash,
+                    status = "failed",
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+            advanceUntilIdle()
+
+            // Verify: updateMessageStatus was NOT called (status degradation blocked)
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageStatus(testMessageHash, "failed")
+            }
+
+            // Cleanup
+            testViewModel.viewModelScope.cancel()
+        }
+
+    @Test
+    fun `failed status is blocked when message is already delivered`() =
+        runTest {
+            // Setup: Create a flow that emits a failed status update
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            // Mock the message exists in database with 'delivered' status
+            val testMessageHash = "delivered_msg_spurious_fail"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "delivered", // Already in terminal success state
+                )
+            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            // Create a new ViewModel to pick up the mocked flow
+            val testViewModel =
+                MessagingViewModel(
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    contactRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                )
+            advanceUntilIdle()
+
+            // Emit a 'failed' status update
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = testMessageHash,
+                    status = "failed",
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+            advanceUntilIdle()
+
+            // Verify: updateMessageStatus was NOT called (status degradation blocked)
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageStatus(testMessageHash, "failed")
+            }
+
+            // Cleanup
+            testViewModel.viewModelScope.cancel()
+        }
+
+    @Test
+    fun `failed status is allowed when message is pending`() =
+        runTest {
+            // Setup: Create a flow that emits a failed status update
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            // Mock the message exists in database with 'pending' status (not terminal)
+            val testMessageHash = "pending_msg_legit_fail"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "pending", // NOT a terminal success state
+                )
+            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            // Create a new ViewModel to pick up the mocked flow
+            val testViewModel =
+                MessagingViewModel(
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    contactRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                )
+            advanceUntilIdle()
+
+            // Emit a 'failed' status update
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = testMessageHash,
+                    status = "failed",
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+            advanceUntilIdle()
+
+            // Verify: updateMessageStatus WAS called (legitimate failure)
+            coVerify(exactly = 1) {
+                conversationRepository.updateMessageStatus(testMessageHash, "failed")
+            }
+
+            // Cleanup
+            testViewModel.viewModelScope.cancel()
+        }
+
+    @Test
+    fun `non-failed status updates still work for terminal states`() =
+        runTest {
+            // Setup: Create a flow that emits a delivered status update
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            // Mock the message exists in database with 'sent' status
+            val testMessageHash = "sent_msg_upgrade_to_delivered"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "sent", // Will be upgraded to delivered
+                )
+            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            // Create a new ViewModel to pick up the mocked flow
+            val testViewModel =
+                MessagingViewModel(
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    contactRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                )
+            advanceUntilIdle()
+
+            // Emit a 'delivered' status update (upgrading from sent)
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = testMessageHash,
+                    status = "delivered",
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+            advanceUntilIdle()
+
+            // Verify: updateMessageStatus WAS called (status upgrade allowed)
+            coVerify(exactly = 1) {
+                conversationRepository.updateMessageStatus(testMessageHash, "delivered")
+            }
+
+            // Cleanup
+            testViewModel.viewModelScope.cancel()
         }
 
     // ========== CONTACT TOGGLE TESTS ==========

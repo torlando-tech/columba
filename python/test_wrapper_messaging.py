@@ -1209,6 +1209,8 @@ class TestDeliveryCallbacks(unittest.TestCase):
         mock_message.tried_relays = []
         # fields must be a dict (not Mock) for "5 in fields" check to work
         mock_message.fields = {}
+        # Set state to None so immediate state check doesn't trigger _on_message_sent
+        mock_message.state = None
 
         wrapper._on_message_failed(mock_message)
 
@@ -1256,6 +1258,7 @@ class TestDeliveryCallbacks(unittest.TestCase):
         status_event = json.loads(call_arg)
         self.assertEqual(status_event['status'], 'failed')
 
+    @patch.object(reticulum_wrapper, 'LXMF', mock_lxmf)
     def test_on_message_sent(self):
         """Test _on_message_sent callback"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -1265,6 +1268,8 @@ class TestDeliveryCallbacks(unittest.TestCase):
 
         mock_message = Mock()
         mock_message.hash = b'messagehash12345'
+        # Ensure desired_method is not PROPAGATED so we get 'sent' status
+        mock_message.desired_method = mock_lxmf.LXMessage.DIRECT
 
         wrapper._on_message_sent(mock_message)
 

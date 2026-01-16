@@ -944,6 +944,7 @@ class TestDeliveryCallbacks(unittest.TestCase):
         # Should not raise exception
         wrapper._on_message_failed(mock_message)
 
+    @patch.object(reticulum_wrapper, 'LXMF', mock_lxmf)
     def test_on_message_sent_calls_kotlin_callback(self):
         """Test that _on_message_sent invokes Kotlin callback with sent status"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -951,6 +952,8 @@ class TestDeliveryCallbacks(unittest.TestCase):
 
         mock_message = MagicMock()
         mock_message.hash = b'sent_test_hash'
+        # Ensure desired_method is not PROPAGATED so we get 'sent' status
+        mock_message.desired_method = mock_lxmf.LXMessage.DIRECT
 
         wrapper._on_message_sent(mock_message)
 
@@ -960,6 +963,7 @@ class TestDeliveryCallbacks(unittest.TestCase):
         status_data = json.loads(call_args)
         self.assertEqual(status_data['status'], 'sent')
 
+    @patch.object(reticulum_wrapper, 'LXMF', mock_lxmf)
     def test_on_message_sent_handles_missing_callback(self):
         """Test that _on_message_sent handles missing callback gracefully"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -967,6 +971,8 @@ class TestDeliveryCallbacks(unittest.TestCase):
 
         mock_message = MagicMock()
         mock_message.hash = b'test_hash'
+        # Ensure desired_method is not PROPAGATED
+        mock_message.desired_method = mock_lxmf.LXMessage.DIRECT
 
         # Should not raise exception
         wrapper._on_message_sent(mock_message)

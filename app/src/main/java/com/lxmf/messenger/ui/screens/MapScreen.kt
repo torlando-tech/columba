@@ -248,7 +248,7 @@ fun MapScreen(
                         // Position in bottom-left to avoid conflict with FABs on right
                         val density = ctx.resources.displayMetrics.density
                         val marginPx = (8 * density).toInt()
-                        val bottomMarginPx = (100 * density).toInt() // Above nav bar
+                        val bottomMarginPx = (120 * density).toInt() // Above nav bar
                         map.uiSettings.isAttributionEnabled = true
                         map.uiSettings.setAttributionGravity(Gravity.BOTTOM or Gravity.START)
                         map.uiSettings.setAttributionMargins(marginPx, 0, 0, bottomMarginPx)

@@ -99,6 +99,7 @@ data class OfflineMapDownloadState(
     val addressSearchResults: List<AddressSearchResult> = emptyList(),
     val isSearchingAddress: Boolean = false,
     val addressSearchError: String? = null,
+    val isGeocoderAvailable: Boolean = true, // Checked on init
 ) {
     /**
      * Check if the location is set.
@@ -155,6 +156,31 @@ class OfflineMapDownloadViewModel
 
         // Track if a download is in progress
         private var isDownloading = false
+
+        init {
+            // Check if geocoder backend is actually working (not just installed)
+            // Geocoder.isPresent() only checks if installed, not if Play Services is enabled
+            viewModelScope.launch(Dispatchers.IO) {
+                val geocoderAvailable = checkGeocoderAvailable()
+                if (!geocoderAvailable) {
+                    _state.update { it.copy(isGeocoderAvailable = false) }
+                }
+            }
+        }
+
+        @Suppress("DEPRECATION") // Geocoder API deprecated but replacement requires API 33+
+        private fun checkGeocoderAvailable(): Boolean {
+            if (!Geocoder.isPresent()) return false
+            return try {
+                // Try a simple geocode to verify the service is actually working
+                val geocoder = Geocoder(context, Locale.getDefault())
+                geocoder.getFromLocationName("test", 1)
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "Geocoder not available: ${e.javaClass.simpleName}")
+                false
+            }
+        }
 
         /**
          * Set the center location from user's current position.

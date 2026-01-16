@@ -1107,20 +1107,34 @@ class SettingsViewModel
         /**
          * Start observing current relay info from PropagationNodeManager.
          * Call this after init to update state with relay information.
+         *
+         * Uses combine to observe both the relay state AND the auto-select setting.
+         * This fixes a bug where when relayInfo was null, the auto-select state
+         * would incorrectly default to true instead of reading from the actual setting.
          */
         private fun startRelayMonitor() {
             viewModelScope.launch {
-                propagationNodeManager.currentRelay.collect { relayInfo ->
+                // Combine relay info with the actual auto-select setting from DataStore
+                // This ensures UI state is correct even when no relay is selected
+                combine(
+                    propagationNodeManager.currentRelay,
+                    settingsRepository.autoSelectPropagationNodeFlow,
+                ) { relayInfo, isAutoSelect ->
+                    relayInfo to isAutoSelect
+                }.collect { (relayInfo, isAutoSelect) ->
                     _state.value =
                         _state.value.copy(
                             currentRelayName = relayInfo?.displayName,
                             // -1 means unknown hops (relay restored without announce data)
                             currentRelayHops = relayInfo?.hops?.takeIf { it >= 0 },
                             currentRelayHash = relayInfo?.destinationHash,
-                            autoSelectPropagationNode = relayInfo?.isAutoSelected ?: true,
+                            // Use the actual setting from DataStore, not a default
+                            autoSelectPropagationNode = isAutoSelect,
                         )
                     if (relayInfo != null) {
-                        Log.d(TAG, "Current relay updated: ${relayInfo.displayName} (${relayInfo.hops} hops)")
+                        Log.d(TAG, "Current relay updated: ${relayInfo.displayName} (${relayInfo.hops} hops, autoSelect=$isAutoSelect)")
+                    } else {
+                        Log.d(TAG, "No relay selected (autoSelect=$isAutoSelect)")
                     }
                 }
             }

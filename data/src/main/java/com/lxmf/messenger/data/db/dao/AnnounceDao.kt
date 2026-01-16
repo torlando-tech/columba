@@ -183,8 +183,18 @@ interface AnnounceDao {
     /**
      * Get all announces with pagination support, sorted by most recently seen (descending).
      * Returns a PagingSource for use with Paging 3 library.
+     *
+     * Note: Deprecated propagation nodes (stampCostFlexibility IS NULL) are filtered out
+     * for consistency with relay selection. These nodes have outdated announce formats
+     * that cause sync failures.
      */
-    @Query("SELECT * FROM announces ORDER BY lastSeenTimestamp DESC")
+    @Query(
+        """
+        SELECT * FROM announces
+        WHERE (nodeType != 'PROPAGATION_NODE' OR stampCostFlexibility IS NOT NULL)
+        ORDER BY lastSeenTimestamp DESC
+        """,
+    )
     fun getAllAnnouncesPaged(): PagingSource<Int, AnnounceEntity>
 
     /**
@@ -204,11 +214,15 @@ interface AnnounceDao {
     /**
      * Search announces by peer name or destination hash with pagination support.
      * Returns a PagingSource for use with Paging 3 library.
+     *
+     * Note: Deprecated propagation nodes (stampCostFlexibility IS NULL) are filtered out
+     * for consistency with relay selection.
      */
     @Query(
         """
         SELECT * FROM announces
         WHERE (peerName LIKE '%' || :query || '%' OR destinationHash LIKE '%' || :query || '%')
+        AND (nodeType != 'PROPAGATION_NODE' OR stampCostFlexibility IS NOT NULL)
         ORDER BY lastSeenTimestamp DESC
         """,
     )
@@ -217,11 +231,18 @@ interface AnnounceDao {
     /**
      * Get announces filtered by node types AND search query with pagination support.
      * Returns a PagingSource for use with Paging 3 library.
+     *
+     * Note: Deprecated propagation nodes (stampCostFlexibility IS NULL) are filtered out
+     * for consistency with relay selection.
      */
     @Query(
-        "SELECT * FROM announces WHERE nodeType IN (:nodeTypes) AND " +
-            "(peerName LIKE '%' || :query || '%' OR destinationHash LIKE '%' || :query || '%') " +
-            "ORDER BY lastSeenTimestamp DESC",
+        """
+        SELECT * FROM announces
+        WHERE nodeType IN (:nodeTypes)
+        AND (peerName LIKE '%' || :query || '%' OR destinationHash LIKE '%' || :query || '%')
+        AND (nodeType != 'PROPAGATION_NODE' OR stampCostFlexibility IS NOT NULL)
+        ORDER BY lastSeenTimestamp DESC
+        """,
     )
     fun getAnnouncesByTypesAndSearchPaged(
         nodeTypes: List<String>,

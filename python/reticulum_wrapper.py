@@ -1675,6 +1675,11 @@ class ReticulumWrapper:
                             data = umsgpack.unpackb(app_data)
                             stamp_cost_flexibility = int(data[5][1])
                             peering_cost = int(data[5][2])
+                        else:
+                            # Log why validation failed - helps diagnose auto-selection issues
+                            log_info("ReticulumWrapper", "_announce_handler",
+                                     f"⚠️ Propagation node {destination_hash[:16]}... has invalid/deprecated announce data "
+                                     f"(pn_announce_data_is_valid=False), stamp_cost_flexibility will be NULL")
                         log_debug("ReticulumWrapper", "_announce_handler",
                                   f"PN stamp cost: {stamp_cost}, flex: {stamp_cost_flexibility}, peer: {peering_cost}")
                     else:

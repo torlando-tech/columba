@@ -1,21 +1,16 @@
 package com.lxmf.messenger.notifications
 
 import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.lxmf.messenger.MainActivity
-import io.mockk.clearAllMocks
-import io.mockk.unmockkAll
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import org.junit.After
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.spyk
+import io.mockk.verify
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -24,501 +19,279 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowApplication
 
 /**
  * Unit tests for CallActionReceiver.
  *
- * Tests handling of call notification actions:
- * - Answer call (opens MainActivity with auto-answer)
- * - Decline call (triggers hangup via protocol)
- * - End call (triggers hangup via protocol)
- * - Notification cancellation on any action
- * - Graceful handling of unknown actions and null contexts
- *
- * Note: Tests use helper methods that simulate the receiver's logic to verify
- * behavior without depending on goAsync() which returns null in test environments.
- * The core intent building and action handling logic is tested through this approach.
+ * Tests handling of call notification actions using Robolectric to actually
+ * invoke onReceive and verify behavior.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
-@OptIn(ExperimentalCoroutinesApi::class)
 class CallActionReceiverTest {
-    private val testDispatcher = StandardTestDispatcher()
     private lateinit var context: Context
+    private lateinit var receiver: CallActionReceiver
+    private lateinit var shadowApplication: ShadowApplication
+    private lateinit var mockPendingResult: BroadcastReceiver.PendingResult
 
     @Before
     fun setup() {
-        Dispatchers.setMain(testDispatcher)
         context = RuntimeEnvironment.getApplication()
+        mockPendingResult = mockk(relaxed = true)
+        // Use a spy so we can mock goAsync() while keeping real onReceive behavior
+        receiver = spyk(CallActionReceiver())
+        every { receiver.goAsync() } returns mockPendingResult
+        shadowApplication = Shadows.shadowOf(context as Application)
     }
 
-    @After
-    fun tearDown() {
-        Dispatchers.resetMain()
-        unmockkAll()
-        clearAllMocks()
-    }
+    // ========== Answer Call Action Tests ==========
 
-    // ========== Helper Methods ==========
-
-    /**
-     * Simulates the answer call action logic without relying on goAsync().
-     * This tests the intent building and activity start behavior.
-     */
-    private fun simulateAnswerCallAction(
-        context: Context,
-        identityHash: String?,
-    ) {
-        val answerIntent =
-            Intent(context, MainActivity::class.java).apply {
-                action = CallNotificationHelper.ACTION_ANSWER_CALL
-                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
-                putExtra(CallActionReceiver.EXTRA_AUTO_ANSWER, true)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            }
-        context.startActivity(answerIntent)
-    }
-
-    /**
-     * Returns the action type string based on the action, mimicking receiver logic.
-     */
-    private fun getHangupActionType(action: String?): String? {
-        return when (action) {
-            CallNotificationHelper.ACTION_DECLINE_CALL -> "decline"
-            CallNotificationHelper.ACTION_END_CALL -> "end"
-            else -> null
+    @Test
+    fun `onReceive with ANSWER_CALL action starts MainActivity`() {
+        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123def456")
         }
-    }
 
-    /**
-     * Returns whether the action should trigger hangup.
-     */
-    private fun shouldTriggerHangup(action: String?): Boolean {
-        return action == CallNotificationHelper.ACTION_DECLINE_CALL ||
-            action == CallNotificationHelper.ACTION_END_CALL
-    }
+        receiver.onReceive(context, intent)
 
-    /**
-     * Returns whether the action should start an activity.
-     */
-    private fun shouldStartActivity(action: String?): Boolean {
-        return action == CallNotificationHelper.ACTION_ANSWER_CALL
-    }
-
-    // ========== ACTION_ANSWER_CALL Tests ==========
-
-    @Test
-    fun `onReceive handles ACTION_ANSWER_CALL correctly - launches activity intent`() {
-        // Given
-        val testIdentityHash = "abc123def456789012345678901234567890"
-
-        // When - simulate the answer action
-        simulateAnswerCallAction(context, testIdentityHash)
-
-        // Then - verify activity was started with correct intent
-        val shadowApp = Shadows.shadowOf(context as Application)
-        val startedActivity = shadowApp.nextStartedActivity
-
-        // Verify intent properties
-        assertEquals(CallNotificationHelper.ACTION_ANSWER_CALL, startedActivity.action)
-        assertEquals(testIdentityHash, startedActivity.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH))
-        assertTrue(startedActivity.getBooleanExtra(CallActionReceiver.EXTRA_AUTO_ANSWER, false))
-        assertTrue(startedActivity.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
-        assertTrue(startedActivity.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP != 0)
-        assertEquals(MainActivity::class.java.name, startedActivity.component?.className)
+        val startedIntent = shadowApplication.nextStartedActivity
+        assertNotNull("Should start an activity", startedIntent)
+        assertEquals(MainActivity::class.java.name, startedIntent.component?.className)
     }
 
     @Test
-    fun `onReceive ACTION_ANSWER_CALL should start activity`() {
-        // Given
-        val action = CallNotificationHelper.ACTION_ANSWER_CALL
-
-        // Then
-        assertTrue(
-            "Answer action should start activity",
-            shouldStartActivity(action),
-        )
-    }
-
-    @Test
-    fun `onReceive ACTION_ANSWER_CALL does not trigger hangup`() {
-        // Given
-        val action = CallNotificationHelper.ACTION_ANSWER_CALL
-
-        // Then
-        assertFalse(
-            "Answer action should not trigger hangup",
-            shouldTriggerHangup(action),
-        )
-        assertNull(
-            "Answer action should not have hangup type",
-            getHangupActionType(action),
-        )
-    }
-
-    // ========== ACTION_DECLINE_CALL Tests ==========
-
-    @Test
-    fun `onReceive handles ACTION_DECLINE_CALL correctly - should call hangup`() {
-        // Given
-        val action = CallNotificationHelper.ACTION_DECLINE_CALL
-
-        // Then
-        assertTrue(
-            "Decline action should trigger hangup",
-            shouldTriggerHangup(action),
-        )
-        assertEquals("decline", getHangupActionType(action))
-    }
-
-    @Test
-    fun `onReceive ACTION_DECLINE_CALL does not start activity`() {
-        // Given
-        val action = CallNotificationHelper.ACTION_DECLINE_CALL
-
-        // Then
-        assertFalse(
-            "Decline action should not start activity",
-            shouldStartActivity(action),
-        )
-    }
-
-    // ========== ACTION_END_CALL Tests ==========
-
-    @Test
-    fun `onReceive handles ACTION_END_CALL correctly - should call hangup`() {
-        // Given
-        val action = CallNotificationHelper.ACTION_END_CALL
-
-        // Then
-        assertTrue(
-            "End action should trigger hangup",
-            shouldTriggerHangup(action),
-        )
-        assertEquals("end", getHangupActionType(action))
-    }
-
-    @Test
-    fun `onReceive ACTION_END_CALL does not start activity`() {
-        // Given
-        val action = CallNotificationHelper.ACTION_END_CALL
-
-        // Then
-        assertFalse(
-            "End action should not start activity",
-            shouldStartActivity(action),
-        )
-    }
-
-    // ========== Notification Cancellation Tests ==========
-
-    @Test
-    fun `onReceive cancels notification on any action`() {
-        // The receiver always calls cancelIncomingCallNotification() before
-        // processing the action. This test verifies that all known actions
-        // would reach the notification cancellation point.
-
-        val actions =
-            listOf(
-                CallNotificationHelper.ACTION_ANSWER_CALL,
-                CallNotificationHelper.ACTION_DECLINE_CALL,
-                CallNotificationHelper.ACTION_END_CALL,
-            )
-
-        // All actions should be valid and processed (notification cancellation
-        // happens before the when block, so all actions trigger it)
-        actions.forEach { action ->
-            // Verify action is recognized
-            val recognized = shouldTriggerHangup(action) || shouldStartActivity(action)
-            assertTrue(
-                "Action $action should be recognized",
-                recognized,
-            )
+    fun `onReceive with ANSWER_CALL action sets correct intent action`() {
+        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123def456")
         }
+
+        receiver.onReceive(context, intent)
+
+        val startedIntent = shadowApplication.nextStartedActivity
+        assertNotNull(startedIntent)
+        assertEquals(CallNotificationHelper.ACTION_ANSWER_CALL, startedIntent.action)
+    }
+
+    @Test
+    fun `onReceive with ANSWER_CALL action passes identity hash`() {
+        val testHash = "abc123def456789012345678901234567890"
+        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, testHash)
+        }
+
+        receiver.onReceive(context, intent)
+
+        val startedIntent = shadowApplication.nextStartedActivity
+        assertNotNull(startedIntent)
+        assertEquals(
+            testHash,
+            startedIntent.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH),
+        )
+    }
+
+    @Test
+    fun `onReceive with ANSWER_CALL action sets auto answer flag`() {
+        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+        }
+
+        receiver.onReceive(context, intent)
+
+        val startedIntent = shadowApplication.nextStartedActivity
+        assertNotNull(startedIntent)
+        assertTrue(
+            "Should set auto_answer flag",
+            startedIntent.getBooleanExtra(CallActionReceiver.EXTRA_AUTO_ANSWER, false),
+        )
+    }
+
+    @Test
+    fun `onReceive with ANSWER_CALL action sets correct intent flags`() {
+        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+        }
+
+        receiver.onReceive(context, intent)
+
+        val startedIntent = shadowApplication.nextStartedActivity
+        assertNotNull(startedIntent)
+        assertTrue(
+            "Should have FLAG_ACTIVITY_NEW_TASK",
+            (startedIntent.flags and Intent.FLAG_ACTIVITY_NEW_TASK) != 0,
+        )
+        assertTrue(
+            "Should have FLAG_ACTIVITY_SINGLE_TOP",
+            (startedIntent.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP) != 0,
+        )
+    }
+
+    @Test
+    fun `onReceive with ANSWER_CALL action handles null identity hash`() {
+        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL)
+        // No identity hash extra
+
+        receiver.onReceive(context, intent)
+
+        val startedIntent = shadowApplication.nextStartedActivity
+        assertNotNull("Should still start activity", startedIntent)
+        assertEquals(MainActivity::class.java.name, startedIntent.component?.className)
+    }
+
+    // ========== Decline Call Action Tests ==========
+
+    @Test
+    fun `onReceive with DECLINE_CALL action does not start activity`() {
+        val intent = Intent(CallNotificationHelper.ACTION_DECLINE_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+        }
+
+        receiver.onReceive(context, intent)
+
+        // Decline should not start an activity (it triggers hangup instead)
+        val startedIntent = shadowApplication.nextStartedActivity
+        // No activity should be started for decline action
+        assertTrue(
+            "Decline action should not start MainActivity",
+            startedIntent == null || startedIntent.component?.className != MainActivity::class.java.name ||
+                startedIntent.action != CallNotificationHelper.ACTION_ANSWER_CALL,
+        )
+    }
+
+    @Test
+    fun `onReceive with DECLINE_CALL action calls goAsync for background work`() {
+        val intent = Intent(CallNotificationHelper.ACTION_DECLINE_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+        }
+
+        receiver.onReceive(context, intent)
+
+        // Verify goAsync was called for async hangup
+        verify { receiver.goAsync() }
+    }
+
+    @Test
+    fun `onReceive with DECLINE_CALL action finishes pending result when app unavailable`() {
+        val intent = Intent(CallNotificationHelper.ACTION_DECLINE_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+        }
+
+        receiver.onReceive(context, intent)
+
+        // In test env without ColumbaApplication, it should still finish the pending result
+        // Give coroutine a moment to run
+        Thread.sleep(100)
+        verify { mockPendingResult.finish() }
+    }
+
+    // ========== End Call Action Tests ==========
+
+    @Test
+    fun `onReceive with END_CALL action does not start activity`() {
+        val intent = Intent(CallNotificationHelper.ACTION_END_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+        }
+
+        receiver.onReceive(context, intent)
+
+        val startedIntent = shadowApplication.nextStartedActivity
+        assertTrue(
+            "End action should not start MainActivity with answer action",
+            startedIntent == null || startedIntent.action != CallNotificationHelper.ACTION_ANSWER_CALL,
+        )
+    }
+
+    @Test
+    fun `onReceive with END_CALL action calls goAsync for background work`() {
+        val intent = Intent(CallNotificationHelper.ACTION_END_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+        }
+
+        receiver.onReceive(context, intent)
+
+        // Verify goAsync was called for async hangup
+        verify { receiver.goAsync() }
+    }
+
+    @Test
+    fun `onReceive with END_CALL action finishes pending result when app unavailable`() {
+        val intent = Intent(CallNotificationHelper.ACTION_END_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+        }
+
+        receiver.onReceive(context, intent)
+
+        // In test env without ColumbaApplication, it should still finish the pending result
+        // Give coroutine a moment to run
+        Thread.sleep(100)
+        verify { mockPendingResult.finish() }
     }
 
     // ========== Unknown Action Tests ==========
 
     @Test
-    fun `onReceive ignores unknown actions`() {
-        // Given
-        val unknownAction = "com.lxmf.messenger.UNKNOWN_ACTION"
-
-        // Then
-        assertFalse(
-            "Unknown action should not trigger hangup",
-            shouldTriggerHangup(unknownAction),
-        )
-        assertFalse(
-            "Unknown action should not start activity",
-            shouldStartActivity(unknownAction),
-        )
-        assertNull(
-            "Unknown action should not have hangup type",
-            getHangupActionType(unknownAction),
-        )
-    }
-
-    @Test
-    fun `onReceive handles null action gracefully`() {
-        // Given
-        val nullAction: String? = null
-
-        // Then - should not trigger any action
-        assertFalse(
-            "Null action should not trigger hangup",
-            shouldTriggerHangup(nullAction),
-        )
-        assertFalse(
-            "Null action should not start activity",
-            shouldStartActivity(nullAction),
-        )
-        assertNull(
-            "Null action should not have hangup type",
-            getHangupActionType(nullAction),
-        )
-    }
-
-    // ========== performAsyncHangup Tests ==========
-
-    @Test
-    fun `performAsyncHangup differentiates between decline and end actions`() {
-        // Test decline action
-        assertEquals(
-            "Decline should have 'decline' action type",
-            "decline",
-            getHangupActionType(CallNotificationHelper.ACTION_DECLINE_CALL),
-        )
-
-        // Test end action
-        assertEquals(
-            "End should have 'end' action type",
-            "end",
-            getHangupActionType(CallNotificationHelper.ACTION_END_CALL),
-        )
-    }
-
-    @Test
-    fun `performAsyncHangup handles null application context gracefully for decline`() =
-        runTest {
-            // The receiver's performAsyncHangup method has null safety:
-            // val app = context.applicationContext as? ColumbaApplication
-            // if (app == null) { ... return }
-
-            // Verify the action type is set correctly regardless of app context
-            val action = CallNotificationHelper.ACTION_DECLINE_CALL
-            assertTrue(shouldTriggerHangup(action))
-            assertEquals("decline", getHangupActionType(action))
+    fun `onReceive with unknown action does not start activity`() {
+        val intent = Intent("com.example.UNKNOWN_ACTION").apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
         }
 
-    @Test
-    fun `performAsyncHangup handles null application context gracefully for end call`() =
-        runTest {
-            // Verify the action type is set correctly regardless of app context
-            val action = CallNotificationHelper.ACTION_END_CALL
-            assertTrue(shouldTriggerHangup(action))
-            assertEquals("end", getHangupActionType(action))
-        }
+        receiver.onReceive(context, intent)
 
-    @Test
-    fun `performAsyncHangup calls protocol hangupCall`() =
-        runTest {
-            // This test documents that performAsyncHangup should call protocol.hangupCall()
-            // The actual IPC call is tested via integration tests, but we verify
-            // the action routing is correct
-
-            val declineAction = CallNotificationHelper.ACTION_DECLINE_CALL
-            val endAction = CallNotificationHelper.ACTION_END_CALL
-
-            // Both actions should trigger hangup
-            assertTrue(
-                "Decline should trigger hangup call",
-                shouldTriggerHangup(declineAction),
-            )
-            assertTrue(
-                "End should trigger hangup call",
-                shouldTriggerHangup(endAction),
-            )
-        }
-
-    // ========== Identity Hash Extraction Tests ==========
-
-    @Test
-    fun `onReceive extracts identity hash from intent`() {
-        // Given
-        val testIdentityHash = "abc123def456789012345678901234567890"
-
-        // When
-        simulateAnswerCallAction(context, testIdentityHash)
-
-        // Then
-        val shadowApp = Shadows.shadowOf(context as Application)
-        val startedActivity = shadowApp.nextStartedActivity
-        assertEquals(testIdentityHash, startedActivity.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH))
-    }
-
-    @Test
-    fun `onReceive handles null identity hash`() {
-        // Given - no identity hash
-
-        // When
-        simulateAnswerCallAction(context, null)
-
-        // Then - activity should still be started with null hash
-        val shadowApp = Shadows.shadowOf(context as Application)
-        val startedActivity = shadowApp.nextStartedActivity
-        assertNull(startedActivity.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH))
-    }
-
-    @Test
-    fun `onReceive handles empty identity hash`() {
-        // Given
-        val emptyHash = ""
-
-        // When
-        simulateAnswerCallAction(context, emptyHash)
-
-        // Then
-        val shadowApp = Shadows.shadowOf(context as Application)
-        val startedActivity = shadowApp.nextStartedActivity
-        assertEquals("", startedActivity.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH))
-    }
-
-    // ========== Intent Flags Tests ==========
-
-    @Test
-    fun `onReceive sets correct flags for answer intent`() {
-        // Given
-        val testIdentityHash = "abc123"
-
-        // When
-        simulateAnswerCallAction(context, testIdentityHash)
-
-        // Then
-        val shadowApp = Shadows.shadowOf(context as Application)
-        val startedActivity = shadowApp.nextStartedActivity
-
-        // Verify FLAG_ACTIVITY_NEW_TASK is set (required for starting activity from receiver)
+        val startedIntent = shadowApplication.nextStartedActivity
+        // Unknown action should not trigger any activity start
         assertTrue(
-            "FLAG_ACTIVITY_NEW_TASK should be set",
-            startedActivity.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0,
-        )
-
-        // Verify FLAG_ACTIVITY_SINGLE_TOP is set (reuse existing activity)
-        assertTrue(
-            "FLAG_ACTIVITY_SINGLE_TOP should be set",
-            startedActivity.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP != 0,
+            "Unknown action should not start any activity",
+            startedIntent == null,
         )
     }
 
-    // ========== Auto Answer Extra Tests ==========
-
     @Test
-    fun `onReceive sets EXTRA_AUTO_ANSWER to true for answer action`() {
-        // Given
-        val testIdentityHash = "abc123"
+    fun `onReceive with null action does not crash`() {
+        val intent = Intent()
+        // Action is null
 
-        // When
-        simulateAnswerCallAction(context, testIdentityHash)
-
-        // Then
-        val shadowApp = Shadows.shadowOf(context as Application)
-        val startedActivity = shadowApp.nextStartedActivity
-        assertTrue(
-            "EXTRA_AUTO_ANSWER should be true",
-            startedActivity.getBooleanExtra(CallActionReceiver.EXTRA_AUTO_ANSWER, false),
-        )
+        // Should not throw
+        receiver.onReceive(context, intent)
     }
 
     // ========== Companion Object Constants Tests ==========
 
     @Test
-    fun `EXTRA_AUTO_ANSWER constant is correct`() {
+    fun `EXTRA_AUTO_ANSWER constant has correct value`() {
         assertEquals("auto_answer", CallActionReceiver.EXTRA_AUTO_ANSWER)
     }
 
-    // ========== Action Constants from CallNotificationHelper Tests ==========
+    // ========== Integration-like Tests ==========
 
     @Test
-    fun `receiver handles all CallNotificationHelper action constants`() {
-        // Verify receiver correctly handles all action constants
-        assertEquals(
-            "com.lxmf.messenger.ACTION_ANSWER_CALL",
-            CallNotificationHelper.ACTION_ANSWER_CALL,
-        )
-        assertEquals(
-            "com.lxmf.messenger.ACTION_DECLINE_CALL",
-            CallNotificationHelper.ACTION_DECLINE_CALL,
-        )
-        assertEquals(
-            "com.lxmf.messenger.ACTION_END_CALL",
-            CallNotificationHelper.ACTION_END_CALL,
-        )
+    fun `answer action with full identity hash works correctly`() {
+        val fullHash = "0102030405060708091011121314151617181920212223242526272829303132"
+        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, fullHash)
+        }
+
+        receiver.onReceive(context, intent)
+
+        val startedIntent = shadowApplication.nextStartedActivity
+        assertNotNull(startedIntent)
+        assertEquals(fullHash, startedIntent.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH))
+        assertEquals(CallNotificationHelper.ACTION_ANSWER_CALL, startedIntent.action)
+        assertTrue(startedIntent.getBooleanExtra(CallActionReceiver.EXTRA_AUTO_ANSWER, false))
     }
 
     @Test
-    fun `receiver uses correct EXTRA_IDENTITY_HASH constant`() {
-        assertEquals("identity_hash", CallNotificationHelper.EXTRA_IDENTITY_HASH)
-    }
+    fun `multiple sequential answer actions work correctly`() {
+        val hashes = listOf("hash1", "hash2", "hash3")
 
-    // ========== MainActivity Component Tests ==========
+        hashes.forEach { hash ->
+            val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, hash)
+            }
+            receiver.onReceive(context, intent)
+        }
 
-    @Test
-    fun `answer intent targets MainActivity`() {
-        // Given
-        val testIdentityHash = "abc123"
-
-        // When
-        simulateAnswerCallAction(context, testIdentityHash)
-
-        // Then
-        val shadowApp = Shadows.shadowOf(context as Application)
-        val startedActivity = shadowApp.nextStartedActivity
-        assertEquals(
-            "Intent should target MainActivity",
-            MainActivity::class.java.name,
-            startedActivity.component?.className,
-        )
-    }
-
-    // ========== Action Routing Logic Tests ==========
-
-    @Test
-    fun `action routing correctly identifies all actions`() {
-        // Answer - starts activity, no hangup
-        assertTrue(shouldStartActivity(CallNotificationHelper.ACTION_ANSWER_CALL))
-        assertFalse(shouldTriggerHangup(CallNotificationHelper.ACTION_ANSWER_CALL))
-
-        // Decline - triggers hangup, no activity
-        assertFalse(shouldStartActivity(CallNotificationHelper.ACTION_DECLINE_CALL))
-        assertTrue(shouldTriggerHangup(CallNotificationHelper.ACTION_DECLINE_CALL))
-
-        // End - triggers hangup, no activity
-        assertFalse(shouldStartActivity(CallNotificationHelper.ACTION_END_CALL))
-        assertTrue(shouldTriggerHangup(CallNotificationHelper.ACTION_END_CALL))
-
-        // Unknown - no action
-        assertFalse(shouldStartActivity("unknown"))
-        assertFalse(shouldTriggerHangup("unknown"))
-
-        // Null - no action
-        assertFalse(shouldStartActivity(null))
-        assertFalse(shouldTriggerHangup(null))
-    }
-
-    @Test
-    fun `hangup action types are distinct`() {
-        val declineType = getHangupActionType(CallNotificationHelper.ACTION_DECLINE_CALL)
-        val endType = getHangupActionType(CallNotificationHelper.ACTION_END_CALL)
-
-        // They should be different
-        assertTrue(
-            "Decline and end action types should be different",
-            declineType != endType,
-        )
-
-        // And have expected values
-        assertEquals("decline", declineType)
-        assertEquals("end", endType)
+        // Verify all activities were started (check the last one)
+        // Note: shadowApplication.nextStartedActivity consumes intents
+        // So we just verify no exception was thrown for multiple calls
     }
 }

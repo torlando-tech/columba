@@ -124,9 +124,8 @@ class CodecSelectionDialogTest {
     }
 
     @Test
-    fun `default profile shows (Recommended) suffix`() {
-        // The default profile is QUALITY_MEDIUM which shows "(Recommended)"
-        // Verify via the DEFAULT constant value
+    fun `default profile is QUALITY_MEDIUM`() {
+        // The default profile is QUALITY_MEDIUM which shows "Recommended" badge
         assertEquals(CodecProfile.QUALITY_MEDIUM, CodecProfile.DEFAULT)
     }
 

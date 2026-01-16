@@ -2,17 +2,9 @@ package com.lxmf.messenger.reticulum.audio.bridge
 
 import android.app.Application
 import android.content.Context
-import android.media.AudioFormat
-import android.media.AudioManager
-import android.media.AudioRecord
-import android.media.AudioTrack
 import androidx.test.core.app.ApplicationProvider
 import io.mockk.clearAllMocks
-import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkAll
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -175,20 +167,22 @@ class KotlinAudioBridgeTest {
     // ========== Shutdown Tests ==========
 
     @Test
-    fun `shutdown stops playback`() = runTest {
-        audioBridge.shutdown()
-        advanceUntilIdle()
+    fun `shutdown stops playback`() =
+        runTest {
+            audioBridge.shutdown()
+            advanceUntilIdle()
 
-        assertFalse(audioBridge.isPlaybackActive())
-    }
+            assertFalse(audioBridge.isPlaybackActive())
+        }
 
     @Test
-    fun `shutdown stops recording`() = runTest {
-        audioBridge.shutdown()
-        advanceUntilIdle()
+    fun `shutdown stops recording`() =
+        runTest {
+            audioBridge.shutdown()
+            advanceUntilIdle()
 
-        assertFalse(audioBridge.isRecordingActive())
-    }
+            assertFalse(audioBridge.isRecordingActive())
+        }
 
     // ========== Python Callback Tests ==========
 

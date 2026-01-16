@@ -265,7 +265,8 @@ fun IncomingCallScreen(
                         modifier = Modifier.size(72.dp),
                         colors =
                             IconButtonDefaults.filledIconButtonColors(
-                                containerColor = Color(0xFF4CAF50), // Green
+                                // Green answer button
+                                containerColor = Color(0xFF4CAF50),
                             ),
                         shape = CircleShape,
                     ) {

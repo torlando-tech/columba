@@ -4,8 +4,8 @@ import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.reticulum.call.bridge.CallBridge
-import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.call.bridge.CallState
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -111,66 +111,75 @@ class CallViewModelTest {
     // ========== isConnecting Tests ==========
 
     @Test
-    fun `isConnecting is true when state is Connecting`() = runTest {
-        callStateFlow.value = CallState.Connecting("abc123")
-        assertTrue(viewModel.isConnecting.value)
-    }
+    fun `isConnecting is true when state is Connecting`() =
+        runTest {
+            callStateFlow.value = CallState.Connecting("abc123")
+            assertTrue(viewModel.isConnecting.value)
+        }
 
     @Test
-    fun `isConnecting is false when state is Idle`() = runTest {
-        callStateFlow.value = CallState.Idle
-        assertFalse(viewModel.isConnecting.value)
-    }
+    fun `isConnecting is false when state is Idle`() =
+        runTest {
+            callStateFlow.value = CallState.Idle
+            assertFalse(viewModel.isConnecting.value)
+        }
 
     @Test
-    fun `isConnecting is false when state is Ringing`() = runTest {
-        callStateFlow.value = CallState.Ringing("abc123")
-        assertFalse(viewModel.isConnecting.value)
-    }
+    fun `isConnecting is false when state is Ringing`() =
+        runTest {
+            callStateFlow.value = CallState.Ringing("abc123")
+            assertFalse(viewModel.isConnecting.value)
+        }
 
     // ========== UI Action Tests ==========
 
     @Test
-    fun `initiateCall updates bridge and forwards to protocol`() = runTest {
-        val testHash = "abc123def456789012345678901234567890"
-        viewModel.initiateCall(testHash)
-        verify { mockCallBridge.setConnecting(testHash) }
-        coVerify { mockProtocol.initiateCall(testHash, null) }
-    }
+    fun `initiateCall updates bridge and forwards to protocol`() =
+        runTest {
+            val testHash = "abc123def456789012345678901234567890"
+            viewModel.initiateCall(testHash)
+            verify { mockCallBridge.setConnecting(testHash) }
+            coVerify { mockProtocol.initiateCall(testHash, null) }
+        }
 
     @Test
-    fun `answerCall forwards to protocol`() = runTest {
-        viewModel.answerCall()
-        coVerify { mockProtocol.answerCall() }
-    }
+    fun `answerCall forwards to protocol`() =
+        runTest {
+            viewModel.answerCall()
+            coVerify { mockProtocol.answerCall() }
+        }
 
     @Test
-    fun `endCall forwards to protocol and updates bridge`() = runTest {
-        viewModel.endCall()
-        coVerify { mockProtocol.hangupCall() }
-        verify { mockCallBridge.setEnded() }
-    }
+    fun `endCall forwards to protocol and updates bridge`() =
+        runTest {
+            viewModel.endCall()
+            coVerify { mockProtocol.hangupCall() }
+            verify { mockCallBridge.setEnded() }
+        }
 
     @Test
-    fun `declineCall forwards to protocol and updates bridge`() = runTest {
-        viewModel.declineCall()
-        coVerify { mockProtocol.hangupCall() }
-        verify { mockCallBridge.setEnded() }
-    }
+    fun `declineCall forwards to protocol and updates bridge`() =
+        runTest {
+            viewModel.declineCall()
+            coVerify { mockProtocol.hangupCall() }
+            verify { mockCallBridge.setEnded() }
+        }
 
     @Test
-    fun `toggleMute updates bridge and forwards to protocol`() = runTest {
-        viewModel.toggleMute()
-        verify { mockCallBridge.setMutedLocally(any()) }
-        coVerify { mockProtocol.setCallMuted(any()) }
-    }
+    fun `toggleMute updates bridge and forwards to protocol`() =
+        runTest {
+            viewModel.toggleMute()
+            verify { mockCallBridge.setMutedLocally(any()) }
+            coVerify { mockProtocol.setCallMuted(any()) }
+        }
 
     @Test
-    fun `toggleSpeaker updates bridge and forwards to protocol`() = runTest {
-        viewModel.toggleSpeaker()
-        verify { mockCallBridge.setSpeakerLocally(any()) }
-        coVerify { mockProtocol.setCallSpeaker(any()) }
-    }
+    fun `toggleSpeaker updates bridge and forwards to protocol`() =
+        runTest {
+            viewModel.toggleSpeaker()
+            verify { mockCallBridge.setSpeakerLocally(any()) }
+            coVerify { mockProtocol.setCallSpeaker(any()) }
+        }
 
     // ========== hasActiveCall Tests ==========
 
@@ -278,44 +287,48 @@ class CallViewModelTest {
     // ========== Peer Name Resolution Tests ==========
 
     @Test
-    fun `peerName resolves from contact repository`() = runTest {
-        val testHash = "abc123def456789012345678901234567890"
-        val mockContact = mockk<ContactEntity> {
-            every { customNickname } returns "Test User"
+    fun `peerName resolves from contact repository`() =
+        runTest {
+            val testHash = "abc123def456789012345678901234567890"
+            val mockContact =
+                mockk<ContactEntity> {
+                    every { customNickname } returns "Test User"
+                }
+            coEvery { mockContactRepository.getContact(testHash) } returns mockContact
+
+            remoteIdentityFlow.value = testHash
+
+            // Give time for the collector to process
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals("Test User", viewModel.peerName.value)
         }
-        coEvery { mockContactRepository.getContact(testHash) } returns mockContact
-
-        remoteIdentityFlow.value = testHash
-
-        // Give time for the collector to process
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("Test User", viewModel.peerName.value)
-    }
 
     @Test
-    fun `peerName falls back to formatted hash when contact not found`() = runTest {
-        val testHash = "abc123def456789012345678901234567890"
-        coEvery { mockContactRepository.getContact(testHash) } returns null
+    fun `peerName falls back to formatted hash when contact not found`() =
+        runTest {
+            val testHash = "abc123def456789012345678901234567890"
+            coEvery { mockContactRepository.getContact(testHash) } returns null
 
-        remoteIdentityFlow.value = testHash
-        testDispatcher.scheduler.advanceUntilIdle()
+            remoteIdentityFlow.value = testHash
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        val name = viewModel.peerName.value
-        assertTrue(name?.contains("abc123") == true)
-        assertTrue(name?.contains("...") == true)
-    }
+            val name = viewModel.peerName.value
+            assertTrue(name?.contains("abc123") == true)
+            assertTrue(name?.contains("...") == true)
+        }
 
     @Test
-    fun `peerName handles repository exception gracefully`() = runTest {
-        val testHash = "abc123def456789012345678901234567890"
-        coEvery { mockContactRepository.getContact(testHash) } throws RuntimeException("Database error")
+    fun `peerName handles repository exception gracefully`() =
+        runTest {
+            val testHash = "abc123def456789012345678901234567890"
+            coEvery { mockContactRepository.getContact(testHash) } throws RuntimeException("Database error")
 
-        remoteIdentityFlow.value = testHash
-        testDispatcher.scheduler.advanceUntilIdle()
+            remoteIdentityFlow.value = testHash
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        // Should fallback to formatted hash
-        val name = viewModel.peerName.value
-        assertTrue(name?.contains("abc123") == true)
-    }
+            // Should fallback to formatted hash
+            val name = viewModel.peerName.value
+            assertTrue(name?.contains("abc123") == true)
+        }
 }

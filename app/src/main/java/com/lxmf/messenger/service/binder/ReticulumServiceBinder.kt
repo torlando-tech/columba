@@ -7,6 +7,7 @@ import com.lxmf.messenger.IReadinessCallback
 import com.lxmf.messenger.IReticulumService
 import com.lxmf.messenger.IReticulumServiceCallback
 import com.lxmf.messenger.crypto.StampGenerator
+import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
 import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
 import com.lxmf.messenger.service.manager.BleCoordinator
@@ -19,11 +20,10 @@ import com.lxmf.messenger.service.manager.MaintenanceManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
-import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
-import com.lxmf.messenger.service.persistence.ServicePersistenceManager
 import com.lxmf.messenger.service.manager.RoutingManager
 import com.lxmf.messenger.service.manager.ServiceNotificationManager
+import com.lxmf.messenger.service.persistence.ServicePersistenceManager
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -1125,9 +1125,10 @@ class ReticulumServiceBinder(
                 callNotificationHelper.showIncomingCallNotification(identityHash, callerName)
 
                 // Also broadcast to UI process
-                val callJson = org.json.JSONObject().apply {
-                    put("caller_hash", identityHash)
-                }.toString()
+                val callJson =
+                    org.json.JSONObject().apply {
+                        put("caller_hash", identityHash)
+                    }.toString()
                 broadcaster.broadcastIncomingCall(callJson)
             }
         }
@@ -1135,9 +1136,10 @@ class ReticulumServiceBinder(
             // Cancel incoming call notification when call ends
             callNotificationHelper.cancelIncomingCallNotification()
 
-            val callJson = org.json.JSONObject().apply {
-                put("caller_hash", identityHash ?: "")
-            }.toString()
+            val callJson =
+                org.json.JSONObject().apply {
+                    put("caller_hash", identityHash ?: "")
+                }.toString()
             broadcaster.broadcastCallEnded(callJson)
         }
         callBridge.setCallStateChangedListener { state, identityHash ->
@@ -1146,10 +1148,11 @@ class ReticulumServiceBinder(
                 callNotificationHelper.cancelIncomingCallNotification()
             }
 
-            val stateJson = org.json.JSONObject().apply {
-                put("state", state)
-                put("remote_identity", identityHash ?: "")
-            }.toString()
+            val stateJson =
+                org.json.JSONObject().apply {
+                    put("state", state)
+                    put("remote_identity", identityHash ?: "")
+                }.toString()
             broadcaster.broadcastCallStateChanged(stateJson)
         }
         Log.d(TAG, "📞 Call IPC listeners registered")
@@ -1229,7 +1232,10 @@ class ReticulumServiceBinder(
     // Voice Call Methods (LXST)
     // ===========================================
 
-    override fun initiateCall(destHash: String, profileCode: Int): String {
+    override fun initiateCall(
+        destHash: String,
+        profileCode: Int,
+    ): String {
         return try {
             Log.i(TAG, "📞 Initiating call to ${destHash.take(16)} with profile=${if (profileCode == -1) "default" else "0x${profileCode.toString(16)}"}...")
             wrapperManager.withWrapper { wrapper ->

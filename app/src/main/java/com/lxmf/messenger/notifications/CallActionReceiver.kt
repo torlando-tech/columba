@@ -45,12 +45,13 @@ class CallActionReceiver : BroadcastReceiver() {
             CallNotificationHelper.ACTION_ANSWER_CALL -> {
                 Log.i(TAG, "Answering call from notification - opening voice call screen")
                 // Open voice call screen with auto-answer flag
-                val answerIntent = Intent(context, MainActivity::class.java).apply {
-                    this.action = CallNotificationHelper.ACTION_ANSWER_CALL
-                    putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
-                    putExtra(EXTRA_AUTO_ANSWER, true)
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                }
+                val answerIntent =
+                    Intent(context, MainActivity::class.java).apply {
+                        this.action = CallNotificationHelper.ACTION_ANSWER_CALL
+                        putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
+                        putExtra(EXTRA_AUTO_ANSWER, true)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    }
                 context.startActivity(answerIntent)
             }
             CallNotificationHelper.ACTION_DECLINE_CALL -> {

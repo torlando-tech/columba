@@ -331,7 +331,10 @@ interface ReticulumProtocol {
      * @param profileCode LXST codec profile code (0x10-0x80), or null to use default
      * @return Result with success/failure status
      */
-    suspend fun initiateCall(destinationHash: String, profileCode: Int? = null): Result<Unit>
+    suspend fun initiateCall(
+        destinationHash: String,
+        profileCode: Int? = null,
+    ): Result<Unit>
 
     /**
      * Answer an incoming voice call.

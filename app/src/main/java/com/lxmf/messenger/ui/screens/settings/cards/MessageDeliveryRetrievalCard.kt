@@ -355,9 +355,32 @@ fun MessageDeliveryRetrievalCard(
                 )
             }
 
-            // Manual entry - always show when "Use specific relay" is selected
+            // Manual mode UI - show relay selection button and manual entry
             if (!isAutoSelect) {
                 Spacer(modifier = Modifier.height(8.dp))
+
+                // Show button to open relay selection dialog when no relay is selected
+                if (currentRelayName == null) {
+                    OutlinedButton(
+                        onClick = { showRelaySelectionDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Hub,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Select from available relays")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Or enter a relay hash manually:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
                 ManualRelayInput(
                     hashInput = manualHashInput,
                     onHashChange = { manualHashInput = it },

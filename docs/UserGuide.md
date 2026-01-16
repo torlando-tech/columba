@@ -45,7 +45,7 @@ You **do not** need:
    * Enable **Install unknown apps**
 5. Tap the downloaded APK to install
 
-> Android may warn you about installing from outside the Play Store. This is normal for open-source apps.
+> Android may warn you about installing from outside the Play Store. This is normal.
 
 ---
 

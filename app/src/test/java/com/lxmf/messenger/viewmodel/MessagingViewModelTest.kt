@@ -1131,6 +1131,7 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
+            @Suppress("UnusedPrivateProperty") // ViewModel needs to exist to collect flows
             val testViewModel =
                 MessagingViewModel(
                     reticulumProtocol,
@@ -1186,6 +1187,7 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
+            @Suppress("UnusedPrivateProperty") // ViewModel needs to exist to collect flows
             val testViewModel =
                 MessagingViewModel(
                     reticulumProtocol,
@@ -1241,6 +1243,7 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
+            @Suppress("UnusedPrivateProperty") // ViewModel needs to exist to collect flows
             val testViewModel =
                 MessagingViewModel(
                     reticulumProtocol,
@@ -1296,6 +1299,7 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
+            @Suppress("UnusedPrivateProperty") // ViewModel needs to exist to collect flows
             val testViewModel =
                 MessagingViewModel(
                     reticulumProtocol,
@@ -1351,6 +1355,7 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
+            @Suppress("UnusedPrivateProperty") // ViewModel needs to exist to collect flows
             val testViewModel =
                 MessagingViewModel(
                     reticulumProtocol,

@@ -6,6 +6,8 @@ import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -244,15 +246,22 @@ fun MapScreen(
                     mapView = this
 
                     getMapAsync { map ->
+                        mapLibreMap = map
+
                         // Enable attribution (required for OpenFreeMap/OSM license compliance)
                         // Position in bottom-left to avoid conflict with FABs on right
-                        val density = ctx.resources.displayMetrics.density
-                        val marginPx = (8 * density).toInt()
-                        val bottomMarginPx = (120 * density).toInt() // Above nav bar
-                        map.uiSettings.isAttributionEnabled = true
-                        map.uiSettings.setAttributionGravity(Gravity.BOTTOM or Gravity.START)
-                        map.uiSettings.setAttributionMargins(marginPx, 0, 0, bottomMarginPx)
-                        mapLibreMap = map
+                        // Use post to ensure view is laid out and we can get proper insets
+                        this.post {
+                            val density = ctx.resources.displayMetrics.density
+                            val marginPx = (8 * density).toInt()
+                            val insets = ViewCompat.getRootWindowInsets(this)
+                            val navBarHeight = insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
+                            // 100dp for app bottom nav bar + system nav bar height
+                            val bottomMarginPx = (100 * density).toInt() + navBarHeight
+                            map.uiSettings.isAttributionEnabled = true
+                            map.uiSettings.setAttributionGravity(Gravity.BOTTOM or Gravity.START)
+                            map.uiSettings.setAttributionMargins(marginPx, 0, 0, bottomMarginPx)
+                        }
 
                         // Load map style based on settings (offline, HTTP, or RMSP)
                         val styleResult = state.mapStyleResult

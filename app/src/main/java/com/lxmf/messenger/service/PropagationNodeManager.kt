@@ -696,10 +696,21 @@ class PropagationNodeManager
             announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")).collect { propagationNodes ->
                 val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
 
+                Log.d(
+                    TAG,
+                    "observePropagationNodeAnnounces: isAutoSelect=$isAutoSelect, " +
+                        "availableNodes=${propagationNodes.size}",
+                )
+
                 if (isAutoSelect && propagationNodes.isNotEmpty()) {
                     // Find the nearest propagation node
                     val nearest = propagationNodes.minByOrNull { it.hops }
                     if (nearest != null) {
+                        Log.i(
+                            TAG,
+                            "Auto-selecting nearest relay: ${nearest.peerName} " +
+                                "(${nearest.destinationHash.take(12)}...) at ${nearest.hops} hops",
+                        )
                         onPropagationNodeAnnounce(
                             nearest.destinationHash,
                             nearest.peerName,
@@ -707,6 +718,12 @@ class PropagationNodeManager
                             nearest.publicKey,
                         )
                     }
+                } else if (isAutoSelect && propagationNodes.isEmpty()) {
+                    Log.w(
+                        TAG,
+                        "Auto-select enabled but no valid propagation nodes available. " +
+                            "Nodes with deprecated announce format (stampCostFlexibility=NULL) are filtered out.",
+                    )
                 }
             }
         }

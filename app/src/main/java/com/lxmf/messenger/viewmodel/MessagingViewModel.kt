@@ -20,6 +20,8 @@ import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.ui.model.CodecProfile
 import com.lxmf.messenger.ui.model.DecodedImageResult
 import com.lxmf.messenger.ui.model.ImageCache
 import com.lxmf.messenger.ui.model.LocationSharingState
@@ -1775,6 +1777,34 @@ class MessagingViewModel
                         Log.e(TAG, "Error restoring failed status", e2)
                     }
                 }
+            }
+        }
+
+        /**
+         * Get the recommended codec profile based on link speed probing.
+         *
+         * Probes the link to the current conversation peer and returns a
+         * codec profile recommendation based on the measured bandwidth.
+         *
+         * @return Recommended codec profile, or DEFAULT if probing fails
+         */
+        suspend fun getRecommendedCodecProfile(): CodecProfile {
+            val destHash = _currentConversation.value ?: return CodecProfile.DEFAULT
+            val destHashBytes = validateDestinationHash(destHash) ?: return CodecProfile.DEFAULT
+
+            val protocol = reticulumProtocol as? ServiceReticulumProtocol
+                ?: return CodecProfile.DEFAULT
+
+            return try {
+                val probe = protocol.probeLinkSpeed(destHashBytes, 5.0f, "direct")
+                if (probe.isSuccess) {
+                    CodecProfile.recommendFromProbe(probe)
+                } else {
+                    CodecProfile.DEFAULT
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error probing link speed for codec recommendation", e)
+                CodecProfile.DEFAULT
             }
         }
 

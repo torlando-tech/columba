@@ -44,6 +44,10 @@ class ConversationLinkManager
             private const val THRESHOLD_MEDIUM_BPS = 50_000L // < 50 kbps -> MEDIUM
             private const val THRESHOLD_HIGH_BPS = 500_000L // < 500 kbps -> HIGH
 
+            // Interface type detection thresholds
+            private const val THRESHOLD_SLOW_INTERFACE_BPS = 50_000L // < 50 kbps = likely LoRa/BLE
+            private const val THRESHOLD_FAST_INTERFACE_BPS = 500_000L // >= 500 kbps = likely WiFi/TCP
+
             /**
              * Convert a bitrate to a compression preset based on thresholds.
              */
@@ -131,19 +135,25 @@ class ConversationLinkManager
             /**
              * Get the best available rate estimate in bits per second.
              *
+             * Uses conservative estimation for mesh networks where slow intermediate
+             * hops can bottleneck the path even if the first hop is fast.
+             *
              * Preference order:
              * 1. expectedRateBps - Actual measured throughput (most accurate)
-             * 2. max(establishmentRateBps, nextHopBitrateBps) - Fallback
+             * 2. establishmentRateBps - Measured during link handshake (path quality)
+             * 3. nextHopBitrateBps - First hop only (least reliable for multi-hop)
              */
             val bestRateBps: Long?
                 get() {
-                    if (expectedRateBps != null && expectedRateBps > 0) {
-                        return expectedRateBps
+                    val expected = expectedRateBps
+                    if (expected != null && expected > 0) {
+                        return expected
                     }
-                    val rates =
-                        listOfNotNull(establishmentRateBps, nextHopBitrateBps)
-                            .filter { it > 0 }
-                    return rates.maxOrNull()
+                    val establishment = establishmentRateBps?.takeIf { it > 0 }
+                    if (establishment != null) {
+                        return establishment
+                    }
+                    return nextHopBitrateBps?.takeIf { it > 0 }
                 }
 
             /**
@@ -168,22 +178,45 @@ class ConversationLinkManager
             /**
              * Recommend a compression preset based on link metrics.
              *
-             * Uses the MAXIMUM of establishment rate and interface bitrate.
-             * Establishment rate can be artificially low for fast interfaces (like WiFi),
-             * while interface bitrate gives the theoretical maximum.
+             * Algorithm prioritizes actual measurements over interface speed:
+             * 1. Use link quality metrics if available (actual measured performance)
+             * 2. If next hop is slow (< 50 kbps, likely LoRa/BLE) → use interface speed
+             * 3. If single hop with fast interface and no measurements → trust interface
+             * 4. Fall back to hop count heuristics if no rate data available
              */
             fun recommendPreset(): ImageCompressionPreset {
-                // Use the MAXIMUM of establishment rate and interface bitrate
-                val establishmentRate = bestRateBps ?: 0L
-                val interfaceBitrate = nextHopBitrateBps?.takeIf { it > 0 } ?: 0L
-                val effectiveRate = maxOf(establishmentRate, interfaceBitrate)
+                val interfaceBitrate = nextHopBitrateBps?.takeIf { it > 0 }
+                val linkRate = expectedRateBps ?: establishmentRateBps
+                val hopCount = hops
 
-                if (effectiveRate > 0) {
-                    return presetFromBitrate(effectiveRate)
+                // 1. Always prefer actual link measurements over interface speed
+                // This is the most reliable indicator of actual path performance
+                if (linkRate != null && linkRate > 0) {
+                    return presetFromBitrate(linkRate)
                 }
 
-                // Fallback: use hop count heuristics
-                val hopCount = hops
+                // 2. If next hop is slow (< 50 kbps), it's likely LoRa/BLE - use it
+                if (interfaceBitrate != null && interfaceBitrate < THRESHOLD_SLOW_INTERFACE_BPS) {
+                    return presetFromBitrate(interfaceBitrate)
+                }
+
+                // 3. Single hop with fast interface and NO link metrics - trust interface
+                if (hopCount == 1 && interfaceBitrate != null && interfaceBitrate >= THRESHOLD_FAST_INTERFACE_BPS) {
+                    return presetFromBitrate(interfaceBitrate)
+                }
+
+                // 4. Multi-hop with fast first hop but no link metrics - be conservative
+                if (interfaceBitrate != null && hopCount != null && hopCount > 1) {
+                    // Can't trust fast first hop for multi-hop paths
+                    return ImageCompressionPreset.MEDIUM
+                }
+
+                // 5. Fallback: use interface bitrate if available
+                if (interfaceBitrate != null) {
+                    return presetFromBitrate(interfaceBitrate)
+                }
+
+                // 6. Last resort: hop count heuristics
                 return when {
                     hopCount != null -> {
                         when {

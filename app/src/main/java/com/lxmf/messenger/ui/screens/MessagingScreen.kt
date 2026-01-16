@@ -152,6 +152,7 @@ import com.lxmf.messenger.ui.components.ReplyPreviewBubble
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SwipeableMessageBubble
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
+import com.lxmf.messenger.ui.model.CodecProfile
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
@@ -221,6 +222,8 @@ fun MessagingScreen(
 
     // Codec selection dialog state
     var showCodecSelectionDialog by remember { mutableStateOf(false) }
+    var recommendedCodecProfile by remember { mutableStateOf(CodecProfile.DEFAULT) }
+    var isProbingLinkSpeed by remember { mutableStateOf(false) }
 
     // Location permission launcher
     val locationPermissionLauncher =
@@ -601,13 +604,28 @@ fun MessagingScreen(
                 actions = {
                     // Voice call button
                     IconButton(
-                        onClick = { showCodecSelectionDialog = true },
+                        onClick = {
+                            scope.launch {
+                                isProbingLinkSpeed = true
+                                recommendedCodecProfile = viewModel.getRecommendedCodecProfile()
+                                isProbingLinkSpeed = false
+                                showCodecSelectionDialog = true
+                            }
+                        },
+                        enabled = !isProbingLinkSpeed,
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Call,
-                            contentDescription = "Voice call",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        if (isProbingLinkSpeed) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Call,
+                                contentDescription = "Voice call",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
 
                     // Location sharing button
@@ -1122,6 +1140,8 @@ fun MessagingScreen(
     // Codec selection dialog for voice calls
     if (showCodecSelectionDialog) {
         CodecSelectionDialog(
+            recommendedProfile = recommendedCodecProfile,
+            linkState = conversationLinkState,
             onDismiss = { showCodecSelectionDialog = false },
             onProfileSelected = { profile ->
                 showCodecSelectionDialog = false

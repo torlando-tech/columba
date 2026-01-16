@@ -36,6 +36,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Icon
+import androidx.compose.ui.unit.sp
 import com.lxmf.messenger.service.ConversationLinkManager
 import java.util.Locale
 
@@ -303,21 +307,16 @@ fun QualityOptionRow(
 }
 
 /**
- * A chip badge indicating the recommended option.
+ * A star icon indicating the recommended option.
  */
 @Composable
 fun RecommendedChip() {
-    Surface(
-        color = MaterialTheme.colorScheme.primary,
-        shape = MaterialTheme.shapes.extraSmall,
-    ) {
-        Text(
-            text = "Recommended",
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onPrimary,
-        )
-    }
+    Icon(
+        imageVector = Icons.Filled.Star,
+        contentDescription = "Recommended",
+        modifier = Modifier.height(18.dp),
+        tint = MaterialTheme.colorScheme.primary,
+    )
 }
 
 /**

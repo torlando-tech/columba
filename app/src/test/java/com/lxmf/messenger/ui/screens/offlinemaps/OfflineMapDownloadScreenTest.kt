@@ -50,6 +50,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                isGeocoderAvailable = true,
                 addressQuery = "",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = false,
@@ -74,6 +75,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                isGeocoderAvailable = true,
                 addressQuery = "",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = false,
@@ -97,6 +99,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                isGeocoderAvailable = true,
                 addressQuery = "",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = false,
@@ -120,6 +123,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                isGeocoderAvailable = true,
                 addressQuery = "",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = false,
@@ -143,6 +147,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                isGeocoderAvailable = true,
                 addressQuery = "",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = false,
@@ -167,6 +172,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                isGeocoderAvailable = true,
                 addressQuery = "",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = false,
@@ -190,6 +196,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = true,
                 latitude = 37.7749,
                 longitude = -122.4194,
+                isGeocoderAvailable = true,
                 addressQuery = "",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = false,
@@ -213,6 +220,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = true,
                 latitude = 37.7749,
                 longitude = -122.4194,
+                isGeocoderAvailable = true,
                 addressQuery = "",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = false,
@@ -236,6 +244,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                isGeocoderAvailable = true,
                 addressQuery = "",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = false,
@@ -265,6 +274,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                isGeocoderAvailable = true,
                 addressQuery = "Dallas",
                 addressSearchResults = searchResults,
                 isSearchingAddress = false,
@@ -289,6 +299,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                isGeocoderAvailable = true,
                 addressQuery = "xyz123",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = false,
@@ -312,6 +323,7 @@ class OfflineMapDownloadScreenTest {
                 hasLocation = false,
                 latitude = null,
                 longitude = null,
+                isGeocoderAvailable = true,
                 addressQuery = "New York",
                 addressSearchResults = emptyList(),
                 isSearchingAddress = true,
@@ -329,6 +341,35 @@ class OfflineMapDownloadScreenTest {
         // We can't easily test for CircularProgressIndicator directly, but we can verify
         // the search icon is NOT displayed when searching
         composeTestRule.onNodeWithContentDescription("Search").assertDoesNotExist()
+    }
+
+    @Test
+    fun locationStep_hidesAddressSearchWhenGeocoderUnavailable() {
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                isGeocoderAvailable = false,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
+                onLocationSet = { _, _ -> },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                onNext = {},
+            )
+        }
+
+        // Address search field should NOT be displayed when geocoder is unavailable
+        composeTestRule.onNodeWithText("Search City or Address").assertDoesNotExist()
+        // But other location options should still be available
+        composeTestRule.onNodeWithText("Use Current Location").assertExists()
+        composeTestRule.onNodeWithText("Latitude").assertExists()
+        composeTestRule.onNodeWithText("Geohash").assertExists()
     }
 
     // ========== RadiusSelectionStep Tests ==========

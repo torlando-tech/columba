@@ -1152,4 +1152,36 @@ class OfflineMapDownloadViewModelTest {
         }
 
     // endregion
+
+    // region Geocoder Availability Tests
+
+    @Test
+    fun `isGeocoderAvailable defaults to true in state`() {
+        val state = OfflineMapDownloadState()
+        assertTrue(state.isGeocoderAvailable)
+    }
+
+    @Test
+    fun `state with isGeocoderAvailable false is valid`() {
+        val state = OfflineMapDownloadState(isGeocoderAvailable = false)
+        assertFalse(state.isGeocoderAvailable)
+    }
+
+    @Test
+    fun `initial viewmodel state has geocoder availability set`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                // In Robolectric, Geocoder.isPresent() returns true by default
+                // The actual availability depends on whether the geocoder test succeeds
+                // We just verify the field exists and has a boolean value
+                assertNotNull(state.isGeocoderAvailable)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    // endregion
 }

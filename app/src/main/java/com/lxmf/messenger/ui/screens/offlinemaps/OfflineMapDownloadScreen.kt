@@ -159,6 +159,7 @@ fun OfflineMapDownloadScreen(
                         hasLocation = state.hasLocation,
                         latitude = state.centerLatitude,
                         longitude = state.centerLongitude,
+                        isGeocoderAvailable = state.isGeocoderAvailable,
                         addressQuery = state.addressQuery,
                         addressSearchResults = state.addressSearchResults,
                         isSearchingAddress = state.isSearchingAddress,
@@ -243,6 +244,7 @@ fun LocationSelectionStep(
     hasLocation: Boolean,
     latitude: Double?,
     longitude: Double?,
+    isGeocoderAvailable: Boolean,
     addressQuery: String,
     addressSearchResults: List<AddressSearchResult>,
     isSearchingAddress: Boolean,
@@ -380,73 +382,75 @@ fun LocationSelectionStep(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "- or -",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        // Address/City search - only show if geocoder is available (requires Google Play Services)
+        if (isGeocoderAvailable) {
+            Text(
+                text = "- or -",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        // Address/City search
-        OutlinedTextField(
-            value = addressQuery,
-            onValueChange = onAddressQueryChange,
-            label = { Text("Search City or Address") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { onSearchAddress() }),
-            trailingIcon = {
-                if (isSearchingAddress) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
-                    )
-                } else if (addressQuery.isNotEmpty()) {
-                    IconButton(onClick = onSearchAddress) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search",
-                        )
-                    }
-                }
-            },
-            supportingText = {
-                addressSearchError?.let { error ->
-                    Text(error, color = MaterialTheme.colorScheme.error)
-                }
-            },
-            isError = addressSearchError != null,
-        )
-
-        // Search results
-        if (addressSearchResults.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Card(
+            OutlinedTextField(
+                value = addressQuery,
+                onValueChange = onAddressQueryChange,
+                label = { Text("Search City or Address") },
                 modifier = Modifier.fillMaxWidth(),
-                colors =
-                    CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    addressSearchResults.forEach { result ->
-                        TextButton(
-                            onClick = { onSelectAddressResult(result) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                text = result.displayName,
-                                modifier = Modifier.weight(1f),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSearchAddress() }),
+                trailingIcon = {
+                    if (isSearchingAddress) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else if (addressQuery.isNotEmpty()) {
+                        IconButton(onClick = onSearchAddress) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search",
                             )
+                        }
+                    }
+                },
+                supportingText = {
+                    addressSearchError?.let { error ->
+                        Text(error, color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                isError = addressSearchError != null,
+            )
+
+            // Search results
+            if (addressSearchResults.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        ),
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        addressSearchResults.forEach { result ->
+                            TextButton(
+                                onClick = { onSelectAddressResult(result) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    text = result.displayName,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         Text(
             text = "- or -",

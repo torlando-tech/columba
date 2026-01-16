@@ -1,6 +1,9 @@
 package com.lxmf.messenger.ui.components
 
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,18 +17,21 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -113,23 +119,28 @@ fun <T> QualitySelectionDialog(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // Quality options list (uses Column instead of LazyColumn for
-                // consistent rendering in tests - all items are composed immediately)
-                Column(
-                    modifier = Modifier
-                        .heightIn(max = 400.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                // Quality options list with scroll indicators
+                val scrollState = rememberScrollState()
+                ScrollableOptionsContainer(
+                    scrollState = scrollState,
+                    modifier = Modifier.heightIn(max = 400.dp),
                 ) {
-                    options.forEach { option ->
-                        QualityOptionRow(
-                            displayName = option.displayName,
-                            description = option.description,
-                            isSelected = option.value == selectedValue,
-                            isRecommended = option.value == recommendedOption,
-                            transferTime = transferTimeEstimates?.get(option.value),
-                            onClick = { selectedValue = option.value },
-                        )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(scrollState),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        options.forEach { option ->
+                            QualityOptionRow(
+                                displayName = option.displayName,
+                                description = option.description,
+                                isSelected = option.value == selectedValue,
+                                isRecommended = option.value == recommendedOption,
+                                transferTime = transferTimeEstimates?.get(option.value),
+                                onClick = { selectedValue = option.value },
+                            )
+                        }
                     }
                 }
             }
@@ -306,6 +317,66 @@ fun RecommendedChip() {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onPrimary,
         )
+    }
+}
+
+/**
+ * Container for scrollable content with dynamic scroll indicators.
+ *
+ * Shows a divider at the top when scrolled down (indicating content above)
+ * and a fade gradient at the bottom when more content exists below.
+ * This follows Material Design guidelines for scrollable dialogs.
+ *
+ * @param scrollState The scroll state to track position
+ * @param modifier Modifier for the container
+ * @param content The scrollable content
+ */
+@Composable
+fun ScrollableOptionsContainer(
+    scrollState: ScrollState,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    // Derive scroll position states
+    val showTopIndicator by remember {
+        derivedStateOf { scrollState.value > 0 }
+    }
+    val showBottomIndicator by remember {
+        derivedStateOf {
+            scrollState.value < scrollState.maxValue && scrollState.maxValue > 0
+        }
+    }
+
+    Column(modifier = modifier) {
+        // Top divider - appears when scrolled down
+        if (showTopIndicator) {
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+        }
+
+        // Scrollable content with bottom fade overlay
+        Box(modifier = Modifier.weight(1f, fill = false)) {
+            content()
+
+            // Bottom fade gradient - appears when more content below
+            if (showBottomIndicator) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(24.dp)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.surface,
+                                ),
+                            ),
+                        ),
+                )
+            }
+        }
     }
 }
 

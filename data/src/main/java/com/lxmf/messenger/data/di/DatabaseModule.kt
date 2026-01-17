@@ -63,6 +63,7 @@ object DatabaseModule {
             MIGRATION_27_28,
             MIGRATION_28_29,
             MIGRATION_29_30,
+            MIGRATION_30_31,
         )
     }
 
@@ -1247,6 +1248,25 @@ object DatabaseModule {
                 database.execSQL("ALTER TABLE messages ADD COLUMN receivedHopCount INTEGER DEFAULT NULL")
                 // Add receivedInterface column (nullable TEXT for interface name at reception)
                 database.execSQL("ALTER TABLE messages ADD COLUMN receivedInterface TEXT DEFAULT NULL")
+            }
+        }
+
+    // Migration from version 30 to 31: Add encrypted identity key storage
+    // Adds columns for AES-256-GCM encrypted key data using Android Keystore
+    // The keyData column will be cleared after encryption migration completes
+    private val MIGRATION_30_31 =
+        object : Migration(30, 31) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add encryptedKeyData column for storing device-encrypted key
+                database.execSQL("ALTER TABLE local_identities ADD COLUMN encryptedKeyData BLOB")
+                // Add keyEncryptionVersion: 0=plain, 1=device-only, 2=device+password
+                database.execSQL(
+                    "ALTER TABLE local_identities ADD COLUMN keyEncryptionVersion INTEGER NOT NULL DEFAULT 0",
+                )
+                // Add passwordSalt for PBKDF2 key derivation (if password protected)
+                database.execSQL("ALTER TABLE local_identities ADD COLUMN passwordSalt BLOB")
+                // Add passwordVerificationHash for verifying password correctness
+                database.execSQL("ALTER TABLE local_identities ADD COLUMN passwordVerificationHash BLOB")
             }
         }
 

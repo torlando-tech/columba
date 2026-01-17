@@ -21,9 +21,11 @@ data class MigrationBundle(
     val customThemes: List<CustomThemeExport> = emptyList(),
     val settings: SettingsExport,
     val attachmentManifest: List<AttachmentRef> = emptyList(),
+    /** True if identity keys are encrypted with a password (added in v7) */
+    val keysEncrypted: Boolean = false,
 ) {
     companion object {
-        const val CURRENT_VERSION = 6
+        const val CURRENT_VERSION = 7
 
         // Minimum version we can import - older files may have incompatible structure
         const val MINIMUM_VERSION = 1
@@ -32,14 +34,26 @@ data class MigrationBundle(
 
 /**
  * Exported identity data including the private key for restoration.
+ *
+ * Key encryption for export:
+ * - If export password is provided: keyData is encrypted with PBKDF2-derived key
+ * - If no password: keyData is Base64-encoded plaintext (legacy format)
+ *
+ * Format when encrypted:
+ * - encryptedKeyData: [32-byte salt][12-byte IV][encrypted data][16-byte auth tag]
+ * - keyData should be empty or null when encryptedKeyData is present
  */
 @Serializable
 data class IdentityExport(
     val identityHash: String,
     val displayName: String,
     val destinationHash: String,
-    /** Base64 encoded 64-byte private key */
+    /** Base64 encoded 64-byte private key (legacy unencrypted format) */
     val keyData: String,
+    /** Base64 encoded password-encrypted key data (new encrypted format) */
+    val encryptedKeyData: String? = null,
+    /** True if encryptedKeyData is present and requires password to decrypt */
+    val isKeyEncrypted: Boolean = false,
     val createdTimestamp: Long,
     val lastUsedTimestamp: Long,
     val isActive: Boolean,

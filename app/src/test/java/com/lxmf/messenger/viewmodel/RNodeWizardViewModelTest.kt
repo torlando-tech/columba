@@ -7,6 +7,7 @@ import app.cash.turbine.test
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.DiscoveredRNode
+import com.lxmf.messenger.data.model.DiscoveredUsbDevice
 import com.lxmf.messenger.data.model.FrequencyRegions
 import com.lxmf.messenger.data.model.ModemPreset
 import com.lxmf.messenger.data.model.RNodeRegionalPreset
@@ -2299,4 +2300,117 @@ class RNodeWizardViewModelTest {
                 assertEquals("gateway", state.interfaceMode)
             }
         }
+
+    // ========== DiscoveredUsbDevice Data Class Tests ==========
+
+    @Test
+    fun `DiscoveredUsbDevice displayName uses productName when available`() {
+        val device =
+            DiscoveredUsbDevice(
+                deviceId = 1001,
+                vendorId = 0x0403,
+                productId = 0x6001,
+                deviceName = "/dev/bus/usb/001/002",
+                manufacturerName = "FTDI",
+                productName = "FT232R USB UART",
+                serialNumber = "A12345",
+                driverType = "FTDI",
+                hasPermission = true,
+            )
+        assertEquals("FT232R USB UART", device.displayName)
+    }
+
+    @Test
+    fun `DiscoveredUsbDevice displayName falls back to manufacturerName`() {
+        val device =
+            DiscoveredUsbDevice(
+                deviceId = 1,
+                vendorId = 0x0403,
+                productId = 0x6001,
+                deviceName = "/dev/bus/usb/001/002",
+                manufacturerName = "FTDI",
+                productName = null,
+                serialNumber = null,
+                driverType = "FTDI",
+                hasPermission = true,
+            )
+        assertEquals("FTDI", device.displayName)
+    }
+
+    @Test
+    fun `DiscoveredUsbDevice displayName falls back to generic name`() {
+        val device =
+            DiscoveredUsbDevice(
+                deviceId = 1,
+                vendorId = 0x1A86,
+                productId = 0x7523,
+                deviceName = "/dev/bus/usb/001/003",
+                manufacturerName = null,
+                productName = null,
+                serialNumber = null,
+                driverType = "CH340",
+                hasPermission = false,
+            )
+        assertEquals("USB Serial Device (CH340)", device.displayName)
+    }
+
+    @Test
+    fun `DiscoveredUsbDevice vidPid formats correctly`() {
+        val device =
+            DiscoveredUsbDevice(
+                deviceId = 1001,
+                vendorId = 0x0403,
+                productId = 0x6001,
+                deviceName = "/dev/bus/usb/001/002",
+                manufacturerName = "FTDI",
+                productName = "FT232R USB UART",
+                serialNumber = "A12345",
+                driverType = "FTDI",
+                hasPermission = true,
+            )
+        assertEquals("0403:6001", device.vidPid)
+    }
+
+    @Test
+    fun `DiscoveredUsbDevice vidPid pads with zeros`() {
+        val device =
+            DiscoveredUsbDevice(
+                deviceId = 1,
+                vendorId = 0x0001,
+                productId = 0x0002,
+                deviceName = "/dev/bus/usb/001/003",
+                manufacturerName = null,
+                productName = null,
+                serialNumber = null,
+                driverType = "CDC",
+                hasPermission = false,
+            )
+        assertEquals("0001:0002", device.vidPid)
+    }
+
+    @Test
+    fun `DiscoveredUsbDevice stores all properties correctly`() {
+        val device =
+            DiscoveredUsbDevice(
+                deviceId = 42,
+                vendorId = 0x1A86,
+                productId = 0x7523,
+                deviceName = "/dev/bus/usb/002/005",
+                manufacturerName = "QinHeng Electronics",
+                productName = "HL-340 USB-Serial adapter",
+                serialNumber = "SN12345",
+                driverType = "CH340",
+                hasPermission = true,
+            )
+
+        assertEquals(42, device.deviceId)
+        assertEquals(0x1A86, device.vendorId)
+        assertEquals(0x7523, device.productId)
+        assertEquals("/dev/bus/usb/002/005", device.deviceName)
+        assertEquals("QinHeng Electronics", device.manufacturerName)
+        assertEquals("HL-340 USB-Serial adapter", device.productName)
+        assertEquals("SN12345", device.serialNumber)
+        assertEquals("CH340", device.driverType)
+        assertTrue(device.hasPermission)
+    }
 }

@@ -359,11 +359,21 @@ class IdentityKeyProvider
          */
         suspend fun clearAllCachedKeys() {
             cacheMutex.withLock {
-                keyCache.values.forEach { keyData ->
-                    encryptor.secureWipe(keyData)
-                }
-                keyCache.clear()
+                clearCacheInternal()
             }
+        }
+
+        /**
+         * Synchronously clear all cached keys.
+         * Used by lifecycle callbacks where suspend is not available.
+         * Safe to call without mutex for cleanup scenarios since ConcurrentHashMap
+         * handles concurrent access and we're doing a full clear.
+         */
+        private fun clearCacheInternal() {
+            keyCache.values.forEach { keyData ->
+                encryptor.secureWipe(keyData)
+            }
+            keyCache.clear()
             Log.d(TAG, "Cleared all cached keys")
         }
 
@@ -457,9 +467,7 @@ class IdentityKeyProvider
 
         override fun onStop(owner: LifecycleOwner) {
             // App going to background - clear sensitive data
-            kotlinx.coroutines.runBlocking {
-                clearAllCachedKeys()
-            }
+            clearCacheInternal()
             cleanupAllTempFiles()
         }
     }

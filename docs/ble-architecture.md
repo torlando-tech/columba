@@ -199,7 +199,8 @@ sequenceDiagram
         Server->>Bridge: onDataReceived(address, data)
         Bridge->>Python: on_data_received(address, data)
         Python->>Python: _handle_identity_handshake()<br/>Detect: len=16, no existing identity
-        Note over Python: Store identity mapping<br/>Start fragmenter/reassembler
+        Note over Python: Store identity mapping:<br/>address_to_identity[addr] = bytes<br/>identity_to_address[hash] = addr<br/>
+        Note over Python: Create fragmenter/reassembler<br/>key = identity.hex() (32 chars)<br/>fragmenters[key] = BLEFragmenter(mtu)<br/>reassemblers[key] = BLEReassembler()
     end
 
     Python->>Python: _spawn_peer_interface<br/>(address, identity, mtu, role)

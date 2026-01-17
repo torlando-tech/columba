@@ -1077,6 +1077,7 @@ class ServiceReticulumProtocol(
         }
     }
 
+    @Suppress("LongMethod") // Config serialization naturally grows with each interface type
     @androidx.annotation.VisibleForTesting
     internal fun buildConfigJson(config: ReticulumConfig): String {
         val json = JSONObject()
@@ -1148,6 +1149,13 @@ class ServiceReticulumProtocol(
                     ifaceJson.put("name", iface.name)
                     ifaceJson.put("device_name", iface.deviceName)
                     ifaceJson.put("max_connections", iface.maxConnections)
+                    ifaceJson.put("mode", iface.mode)
+                }
+                is InterfaceConfig.TCPServer -> {
+                    ifaceJson.put("type", "TCPServer")
+                    ifaceJson.put("name", iface.name)
+                    ifaceJson.put("listen_ip", iface.listenIp)
+                    ifaceJson.put("listen_port", iface.listenPort)
                     ifaceJson.put("mode", iface.mode)
                 }
             }

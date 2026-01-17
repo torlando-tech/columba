@@ -796,6 +796,166 @@ class InterfaceManagementViewModelStatusEventTest {
 
     // endregion
 
+    // region TCPServer Tests
+
+    @Test
+    fun `showEditDialog with TCPServer converts correctly`() =
+        runTest {
+            val entity =
+                InterfaceEntity(
+                    id = 5L,
+                    name = "My TCP Server",
+                    type = "TCPServer",
+                    enabled = true,
+                    configJson = """{"listen_ip": "0.0.0.0", "listen_port": 4242, "mode": "full"}""",
+                    displayOrder = 0,
+                )
+
+            every { interfaceRepository.entityToConfig(entity) } returns
+                InterfaceConfig.TCPServer(
+                    name = "My TCP Server",
+                    enabled = true,
+                    listenIp = "0.0.0.0",
+                    listenPort = 4242,
+                    mode = "full",
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.showEditDialog(entity)
+            advanceUntilIdle()
+
+            viewModel.configState.test {
+                val configState = awaitItem()
+                assertEquals("My TCP Server", configState.name)
+                assertEquals("TCPServer", configState.type)
+                assertEquals("0.0.0.0", configState.listenIp)
+                assertEquals("4242", configState.listenPort)
+                assertEquals("full", configState.mode)
+            }
+        }
+
+    @Test
+    fun `validateConfig rejects TCPServer with invalid listen port`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.showAddDialog()
+            advanceUntilIdle()
+
+            // Set up a TCPServer with invalid port
+            viewModel.updateConfigState {
+                it.copy(
+                    name = "Test Server",
+                    type = "TCPServer",
+                    listenIp = "0.0.0.0",
+                    listenPort = "99999", // Invalid: > 65535
+                )
+            }
+            advanceUntilIdle()
+
+            viewModel.saveInterface()
+            advanceUntilIdle()
+
+            viewModel.configState.test {
+                val configState = awaitItem()
+                assertNotNull(configState.listenPortError)
+            }
+        }
+
+    @Test
+    fun `validateConfig rejects TCPServer with invalid listen IP`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.showAddDialog()
+            advanceUntilIdle()
+
+            // Set up a TCPServer with invalid IP
+            viewModel.updateConfigState {
+                it.copy(
+                    name = "Test Server",
+                    type = "TCPServer",
+                    listenIp = "invalid ip with spaces",
+                    listenPort = "4242",
+                )
+            }
+            advanceUntilIdle()
+
+            viewModel.saveInterface()
+            advanceUntilIdle()
+
+            viewModel.configState.test {
+                val configState = awaitItem()
+                assertNotNull(configState.listenIpError)
+            }
+        }
+
+    @Test
+    fun `validateConfig accepts valid TCPServer configuration`() =
+        runTest {
+            coEvery { interfaceRepository.insertInterface(any()) } returns 1L
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                )
+
+            advanceUntilIdle()
+
+            viewModel.showAddDialog()
+            advanceUntilIdle()
+
+            // Set up a valid TCPServer
+            viewModel.updateConfigState {
+                it.copy(
+                    name = "Valid Server",
+                    type = "TCPServer",
+                    listenIp = "192.168.1.1",
+                    listenPort = "8080",
+                )
+            }
+            advanceUntilIdle()
+
+            viewModel.saveInterface()
+            advanceUntilIdle()
+
+            viewModel.configState.test {
+                val configState = awaitItem()
+                assertEquals(null, configState.listenIpError)
+                assertEquals(null, configState.listenPortError)
+            }
+        }
+
+    // endregion
+
     // region Interface Status Flow Tests
 
     @Test

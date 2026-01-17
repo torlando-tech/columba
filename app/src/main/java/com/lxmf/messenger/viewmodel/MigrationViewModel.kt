@@ -179,9 +179,10 @@ class MigrationViewModel
                     _importProgress.value = 0f
 
                     val result =
-                        migrationImporter.importData(uri) { progress ->
-                            _importProgress.value = progress
-                        }
+                        migrationImporter.importData(
+                            uri = uri,
+                            onProgress = { progress -> _importProgress.value = progress },
+                        )
 
                     when (result) {
                         is ImportResult.Success -> {

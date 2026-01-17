@@ -1,5 +1,8 @@
 package com.lxmf.messenger.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,11 +33,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.ui.screens.settings.cards.AboutCard
 import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
 import com.lxmf.messenger.ui.screens.settings.cards.DataMigrationCard
@@ -48,8 +53,10 @@ import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
+import com.lxmf.messenger.util.DeviceInfoUtil
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.SettingsViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +75,7 @@ fun SettingsScreen(
     val state by viewModel.state.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     // Show Snackbar when shared instance becomes available (ephemeral notification)
     LaunchedEffect(state.sharedInstanceAvailable) {
@@ -245,6 +253,41 @@ fun SettingsScreen(
 
                 DataMigrationCard(
                     onNavigateToMigration = onNavigateToMigration,
+                )
+
+                // About section
+                val context = LocalContext.current
+                val systemInfo =
+                    remember(
+                        state.identityHash,
+                        state.reticulumVersion,
+                        state.lxmfVersion,
+                        state.bleReticulumVersion,
+                    ) {
+                        DeviceInfoUtil.getSystemInfo(
+                            context = context,
+                            identityHash = state.identityHash,
+                            reticulumVersion = state.reticulumVersion,
+                            lxmfVersion = state.lxmfVersion,
+                            bleReticulumVersion = state.bleReticulumVersion,
+                        )
+                    }
+
+                AboutCard(
+                    systemInfo = systemInfo,
+                    onCopySystemInfo = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("System Info", DeviceInfoUtil.formatForClipboard(systemInfo))
+                        clipboard.setPrimaryClip(clip)
+
+                        // Show snackbar confirmation
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = "System info copied to clipboard",
+                                duration = SnackbarDuration.Short,
+                            )
+                        }
+                    },
                 )
 
                 // Bottom spacing for navigation bar

@@ -42,6 +42,16 @@ fun getVersionFromTag(): Pair<Int, String> {
     }
 }
 
+fun getGitCommitHash(): String {
+    return try {
+        providers.exec {
+            commandLine("git", "rev-parse", "--short=7", "HEAD")
+        }.standardOutput.asText.get().trim()
+    } catch (e: Exception) {
+        "unknown"
+    }
+}
+
 val (versionCodeValue, versionNameValue) = getVersionFromTag()
 
 android {
@@ -54,6 +64,9 @@ android {
         targetSdk = 35
         versionCode = versionCodeValue
         versionName = versionNameValue
+
+        buildConfigField("String", "GIT_COMMIT_HASH", "\"${getGitCommitHash()}\"")
+        buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

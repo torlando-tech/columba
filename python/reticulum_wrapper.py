@@ -6841,3 +6841,38 @@ class ReticulumWrapper:
                 log_info("ReticulumWrapper", "clear_rmsp_servers", "Cleared all RMSP servers")
         except Exception as e:
             log_error("ReticulumWrapper", "clear_rmsp_servers", f"Error: {e}")
+
+    # ============================================================================
+    # Protocol Version Information (for About screen)
+    # ============================================================================
+
+    def get_reticulum_version(self) -> str:
+        """Get Reticulum version string."""
+        try:
+            global RNS
+            if RNS and hasattr(RNS, '__version__'):
+                return RNS.__version__
+            return "unknown"
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_reticulum_version", f"Error: {e}")
+            return "unknown"
+
+    def get_lxmf_version(self) -> str:
+        """Get LXMF version string."""
+        try:
+            global LXMF
+            if LXMF and hasattr(LXMF, '__version__'):
+                return LXMF.__version__
+            return "unknown"
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_lxmf_version", f"Error: {e}")
+            return "unknown"
+
+    def get_ble_reticulum_version(self) -> str:
+        """Get BLE-Reticulum version string."""
+        try:
+            import pkg_resources
+            return pkg_resources.get_distribution("ble-reticulum").version
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_ble_reticulum_version", f"Error: {e}")
+            return "unknown"

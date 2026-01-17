@@ -1,0 +1,748 @@
+package com.lxmf.messenger.reticulum.usb
+
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
+import android.os.Build
+import android.util.Log
+import com.chaquo.python.PyObject
+import com.hoho.android.usbserial.driver.CdcAcmSerialDriver
+import com.hoho.android.usbserial.driver.Ch34xSerialDriver
+import com.hoho.android.usbserial.driver.Cp21xxSerialDriver
+import com.hoho.android.usbserial.driver.FtdiSerialDriver
+import com.hoho.android.usbserial.driver.ProlificSerialDriver
+import com.hoho.android.usbserial.driver.UsbSerialDriver
+import com.hoho.android.usbserial.driver.UsbSerialPort
+import com.hoho.android.usbserial.driver.UsbSerialProber
+import com.hoho.android.usbserial.util.SerialInputOutputManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import java.io.IOException
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * Data class representing a USB device for Python interop.
+ */
+data class UsbDeviceInfo(
+    val deviceId: Int,
+    val vendorId: Int,
+    val productId: Int,
+    val deviceName: String,
+    val manufacturerName: String?,
+    val productName: String?,
+    val serialNumber: String?,
+    val driverType: String,
+)
+
+/**
+ * Listener interface for USB connection state changes.
+ */
+interface UsbConnectionListener {
+    fun onUsbConnected(deviceId: Int)
+    fun onUsbDisconnected(deviceId: Int)
+    fun onUsbPermissionGranted(deviceId: Int)
+    fun onUsbPermissionDenied(deviceId: Int)
+}
+
+/**
+ * Kotlin USB Bridge for serial communication with RNode devices.
+ *
+ * This bridge provides USB serial communication with RNode hardware using the
+ * usb-serial-for-android library. It supports various USB-to-serial chipsets:
+ * - FTDI (FT232R, FT232H, etc.)
+ * - Silicon Labs CP210x
+ * - Prolific PL2303
+ * - CH340/CH341
+ * - CDC-ACM (native USB serial on ESP32-S3, NRF52840)
+ *
+ * Usage from Python:
+ *   bridge = get_kotlin_usb_bridge()
+ *   devices = bridge.getConnectedUsbDevices()
+ *   bridge.connect(device_id)
+ *   bridge.write(bytes([0xC0, 0x00, ...]))  # KISS frame
+ *   data = bridge.read()  # Non-blocking
+ *   bridge.disconnect()
+ *
+ * @property context Application context for USB access
+ */
+@Suppress("TooManyFunctions")
+class KotlinUSBBridge(
+    private val context: Context,
+) : SerialInputOutputManager.Listener {
+    companion object {
+        private const val TAG = "Columba:USBBridge"
+        private const val ACTION_USB_PERMISSION = "com.lxmf.messenger.USB_PERMISSION"
+
+        // Buffer sizes
+        private const val READ_BUFFER_SIZE = 4096
+        private const val WRITE_TIMEOUT_MS = 1000
+
+        // Default serial parameters for RNode
+        private const val DEFAULT_BAUD_RATE = 115200
+        private const val DEFAULT_DATA_BITS = UsbSerialPort.DATABITS_8
+        private const val DEFAULT_STOP_BITS = UsbSerialPort.STOPBITS_1
+        private const val DEFAULT_PARITY = UsbSerialPort.PARITY_NONE
+
+        // Supported USB VIDs (same as Sideband)
+        private val SUPPORTED_VIDS =
+            setOf(
+                0x0403, // FTDI
+                0x10C4, // SiLabs CP210x
+                0x067B, // Prolific PL2303
+                0x1A86, // CH340/CH341
+                0x0525, // ESP32/NRF52 CDC (Linux Foundation)
+                0x2E8A, // Raspberry Pi Pico
+                0x303A, // Espressif
+            )
+
+        // Custom prober to detect more devices
+        private val customProber: UsbSerialProber by lazy {
+            val customTable =
+                com.hoho.android.usbserial.driver.ProbeTable().apply {
+                    // Add ESP32-S3 and NRF52840 CDC-ACM devices
+                    addProduct(0x303A, 0x1001, CdcAcmSerialDriver::class.java) // ESP32-S3 CDC
+                    addProduct(0x239A, 0x8029, CdcAcmSerialDriver::class.java) // Adafruit NRF52840
+                    addProduct(0x1915, 0x520F, CdcAcmSerialDriver::class.java) // Nordic NRF52840
+                }
+            UsbSerialProber(customTable)
+        }
+
+        @Volatile
+        private var instance: KotlinUSBBridge? = null
+
+        /**
+         * Get or create singleton instance.
+         */
+        fun getInstance(context: Context): KotlinUSBBridge {
+            return instance ?: synchronized(this) {
+                instance ?: KotlinUSBBridge(context.applicationContext).also { instance = it }
+            }
+        }
+    }
+
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+
+    // Connection state
+    private var currentDriver: UsbSerialDriver? = null
+    private var currentPort: UsbSerialPort? = null
+    private var ioManager: SerialInputOutputManager? = null
+    private var connectedDeviceId: Int? = null
+
+    // Thread-safe state flags
+    private val isConnected = AtomicBoolean(false)
+
+    // Read buffer for non-blocking reads
+    private val readBuffer = ConcurrentLinkedQueue<Byte>()
+
+    // Executor for serial I/O
+    private val ioExecutor = Executors.newSingleThreadExecutor()
+
+    // Python callbacks
+    @Volatile
+    private var onDataReceived: PyObject? = null
+
+    @Volatile
+    private var onConnectionStateChanged: PyObject? = null
+
+    @Volatile
+    private var onBluetoothPinReceived: PyObject? = null
+
+    // Kotlin listeners
+    private val connectionListeners = mutableListOf<UsbConnectionListener>()
+
+    // Permission request callbacks
+    private val pendingPermissionCallbacks = mutableMapOf<Int, (Boolean) -> Unit>()
+
+    // USB permission broadcast receiver
+    private val usbPermissionReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context,
+                intent: Intent,
+            ) {
+                if (intent.action == ACTION_USB_PERMISSION) {
+                    val device: UsbDevice? =
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                        }
+
+                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                    device?.let { dev ->
+                        Log.d(TAG, "USB permission ${if (granted) "granted" else "denied"} for device ${dev.deviceId}")
+                        pendingPermissionCallbacks.remove(dev.deviceId)?.invoke(granted)
+
+                        if (granted) {
+                            notifyListeners { it.onUsbPermissionGranted(dev.deviceId) }
+                        } else {
+                            notifyListeners { it.onUsbPermissionDenied(dev.deviceId) }
+                        }
+                    }
+                }
+            }
+        }
+
+    // USB attach/detach broadcast receiver
+    private val usbEventReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context,
+                intent: Intent,
+            ) {
+                when (intent.action) {
+                    UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                        val device: UsbDevice? =
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                            }
+                        device?.let { dev ->
+                            Log.d(TAG, "USB device attached: ${dev.deviceName}")
+                            // Only notify if it's a supported device
+                            if (SUPPORTED_VIDS.contains(dev.vendorId)) {
+                                notifyListeners { it.onUsbConnected(dev.deviceId) }
+                            }
+                        }
+                    }
+                    UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                        val device: UsbDevice? =
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                            }
+                        device?.let { dev ->
+                            Log.d(TAG, "USB device detached: ${dev.deviceName}")
+                            // If this was our connected device, handle disconnect
+                            if (dev.deviceId == connectedDeviceId) {
+                                handleDisconnect()
+                            }
+                            notifyListeners { it.onUsbDisconnected(dev.deviceId) }
+                        }
+                    }
+                }
+            }
+        }
+
+    init {
+        // Register broadcast receivers
+        val permissionFilter = IntentFilter(ACTION_USB_PERMISSION)
+        val eventFilter =
+            IntentFilter().apply {
+                addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+                addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+            }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(usbPermissionReceiver, permissionFilter, Context.RECEIVER_NOT_EXPORTED)
+            context.registerReceiver(usbEventReceiver, eventFilter, Context.RECEIVER_EXPORTED)
+        } else {
+            context.registerReceiver(usbPermissionReceiver, permissionFilter)
+            context.registerReceiver(usbEventReceiver, eventFilter)
+        }
+        Log.d(TAG, "KotlinUSBBridge initialized")
+    }
+
+    /**
+     * Set callback for received data.
+     * Called on background thread when data arrives from USB device.
+     *
+     * @param callback Python callable: callback(data: bytes)
+     */
+    fun setOnDataReceived(callback: PyObject) {
+        onDataReceived = callback
+    }
+
+    /**
+     * Set callback for connection state changes.
+     *
+     * @param callback Python callable: callback(connected: bool, device_id: int)
+     */
+    fun setOnConnectionStateChanged(callback: PyObject) {
+        onConnectionStateChanged = callback
+    }
+
+    /**
+     * Set callback for Bluetooth PIN received during pairing mode.
+     * RNode sends the PIN via CMD_BT_PIN (0x62) when entering pairing mode.
+     *
+     * @param callback Python callable: callback(pin: str)
+     */
+    fun setOnBluetoothPinReceived(callback: PyObject) {
+        onBluetoothPinReceived = callback
+    }
+
+    // Kotlin callback for Bluetooth PIN (for use from Android/Kotlin code)
+    @Volatile
+    private var onBluetoothPinReceivedKotlin: ((String) -> Unit)? = null
+
+    /**
+     * Set Kotlin callback for Bluetooth PIN received during pairing mode.
+     * This is the Kotlin-friendly version for use from Android code.
+     *
+     * @param callback Kotlin lambda: (pin: String) -> Unit
+     */
+    fun setOnBluetoothPinReceivedKotlin(callback: (String) -> Unit) {
+        onBluetoothPinReceivedKotlin = callback
+    }
+
+    /**
+     * Notify Bluetooth PIN callback.
+     * Called from Python when RNode sends a PIN during BT pairing mode.
+     *
+     * @param pin The 6-digit PIN for Bluetooth pairing
+     */
+    fun notifyBluetoothPin(pin: String) {
+        Log.d(TAG, "Bluetooth PIN received: $pin")
+        // Notify Python callback
+        onBluetoothPinReceived?.callAttr("__call__", pin)
+        // Notify Kotlin callback
+        onBluetoothPinReceivedKotlin?.invoke(pin)
+    }
+
+    /**
+     * Add a connection listener.
+     */
+    fun addConnectionListener(listener: UsbConnectionListener) {
+        synchronized(connectionListeners) {
+            if (!connectionListeners.contains(listener)) {
+                connectionListeners.add(listener)
+            }
+        }
+    }
+
+    /**
+     * Remove a connection listener.
+     */
+    fun removeConnectionListener(listener: UsbConnectionListener) {
+        synchronized(connectionListeners) {
+            connectionListeners.remove(listener)
+        }
+    }
+
+    private fun notifyListeners(action: (UsbConnectionListener) -> Unit) {
+        synchronized(connectionListeners) {
+            connectionListeners.forEach { listener ->
+                try {
+                    action(listener)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Connection listener threw exception", e)
+                }
+            }
+        }
+    }
+
+    /**
+     * Get list of connected USB serial devices.
+     * Returns devices with supported VIDs and detected serial drivers.
+     *
+     * @return List of UsbDeviceInfo for discovered devices
+     */
+    fun getConnectedUsbDevices(): List<UsbDeviceInfo> {
+        val devices = mutableListOf<UsbDeviceInfo>()
+
+        // Get all USB devices
+        val usbDevices = usbManager.deviceList
+
+        for ((_, device) in usbDevices) {
+            // Skip unsupported devices
+            if (!SUPPORTED_VIDS.contains(device.vendorId)) continue
+
+            // Try to find a driver for this device
+            val driver =
+                UsbSerialProber.getDefaultProber().probeDevice(device)
+                    ?: customProber.probeDevice(device)
+                    ?: continue
+
+            val driverType = getDriverTypeName(driver)
+
+            devices.add(
+                UsbDeviceInfo(
+                    deviceId = device.deviceId,
+                    vendorId = device.vendorId,
+                    productId = device.productId,
+                    deviceName = device.deviceName,
+                    manufacturerName = device.manufacturerName,
+                    productName = device.productName,
+                    serialNumber = device.serialNumber,
+                    driverType = driverType,
+                ),
+            )
+
+            Log.d(TAG, "Found USB device: ${device.productName ?: device.deviceName} (VID=${device.vendorId.toHexString()}, PID=${device.productId.toHexString()}, driver=$driverType)")
+        }
+
+        return devices
+    }
+
+    private fun getDriverTypeName(driver: UsbSerialDriver): String {
+        return when (driver) {
+            is FtdiSerialDriver -> "FTDI"
+            is Cp21xxSerialDriver -> "CP210x"
+            is ProlificSerialDriver -> "PL2303"
+            is Ch34xSerialDriver -> "CH340"
+            is CdcAcmSerialDriver -> "CDC-ACM"
+            else -> "Unknown"
+        }
+    }
+
+    private fun Int.toHexString(): String = "0x${this.toString(16).uppercase()}"
+
+    /**
+     * Check if we have permission to access a USB device.
+     *
+     * @param deviceId The device ID to check
+     * @return true if permission is granted, false otherwise
+     */
+    fun hasPermission(deviceId: Int): Boolean {
+        val device = usbManager.deviceList.values.find { it.deviceId == deviceId } ?: return false
+        return usbManager.hasPermission(device)
+    }
+
+    /**
+     * Request permission to access a USB device.
+     *
+     * @param deviceId The device ID to request permission for
+     * @param callback Callback invoked with permission result (true = granted)
+     */
+    fun requestPermission(
+        deviceId: Int,
+        callback: PyObject,
+    ) {
+        requestPermission(deviceId) { granted ->
+            callback.callAttr("__call__", granted)
+        }
+    }
+
+    /**
+     * Request permission to access a USB device (Kotlin callback version).
+     */
+    fun requestPermission(
+        deviceId: Int,
+        callback: (Boolean) -> Unit,
+    ) {
+        val device =
+            usbManager.deviceList.values.find { it.deviceId == deviceId }
+                ?: run {
+                    Log.e(TAG, "Device not found: $deviceId")
+                    callback(false)
+                    return
+                }
+
+        if (usbManager.hasPermission(device)) {
+            Log.d(TAG, "Already have permission for device $deviceId")
+            callback(true)
+            return
+        }
+
+        // Store callback and request permission
+        pendingPermissionCallbacks[deviceId] = callback
+
+        val flags =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_MUTABLE
+            } else {
+                0
+            }
+        val permissionIntent =
+            PendingIntent.getBroadcast(
+                context,
+                0,
+                Intent(ACTION_USB_PERMISSION),
+                flags,
+            )
+
+        Log.d(TAG, "Requesting USB permission for device $deviceId")
+        usbManager.requestPermission(device, permissionIntent)
+    }
+
+    /**
+     * Connect to a USB device by device ID.
+     *
+     * @param deviceId The device ID to connect to
+     * @param baudRate Baud rate (default: 115200)
+     * @return true if connection successful, false otherwise
+     */
+    @Suppress("ReturnCount")
+    fun connect(
+        deviceId: Int,
+        baudRate: Int = DEFAULT_BAUD_RATE,
+    ): Boolean {
+        if (isConnected.get()) {
+            if (connectedDeviceId == deviceId) {
+                Log.d(TAG, "Already connected to device $deviceId")
+                return true
+            }
+            disconnect()
+        }
+
+        val device =
+            usbManager.deviceList.values.find { it.deviceId == deviceId }
+                ?: run {
+                    Log.e(TAG, "Device not found: $deviceId")
+                    return false
+                }
+
+        if (!usbManager.hasPermission(device)) {
+            Log.e(TAG, "No permission for device $deviceId")
+            return false
+        }
+
+        // Find driver
+        val driver =
+            UsbSerialProber.getDefaultProber().probeDevice(device)
+                ?: customProber.probeDevice(device)
+                ?: run {
+                    Log.e(TAG, "No driver found for device $deviceId")
+                    return false
+                }
+
+        if (driver.ports.isEmpty()) {
+            Log.e(TAG, "No ports available for device $deviceId")
+            return false
+        }
+
+        val port = driver.ports[0]
+        val connection =
+            usbManager.openDevice(device)
+                ?: run {
+                    Log.e(TAG, "Failed to open device $deviceId")
+                    return false
+                }
+
+        return try {
+            port.open(connection)
+            port.setParameters(baudRate, DEFAULT_DATA_BITS, DEFAULT_STOP_BITS, DEFAULT_PARITY)
+
+            // Set flow control if supported
+            try {
+                port.dtr = true
+                port.rts = true
+            } catch (e: UnsupportedOperationException) {
+                Log.d(TAG, "Flow control not supported by this driver")
+            }
+
+            currentDriver = driver
+            currentPort = port
+            connectedDeviceId = deviceId
+            isConnected.set(true)
+
+            // Start I/O manager for async reads
+            val manager = SerialInputOutputManager(port, this)
+            manager.readTimeout = 0 // Non-blocking reads
+            ioManager = manager
+            ioExecutor.submit(manager)
+
+            Log.i(TAG, "Connected to USB device $deviceId (${getDriverTypeName(driver)}) at $baudRate baud")
+
+            // Notify Python
+            onConnectionStateChanged?.callAttr("__call__", true, deviceId)
+
+            true
+        } catch (e: IOException) {
+            Log.e(TAG, "Failed to connect to device $deviceId", e)
+            try {
+                port.close()
+            } catch (_: Exception) {
+            }
+            false
+        }
+    }
+
+    /**
+     * Disconnect from the current USB device.
+     */
+    fun disconnect() {
+        if (!isConnected.getAndSet(false)) {
+            return
+        }
+
+        val deviceId = connectedDeviceId
+        Log.i(TAG, "Disconnecting from USB device $deviceId")
+
+        // Stop I/O manager
+        ioManager?.stop()
+        ioManager = null
+
+        // Close port
+        try {
+            currentPort?.close()
+        } catch (e: IOException) {
+            Log.w(TAG, "Error closing port", e)
+        }
+
+        currentPort = null
+        currentDriver = null
+        connectedDeviceId = null
+        readBuffer.clear()
+
+        // Notify Python
+        onConnectionStateChanged?.callAttr("__call__", false, deviceId ?: -1)
+
+        Log.i(TAG, "Disconnected from USB device $deviceId")
+    }
+
+    /**
+     * Handle unexpected disconnect.
+     */
+    private fun handleDisconnect() {
+        if (isConnected.getAndSet(false)) {
+            val deviceId = connectedDeviceId
+            Log.w(TAG, "USB device disconnected unexpectedly: $deviceId")
+
+            // Stop I/O manager
+            ioManager?.stop()
+            ioManager = null
+
+            // Close port
+            try {
+                currentPort?.close()
+            } catch (e: IOException) {
+                Log.w(TAG, "Error closing port", e)
+            }
+
+            currentPort = null
+            currentDriver = null
+            connectedDeviceId = null
+            readBuffer.clear()
+
+            // Notify Python
+            onConnectionStateChanged?.callAttr("__call__", false, deviceId ?: -1)
+        }
+    }
+
+    /**
+     * Check if currently connected to a USB device.
+     *
+     * @return true if connected, false otherwise
+     */
+    fun isConnected(): Boolean = isConnected.get() && currentPort != null
+
+    /**
+     * Get the currently connected device ID.
+     *
+     * @return Device ID or null if not connected
+     */
+    fun getConnectedDeviceId(): Int? = if (isConnected.get()) connectedDeviceId else null
+
+    /**
+     * Write data to the USB device.
+     * Thread-safe - can be called from any thread.
+     *
+     * @param data Bytes to write (typically KISS-framed data)
+     * @return Number of bytes written, or -1 on error
+     */
+    fun write(data: ByteArray): Int {
+        if (!isConnected.get()) {
+            Log.w(TAG, "Cannot write - not connected")
+            return -1
+        }
+
+        val port =
+            currentPort ?: run {
+                Log.e(TAG, "Port is null")
+                return -1
+            }
+
+        return synchronized(this) {
+            try {
+                port.write(data, WRITE_TIMEOUT_MS)
+                Log.v(TAG, "Wrote ${data.size} bytes")
+                data.size
+            } catch (e: IOException) {
+                Log.e(TAG, "Write failed", e)
+                scope.launch { handleDisconnect() }
+                -1
+            }
+        }
+    }
+
+    /**
+     * Read available data from the buffer (non-blocking).
+     * Data is accumulated from the async I/O manager.
+     *
+     * @return Available bytes, or empty array if no data
+     */
+    fun read(): ByteArray {
+        if (readBuffer.isEmpty()) {
+            return ByteArray(0)
+        }
+
+        val data = mutableListOf<Byte>()
+        while (true) {
+            val byte = readBuffer.poll() ?: break
+            data.add(byte)
+        }
+
+        if (data.isNotEmpty()) {
+            Log.v(TAG, "Read ${data.size} bytes from buffer")
+        }
+
+        return data.toByteArray()
+    }
+
+    /**
+     * Get number of bytes available in the read buffer.
+     *
+     * @return Number of buffered bytes
+     */
+    fun available(): Int = readBuffer.size
+
+    /**
+     * Callback from SerialInputOutputManager when new data arrives.
+     */
+    override fun onNewData(data: ByteArray) {
+        if (data.isNotEmpty()) {
+            Log.v(TAG, "USB received ${data.size} bytes")
+
+            // Add to read buffer
+            for (byte in data) {
+                readBuffer.offer(byte)
+            }
+
+            // Notify Python callback
+            onDataReceived?.callAttr("__call__", data)
+        }
+    }
+
+    /**
+     * Callback from SerialInputOutputManager on error.
+     */
+    override fun onRunError(e: Exception) {
+        Log.e(TAG, "USB I/O error", e)
+        handleDisconnect()
+    }
+
+    /**
+     * Shutdown the bridge and release resources.
+     */
+    fun shutdown() {
+        disconnect()
+
+        try {
+            context.unregisterReceiver(usbPermissionReceiver)
+            context.unregisterReceiver(usbEventReceiver)
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "Receivers already unregistered")
+        }
+
+        scope.cancel()
+        ioExecutor.shutdown()
+        Log.d(TAG, "KotlinUSBBridge shutdown")
+    }
+}

@@ -28,6 +28,38 @@ data class DiscoveredRNode(
 )
 
 /**
+ * Discovered USB serial device that may be an RNode.
+ */
+data class DiscoveredUsbDevice(
+    /** Android USB device ID for connection */
+    val deviceId: Int,
+    /** USB Vendor ID */
+    val vendorId: Int,
+    /** USB Product ID */
+    val productId: Int,
+    /** System device name (e.g., /dev/bus/usb/...) */
+    val deviceName: String,
+    /** Manufacturer name from USB descriptor (may be null) */
+    val manufacturerName: String?,
+    /** Product name from USB descriptor (may be null) */
+    val productName: String?,
+    /** Serial number from USB descriptor (may be null) */
+    val serialNumber: String?,
+    /** Detected driver type (FTDI, CP210x, CH340, CDC-ACM, etc.) */
+    val driverType: String,
+    /** Whether USB permission has been granted */
+    val hasPermission: Boolean = false,
+) {
+    /** User-friendly display name */
+    val displayName: String
+        get() = productName ?: manufacturerName ?: "USB Serial Device ($driverType)"
+
+    /** Formatted VID:PID for display */
+    val vidPid: String
+        get() = String.format("%04X:%04X", vendorId, productId)
+}
+
+/**
  * Regional preset for RNode LoRa configuration.
  * Contains legally compliant frequency settings for specific regions.
  */

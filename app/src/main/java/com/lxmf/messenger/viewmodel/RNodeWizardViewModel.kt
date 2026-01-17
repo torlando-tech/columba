@@ -70,6 +70,7 @@ enum class WizardStep {
 enum class RNodeConnectionType {
     BLUETOOTH, // Classic or BLE Bluetooth
     TCP_WIFI, // TCP over WiFi
+    USB_SERIAL, // USB Serial (CDC-ACM, FTDI, CP210x, CH340, etc.)
 }
 
 /**
@@ -116,6 +117,15 @@ data class RNodeWizardState(
     val isTcpValidating: Boolean = false,
     val tcpValidationSuccess: Boolean? = null,
     val tcpValidationError: String? = null,
+    // USB Serial connection fields
+    val usbDevices: List<com.lxmf.messenger.data.model.DiscoveredUsbDevice> = emptyList(),
+    val selectedUsbDevice: com.lxmf.messenger.data.model.DiscoveredUsbDevice? = null,
+    val isUsbScanning: Boolean = false,
+    val usbScanError: String? = null,
+    val isRequestingUsbPermission: Boolean = false,
+    // Bluetooth pairing via USB mode
+    val isUsbPairingMode: Boolean = false,
+    val usbBluetoothPin: String? = null,
     // Companion Device Association (Android 12+)
     val isAssociating: Boolean = false,
     val pendingAssociationIntent: IntentSender? = null,
@@ -206,6 +216,11 @@ class RNodeWizardViewModel
 
         private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
+
+        // USB bridge (singleton from reticulum module)
+        private val usbBridge by lazy {
+            com.lxmf.messenger.reticulum.usb.KotlinUSBBridge.getInstance(context)
+        }
 
         // RSSI update throttling - track last update time per device
         private val lastRssiUpdate = mutableMapOf<String, Long>()
@@ -455,6 +470,8 @@ class RNodeWizardViewModel
                                         state.manualDeviceName.isNotBlank() &&
                                         state.manualDeviceNameError == null
                                 )
+                        RNodeConnectionType.USB_SERIAL ->
+                            state.selectedUsbDevice != null && state.selectedUsbDevice.hasPermission
                     }
                 WizardStep.REGION_SELECTION ->
                     state.selectedFrequencyRegion != null || state.isCustomMode || state.selectedPreset != null
@@ -1306,12 +1323,22 @@ class RNodeWizardViewModel
             _state.update {
                 it.copy(
                     connectionType = type,
-                    // Clear Bluetooth selection when switching to TCP
-                    selectedDevice = if (type == RNodeConnectionType.TCP_WIFI) null else it.selectedDevice,
-                    // Clear TCP validation when switching to Bluetooth
-                    tcpValidationSuccess = if (type == RNodeConnectionType.BLUETOOTH) null else it.tcpValidationSuccess,
-                    tcpValidationError = if (type == RNodeConnectionType.BLUETOOTH) null else it.tcpValidationError,
+                    // Clear Bluetooth selection when switching away from Bluetooth
+                    selectedDevice = if (type != RNodeConnectionType.BLUETOOTH) null else it.selectedDevice,
+                    // Clear TCP validation when switching away from TCP
+                    tcpValidationSuccess = if (type != RNodeConnectionType.TCP_WIFI) null else it.tcpValidationSuccess,
+                    tcpValidationError = if (type != RNodeConnectionType.TCP_WIFI) null else it.tcpValidationError,
+                    // Clear USB selection when switching away from USB
+                    selectedUsbDevice = if (type != RNodeConnectionType.USB_SERIAL) null else it.selectedUsbDevice,
+                    usbScanError = if (type != RNodeConnectionType.USB_SERIAL) null else it.usbScanError,
+                    usbBluetoothPin = if (type != RNodeConnectionType.USB_SERIAL) null else it.usbBluetoothPin,
+                    isUsbPairingMode = if (type != RNodeConnectionType.USB_SERIAL) false else it.isUsbPairingMode,
                 )
+            }
+
+            // Auto-scan USB devices when switching to USB mode
+            if (type == RNodeConnectionType.USB_SERIAL) {
+                scanUsbDevices()
             }
         }
 
@@ -1407,6 +1434,201 @@ class RNodeWizardViewModel
                     }
                 }
             }
+        }
+
+        // =========================================================================
+        // USB Serial Methods
+        // =========================================================================
+
+        /**
+         * Scan for connected USB serial devices.
+         */
+        fun scanUsbDevices() {
+            viewModelScope.launch {
+                _state.update { it.copy(isUsbScanning = true, usbScanError = null) }
+
+                try {
+                    val devices = withContext(Dispatchers.IO) {
+                        usbBridge.getConnectedUsbDevices()
+                    }
+
+                    val usbDevices = devices.map { device ->
+                        com.lxmf.messenger.data.model.DiscoveredUsbDevice(
+                            deviceId = device.deviceId,
+                            vendorId = device.vendorId,
+                            productId = device.productId,
+                            deviceName = device.deviceName,
+                            manufacturerName = device.manufacturerName,
+                            productName = device.productName,
+                            serialNumber = device.serialNumber,
+                            driverType = device.driverType,
+                            hasPermission = usbBridge.hasPermission(device.deviceId),
+                        )
+                    }
+
+                    _state.update {
+                        it.copy(
+                            isUsbScanning = false,
+                            usbDevices = usbDevices,
+                            usbScanError = if (usbDevices.isEmpty()) "No USB serial devices found" else null,
+                        )
+                    }
+
+                    Log.d(TAG, "Found ${usbDevices.size} USB serial device(s)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "USB scan failed", e)
+                    _state.update {
+                        it.copy(
+                            isUsbScanning = false,
+                            usbScanError = "Failed to scan USB devices: ${e.message}",
+                        )
+                    }
+                }
+            }
+        }
+
+        /**
+         * Select a USB device.
+         * If permission is needed, requests it first.
+         */
+        fun selectUsbDevice(device: com.lxmf.messenger.data.model.DiscoveredUsbDevice) {
+            if (device.hasPermission) {
+                _state.update { it.copy(selectedUsbDevice = device) }
+            } else {
+                requestUsbPermission(device)
+            }
+        }
+
+        /**
+         * Request USB permission for a device.
+         */
+        fun requestUsbPermission(device: com.lxmf.messenger.data.model.DiscoveredUsbDevice) {
+            _state.update { it.copy(isRequestingUsbPermission = true) }
+
+            usbBridge.requestPermission(device.deviceId) { granted ->
+                viewModelScope.launch {
+                    if (granted) {
+                        Log.d(TAG, "USB permission granted for device ${device.deviceId}")
+                        // Update device list to reflect new permission status
+                        val updatedDevices = _state.value.usbDevices.map {
+                            if (it.deviceId == device.deviceId) it.copy(hasPermission = true) else it
+                        }
+                        val updatedDevice = device.copy(hasPermission = true)
+                        _state.update {
+                            it.copy(
+                                isRequestingUsbPermission = false,
+                                usbDevices = updatedDevices,
+                                selectedUsbDevice = updatedDevice,
+                            )
+                        }
+                    } else {
+                        Log.w(TAG, "USB permission denied for device ${device.deviceId}")
+                        _state.update {
+                            it.copy(
+                                isRequestingUsbPermission = false,
+                                usbScanError = "USB permission denied. Please grant permission to use this device.",
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * Enter Bluetooth pairing mode via USB connection.
+         * Sends CMD_BT_CTRL command to RNode to enter pairing mode.
+         * RNode will respond with CMD_BT_PIN containing the 6-digit PIN.
+         */
+        fun enterUsbBluetoothPairingMode() {
+            val device = _state.value.selectedUsbDevice ?: return
+
+            viewModelScope.launch {
+                _state.update { it.copy(isUsbPairingMode = true, usbBluetoothPin = null) }
+
+                try {
+                    // Set up PIN callback (Kotlin version)
+                    usbBridge.setOnBluetoothPinReceivedKotlin { pin ->
+                        viewModelScope.launch {
+                            Log.d(TAG, "Received Bluetooth PIN from RNode: $pin")
+                            _state.update { it.copy(usbBluetoothPin = pin) }
+                        }
+                    }
+
+                    // Connect to USB device
+                    val connected = withContext(Dispatchers.IO) {
+                        usbBridge.connect(device.deviceId)
+                    }
+
+                    if (!connected) {
+                        _state.update {
+                            it.copy(
+                                isUsbPairingMode = false,
+                                usbScanError = "Failed to connect to USB device",
+                            )
+                        }
+                        return@launch
+                    }
+
+                    // Send pairing mode command via Python bridge
+                    // Note: This will be handled by the Python rnode_interface
+                    // For now, we send raw KISS command directly
+                    val kissPairingCmd = byteArrayOf(
+                        0xC0.toByte(), // KISS FEND
+                        0x46.toByte(), // CMD_BT_CTRL
+                        0x02.toByte(), // BT_CTRL_PAIRING_MODE
+                        0xC0.toByte(), // KISS FEND
+                    )
+
+                    val written = withContext(Dispatchers.IO) {
+                        usbBridge.write(kissPairingCmd)
+                    }
+
+                    if (written != kissPairingCmd.size) {
+                        _state.update {
+                            it.copy(
+                                isUsbPairingMode = false,
+                                usbScanError = "Failed to send pairing command",
+                            )
+                        }
+                        usbBridge.disconnect()
+                    } else {
+                        Log.d(TAG, "Bluetooth pairing mode command sent via USB")
+                        // Wait for PIN response (handled by callback)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to enter Bluetooth pairing mode", e)
+                    _state.update {
+                        it.copy(
+                            isUsbPairingMode = false,
+                            usbScanError = "Error: ${e.message}",
+                        )
+                    }
+                }
+            }
+        }
+
+        /**
+         * Exit USB Bluetooth pairing mode.
+         */
+        fun exitUsbBluetoothPairingMode() {
+            viewModelScope.launch {
+                withContext(Dispatchers.IO) {
+                    usbBridge.disconnect()
+                }
+                _state.update {
+                    it.copy(
+                        isUsbPairingMode = false,
+                        usbBluetoothPin = null,
+                    )
+                }
+            }
+        }
+
+        /**
+         * Clear USB-related errors.
+         */
+        fun clearUsbError() {
+            _state.update { it.copy(usbScanError = null) }
         }
 
         // Pairing handler to auto-confirm Just Works pairing

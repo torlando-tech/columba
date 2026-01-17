@@ -269,15 +269,19 @@ flowchart LR
 
 **Solution:** Use the 16-byte Reticulum identity (exchanged during handshake) as the stable peer identifier. When a new connection arrives with a known identity but different MAC, migrate all address-based mappings to the new MAC while preserving the peer interface and fragmenter state.
 
-**Connection flow** (new MAC connects):
+**Important:** Identity detection differs by connection role:
+- **Central mode** (we connect to peer): Kotlin reads Identity Characteristic → `handleIdentityReceived`
+- **Peripheral mode** (peer connects to us): Python detects 16-byte handshake → `_handle_identity_handshake`
+
+**Central mode flow** (we connect to peer with new MAC):
 
 ```mermaid
 flowchart TD
-    A[New connection from MAC_NEW<br/>with identity] --> B{Python: _check_duplicate_identity<br/><br/>Prevents duplicate connections during MAC rotation overlap. Without this, we'd have two connections to same peer.}
-    B -->|"identity already at MAC_OLD<br/>(connected)"| C[Reject connection<br/>Android MAC rotation]
-    B -->|"new identity or<br/>same MAC"| D[Allow connection]
+    A[We connect to MAC_NEW<br/>Read Identity Characteristic] --> B[Kotlin: handleIdentityReceived]
+    B --> C{onDuplicateIdentityDetected callback<br/><br/>Python: _check_duplicate_identity}
+    C -->|"identity already at MAC_OLD<br/>(still connected)"| D[Reject connection<br/>Log: Duplicate identity rejected]
+    C -->|"new identity or<br/>MAC_OLD disconnected"| E[Allow connection]
 
-    D --> E[Kotlin: handleIdentityReceived]
     E --> F{Existing mapping for identity?}
 
     F -->|No| G[Create new mapping<br/>identity → MAC_NEW]
@@ -291,6 +295,19 @@ flowchart TD
     L --> M[Migrate mappings:<br/>• address_to_identity<br/>• identity_to_address<br/>• interface.peer_address]
 ```
 
+**Peripheral mode flow** (peer with new MAC connects to us):
+
+```mermaid
+flowchart TD
+    A[MAC_NEW connects to us<br/>Sends 16-byte identity handshake] --> B[Python: _handle_identity_handshake<br/>Detects len=16, no existing identity]
+    B --> C{_check_duplicate_identity<br/><br/>Same check as central mode}
+    C -->|"identity at MAC_OLD<br/>(still connected)"| D[Reject: disconnect MAC_NEW<br/>Log: duplicate identity rejected]
+    C -->|"new identity or<br/>MAC_OLD disconnected"| E{Identity already has interface?}
+    E -->|No| F[Create new interface<br/>Store mappings]
+    E -->|Yes| G[Update existing interface<br/>peer_address = MAC_NEW]
+    G --> H[Update address_to_interface<br/>identity_to_address mappings]
+```
+
 **On disconnect (MAC_OLD disconnects while MAC_NEW still connected):**
 ```mermaid
 flowchart LR
@@ -300,7 +317,7 @@ flowchart LR
 ```
 
 **Key behaviors:**
-- **Early rejection**: `_check_duplicate_identity` rejects if identity already connected (see note in diagram)
+- **Early rejection (both modes)**: `_check_duplicate_identity` rejects if identity already connected at different MAC — works in both central mode (via Kotlin callback) and peripheral mode (in `_handle_identity_handshake`)
 - **Central preference**: Kotlin prefers mappings with live central connections (more reliable for sending)
 - **Stale cache**: On disconnect, `staleAddressToIdentity` caches old address → identity, allowing `send()` to resolve old addresses during transition
 - **Fragmenter/Reassembler unaffected**: Keyed by identity (32-char hex), not address — they continue working across MAC rotations without migration

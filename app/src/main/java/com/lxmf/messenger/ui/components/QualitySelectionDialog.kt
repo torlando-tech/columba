@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.lxmf.messenger.ui.components
 
 import androidx.compose.foundation.ScrollState

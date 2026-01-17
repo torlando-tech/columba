@@ -184,51 +184,49 @@ class ConversationLinkManager
              * 3. If single hop with fast interface and no measurements → trust interface
              * 4. Fall back to hop count heuristics if no rate data available
              */
+            @Suppress("ReturnCount")
             fun recommendPreset(): ImageCompressionPreset {
                 val interfaceBitrate = nextHopBitrateBps?.takeIf { it > 0 }
                 val linkRate = expectedRateBps ?: establishmentRateBps
                 val hopCount = hops
 
                 // 1. Always prefer actual link measurements over interface speed
-                // This is the most reliable indicator of actual path performance
                 if (linkRate != null && linkRate > 0) {
                     return presetFromBitrate(linkRate)
                 }
 
-                // 2. If next hop is slow (< 50 kbps), it's likely LoRa/BLE - use it
-                if (interfaceBitrate != null && interfaceBitrate < THRESHOLD_SLOW_INTERFACE_BPS) {
-                    return presetFromBitrate(interfaceBitrate)
-                }
-
-                // 3. Single hop with fast interface and NO link metrics - trust interface
-                if (hopCount == 1 && interfaceBitrate != null && interfaceBitrate >= THRESHOLD_FAST_INTERFACE_BPS) {
-                    return presetFromBitrate(interfaceBitrate)
-                }
-
-                // 4. Multi-hop with fast first hop but no link metrics - be conservative
-                if (interfaceBitrate != null && hopCount != null && hopCount > 1) {
-                    // Can't trust fast first hop for multi-hop paths
-                    return ImageCompressionPreset.MEDIUM
-                }
-
-                // 5. Fallback: use interface bitrate if available
+                // 2. Use interface bitrate for various scenarios
                 if (interfaceBitrate != null) {
-                    return presetFromBitrate(interfaceBitrate)
+                    return recommendFromInterfaceBitrate(interfaceBitrate, hopCount)
                 }
 
-                // 6. Last resort: hop count heuristics
-                return when {
-                    hopCount != null -> {
-                        when {
-                            hopCount <= 1 -> ImageCompressionPreset.HIGH
-                            hopCount <= 3 -> ImageCompressionPreset.MEDIUM
-                            else -> ImageCompressionPreset.LOW
-                        }
-                    }
+                // 3. Last resort: hop count or error-based heuristics
+                return recommendFromHopCountOrError(hopCount)
+            }
+
+            private fun recommendFromInterfaceBitrate(
+                interfaceBitrate: Long,
+                hopCount: Int?,
+            ): ImageCompressionPreset =
+                when {
+                    // Slow interface (< 50 kbps, likely LoRa/BLE) - use it directly
+                    interfaceBitrate < THRESHOLD_SLOW_INTERFACE_BPS -> presetFromBitrate(interfaceBitrate)
+                    // Single hop with fast interface - trust it
+                    hopCount == 1 && interfaceBitrate >= THRESHOLD_FAST_INTERFACE_BPS -> presetFromBitrate(interfaceBitrate)
+                    // Multi-hop with fast first hop - be conservative (can't trust fast first hop)
+                    hopCount != null && hopCount > 1 -> ImageCompressionPreset.MEDIUM
+                    // Fallback: use interface bitrate
+                    else -> presetFromBitrate(interfaceBitrate)
+                }
+
+            private fun recommendFromHopCountOrError(hopCount: Int?): ImageCompressionPreset =
+                when {
+                    hopCount != null && hopCount <= 1 -> ImageCompressionPreset.HIGH
+                    hopCount != null && hopCount <= 3 -> ImageCompressionPreset.MEDIUM
+                    hopCount != null -> ImageCompressionPreset.LOW
                     error != null -> ImageCompressionPreset.LOW // No connection
                     else -> ImageCompressionPreset.MEDIUM // Unknown state
                 }
-            }
         }
 
         /**

@@ -1789,24 +1789,28 @@ class MessagingViewModel
          * @return Recommended codec profile, or DEFAULT if probing fails
          */
         suspend fun getRecommendedCodecProfile(): CodecProfile {
-            val destHash = _currentConversation.value ?: return CodecProfile.DEFAULT
-            val destHashBytes = validateDestinationHash(destHash) ?: return CodecProfile.DEFAULT
-
+            val destHash = _currentConversation.value
+            val destHashBytes = destHash?.let { validateDestinationHash(it) }
             val protocol = reticulumProtocol as? ServiceReticulumProtocol
-                ?: return CodecProfile.DEFAULT
 
-            return try {
+            return if (destHashBytes != null && protocol != null) {
+                probeAndRecommendCodec(protocol, destHashBytes)
+            } else {
+                CodecProfile.DEFAULT
+            }
+        }
+
+        private suspend fun probeAndRecommendCodec(
+            protocol: ServiceReticulumProtocol,
+            destHashBytes: ByteArray,
+        ): CodecProfile =
+            try {
                 val probe = protocol.probeLinkSpeed(destHashBytes, 5.0f, "direct")
-                if (probe.isSuccess) {
-                    CodecProfile.recommendFromProbe(probe)
-                } else {
-                    CodecProfile.DEFAULT
-                }
+                if (probe.isSuccess) CodecProfile.recommendFromProbe(probe) else CodecProfile.DEFAULT
             } catch (e: Exception) {
                 Log.e(TAG, "Error probing link speed for codec recommendation", e)
                 CodecProfile.DEFAULT
             }
-        }
 
         override fun onCleared() {
             super.onCleared()

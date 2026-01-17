@@ -1,12 +1,10 @@
 package com.lxmf.messenger.reticulum.usb
 
 import android.content.Context
-import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.isActive
 import org.junit.After
@@ -83,26 +81,29 @@ class KotlinUSBBridgeTest {
         var connectedDeviceId: Int? = null
         var disconnectedDeviceId: Int? = null
 
-        val listener = object : UsbConnectionListener {
-            override fun onUsbConnected(deviceId: Int) {
-                connectedDeviceId = deviceId
-            }
+        val listener =
+            object : UsbConnectionListener {
+                override fun onUsbConnected(deviceId: Int) {
+                    connectedDeviceId = deviceId
+                }
 
-            override fun onUsbDisconnected(deviceId: Int) {
-                disconnectedDeviceId = deviceId
-            }
+                override fun onUsbDisconnected(deviceId: Int) {
+                    disconnectedDeviceId = deviceId
+                }
 
-            override fun onUsbPermissionGranted(deviceId: Int) {}
-            override fun onUsbPermissionDenied(deviceId: Int) {}
-        }
+                override fun onUsbPermissionGranted(deviceId: Int) {}
+
+                override fun onUsbPermissionDenied(deviceId: Int) {}
+            }
 
         bridge.addConnectionListener(listener)
 
         // Access notifyListeners via reflection to test listener registration
-        val notifyMethod = KotlinUSBBridge::class.java.getDeclaredMethod(
-            "notifyListeners",
-            Function1::class.java
-        )
+        val notifyMethod =
+            KotlinUSBBridge::class.java.getDeclaredMethod(
+                "notifyListeners",
+                Function1::class.java,
+            )
         notifyMethod.isAccessible = true
         notifyMethod.invoke(bridge, { l: UsbConnectionListener -> l.onUsbConnected(42) })
 
@@ -114,23 +115,27 @@ class KotlinUSBBridgeTest {
         val bridge = KotlinUSBBridge(mockContext)
         val connectionCount = AtomicInteger(0)
 
-        val listener = object : UsbConnectionListener {
-            override fun onUsbConnected(deviceId: Int) {
-                connectionCount.incrementAndGet()
-            }
+        val listener =
+            object : UsbConnectionListener {
+                override fun onUsbConnected(deviceId: Int) {
+                    connectionCount.incrementAndGet()
+                }
 
-            override fun onUsbDisconnected(deviceId: Int) {}
-            override fun onUsbPermissionGranted(deviceId: Int) {}
-            override fun onUsbPermissionDenied(deviceId: Int) {}
-        }
+                override fun onUsbDisconnected(deviceId: Int) {}
+
+                override fun onUsbPermissionGranted(deviceId: Int) {}
+
+                override fun onUsbPermissionDenied(deviceId: Int) {}
+            }
 
         bridge.addConnectionListener(listener)
 
         // Notify first time
-        val notifyMethod = KotlinUSBBridge::class.java.getDeclaredMethod(
-            "notifyListeners",
-            Function1::class.java
-        )
+        val notifyMethod =
+            KotlinUSBBridge::class.java.getDeclaredMethod(
+                "notifyListeners",
+                Function1::class.java,
+            )
         notifyMethod.isAccessible = true
         notifyMethod.invoke(bridge, { l: UsbConnectionListener -> l.onUsbConnected(1) })
 
@@ -149,24 +154,28 @@ class KotlinUSBBridgeTest {
         val bridge = KotlinUSBBridge(mockContext)
         val notificationCount = AtomicInteger(0)
 
-        val listener = object : UsbConnectionListener {
-            override fun onUsbConnected(deviceId: Int) {
-                notificationCount.incrementAndGet()
-            }
+        val listener =
+            object : UsbConnectionListener {
+                override fun onUsbConnected(deviceId: Int) {
+                    notificationCount.incrementAndGet()
+                }
 
-            override fun onUsbDisconnected(deviceId: Int) {}
-            override fun onUsbPermissionGranted(deviceId: Int) {}
-            override fun onUsbPermissionDenied(deviceId: Int) {}
-        }
+                override fun onUsbDisconnected(deviceId: Int) {}
+
+                override fun onUsbPermissionGranted(deviceId: Int) {}
+
+                override fun onUsbPermissionDenied(deviceId: Int) {}
+            }
 
         // Register same listener twice
         bridge.addConnectionListener(listener)
         bridge.addConnectionListener(listener)
 
-        val notifyMethod = KotlinUSBBridge::class.java.getDeclaredMethod(
-            "notifyListeners",
-            Function1::class.java
-        )
+        val notifyMethod =
+            KotlinUSBBridge::class.java.getDeclaredMethod(
+                "notifyListeners",
+                Function1::class.java,
+            )
         notifyMethod.isAccessible = true
         notifyMethod.invoke(bridge, { l: UsbConnectionListener -> l.onUsbConnected(1) })
 
@@ -178,33 +187,40 @@ class KotlinUSBBridgeTest {
         val bridge = KotlinUSBBridge(mockContext)
         val listener2Called = AtomicBoolean(false)
 
-        val throwingListener = object : UsbConnectionListener {
-            override fun onUsbConnected(deviceId: Int) {
-                error("Test exception")
+        val throwingListener =
+            object : UsbConnectionListener {
+                override fun onUsbConnected(deviceId: Int) {
+                    error("Test exception")
+                }
+
+                override fun onUsbDisconnected(deviceId: Int) {}
+
+                override fun onUsbPermissionGranted(deviceId: Int) {}
+
+                override fun onUsbPermissionDenied(deviceId: Int) {}
             }
 
-            override fun onUsbDisconnected(deviceId: Int) {}
-            override fun onUsbPermissionGranted(deviceId: Int) {}
-            override fun onUsbPermissionDenied(deviceId: Int) {}
-        }
+        val normalListener =
+            object : UsbConnectionListener {
+                override fun onUsbConnected(deviceId: Int) {
+                    listener2Called.set(true)
+                }
 
-        val normalListener = object : UsbConnectionListener {
-            override fun onUsbConnected(deviceId: Int) {
-                listener2Called.set(true)
+                override fun onUsbDisconnected(deviceId: Int) {}
+
+                override fun onUsbPermissionGranted(deviceId: Int) {}
+
+                override fun onUsbPermissionDenied(deviceId: Int) {}
             }
-
-            override fun onUsbDisconnected(deviceId: Int) {}
-            override fun onUsbPermissionGranted(deviceId: Int) {}
-            override fun onUsbPermissionDenied(deviceId: Int) {}
-        }
 
         bridge.addConnectionListener(throwingListener)
         bridge.addConnectionListener(normalListener)
 
-        val notifyMethod = KotlinUSBBridge::class.java.getDeclaredMethod(
-            "notifyListeners",
-            Function1::class.java
-        )
+        val notifyMethod =
+            KotlinUSBBridge::class.java.getDeclaredMethod(
+                "notifyListeners",
+                Function1::class.java,
+            )
         notifyMethod.isAccessible = true
 
         // Should not throw and should still notify second listener
@@ -305,7 +321,9 @@ class KotlinUSBBridgeTest {
                         }
 
                         override fun onUsbDisconnected(deviceId: Int) {}
+
                         override fun onUsbPermissionGranted(deviceId: Int) {}
+
                         override fun onUsbPermissionDenied(deviceId: Int) {}
                     },
                 )
@@ -315,10 +333,11 @@ class KotlinUSBBridgeTest {
 
         assertTrue("All registrations should complete", latch.await(5, TimeUnit.SECONDS))
 
-        val notifyMethod = KotlinUSBBridge::class.java.getDeclaredMethod(
-            "notifyListeners",
-            Function1::class.java
-        )
+        val notifyMethod =
+            KotlinUSBBridge::class.java.getDeclaredMethod(
+                "notifyListeners",
+                Function1::class.java,
+            )
         notifyMethod.isAccessible = true
         notifyMethod.invoke(bridge, { l: UsbConnectionListener -> l.onUsbConnected(1) })
 
@@ -361,16 +380,17 @@ class KotlinUSBBridgeTest {
 
     @Test
     fun `UsbDeviceInfo holds correct values`() {
-        val deviceInfo = UsbDeviceInfo(
-            deviceId = 1,
-            vendorId = 0x0403,
-            productId = 0x6001,
-            deviceName = "/dev/bus/usb/001/002",
-            manufacturerName = "FTDI",
-            productName = "FT232R",
-            serialNumber = "A12345",
-            driverType = "FTDI",
-        )
+        val deviceInfo =
+            UsbDeviceInfo(
+                deviceId = 1,
+                vendorId = 0x0403,
+                productId = 0x6001,
+                deviceName = "/dev/bus/usb/001/002",
+                manufacturerName = "FTDI",
+                productName = "FT232R",
+                serialNumber = "A12345",
+                driverType = "FTDI",
+            )
 
         assertEquals("Device ID should match", 1, deviceInfo.deviceId)
         assertEquals("Vendor ID should match", 0x0403, deviceInfo.vendorId)
@@ -384,16 +404,17 @@ class KotlinUSBBridgeTest {
 
     @Test
     fun `UsbDeviceInfo handles null optional fields`() {
-        val deviceInfo = UsbDeviceInfo(
-            deviceId = 1,
-            vendorId = 0x1A86,
-            productId = 0x7523,
-            deviceName = "/dev/bus/usb/001/003",
-            manufacturerName = null,
-            productName = null,
-            serialNumber = null,
-            driverType = "CH340",
-        )
+        val deviceInfo =
+            UsbDeviceInfo(
+                deviceId = 1,
+                vendorId = 0x1A86,
+                productId = 0x7523,
+                deviceName = "/dev/bus/usb/001/003",
+                manufacturerName = null,
+                productName = null,
+                serialNumber = null,
+                driverType = "CH340",
+            )
 
         assertEquals("Device ID should match", 1, deviceInfo.deviceId)
         assertNull("Manufacturer should be null", deviceInfo.manufacturerName)

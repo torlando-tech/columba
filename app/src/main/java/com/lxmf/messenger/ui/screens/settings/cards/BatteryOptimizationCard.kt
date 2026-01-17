@@ -1,5 +1,10 @@
 package com.lxmf.messenger.ui.screens.settings.cards
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,9 +13,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -37,7 +45,10 @@ import com.lxmf.messenger.util.BatteryOptimizationManager
 import kotlinx.coroutines.delay
 
 @Composable
-fun BatteryOptimizationCard() {
+fun BatteryOptimizationCard(
+    isExpanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+) {
     val context = LocalContext.current
     var isExempted by remember { mutableStateOf(false) }
     var isCheckingStatus by remember { mutableStateOf(true) }
@@ -56,102 +67,141 @@ fun BatteryOptimizationCard() {
         }
     }
 
+    // Dynamic colors based on exemption status
+    val containerColor =
+        if (isExempted) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.errorContainer
+        }
+    val contentColor =
+        if (isExempted) {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        } else {
+            MaterialTheme.colorScheme.onErrorContainer
+        }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onExpandedChange(!isExpanded) },
+        shape = RoundedCornerShape(12.dp),
         colors =
             CardDefaults.cardColors(
-                containerColor =
-                    if (isExempted) {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.errorContainer
-                    },
+                containerColor = containerColor,
             ),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // Header row (always visible)
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        imageVector = if (isExempted) Icons.Default.CheckCircle else Icons.Default.Info,
+                        contentDescription = null,
+                        tint = contentColor,
+                    )
+                    Text(
+                        text = "Background Service Protection",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = contentColor,
+                    )
+                }
+
+                // Chevron indicator
                 Icon(
-                    imageVector = if (isExempted) Icons.Default.CheckCircle else Icons.Default.Info,
-                    contentDescription = null,
-                    tint =
-                        if (isExempted) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
+                    imageVector =
+                        if (isExpanded) {
+                            Icons.Default.KeyboardArrowUp
                         } else {
-                            MaterialTheme.colorScheme.onErrorContainer
+                            Icons.Default.KeyboardArrowDown
                         },
-                )
-                Text(
-                    text = "Background Service Protection",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color =
-                        if (isExempted) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        },
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    tint = contentColor,
                 )
             }
 
-            if (isCheckingStatus) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            } else if (isExempted) {
-                Text(
-                    text = "Battery optimization exemption granted. Columba can run reliably in the background.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-
-                OutlinedButton(
-                    onClick = {
-                        val intent = BatteryOptimizationManager.createBatterySettingsIntent()
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
+            // Expanded content with animation
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(animationSpec = tween(durationMillis = 300)),
+                exit = shrinkVertically(animationSpec = tween(durationMillis = 300)),
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Icon(Icons.Default.Settings, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("View Battery Settings")
-                }
-            } else {
-                Text(
-                    text = "Battery optimization is enabled. Android may kill the background service during Deep Doze mode, causing gaps in message delivery.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                )
+                    if (isCheckingStatus) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    } else if (isExempted) {
+                        Text(
+                            text = "Battery optimization exemption granted. Columba can run reliably in the background.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = contentColor,
+                        )
 
-                Button(
-                    onClick = {
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                            BatteryOptimizationManager.recordPromptShown(context)
-                            val intent = BatteryOptimizationManager.createRequestExemptionIntent(context)
-                            context.startActivity(intent)
-                            // Status will auto-refresh within 3 seconds
+                        OutlinedButton(
+                            onClick = {
+                                val intent = BatteryOptimizationManager.createBatterySettingsIntent()
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("View Battery Settings")
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                        ),
-                ) {
-                    Text("Request Exemption")
-                }
+                    } else {
+                        Text(
+                            text =
+                                "Battery optimization is enabled. Android may kill the background " +
+                                    "service during Deep Doze mode, causing gaps in message delivery.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = contentColor,
+                        )
 
-                TextButton(
-                    onClick = {
-                        val intent = BatteryOptimizationManager.createBatterySettingsIntent()
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Open Battery Settings Manually")
+                        Button(
+                            onClick = {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                                    BatteryOptimizationManager.recordPromptShown(context)
+                                    val intent = BatteryOptimizationManager.createRequestExemptionIntent(context)
+                                    context.startActivity(intent)
+                                    // Status will auto-refresh within 3 seconds
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors =
+                                ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                ),
+                        ) {
+                            Text("Request Exemption")
+                        }
+
+                        TextButton(
+                            onClick = {
+                                val intent = BatteryOptimizationManager.createBatterySettingsIntent()
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Open Battery Settings Manually")
+                        }
+                    }
                 }
             }
         }

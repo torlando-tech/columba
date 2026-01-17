@@ -55,6 +55,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
 import com.lxmf.messenger.util.DeviceInfoUtil
 import com.lxmf.messenger.viewmodel.DebugViewModel
+import com.lxmf.messenger.viewmodel.SettingsCardId
 import com.lxmf.messenger.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
 
@@ -151,6 +152,8 @@ fun SettingsScreen(
                 }
 
                 NetworkCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.NETWORK.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.NETWORK, it) },
                     onViewStatus = onNavigateToNetworkStatus,
                     onManageInterfaces = onNavigateToInterfaces,
                     isSharedInstance = state.isSharedInstance,
@@ -160,15 +163,23 @@ fun SettingsScreen(
                 )
 
                 IdentityCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.IDENTITY.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.IDENTITY, it) },
                     onViewIdentity = onNavigateToIdentity,
                     onManageIdentities = onNavigateToIdentityManager,
                 )
 
                 NotificationSettingsCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.NOTIFICATIONS.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.NOTIFICATIONS, it) },
+                    notificationsEnabled = state.notificationsEnabled,
+                    onNotificationsEnabledChange = { viewModel.setNotificationsEnabled(it) },
                     onManageClick = onNavigateToNotifications,
                 )
 
                 AutoAnnounceCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.AUTO_ANNOUNCE.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.AUTO_ANNOUNCE, it) },
                     enabled = state.autoAnnounceEnabled,
                     intervalHours = state.autoAnnounceIntervalHours,
                     lastAnnounceTime = state.lastAutoAnnounceTime,
@@ -182,6 +193,8 @@ fun SettingsScreen(
                 )
 
                 LocationSharingCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.LOCATION_SHARING.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.LOCATION_SHARING, it) },
                     enabled = state.locationSharingEnabled,
                     onEnabledChange = { viewModel.setLocationSharingEnabled(it) },
                     activeSessions = state.activeSharingSessions,
@@ -194,6 +207,8 @@ fun SettingsScreen(
                 )
 
                 MapSourcesCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.MAP_SOURCES.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.MAP_SOURCES, it) },
                     httpEnabled = state.mapSourceHttpEnabled,
                     onHttpEnabledChange = { viewModel.setMapSourceHttpEnabled(it) },
                     rmspEnabled = state.mapSourceRmspEnabled,
@@ -203,6 +218,8 @@ fun SettingsScreen(
                 )
 
                 MessageDeliveryRetrievalCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.MESSAGE_DELIVERY.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.MESSAGE_DELIVERY, it) },
                     defaultMethod = state.defaultDeliveryMethod,
                     tryPropagationOnFail = state.tryPropagationOnFail,
                     currentRelayName = state.currentRelayName,
@@ -234,6 +251,8 @@ fun SettingsScreen(
                 )
 
                 ImageCompressionCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.IMAGE_COMPRESSION.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.IMAGE_COMPRESSION, it) },
                     selectedPreset = state.imageCompressionPreset,
                     detectedPreset = state.detectedCompressionPreset,
                     hasSlowInterface =
@@ -243,15 +262,22 @@ fun SettingsScreen(
                 )
 
                 ThemeSelectionCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.THEME.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.THEME, it) },
                     selectedTheme = state.selectedTheme,
                     customThemes = state.customThemes,
                     onThemeChange = { viewModel.setTheme(it) },
                     onNavigateToCustomThemes = onNavigateToCustomThemes,
                 )
 
-                BatteryOptimizationCard()
+                BatteryOptimizationCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.BATTERY.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.BATTERY, it) },
+                )
 
                 DataMigrationCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.DATA_MIGRATION.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.DATA_MIGRATION, it) },
                     onNavigateToMigration = onNavigateToMigration,
                 )
 
@@ -274,6 +300,8 @@ fun SettingsScreen(
                     }
 
                 AboutCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.ABOUT.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.ABOUT, it) },
                     systemInfo = systemInfo,
                     onCopySystemInfo = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

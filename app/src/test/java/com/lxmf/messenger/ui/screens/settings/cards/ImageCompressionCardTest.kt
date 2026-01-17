@@ -41,6 +41,8 @@ class ImageCompressionCardTest {
     fun `card displays title`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.AUTO,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -55,6 +57,8 @@ class ImageCompressionCardTest {
     fun `card displays description text`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.AUTO,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -72,6 +76,8 @@ class ImageCompressionCardTest {
     fun `card displays all preset chips`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.HIGH,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -90,6 +96,8 @@ class ImageCompressionCardTest {
     fun `LOW preset shows correct description`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.LOW,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -104,6 +112,8 @@ class ImageCompressionCardTest {
     fun `MEDIUM preset shows correct description`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.MEDIUM,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -118,6 +128,8 @@ class ImageCompressionCardTest {
     fun `HIGH preset shows correct description`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.HIGH,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -132,6 +144,8 @@ class ImageCompressionCardTest {
     fun `ORIGINAL preset shows correct description`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.ORIGINAL,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -148,6 +162,8 @@ class ImageCompressionCardTest {
     fun `AUTO preset with detected LOW shows Auto Low chip`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.AUTO,
                 detectedPreset = ImageCompressionPreset.LOW,
                 hasSlowInterface = true,
@@ -162,6 +178,8 @@ class ImageCompressionCardTest {
     fun `AUTO preset with detected MEDIUM shows Auto Medium chip`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.AUTO,
                 detectedPreset = ImageCompressionPreset.MEDIUM,
                 hasSlowInterface = true,
@@ -176,6 +194,8 @@ class ImageCompressionCardTest {
     fun `AUTO preset with detected HIGH shows Auto High chip`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.AUTO,
                 detectedPreset = ImageCompressionPreset.HIGH,
                 hasSlowInterface = false,
@@ -190,6 +210,8 @@ class ImageCompressionCardTest {
     fun `AUTO preset shows detected preset description`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.AUTO,
                 detectedPreset = ImageCompressionPreset.LOW,
                 hasSlowInterface = true,
@@ -207,6 +229,8 @@ class ImageCompressionCardTest {
     fun `warning shown when ORIGINAL selected with slow interface`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.ORIGINAL,
                 detectedPreset = null,
                 hasSlowInterface = true,
@@ -224,6 +248,8 @@ class ImageCompressionCardTest {
     fun `warning not shown when ORIGINAL selected without slow interface`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.ORIGINAL,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -241,6 +267,8 @@ class ImageCompressionCardTest {
     fun `warning not shown for LOW preset with slow interface`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.LOW,
                 detectedPreset = null,
                 hasSlowInterface = true,
@@ -262,6 +290,8 @@ class ImageCompressionCardTest {
 
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.AUTO,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -280,6 +310,8 @@ class ImageCompressionCardTest {
 
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.AUTO,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -298,6 +330,8 @@ class ImageCompressionCardTest {
 
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.AUTO,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -316,6 +350,8 @@ class ImageCompressionCardTest {
 
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.AUTO,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -334,6 +370,8 @@ class ImageCompressionCardTest {
 
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.HIGH,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -352,6 +390,8 @@ class ImageCompressionCardTest {
     fun `LOW preset shows max dimensions`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.LOW,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -366,6 +406,8 @@ class ImageCompressionCardTest {
     fun `MEDIUM preset shows max dimensions`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.MEDIUM,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -380,6 +422,8 @@ class ImageCompressionCardTest {
     fun `HIGH preset shows max dimensions`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.HIGH,
                 detectedPreset = null,
                 hasSlowInterface = false,
@@ -394,6 +438,8 @@ class ImageCompressionCardTest {
     fun `ORIGINAL preset shows 8K max dimensions`() {
         composeTestRule.setContent {
             ImageCompressionCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 selectedPreset = ImageCompressionPreset.ORIGINAL,
                 detectedPreset = null,
                 hasSlowInterface = false,

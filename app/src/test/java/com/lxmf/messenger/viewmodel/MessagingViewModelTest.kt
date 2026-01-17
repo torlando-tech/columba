@@ -1161,7 +1161,6 @@ class MessagingViewModelTest {
             coVerify(exactly = 0) {
                 conversationRepository.updateMessageStatus(testMessageHash, "failed")
             }
-
         }
 
     @Test
@@ -1217,7 +1216,6 @@ class MessagingViewModelTest {
             coVerify(exactly = 0) {
                 conversationRepository.updateMessageStatus(testMessageHash, "failed")
             }
-
         }
 
     @Test
@@ -1273,7 +1271,6 @@ class MessagingViewModelTest {
             coVerify(exactly = 0) {
                 conversationRepository.updateMessageStatus(testMessageHash, "failed")
             }
-
         }
 
     @Test
@@ -1329,7 +1326,6 @@ class MessagingViewModelTest {
             coVerify(exactly = 1) {
                 conversationRepository.updateMessageStatus(testMessageHash, "failed")
             }
-
         }
 
     @Test
@@ -1385,7 +1381,6 @@ class MessagingViewModelTest {
             coVerify(exactly = 1) {
                 conversationRepository.updateMessageStatus(testMessageHash, "delivered")
             }
-
         }
 
     // ========== CONTACT TOGGLE TESTS ==========

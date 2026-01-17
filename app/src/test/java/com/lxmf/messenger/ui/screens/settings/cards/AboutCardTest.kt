@@ -64,6 +64,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
                 )
@@ -78,6 +80,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
                 )
@@ -92,6 +96,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
                 )
@@ -108,6 +114,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
                 )
@@ -122,6 +130,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
                 )
@@ -139,6 +149,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
                 )
@@ -154,6 +166,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = minimalSystemInfo,
                     onCopySystemInfo = {},
                 )
@@ -177,6 +191,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = infoWithNullVersions,
                     onCopySystemInfo = {},
                 )
@@ -193,6 +209,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = infoWithNullIdentity,
                     onCopySystemInfo = {},
                 )
@@ -209,6 +227,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = customVersionInfo,
                     onCopySystemInfo = {},
                 )
@@ -240,6 +260,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = edgeCaseInfo,
                     onCopySystemInfo = {},
                 )
@@ -256,6 +278,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
                 )
@@ -275,6 +299,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
                 )
@@ -290,6 +316,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = minimalSystemInfo,
                     onCopySystemInfo = {},
                 )
@@ -307,6 +335,8 @@ class AboutCardTest {
         composeTestRule.setContent {
             ColumbaTheme {
                 AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = { callbackInvoked = true },
                 )

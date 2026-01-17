@@ -1100,9 +1100,10 @@ class ReticulumServiceBinder(
 
     override fun getReticulumVersion(): String? {
         return try {
-            val result = wrapperManager.withWrapper { wrapper ->
-                wrapper.callAttr("get_reticulum_version")?.toString()
-            }
+            val result =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr("get_reticulum_version")?.toString()
+                }
             result?.takeIf { it != "unknown" }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get Reticulum version", e)
@@ -1112,9 +1113,10 @@ class ReticulumServiceBinder(
 
     override fun getLxmfVersion(): String? {
         return try {
-            val result = wrapperManager.withWrapper { wrapper ->
-                wrapper.callAttr("get_lxmf_version")?.toString()
-            }
+            val result =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr("get_lxmf_version")?.toString()
+                }
             result?.takeIf { it != "unknown" }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get LXMF version", e)
@@ -1124,9 +1126,10 @@ class ReticulumServiceBinder(
 
     override fun getBleReticulumVersion(): String? {
         return try {
-            val result = wrapperManager.withWrapper { wrapper ->
-                wrapper.callAttr("get_ble_reticulum_version")?.toString()
-            }
+            val result =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr("get_ble_reticulum_version")?.toString()
+                }
             result?.takeIf { it != "unknown" }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get BLE-Reticulum version", e)

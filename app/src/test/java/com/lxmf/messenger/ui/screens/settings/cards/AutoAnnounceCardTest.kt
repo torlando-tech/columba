@@ -63,6 +63,8 @@ class AutoAnnounceCardTest {
         composeTestRule.setContent {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 AutoAnnounceCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     enabled = config.enabled,
                     intervalHours = config.intervalHours,
                     lastAnnounceTime = config.lastAnnounceTime,
@@ -88,10 +90,11 @@ class AutoAnnounceCardTest {
     }
 
     @Test
-    fun header_displaysIcon() {
+    fun header_displaysTitle() {
         setUpCardWithConfig(AutoAnnounceTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithContentDescription("Auto Announce").assertIsDisplayed()
+        // The card title is displayed in the header
+        composeTestRule.onNodeWithText("Auto Announce").assertIsDisplayed()
     }
 
     @Test

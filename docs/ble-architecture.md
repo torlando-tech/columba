@@ -224,13 +224,13 @@ sequenceDiagram
     Note over C: Connect as GATT client
     C->>P: Read Identity Characteristic
     P-->>C: Peripheral's 16-byte identity
-    Note over C: Store: address → identity
+    Note over C: Store bidirectional mapping:<br/>address_to_identity[addr] = bytes<br/>identity_to_address[hash] = addr
 
     C->>P: Write 16 bytes to RX Characteristic
     Note over P: Detect identity handshake:<br/>exactly 16 bytes, no existing identity
-    Note over P: Store: address → identity
+    Note over P: Store bidirectional mapping:<br/>address_to_identity[addr] = bytes<br/>identity_to_address[hash] = addr
 
-    Note over C,P: Both sides now have<br/>identity ↔ address mapping
+    Note over C,P: Both sides now have<br/>bidirectional identity ↔ address mapping
 ```
 
 ### Identity Tracking Data Structures
@@ -238,22 +238,30 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph Python["Python (BLEInterface)"]
-        P_A2I["address_to_identity<br/>MAC → 16-byte identity"]
-        P_I2A["identity_to_address<br/>hash → MAC"]
-        P_SI["spawned_interfaces<br/>hash → BLEPeerInterface"]
-        P_Cache["_identity_cache<br/>MAC → (identity, timestamp)<br/>TTL: 60s"]
+        P_A2I["address_to_identity<br/>MAC → 16 bytes"]
+        P_I2A["identity_to_address<br/>16-char hex → MAC"]
+        P_SI["spawned_interfaces<br/>16-char hex → BLEPeerInterface"]
+        P_Cache["_identity_cache<br/>MAC → (16 bytes, timestamp)<br/>TTL: 60s"]
     end
 
     subgraph Kotlin["Kotlin (KotlinBLEBridge)"]
-        K_A2I["addressToIdentity<br/>MAC → 32-char hex"]
-        K_I2A["identityToAddress<br/>hex → MAC"]
+        K_A2I["addressToIdentity<br/>MAC → 16 bytes<br/>(central mode only)"]
+        K_I2A["identityToAddress<br/>16-char hex → MAC<br/>(central mode only)"]
         K_Peers["connectedPeers<br/>MAC → PeerConnection"]
         K_Pending["pendingConnections<br/>MAC → PendingConnection"]
     end
 
-    P_A2I -.->|sync| K_A2I
-    P_I2A -.->|sync| K_I2A
+    K_A2I -.->|"central mode: populates"| P_A2I
+    K_I2A -.->|"central mode: populates"| P_I2A
 ```
+
+> **Note on 16-char hex keys:** Maps like `identity_to_address` and `spawned_interfaces` use truncated 64-bit keys (16 hex chars) for shorter log output. Birthday collision risk is ~2³² (~4 billion) identities — astronomically safe for BLE mesh networks with <100 peers. Fragmenter/reassembler keys use full 32-char hex for maximum precision in packet reassembly.
+
+**Identity detection by connection role:**
+| Role | Who Detects | How |
+|------|-------------|-----|
+| Central (we connect to them) | Kotlin (GattClient) | Reads Identity Characteristic |
+| Peripheral (they connect to us) | Python (BLEInterface) | Detects 16-byte write to RX |
 
 ### MAC Rotation Handling
 

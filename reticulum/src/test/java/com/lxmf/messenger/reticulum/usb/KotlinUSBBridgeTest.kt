@@ -91,9 +91,9 @@ class KotlinUSBBridgeTest {
                     disconnectedDeviceId = deviceId
                 }
 
-                override fun onUsbPermissionGranted(deviceId: Int) {}
+                override fun onUsbPermissionGranted(deviceId: Int) = Unit
 
-                override fun onUsbPermissionDenied(deviceId: Int) {}
+                override fun onUsbPermissionDenied(deviceId: Int) = Unit
             }
 
         bridge.addConnectionListener(listener)
@@ -121,11 +121,11 @@ class KotlinUSBBridgeTest {
                     connectionCount.incrementAndGet()
                 }
 
-                override fun onUsbDisconnected(deviceId: Int) {}
+                override fun onUsbDisconnected(deviceId: Int) = Unit
 
-                override fun onUsbPermissionGranted(deviceId: Int) {}
+                override fun onUsbPermissionGranted(deviceId: Int) = Unit
 
-                override fun onUsbPermissionDenied(deviceId: Int) {}
+                override fun onUsbPermissionDenied(deviceId: Int) = Unit
             }
 
         bridge.addConnectionListener(listener)
@@ -160,11 +160,11 @@ class KotlinUSBBridgeTest {
                     notificationCount.incrementAndGet()
                 }
 
-                override fun onUsbDisconnected(deviceId: Int) {}
+                override fun onUsbDisconnected(deviceId: Int) = Unit
 
-                override fun onUsbPermissionGranted(deviceId: Int) {}
+                override fun onUsbPermissionGranted(deviceId: Int) = Unit
 
-                override fun onUsbPermissionDenied(deviceId: Int) {}
+                override fun onUsbPermissionDenied(deviceId: Int) = Unit
             }
 
         // Register same listener twice
@@ -193,11 +193,11 @@ class KotlinUSBBridgeTest {
                     error("Test exception")
                 }
 
-                override fun onUsbDisconnected(deviceId: Int) {}
+                override fun onUsbDisconnected(deviceId: Int) = Unit
 
-                override fun onUsbPermissionGranted(deviceId: Int) {}
+                override fun onUsbPermissionGranted(deviceId: Int) = Unit
 
-                override fun onUsbPermissionDenied(deviceId: Int) {}
+                override fun onUsbPermissionDenied(deviceId: Int) = Unit
             }
 
         val normalListener =
@@ -206,11 +206,11 @@ class KotlinUSBBridgeTest {
                     listener2Called.set(true)
                 }
 
-                override fun onUsbDisconnected(deviceId: Int) {}
+                override fun onUsbDisconnected(deviceId: Int) = Unit
 
-                override fun onUsbPermissionGranted(deviceId: Int) {}
+                override fun onUsbPermissionGranted(deviceId: Int) = Unit
 
-                override fun onUsbPermissionDenied(deviceId: Int) {}
+                override fun onUsbPermissionDenied(deviceId: Int) = Unit
             }
 
         bridge.addConnectionListener(throwingListener)
@@ -320,11 +320,11 @@ class KotlinUSBBridgeTest {
                             notificationCount.incrementAndGet()
                         }
 
-                        override fun onUsbDisconnected(deviceId: Int) {}
+                        override fun onUsbDisconnected(deviceId: Int) = Unit
 
-                        override fun onUsbPermissionGranted(deviceId: Int) {}
+                        override fun onUsbPermissionGranted(deviceId: Int) = Unit
 
-                        override fun onUsbPermissionDenied(deviceId: Int) {}
+                        override fun onUsbPermissionDenied(deviceId: Int) = Unit
                     },
                 )
                 latch.countDown()

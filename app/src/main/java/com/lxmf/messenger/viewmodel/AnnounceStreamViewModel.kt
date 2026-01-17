@@ -20,6 +20,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -59,6 +61,15 @@ class AnnounceStreamViewModel
         // Audio filter state - default to false (don't show audio announces)
         private val _showAudioAnnounces = MutableStateFlow(false)
         val showAudioAnnounces: StateFlow<Boolean> = _showAudioAnnounces.asStateFlow()
+
+        // Total announce count for tab label
+        val announceCount: StateFlow<Int> =
+            announceRepository.getAnnounceCountFlow()
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = 0,
+                )
 
         // Announces with pagination support, filtered by node types, audio filter, AND search query
         val announces: Flow<PagingData<com.lxmf.messenger.data.repository.Announce>> =

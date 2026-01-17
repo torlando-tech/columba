@@ -142,6 +142,7 @@ fun ContactsScreen(
     val selectedNodeTypes by announceViewModel.selectedNodeTypes.collectAsState()
     val showAudioAnnounces by announceViewModel.showAudioAnnounces.collectAsState()
     val announceSearchQuery by announceViewModel.searchQuery.collectAsState()
+    val announceCount by announceViewModel.announceCount.collectAsState()
     val isAnnouncing by announceViewModel.isAnnouncing.collectAsState()
     val announceSuccess by announceViewModel.announceSuccess.collectAsState()
     val announceError by announceViewModel.announceError.collectAsState()
@@ -228,18 +229,11 @@ fun ContactsScreen(
             Column {
                 TopAppBar(
                     title = {
-                        Column {
-                            Text(
-                                text = "Contacts",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                text = "$contactCount ${if (contactCount == 1) "contact" else "contacts"}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        Text(
+                            text = "Contacts",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
                     },
                     actions = {
                         // Search button
@@ -363,7 +357,12 @@ fun ContactsScreen(
                             onClick = { selectedTab = tab },
                             selected = selectedTab == tab,
                         ) {
-                            Text(tab.displayName)
+                            val label =
+                                when (tab) {
+                                    ContactsTab.MY_CONTACTS -> "My Contacts ($contactCount)"
+                                    ContactsTab.NETWORK -> "Network ($announceCount)"
+                                }
+                            Text(label)
                         }
                     }
                 }

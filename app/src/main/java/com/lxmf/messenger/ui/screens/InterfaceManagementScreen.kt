@@ -890,7 +890,7 @@ fun ApplyErrorDialog(
 /**
  * Get user-friendly label for interface type.
  */
-private fun getInterfaceTypeLabel(type: String): String {
+internal fun getInterfaceTypeLabel(type: String): String {
     return when (type) {
         "AutoInterface" -> "Auto Discovery"
         "TCPClient" -> "TCP Client"
@@ -1086,7 +1086,7 @@ fun InterfaceTypeSelector(
 }
 
 @Composable
-private fun InterfaceTypeOption(
+internal fun InterfaceTypeOption(
     title: String,
     description: String,
     onClick: () -> Unit,

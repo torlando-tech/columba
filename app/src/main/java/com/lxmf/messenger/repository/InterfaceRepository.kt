@@ -352,6 +352,34 @@ class InterfaceRepository
                         )
                     }
 
+                    "TCPServer" -> {
+                        val listenIp = json.optString("listen_ip", "0.0.0.0")
+                        val listenPort = json.optInt("listen_port", 4242)
+
+                        // Validate listen IP
+                        when (val listenIpResult = InputValidator.validateHostname(listenIp)) {
+                            is ValidationResult.Error -> {
+                                Log.e(TAG, "Invalid listen IP in database: $listenIp - ${listenIpResult.message}")
+                                error("Invalid listen IP: $listenIp")
+                            }
+                            else -> {}
+                        }
+
+                        // Validate port
+                        if (listenPort !in 1..65535) {
+                            Log.e(TAG, "Invalid listen port in database: $listenPort")
+                            error("Invalid listen port: $listenPort")
+                        }
+
+                        InterfaceConfig.TCPServer(
+                            name = entity.name,
+                            enabled = entity.enabled,
+                            listenIp = listenIp,
+                            listenPort = listenPort,
+                            mode = json.optString("mode", "full"),
+                        )
+                    }
+
                     else -> {
                         Log.e(TAG, "Unknown interface type in database: ${entity.type}")
                         throw IllegalArgumentException("Unknown interface type: ${entity.type}")

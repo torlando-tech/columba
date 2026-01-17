@@ -1,10 +1,17 @@
+@file:Suppress("TooManyFunctions", "SwallowedException")
+
 package com.lxmf.messenger.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -60,9 +68,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
@@ -397,6 +409,12 @@ fun InterfaceManagementScreen(
                 when (type) {
                     "RNode" -> onNavigateToRNodeWizard(null)
                     "TCPClient" -> onNavigateToTcpClientWizard()
+                    "TCPServer" -> {
+                        viewModel.showAddDialog()
+                        viewModel.updateConfigState {
+                            it.copy(type = type, name = "TCP Server", mode = "full")
+                        }
+                    }
                     else -> {
                         viewModel.showAddDialog()
                         viewModel.updateConfigState { it.copy(type = type) }
@@ -446,11 +464,38 @@ fun InterfaceCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
-                    Text(
-                        text = getInterfaceTypeLabel(interfaceEntity.type),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+
+                    // For TCPServer, make the description tappable to copy address
+                    if (interfaceEntity.type == "TCPServer") {
+                        val clipboardManager = LocalClipboardManager.current
+                        val context = LocalContext.current
+                        val (localIp, isYggdrasil) = getLocalIpAddress()
+                        val copyAddress = try {
+                            val json = org.json.JSONObject(interfaceEntity.configJson)
+                            val port = json.optInt("listen_port", 4242)
+                            if (localIp != null) formatAddressWithPort(localIp, port, isYggdrasil) else null
+                        } catch (e: Exception) {
+                            null
+                        }
+
+                        Text(
+                            text = getInterfaceDescription(interfaceEntity),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable(enabled = copyAddress != null) {
+                                copyAddress?.let {
+                                    clipboardManager.setText(AnnotatedString(it))
+                                    Toast.makeText(context, "Copied $it", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                        )
+                    } else {
+                        Text(
+                            text = getInterfaceDescription(interfaceEntity),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
 
                 Switch(
@@ -849,10 +894,91 @@ private fun getInterfaceTypeLabel(type: String): String {
     return when (type) {
         "AutoInterface" -> "Auto Discovery"
         "TCPClient" -> "TCP Client"
+        "TCPServer" -> "TCP Server"
         "RNode" -> "RNode LoRa"
         "UDP" -> "UDP Interface"
         "AndroidBLE" -> "Bluetooth LE"
         else -> type
+    }
+}
+
+// TODO: Nice-to-have: Show connected peer count for TCP Server interfaces.
+//       TCPServerInterface.clients returns len(spawned_interfaces).
+//       Implementation requires: Python → IPC → ViewModel → UI layers.
+
+/**
+ * Format an IP address with port, using brackets for IPv6.
+ */
+internal fun formatAddressWithPort(ip: String?, port: Int, isIpv6: Boolean): String {
+    return when {
+        ip == null -> "no network:$port"
+        isIpv6 || ip.contains(":") -> "[$ip]:$port"
+        else -> "$ip:$port"
+    }
+}
+
+/**
+ * Get the device's local IP address, preferring Yggdrasil if available.
+ * Returns a pair of (ipAddress, isYggdrasil).
+ */
+@Suppress("NestedBlockDepth", "SwallowedException")
+private fun getLocalIpAddress(): Pair<String?, Boolean> {
+    var ipv4Address: String? = null
+    var yggdrasilAddress: String? = null
+
+    try {
+        val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+        while (interfaces.hasMoreElements()) {
+            val networkInterface = interfaces.nextElement()
+            if (networkInterface.isLoopback || !networkInterface.isUp) continue
+            val addresses = networkInterface.inetAddresses
+            while (addresses.hasMoreElements()) {
+                val address = addresses.nextElement()
+                if (address.isLoopbackAddress) continue
+
+                if (address is java.net.Inet6Address) {
+                    // Check for Yggdrasil address (200::/7 range - first byte is 0x02 or 0x03)
+                    val bytes = address.address
+                    if (bytes.size >= 1 && (bytes[0] == 0x02.toByte() || bytes[0] == 0x03.toByte())) {
+                        yggdrasilAddress = address.hostAddress?.split("%")?.get(0) // Remove zone ID
+                    }
+                } else if (address is java.net.Inet4Address && ipv4Address == null) {
+                    ipv4Address = address.hostAddress
+                }
+            }
+        }
+    } catch (e: Exception) {
+        // Ignore errors
+    }
+
+    // Prefer Yggdrasil if available
+    return if (yggdrasilAddress != null) {
+        Pair(yggdrasilAddress, true)
+    } else {
+        Pair(ipv4Address, false)
+    }
+}
+
+/**
+ * Get interface description including type and relevant details.
+ */
+@Composable
+private fun getInterfaceDescription(interfaceEntity: InterfaceEntity): String {
+    val typeLabel = getInterfaceTypeLabel(interfaceEntity.type)
+    return when (interfaceEntity.type) {
+        "TCPServer" -> {
+            try {
+                val json = org.json.JSONObject(interfaceEntity.configJson)
+                val listenPort = json.optInt("listen_port", 4242)
+                val (localIp, isYggdrasil) = getLocalIpAddress()
+                val networkType = if (isYggdrasil) " (Yggdrasil)" else ""
+                val addressDisplay = formatAddressWithPort(localIp, listenPort, isYggdrasil)
+                "$typeLabel$networkType · $addressDisplay"
+            } catch (e: Exception) {
+                typeLabel
+            }
+        }
+        else -> typeLabel
     }
 }
 
@@ -864,6 +990,13 @@ fun InterfaceTypeSelector(
     onTypeSelected: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var advancedExpanded by remember { mutableStateOf(false) }
+    val rotationAngle by animateFloatAsState(
+        targetValue = if (advancedExpanded) 90f else 0f,
+        animationSpec = tween(150),
+        label = "rotation",
+    )
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Select Interface Type") },
@@ -891,6 +1024,56 @@ fun InterfaceTypeSelector(
                     description = "Connects to separate RNode hardware via BLE or Bluetooth Classic",
                     onClick = { onTypeSelected("RNode") },
                 )
+
+                // Collapsible Advanced section
+                Card(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { advancedExpanded = !advancedExpanded },
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
+                ) {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Advanced",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = if (advancedExpanded) "Collapse" else "Expand",
+                            modifier = Modifier.rotate(rotationAngle),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = advancedExpanded,
+                    enter = expandVertically(animationSpec = tween(150)),
+                    exit = shrinkVertically(animationSpec = tween(100)),
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        InterfaceTypeOption(
+                            title = "TCP Server",
+                            description = "Accept incoming connections from other Reticulum nodes",
+                            onClick = { onTypeSelected("TCPServer") },
+                        )
+                    }
+                }
             }
         },
         confirmButton = {},

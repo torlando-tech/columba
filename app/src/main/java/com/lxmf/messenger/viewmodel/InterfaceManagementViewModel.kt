@@ -77,6 +77,9 @@ data class InterfaceConfigState(
     // AndroidBLE fields
     val deviceName: String = "",
     val maxConnections: String = "7",
+    // TCPServer fields
+    val listenIp: String = "0.0.0.0",
+    val listenPort: String = "4242",
     // RNode fields
     val targetDeviceName: String = "",
     // "classic" or "ble"
@@ -109,6 +112,8 @@ data class InterfaceConfigState(
     val txPowerError: String? = null,
     val spreadingFactorError: String? = null,
     val codingRateError: String? = null,
+    val listenIpError: String? = null,
+    val listenPortError: String? = null,
 )
 
 /**
@@ -662,6 +667,30 @@ class InterfaceManagementViewModel
                         _configState.value = _configState.value.copy(maxConnectionsError = null)
                     }
                 }
+
+                "TCPServer" -> {
+                    // VALIDATION: Validate listen IP (0.0.0.0 or valid IP/hostname)
+                    when (val ipResult = InputValidator.validateHostname(config.listenIp)) {
+                        is ValidationResult.Error -> {
+                            _configState.value = _configState.value.copy(listenIpError = ipResult.message)
+                            isValid = false
+                        }
+                        is ValidationResult.Success -> {
+                            _configState.value = _configState.value.copy(listenIpError = null)
+                        }
+                    }
+
+                    // VALIDATION: Validate listen port
+                    when (val portResult = InputValidator.validatePort(config.listenPort)) {
+                        is ValidationResult.Error -> {
+                            _configState.value = _configState.value.copy(listenPortError = portResult.message)
+                            isValid = false
+                        }
+                        is ValidationResult.Success -> {
+                            _configState.value = _configState.value.copy(listenPortError = null)
+                        }
+                    }
+                }
             }
 
             return isValid
@@ -724,6 +753,16 @@ class InterfaceManagementViewModel
                         mode = config.mode,
                     )
 
+                is InterfaceConfig.TCPServer ->
+                    InterfaceConfigState(
+                        name = config.name,
+                        type = "TCPServer",
+                        enabled = config.enabled,
+                        listenIp = config.listenIp,
+                        listenPort = config.listenPort.toString(),
+                        mode = config.mode,
+                    )
+
                 else -> InterfaceConfigState() // Default for unsupported types
             }
         }
@@ -779,6 +818,15 @@ class InterfaceManagementViewModel
                         codingRate = state.codingRate.toIntOrNull() ?: 5,
                         stAlock = state.stAlock.toDoubleOrNull(),
                         ltAlock = state.ltAlock.toDoubleOrNull(),
+                        mode = state.mode,
+                    )
+
+                "TCPServer" ->
+                    InterfaceConfig.TCPServer(
+                        name = state.name.trim(),
+                        enabled = state.enabled,
+                        listenIp = state.listenIp.trim(),
+                        listenPort = state.listenPort.toIntOrNull() ?: 4242,
                         mode = state.mode,
                     )
 

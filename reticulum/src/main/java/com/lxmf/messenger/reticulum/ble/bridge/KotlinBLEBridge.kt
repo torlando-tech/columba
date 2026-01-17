@@ -82,8 +82,14 @@ class KotlinBLEBridge(
     }
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    private val bluetoothAdapter = bluetoothManager.adapter
+    private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
     private val operationQueue = BleOperationQueue(scope)
+
+    /**
+     * Indicates whether Bluetooth hardware is available on this device.
+     * When false, all BLE operations will fail gracefully without crashing.
+     */
+    val isBluetoothAvailable: Boolean = bluetoothAdapter != null
 
     // Bluetooth adapter state monitoring
     private val _adapterState =
@@ -126,11 +132,11 @@ class KotlinBLEBridge(
 
     private var isReceiverRegistered = false
 
-    // BLE Components
-    private val scanner = BleScanner(context, bluetoothAdapter, scope)
-    private val gattClient = BleGattClient(context, bluetoothAdapter, operationQueue, scope)
-    private val gattServer = BleGattServer(context, bluetoothManager, scope)
-    private val advertiser = BleAdvertiser(context, bluetoothAdapter, scope)
+    // BLE Components - nullable when Bluetooth hardware is unavailable
+    private val scanner: BleScanner? = bluetoothAdapter?.let { BleScanner(context, it, scope) }
+    private val gattClient: BleGattClient? = bluetoothAdapter?.let { BleGattClient(context, it, operationQueue, scope) }
+    private val gattServer: BleGattServer? = if (bluetoothAdapter != null) BleGattServer(context, bluetoothManager, scope) else null
+    private val advertiser: BleAdvertiser? = bluetoothAdapter?.let { BleAdvertiser(context, it, scope) }
     // NOTE: BleBondManager not used - Android-to-Android requires Numeric Comparison (user confirmation)
     // which defeats the purpose of automatic reconnection. Relying on app-layer identity tracking instead.
 
@@ -358,7 +364,7 @@ class KotlinBLEBridge(
     @Suppress("CyclomaticComplexMethod")
     private fun buildConnectionDetailsJson(): String {
         return try {
-            val deviceMap = scanner.getDevicesSnapshot()
+            val deviceMap = scanner?.getDevicesSnapshot() ?: emptyMap()
             val jsonArray = org.json.JSONArray()
 
             // Deduplicate by identity - keep only the best peer per identity
@@ -438,7 +444,7 @@ class KotlinBLEBridge(
                     kotlinx.coroutines.delay(1000L)
                     if (connectedPeers.isNotEmpty()) {
                         // Update RSSI values from scanner cache
-                        val deviceMap = scanner.getDevicesSnapshot()
+                        val deviceMap = scanner?.getDevicesSnapshot() ?: emptyMap()
                         connectedPeers.values.forEach { peer ->
                             val device = deviceMap[peer.address]
                             if (device != null && device.rssi != -100) {
@@ -573,6 +579,12 @@ class KotlinBLEBridge(
             storedTxCharUuid = txCharUuid
             storedIdentityCharUuid = identityCharUuid
 
+            // Verify Bluetooth hardware is available
+            if (bluetoothAdapter == null) {
+                Log.e(TAG, "Bluetooth hardware is not available")
+                return Result.failure(Exception("Bluetooth hardware is not available"))
+            }
+
             // Verify Bluetooth is enabled
             if (!bluetoothAdapter.isEnabled) {
                 Log.e(TAG, "Bluetooth is disabled")
@@ -583,13 +595,13 @@ class KotlinBLEBridge(
             setupCallbacks()
 
             // Start GATT server (peripheral mode)
-            gattServer.open().fold(
+            gattServer?.open()?.fold(
                 onSuccess = { Log.d(TAG, "GATT server opened successfully") },
                 onFailure = {
                     Log.e(TAG, "Failed to open GATT server", it)
                     return Result.failure(it)
                 },
-            )
+            ) ?: return Result.failure(Exception("GATT server not available"))
 
             // Bluetooth adapter state receiver is registered in init block
             Log.d(TAG, "Bluetooth state receiver already active (registered in init)")
@@ -603,10 +615,10 @@ class KotlinBLEBridge(
             // Clean up partially initialized state to prevent resource leaks
             try {
                 // Stop scanner if it was started
-                scanner.stopScanning()
+                scanner?.stopScanning()
 
                 // Close GATT server if it was opened
-                gattServer.close()
+                gattServer?.close()
 
                 // Unregister receiver if it was registered
                 if (isReceiverRegistered) {
@@ -677,7 +689,7 @@ class KotlinBLEBridge(
 
         // Close GATT server
         try {
-            gattServer.close()
+            gattServer?.close()
         } catch (e: Exception) {
             Log.e(TAG, "Error closing GATT server during cleanup", e)
         }
@@ -834,10 +846,10 @@ class KotlinBLEBridge(
         require(identityBytes.size == 16) { "Identity must be 16 bytes" }
         transportIdentityHash = identityBytes
 
-        // Update all BLE components
-        gattClient.setTransportIdentity(identityBytes)
-        gattServer.setTransportIdentity(identityBytes)
-        advertiser.setTransportIdentity(identityBytes)
+        // Update all BLE components (if available)
+        gattClient?.setTransportIdentity(identityBytes)
+        gattServer?.setTransportIdentity(identityBytes)
+        advertiser?.setTransportIdentity(identityBytes)
 
         Log.i(TAG, "Transport identity set: ${identityBytes.joinToString("") { "%02x".format(it) }}")
 
@@ -851,7 +863,12 @@ class KotlinBLEBridge(
 
     suspend fun startScanning(): Result<Unit> =
         withContext(Dispatchers.Default) {
-            scanner.startScanning().onSuccess {
+            val scannerInstance = scanner
+            if (scannerInstance == null) {
+                Log.e(TAG, "Cannot start scanning - Bluetooth not available")
+                return@withContext Result.failure(Exception("Bluetooth not available"))
+            }
+            scannerInstance.startScanning().onSuccess {
                 Log.d(TAG, "Scanning started")
             }.onFailure {
                 Log.e(TAG, "Failed to start scanning", it)
@@ -875,7 +892,7 @@ class KotlinBLEBridge(
      */
     suspend fun stopScanning() =
         withContext(Dispatchers.Default) {
-            scanner.stopScanning()
+            scanner?.stopScanning()
             Log.d(TAG, "Scanning stopped")
         }
 
@@ -895,7 +912,12 @@ class KotlinBLEBridge(
             // Store device name for restart capability
             storedDeviceName = deviceName
 
-            advertiser.startAdvertising(deviceName).onSuccess {
+            val advertiserInstance = advertiser
+            if (advertiserInstance == null) {
+                Log.e(TAG, "Cannot start advertising - Bluetooth not available")
+                return@withContext Result.failure(Exception("Bluetooth not available"))
+            }
+            advertiserInstance.startAdvertising(deviceName).onSuccess {
                 Log.d(TAG, "Advertising started")
             }.onFailure {
                 Log.e(TAG, "Failed to start advertising", it)
@@ -915,7 +937,7 @@ class KotlinBLEBridge(
      */
     fun stopAdvertising() {
         scope.launch {
-            advertiser.stopAdvertising()
+            advertiser?.stopAdvertising()
             Log.d(TAG, "Advertising stopped")
         }
     }
@@ -929,11 +951,12 @@ class KotlinBLEBridge(
      * @return true if advertising was already active, false if restart was triggered
      */
     fun ensureAdvertising(): Boolean {
-        if (!advertiser.isAdvertising.value && transportIdentityHash != null) {
+        val advertiserInstance = advertiser ?: return true // No Bluetooth, nothing to do
+        if (!advertiserInstance.isAdvertising.value && transportIdentityHash != null) {
             scope.launch {
                 val name = storedDeviceName ?: "Reticulum"
                 Log.d(TAG, "ensureAdvertising: restarting as '$name'")
-                advertiser.startAdvertising(name)
+                advertiserInstance.startAdvertising(name)
             }
             return false // Was not advertising, now restarting
         }
@@ -997,9 +1020,9 @@ class KotlinBLEBridge(
     fun shouldConnect(peerAddress: String): Boolean {
         try {
             // Get local MAC address
-            val localAddress = bluetoothAdapter.address
+            val localAddress = bluetoothAdapter?.address
             if (localAddress == null) {
-                Log.w(TAG, "Local MAC address unavailable, falling back to always connect")
+                Log.w(TAG, "Local MAC address unavailable (no Bluetooth?), falling back to always connect")
                 return true
             }
 
@@ -1075,13 +1098,20 @@ class KotlinBLEBridge(
                 return
             }
 
+            // Check if GATT client is available
+            val client = gattClient
+            if (client == null) {
+                Log.w(TAG, "Cannot connect to $address - Bluetooth not available")
+                return
+            }
+
             // Track as pending central connection (for race condition fix in stale detection)
             // This prevents the connection from being treated as "stale" when identity arrives
             // before handlePeerConnected() has added the peer to connectedPeers
             pendingCentralConnections.add(address)
 
             // Connect via GATT client
-            gattClient.connect(address)
+            client.connect(address)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to connect to $address", e)
         }
@@ -1112,10 +1142,10 @@ class KotlinBLEBridge(
 
             // Disconnect based on connection type
             if (peer.isCentral) {
-                gattClient.disconnect(address)
+                gattClient?.disconnect(address)
             }
             if (peer.isPeripheral) {
-                gattServer.disconnectCentral(address)
+                gattServer?.disconnectCentral(address)
             }
 
             // Cleanup will happen in onDisconnected callback
@@ -1145,7 +1175,7 @@ class KotlinBLEBridge(
     suspend fun disconnectCentral(address: String) {
         try {
             Log.i(TAG, "Disconnecting central connection to $address...")
-            gattClient.disconnect(address)
+            gattClient?.disconnect(address)
 
             // Update peer state - mark as no longer central
             peersMutex.withLock {
@@ -1177,7 +1207,7 @@ class KotlinBLEBridge(
     suspend fun disconnectPeripheral(address: String) {
         try {
             Log.i(TAG, "Disconnecting peripheral connection from $address...")
-            gattServer.disconnectCentral(address)
+            gattServer?.disconnectCentral(address)
 
             // Update peer state - mark as no longer peripheral
             peersMutex.withLock {
@@ -1244,17 +1274,17 @@ class KotlinBLEBridge(
 
             // Prefer central connection (we write to their RX)
             if (peer.isCentral) {
-                gattClient.sendData(targetAddress, data).fold(
+                gattClient?.sendData(targetAddress, data)?.fold(
                     onSuccess = { Log.v(TAG, "Fragment sent via central to $targetAddress") },
                     onFailure = { Log.e(TAG, "Failed to send fragment via central to $targetAddress", it) },
-                )
+                ) ?: Log.w(TAG, "Cannot send via central - Bluetooth not available")
             }
             // Otherwise use peripheral connection (notify their TX)
             else if (peer.isPeripheral) {
-                gattServer.notifyCentrals(data, targetAddress).fold(
+                gattServer?.notifyCentrals(data, targetAddress)?.fold(
                     onSuccess = { Log.v(TAG, "Fragment sent via peripheral to $targetAddress") },
                     onFailure = { Log.e(TAG, "Failed to send fragment via peripheral to $targetAddress", it) },
-                )
+                ) ?: Log.w(TAG, "Cannot send via peripheral - Bluetooth not available")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send data to $targetAddress (requested: $address)", e)
@@ -1348,7 +1378,7 @@ class KotlinBLEBridge(
      */
     suspend fun getConnectionDetails(): List<BleConnectionDetails> {
         val details = mutableListOf<BleConnectionDetails>()
-        val discoveredDevices = scanner.getDevicesSortedByPriority()
+        val discoveredDevices = scanner?.getDevicesSortedByPriority() ?: emptyList()
         val deviceMap = discoveredDevices.associateBy { it.address }
 
         peersMutex.withLock {
@@ -1403,7 +1433,7 @@ class KotlinBLEBridge(
         val details = mutableListOf<BleConnectionDetails>()
 
         // Get snapshot of scanner devices (thread-safe, non-blocking)
-        val deviceMap = scanner.getDevicesSnapshot()
+        val deviceMap = scanner?.getDevicesSnapshot() ?: emptyMap()
 
         // Deduplicate by identity - keep only the best peer per identity
         // (prefer central connection, then most recent activity)
@@ -1482,8 +1512,8 @@ class KotlinBLEBridge(
      */
     @Suppress("LongMethod")
     private fun setupCallbacks() {
-        // Scanner callbacks
-        scanner.onDeviceDiscovered = { device: BleDevice ->
+        // Scanner callbacks (if available)
+        scanner?.onDeviceDiscovered = { device: BleDevice ->
             // Skip devices that match recently deduplicated identities
             // (prevents reconnecting as central to a peer we're already connected to as peripheral)
             if (!shouldSkipDiscoveredDevice(device.name)) {
@@ -1494,20 +1524,20 @@ class KotlinBLEBridge(
             }
         }
 
-        // GATT Client callbacks (central mode)
-        gattClient.onConnected = { address: String, mtu: Int ->
+        // GATT Client callbacks (central mode, if available)
+        gattClient?.onConnected = { address: String, mtu: Int ->
             scope.launch {
                 handlePeerConnected(address, mtu, isCentral = true)
             }
         }
 
-        gattClient.onDisconnected = { address: String, reason: String? ->
+        gattClient?.onDisconnected = { address: String, reason: String? ->
             scope.launch {
                 handlePeerDisconnected(address, isCentral = true)
             }
         }
 
-        gattClient.onConnectionFailed = { address: String, error: String ->
+        gattClient?.onConnectionFailed = { address: String, error: String ->
             // Clean up pending central tracking when connection fails
             pendingCentralConnections.remove(address)
             Log.d(TAG, "Central connection failed to $address: $error")
@@ -1518,7 +1548,7 @@ class KotlinBLEBridge(
             scope.launch {
                 val identityHash = addressToIdentity[address]
                 if (identityHash != null) {
-                    val completed = gattServer.completeConnectionWithIdentity(address, identityHash)
+                    val completed = gattServer?.completeConnectionWithIdentity(address, identityHash) ?: false
                     if (completed) {
                         Log.i(TAG, "Central failed, completed peripheral connection for $address")
                     }
@@ -1526,63 +1556,63 @@ class KotlinBLEBridge(
             }
         }
 
-        gattClient.onDataReceived = { address: String, data: ByteArray ->
+        gattClient?.onDataReceived = { address: String, data: ByteArray ->
             scope.launch {
                 handleDataReceived(address, data)
             }
         }
 
-        gattClient.onMtuChanged = { address: String, mtu: Int ->
+        gattClient?.onMtuChanged = { address: String, mtu: Int ->
             scope.launch {
                 handleMtuChanged(address, mtu)
             }
         }
 
-        gattClient.onIdentityReceived = { address: String, identityHash: String ->
+        gattClient?.onIdentityReceived = { address: String, identityHash: String ->
             scope.launch {
                 handleIdentityReceived(address, identityHash, isCentralConnection = true)
             }
         }
 
-        // GATT Server callbacks (peripheral mode)
-        gattServer.onCentralConnected = { address: String, mtu: Int ->
+        // GATT Server callbacks (peripheral mode, if available)
+        gattServer?.onCentralConnected = { address: String, mtu: Int ->
             scope.launch {
                 handlePeerConnected(address, mtu, isCentral = false)
             }
         }
 
-        gattServer.onCentralDisconnected = { address: String ->
+        gattServer?.onCentralDisconnected = { address: String ->
             scope.launch {
                 handlePeerDisconnected(address, isCentral = false)
             }
         }
 
-        gattServer.onDataReceived = { address: String, data: ByteArray ->
+        gattServer?.onDataReceived = { address: String, data: ByteArray ->
             scope.launch {
                 handleDataReceived(address, data)
             }
         }
 
-        gattServer.onMtuChanged = { address: String, mtu: Int ->
+        gattServer?.onMtuChanged = { address: String, mtu: Int ->
             scope.launch {
                 handleMtuChanged(address, mtu)
             }
         }
 
-        gattServer.onIdentityReceived = { address: String, identityHash: String ->
+        gattServer?.onIdentityReceived = { address: String, identityHash: String ->
             scope.launch {
                 handleIdentityReceived(address, identityHash, isCentralConnection = false)
             }
         }
 
-        // Advertiser callbacks (for logging and potential Python notification)
-        advertiser.onAdvertisingStarted = { deviceName: String ->
+        // Advertiser callbacks (for logging and potential Python notification, if available)
+        advertiser?.onAdvertisingStarted = { deviceName: String ->
             Log.i(TAG, "Advertising started: $deviceName")
         }
-        advertiser.onAdvertisingStopped = {
+        advertiser?.onAdvertisingStopped = {
             Log.i(TAG, "Advertising stopped")
         }
-        advertiser.onAdvertisingFailed = { errorCode: Int, message: String ->
+        advertiser?.onAdvertisingFailed = { errorCode: Int, message: String ->
             Log.e(TAG, "Advertising failed: $message (code: $errorCode)")
         }
     }
@@ -1606,7 +1636,7 @@ class KotlinBLEBridge(
         }
 
         // Get RSSI from scanner cache at connection time (before MAC rotation)
-        val scannedDevice = scanner.getDevicesSnapshot()[address]
+        val scannedDevice = scanner?.getDevicesSnapshot()?.get(address)
         val rssiAtConnection = scannedDevice?.rssi ?: -100
 
         // Track deduplication action to perform after mutex (can't call disconnect inside mutex)
@@ -1698,11 +1728,11 @@ class KotlinBLEBridge(
         when (dedupeAction) {
             DedupeAction.CLOSE_CENTRAL -> {
                 Log.i(TAG, "Deduplication: disconnecting central connection to $address")
-                gattClient.disconnect(address)
+                gattClient?.disconnect(address)
             }
             DedupeAction.CLOSE_PERIPHERAL -> {
                 Log.i(TAG, "Deduplication: disconnecting peripheral connection from $address")
-                gattServer.disconnectCentral(address)
+                gattServer?.disconnectCentral(address)
             }
             DedupeAction.NONE -> { /* No deduplication needed */ }
         }
@@ -1777,7 +1807,7 @@ class KotlinBLEBridge(
 
                 // Remove from scanner cache so device can be rediscovered and reconnected
                 // This enables automatic reconnection on next scan cycle
-                scanner.removeDevice(address)
+                scanner?.removeDevice(address)
             } else {
                 Log.d(TAG, "Peer $address partially disconnected (central=${peer.isCentral}, peripheral=${peer.isPeripheral})")
             }

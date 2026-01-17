@@ -41,6 +41,8 @@ data class TcpClientWizardState(
     val interfaceName: String = "",
     val targetHost: String = "",
     val targetPort: String = "",
+    // RNS 1.1.x Bootstrap Interface option
+    val bootstrapOnly: Boolean = false,
     // Save state
     val isSaving: Boolean = false,
     val saveError: String? = null,
@@ -80,6 +82,7 @@ class TcpClientWizardViewModel
                     interfaceName = server.name,
                     targetHost = server.host,
                     targetPort = server.port.toString(),
+                    bootstrapOnly = server.isBootstrap,
                 )
             }
         }
@@ -95,8 +98,17 @@ class TcpClientWizardViewModel
                     interfaceName = "",
                     targetHost = "",
                     targetPort = "",
+                    bootstrapOnly = false,
                 )
             }
+        }
+
+        /**
+         * Toggle the bootstrap-only flag.
+         * Bootstrap interfaces auto-detach once sufficient discovered interfaces are connected.
+         */
+        fun toggleBootstrapOnly(enabled: Boolean) {
+            _state.update { it.copy(bootstrapOnly = enabled) }
         }
 
         /**
@@ -199,6 +211,7 @@ class TcpClientWizardViewModel
                             targetPort = currentState.targetPort.toIntOrNull() ?: 4242,
                             kissFraming = false,
                             mode = "full",
+                            bootstrapOnly = currentState.bootstrapOnly,
                         )
 
                     interfaceRepository.insertInterface(config)

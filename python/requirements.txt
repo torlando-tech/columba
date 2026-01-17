@@ -6,9 +6,15 @@
 # numpy is required by LXST for audio processing
 numpy
 
-# RNS from fork with patched Link.py for shared instance RPC error handling
-# Patch: catch exceptions in __update_phy_stats() to prevent crashes when
-# connecting to another app's shared instance with mismatched RPC keys
+# RNS with patched Link.py for shared instance RPC error handling:
+# - Catches exceptions in __update_phy_stats() to prevent crashes when
+#   connecting to another app's shared instance with mismatched RPC keys
+# TODO(issue-216): Rebase fork to RNS 1.1.2 for interface discovery and bootstrap support.
+#   The fix-phy-stats-rpc branch needs to be rebased on top of RNS 1.1.2 to get:
+#   - discover_interfaces config option
+#   - autoconnect_discovered_interfaces config option
+#   - bootstrap_only interface option
+#   See: https://github.com/markqvist/Reticulum/releases/tag/1.1.0
 rns @ git+https://github.com/torlando-tech/Reticulum@fix-phy-stats-rpc
 
 # LXMF from fork with external stamp generator + receiving interface capture

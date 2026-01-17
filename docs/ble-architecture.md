@@ -278,38 +278,54 @@ flowchart LR
 ```mermaid
 flowchart TD
     A[We connect to MAC_NEW<br/>Read Identity Characteristic] --> B[Kotlin: handleIdentityReceived]
-    B --> C{Python: _check_duplicate_identity<br/><br/>Checks: identity_to_address.get‹hash›}
-    C -->|"Returns MAC_OLD<br/>and MAC_OLD ≠ MAC_NEW"| D[Reject: duplicate identity<br/>MAC_OLD still connected]
-    C -->|"Returns None<br/>(new or disconnected)"| E[Allow: no existing connection]
-    C -->|"Returns MAC_NEW<br/>(same MAC reconnecting)"| E
+    B --> C{Kotlin: onDuplicateIdentityDetected?<br/>Calls Python _check_duplicate_identity<br/>Returns: bool}
+    C -->|"Returns True<br/>(identity already at different MAC)"| D[Reject: disconnect MAC_NEW<br/>Log: Duplicate identity rejected]
+    C -->|"Returns False or no callback"| E[Allow: continue processing]
 
-    E --> F{Kotlin: identityToAddress‹hash›<br/><br/>Note: Both Python and Kotlin<br/>track identity→address mappings}
+    E --> F{Kotlin: existingAddress =<br/>identityToAddress‹hash›}
 
-    F -->|"null<br/>(new identity or fully cleaned up)"| G[Create new mapping<br/>identityToAddress‹hash› = MAC_NEW]
-    F -->|"MAC_OLD<br/>(stale mapping or reconnect)"| H{gattClient.isConnected‹MAC_OLD›?<br/><br/>Verify GATT connection is live}
+    F -->|"null<br/>(new identity)"| G[shouldUpdate = true]
+    F -->|"MAC_OLD exists"| H{Is MAC_OLD actually connected?<br/>gattClient.isConnected‹MAC_OLD›}
 
-    H -->|"Yes, and MAC_NEW lacks central"| I[Keep MAC_OLD as primary<br/>Still add addressToIdentity‹MAC_NEW›]
-    H -->|"No, or MAC_NEW has central"| J[Update: identityToAddress‹hash› = MAC_NEW]
+    H -->|"No, or MAC_NEW has central"| G
+    H -->|"Yes, and MAC_NEW lacks central"| I[shouldUpdate = false<br/>Keep MAC_OLD as primary]
 
-    J --> K[Kotlin: onAddressChanged‹MAC_OLD, MAC_NEW›]
-    K --> L[Python: _address_changed_callback]
-    L --> M[Migrate Python mappings:<br/>• address_to_identity‹MAC_NEW› = identity<br/>• identity_to_address‹hash› = MAC_NEW<br/>• interface.peer_address = MAC_NEW]
+    G --> J[Update identityToAddress‹hash› = MAC_NEW]
+    J --> K{existingAddress ≠ null<br/>AND existingAddress ≠ MAC_NEW?}
+    K -->|Yes| L[Kotlin: onAddressChanged‹MAC_OLD, MAC_NEW›]
+    K -->|No| M[No address change notification]
+
+    I --> N[Keep identityToAddress‹hash› = MAC_OLD]
+
+    L --> O[Python: _address_changed_callback<br/>Migrate peer mappings]
+
+    N --> P[Always: addressToIdentity‹MAC_NEW› = hash]
+    M --> P
+    O --> P
 ```
+
+**Key code reference**: `KotlinBLEBridge.handleIdentityReceived()` lines 1997-2150
 
 **Peripheral mode flow** (peer with new MAC connects to us):
 
 ```mermaid
 flowchart TD
-    A[MAC_NEW connects to us<br/>Sends 16-byte identity handshake] --> B[Python: _handle_identity_handshake<br/>Detects: len=16 and no address_to_identity‹MAC_NEW›]
-    B --> C{Python: _check_duplicate_identity<br/><br/>Checks: identity_to_address.get‹hash›}
-    C -->|"Returns MAC_OLD<br/>and MAC_OLD ≠ MAC_NEW"| D[Reject: disconnect MAC_NEW<br/>Log: duplicate identity rejected]
-    C -->|"Returns None<br/>(new or disconnected)"| E[Allow: proceed with handshake]
-    C -->|"Returns MAC_NEW<br/>(same MAC)"| E
+    A[MAC_NEW connects to us<br/>Writes 16-byte identity to RX] --> B{Python: _handle_identity_handshake<br/>Entry check: len=16 AND<br/>no address_to_identity‹MAC_NEW›}
+    B -->|Check fails| Z[Return False: not a handshake<br/>Pass to normal data handler]
+    B -->|Check passes| C{Python: _check_duplicate_identity<br/>Returns: bool}
 
-    E --> F{spawned_interfaces‹hash› exists?}
-    F -->|No| G[Create new BLEPeerInterface<br/>Store in spawned_interfaces‹hash›<br/>Store address_to_identity, identity_to_address]
-    F -->|Yes| H[Update existing interface:<br/>peer_address = MAC_NEW<br/>address_to_interface‹MAC_NEW› = interface]
+    C -->|"Returns True<br/>(identity_to_address‹hash› = MAC_OLD<br/>AND MAC_OLD ≠ MAC_NEW)"| D[Reject: driver.disconnect‹MAC_NEW›<br/>Log: duplicate identity rejected<br/>Return True: handshake consumed]
+    C -->|"Returns False<br/>(new identity OR same MAC)"| E[Allow: continue processing]
+
+    E --> F[Store mappings unconditionally:<br/>address_to_identity‹MAC_NEW› = identity<br/>identity_to_address‹hash› = MAC_NEW]
+    F --> G{spawned_interfaces‹hash› exists?}
+    G -->|No| H[Create new BLEPeerInterface<br/>via _spawn_peer_interface]
+    G -->|Yes| I{existing.peer_address ≠ MAC_NEW?}
+    I -->|Yes| J[Update existing interface:<br/>peer_address = MAC_NEW<br/>address_to_interface‹MAC_NEW› = interface]
+    I -->|No| K[No update needed<br/>Same address already set]
 ```
+
+**Key code reference**: `BLEInterface._handle_identity_handshake()` lines 1108-1200
 
 **On disconnect (MAC_OLD disconnects while MAC_NEW still connected):**
 ```mermaid

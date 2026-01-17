@@ -301,6 +301,26 @@ interface ReticulumProtocol {
         emoji: String,
         sourceIdentity: Identity,
     ): Result<MessageReceipt>
+
+    // Protocol version information (for About screen)
+
+    /**
+     * Get Reticulum version string.
+     * @return Version string like "0.8.5" or null if unavailable
+     */
+    suspend fun getReticulumVersion(): String?
+
+    /**
+     * Get LXMF version string.
+     * @return Version string like "0.5.4" or null if unavailable
+     */
+    suspend fun getLxmfVersion(): String?
+
+    /**
+     * Get BLE-Reticulum version string.
+     * @return Version string like "0.2.2" or null if unavailable
+     */
+    suspend fun getBleReticulumVersion(): String?
 }
 
 /**

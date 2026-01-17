@@ -399,4 +399,19 @@ class MockReticulumProtocol : ReticulumProtocol {
             ),
         )
     }
+
+    override suspend fun getReticulumVersion(): String? {
+        // Mock implementation - return a fake version
+        return "0.8.5"
+    }
+
+    override suspend fun getLxmfVersion(): String? {
+        // Mock implementation - return a fake version
+        return "0.5.4"
+    }
+
+    override suspend fun getBleReticulumVersion(): String? {
+        // Mock implementation - return a fake version
+        return "0.2.2"
+    }
 }

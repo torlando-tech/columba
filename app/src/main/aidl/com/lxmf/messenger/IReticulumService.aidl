@@ -430,6 +430,26 @@ interface IReticulumService {
      */
     String getLinkStatus(in byte[] destHash);
 
+    // ==================== PROTOCOL VERSION INFORMATION ====================
+
+    /**
+     * Get Reticulum version string.
+     * @return Version string like "0.8.5" or null if unavailable
+     */
+    String getReticulumVersion();
+
+    /**
+     * Get LXMF version string.
+     * @return Version string like "0.5.4" or null if unavailable
+     */
+    String getLxmfVersion();
+
+    /**
+     * Get BLE-Reticulum version string.
+     * @return Version string like "0.2.2" or null if unavailable
+     */
+    String getBleReticulumVersion();
+
     // ==================== RMSP MAP SERVICE ====================
 
     /**

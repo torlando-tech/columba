@@ -104,6 +104,18 @@ data class MessageUi(
      * Null for sent messages or messages received before this feature was added.
      */
     val receivedInterface: String? = null,
+    /**
+     * RSSI in dBm when message was received via radio interface (RNode, BLE).
+     * Typically ranges from -30 (excellent) to -120 (very weak).
+     * Null for TCP/AutoInterface, sent messages, or pre-feature messages.
+     */
+    val receivedRssi: Int? = null,
+    /**
+     * SNR in dB when message was received via radio interface (RNode only).
+     * Typically ranges from -20 (very poor) to +20 (excellent).
+     * Null for BLE/TCP/AutoInterface, sent messages, or pre-feature messages.
+     */
+    val receivedSnr: Float? = null,
 ) {
     /**
      * Whether this message should be displayed as a standalone media item without a bubble.

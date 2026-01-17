@@ -63,6 +63,7 @@ object DatabaseModule {
             MIGRATION_27_28,
             MIGRATION_28_29,
             MIGRATION_29_30,
+            MIGRATION_30_31,
         )
     }
 
@@ -1247,6 +1248,18 @@ object DatabaseModule {
                 database.execSQL("ALTER TABLE messages ADD COLUMN receivedHopCount INTEGER DEFAULT NULL")
                 // Add receivedInterface column (nullable TEXT for interface name at reception)
                 database.execSQL("ALTER TABLE messages ADD COLUMN receivedInterface TEXT DEFAULT NULL")
+            }
+        }
+
+    // Migration from version 30 to 31: Add signal quality fields to messages
+    // Stores RSSI and SNR captured when messages are received via radio interfaces
+    private val MIGRATION_30_31 =
+        object : Migration(30, 31) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add receivedRssi column (nullable INTEGER for RSSI in dBm)
+                database.execSQL("ALTER TABLE messages ADD COLUMN receivedRssi INTEGER DEFAULT NULL")
+                // Add receivedSnr column (nullable REAL for SNR in dB)
+                database.execSQL("ALTER TABLE messages ADD COLUMN receivedSnr REAL DEFAULT NULL")
             }
         }
 

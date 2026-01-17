@@ -50,6 +50,8 @@ data class Message(
     val replyToMessageId: String? = null,
     val receivedHopCount: Int? = null,
     val receivedInterface: String? = null,
+    val receivedRssi: Int? = null,
+    val receivedSnr: Float? = null,
 )
 
 /**

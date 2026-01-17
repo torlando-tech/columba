@@ -45,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.ui.util.getReceivingInterfaceInfo
+import com.lxmf.messenger.ui.util.getRssiInfo
+import com.lxmf.messenger.ui.util.getSnrInfo
 import com.lxmf.messenger.viewmodel.MessageDetailViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -178,6 +180,30 @@ fun MessageDetailScreen(
                             title = "Received Via",
                             content = interfaceInfo.text,
                             subtitle = interfaceInfo.subtitle,
+                        )
+                    }
+
+                    // Signal strength (RSSI) card (only if available)
+                    msg.receivedRssi?.let { rssi ->
+                        val rssiInfo = getRssiInfo(rssi)
+                        MessageInfoCard(
+                            icon = rssiInfo.icon,
+                            iconTint = rssiInfo.color,
+                            title = "Signal Strength",
+                            content = rssiInfo.text,
+                            subtitle = rssiInfo.subtitle,
+                        )
+                    }
+
+                    // Signal quality (SNR) card (only if available)
+                    msg.receivedSnr?.let { snr ->
+                        val snrInfo = getSnrInfo(snr)
+                        MessageInfoCard(
+                            icon = snrInfo.icon,
+                            iconTint = snrInfo.color,
+                            title = "Signal Quality",
+                            content = snrInfo.text,
+                            subtitle = snrInfo.subtitle,
                         )
                     }
                 }

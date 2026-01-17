@@ -53,4 +53,8 @@ data class MessageEntity(
     val receivedHopCount: Int? = null,
     // Interface name through which message was received (null for sent messages or pre-feature messages)
     val receivedInterface: String? = null,
+    // RSSI in dBm when message was received (typically -30 to -120, null for TCP/AutoInterface or sent)
+    val receivedRssi: Int? = null,
+    // SNR in dB when message was received (typically -20 to +20, null for BLE/TCP or sent messages)
+    val receivedSnr: Float? = null,
 )

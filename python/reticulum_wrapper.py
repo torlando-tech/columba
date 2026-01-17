@@ -3149,7 +3149,8 @@ class ReticulumWrapper:
                     dest_hash = bytes(dest_hash)
 
             if dest_hash is None:
-                self.router.set_outbound_propagation_node(None)
+                # LXMF doesn't support passing None to clear the propagation node
+                # Just clear our internal tracking - LXMF will handle having no valid node
                 self.active_propagation_node = None
                 log_info("ReticulumWrapper", "set_outbound_propagation_node", "Cleared propagation node")
             else:

@@ -104,7 +104,8 @@ class LocationSharingCardTest {
     @Test
     fun `formatTimeRemaining correctly formats 4 hours 15 minutes`() {
         val now = System.currentTimeMillis()
-        val endTime = now + (4 * 60 + 15) * 60_000 // 4 hours 15 minutes from now
+        // Add 30 second buffer to prevent flakiness from test execution time
+        val endTime = now + (4 * 60 + 15) * 60_000 + 30_000
 
         val result = formatTimeRemaining(endTime)
 

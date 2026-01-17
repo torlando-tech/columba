@@ -60,6 +60,7 @@ import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.BrokenImage
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
@@ -125,6 +126,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -135,6 +137,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.ui.components.CodecSelectionDialog
 import com.lxmf.messenger.ui.components.FileAttachmentCard
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
 import com.lxmf.messenger.ui.components.FileAttachmentPreviewRow
@@ -150,6 +153,7 @@ import com.lxmf.messenger.ui.components.ReplyPreviewBubble
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SwipeableMessageBubble
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
+import com.lxmf.messenger.ui.model.CodecProfile
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
@@ -177,6 +181,7 @@ fun MessagingScreen(
     onBackClick: () -> Unit,
     onPeerClick: () -> Unit = {},
     onViewMessageDetails: (messageId: String) -> Unit = {},
+    onVoiceCall: (profileCode: Int) -> Unit = {},
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
@@ -215,6 +220,11 @@ fun MessagingScreen(
     var showLocationPermissionSheet by remember { mutableStateOf(false) }
     val locationPermissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showStopSharingDialog by remember { mutableStateOf(false) }
+
+    // Codec selection dialog state
+    var showCodecSelectionDialog by remember { mutableStateOf(false) }
+    var recommendedCodecProfile by remember { mutableStateOf(CodecProfile.DEFAULT) }
+    var isProbingLinkSpeed by remember { mutableStateOf(false) }
 
     // Location permission launcher
     val locationPermissionLauncher =
@@ -505,6 +515,8 @@ fun MessagingScreen(
                             text = peerName,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         // Online status indicator - considers active link OR recent announce
                         val lastSeen = announceInfo?.lastSeenTimestamp
@@ -593,6 +605,32 @@ fun MessagingScreen(
                     }
                 },
                 actions = {
+                    // Voice call button
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                isProbingLinkSpeed = true
+                                recommendedCodecProfile = viewModel.getRecommendedCodecProfile()
+                                isProbingLinkSpeed = false
+                                showCodecSelectionDialog = true
+                            }
+                        },
+                        enabled = !isProbingLinkSpeed,
+                    ) {
+                        if (isProbingLinkSpeed) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Call,
+                                contentDescription = "Voice call",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
                     // Location sharing button
                     IconButton(
                         onClick = {
@@ -1099,6 +1137,19 @@ fun MessagingScreen(
             transferTimeEstimates = state.transferTimeEstimates,
             onSelect = { preset -> viewModel.selectImageQuality(preset) },
             onDismiss = { viewModel.dismissQualitySelection() },
+        )
+    }
+
+    // Codec selection dialog for voice calls
+    if (showCodecSelectionDialog) {
+        CodecSelectionDialog(
+            recommendedProfile = recommendedCodecProfile,
+            linkState = conversationLinkState,
+            onDismiss = { showCodecSelectionDialog = false },
+            onProfileSelected = { profile ->
+                showCodecSelectionDialog = false
+                onVoiceCall(profile.code)
+            },
         )
     }
 }

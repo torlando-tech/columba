@@ -91,4 +91,27 @@ interface IReticulumServiceCallback {
      *        {"state": 0-7 or 0xf0-0xf4, "state_name": "...", "progress": 0.0-1.0, "messages_received": N}
      */
     void onPropagationStateChanged(String stateJson);
+
+    // ==================== VOICE CALLS (LXST) ====================
+
+    /**
+     * Called when an incoming voice call is received.
+     * @param callJson JSON string with caller info:
+     *        {"caller_hash": "...", "caller_name": "..."}
+     */
+    void onIncomingCall(String callJson);
+
+    /**
+     * Called when voice call state changes.
+     * @param stateJson JSON string with call state:
+     *        {"state": "ringing/established/ended/busy/rejected", "remote_identity": "...", "is_muted": false}
+     */
+    void onCallStateChanged(String stateJson);
+
+    /**
+     * Called when a voice call ends.
+     * @param callJson JSON string with call info:
+     *        {"caller_hash": "..."}
+     */
+    void onCallEnded(String callJson);
 }

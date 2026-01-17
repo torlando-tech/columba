@@ -20,6 +20,8 @@ import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.ui.model.CodecProfile
 import com.lxmf.messenger.ui.model.DecodedImageResult
 import com.lxmf.messenger.ui.model.ImageCache
 import com.lxmf.messenger.ui.model.LocationSharingState
@@ -101,13 +103,21 @@ class MessagingViewModel
         private val _currentConversation = MutableStateFlow<String?>(null)
         private var currentPeerName: String = "Unknown"
 
+        // Refresh trigger for forcing PagingData refresh when delivery status updates
+        // Room's automatic invalidation sometimes doesn't trigger UI refresh with cachedIn()
+        private val _messagesRefreshTrigger = MutableStateFlow(0)
+
         // Messages automatically update when conversation changes OR database changes
         // Uses Paging3 for efficient infinite scroll: loads 30 messages initially,
         // then loads more in background as user scrolls up
         // PERFORMANCE: toMessageUi() is now fast (cache lookup only, no disk I/O)
         // Image decoding happens asynchronously via loadImageAsync()
+        // Combined with refresh trigger to force refresh on delivery status updates
         val messages: Flow<PagingData<MessageUi>> =
-            _currentConversation
+            kotlinx.coroutines.flow.combine(
+                _currentConversation,
+                _messagesRefreshTrigger,
+            ) { peerHash, _ -> peerHash }
                 .flatMapLatest { peerHash ->
                     Log.d(TAG, "Flow: Switching to conversation $peerHash")
                     if (peerHash != null) {
@@ -753,6 +763,9 @@ class MessagingViewModel
                             errorMessage = null,
                         )
                     }
+
+                    // Trigger refresh to ensure UI updates (Room invalidation doesn't always propagate with cachedIn)
+                    _messagesRefreshTrigger.value++
 
                     Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status}")
                 } else {
@@ -1766,6 +1779,38 @@ class MessagingViewModel
                 }
             }
         }
+
+        /**
+         * Get the recommended codec profile based on link speed probing.
+         *
+         * Probes the link to the current conversation peer and returns a
+         * codec profile recommendation based on the measured bandwidth.
+         *
+         * @return Recommended codec profile, or DEFAULT if probing fails
+         */
+        suspend fun getRecommendedCodecProfile(): CodecProfile {
+            val destHash = _currentConversation.value
+            val destHashBytes = destHash?.let { validateDestinationHash(it) }
+            val protocol = reticulumProtocol as? ServiceReticulumProtocol
+
+            return if (destHashBytes != null && protocol != null) {
+                probeAndRecommendCodec(protocol, destHashBytes)
+            } else {
+                CodecProfile.DEFAULT
+            }
+        }
+
+        private suspend fun probeAndRecommendCodec(
+            protocol: ServiceReticulumProtocol,
+            destHashBytes: ByteArray,
+        ): CodecProfile =
+            try {
+                val probe = protocol.probeLinkSpeed(destHashBytes, 5.0f, "direct")
+                if (probe.isSuccess) CodecProfile.recommendFromProbe(probe) else CodecProfile.DEFAULT
+            } catch (e: Exception) {
+                Log.e(TAG, "Error probing link speed for codec recommendation", e)
+                CodecProfile.DEFAULT
+            }
 
         override fun onCleared() {
             super.onCleared()

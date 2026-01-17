@@ -414,4 +414,29 @@ class MockReticulumProtocol : ReticulumProtocol {
         // Mock implementation - return a fake version
         return "0.2.2"
     }
+
+    // Voice Call Methods (Mock)
+    override suspend fun initiateCall(
+        destinationHash: String,
+        profileCode: Int?,
+    ): Result<Unit> = Result.success(Unit)
+
+    override suspend fun answerCall(): Result<Unit> = Result.success(Unit)
+
+    override suspend fun hangupCall() = Unit
+
+    override suspend fun setCallMuted(muted: Boolean) = Unit
+
+    override suspend fun setCallSpeaker(speakerOn: Boolean) = Unit
+
+    override suspend fun getCallState(): Result<VoiceCallState> =
+        Result.success(
+            VoiceCallState(
+                status = "idle",
+                isActive = false,
+                isMuted = false,
+                remoteIdentity = null,
+                profile = null,
+            ),
+        )
 }

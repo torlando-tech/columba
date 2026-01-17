@@ -74,8 +74,9 @@ android {
         }
 
         ndk {
-            // Chaquopy supports these architectures
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            // Python 3.11 supports 64-bit ABIs
+            // TODO: x86_64 disabled until pycodec2 wheel resolution issue is fixed
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
@@ -214,10 +215,16 @@ chaquopy {
         version = "3.11"
 
         pip {
+            // Install pre-built pycodec2 wheel for arm64
+            // Uses pure Python ctypes wrapper (not Cython) to avoid Android linker namespace
+            // symbol resolution issues with Python C API symbols like PyExc_RuntimeError
+            // audioop is built-in on Python 3.11, no external wheel needed
+            install("https://github.com/torlando-tech/android-python-wheels/releases/download/v1.1.0/pycodec2-4.1.1-cp311-cp311-android_21_arm64_v8a.whl")
+
             // Install ble-reticulum from GitHub
             install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
 
-            // Install requirements from requirements.txt
+            // Install requirements from requirements.txt (includes LXST which has pycodec2 removed)
             install("-r", "../python/requirements.txt")
         }
 
@@ -227,7 +234,8 @@ chaquopy {
         }
 
         // Extract package files so .py sources are accessible at runtime
-        extractPackages("ble_reticulum", "ble_modules")
+        // pycodec2 needs to be extracted so libcodec2.so can be loaded at runtime
+        extractPackages("ble_reticulum", "ble_modules", "pycodec2")
     }
 
     sourceSets {

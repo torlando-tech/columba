@@ -239,6 +239,7 @@ class ServiceReticulumProtocol(
     }
 
     // Service callback implementation
+    @Suppress("TooManyFunctions") // AIDL callback interface requires implementing all methods
     private val serviceCallback =
         object : IReticulumServiceCallback.Stub() {
             @Suppress("LongMethod")
@@ -525,6 +526,51 @@ class ServiceReticulumProtocol(
                     _propagationStateFlow.tryEmit(state)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling propagation state callback", e)
+                }
+            }
+
+            override fun onIncomingCall(callJson: String) {
+                try {
+                    Log.i(TAG, "📞 Incoming call: $callJson")
+                    val json = JSONObject(callJson)
+                    val callerHash = json.optString("caller_hash", "")
+                    // Notify CallBridge of incoming call
+                    com.lxmf.messenger.reticulum.call.bridge.CallBridge.getInstance().onIncomingCall(callerHash)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling incoming call callback", e)
+                }
+            }
+
+            override fun onCallStateChanged(stateJson: String) {
+                try {
+                    Log.d(TAG, "📞 Call state changed: $stateJson")
+                    val json = JSONObject(stateJson)
+                    val state = json.optString("state", "unknown")
+                    val remoteIdentity = json.optString("remote_identity", null)
+
+                    // Notify CallBridge of state change
+                    val bridge = com.lxmf.messenger.reticulum.call.bridge.CallBridge.getInstance()
+                    when (state) {
+                        "ringing" -> bridge.onCallRinging(remoteIdentity ?: "")
+                        "established" -> bridge.onCallEstablished(remoteIdentity ?: "")
+                        "ended" -> bridge.onCallEnded(remoteIdentity)
+                        "busy" -> bridge.onCallBusy()
+                        "rejected" -> bridge.onCallRejected()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling call state change callback", e)
+                }
+            }
+
+            override fun onCallEnded(callJson: String) {
+                try {
+                    Log.i(TAG, "📞 Call ended: $callJson")
+                    val json = JSONObject(callJson)
+                    val callerHash = json.optString("caller_hash", null)
+                    // Notify CallBridge of call ended
+                    com.lxmf.messenger.reticulum.call.bridge.CallBridge.getInstance().onCallEnded(callerHash)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling call ended callback", e)
                 }
             }
         }
@@ -2587,6 +2633,95 @@ class ServiceReticulumProtocol(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get BLE-Reticulum version", e)
             null
+        }
+    }
+
+    // ===========================================
+    // Voice Call Methods (LXST)
+    // ===========================================
+
+    override suspend fun initiateCall(
+        destinationHash: String,
+        profileCode: Int?,
+    ): Result<Unit> {
+        // Use IO dispatcher for blocking AIDL call - LXST may block for path discovery
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            runCatching {
+                val svc =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+                Log.i(TAG, "📞 Initiating call to ${destinationHash.take(16)} with profile=${profileCode ?: "default"}...")
+                // AIDL uses -1 to indicate "use default profile"
+                val resultJson = svc.initiateCall(destinationHash, profileCode ?: -1)
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    val error = result.optString("error", "Unknown error")
+                    throw RuntimeException(error)
+                }
+            }
+        }
+    }
+
+    override suspend fun answerCall(): Result<Unit> {
+        // Use IO dispatcher for blocking AIDL call
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+            runCatching {
+                val svc =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+                Log.i(TAG, "📞 Answering call")
+                val resultJson = svc.answerCall()
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    val error = result.optString("error", "Unknown error")
+                    throw RuntimeException(error)
+                }
+            }
+        }
+    }
+
+    override suspend fun hangupCall() {
+        try {
+            val svc = this.service ?: return
+            Log.i(TAG, "📞 Hanging up call")
+            svc.hangupCall()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error hanging up call", e)
+        }
+    }
+
+    override suspend fun setCallMuted(muted: Boolean) {
+        try {
+            val svc = this.service ?: return
+            Log.d(TAG, "📞 Setting call muted: $muted")
+            svc.setCallMuted(muted)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting call mute", e)
+        }
+    }
+
+    override suspend fun setCallSpeaker(speakerOn: Boolean) {
+        try {
+            val svc = this.service ?: return
+            Log.d(TAG, "📞 Setting call speaker: $speakerOn")
+            svc.setCallSpeaker(speakerOn)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting call speaker", e)
+        }
+    }
+
+    override suspend fun getCallState(): Result<VoiceCallState> {
+        return runCatching {
+            val svc = this.service ?: throw IllegalStateException("Service not bound")
+            val resultJson = svc.callState
+            val result = JSONObject(resultJson)
+            VoiceCallState(
+                status = result.optString("status", "unknown"),
+                isActive = result.optBoolean("is_active", false),
+                isMuted = result.optBoolean("is_muted", false),
+                remoteIdentity = result.optString("remote_identity", null),
+                profile = result.optString("profile", null),
+            )
         }
     }
 }

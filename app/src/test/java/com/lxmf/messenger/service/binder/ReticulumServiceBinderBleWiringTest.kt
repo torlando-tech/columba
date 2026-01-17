@@ -14,6 +14,7 @@ import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.RoutingManager
 import com.lxmf.messenger.service.manager.ServiceNotificationManager
+import com.lxmf.messenger.service.persistence.ServicePersistenceManager
 import com.lxmf.messenger.service.state.ServiceState
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -59,6 +60,7 @@ class ReticulumServiceBinderBleWiringTest {
     private lateinit var mockNetworkChangeManager: NetworkChangeManager
     private lateinit var mockNotificationManager: ServiceNotificationManager
     private lateinit var mockBleCoordinator: BleCoordinator
+    private lateinit var mockPersistenceManager: ServicePersistenceManager
     private lateinit var mockBridge: KotlinBLEBridge
 
     @Before
@@ -79,6 +81,7 @@ class ReticulumServiceBinderBleWiringTest {
         mockNetworkChangeManager = mockk(relaxed = true)
         mockNotificationManager = mockk(relaxed = true)
         mockBleCoordinator = mockk(relaxed = true)
+        mockPersistenceManager = mockk(relaxed = true)
         mockBridge = mockk(relaxed = true)
 
         // Mock the KotlinBLEBridge singleton
@@ -118,6 +121,7 @@ class ReticulumServiceBinderBleWiringTest {
                     networkChangeManager = mockNetworkChangeManager,
                     notificationManager = mockNotificationManager,
                     bleCoordinator = mockBleCoordinator,
+                    persistenceManager = mockPersistenceManager,
                     scope = CoroutineScope(testDispatcher),
                     onInitialized = {},
                     onShutdown = {},

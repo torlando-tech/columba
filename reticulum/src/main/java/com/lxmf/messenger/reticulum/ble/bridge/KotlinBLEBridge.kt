@@ -161,6 +161,9 @@ class KotlinBLEBridge(
     // Identity tracking (Protocol v2.2)
     private val addressToIdentity = ConcurrentHashMap<String, String>() // address -> 32-char hex identity
     private val identityToAddress = ConcurrentHashMap<String, String>() // identity -> address
+    // Stale address cache: maps recently-disconnected peripheral addresses to their identity
+    // This allows send() to resolve old addresses when Python's peer_address hasn't updated yet
+    private val staleAddressToIdentity = ConcurrentHashMap<String, String>() // disconnected address -> identity
 
     // Pending connections waiting for identity (race condition fix)
     // When onConnected fires before onIdentityReceived, we defer Python notification
@@ -1248,7 +1251,17 @@ class KotlinBLEBridge(
 
             // If peer not found, try resolving via identity (handles deduplication address changes)
             if (peer == null) {
-                val identityHash = addressToIdentity[address]
+                // First try current addressToIdentity mapping
+                var identityHash = addressToIdentity[address]
+
+                // If not found, check stale address cache (handles MAC rotation during disconnect)
+                if (identityHash == null) {
+                    identityHash = staleAddressToIdentity[address]
+                    if (identityHash != null) {
+                        Log.d(TAG, "Found identity $identityHash for stale address $address in cache")
+                    }
+                }
+
                 if (identityHash != null) {
                     val currentAddress = identityToAddress[identityHash]
                     if (currentAddress != null && currentAddress != address) {
@@ -1272,19 +1285,28 @@ class KotlinBLEBridge(
             // Data is now a pre-formatted fragment from the Python layer
             Log.d(TAG, "Sending ${data.size} byte fragment to $targetAddress")
 
-            // Prefer central connection (we write to their RX)
-            if (peer.isCentral) {
+            // Prefer central connection (we write to their RX) - BUT skip if deduplication is closing it
+            // During deduplication, isCentral is still true until disconnect callback fires, but the
+            // GATT client is already disconnecting. Use deduplicationState to avoid sending via closing path.
+            val useCentral = peer.isCentral && peer.deduplicationState != DeduplicationState.CLOSING_CENTRAL
+            val usePeripheral = peer.isPeripheral && peer.deduplicationState != DeduplicationState.CLOSING_PERIPHERAL
+
+            if (useCentral) {
                 gattClient?.sendData(targetAddress, data)?.fold(
                     onSuccess = { Log.v(TAG, "Fragment sent via central to $targetAddress") },
                     onFailure = { Log.e(TAG, "Failed to send fragment via central to $targetAddress", it) },
                 ) ?: Log.w(TAG, "Cannot send via central - Bluetooth not available")
             }
             // Otherwise use peripheral connection (notify their TX)
-            else if (peer.isPeripheral) {
+            else if (usePeripheral) {
                 gattServer?.notifyCentrals(data, targetAddress)?.fold(
                     onSuccess = { Log.v(TAG, "Fragment sent via peripheral to $targetAddress") },
                     onFailure = { Log.e(TAG, "Failed to send fragment via peripheral to $targetAddress", it) },
                 ) ?: Log.w(TAG, "Cannot send via peripheral - Bluetooth not available")
+            }
+            // Both paths blocked during deduplication
+            else if (peer.deduplicationState != DeduplicationState.NONE) {
+                Log.w(TAG, "Cannot send to $targetAddress - deduplication in progress (state=${peer.deduplicationState})")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send data to $targetAddress (requested: $address)", e)
@@ -1684,6 +1706,10 @@ class KotlinBLEBridge(
                         peer.deduplicationState = DeduplicationState.CLOSING_CENTRAL
                         dedupeAction = DedupeAction.CLOSE_CENTRAL
                     }
+                    // Add deduplication cooldown to prevent immediate reconnection as central
+                    // This prevents reconnection storms when one side keeps trying to reconnect
+                    recentlyDeduplicatedIdentities[peerIdentity] = System.currentTimeMillis()
+                    Log.d(TAG, "Added $peerIdentity to deduplication cooldown (${deduplicationCooldownMs / 1000}s)")
                 } else {
                     Log.w(TAG, "Dual connection but identity not yet available - deferring deduplication")
                 }
@@ -1785,15 +1811,38 @@ class KotlinBLEBridge(
                 if (identityHash != null) {
                     // Check if this identity has any other active addresses
                     // (could have accumulated during MAC rotations)
-                    val hasOtherAddress = addressToIdentity.values.any { it == identityHash }
-                    if (!hasOtherAddress) {
+                    val otherAddresses = addressToIdentity.entries.filter { it.value == identityHash }.map { it.key }
+                    if (otherAddresses.isEmpty()) {
                         // Identity fully disconnected - clean up reverse mapping
                         identityToAddress.remove(identityHash)
                         // Allow reconnection as central again
                         recentlyDeduplicatedIdentities.remove(identityHash)
+                        // Clean up any stale entries for this identity
+                        staleAddressToIdentity.entries.removeIf { it.value == identityHash }
                         Log.d(TAG, "Cleaned up all mappings for identity $identityHash")
                     } else {
-                        Log.d(TAG, "Identity $identityHash still has other address mappings")
+                        // Identity still connected at another address - cache the stale mapping
+                        // This allows send() to resolve the old address to the current one
+                        staleAddressToIdentity[address] = identityHash
+
+                        // If identityToAddress points to the disconnecting address, update it to another active address
+                        if (identityToAddress[identityHash] == address) {
+                            // Prefer an address with a connected peer, especially one with central connection
+                            val bestAddress = otherAddresses.maxByOrNull { otherAddr ->
+                                val peer = connectedPeers[otherAddr]
+                                when {
+                                    peer == null -> 0
+                                    peer.isCentral -> 2
+                                    peer.isPeripheral -> 1
+                                    else -> 0
+                                }
+                            }
+                            if (bestAddress != null) {
+                                identityToAddress[identityHash] = bestAddress
+                                Log.d(TAG, "Updated identityToAddress[$identityHash] from disconnected $address to $bestAddress")
+                            }
+                        }
+                        Log.d(TAG, "Cached stale address $address -> $identityHash (identity still has other addresses: $otherAddresses)")
                     }
                 }
 
@@ -1951,7 +2000,8 @@ class KotlinBLEBridge(
         var completedPending: PendingConnection? = null
 
         // Track address change for MAC rotation notification to Python
-        var addressChangedFrom: String? = null
+        // Pair of (oldAddress, newAddress) - tells Python to redirect from old to new
+        var addressChangeNotification: Pair<String, String>? = null
 
         peersMutex.withLock {
             // Update peer with identity if it exists
@@ -2000,16 +2050,22 @@ class KotlinBLEBridge(
                     Log.d(TAG, "Updated identity→address mapping: $identityHash → $address (central=${peerAtNewAddress.isCentral})")
 
                     // Track address change for MAC rotation notification
-                    // Only notify Python when the NEW address has a central connection (reliable for sending)
-                    // This prevents updating peer_address to addresses that can only receive, not send
-                    if (existingAddress != null && existingAddress != address && peerAtNewAddress.isCentral) {
-                        addressChangedFrom = existingAddress
-                        Log.i(TAG, "Address changed for identity $identityHash: $existingAddress → $address (new has central)")
-                    } else if (existingAddress != null && existingAddress != address) {
-                        Log.d(TAG, "Address changed but not notifying Python: $existingAddress → $address (new is peripheral-only)")
+                    // Always notify Python when address changes so it can update address_to_identity
+                    // Python needs to know ALL addresses that map to this identity for receiving data
+                    if (existingAddress != null && existingAddress != address) {
+                        addressChangeNotification = Pair(existingAddress, address)
+                        Log.i(TAG, "Address changed for identity $identityHash: $existingAddress → $address (central=${peerAtNewAddress.isCentral})")
                     }
                 } else {
                     Log.d(TAG, "Keeping existing identity→address mapping: $identityHash → $existingAddress (existing has live central)")
+                    // DON'T send address change notification here!
+                    // Python's on_device_connected already added address_to_identity for the new address.
+                    // Sending a redirect (new → existing) would DELETE the new address mapping,
+                    // preventing Python from receiving data from the new address.
+                    // Python's peer_address already points to the central address (correct for sending).
+                    if (existingAddress != null && existingAddress != address) {
+                        Log.d(TAG, "NOT notifying Python: $address already handled by on_device_connected, peer_address stays $existingAddress")
+                    }
                 }
             } else {
                 // Peer doesn't exist yet - update mapping only if no existing valid mapping
@@ -2025,6 +2081,8 @@ class KotlinBLEBridge(
 
             // Always update address→identity mapping (for data routing from this address)
             addressToIdentity[address] = identityHash
+            // Remove from stale cache if present (address is now active again)
+            staleAddressToIdentity.remove(address)
 
             // Check for pending connection that was waiting for identity
             completedPending = pendingConnections.remove(address)
@@ -2070,13 +2128,13 @@ class KotlinBLEBridge(
         onIdentityReceived?.callAttr("__call__", address, identityHash)
 
         // Notify Python of address change for MAC rotation handling
-        addressChangedFrom?.let { oldAddress ->
+        addressChangeNotification?.let { (oldAddress, newAddress) ->
             Log.w(
                 TAG,
                 "[CALLBACK] handleIdentityReceived: Calling onAddressChanged Python callback " +
-                    "($oldAddress → $address, identity=$identityHash)",
+                    "($oldAddress → $newAddress, identity=$identityHash)",
             )
-            onAddressChanged?.callAttr("__call__", oldAddress, address, identityHash)
+            onAddressChanged?.callAttr("__call__", oldAddress, newAddress, identityHash)
         }
     }
 

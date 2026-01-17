@@ -229,6 +229,9 @@ class KotlinBLEBridge(
     @Volatile
     private var onAddressChanged: PyObject? = null
 
+    @Volatile
+    private var onDuplicateIdentityDetected: PyObject? = null
+
     fun setOnDeviceDiscovered(callback: PyObject) {
         // VALIDATION: Accept PyObject from Python - validation happens at call time
         onDeviceDiscovered = callback
@@ -308,6 +311,14 @@ class KotlinBLEBridge(
         // VALIDATION: Accept PyObject from Python - validation happens at call time
         // Called when address changes during dual connection deduplication
         onAddressChanged = callback
+    }
+
+    fun setOnDuplicateIdentityDetected(callback: PyObject) {
+        // VALIDATION: Accept PyObject from Python - validation happens at call time
+        // Called when identity is received to check if it's a duplicate (MAC rotation).
+        // Python's _check_duplicate_identity returns True if duplicate, False otherwise.
+        // If duplicate, connection should be rejected with safe message (no blacklist trigger).
+        onDuplicateIdentityDetected = callback
     }
 
     // Native connection change listeners (for IPC callbacks, not Python)
@@ -1994,6 +2005,43 @@ class KotlinBLEBridge(
         if (!processedIdentityCallbacks.add(dedupeKey)) {
             Log.d(TAG, "Ignoring duplicate identity callback for $address ($identityHash)")
             return
+        }
+
+        // Check for duplicate identity (Android MAC rotation) via Python callback
+        // Python's _check_duplicate_identity returns True if this identity is already connected
+        // at a different address, meaning this is a MAC rotation attempt that should be rejected.
+        val duplicateCallback = onDuplicateIdentityDetected
+        if (duplicateCallback != null) {
+            try {
+                // Convert hex string to ByteArray for Python
+                val identityBytes = identityHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                val isDuplicate = duplicateCallback.callAttr("__call__", address, identityBytes)
+
+                // Python returns True (boolean) if duplicate, which Chaquopy converts to Boolean
+                if (isDuplicate?.toBoolean() == true) {
+                    Log.w(
+                        TAG,
+                        "Duplicate identity rejected for $address - identity ${identityHash.take(16)}... " +
+                            "already connected at different MAC (MAC rotation)",
+                    )
+                    // Disconnect this connection since it's a duplicate
+                    // Use safe log message format that doesn't trigger blacklist
+                    // ("Duplicate identity rejected for" doesn't match "Connection failed to" pattern)
+                    scope.launch {
+                        if (isCentralConnection) {
+                            gattClient?.disconnect(address)
+                        } else {
+                            gattServer?.disconnectCentral(address)
+                        }
+                    }
+                    // Remove from processed callbacks to allow retry after original disconnects
+                    processedIdentityCallbacks.remove(dedupeKey)
+                    return
+                }
+            } catch (e: Exception) {
+                // Log but don't fail - if callback has issues, allow connection to proceed
+                Log.w(TAG, "Error in duplicate identity callback for $address: ${e.message}")
+            }
         }
 
         // Track pending connection that was waiting for identity (race condition fix)

@@ -26,10 +26,38 @@ import java.security.MessageDigest
 class ServicePersistenceManager(
     private val context: Context,
     private val scope: CoroutineScope,
+    private val settingsAccessor: ServiceSettingsAccessor,
 ) {
     companion object {
         private const val TAG = "ServicePersistenceManager"
     }
+
+    /**
+     * Check if a sender should be blocked based on privacy settings.
+     * Returns true if the message should be blocked, false if it should be allowed.
+     * Fails open: if checking contact status fails, the message is allowed through.
+     */
+    private suspend fun shouldBlockUnknownSender(
+        sourceHash: String,
+        identityHash: String,
+    ): Boolean =
+        try {
+            if (settingsAccessor.getBlockUnknownSenders()) {
+                val isKnownContact = contactDao.contactExists(sourceHash, identityHash)
+                if (!isKnownContact) {
+                    Log.d(TAG, "Blocking message from unknown sender: ${sourceHash.take(16)}")
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            // Fail open: if we can't check the contact list, allow the message through
+            Log.w(TAG, "Error checking contact status, allowing message: ${e.message}")
+            false
+        }
 
     private val database: ColumbaDatabase by lazy {
         ServiceDatabaseProvider.getDatabase(context)
@@ -157,6 +185,11 @@ class ServicePersistenceManager(
             val activeIdentity = localIdentityDao.getActiveIdentitySync()
             if (activeIdentity == null) {
                 Log.w(TAG, "No active identity - cannot persist message")
+                return
+            }
+
+            // Check if we should block this sender
+            if (shouldBlockUnknownSender(sourceHash, activeIdentity.identityHash)) {
                 return
             }
 

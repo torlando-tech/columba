@@ -35,6 +35,7 @@ import javax.inject.Inject
 enum class SettingsCardId {
     NETWORK,
     IDENTITY,
+    PRIVACY,
     NOTIFICATIONS,
     AUTO_ANNOUNCE,
     LOCATION_SHARING,
@@ -108,6 +109,8 @@ data class SettingsState(
     val locationPrecisionRadius: Int = 0,
     // Notifications state
     val notificationsEnabled: Boolean = true,
+    // Privacy state
+    val blockUnknownSenders: Boolean = false,
     // Incoming message size limit (default 1MB)
     val incomingMessageSizeLimitKb: Int = 1024,
     // Image compression state
@@ -181,6 +184,8 @@ class SettingsViewModel
             loadMapSourceSettings()
             // Load notifications enabled setting
             loadNotificationsSettings()
+            // Load privacy settings
+            loadPrivacySettings()
             // Load protocol versions for About screen
             fetchProtocolVersions()
             // Always start sync state monitoring (no infinite loops, needed for UI)
@@ -1327,6 +1332,32 @@ class SettingsViewModel
                 settingsRepository.saveNotificationsEnabled(enabled)
                 _state.update { it.copy(notificationsEnabled = enabled) }
                 Log.d(TAG, "Notifications ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        // Privacy methods
+
+        /**
+         * Load privacy settings from the repository.
+         * Subscribes to flow updates so the card stays synced.
+         */
+        private fun loadPrivacySettings() {
+            viewModelScope.launch {
+                settingsRepository.blockUnknownSendersFlow.collect { enabled ->
+                    _state.update { it.copy(blockUnknownSenders = enabled) }
+                }
+            }
+        }
+
+        /**
+         * Set the block unknown senders setting.
+         * When enabled, messages from senders not in contacts are silently discarded.
+         */
+        fun setBlockUnknownSenders(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveBlockUnknownSenders(enabled)
+                _state.update { it.copy(blockUnknownSenders = enabled) }
+                Log.d(TAG, "Block unknown senders ${if (enabled) "enabled" else "disabled"}")
             }
         }
 

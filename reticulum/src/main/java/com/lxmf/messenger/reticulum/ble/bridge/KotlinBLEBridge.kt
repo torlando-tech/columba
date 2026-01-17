@@ -1966,16 +1966,31 @@ class KotlinBLEBridge(
                 // Prefer addresses with central connection (more reliable for sending)
                 val existingAddress = identityToAddress[identityHash]
                 val existingPeer = existingAddress?.let { connectedPeers[it] }
+
+                // Verify actual GATT connection state - peer entry may be stale if disconnect
+                // notification was missed. This prevents keeping mappings to dead connections.
+                val existingActuallyHasCentral = existingAddress != null &&
+                    existingPeer?.isCentral == true &&
+                    gattClient?.isConnected(existingAddress) == true
+
+                if (existingPeer?.isCentral == true && !existingActuallyHasCentral) {
+                    Log.w(
+                        TAG,
+                        "Stale central connection detected for $existingAddress " +
+                            "(peer says central=true but GATT not connected)",
+                    )
+                }
+
                 val shouldUpdate =
                     when {
                         existingAddress == null -> true // No existing mapping
                         existingPeer == null -> true // Old peer no longer exists
                         // Prefer peer with central connection
-                        peerAtNewAddress.isCentral && !existingPeer.isCentral -> true
+                        peerAtNewAddress.isCentral && !existingActuallyHasCentral -> true
                         // If new has both, prefer it
                         peerAtNewAddress.isCentral && peerAtNewAddress.isPeripheral -> true
                         // If existing has central and new doesn't, keep existing
-                        existingPeer.isCentral && !peerAtNewAddress.isCentral -> false
+                        existingActuallyHasCentral && !peerAtNewAddress.isCentral -> false
                         // Default: use the newer address
                         else -> true
                     }
@@ -1994,7 +2009,7 @@ class KotlinBLEBridge(
                         Log.d(TAG, "Address changed but not notifying Python: $existingAddress → $address (new is peripheral-only)")
                     }
                 } else {
-                    Log.d(TAG, "Keeping existing identity→address mapping: $identityHash → $existingAddress (existing has central)")
+                    Log.d(TAG, "Keeping existing identity→address mapping: $identityHash → $existingAddress (existing has live central)")
                 }
             } else {
                 // Peer doesn't exist yet - update mapping only if no existing valid mapping

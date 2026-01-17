@@ -121,41 +121,47 @@ When this device discovers and connects to a peripheral:
 
 ```mermaid
 sequenceDiagram
+    box rgb(30, 73, 102) Kotlin Native Layer
     participant Scan as BleScanner
     participant Bridge as KotlinBLEBridge
     participant Client as BleGattClient
+    end
     participant Peer as Remote Peripheral
+    box rgb(55, 118, 71) Python Layer
     participant Python as AndroidBLEDriver
+    end
 
     Scan->>Bridge: onDeviceDiscovered(address, rssi)
     Bridge->>Bridge: shouldConnect(address)?
     Note over Bridge: MAC comparison:<br/>our MAC < peer MAC = connect
     Bridge->>Client: connect(address)
 
-    rect rgb(30, 73, 102)
-        Note over Client,Peer: 4-Step GATT Handshake
-        Client->>Peer: 1. connectGatt()
-        Peer-->>Client: onConnectionStateChange(CONNECTED)
-        Client->>Peer: 2. discoverServices()
-        Peer-->>Client: onServicesDiscovered()
+    Note over Client,Peer: GATT Connection Setup
+    Client->>Peer: connectGatt()
+    Peer-->>Client: onConnectionStateChange(CONNECTED)
+    Client->>Peer: discoverServices()
+    Peer-->>Client: onServicesDiscovered()
 
-        Client->>Peer: Read Identity Characteristic
+    rect rgb(147, 112, 219)
+        Note over Client,Peer: Identity Handshake (Protocol v2.2)
+        Client->>Peer: Step 1: Read Identity Characteristic
         Peer-->>Client: 16-byte identity hash
         Client->>Bridge: onIdentityReceived(address, hash)
 
-        Client->>Peer: 3. requestMtu(517)
+        Client->>Peer: Step 2: requestMtu(517)
         Peer-->>Client: onMtuChanged(negotiated_mtu)
 
-        Client->>Peer: 4. Enable CCCD notifications
+        Client->>Peer: Step 3: Enable CCCD notifications
         Peer-->>Client: onDescriptorWrite(success)
 
-        Client->>Peer: Write our identity to RX
+        Client->>Peer: Step 4: Write our identity to RX
         Peer-->>Client: onCharacteristicWrite(success)
     end
 
-    Client->>Bridge: onConnected(address, mtu, identity)
-    Bridge->>Python: onConnected callback
-    Python->>Python: Spawn BLEPeerInterface
+    Client->>Bridge: onConnected(address, mtu)
+    Note over Bridge: Retrieves stored identity<br/>from addressToIdentity map
+    Bridge->>Python: onConnected(address, mtu, role, identity)
+    Python->>Python: _spawn_peer_interface<br/>(address, identity, mtu, role)
 ```
 
 ### Peripheral Mode Connection Sequence
@@ -195,7 +201,7 @@ sequenceDiagram
     Bridge->>Bridge: Complete connection with identity
     Bridge->>Python: onConnected(address, mtu, "peripheral", identity)
     Bridge->>Python: onIdentityReceived(address, hash)
-    Python->>Python: Spawn BLEPeerInterface
+    Python->>Python: _spawn_peer_interface(address, identity, mtu, role)
 ```
 
 ---

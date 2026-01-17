@@ -3,6 +3,7 @@ package com.lxmf.messenger.service.persistence
 import android.content.Context
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.dao.AnnounceDao
+import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.ConversationDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
@@ -36,7 +37,7 @@ import org.junit.Test
  * Unit tests for ServicePersistenceManager.
  *
  * Tests persistence of announces and messages from the service process,
- * including de-duplication, identity scoping, and error handling.
+ * including de-duplication, identity scoping, unknown sender filtering, and error handling.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServicePersistenceManagerTest {
@@ -44,10 +45,12 @@ class ServicePersistenceManagerTest {
     private lateinit var testScope: TestScope
     private lateinit var database: ColumbaDatabase
     private lateinit var announceDao: AnnounceDao
+    private lateinit var contactDao: ContactDao
     private lateinit var messageDao: MessageDao
     private lateinit var conversationDao: ConversationDao
     private lateinit var localIdentityDao: LocalIdentityDao
     private lateinit var peerIdentityDao: PeerIdentityDao
+    private lateinit var settingsAccessor: ServiceSettingsAccessor
     private lateinit var persistenceManager: ServicePersistenceManager
 
     private val testDestinationHash = "0102030405060708"
@@ -61,13 +64,16 @@ class ServicePersistenceManagerTest {
         testScope = TestScope(UnconfinedTestDispatcher())
         database = mockk(relaxed = true)
         announceDao = mockk(relaxed = true)
+        contactDao = mockk(relaxed = true)
         messageDao = mockk(relaxed = true)
         conversationDao = mockk(relaxed = true)
         localIdentityDao = mockk(relaxed = true)
         peerIdentityDao = mockk(relaxed = true)
+        settingsAccessor = mockk(relaxed = true)
 
         // Mock database DAOs
         every { database.announceDao() } returns announceDao
+        every { database.contactDao() } returns contactDao
         every { database.messageDao() } returns messageDao
         every { database.conversationDao() } returns conversationDao
         every { database.localIdentityDao() } returns localIdentityDao
@@ -77,7 +83,10 @@ class ServicePersistenceManagerTest {
         mockkObject(ServiceDatabaseProvider)
         every { ServiceDatabaseProvider.getDatabase(any()) } returns database
 
-        persistenceManager = ServicePersistenceManager(context, testScope)
+        // Default: don't block unknown senders
+        every { settingsAccessor.getBlockUnknownSenders() } returns false
+
+        persistenceManager = ServicePersistenceManager(context, testScope, settingsAccessor)
     }
 
     @After
@@ -753,4 +762,167 @@ class ServicePersistenceManagerTest {
 
         io.mockk.verify { ServiceDatabaseProvider.close() }
     }
+
+    // ========== Block Unknown Senders Tests ==========
+
+    @Test
+    fun `persistMessage blocks unknown sender when setting enabled`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            // Enable block unknown senders
+            every { settingsAccessor.getBlockUnknownSenders() } returns true
+            // Sender is NOT in contacts
+            coEvery { contactDao.contactExists("unknown_sender", testIdentityHash) } returns false
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello from unknown",
+                sourceHash = "unknown_sender",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            testScope.advanceUntilIdle()
+
+            // Should NOT persist message (blocked)
+            coVerify(exactly = 0) { messageDao.insertMessage(any()) }
+            coVerify(exactly = 0) { conversationDao.insertConversation(any()) }
+        }
+
+    @Test
+    fun `persistMessage allows known contact when setting enabled`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            // Enable block unknown senders
+            every { settingsAccessor.getBlockUnknownSenders() } returns true
+            // Sender IS in contacts
+            coEvery { contactDao.contactExists("known_sender", testIdentityHash) } returns true
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation(any(), any()) } returns null
+            coEvery { conversationDao.insertConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(any()) } just Runs
+
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello from contact",
+                sourceHash = "known_sender",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            testScope.advanceUntilIdle()
+
+            // Should persist message (contact is known)
+            coVerify { messageDao.insertMessage(any()) }
+        }
+
+    @Test
+    fun `persistMessage allows all messages when setting disabled`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            // Disable block unknown senders (default)
+            every { settingsAccessor.getBlockUnknownSenders() } returns false
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation(any(), any()) } returns null
+            coEvery { conversationDao.insertConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(any()) } just Runs
+
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello from anyone",
+                sourceHash = "random_sender",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            testScope.advanceUntilIdle()
+
+            // Should persist message (setting is disabled)
+            coVerify { messageDao.insertMessage(any()) }
+            // Should NOT check contact existence when setting is disabled
+            coVerify(exactly = 0) { contactDao.contactExists(any(), any()) }
+        }
+
+    @Test
+    fun `persistMessage fails open on contact check error`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            // Enable block unknown senders
+            every { settingsAccessor.getBlockUnknownSenders() } returns true
+            // Contact check throws exception
+            coEvery { contactDao.contactExists(any(), any()) } throws RuntimeException("Database error")
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation(any(), any()) } returns null
+            coEvery { conversationDao.insertConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(any()) } just Runs
+
+            persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello",
+                sourceHash = "any_sender",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            testScope.advanceUntilIdle()
+
+            // Should still persist message (fail-open on error)
+            coVerify { messageDao.insertMessage(any()) }
+        }
 }

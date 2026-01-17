@@ -1048,4 +1048,54 @@ class SettingsRepositoryTest {
             assertEquals(6, repository.autoAnnounceIntervalHoursFlow.first())
             assertTrue(repository.transportNodeEnabledFlow.first())
         }
+
+    // ========== Block Unknown Senders (Privacy) Flow Tests ==========
+
+    @Test
+    fun blockUnknownSendersFlow_defaultsToFalse() =
+        runTest {
+            // Issue #208: Block unknown senders should default to false (allow all messages)
+            repository.blockUnknownSendersFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                assertFalse(
+                    "Block unknown senders should default to false to preserve existing behavior",
+                    initial,
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun blockUnknownSendersFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.blockUnknownSendersFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveBlockUnknownSenders(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveBlockUnknownSenders(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getBlockUnknownSenders_matchesFlow() =
+        runTest {
+            // Set to a known value
+            repository.saveBlockUnknownSenders(true)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // When - Read from both sources
+            val flowValue = repository.blockUnknownSendersFlow.first()
+            val methodValue = repository.getBlockUnknownSenders()
+
+            // Then - Both should return same value
+            assertEquals("Flow and method should return same value", flowValue, methodValue)
+            assertTrue("Both should be true", methodValue)
+        }
 }

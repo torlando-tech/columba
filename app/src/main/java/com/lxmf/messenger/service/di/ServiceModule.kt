@@ -84,8 +84,8 @@ object ServiceModule {
         val notificationManager = ServiceNotificationManager(context, state)
         val broadcaster = CallbackBroadcaster()
         val bleCoordinator = BleCoordinator(context)
-        val persistenceManager = ServicePersistenceManager(context, scope)
         val settingsAccessor = ServiceSettingsAccessor(context)
+        val persistenceManager = ServicePersistenceManager(context, scope, settingsAccessor)
 
         // Phase 2: Python wrapper (depends on state, context, scope)
         val wrapperManager = PythonWrapperManager(state, context, scope)

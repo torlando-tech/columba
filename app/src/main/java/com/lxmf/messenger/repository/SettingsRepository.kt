@@ -108,6 +108,9 @@ class SettingsRepository
             // Map source preferences
             val MAP_SOURCE_HTTP_ENABLED = booleanPreferencesKey("map_source_http_enabled")
             val MAP_SOURCE_RMSP_ENABLED = booleanPreferencesKey("map_source_rmsp_enabled")
+
+            // Privacy preferences
+            val BLOCK_UNKNOWN_SENDERS = booleanPreferencesKey("block_unknown_senders")
         }
 
         // Notification preferences
@@ -1102,6 +1105,10 @@ class SettingsRepository
 
             /** Maximum incoming message size limit: 128MB (effectively unlimited) */
             const val MAX_INCOMING_SIZE_LIMIT_KB = 131072
+
+            // Cross-process SharedPreferences keys (for settings read by the service)
+            const val CROSS_PROCESS_PREFS_NAME = "cross_process_settings"
+            const val KEY_BLOCK_UNKNOWN_SENDERS = "block_unknown_senders"
         }
 
         // Export/Import methods for migration
@@ -1221,6 +1228,51 @@ class SettingsRepository
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.MAP_SOURCE_RMSP_ENABLED] = enabled
             }
+        }
+
+        // Privacy preferences
+
+        /**
+         * Flow of the block unknown senders setting.
+         * When enabled, messages from senders not in the contacts list are silently discarded.
+         * Defaults to false if not set (allow all messages - preserves existing behavior).
+         */
+        val blockUnknownSendersFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.BLOCK_UNKNOWN_SENDERS] ?: false
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the block unknown senders setting (non-flow).
+         */
+        suspend fun getBlockUnknownSenders(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.BLOCK_UNKNOWN_SENDERS] ?: false
+                }
+                .first()
+
+        /**
+         * Save the block unknown senders setting.
+         *
+         * Also writes to SharedPreferences with MODE_MULTI_PROCESS so the service process
+         * can read it (DataStore doesn't support reliable cross-process reads).
+         *
+         * @param enabled Whether to block messages from unknown senders
+         */
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS needed for cross-process reads
+        suspend fun saveBlockUnknownSenders(enabled: Boolean) {
+            // Write to DataStore for local flow/UI
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.BLOCK_UNKNOWN_SENDERS] = enabled
+            }
+            // Write to SharedPreferences for cross-process access by the service
+            context.getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .putBoolean(KEY_BLOCK_UNKNOWN_SENDERS, enabled)
+                .apply()
         }
 
         // Custom theme methods (delegated to CustomThemeRepository)

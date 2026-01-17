@@ -8,6 +8,7 @@ import androidx.room.Query
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import kotlinx.coroutines.flow.Flow
 
+@Suppress("TooManyFunctions") // DAOs naturally have many query methods
 @Dao
 interface AnnounceDao {
     /**
@@ -123,6 +124,12 @@ interface AnnounceDao {
      */
     @Query("SELECT COUNT(*) FROM announces")
     suspend fun getAnnounceCount(): Int
+
+    /**
+     * Get count of all announces as a Flow for reactive UI updates.
+     */
+    @Query("SELECT COUNT(*) FROM announces")
+    fun getAnnounceCountFlow(): Flow<Int>
 
     /**
      * Get announces filtered by node types.

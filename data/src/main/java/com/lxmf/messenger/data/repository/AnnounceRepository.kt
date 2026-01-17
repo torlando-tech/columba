@@ -313,6 +313,13 @@ class AnnounceRepository
         }
 
         /**
+         * Get total count of announces as a Flow for reactive UI updates.
+         */
+        fun getAnnounceCountFlow(): Flow<Int> {
+            return announceDao.getAnnounceCountFlow()
+        }
+
+        /**
          * Count announces that match the given path table hashes.
          * Filters to only count PEER and NODE types (excludes PROPAGATION_NODE).
          *

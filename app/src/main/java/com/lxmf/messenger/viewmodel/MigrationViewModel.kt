@@ -246,9 +246,12 @@ class MigrationViewModel
                     val cachedBytes = cachedImportZipBytes
                     cachedImportZipBytes = null // Release reference before long-running import
                     val result =
-                        migrationImporter.importData(uri, password, cachedBytes) { progress ->
-                            _importProgress.value = progress
-                        }
+                        migrationImporter.importData(
+                            uri = uri,
+                            password = password,
+                            cachedZipBytes = cachedBytes,
+                            onProgress = { progress -> _importProgress.value = progress },
+                        )
 
                     when (result) {
                         is ImportResult.Success -> {

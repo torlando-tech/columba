@@ -171,37 +171,38 @@ When a remote central connects to us:
 ```mermaid
 sequenceDiagram
     participant Central as Remote Central
+    box rgb(30, 73, 102) Kotlin Native Layer
     participant Server as BleGattServer
     participant Bridge as KotlinBLEBridge
+    end
+    box rgb(55, 118, 71) Python Layer
     participant Python as AndroidBLEDriver
+    end
 
     Central->>Server: connectGatt()
     Server->>Server: onConnectionStateChange(CONNECTED)
     Server->>Bridge: onCentralConnected(address, MIN_MTU)
-    Note over Bridge: Track as pending connection<br/>(identity not yet received)
+    Note over Bridge: Tracks as pending connection<br/>(awaiting identity from central)
 
     Central->>Server: discoverServices()
     Central->>Server: Read Identity Characteristic
     Server-->>Central: Our 16-byte identity
 
     Central->>Server: requestMtu()
-    Server->>Server: onMtuChanged()
     Server->>Bridge: onMtuChanged(address, mtu)
 
     Central->>Server: Enable CCCD notifications
 
-    rect rgb(30, 73, 102)
-        Note over Central,Server: Identity Handshake
+    rect rgb(147, 112, 219)
+        Note over Central,Python: Identity Handshake (Protocol v2.2)
         Central->>Server: Write 16 bytes to RX
-        Server->>Server: Detect: len=16, no existing identity
-        Server->>Bridge: onIdentityReceived(address, hash)
-        Server->>Bridge: onDataReceived(address, identity_bytes)
+        Server->>Bridge: onDataReceived(address, data)
+        Bridge->>Python: on_data_received(address, data)
+        Python->>Python: _handle_identity_handshake()<br/>Detect: len=16, no existing identity
+        Note over Python: Store identity mapping<br/>Start fragmenter/reassembler
     end
 
-    Bridge->>Bridge: Complete connection with identity
-    Bridge->>Python: onConnected(address, mtu, "peripheral", identity)
-    Bridge->>Python: onIdentityReceived(address, hash)
-    Python->>Python: _spawn_peer_interface(address, identity, mtu, role)
+    Python->>Python: _spawn_peer_interface<br/>(address, identity, mtu, role)
 ```
 
 ---

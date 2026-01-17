@@ -58,8 +58,7 @@ fun CollapsibleSettingsCard(
     Card(
         modifier =
             modifier
-                .fillMaxWidth()
-                .clickable { onExpandedChange(!isExpanded) },
+                .fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors =
             CardDefaults.cardColors(
@@ -79,11 +78,14 @@ fun CollapsibleSettingsCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                // Icon and title
+                // Icon and title (clickable to expand/collapse)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f),
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .clickable { onExpandedChange(!isExpanded) },
                 ) {
                     Icon(
                         imageVector = icon,

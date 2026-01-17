@@ -1095,4 +1095,42 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error announcing LXMF destination", e)
         }
     }
+
+    // ==================== PROTOCOL VERSION INFORMATION ====================
+
+    override fun getReticulumVersion(): String? {
+        return try {
+            val result = wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("get_reticulum_version")?.toString()
+            }
+            result?.takeIf { it != "unknown" }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get Reticulum version", e)
+            null
+        }
+    }
+
+    override fun getLxmfVersion(): String? {
+        return try {
+            val result = wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("get_lxmf_version")?.toString()
+            }
+            result?.takeIf { it != "unknown" }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get LXMF version", e)
+            null
+        }
+    }
+
+    override fun getBleReticulumVersion(): String? {
+        return try {
+            val result = wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("get_ble_reticulum_version")?.toString()
+            }
+            result?.takeIf { it != "unknown" }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get BLE-Reticulum version", e)
+            null
+        }
+    }
 }

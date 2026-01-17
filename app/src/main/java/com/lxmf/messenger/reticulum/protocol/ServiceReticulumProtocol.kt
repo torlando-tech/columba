@@ -2560,4 +2560,33 @@ class ServiceReticulumProtocol(
     private fun ByteArray.toHexString(): String {
         return joinToString("") { "%02x".format(it) }
     }
+
+    // Protocol version information (for About screen)
+
+    override suspend fun getReticulumVersion(): String? {
+        return try {
+            service?.getReticulumVersion()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get Reticulum version", e)
+            null
+        }
+    }
+
+    override suspend fun getLxmfVersion(): String? {
+        return try {
+            service?.getLxmfVersion()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get LXMF version", e)
+            null
+        }
+    }
+
+    override suspend fun getBleReticulumVersion(): String? {
+        return try {
+            service?.getBleReticulumVersion()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get BLE-Reticulum version", e)
+            null
+        }
+    }
 }

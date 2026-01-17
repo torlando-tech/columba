@@ -97,6 +97,10 @@ data class SettingsState(
     val mapSourceRmspEnabled: Boolean = false,
     val rmspServerCount: Int = 0,
     val hasOfflineMaps: Boolean = false,
+    // Protocol versions (for About screen)
+    val reticulumVersion: String? = null,
+    val lxmfVersion: String? = null,
+    val bleReticulumVersion: String? = null,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -150,6 +154,8 @@ class SettingsViewModel
             loadImageCompressionSettings()
             // Load map source settings
             loadMapSourceSettings()
+            // Load protocol versions for About screen
+            fetchProtocolVersions()
             // Always start sync state monitoring (no infinite loops, needed for UI)
             startSyncStateMonitor()
             if (enableMonitors) {
@@ -315,6 +321,10 @@ class SettingsViewModel
                             mapSourceRmspEnabled = _state.value.mapSourceRmspEnabled,
                             rmspServerCount = _state.value.rmspServerCount,
                             hasOfflineMaps = _state.value.hasOfflineMaps,
+                            // Preserve protocol versions from fetchProtocolVersions()
+                            reticulumVersion = _state.value.reticulumVersion,
+                            lxmfVersion = _state.value.lxmfVersion,
+                            bleReticulumVersion = _state.value.bleReticulumVersion,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value
@@ -468,6 +478,44 @@ class SettingsViewModel
 
             Log.e(TAG, "Failed to get identity info after $MAX_RETRIES attempts", lastException)
             return Pair(null, null)
+        }
+
+        private fun fetchProtocolVersions() {
+            viewModelScope.launch {
+                try {
+                    // Add initial delay to allow Reticulum service to fully initialize
+                    delay(INIT_DELAY_MS * 4)
+
+                    var rnsVersion: String? = null
+                    var lxmfVer: String? = null
+                    var bleVer: String? = null
+
+                    // Retry up to 3 times if versions are null (service might not be bound yet)
+                    repeat(3) { attempt ->
+                        rnsVersion = reticulumProtocol.getReticulumVersion()
+                        lxmfVer = reticulumProtocol.getLxmfVersion()
+                        bleVer = reticulumProtocol.getBleReticulumVersion()
+
+                        if (rnsVersion != null || lxmfVer != null || bleVer != null) {
+                            return@repeat
+                        }
+
+                        if (attempt < 2) {
+                            delay(1000)
+                        }
+                    }
+
+                    _state.update {
+                        it.copy(
+                            reticulumVersion = rnsVersion,
+                            lxmfVersion = lxmfVer,
+                            bleReticulumVersion = bleVer,
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to fetch protocol versions", e)
+                }
+            }
         }
 
         fun updateDisplayName(newDisplayName: String) {

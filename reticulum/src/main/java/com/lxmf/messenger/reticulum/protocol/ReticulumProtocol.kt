@@ -191,6 +191,24 @@ interface ReticulumProtocol {
      */
     suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>?
 
+    // RNS 1.1.x Interface Discovery
+
+    /**
+     * Get list of discovered interfaces from RNS 1.1.x discovery system.
+     * Requires RNS 1.1.0 or later.
+     *
+     * @return List of DiscoveredInterface objects with interface info
+     */
+    suspend fun getDiscoveredInterfaces(): List<DiscoveredInterface>
+
+    /**
+     * Check if interface discovery and auto-connect is enabled.
+     * Requires RNS 1.1.0 or later.
+     *
+     * @return true if RNS is configured to auto-connect discovered interfaces
+     */
+    suspend fun isDiscoveryEnabled(): Boolean
+
     // Performance optimization
 
     /**
@@ -525,6 +543,40 @@ data class FailedInterface(
                 )
             }
             return failedList
+        }
+    }
+}
+
+/**
+ * Information about an interface discovered via RNS 1.1.x interface discovery.
+ */
+data class DiscoveredInterface(
+    val name: String,
+    val type: String,
+    val host: String?,
+    val port: Int?,
+    val isOnline: Boolean,
+) {
+    companion object {
+        /**
+         * Parse a JSON array string into a list of DiscoveredInterface objects.
+         */
+        fun parseFromJson(jsonString: String): List<DiscoveredInterface> {
+            val jsonArray = org.json.JSONArray(jsonString)
+            val discovered = mutableListOf<DiscoveredInterface>()
+            for (i in 0 until jsonArray.length()) {
+                val item = jsonArray.getJSONObject(i)
+                discovered.add(
+                    DiscoveredInterface(
+                        name = item.optString("name", "Unknown"),
+                        type = item.optString("type", "Unknown"),
+                        host = item.optString("host", null),
+                        port = if (item.has("port") && !item.isNull("port")) item.getInt("port") else null,
+                        isOnline = item.optBoolean("is_online", false),
+                    ),
+                )
+            }
+            return discovered
         }
     }
 }

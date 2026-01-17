@@ -26,6 +26,7 @@ fun InterfaceConfig.toJsonString(): String {
                 put("mode", mode)
                 networkName?.let { put("network_name", it) }
                 passphrase?.let { put("passphrase", it) }
+                if (bootstrapOnly) put("bootstrap_only", true)
             }.toString()
 
         is InterfaceConfig.RNode ->

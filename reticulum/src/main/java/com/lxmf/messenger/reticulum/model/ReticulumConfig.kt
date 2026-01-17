@@ -27,6 +27,32 @@ data class ReticulumConfig(
      * When false, only handles its own traffic without relaying for other peers.
      */
     val enableTransport: Boolean = true,
+    // ==================== RNS 1.1.x Interface Discovery ====================
+    /**
+     * Enable automatic interface discovery (RNS 1.1.0+).
+     * When enabled, RNS will discover and potentially auto-connect to interfaces
+     * announced by other nodes on the network.
+     */
+    val discoverInterfaces: Boolean = false,
+    /**
+     * Maximum number of discovered interfaces to auto-connect.
+     * 0 = disabled (discovery only, no auto-connect)
+     * 1-10 = auto-connect up to this many discovered interfaces
+     * Default: 0 (disabled)
+     */
+    val autoconnectDiscoveredInterfaces: Int = 0,
+    /**
+     * List of identity hashes (hex) of trusted discovery sources.
+     * If null or empty, all discovered interfaces are considered.
+     * If set, only interfaces from these sources will be auto-connected.
+     */
+    val interfaceDiscoverySources: List<String>? = null,
+    /**
+     * Required proof-of-work stamp value for discovery announces.
+     * Higher values require more computational effort to create announces,
+     * providing spam prevention. Range: 8-20, default: 14.
+     */
+    val requiredDiscoveryValue: Int = 14,
 )
 
 /**
@@ -71,6 +97,8 @@ sealed class InterfaceConfig {
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
      * @param networkName Optional IFAC network name for cryptographic authentication
      * @param passphrase Optional IFAC passphrase for cryptographic authentication
+     * @param bootstrapOnly When true, this interface auto-detaches once sufficient discovered
+     *                      interfaces are connected (RNS 1.1.0+ bootstrap feature)
      */
     data class TCPClient(
         override val name: String = "TCP Connection",
@@ -81,6 +109,7 @@ sealed class InterfaceConfig {
         val mode: String = "full",
         val networkName: String? = null,
         val passphrase: String? = null,
+        val bootstrapOnly: Boolean = false,
     ) : InterfaceConfig()
 
     /**

@@ -2022,6 +2022,29 @@ class ServiceReticulumProtocol(
         }
     }
 
+    // ==================== RNS 1.1.x INTERFACE DISCOVERY ====================
+
+    override suspend fun getDiscoveredInterfaces(): List<DiscoveredInterface> {
+        return try {
+            val service = this.service ?: return emptyList()
+            val resultJson = service.discoveredInterfaces
+            DiscoveredInterface.parseFromJson(resultJson)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting discovered interfaces", e)
+            emptyList()
+        }
+    }
+
+    override suspend fun isDiscoveryEnabled(): Boolean {
+        return try {
+            val service = this.service ?: return false
+            service.isDiscoveryEnabled
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking discovery enabled status", e)
+            false
+        }
+    }
+
     override fun setConversationActive(active: Boolean) {
         try {
             service?.setConversationActive(active)

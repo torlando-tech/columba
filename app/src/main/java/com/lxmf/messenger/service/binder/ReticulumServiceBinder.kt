@@ -637,6 +637,32 @@ class ReticulumServiceBinder(
     }
 
     // ===========================================
+    // RNS 1.1.x Interface Discovery
+    // ===========================================
+
+    override fun getDiscoveredInterfaces(): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("get_discovered_interfaces")?.toString() ?: "[]"
+            } ?: "[]"
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting discovered interfaces", e)
+            "[]"
+        }
+    }
+
+    override fun isDiscoveryEnabled(): Boolean {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("is_discovery_enabled")?.toBoolean() ?: false
+            } ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking discovery enabled status", e)
+            false
+        }
+    }
+
+    // ===========================================
     // Propagation Node Support
     // ===========================================
 

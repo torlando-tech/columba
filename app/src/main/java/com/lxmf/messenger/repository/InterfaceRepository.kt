@@ -227,6 +227,7 @@ class InterfaceRepository
                             mode = json.optString("mode", "full"),
                             networkName = json.optString("network_name", "").ifEmpty { null },
                             passphrase = json.optString("passphrase", "").ifEmpty { null },
+                            bootstrapOnly = json.optBoolean("bootstrap_only", false),
                         )
                     }
 

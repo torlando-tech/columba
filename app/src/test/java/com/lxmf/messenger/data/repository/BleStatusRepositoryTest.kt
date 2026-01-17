@@ -524,9 +524,11 @@ class BleStatusRepositoryTest {
             repository.getConnectedPeersFlow().test(timeout = 5.seconds) {
                 val emission = awaitItem()
                 // When adapter is OFF (which happens when no BT hardware), we get BluetoothDisabled
-                assertTrue("Expected BluetoothDisabled or empty Success",
+                assertTrue(
+                    "Expected BluetoothDisabled or empty Success",
                     emission is BleConnectionsState.BluetoothDisabled ||
-                    (emission is BleConnectionsState.Success && emission.connections.isEmpty()))
+                        (emission is BleConnectionsState.Success && emission.connections.isEmpty()),
+                )
                 cancelAndIgnoreRemainingEvents()
             }
         }

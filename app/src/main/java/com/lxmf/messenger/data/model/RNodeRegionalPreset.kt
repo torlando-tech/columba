@@ -1,6 +1,7 @@
 package com.lxmf.messenger.data.model
 
 import android.bluetooth.BluetoothDevice
+import java.util.Locale
 
 /**
  * Bluetooth connection type for RNode devices.
@@ -56,7 +57,7 @@ data class DiscoveredUsbDevice(
 
     /** Formatted VID:PID for display */
     val vidPid: String
-        get() = String.format("%04X:%04X", vendorId, productId)
+        get() = String.format(Locale.US, "%04X:%04X", vendorId, productId)
 }
 
 /**

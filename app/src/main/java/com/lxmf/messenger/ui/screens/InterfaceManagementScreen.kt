@@ -2,6 +2,7 @@
 
 package com.lxmf.messenger.ui.screens
 
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -74,7 +75,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import android.widget.Toast
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
@@ -470,24 +470,26 @@ fun InterfaceCard(
                         val clipboardManager = LocalClipboardManager.current
                         val context = LocalContext.current
                         val (localIp, isYggdrasil) = getLocalIpAddress()
-                        val copyAddress = try {
-                            val json = org.json.JSONObject(interfaceEntity.configJson)
-                            val port = json.optInt("listen_port", 4242)
-                            if (localIp != null) formatAddressWithPort(localIp, port, isYggdrasil) else null
-                        } catch (e: Exception) {
-                            null
-                        }
+                        val copyAddress =
+                            try {
+                                val json = org.json.JSONObject(interfaceEntity.configJson)
+                                val port = json.optInt("listen_port", 4242)
+                                if (localIp != null) formatAddressWithPort(localIp, port, isYggdrasil) else null
+                            } catch (e: Exception) {
+                                null
+                            }
 
                         Text(
                             text = getInterfaceDescription(interfaceEntity),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable(enabled = copyAddress != null) {
-                                copyAddress?.let {
-                                    clipboardManager.setText(AnnotatedString(it))
-                                    Toast.makeText(context, "Copied $it", Toast.LENGTH_SHORT).show()
-                                }
-                            },
+                            modifier =
+                                Modifier.clickable(enabled = copyAddress != null) {
+                                    copyAddress?.let {
+                                        clipboardManager.setText(AnnotatedString(it))
+                                        Toast.makeText(context, "Copied $it", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
                         )
                     } else {
                         Text(
@@ -909,7 +911,11 @@ internal fun getInterfaceTypeLabel(type: String): String {
 /**
  * Format an IP address with port, using brackets for IPv6.
  */
-internal fun formatAddressWithPort(ip: String?, port: Int, isIpv6: Boolean): String {
+internal fun formatAddressWithPort(
+    ip: String?,
+    port: Int,
+    isIpv6: Boolean,
+): String {
     return when {
         ip == null -> "no network:$port"
         isIpv6 || ip.contains(":") -> "[$ip]:$port"

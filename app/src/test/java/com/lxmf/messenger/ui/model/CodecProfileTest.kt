@@ -19,20 +19,20 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class CodecProfileTest {
-
     // ========== getConservativeBandwidthBps Tests ==========
 
     @Test
     fun `getConservativeBandwidthBps prefers expectedRateBps when available`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 50000L, // 50 kbps - measured throughput
-            establishmentRateBps = 100000L, // 100 kbps - higher establishment rate
-            nextHopBitrateBps = 1000000L, // 1 Mbps - even higher interface rate
-            rttSeconds = 0.1,
-            hops = 1,
-            linkReused = true,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 50000L, // 50 kbps - measured throughput
+                establishmentRateBps = 100000L, // 100 kbps - higher establishment rate
+                nextHopBitrateBps = 1000000L, // 1 Mbps - even higher interface rate
+                rttSeconds = 0.1,
+                hops = 1,
+                linkReused = true,
+            )
 
         val result = CodecProfile.getConservativeBandwidthBps(probe)
 
@@ -41,15 +41,16 @@ class CodecProfileTest {
 
     @Test
     fun `getConservativeBandwidthBps uses min of establishment and nextHop when no expectedRate`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = null, // No measured throughput
-            establishmentRateBps = 20000L, // 20 kbps
-            nextHopBitrateBps = 50000L, // 50 kbps - higher next hop rate
-            rttSeconds = 0.2,
-            hops = 2,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = null, // No measured throughput
+                establishmentRateBps = 20000L, // 20 kbps
+                nextHopBitrateBps = 50000L, // 50 kbps - higher next hop rate
+                rttSeconds = 0.2,
+                hops = 2,
+                linkReused = false,
+            )
 
         val result = CodecProfile.getConservativeBandwidthBps(probe)
 
@@ -59,15 +60,16 @@ class CodecProfileTest {
 
     @Test
     fun `getConservativeBandwidthBps uses min when nextHop is lower than establishment`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = null,
-            establishmentRateBps = 100000L, // 100 kbps
-            nextHopBitrateBps = 5000L, // 5 kbps - slow next hop (e.g., BLE)
-            rttSeconds = 0.5,
-            hops = 1,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = null,
+                establishmentRateBps = 100000L, // 100 kbps
+                nextHopBitrateBps = 5000L, // 5 kbps - slow next hop (e.g., BLE)
+                rttSeconds = 0.5,
+                hops = 1,
+                linkReused = false,
+            )
 
         val result = CodecProfile.getConservativeBandwidthBps(probe)
 
@@ -77,15 +79,16 @@ class CodecProfileTest {
 
     @Test
     fun `getConservativeBandwidthBps returns establishment when no nextHop`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = null,
-            establishmentRateBps = 30000L, // 30 kbps
-            nextHopBitrateBps = null, // No next hop info
-            rttSeconds = 0.15,
-            hops = 3,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = null,
+                establishmentRateBps = 30000L, // 30 kbps
+                nextHopBitrateBps = null, // No next hop info
+                rttSeconds = 0.15,
+                hops = 3,
+                linkReused = false,
+            )
 
         val result = CodecProfile.getConservativeBandwidthBps(probe)
 
@@ -94,15 +97,16 @@ class CodecProfileTest {
 
     @Test
     fun `getConservativeBandwidthBps returns nextHop when no establishment`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = null,
-            establishmentRateBps = null, // No establishment rate
-            nextHopBitrateBps = 10000L, // 10 kbps
-            rttSeconds = null,
-            hops = null,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = null,
+                establishmentRateBps = null, // No establishment rate
+                nextHopBitrateBps = 10000L, // 10 kbps
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+            )
 
         val result = CodecProfile.getConservativeBandwidthBps(probe)
 
@@ -111,15 +115,16 @@ class CodecProfileTest {
 
     @Test
     fun `getConservativeBandwidthBps returns null when no metrics`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = null,
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = null,
-            hops = null,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = null,
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+            )
 
         val result = CodecProfile.getConservativeBandwidthBps(probe)
 
@@ -128,15 +133,16 @@ class CodecProfileTest {
 
     @Test
     fun `getConservativeBandwidthBps ignores zero values`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 0L, // Zero should be ignored
-            establishmentRateBps = 0L, // Zero should be ignored
-            nextHopBitrateBps = 25000L, // 25 kbps - only valid value
-            rttSeconds = 0.1,
-            hops = 1,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 0L, // Zero should be ignored
+                establishmentRateBps = 0L, // Zero should be ignored
+                nextHopBitrateBps = 25000L, // 25 kbps - only valid value
+                rttSeconds = 0.1,
+                hops = 1,
+                linkReused = false,
+            )
 
         val result = CodecProfile.getConservativeBandwidthBps(probe)
 
@@ -147,15 +153,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe returns BANDWIDTH_ULTRA_LOW for very slow links`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 1000L, // 1 kbps - very slow
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = 1.0,
-            hops = 5,
-            linkReused = true,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 1000L, // 1 kbps - very slow
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = 1.0,
+                hops = 5,
+                linkReused = true,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -164,15 +171,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe returns BANDWIDTH_VERY_LOW for slow links`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 3000L, // 3 kbps - slow (between 1.5 and 4 kbps)
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = 0.5,
-            hops = 3,
-            linkReused = true,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 3000L, // 3 kbps - slow (between 1.5 and 4 kbps)
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = 0.5,
+                hops = 3,
+                linkReused = true,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -181,15 +189,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe returns BANDWIDTH_LOW for limited bandwidth`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 8000L, // 8 kbps - limited (between 4 and 10 kbps)
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = 0.3,
-            hops = 2,
-            linkReused = true,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 8000L, // 8 kbps - limited (between 4 and 10 kbps)
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = 0.3,
+                hops = 2,
+                linkReused = true,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -198,15 +207,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe returns QUALITY_MEDIUM for moderate bandwidth`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 25000L, // 25 kbps - moderate (between 10 and 32 kbps)
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = 0.1,
-            hops = 1,
-            linkReused = true,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 25000L, // 25 kbps - moderate (between 10 and 32 kbps)
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = 0.1,
+                hops = 1,
+                linkReused = true,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -215,15 +225,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe returns QUALITY_HIGH for good bandwidth`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 50000L, // 50 kbps - good (between 32 and 64 kbps)
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = 0.05,
-            hops = 1,
-            linkReused = true,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 50000L, // 50 kbps - good (between 32 and 64 kbps)
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = 0.05,
+                hops = 1,
+                linkReused = true,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -232,15 +243,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe returns QUALITY_MAX for fast links`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 100000L, // 100 kbps - fast (> 64 kbps)
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = 0.02,
-            hops = 1,
-            linkReused = true,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 100000L, // 100 kbps - fast (> 64 kbps)
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = 0.02,
+                hops = 1,
+                linkReused = true,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -249,15 +261,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe returns DEFAULT when probe has no data`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = null,
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = null,
-            hops = null,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = null,
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -266,16 +279,17 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe returns DEFAULT for failed probe`() {
-        val probe = LinkSpeedProbeResult(
-            status = "error",
-            expectedRateBps = null,
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = null,
-            hops = null,
-            linkReused = false,
-            error = "Connection timeout",
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "error",
+                expectedRateBps = null,
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+                error = "Connection timeout",
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -286,15 +300,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe at 1500 bps threshold recommends BANDWIDTH_VERY_LOW`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 1500L, // Exactly at threshold
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = null,
-            hops = null,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 1500L, // Exactly at threshold
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -303,15 +318,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe at 4000 bps threshold recommends BANDWIDTH_LOW`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 4000L, // Exactly at threshold
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = null,
-            hops = null,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 4000L, // Exactly at threshold
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -320,15 +336,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe at 10000 bps threshold recommends QUALITY_MEDIUM`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 10000L, // Exactly at threshold
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = null,
-            hops = null,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 10000L, // Exactly at threshold
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -337,15 +354,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe at 32000 bps threshold recommends QUALITY_HIGH`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 32000L, // Exactly at threshold
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = null,
-            hops = null,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 32000L, // Exactly at threshold
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -354,15 +372,16 @@ class CodecProfileTest {
 
     @Test
     fun `recommendFromProbe at 64000 bps threshold recommends QUALITY_MAX`() {
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 64000L, // Exactly at threshold
-            establishmentRateBps = null,
-            nextHopBitrateBps = null,
-            rttSeconds = null,
-            hops = null,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 64000L, // Exactly at threshold
+                establishmentRateBps = null,
+                nextHopBitrateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -374,15 +393,16 @@ class CodecProfileTest {
     @Test
     fun `typical BLE link recommends low bandwidth codec`() {
         // BLE typically has ~5 kbps effective throughput
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = null,
-            establishmentRateBps = 4000L,
-            nextHopBitrateBps = 5000L, // BLE interface
-            rttSeconds = 0.5,
-            hops = 1,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = null,
+                establishmentRateBps = 4000L,
+                nextHopBitrateBps = 5000L, // BLE interface
+                rttSeconds = 0.5,
+                hops = 1,
+                linkReused = false,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -393,15 +413,16 @@ class CodecProfileTest {
     @Test
     fun `TCP with slow intermediate hop recommends conservative codec`() {
         // Fast TCP next hop but slow establishment rate indicates slow intermediate hops
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = null,
-            establishmentRateBps = 8000L, // Slow establishment (slow intermediate hop)
-            nextHopBitrateBps = 1000000L, // 1 Mbps TCP interface
-            rttSeconds = 0.8,
-            hops = 4,
-            linkReused = false,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = null,
+                establishmentRateBps = 8000L, // Slow establishment (slow intermediate hop)
+                nextHopBitrateBps = 1000000L, // 1 Mbps TCP interface
+                rttSeconds = 0.8,
+                hops = 4,
+                linkReused = false,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 
@@ -412,15 +433,16 @@ class CodecProfileTest {
     @Test
     fun `fast local TCP link recommends high quality codec`() {
         // Fast TCP with measured throughput
-        val probe = LinkSpeedProbeResult(
-            status = "success",
-            expectedRateBps = 500000L, // 500 kbps measured
-            establishmentRateBps = 100000L,
-            nextHopBitrateBps = 10000000L, // 10 Mbps interface
-            rttSeconds = 0.01,
-            hops = 1,
-            linkReused = true,
-        )
+        val probe =
+            LinkSpeedProbeResult(
+                status = "success",
+                expectedRateBps = 500000L, // 500 kbps measured
+                establishmentRateBps = 100000L,
+                nextHopBitrateBps = 10000000L, // 10 Mbps interface
+                rttSeconds = 0.01,
+                hops = 1,
+                linkReused = true,
+            )
 
         val result = CodecProfile.recommendFromProbe(probe)
 

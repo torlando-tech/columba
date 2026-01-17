@@ -30,20 +30,22 @@ fun ImageQualitySelectionDialog(
     onDismiss: () -> Unit,
 ) {
     // Show presets in order: LOW, MEDIUM, HIGH, ORIGINAL (skip AUTO)
-    val presets = listOf(
-        ImageCompressionPreset.LOW,
-        ImageCompressionPreset.MEDIUM,
-        ImageCompressionPreset.HIGH,
-        ImageCompressionPreset.ORIGINAL,
-    )
-
-    val options = presets.map { preset ->
-        QualityOption(
-            value = preset,
-            displayName = preset.displayName,
-            description = preset.description,
+    val presets =
+        listOf(
+            ImageCompressionPreset.LOW,
+            ImageCompressionPreset.MEDIUM,
+            ImageCompressionPreset.HIGH,
+            ImageCompressionPreset.ORIGINAL,
         )
-    }
+
+    val options =
+        presets.map { preset ->
+            QualityOption(
+                value = preset,
+                displayName = preset.displayName,
+                description = preset.description,
+            )
+        }
 
     QualitySelectionDialog(
         title = "Choose Image Quality",

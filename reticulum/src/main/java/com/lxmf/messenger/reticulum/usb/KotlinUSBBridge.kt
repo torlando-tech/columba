@@ -48,8 +48,11 @@ data class UsbDeviceInfo(
  */
 interface UsbConnectionListener {
     fun onUsbConnected(deviceId: Int)
+
     fun onUsbDisconnected(deviceId: Int)
+
     fun onUsbPermissionGranted(deviceId: Int)
+
     fun onUsbPermissionDenied(deviceId: Int)
 }
 
@@ -83,7 +86,6 @@ class KotlinUSBBridge(
         private const val ACTION_USB_PERMISSION = "com.lxmf.messenger.USB_PERMISSION"
 
         // Buffer sizes
-        private const val READ_BUFFER_SIZE = 4096
         private const val WRITE_TIMEOUT_MS = 1000
 
         // Default serial parameters for RNode
@@ -92,16 +94,25 @@ class KotlinUSBBridge(
         private const val DEFAULT_STOP_BITS = UsbSerialPort.STOPBITS_1
         private const val DEFAULT_PARITY = UsbSerialPort.PARITY_NONE
 
-        // Supported USB VIDs (same as Sideband)
+        /**
+         * Supported USB VIDs (same as Sideband):
+         * - 0x0403: FTDI
+         * - 0x10C4: SiLabs CP210x
+         * - 0x067B: Prolific PL2303
+         * - 0x1A86: CH340/CH341
+         * - 0x0525: ESP32/NRF52 CDC (Linux Foundation)
+         * - 0x2E8A: Raspberry Pi Pico
+         * - 0x303A: Espressif
+         */
         private val SUPPORTED_VIDS =
             setOf(
-                0x0403, // FTDI
-                0x10C4, // SiLabs CP210x
-                0x067B, // Prolific PL2303
-                0x1A86, // CH340/CH341
-                0x0525, // ESP32/NRF52 CDC (Linux Foundation)
-                0x2E8A, // Raspberry Pi Pico
-                0x303A, // Espressif
+                0x0403,
+                0x10C4,
+                0x067B,
+                0x1A86,
+                0x0525,
+                0x2E8A,
+                0x303A,
             )
 
         // Custom prober to detect more devices
@@ -384,7 +395,12 @@ class KotlinUSBBridge(
                 ),
             )
 
-            Log.d(TAG, "Found USB device: ${device.productName ?: device.deviceName} (VID=${device.vendorId.toHexString()}, PID=${device.productId.toHexString()}, driver=$driverType)")
+            Log.d(
+                TAG,
+                "Found USB device: ${device.productName ?: device.deviceName} " +
+                    "(VID=${device.vendorId.toHexString()}, PID=${device.productId.toHexString()}, " +
+                    "driver=$driverType)",
+            )
         }
 
         return devices

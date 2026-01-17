@@ -107,12 +107,12 @@ enum class CodecProfile(
             val bandwidthBps = getConservativeBandwidthBps(probe) ?: return DEFAULT
             val kbps = bandwidthBps / 1000.0
             return when {
-                kbps < 1.5 -> BANDWIDTH_ULTRA_LOW   // Codec2 700C
-                kbps < 4 -> BANDWIDTH_VERY_LOW      // Codec2 1600
-                kbps < 10 -> BANDWIDTH_LOW          // Codec2 3200
-                kbps < 32 -> QUALITY_MEDIUM         // Opus low
-                kbps < 64 -> QUALITY_HIGH           // Opus medium
-                else -> QUALITY_MAX                 // Opus high
+                kbps < 1.5 -> BANDWIDTH_ULTRA_LOW // Codec2 700C
+                kbps < 4 -> BANDWIDTH_VERY_LOW // Codec2 1600
+                kbps < 10 -> BANDWIDTH_LOW // Codec2 3200
+                kbps < 32 -> QUALITY_MEDIUM // Opus low
+                kbps < 64 -> QUALITY_HIGH // Opus medium
+                else -> QUALITY_MAX // Opus high
             }
         }
     }

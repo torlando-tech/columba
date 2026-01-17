@@ -17,9 +17,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
@@ -38,10 +41,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Icon
-import androidx.compose.ui.unit.sp
 import com.lxmf.messenger.service.ConversationLinkManager
 import java.util.Locale
 
@@ -132,9 +131,10 @@ fun <T> QualitySelectionDialog(
                     modifier = Modifier.heightIn(max = 400.dp),
                 ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(scrollState),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(scrollState),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         options.forEach { option ->
@@ -177,27 +177,28 @@ fun <T> QualitySelectionDialog(
  */
 @Composable
 fun PathInfoSection(linkState: ConversationLinkManager.LinkState?) {
-    val pathInfo = when {
-        linkState == null -> null
-        linkState.isEstablishing -> "Connecting..."
-        linkState.isActive -> {
-            buildString {
-                linkState.hops?.let { append("$it hops") }
+    val pathInfo =
+        when {
+            linkState == null -> null
+            linkState.isEstablishing -> "Connecting..."
+            linkState.isActive -> {
+                buildString {
+                    linkState.hops?.let { append("$it hops") }
 
-                linkState.bestRateBps?.let { rate ->
-                    if (isNotEmpty()) append(" • ")
-                    append(formatBitrate(rate))
-                }
+                    linkState.bestRateBps?.let { rate ->
+                        if (isNotEmpty()) append(" • ")
+                        append(formatBitrate(rate))
+                    }
 
-                linkState.linkMtu?.let { mtu ->
-                    if (isNotEmpty()) append(" • ")
-                    append("${mtu}B MTU")
-                }
-            }.ifEmpty { null }
+                    linkState.linkMtu?.let { mtu ->
+                        if (isNotEmpty()) append(" • ")
+                        append("${mtu}B MTU")
+                    }
+                }.ifEmpty { null }
+            }
+            linkState.error != null -> "Connection failed"
+            else -> "No active link"
         }
-        linkState.error != null -> "Connection failed"
-        else -> "No active link"
-    }
 
     if (pathInfo != null) {
         Surface(
@@ -233,20 +234,22 @@ fun QualityOptionRow(
     transferTime: String? = null,
     onClick: () -> Unit,
 ) {
-    val backgroundColor = when {
-        isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        isRecommended -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f)
-        else -> Color.Transparent
-    }
+    val backgroundColor =
+        when {
+            isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            isRecommended -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f)
+            else -> Color.Transparent
+        }
 
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .selectable(
-                selected = isSelected,
-                onClick = onClick,
-                role = Role.RadioButton,
-            ),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .selectable(
+                    selected = isSelected,
+                    onClick = onClick,
+                    role = Role.RadioButton,
+                ),
         color = backgroundColor,
         shape = MaterialTheme.shapes.small,
     ) {
@@ -363,18 +366,21 @@ fun ScrollableOptionsContainer(
             // Bottom fade gradient - appears when more content below
             if (showBottomIndicator) {
                 Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(24.dp)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.surface,
-                                ),
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(24.dp)
+                            .background(
+                                brush =
+                                    Brush.verticalGradient(
+                                        colors =
+                                            listOf(
+                                                Color.Transparent,
+                                                MaterialTheme.colorScheme.surface,
+                                            ),
+                                    ),
                             ),
-                        ),
                 )
             }
         }

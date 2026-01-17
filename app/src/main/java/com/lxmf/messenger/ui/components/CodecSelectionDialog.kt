@@ -24,13 +24,14 @@ fun CodecSelectionDialog(
     onDismiss: () -> Unit,
     onProfileSelected: (CodecProfile) -> Unit,
 ) {
-    val options = CodecProfile.entries.map { profile ->
-        QualityOption(
-            value = profile,
-            displayName = profile.displayName,
-            description = profile.description,
-        )
-    }
+    val options =
+        CodecProfile.entries.map { profile ->
+            QualityOption(
+                value = profile,
+                displayName = profile.displayName,
+                description = profile.description,
+            )
+        }
 
     QualitySelectionDialog(
         title = "Select Call Quality",

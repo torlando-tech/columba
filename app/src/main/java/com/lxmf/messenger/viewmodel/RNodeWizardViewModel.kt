@@ -1448,23 +1448,25 @@ class RNodeWizardViewModel
                 _state.update { it.copy(isUsbScanning = true, usbScanError = null) }
 
                 try {
-                    val devices = withContext(Dispatchers.IO) {
-                        usbBridge.getConnectedUsbDevices()
-                    }
+                    val devices =
+                        withContext(Dispatchers.IO) {
+                            usbBridge.getConnectedUsbDevices()
+                        }
 
-                    val usbDevices = devices.map { device ->
-                        com.lxmf.messenger.data.model.DiscoveredUsbDevice(
-                            deviceId = device.deviceId,
-                            vendorId = device.vendorId,
-                            productId = device.productId,
-                            deviceName = device.deviceName,
-                            manufacturerName = device.manufacturerName,
-                            productName = device.productName,
-                            serialNumber = device.serialNumber,
-                            driverType = device.driverType,
-                            hasPermission = usbBridge.hasPermission(device.deviceId),
-                        )
-                    }
+                    val usbDevices =
+                        devices.map { device ->
+                            com.lxmf.messenger.data.model.DiscoveredUsbDevice(
+                                deviceId = device.deviceId,
+                                vendorId = device.vendorId,
+                                productId = device.productId,
+                                deviceName = device.deviceName,
+                                manufacturerName = device.manufacturerName,
+                                productName = device.productName,
+                                serialNumber = device.serialNumber,
+                                driverType = device.driverType,
+                                hasPermission = usbBridge.hasPermission(device.deviceId),
+                            )
+                        }
 
                     _state.update {
                         it.copy(
@@ -1510,9 +1512,10 @@ class RNodeWizardViewModel
                     if (granted) {
                         Log.d(TAG, "USB permission granted for device ${device.deviceId}")
                         // Update device list to reflect new permission status
-                        val updatedDevices = _state.value.usbDevices.map {
-                            if (it.deviceId == device.deviceId) it.copy(hasPermission = true) else it
-                        }
+                        val updatedDevices =
+                            _state.value.usbDevices.map {
+                                if (it.deviceId == device.deviceId) it.copy(hasPermission = true) else it
+                            }
                         val updatedDevice = device.copy(hasPermission = true)
                         _state.update {
                             it.copy(
@@ -1555,9 +1558,10 @@ class RNodeWizardViewModel
                     }
 
                     // Connect to USB device
-                    val connected = withContext(Dispatchers.IO) {
-                        usbBridge.connect(device.deviceId)
-                    }
+                    val connected =
+                        withContext(Dispatchers.IO) {
+                            usbBridge.connect(device.deviceId)
+                        }
 
                     if (!connected) {
                         _state.update {
@@ -1572,16 +1576,19 @@ class RNodeWizardViewModel
                     // Send pairing mode command via Python bridge
                     // Note: This will be handled by the Python rnode_interface
                     // For now, we send raw KISS command directly
-                    val kissPairingCmd = byteArrayOf(
-                        0xC0.toByte(), // KISS FEND
-                        0x46.toByte(), // CMD_BT_CTRL
-                        0x02.toByte(), // BT_CTRL_PAIRING_MODE
-                        0xC0.toByte(), // KISS FEND
-                    )
+                    // KISS frame: FEND (0xC0), CMD_BT_CTRL (0x46), BT_CTRL_PAIRING_MODE (0x02), FEND (0xC0)
+                    val kissPairingCmd =
+                        byteArrayOf(
+                            0xC0.toByte(),
+                            0x46.toByte(),
+                            0x02.toByte(),
+                            0xC0.toByte(),
+                        )
 
-                    val written = withContext(Dispatchers.IO) {
-                        usbBridge.write(kissPairingCmd)
-                    }
+                    val written =
+                        withContext(Dispatchers.IO) {
+                            usbBridge.write(kissPairingCmd)
+                        }
 
                     if (written != kissPairingCmd.size) {
                         _state.update {

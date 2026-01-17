@@ -556,6 +556,7 @@ class TestWriteRetry:
                 iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
                 iface.name = "test-rnode"
                 iface.kotlin_bridge = MagicMock()
+                iface.connection_mode = ColumbaRNodeInterface.MODE_CLASSIC
                 return iface
 
     def test_write_uses_exponential_backoff(self):
@@ -936,3 +937,166 @@ class TestKISSConstants:
         assert KISS.RADIO_STATE_OFF == 0x00
         assert KISS.RADIO_STATE_ON == 0x01
         assert KISS.RADIO_STATE_ASK == 0xFF
+
+    def test_bt_ctrl_command(self):
+        """CMD_BT_CTRL should be 0x46."""
+        assert KISS.CMD_BT_CTRL == 0x46
+
+    def test_bt_pin_command(self):
+        """CMD_BT_PIN should be 0x62 for Bluetooth PIN response."""
+        assert KISS.CMD_BT_PIN == 0x62
+
+    def test_bt_ctrl_pairing_mode(self):
+        """BT_CTRL_PAIRING_MODE should be 0x02."""
+        assert KISS.BT_CTRL_PAIRING_MODE == 0x02
+
+
+class TestUSBModeConstants:
+    """Tests for USB mode constants."""
+
+    def test_mode_usb_exists(self):
+        """MODE_USB should be defined."""
+        assert hasattr(ColumbaRNodeInterface, 'MODE_USB')
+        assert ColumbaRNodeInterface.MODE_USB == "usb"
+
+    def test_mode_classic_exists(self):
+        """MODE_CLASSIC should be defined for Bluetooth Classic."""
+        assert hasattr(ColumbaRNodeInterface, 'MODE_CLASSIC')
+        assert ColumbaRNodeInterface.MODE_CLASSIC == "classic"
+
+    def test_mode_ble_exists(self):
+        """MODE_BLE should be defined for Bluetooth LE."""
+        assert hasattr(ColumbaRNodeInterface, 'MODE_BLE')
+        assert ColumbaRNodeInterface.MODE_BLE == "ble"
+
+
+class TestUSBModeInterface:
+    """Tests for USB mode interface functionality."""
+
+    def create_usb_interface(self):
+        """Create a test interface configured for USB mode."""
+        import threading
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
+                iface.frequency = 915000000
+                iface.bandwidth = 125000
+                iface.txpower = 17
+                iface.sf = 8
+                iface.cr = 5
+                iface.st_alock = None
+                iface.lt_alock = None
+                iface.name = "test-rnode-usb"
+                iface.target_device_name = ""  # Empty for USB mode
+                iface.usb_device_id = 123
+                iface.connection_mode = ColumbaRNodeInterface.MODE_USB
+                iface.kotlin_bridge = None
+                iface.usb_bridge = None
+                iface.enable_framebuffer = False
+                iface.framebuffer_enabled = False
+                iface._read_thread = None
+                iface._running = threading.Event()
+                iface._read_lock = threading.Lock()
+                iface._reconnect_thread = None
+                iface._reconnecting = False
+                iface._max_reconnect_attempts = 30
+                iface._reconnect_interval = 10.0
+                iface._on_error_callback = None
+                iface._on_online_status_changed = None
+                iface.online = False
+                return iface
+
+    def test_usb_mode_stored_correctly(self):
+        """USB mode should be stored in connection_mode."""
+        iface = self.create_usb_interface()
+        assert iface.connection_mode == ColumbaRNodeInterface.MODE_USB
+
+    def test_usb_device_id_stored(self):
+        """USB device ID should be stored."""
+        iface = self.create_usb_interface()
+        assert iface.usb_device_id == 123
+
+    def test_enter_bluetooth_pairing_mode_requires_usb_mode(self):
+        """enter_bluetooth_pairing_mode should return False if not in USB mode."""
+        import threading
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
+                iface.connection_mode = ColumbaRNodeInterface.MODE_CLASSIC
+                iface.usb_bridge = None
+                iface._read_lock = threading.Lock()
+                iface.online = True
+
+                result = iface.enter_bluetooth_pairing_mode()
+
+                assert result is False
+
+    def test_enter_bluetooth_pairing_mode_requires_usb_bridge(self):
+        """enter_bluetooth_pairing_mode should return False if USB bridge is None."""
+        iface = self.create_usb_interface()
+        iface.usb_bridge = None
+
+        result = iface.enter_bluetooth_pairing_mode()
+
+        assert result is False
+
+    def test_enter_bluetooth_pairing_mode_requires_connection(self):
+        """enter_bluetooth_pairing_mode should return False if not connected."""
+        iface = self.create_usb_interface()
+        mock_bridge = MagicMock()
+        mock_bridge.isConnected.return_value = False
+        iface.usb_bridge = mock_bridge
+
+        result = iface.enter_bluetooth_pairing_mode()
+
+        assert result is False
+
+    def test_enter_bluetooth_pairing_mode_sends_kiss_command(self):
+        """enter_bluetooth_pairing_mode should send correct KISS command."""
+        iface = self.create_usb_interface()
+        mock_bridge = MagicMock()
+        mock_bridge.isConnected.return_value = True
+        mock_bridge.write.return_value = 4
+        iface.usb_bridge = mock_bridge
+
+        result = iface.enter_bluetooth_pairing_mode()
+
+        assert result is True
+        # Verify the KISS command sent: FEND CMD_BT_CTRL BT_CTRL_PAIRING_MODE FEND
+        expected_cmd = bytes([KISS.FEND, KISS.CMD_BT_CTRL, KISS.BT_CTRL_PAIRING_MODE, KISS.FEND])
+        mock_bridge.write.assert_called_once()
+        actual_cmd = mock_bridge.write.call_args[0][0]
+        assert actual_cmd == expected_cmd
+
+
+class TestKISSBluetoothCommands:
+    """Tests for Bluetooth-related KISS commands."""
+
+    def test_pairing_mode_kiss_frame(self):
+        """Verify the correct KISS frame for entering Bluetooth pairing mode."""
+        # KISS frame: FEND CMD_BT_CTRL BT_CTRL_PAIRING_MODE FEND
+        kiss_frame = bytes([KISS.FEND, KISS.CMD_BT_CTRL, KISS.BT_CTRL_PAIRING_MODE, KISS.FEND])
+
+        assert len(kiss_frame) == 4
+        assert kiss_frame[0] == 0xC0  # FEND
+        assert kiss_frame[1] == 0x46  # CMD_BT_CTRL
+        assert kiss_frame[2] == 0x02  # BT_CTRL_PAIRING_MODE
+        assert kiss_frame[3] == 0xC0  # FEND
+
+    def test_bt_pin_command_value(self):
+        """CMD_BT_PIN should be the expected value for PIN response."""
+        # When RNode responds with a Bluetooth PIN, it uses CMD_BT_PIN (0x62)
+        assert KISS.CMD_BT_PIN == 0x62
+
+    def test_bt_pin_response_frame_structure(self):
+        """Test the expected structure of a Bluetooth PIN response frame."""
+        # A PIN response would be: FEND CMD_BT_PIN <6 digit PIN bytes> FEND
+        # Example: PIN "123456" -> bytes [0x31, 0x32, 0x33, 0x34, 0x35, 0x36]
+        pin = "123456"
+        kiss_frame = bytes([KISS.FEND, KISS.CMD_BT_PIN]) + pin.encode('ascii') + bytes([KISS.FEND])
+
+        assert len(kiss_frame) == 9  # 1 + 1 + 6 + 1
+        assert kiss_frame[0] == KISS.FEND
+        assert kiss_frame[1] == KISS.CMD_BT_PIN
+        assert kiss_frame[2:8] == b'123456'
+        assert kiss_frame[8] == KISS.FEND

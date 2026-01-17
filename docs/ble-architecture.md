@@ -278,34 +278,37 @@ flowchart LR
 ```mermaid
 flowchart TD
     A[We connect to MAC_NEW<br/>Read Identity Characteristic] --> B[Kotlin: handleIdentityReceived]
-    B --> C{onDuplicateIdentityDetected callback<br/><br/>Python: _check_duplicate_identity}
-    C -->|"identity already at MAC_OLD<br/>(still connected)"| D[Reject connection<br/>Log: Duplicate identity rejected]
-    C -->|"new identity or<br/>MAC_OLD disconnected"| E[Allow connection]
+    B --> C{Python: _check_duplicate_identity<br/><br/>Checks: identity_to_address.get‹hash›}
+    C -->|"Returns MAC_OLD<br/>and MAC_OLD ≠ MAC_NEW"| D[Reject: duplicate identity<br/>MAC_OLD still connected]
+    C -->|"Returns None<br/>(new or disconnected)"| E[Allow: no existing connection]
+    C -->|"Returns MAC_NEW<br/>(same MAC reconnecting)"| E
 
-    E --> F{Existing mapping for identity?}
+    E --> F{Kotlin: identityToAddress‹hash›<br/><br/>Note: Both Python and Kotlin<br/>track identity→address mappings}
 
-    F -->|No| G[Create new mapping<br/>identity → MAC_NEW]
-    F -->|"Yes, points to MAC_OLD"| H{MAC_OLD has live<br/>central connection?}
+    F -->|"null<br/>(new identity or fully cleaned up)"| G[Create new mapping<br/>identityToAddress‹hash› = MAC_NEW]
+    F -->|"MAC_OLD<br/>(stale mapping or reconnect)"| H{gattClient.isConnected‹MAC_OLD›?<br/><br/>Verify GATT connection is live}
 
-    H -->|"Yes, new lacks central"| I[Keep MAC_OLD mapping<br/>add MAC_NEW → identity only]
-    H -->|"No, or new has central"| J[Update: identity → MAC_NEW]
+    H -->|"Yes, and MAC_NEW lacks central"| I[Keep MAC_OLD as primary<br/>Still add addressToIdentity‹MAC_NEW›]
+    H -->|"No, or MAC_NEW has central"| J[Update: identityToAddress‹hash› = MAC_NEW]
 
-    J --> K[Kotlin: onAddressChanged callback]
+    J --> K[Kotlin: onAddressChanged‹MAC_OLD, MAC_NEW›]
     K --> L[Python: _address_changed_callback]
-    L --> M[Migrate mappings:<br/>• address_to_identity<br/>• identity_to_address<br/>• interface.peer_address]
+    L --> M[Migrate Python mappings:<br/>• address_to_identity‹MAC_NEW› = identity<br/>• identity_to_address‹hash› = MAC_NEW<br/>• interface.peer_address = MAC_NEW]
 ```
 
 **Peripheral mode flow** (peer with new MAC connects to us):
 
 ```mermaid
 flowchart TD
-    A[MAC_NEW connects to us<br/>Sends 16-byte identity handshake] --> B[Python: _handle_identity_handshake<br/>Detects len=16, no existing identity]
-    B --> C{_check_duplicate_identity<br/><br/>Same check as central mode}
-    C -->|"identity at MAC_OLD<br/>(still connected)"| D[Reject: disconnect MAC_NEW<br/>Log: duplicate identity rejected]
-    C -->|"new identity or<br/>MAC_OLD disconnected"| E{Identity already has interface?}
-    E -->|No| F[Create new interface<br/>Store mappings]
-    E -->|Yes| G[Update existing interface<br/>peer_address = MAC_NEW]
-    G --> H[Update address_to_interface<br/>identity_to_address mappings]
+    A[MAC_NEW connects to us<br/>Sends 16-byte identity handshake] --> B[Python: _handle_identity_handshake<br/>Detects: len=16 and no address_to_identity‹MAC_NEW›]
+    B --> C{Python: _check_duplicate_identity<br/><br/>Checks: identity_to_address.get‹hash›}
+    C -->|"Returns MAC_OLD<br/>and MAC_OLD ≠ MAC_NEW"| D[Reject: disconnect MAC_NEW<br/>Log: duplicate identity rejected]
+    C -->|"Returns None<br/>(new or disconnected)"| E[Allow: proceed with handshake]
+    C -->|"Returns MAC_NEW<br/>(same MAC)"| E
+
+    E --> F{spawned_interfaces‹hash› exists?}
+    F -->|No| G[Create new BLEPeerInterface<br/>Store in spawned_interfaces‹hash›<br/>Store address_to_identity, identity_to_address]
+    F -->|Yes| H[Update existing interface:<br/>peer_address = MAC_NEW<br/>address_to_interface‹MAC_NEW› = interface]
 ```
 
 **On disconnect (MAC_OLD disconnects while MAC_NEW still connected):**

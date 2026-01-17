@@ -11,13 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -37,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.service.SharingSession
+import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 import com.lxmf.messenger.ui.model.SharingDuration
 
 /**
@@ -52,6 +50,8 @@ import com.lxmf.messenger.ui.model.SharingDuration
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LocationSharingCard(
+    isExpanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     enabled: Boolean,
     onEnabledChange: (Boolean) -> Unit,
     activeSessions: List<SharingSession>,
@@ -65,83 +65,51 @@ fun LocationSharingCard(
     var showDurationPicker by remember { mutableStateOf(false) }
     var showPrecisionPicker by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
+    CollapsibleSettingsCard(
+        title = "Location Sharing",
+        icon = Icons.Default.LocationOn,
+        isExpanded = isExpanded,
+        onExpandedChange = onExpandedChange,
+        headerAction = {
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChange,
+            )
+        },
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // Header with toggle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LocationOn,
-                        contentDescription = "Location Sharing",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = "Location Sharing",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = onEnabledChange,
-                )
-            }
+        // Description
+        Text(
+            text =
+                "Share your real-time location with contacts. " +
+                    "When disabled, all active sharing sessions will be stopped.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
-            // Description
-            Text(
-                text =
-                    "Share your real-time location with contacts. " +
-                        "When disabled, all active sharing sessions will be stopped.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            // Active sessions section (only shown when enabled and there are sessions)
-            if (enabled && activeSessions.isNotEmpty()) {
-                ActiveSessionsSection(
-                    sessions = activeSessions,
-                    onStopSharing = onStopSharing,
-                    onStopAllSharing = onStopAllSharing,
-                )
-            }
-
-            HorizontalDivider()
-
-            // Default duration picker
-            SettingsRow(
-                label = "Default duration",
-                value = getDurationDisplayText(defaultDuration),
-                onClick = { showDurationPicker = true },
-            )
-
-            // Location precision picker
-            SettingsRow(
-                label = "Location precision",
-                value = getPrecisionRadiusDisplayText(locationPrecisionRadius),
-                onClick = { showPrecisionPicker = true },
+        // Active sessions section (only shown when enabled and there are sessions)
+        if (enabled && activeSessions.isNotEmpty()) {
+            ActiveSessionsSection(
+                sessions = activeSessions,
+                onStopSharing = onStopSharing,
+                onStopAllSharing = onStopAllSharing,
             )
         }
+
+        HorizontalDivider()
+
+        // Default duration picker
+        SettingsRow(
+            label = "Default duration",
+            value = getDurationDisplayText(defaultDuration),
+            onClick = { showDurationPicker = true },
+        )
+
+        // Location precision picker
+        SettingsRow(
+            label = "Location precision",
+            value = getPrecisionRadiusDisplayText(locationPrecisionRadius),
+            onClick = { showPrecisionPicker = true },
+        )
     }
 
     // Duration picker dialog

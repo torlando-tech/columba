@@ -86,6 +86,8 @@ class MessageDeliveryRetrievalCardTest {
             // Wrap in a scrollable column so performScrollTo() works
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 MessageDeliveryRetrievalCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
                     defaultMethod = config.defaultMethod,
                     tryPropagationOnFail = config.tryPropagationOnFail,
                     currentRelayName = config.currentRelayName,
@@ -130,10 +132,11 @@ class MessageDeliveryRetrievalCardTest {
     }
 
     @Test
-    fun header_displaysSendIcon() {
+    fun header_displaysTitle() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithContentDescription("Message Delivery & Retrieval")
+        // The card title is displayed in the header
+        composeTestRule.onNodeWithText("Message Delivery & Retrieval")
             .assertIsDisplayed()
     }
 

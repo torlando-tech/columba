@@ -28,6 +28,26 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Enum representing all collapsible cards in the Settings screen.
+ * Used to track expansion state for each card.
+ */
+enum class SettingsCardId {
+    NETWORK,
+    IDENTITY,
+    NOTIFICATIONS,
+    AUTO_ANNOUNCE,
+    LOCATION_SHARING,
+    MAP_SOURCES,
+    MESSAGE_DELIVERY,
+    IMAGE_COMPRESSION,
+    THEME,
+    BATTERY,
+    DATA_MIGRATION,
+    ABOUT,
+    SHARED_INSTANCE_BANNER,
+}
+
 @androidx.compose.runtime.Immutable
 data class SettingsState(
     val displayName: String = "",
@@ -86,6 +106,8 @@ data class SettingsState(
     val activeSharingSessions: List<com.lxmf.messenger.service.SharingSession> = emptyList(),
     val defaultSharingDuration: String = "ONE_HOUR",
     val locationPrecisionRadius: Int = 0,
+    // Notifications state
+    val notificationsEnabled: Boolean = true,
     // Incoming message size limit (default 1MB)
     val incomingMessageSizeLimitKb: Int = 1024,
     // Image compression state
@@ -101,6 +123,9 @@ data class SettingsState(
     val reticulumVersion: String? = null,
     val lxmfVersion: String? = null,
     val bleReticulumVersion: String? = null,
+    // Card expansion states (all collapsed by default)
+    val cardExpansionStates: Map<String, Boolean> =
+        SettingsCardId.entries.associate { it.name to false },
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -154,6 +179,8 @@ class SettingsViewModel
             loadImageCompressionSettings()
             // Load map source settings
             loadMapSourceSettings()
+            // Load notifications enabled setting
+            loadNotificationsSettings()
             // Load protocol versions for About screen
             fetchProtocolVersions()
             // Always start sync state monitoring (no infinite loops, needed for UI)
@@ -321,6 +348,8 @@ class SettingsViewModel
                             mapSourceRmspEnabled = _state.value.mapSourceRmspEnabled,
                             rmspServerCount = _state.value.rmspServerCount,
                             hasOfflineMaps = _state.value.hasOfflineMaps,
+                            // Preserve notifications state from loadNotificationsSettings()
+                            notificationsEnabled = _state.value.notificationsEnabled,
                             // Preserve protocol versions from fetchProtocolVersions()
                             reticulumVersion = _state.value.reticulumVersion,
                             lxmfVersion = _state.value.lxmfVersion,
@@ -851,6 +880,23 @@ class SettingsViewModel
         }
 
         /**
+         * Toggle the expansion state of a settings card.
+         *
+         * @param cardId The card to toggle
+         * @param expanded Whether the card should be expanded
+         */
+        fun toggleCardExpanded(
+            cardId: SettingsCardId,
+            expanded: Boolean,
+        ) {
+            _state.update {
+                it.copy(
+                    cardExpansionStates = it.cardExpansionStates + (cardId.name to expanded),
+                )
+            }
+        }
+
+        /**
          * Save the RPC key for shared instance authentication.
          * When the key changes, restart the service to apply it.
          *
@@ -1255,6 +1301,32 @@ class SettingsViewModel
             viewModelScope.launch {
                 Log.d(TAG, "User triggered manual sync")
                 propagationNodeManager.triggerSync()
+            }
+        }
+
+        // Notifications methods
+
+        /**
+         * Load notifications settings from the repository.
+         * Subscribes to flow updates so the card stays synced with the Notifications page.
+         */
+        private fun loadNotificationsSettings() {
+            viewModelScope.launch {
+                settingsRepository.notificationsEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(notificationsEnabled = enabled) }
+                }
+            }
+        }
+
+        /**
+         * Set the notifications enabled setting.
+         * When disabled, all notifications are suppressed.
+         */
+        fun setNotificationsEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveNotificationsEnabled(enabled)
+                _state.update { it.copy(notificationsEnabled = enabled) }
+                Log.d(TAG, "Notifications ${if (enabled) "enabled" else "disabled"}")
             }
         }
 

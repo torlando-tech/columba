@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -21,8 +20,6 @@ import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -43,10 +40,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AutoAnnounceCard(
+    isExpanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     enabled: Boolean,
     intervalHours: Int,
     lastAnnounceTime: Long?,
@@ -63,82 +63,50 @@ fun AutoAnnounceCard(
 
     val presetIntervals = listOf(1, 3, 6, 12)
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
+    CollapsibleSettingsCard(
+        title = "Auto Announce",
+        icon = Icons.Default.Sensors,
+        isExpanded = isExpanded,
+        onExpandedChange = onExpandedChange,
+        headerAction = {
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+            )
+        },
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // Header with toggle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Sensors,
-                        contentDescription = "Auto Announce",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = "Auto Announce",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = onToggle,
-                )
-            }
+        // Description
+        Text(
+            text =
+                "Automatically announce your presence on the network at regular intervals. " +
+                    "This helps other peers discover you.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
-            // Description
-            Text(
-                text =
-                    "Automatically announce your presence on the network at regular intervals. " +
-                        "This helps other peers discover you.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // Interval selector (only shown when enabled)
+        if (enabled) {
+            IntervalSelector(
+                intervalHours = intervalHours,
+                presetIntervals = presetIntervals,
+                onIntervalChange = onIntervalChange,
+                onCustomClick = {
+                    customIntervalInput = intervalHours.toString()
+                    showCustomDialog = true
+                },
             )
 
-            // Interval selector (only shown when enabled)
-            if (enabled) {
-                IntervalSelector(
-                    intervalHours = intervalHours,
-                    presetIntervals = presetIntervals,
-                    onIntervalChange = onIntervalChange,
-                    onCustomClick = {
-                        customIntervalInput = intervalHours.toString()
-                        showCustomDialog = true
-                    },
-                )
+            AnnounceStatus(
+                lastAnnounceTime = lastAnnounceTime,
+                nextAnnounceTime = nextAnnounceTime,
+            )
 
-                AnnounceStatus(
-                    lastAnnounceTime = lastAnnounceTime,
-                    nextAnnounceTime = nextAnnounceTime,
-                )
-
-                ManualAnnounceSection(
-                    isManualAnnouncing = isManualAnnouncing,
-                    showManualAnnounceSuccess = showManualAnnounceSuccess,
-                    manualAnnounceError = manualAnnounceError,
-                    onManualAnnounce = onManualAnnounce,
-                )
-            }
+            ManualAnnounceSection(
+                isManualAnnouncing = isManualAnnouncing,
+                showManualAnnounceSuccess = showManualAnnounceSuccess,
+                manualAnnounceError = manualAnnounceError,
+                onManualAnnounce = onManualAnnounce,
+            )
         }
     }
 

@@ -236,6 +236,8 @@ class LocationSharingCardTest {
     fun `locationSharingCard displays title`() {
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = true,
                 onEnabledChange = {},
                 activeSessions = emptyList(),
@@ -255,6 +257,8 @@ class LocationSharingCardTest {
     fun `locationSharingCard displays description`() {
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = false,
                 onEnabledChange = {},
                 activeSessions = emptyList(),
@@ -274,6 +278,8 @@ class LocationSharingCardTest {
     fun `locationSharingCard displays default duration setting`() {
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = true,
                 onEnabledChange = {},
                 activeSessions = emptyList(),
@@ -294,6 +300,8 @@ class LocationSharingCardTest {
     fun `locationSharingCard displays location precision setting`() {
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = true,
                 onEnabledChange = {},
                 activeSessions = emptyList(),
@@ -324,6 +332,8 @@ class LocationSharingCardTest {
 
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = true,
                 onEnabledChange = {},
                 activeSessions = sessions,
@@ -354,6 +364,8 @@ class LocationSharingCardTest {
 
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = true,
                 onEnabledChange = {},
                 activeSessions = sessions,
@@ -389,6 +401,8 @@ class LocationSharingCardTest {
 
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = true,
                 onEnabledChange = {},
                 activeSessions = sessions,
@@ -425,6 +439,8 @@ class LocationSharingCardTest {
 
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = true,
                 onEnabledChange = {},
                 activeSessions = sessions,
@@ -456,6 +472,8 @@ class LocationSharingCardTest {
 
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = false,
                 onEnabledChange = {},
                 activeSessions = sessions,
@@ -476,6 +494,8 @@ class LocationSharingCardTest {
     fun `locationSharingCard duration click opens picker`() {
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = true,
                 onEnabledChange = {},
                 activeSessions = emptyList(),
@@ -498,6 +518,8 @@ class LocationSharingCardTest {
     fun `locationSharingCard precision click opens picker`() {
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = true,
                 onEnabledChange = {},
                 activeSessions = emptyList(),
@@ -522,6 +544,8 @@ class LocationSharingCardTest {
 
         composeTestRule.setContent {
             LocationSharingCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 enabled = enabledValue,
                 onEnabledChange = { enabledValue = it },
                 activeSessions = emptyList(),

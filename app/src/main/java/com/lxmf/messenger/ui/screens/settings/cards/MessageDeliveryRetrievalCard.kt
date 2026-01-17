@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.service.RelayInfo
+import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 import com.lxmf.messenger.util.DestinationHashValidator
 import kotlinx.coroutines.delay
 
@@ -73,6 +74,8 @@ import kotlinx.coroutines.delay
 @Suppress("LongParameterList") // Settings card requires many configuration options
 @Composable
 fun MessageDeliveryRetrievalCard(
+    isExpanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     defaultMethod: String,
     tryPropagationOnFail: Boolean,
     currentRelayName: String?,
@@ -109,514 +112,487 @@ fun MessageDeliveryRetrievalCard(
 
     val presetIntervals = listOf(3600, 10800, 21600, 43200) // 1h, 3h, 6h, 12h
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
+    CollapsibleSettingsCard(
+        title = "Message Delivery & Retrieval",
+        icon = Icons.Default.Send,
+        isExpanded = isExpanded,
+        onExpandedChange = onExpandedChange,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // Header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Send,
-                    contentDescription = "Message Delivery & Retrieval",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "Message Delivery & Retrieval",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+        // Description
+        Text(
+            text = "Configure how messages are sent and retrieved via relay.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
-            // Description
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+        // Default delivery method selector
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = "Configure how messages are sent and retrieved via relay.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-            // Default delivery method selector
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "Default Delivery Method",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                )
-                Box {
-                    OutlinedButton(
-                        onClick = { showMethodDropdown = true },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text =
-                                when (defaultMethod) {
-                                    "direct" -> "Direct (Link-based)"
-                                    "propagated" -> "Propagated (Via Relay)"
-                                    else -> "Direct (Link-based)"
-                                },
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showMethodDropdown,
-                        onDismissRequest = { showMethodDropdown = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text("Direct (Link-based)")
-                                    Text(
-                                        text = "Establishes a link, unlimited size, with retries",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            },
-                            onClick = {
-                                onMethodChange("direct")
-                                showMethodDropdown = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text("Propagated (Via Relay)")
-                                    Text(
-                                        text = "Stores message on relay for offline recipients",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            },
-                            onClick = {
-                                onMethodChange("propagated")
-                                showMethodDropdown = false
-                            },
-                        )
-                    }
-                }
-            }
-
-            // Retry via propagation toggle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Retry via Relay on Failure",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = "If direct delivery fails, retry through relay",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = tryPropagationOnFail,
-                    onCheckedChange = onTryPropagationToggle,
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-            // Relay selection section
-            Text(
-                text = "My Relay",
+                text = "Default Delivery Method",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
             )
-
-            // Auto-select option
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { onAutoSelectToggle(true) }
-                        .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(
-                    selected = isAutoSelect,
-                    onClick = { onAutoSelectToggle(true) },
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
+            Box {
+                OutlinedButton(
+                    onClick = { showMethodDropdown = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text(
-                        text = "Auto-select nearest",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text =
+                            when (defaultMethod) {
+                                "direct" -> "Direct (Link-based)"
+                                "propagated" -> "Propagated (Via Relay)"
+                                else -> "Direct (Link-based)"
+                            },
                     )
-                    if (isAutoSelect && currentRelayName != null) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = "Currently: $currentRelayName",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            if (currentRelayHops != null) {
+                }
+                DropdownMenu(
+                    expanded = showMethodDropdown,
+                    onDismissRequest = { showMethodDropdown = false },
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text("Direct (Link-based)")
                                 Text(
-                                    text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
+                                    text = "Establishes a link, unlimited size, with retries",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                        }
-                    }
-                }
-            }
-
-            // Manual selection option
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { onAutoSelectToggle(false) }
-                        .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(
-                    selected = !isAutoSelect,
-                    onClick = { onAutoSelectToggle(false) },
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Use specific relay",
-                        style = MaterialTheme.typography.bodyMedium,
+                        },
+                        onClick = {
+                            onMethodChange("direct")
+                            showMethodDropdown = false
+                        },
                     )
-                    if (!isAutoSelect && currentRelayName != null) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = currentRelayName,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            if (currentRelayHops != null) {
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text("Propagated (Via Relay)")
                                 Text(
-                                    text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
+                                    text = "Stores message on relay for offline recipients",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                        }
-                    } else if (!isAutoSelect) {
-                        Text(
-                            text = "No relay selected",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                        },
+                        onClick = {
+                            onMethodChange("propagated")
+                            showMethodDropdown = false
+                        },
+                    )
                 }
             }
+        }
 
-            // Current relay display
-            if (currentRelayName != null) {
-                Spacer(modifier = Modifier.height(8.dp))
+        // Retry via propagation toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Tap to select a different relay",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = "Retry via Relay on Failure",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
                 )
-                CurrentRelayInfo(
-                    relayName = currentRelayName,
-                    hops = currentRelayHops,
-                    isAutoSelected = isAutoSelect,
-                    onClick = { showRelaySelectionDialog = true },
-                )
-            } else if (isAutoSelect) {
-                // Auto-select mode with no relay yet
                 Text(
-                    text = "No relay configured. Waiting for propagation node announces...",
+                    text = "If direct delivery fails, retry through relay",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
-            // Manual mode UI - show relay selection button and manual entry
-            if (!isAutoSelect) {
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Show button to open relay selection dialog when no relay is selected
-                if (currentRelayName == null) {
-                    OutlinedButton(
-                        onClick = { showRelaySelectionDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Hub,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Select from available relays")
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Or enter a relay hash manually:",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                ManualRelayInput(
-                    hashInput = manualHashInput,
-                    onHashChange = { manualHashInput = it },
-                    nicknameInput = manualNicknameInput,
-                    onNicknameChange = { manualNicknameInput = it },
-                    onConfirm = { hash, nickname ->
-                        onAddManualRelay(hash, nickname)
-                        // Clear inputs after confirmation
-                        manualHashInput = ""
-                        manualNicknameInput = ""
-                    },
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-            // Message Retrieval Section
-            Text(
-                text = "MESSAGE RETRIEVAL",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
+            Switch(
+                checked = tryPropagationOnFail,
+                onCheckedChange = onTryPropagationToggle,
             )
+        }
 
-            // Auto-retrieve toggle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+        // Relay selection section
+        Text(
+            text = "My Relay",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+        )
+
+        // Auto-select option
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onAutoSelectToggle(true) }
+                    .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(
+                selected = isAutoSelect,
+                onClick = { onAutoSelectToggle(true) },
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Auto-select nearest",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (isAutoSelect && currentRelayName != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "Currently: $currentRelayName",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        if (currentRelayHops != null) {
+                            Text(
+                                text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Manual selection option
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onAutoSelectToggle(false) }
+                    .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(
+                selected = !isAutoSelect,
+                onClick = { onAutoSelectToggle(false) },
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Use specific relay",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (!isAutoSelect && currentRelayName != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = currentRelayName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        if (currentRelayHops != null) {
+                            Text(
+                                text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                } else if (!isAutoSelect) {
                     Text(
-                        text = "Auto-retrieve from relay",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = "Periodically check for messages",
+                        text = "No relay selected",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Switch(
-                    checked = autoRetrieveEnabled,
-                    onCheckedChange = onAutoRetrieveToggle,
-                )
             }
+        }
 
-            // Retrieval interval chips
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "Retrieval interval: ${formatIntervalDisplay(retrievalIntervalSeconds)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                FlowRow(
+        // Current relay display
+        if (currentRelayName != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Tap to select a different relay",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            CurrentRelayInfo(
+                relayName = currentRelayName,
+                hops = currentRelayHops,
+                isAutoSelected = isAutoSelect,
+                onClick = { showRelaySelectionDialog = true },
+            )
+        } else if (isAutoSelect) {
+            // Auto-select mode with no relay yet
+            Text(
+                text = "No relay configured. Waiting for propagation node announces...",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Manual mode UI - show relay selection button and manual entry
+        if (!isAutoSelect) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Show button to open relay selection dialog when no relay is selected
+            if (currentRelayName == null) {
+                OutlinedButton(
+                    onClick = { showRelaySelectionDialog = true },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    IntervalChip(
-                        label = "1h",
-                        selected = retrievalIntervalSeconds == 3600,
-                        enabled = autoRetrieveEnabled,
-                        onClick = { onIntervalChange(3600) },
-                    )
-                    IntervalChip(
-                        label = "3h",
-                        selected = retrievalIntervalSeconds == 10800,
-                        enabled = autoRetrieveEnabled,
-                        onClick = { onIntervalChange(10800) },
-                    )
-                    IntervalChip(
-                        label = "6h",
-                        selected = retrievalIntervalSeconds == 21600,
-                        enabled = autoRetrieveEnabled,
-                        onClick = { onIntervalChange(21600) },
-                    )
-                    IntervalChip(
-                        label = "12h",
-                        selected = retrievalIntervalSeconds == 43200,
-                        enabled = autoRetrieveEnabled,
-                        onClick = { onIntervalChange(43200) },
-                    )
-                    // Custom chip
-                    FilterChip(
-                        selected = !presetIntervals.contains(retrievalIntervalSeconds),
-                        onClick = {
-                            customIntervalInput = retrievalIntervalSeconds.toString()
-                            showCustomIntervalDialog = true
-                        },
-                        enabled = autoRetrieveEnabled,
-                        label = {
-                            Text(
-                                if (presetIntervals.contains(retrievalIntervalSeconds)) {
-                                    "Custom"
-                                } else {
-                                    "Custom (${formatIntervalDisplay(retrievalIntervalSeconds)})"
-                                },
-                            )
-                        },
-                        colors =
-                            FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            ),
-                    )
-                }
-            }
-
-            // Sync Now button
-            Button(
-                onClick = onSyncNow,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isSyncing && currentRelayName != null,
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary,
-                    ),
-            ) {
-                if (isSyncing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onSecondary,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Syncing...")
-                } else {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
+                        imageVector = Icons.Default.Hub,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sync Now")
+                    Text("Select from available relays")
                 }
-            }
-
-            // Last sync timestamp with periodic refresh
-            if (lastSyncTimestamp != null) {
-                // Trigger recomposition every 5 seconds to update relative time
-                var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        delay(5_000)
-                        currentTime = System.currentTimeMillis()
-                    }
-                }
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Last sync: ${formatRelativeTime(lastSyncTimestamp, currentTime)}",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "Or enter a relay hash manually:",
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
                 )
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-            // Incoming Message Size Limit Section
-            Text(
-                text = "INCOMING MESSAGE SIZE",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
+            ManualRelayInput(
+                hashInput = manualHashInput,
+                onHashChange = { manualHashInput = it },
+                nicknameInput = manualNicknameInput,
+                onNicknameChange = { manualNicknameInput = it },
+                onConfirm = { hash, nickname ->
+                    onAddManualRelay(hash, nickname)
+                    // Clear inputs after confirmation
+                    manualHashInput = ""
+                    manualNicknameInput = ""
+                },
             )
+        }
 
-            Text(
-                text = "Maximum size of messages to accept. Larger messages will be rejected.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-            // Size limit chips
-            val presetSizeLimitsKb = listOf(1024, 5120, 10240, 25600, 131072) // 1MB, 5MB, 10MB, 25MB, 128MB
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Message Retrieval Section
+        Text(
+            text = "MESSAGE RETRIEVAL",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+
+        // Auto-retrieve toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Size limit: ${formatSizeLimit(incomingMessageSizeLimitKb)}",
+                    text = "Auto-retrieve from relay",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary,
                 )
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    SizeLimitChip(
-                        label = "1 MB",
-                        selected = incomingMessageSizeLimitKb == 1024,
-                        onClick = { onIncomingMessageSizeLimitChange(1024) },
-                    )
-                    SizeLimitChip(
-                        label = "5 MB",
-                        selected = incomingMessageSizeLimitKb == 5120,
-                        onClick = { onIncomingMessageSizeLimitChange(5120) },
-                    )
-                    SizeLimitChip(
-                        label = "10 MB",
-                        selected = incomingMessageSizeLimitKb == 10240,
-                        onClick = { onIncomingMessageSizeLimitChange(10240) },
-                    )
-                    SizeLimitChip(
-                        label = "25 MB",
-                        selected = incomingMessageSizeLimitKb == 25600,
-                        onClick = { onIncomingMessageSizeLimitChange(25600) },
-                    )
-                    SizeLimitChip(
-                        label = "Unlimited",
-                        selected = incomingMessageSizeLimitKb == 131072,
-                        onClick = { onIncomingMessageSizeLimitChange(131072) },
-                    )
-                    // Custom chip
-                    FilterChip(
-                        selected = !presetSizeLimitsKb.contains(incomingMessageSizeLimitKb),
-                        onClick = {
-                            customSizeLimitInput = (incomingMessageSizeLimitKb / 1024).toString()
-                            showCustomSizeLimitDialog = true
-                        },
-                        label = {
-                            Text(
-                                if (presetSizeLimitsKb.contains(incomingMessageSizeLimitKb)) {
-                                    "Custom"
-                                } else {
-                                    "Custom (${formatSizeLimit(incomingMessageSizeLimitKb)})"
-                                },
-                            )
-                        },
-                        colors =
-                            FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            ),
-                    )
+                Text(
+                    text = "Periodically check for messages",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = autoRetrieveEnabled,
+                onCheckedChange = onAutoRetrieveToggle,
+            )
+        }
+
+        // Retrieval interval chips
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Retrieval interval: ${formatIntervalDisplay(retrievalIntervalSeconds)}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                IntervalChip(
+                    label = "1h",
+                    selected = retrievalIntervalSeconds == 3600,
+                    enabled = autoRetrieveEnabled,
+                    onClick = { onIntervalChange(3600) },
+                )
+                IntervalChip(
+                    label = "3h",
+                    selected = retrievalIntervalSeconds == 10800,
+                    enabled = autoRetrieveEnabled,
+                    onClick = { onIntervalChange(10800) },
+                )
+                IntervalChip(
+                    label = "6h",
+                    selected = retrievalIntervalSeconds == 21600,
+                    enabled = autoRetrieveEnabled,
+                    onClick = { onIntervalChange(21600) },
+                )
+                IntervalChip(
+                    label = "12h",
+                    selected = retrievalIntervalSeconds == 43200,
+                    enabled = autoRetrieveEnabled,
+                    onClick = { onIntervalChange(43200) },
+                )
+                // Custom chip
+                FilterChip(
+                    selected = !presetIntervals.contains(retrievalIntervalSeconds),
+                    onClick = {
+                        customIntervalInput = retrievalIntervalSeconds.toString()
+                        showCustomIntervalDialog = true
+                    },
+                    enabled = autoRetrieveEnabled,
+                    label = {
+                        Text(
+                            if (presetIntervals.contains(retrievalIntervalSeconds)) {
+                                "Custom"
+                            } else {
+                                "Custom (${formatIntervalDisplay(retrievalIntervalSeconds)})"
+                            },
+                        )
+                    },
+                    colors =
+                        FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ),
+                )
+            }
+        }
+
+        // Sync Now button
+        Button(
+            onClick = onSyncNow,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isSyncing && currentRelayName != null,
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                ),
+        ) {
+            if (isSyncing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onSecondary,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Syncing...")
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sync Now")
+            }
+        }
+
+        // Last sync timestamp with periodic refresh
+        if (lastSyncTimestamp != null) {
+            // Trigger recomposition every 5 seconds to update relative time
+            var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    delay(5_000)
+                    currentTime = System.currentTimeMillis()
                 }
+            }
+            Text(
+                text = "Last sync: ${formatRelativeTime(lastSyncTimestamp, currentTime)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+        // Incoming Message Size Limit Section
+        Text(
+            text = "INCOMING MESSAGE SIZE",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+
+        Text(
+            text = "Maximum size of messages to accept. Larger messages will be rejected.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        // Size limit chips
+        val presetSizeLimitsKb = listOf(1024, 5120, 10240, 25600, 131072) // 1MB, 5MB, 10MB, 25MB, 128MB
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Size limit: ${formatSizeLimit(incomingMessageSizeLimitKb)}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SizeLimitChip(
+                    label = "1 MB",
+                    selected = incomingMessageSizeLimitKb == 1024,
+                    onClick = { onIncomingMessageSizeLimitChange(1024) },
+                )
+                SizeLimitChip(
+                    label = "5 MB",
+                    selected = incomingMessageSizeLimitKb == 5120,
+                    onClick = { onIncomingMessageSizeLimitChange(5120) },
+                )
+                SizeLimitChip(
+                    label = "10 MB",
+                    selected = incomingMessageSizeLimitKb == 10240,
+                    onClick = { onIncomingMessageSizeLimitChange(10240) },
+                )
+                SizeLimitChip(
+                    label = "25 MB",
+                    selected = incomingMessageSizeLimitKb == 25600,
+                    onClick = { onIncomingMessageSizeLimitChange(25600) },
+                )
+                SizeLimitChip(
+                    label = "Unlimited",
+                    selected = incomingMessageSizeLimitKb == 131072,
+                    onClick = { onIncomingMessageSizeLimitChange(131072) },
+                )
+                // Custom chip
+                FilterChip(
+                    selected = !presetSizeLimitsKb.contains(incomingMessageSizeLimitKb),
+                    onClick = {
+                        customSizeLimitInput = (incomingMessageSizeLimitKb / 1024).toString()
+                        showCustomSizeLimitDialog = true
+                    },
+                    label = {
+                        Text(
+                            if (presetSizeLimitsKb.contains(incomingMessageSizeLimitKb)) {
+                                "Custom"
+                            } else {
+                                "Custom (${formatSizeLimit(incomingMessageSizeLimitKb)})"
+                            },
+                        )
+                    },
+                    colors =
+                        FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ),
+                )
             }
         }
     }

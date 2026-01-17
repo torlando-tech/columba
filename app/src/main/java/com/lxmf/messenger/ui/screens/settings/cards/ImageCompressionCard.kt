@@ -11,8 +11,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -22,14 +20,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.ImageCompressionPreset
+import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 
 /**
  * Settings card for selecting image compression preset.
  * Shows all presets with descriptions and highlights the detected preset when AUTO is selected.
  *
+ * @param isExpanded Whether the card is currently expanded
+ * @param onExpandedChange Callback when expansion state changes
  * @param selectedPreset The currently selected preset
  * @param detectedPreset The detected optimal preset (shown when AUTO is selected)
  * @param hasSlowInterface Whether any slow interface (RNode/BLE) is enabled
@@ -38,86 +38,61 @@ import com.lxmf.messenger.data.model.ImageCompressionPreset
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ImageCompressionCard(
+    isExpanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     selectedPreset: ImageCompressionPreset,
     detectedPreset: ImageCompressionPreset?,
     hasSlowInterface: Boolean,
     onPresetChange: (ImageCompressionPreset) -> Unit,
 ) {
     android.util.Log.d("ImageCompressionCard", "Rendering: selected=$selectedPreset, detected=$detectedPreset, hasSlowInterface=$hasSlowInterface")
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
+    CollapsibleSettingsCard(
+        title = "Image Compression",
+        icon = Icons.Default.Image,
+        isExpanded = isExpanded,
+        onExpandedChange = onExpandedChange,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        // Description
+        Text(
+            text =
+                "Select compression level for image attachments. " +
+                    "Auto mode detects your network type and selects the optimal preset.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        // Preset chips
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Image,
-                    contentDescription = "Image Compression",
-                    tint = MaterialTheme.colorScheme.primary,
+            ImageCompressionPreset.entries.forEach { preset ->
+                val isSelected = selectedPreset == preset
+                val label = buildPresetLabel(preset, detectedPreset, isSelected)
+
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onPresetChange(preset) },
+                    label = { Text(label) },
+                    colors =
+                        FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
                 )
-                Text(
-                    text = "Image Compression",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
             }
+        }
 
-            // Description
-            Text(
-                text =
-                    "Select compression level for image attachments. " +
-                        "Auto mode detects your network type and selects the optimal preset.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        // Selected preset description
+        PresetDescription(
+            preset = selectedPreset,
+            detectedPreset = detectedPreset,
+        )
 
-            // Preset chips
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ImageCompressionPreset.entries.forEach { preset ->
-                    val isSelected = selectedPreset == preset
-                    val label = buildPresetLabel(preset, detectedPreset, isSelected)
-
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { onPresetChange(preset) },
-                        label = { Text(label) },
-                        colors =
-                            FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            ),
-                    )
-                }
-            }
-
-            // Selected preset description
-            PresetDescription(
-                preset = selectedPreset,
-                detectedPreset = detectedPreset,
-            )
-
-            // Warning when ORIGINAL is selected with slow interfaces
-            if (selectedPreset == ImageCompressionPreset.ORIGINAL && hasSlowInterface) {
-                SlowInterfaceWarning()
-            }
+        // Warning when ORIGINAL is selected with slow interfaces
+        if (selectedPreset == ImageCompressionPreset.ORIGINAL && hasSlowInterface) {
+            SlowInterfaceWarning()
         }
     }
 }

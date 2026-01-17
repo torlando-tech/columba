@@ -2,6 +2,8 @@ package com.lxmf.messenger.ui.screens.settings.cards
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -42,6 +44,8 @@ class MapSourcesCardTest {
     fun mapSourcesCard_displaysHeader() {
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = {},
                 rmspEnabled = false,
@@ -56,6 +60,8 @@ class MapSourcesCardTest {
     fun mapSourcesCard_displaysDescription() {
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = {},
                 rmspEnabled = false,
@@ -74,6 +80,8 @@ class MapSourcesCardTest {
     fun mapSourcesCard_displaysHttpToggle() {
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = {},
                 rmspEnabled = false,
@@ -81,14 +89,19 @@ class MapSourcesCardTest {
             )
         }
 
+        // HTTP toggle is shown in the expanded content with title and description
         composeTestRule.onNodeWithText("HTTP (OpenFreeMap)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Fetch tiles from the internet").assertIsDisplayed()
+        // HTTP toggle Switch is in the content
+        composeTestRule.onNode(isToggleable()).assertIsDisplayed()
     }
 
     @Test
     fun mapSourcesCard_httpToggleShowsEnabled() {
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = {},
                 rmspEnabled = false,
@@ -96,7 +109,8 @@ class MapSourcesCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("HTTP (OpenFreeMap)").assertIsDisplayed()
+        // HTTP Switch should be on when httpEnabled = true
+        composeTestRule.onNode(isToggleable()).assertIsOn()
     }
 
     @Test
@@ -105,6 +119,8 @@ class MapSourcesCardTest {
 
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = { httpEnabledResult = it },
                 rmspEnabled = false,
@@ -113,8 +129,8 @@ class MapSourcesCardTest {
             )
         }
 
-        // Click on the row to toggle
-        composeTestRule.onNodeWithText("HTTP (OpenFreeMap)").performClick()
+        // Click on the Switch to toggle
+        composeTestRule.onNode(isToggleable()).performClick()
 
         assertFalse(httpEnabledResult)
     }
@@ -125,6 +141,8 @@ class MapSourcesCardTest {
 
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = { callbackCalled = true },
                 rmspEnabled = false,
@@ -133,8 +151,8 @@ class MapSourcesCardTest {
             )
         }
 
-        // Try to click to disable
-        composeTestRule.onNodeWithText("HTTP (OpenFreeMap)").performClick()
+        // Try to click to disable - Switch should be disabled
+        composeTestRule.onNode(isToggleable()).performClick()
 
         // Callback should NOT be called because HTTP cannot be disabled
         assertFalse("Callback should not be called when HTTP is only source", callbackCalled)
@@ -146,6 +164,8 @@ class MapSourcesCardTest {
 
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = { httpEnabledResult = it },
                 rmspEnabled = false,
@@ -154,7 +174,7 @@ class MapSourcesCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("HTTP (OpenFreeMap)").performClick()
+        composeTestRule.onNode(isToggleable()).performClick()
 
         assertFalse(httpEnabledResult)
     }
@@ -165,6 +185,8 @@ class MapSourcesCardTest {
 
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = false,
                 onHttpEnabledChange = { httpEnabledResult = it },
                 rmspEnabled = false,
@@ -173,7 +195,7 @@ class MapSourcesCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("HTTP (OpenFreeMap)").performClick()
+        composeTestRule.onNode(isToggleable()).performClick()
 
         assertTrue(httpEnabledResult)
     }
@@ -184,6 +206,8 @@ class MapSourcesCardTest {
     fun mapSourcesCard_displaysOfflineMapsInfo() {
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = {},
                 rmspEnabled = false,
@@ -201,6 +225,8 @@ class MapSourcesCardTest {
     fun mapSourcesCard_hidesOfflineMapsInfoWhenNone() {
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = {},
                 rmspEnabled = false,
@@ -220,6 +246,8 @@ class MapSourcesCardTest {
     fun mapSourcesCard_hidesWarningWhenHttpEnabled() {
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = {},
                 rmspEnabled = false,
@@ -236,6 +264,8 @@ class MapSourcesCardTest {
     fun mapSourcesCard_hidesWarningWhenOfflineMapsExist() {
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = false,
                 onHttpEnabledChange = {},
                 rmspEnabled = false,
@@ -254,6 +284,8 @@ class MapSourcesCardTest {
     fun mapSourcesCard_defaultRmspServerCountIsZero() {
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = {},
                 rmspEnabled = false,
@@ -269,6 +301,8 @@ class MapSourcesCardTest {
     fun mapSourcesCard_defaultHasOfflineMapsIsFalse() {
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = true,
                 onHttpEnabledChange = {},
                 rmspEnabled = false,
@@ -286,6 +320,8 @@ class MapSourcesCardTest {
     fun mapSourcesCard_httpDisabledWithOfflineMapsShowsNoWarning() {
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = false,
                 onHttpEnabledChange = {},
                 rmspEnabled = false,
@@ -306,6 +342,8 @@ class MapSourcesCardTest {
 
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = httpEnabled,
                 onHttpEnabledChange = { httpEnabled = it },
                 rmspEnabled = rmspEnabled,
@@ -314,17 +352,19 @@ class MapSourcesCardTest {
             )
         }
 
-        // HTTP toggle should work
-        composeTestRule.onNodeWithText("HTTP (OpenFreeMap)").performClick()
+        // HTTP toggle should work (click the Switch in header)
+        composeTestRule.onNode(isToggleable()).performClick()
         assertFalse(httpEnabled)
     }
 
     @Test
-    fun mapSourcesCard_clickableRowToggle() {
+    fun mapSourcesCard_switchToggle() {
         var toggledValue: Boolean? = null
 
         composeTestRule.setContent {
             MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 httpEnabled = false,
                 onHttpEnabledChange = { toggledValue = it },
                 rmspEnabled = false,
@@ -333,8 +373,8 @@ class MapSourcesCardTest {
             )
         }
 
-        // Click on the description text should also toggle
-        composeTestRule.onNodeWithText("Fetch tiles from the internet").performClick()
+        // Click on the Switch to toggle
+        composeTestRule.onNode(isToggleable()).performClick()
 
         assertEquals(true, toggledValue)
     }

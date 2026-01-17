@@ -505,6 +505,10 @@ class AndroidBLEDriver(BLEDriverInterface):
         self.kotlin_bridge.setOnMtuNegotiated(lambda address, mtu: self._handle_mtu_negotiated(address, mtu))
         self.kotlin_bridge.setOnAddressChanged(lambda old_addr, new_addr, identity_hash: self._handle_address_changed(old_addr, new_addr, identity_hash))
 
+        # Wire up duplicate identity detection callback
+        # Python's _check_duplicate_identity is set by BLEInterface and returns True if duplicate
+        self.kotlin_bridge.setOnDuplicateIdentityDetected(lambda address, identity_bytes: self._handle_duplicate_identity_detected(address, identity_bytes))
+
         RNS.log("AndroidBLEDriver: Kotlin callbacks configured", RNS.LOG_DEBUG)
 
     def _handle_device_discovered(self, address: str, name: Optional[str], rssi: int, service_uuids: Optional[List[str]]):
@@ -776,3 +780,38 @@ class AndroidBLEDriver(BLEDriverInterface):
 
         except Exception as e:
             RNS.log(f"AndroidBLEDriver: Error handling MTU negotiated: {e}", RNS.LOG_ERROR)
+
+    def _handle_duplicate_identity_detected(self, address: str, identity_bytes: bytes) -> bool:
+        """Handle duplicate identity detection request from Kotlin.
+
+        Called by Kotlin's handleIdentityReceived before accepting a connection.
+        This forwards to Python's _check_duplicate_identity (set by BLEInterface)
+        which checks if this identity is already connected at a different address.
+
+        Args:
+            address: MAC address of the incoming connection
+            identity_bytes: 16-byte identity of the peer
+
+        Returns:
+            True if duplicate (connection should be rejected), False otherwise
+        """
+        try:
+            RNS.log(f"AndroidBLEDriver: [CALLBACK] _handle_duplicate_identity_detected: address={address}", RNS.LOG_DEBUG)
+
+            # Forward to the callback set by BLEInterface
+            if hasattr(self, 'on_duplicate_identity_detected') and self.on_duplicate_identity_detected:
+                is_duplicate = self.on_duplicate_identity_detected(address, identity_bytes)
+                if is_duplicate:
+                    RNS.log(
+                        f"AndroidBLEDriver: Duplicate identity rejected for {address} (MAC rotation)",
+                        RNS.LOG_WARNING
+                    )
+                return bool(is_duplicate)
+
+            # No callback set - allow connection
+            return False
+
+        except Exception as e:
+            RNS.log(f"AndroidBLEDriver: Error in duplicate identity check: {e}", RNS.LOG_ERROR)
+            # On error, allow connection (fail open)
+            return False

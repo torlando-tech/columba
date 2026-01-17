@@ -370,38 +370,38 @@ class KotlinUSBBridge(
         // Get all USB devices
         val usbDevices = usbManager.deviceList
 
-        for ((_, device) in usbDevices) {
-            // Skip unsupported devices
-            if (!SUPPORTED_VIDS.contains(device.vendorId)) continue
+        usbDevices
+            .filter { (_, device) -> SUPPORTED_VIDS.contains(device.vendorId) }
+            .forEach { (_, device) ->
+                // Try to find a driver for this device
+                val driver =
+                    UsbSerialProber.getDefaultProber().probeDevice(device)
+                        ?: customProber.probeDevice(device)
 
-            // Try to find a driver for this device
-            val driver =
-                UsbSerialProber.getDefaultProber().probeDevice(device)
-                    ?: customProber.probeDevice(device)
-                    ?: continue
+                if (driver != null) {
+                    val driverType = getDriverTypeName(driver)
 
-            val driverType = getDriverTypeName(driver)
+                    devices.add(
+                        UsbDeviceInfo(
+                            deviceId = device.deviceId,
+                            vendorId = device.vendorId,
+                            productId = device.productId,
+                            deviceName = device.deviceName,
+                            manufacturerName = device.manufacturerName,
+                            productName = device.productName,
+                            serialNumber = device.serialNumber,
+                            driverType = driverType,
+                        ),
+                    )
 
-            devices.add(
-                UsbDeviceInfo(
-                    deviceId = device.deviceId,
-                    vendorId = device.vendorId,
-                    productId = device.productId,
-                    deviceName = device.deviceName,
-                    manufacturerName = device.manufacturerName,
-                    productName = device.productName,
-                    serialNumber = device.serialNumber,
-                    driverType = driverType,
-                ),
-            )
-
-            Log.d(
-                TAG,
-                "Found USB device: ${device.productName ?: device.deviceName} " +
-                    "(VID=${device.vendorId.toHexString()}, PID=${device.productId.toHexString()}, " +
-                    "driver=$driverType)",
-            )
-        }
+                    Log.d(
+                        TAG,
+                        "Found USB device: ${device.productName ?: device.deviceName} " +
+                            "(VID=${device.vendorId.toHexString()}, PID=${device.productId.toHexString()}, " +
+                            "driver=$driverType)",
+                    )
+                }
+            }
 
         return devices
     }
@@ -550,7 +550,7 @@ class KotlinUSBBridge(
                 port.dtr = true
                 port.rts = true
             } catch (e: UnsupportedOperationException) {
-                Log.d(TAG, "Flow control not supported by this driver")
+                Log.d(TAG, "Flow control not supported by this driver: ${e.message}")
             }
 
             currentDriver = driver
@@ -754,7 +754,7 @@ class KotlinUSBBridge(
             context.unregisterReceiver(usbPermissionReceiver)
             context.unregisterReceiver(usbEventReceiver)
         } catch (e: IllegalArgumentException) {
-            Log.w(TAG, "Receivers already unregistered")
+            Log.w(TAG, "Receivers already unregistered: ${e.message}")
         }
 
         scope.cancel()

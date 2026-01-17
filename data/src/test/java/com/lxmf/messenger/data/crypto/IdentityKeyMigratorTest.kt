@@ -42,10 +42,13 @@ class IdentityKeyMigratorTest {
 
     @Before
     fun setUp() {
+        @Suppress("NoRelaxedMocks") // Android Context
         context = mockk(relaxed = true)
-        identityDao = mockk(relaxed = true)
-        encryptor = mockk(relaxed = true)
+        identityDao = mockk()
+        encryptor = mockk()
+        @Suppress("NoRelaxedMocks") // Android SharedPreferences
         sharedPreferences = mockk(relaxed = true)
+        @Suppress("NoRelaxedMocks") // Android SharedPreferences.Editor
         prefsEditor = mockk(relaxed = true)
 
         // Setup SharedPreferences mock
@@ -257,9 +260,13 @@ class IdentityKeyMigratorTest {
 
     @Test
     fun `resetMigrationState clears preferences`() {
+        every { sharedPreferences.getBoolean("migration_completed", false) } returns false
+
         migrator.resetMigrationState()
 
         verify { prefsEditor.clear() }
         verify { prefsEditor.apply() }
+        // After reset, migration should not be marked as completed
+        assertFalse(migrator.isMigrationCompleted())
     }
 }

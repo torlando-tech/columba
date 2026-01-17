@@ -40,9 +40,10 @@ class IdentityKeyProviderTest {
 
     @Before
     fun setUp() {
+        @Suppress("NoRelaxedMocks") // Android Context
         context = mockk(relaxed = true)
-        identityDao = mockk(relaxed = true)
-        encryptor = mockk(relaxed = true)
+        identityDao = mockk()
+        encryptor = mockk()
 
         // Setup Context mock
         val cacheDir = File(System.getProperty("java.io.tmpdir"), "test_cache")

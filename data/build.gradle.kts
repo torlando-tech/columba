@@ -50,6 +50,9 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
 
+    // Lifecycle
+    implementation(libs.lifecycle.process)
+
     // Paging
     implementation(libs.paging.runtime)
 

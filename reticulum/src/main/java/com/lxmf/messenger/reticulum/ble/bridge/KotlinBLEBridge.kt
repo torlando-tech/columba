@@ -1950,6 +1950,9 @@ class KotlinBLEBridge(
         // Track pending connection that was waiting for identity (race condition fix)
         var completedPending: PendingConnection? = null
 
+        // Track address change for MAC rotation notification to Python
+        var addressChangedFrom: String? = null
+
         peersMutex.withLock {
             // Update peer with identity if it exists
             // NOTE: We do NOT remove old peers here - let disconnect callbacks handle that.
@@ -1980,6 +1983,16 @@ class KotlinBLEBridge(
                 if (shouldUpdate) {
                     identityToAddress[identityHash] = address
                     Log.d(TAG, "Updated identity→address mapping: $identityHash → $address (central=${peerAtNewAddress.isCentral})")
+
+                    // Track address change for MAC rotation notification
+                    // Only notify Python when the NEW address has a central connection (reliable for sending)
+                    // This prevents updating peer_address to addresses that can only receive, not send
+                    if (existingAddress != null && existingAddress != address && peerAtNewAddress.isCentral) {
+                        addressChangedFrom = existingAddress
+                        Log.i(TAG, "Address changed for identity $identityHash: $existingAddress → $address (new has central)")
+                    } else if (existingAddress != null && existingAddress != address) {
+                        Log.d(TAG, "Address changed but not notifying Python: $existingAddress → $address (new is peripheral-only)")
+                    }
                 } else {
                     Log.d(TAG, "Keeping existing identity→address mapping: $identityHash → $existingAddress (existing has central)")
                 }
@@ -2040,6 +2053,16 @@ class KotlinBLEBridge(
         // Notify Python of identity (Python handles deduplication, MAC rotation, etc.)
         Log.w(TAG, "[CALLBACK] handleIdentityReceived: Calling onIdentityReceived Python callback for $address")
         onIdentityReceived?.callAttr("__call__", address, identityHash)
+
+        // Notify Python of address change for MAC rotation handling
+        addressChangedFrom?.let { oldAddress ->
+            Log.w(
+                TAG,
+                "[CALLBACK] handleIdentityReceived: Calling onAddressChanged Python callback " +
+                    "($oldAddress → $address, identity=$identityHash)",
+            )
+            onAddressChanged?.callAttr("__call__", oldAddress, address, identityHash)
+        }
     }
 
     /**

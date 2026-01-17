@@ -37,6 +37,9 @@
     <!-- Declare BLE hardware feature (optional but recommended) -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
 
+    <!-- USB Host feature for RNode USB serial connections (optional) -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
     <!-- Foreground service permissions (Android 9+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />

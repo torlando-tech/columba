@@ -49,6 +49,7 @@ class KISS:
     CMD_BLINK = 0x30
     CMD_RANDOM = 0x40
     CMD_BT_CTRL = 0x46
+    CMD_BT_PIN = 0x62      # Bluetooth PIN response (6-digit)
     CMD_PLATFORM = 0x48
     CMD_MCU = 0x49
     CMD_FW_VERSION = 0x50
@@ -70,6 +71,9 @@ class KISS:
     RADIO_STATE_OFF = 0x00
     RADIO_STATE_ON = 0x01
     RADIO_STATE_ASK = 0xFF
+
+    # Bluetooth control commands
+    BT_CTRL_PAIRING_MODE = 0x02  # Enter Bluetooth pairing mode
 
     # Platforms
     PLATFORM_AVR = 0x90
@@ -162,6 +166,7 @@ class ColumbaRNodeInterface:
     # Connection modes
     MODE_CLASSIC = "classic"  # Bluetooth Classic (SPP/RFCOMM)
     MODE_BLE = "ble"          # Bluetooth Low Energy (GATT)
+    MODE_USB = "usb"          # USB Serial
 
     def __init__(self, owner, name, config):
         """
@@ -233,10 +238,12 @@ class ColumbaRNodeInterface:
 
         # Get Kotlin bridge from wrapper
         self.kotlin_bridge = None
+        self.usb_bridge = None  # USB bridge for USB mode
         self._get_kotlin_bridge()
 
         # Configuration
         self.target_device_name = config.get("target_device_name")
+        self.usb_device_id = config.get("usb_device_id")  # USB device ID for USB mode
         self.connection_mode = config.get("connection_mode", self.MODE_CLASSIC)
         self.frequency = config.get("frequency", 915000000)
         self.bandwidth = config.get("bandwidth", 125000)
@@ -301,6 +308,18 @@ class ColumbaRNodeInterface:
         except Exception as e:
             RNS.log(f"Failed to get KotlinRNodeBridge: {e}", RNS.LOG_ERROR)
 
+    def _get_usb_bridge(self):
+        """Get the Kotlin USB bridge for USB mode connections."""
+        try:
+            import usb_bridge
+            self.usb_bridge = usb_bridge.get_usb_bridge()
+            if self.usb_bridge:
+                RNS.log("Got KotlinUSBBridge from usb_bridge module", RNS.LOG_DEBUG)
+            else:
+                RNS.log("KotlinUSBBridge not available", RNS.LOG_ERROR)
+        except Exception as e:
+            RNS.log(f"Failed to get KotlinUSBBridge: {e}", RNS.LOG_ERROR)
+
     def _validate_config(self):
         """Validate configuration parameters."""
         if self.frequency < self.FREQ_MIN or self.frequency > self.FREQ_MAX:
@@ -329,6 +348,10 @@ class ColumbaRNodeInterface:
 
     def start(self):
         """Start the interface - connect to RNode and configure radio."""
+        # Handle USB mode separately
+        if self.connection_mode == self.MODE_USB:
+            return self._start_usb()
+
         if self.kotlin_bridge is None:
             RNS.log("Cannot start - KotlinRNodeBridge not available", RNS.LOG_ERROR)
             return False
@@ -364,14 +387,67 @@ class ColumbaRNodeInterface:
             self.stop()
             return False
 
+    def _start_usb(self):
+        """Start the interface in USB mode."""
+        self._get_usb_bridge()
+
+        if self.usb_bridge is None:
+            RNS.log("Cannot start USB mode - KotlinUSBBridge not available", RNS.LOG_ERROR)
+            return False
+
+        if self.usb_device_id is None:
+            RNS.log("Cannot start USB mode - no USB device ID configured", RNS.LOG_ERROR)
+            return False
+
+        RNS.log(f"Connecting to RNode via USB (device ID {self.usb_device_id})...", RNS.LOG_INFO)
+
+        # Connect via USB bridge
+        if not self.usb_bridge.connect(self.usb_device_id):
+            RNS.log(f"Failed to connect to USB device {self.usb_device_id}", RNS.LOG_ERROR)
+            return False
+
+        # Set up data callback
+        self.usb_bridge.setOnDataReceived(self._on_data_received)
+        self.usb_bridge.setOnConnectionStateChanged(self._on_usb_connection_state_changed)
+
+        # Start read thread
+        self._running.set()
+        self._read_thread = threading.Thread(target=self._read_loop_usb, daemon=True)
+        self._read_thread.start()
+
+        # Configure device
+        try:
+            time.sleep(0.5)  # USB connections stabilize faster than BLE
+            self._configure_device()
+            return True
+        except Exception as e:
+            RNS.log(f"Failed to configure RNode: {e}", RNS.LOG_ERROR)
+            self.stop()
+            return False
+
+    def _on_usb_connection_state_changed(self, connected, device_id):
+        """Callback when USB connection state changes."""
+        if connected:
+            RNS.log(f"USB device connected: {device_id}", RNS.LOG_INFO)
+        else:
+            RNS.log(f"USB device disconnected: {device_id}", RNS.LOG_WARNING)
+            self._set_online(False)
+            self.detected = False
+            # Note: USB doesn't auto-reconnect - user must re-plug or re-select device
+
     def stop(self):
         """Stop the interface and disconnect."""
         self._running.clear()
         self._reconnecting = False  # Stop any reconnection attempts
         self._set_online(False)
 
-        if self.kotlin_bridge:
-            self.kotlin_bridge.disconnect()
+        # Disconnect based on connection mode
+        if self.connection_mode == self.MODE_USB:
+            if self.usb_bridge:
+                self.usb_bridge.disconnect()
+        else:
+            if self.kotlin_bridge:
+                self.kotlin_bridge.disconnect()
 
         if self._read_thread:
             self._read_thread.join(timeout=2.0)
@@ -556,12 +632,24 @@ class ColumbaRNodeInterface:
 
     def _write(self, data, max_retries=3):
         """Write data to the RNode via Kotlin bridge with exponential backoff retry."""
-        if self.kotlin_bridge is None:
-            raise IOError("Kotlin bridge not available")
+        # Select bridge based on connection mode
+        if self.connection_mode == self.MODE_USB:
+            if self.usb_bridge is None:
+                raise IOError("USB bridge not available")
+            bridge = self.usb_bridge
+        else:
+            if self.kotlin_bridge is None:
+                raise IOError("Kotlin bridge not available")
+            bridge = self.kotlin_bridge
 
         last_error = None
         for attempt in range(max_retries):
-            written = self.kotlin_bridge.writeSync(data)
+            # USB bridge uses write(), Bluetooth bridge uses writeSync()
+            if self.connection_mode == self.MODE_USB:
+                written = bridge.write(data)
+            else:
+                written = bridge.writeSync(data)
+
             if written == len(data):
                 return  # Success
 
@@ -775,6 +863,149 @@ class ColumbaRNodeInterface:
 
         RNS.log("RNode read loop stopped", RNS.LOG_DEBUG)
 
+    def _read_loop_usb(self):
+        """Background thread for reading and parsing KISS frames from USB.
+
+        Similar to _read_loop but uses USB bridge instead of Bluetooth bridge,
+        and includes handling for CMD_BT_PIN during Bluetooth pairing mode.
+        """
+        in_frame = False
+        escape = False
+        command = KISS.CMD_UNKNOWN
+        data_buffer = b""
+
+        RNS.log("RNode USB read loop started", RNS.LOG_DEBUG)
+
+        while self._running.is_set():
+            try:
+                # Read available data from USB bridge
+                raw_data = self.usb_bridge.read()
+                # Convert to bytes if needed (Chaquopy may return jarray)
+                if hasattr(raw_data, '__len__'):
+                    data = bytes(raw_data)
+                else:
+                    data = bytes(raw_data) if raw_data else b""
+
+                if len(data) == 0:
+                    time.sleep(0.01)
+                    continue
+
+                # Parse KISS frames
+                RNS.log(f"RNode USB parsing {len(data)} bytes: {data.hex()}", RNS.LOG_DEBUG)
+                for byte in data:
+                    if in_frame and byte == KISS.FEND and command == KISS.CMD_DATA:
+                        # End of data frame
+                        in_frame = False
+                        self._process_incoming(data_buffer)
+                        data_buffer = b""
+                    elif byte == KISS.FEND:
+                        # Start of frame
+                        in_frame = True
+                        command = KISS.CMD_UNKNOWN
+                        data_buffer = b""
+                    elif in_frame and len(data_buffer) < 512:
+                        if escape:
+                            if byte == KISS.TFEND:
+                                data_buffer += bytes([KISS.FEND])
+                            elif byte == KISS.TFESC:
+                                data_buffer += bytes([KISS.FESC])
+                            else:
+                                # Invalid escape sequence
+                                RNS.log(f"Invalid KISS escape sequence: FESC followed by 0x{byte:02X}", RNS.LOG_WARNING)
+                                data_buffer += bytes([byte])
+                            escape = False
+                        elif byte == KISS.FESC:
+                            escape = True
+                        elif command == KISS.CMD_UNKNOWN:
+                            command = byte
+                        elif command == KISS.CMD_DATA:
+                            data_buffer += bytes([byte])
+                        elif command == KISS.CMD_FREQUENCY:
+                            if len(data_buffer) < 4:
+                                data_buffer += bytes([byte])
+                                if len(data_buffer) == 4:
+                                    freq = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
+                                    with self._read_lock:
+                                        self.r_frequency = freq
+                                    RNS.log(f"RNode frequency: {freq}", RNS.LOG_DEBUG)
+                        elif command == KISS.CMD_BANDWIDTH:
+                            if len(data_buffer) < 4:
+                                data_buffer += bytes([byte])
+                                if len(data_buffer) == 4:
+                                    bw = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
+                                    with self._read_lock:
+                                        self.r_bandwidth = bw
+                                    RNS.log(f"RNode bandwidth: {bw}", RNS.LOG_DEBUG)
+                        elif command == KISS.CMD_TXPOWER:
+                            with self._read_lock:
+                                self.r_txpower = byte
+                            RNS.log(f"RNode TX power: {byte}", RNS.LOG_DEBUG)
+                        elif command == KISS.CMD_SF:
+                            with self._read_lock:
+                                self.r_sf = byte
+                            RNS.log(f"RNode SF: {byte}", RNS.LOG_DEBUG)
+                        elif command == KISS.CMD_CR:
+                            with self._read_lock:
+                                self.r_cr = byte
+                            RNS.log(f"RNode CR: {byte}", RNS.LOG_DEBUG)
+                        elif command == KISS.CMD_RADIO_STATE:
+                            with self._read_lock:
+                                self.r_state = byte
+                            RNS.log(f"RNode radio state: {byte}", RNS.LOG_DEBUG)
+                        elif command == KISS.CMD_STAT_RSSI:
+                            with self._read_lock:
+                                self.r_stat_rssi = byte - 157  # RSSI offset
+                        elif command == KISS.CMD_STAT_SNR:
+                            with self._read_lock:
+                                self.r_stat_snr = int.from_bytes([byte], "big", signed=True) / 4.0
+                        elif command == KISS.CMD_FW_VERSION:
+                            if len(data_buffer) < 2:
+                                data_buffer += bytes([byte])
+                                if len(data_buffer) == 2:
+                                    self.maj_version = data_buffer[0]
+                                    self.min_version = data_buffer[1]
+                                    self._validate_firmware()
+                        elif command == KISS.CMD_PLATFORM:
+                            self.platform = byte
+                        elif command == KISS.CMD_MCU:
+                            self.mcu = byte
+                        elif command == KISS.CMD_DETECT:
+                            if byte == KISS.DETECT_RESP:
+                                self.detected = True
+                                RNS.log("RNode detected!", RNS.LOG_DEBUG)
+                        elif command == KISS.CMD_BT_PIN:
+                            # Bluetooth PIN response during pairing mode
+                            # PIN is sent as 6 ASCII digits
+                            if len(data_buffer) < 6:
+                                data_buffer += bytes([byte])
+                                if len(data_buffer) == 6:
+                                    pin = data_buffer.decode('ascii')
+                                    RNS.log(f"RNode Bluetooth PIN: {pin}", RNS.LOG_INFO)
+                                    # Notify USB bridge to surface PIN to UI
+                                    if self.usb_bridge:
+                                        try:
+                                            self.usb_bridge.notifyBluetoothPin(pin)
+                                        except Exception as e:
+                                            RNS.log(f"Failed to notify BT PIN: {e}", RNS.LOG_ERROR)
+                        elif command == KISS.CMD_ERROR:
+                            error_message = KISS.get_error_message(byte)
+                            RNS.log(f"RNode error (0x{byte:02X}): {error_message}", RNS.LOG_ERROR)
+                            # Surface error to UI via callback
+                            if self._on_error_callback:
+                                try:
+                                    self._on_error_callback(byte, error_message)
+                                except Exception as cb_err:
+                                    RNS.log(f"Error callback failed: {cb_err}", RNS.LOG_ERROR)
+                        elif command == KISS.CMD_READY:
+                            pass  # Device ready
+
+            except Exception as e:
+                if self._running.is_set():
+                    RNS.log(f"USB read loop error: {e}", RNS.LOG_ERROR)
+                    time.sleep(0.1)
+
+        RNS.log("RNode USB read loop stopped", RNS.LOG_DEBUG)
+
     def _validate_firmware(self):
         """Check if firmware version is acceptable."""
         if self.maj_version > self.REQUIRED_FW_VER_MAJ:
@@ -945,6 +1176,42 @@ class ColumbaRNodeInterface:
         """Get last received signal-to-noise ratio."""
         with self._read_lock:
             return self.r_stat_snr
+
+    def enter_bluetooth_pairing_mode(self):
+        """
+        Send command to enter Bluetooth pairing mode (USB mode only).
+
+        When connected via USB, this sends the CMD_BT_CTRL command with
+        BT_CTRL_PAIRING_MODE parameter to put the RNode into Bluetooth
+        pairing mode. The RNode will respond with CMD_BT_PIN containing
+        the 6-digit PIN that must be entered on the Android device's
+        Bluetooth settings to complete pairing.
+
+        This is primarily useful for T114 devices and RNodes without
+        a user button for entering pairing mode manually.
+
+        Returns:
+            True if command was sent successfully, False otherwise
+        """
+        if self.connection_mode != self.MODE_USB:
+            RNS.log("Bluetooth pairing mode is only available via USB connection", RNS.LOG_WARNING)
+            return False
+
+        if self.usb_bridge is None or not self.usb_bridge.isConnected():
+            RNS.log("Cannot enter pairing mode - not connected via USB", RNS.LOG_ERROR)
+            return False
+
+        RNS.log("Sending Bluetooth pairing mode command...", RNS.LOG_INFO)
+
+        try:
+            # KISS frame: FEND CMD_BT_CTRL BT_CTRL_PAIRING_MODE FEND
+            kiss_cmd = bytes([KISS.FEND, KISS.CMD_BT_CTRL, KISS.BT_CTRL_PAIRING_MODE, KISS.FEND])
+            self._write(kiss_cmd)
+            RNS.log("Bluetooth pairing mode command sent", RNS.LOG_INFO)
+            return True
+        except Exception as e:
+            RNS.log(f"Failed to send pairing mode command: {e}", RNS.LOG_ERROR)
+            return False
 
     def __str__(self):
         return f"ColumbaRNodeInterface[{self.name}]"

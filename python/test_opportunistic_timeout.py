@@ -1018,7 +1018,8 @@ class TestPropagationNodeSetting(unittest.TestCase):
 
         self.assertTrue(result.get('success'))
         self.assertIsNone(wrapper.active_propagation_node)
-        wrapper.router.set_outbound_propagation_node.assert_called_once_with(None)
+        # LXMF doesn't support passing None, so we just clear internally without calling the router
+        wrapper.router.set_outbound_propagation_node.assert_not_called()
 
     def test_get_outbound_propagation_node_returns_hex_string(self):
         """Test that get_outbound_propagation_node returns hex string format"""

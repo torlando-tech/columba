@@ -107,8 +107,8 @@ class TestSetOutboundPropagationNode(PropagationTestBase):
         # Verify success
         self.assertTrue(result['success'])
 
-        # Verify router was called with None
-        self.mock_router.set_outbound_propagation_node.assert_called_once_with(None)
+        # Verify router was NOT called (LXMF doesn't support None, we just clear internally)
+        self.mock_router.set_outbound_propagation_node.assert_not_called()
 
         # Verify internal state was cleared
         self.assertIsNone(self.wrapper.active_propagation_node)

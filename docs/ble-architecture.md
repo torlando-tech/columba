@@ -10,35 +10,34 @@ The BLE implementation follows a layered architecture with clear separation of c
 flowchart TB
     subgraph Python["Python Layer (ble-reticulum)"]
         BLEInterface["BLEInterface<br/>Protocol handler, fragmentation,<br/>peer lifecycle"]
-        BLEPeerInterface["BLEPeerInterface<br/>Per-peer Reticulum interface"]
         AndroidDriver["AndroidBLEDriver<br/>Chaquopy bridge to Kotlin"]
+                BLEPeerInterface["BLEPeerInterface<br/>Per-peer Reticulum interface"]
+
     end
 
     subgraph Kotlin["Kotlin Native Layer"]
+        OpQueue["BleOperationQueue<br/>Serialized GATT ops"]
         Bridge["KotlinBLEBridge<br/>Main entry point,<br/>PeerInfo tracking,<br/>deduplication"]
         Scanner["BleScanner<br/>Adaptive intervals,<br/>service filtering"]
         Advertiser["BleAdvertiser<br/>Identity naming,<br/>proactive refresh"]
         GattClient["BleGattClient<br/>Central mode,<br/>4-step handshake"]
         GattServer["BleGattServer<br/>Peripheral mode,<br/>GATT service"]
-        OpQueue["BleOperationQueue<br/>Serialized GATT ops"]
     end
 
     subgraph Android["Android BLE Stack"]
-        BluetoothAdapter["BluetoothAdapter"]
+            BluetoothAdapter["BluetoothAdapter"]
+
         BluetoothLeScanner["BluetoothLeScanner"]
         BluetoothLeAdvertiser["BluetoothLeAdvertiser"]
         BluetoothGatt["BluetoothGatt"]
         BluetoothGattServer["BluetoothGattServer"]
+        
     end
 
-    BLEInterface --> BLEPeerInterface
     BLEInterface --> AndroidDriver
     AndroidDriver -->|Chaquopy| Bridge
-    Bridge --> Scanner
-    Bridge --> Advertiser
-    Bridge --> GattClient
-    Bridge --> GattServer
-    GattClient --> OpQueue
+    Bridge --> OpQueue
+    OpQueue --> BluetoothAdapter
     Scanner --> BluetoothLeScanner
     Advertiser --> BluetoothLeAdvertiser
     GattClient --> BluetoothGatt
@@ -133,7 +132,7 @@ sequenceDiagram
     Note over Bridge: MAC comparison:<br/>our MAC < peer MAC = connect
     Bridge->>Client: connect(address)
 
-    rect rgb(230, 245, 255)
+    rect rgb(30, 73, 102)
         Note over Client,Peer: 4-Step GATT Handshake
         Client->>Peer: 1. connectGatt()
         Peer-->>Client: onConnectionStateChange(CONNECTED)
@@ -185,7 +184,7 @@ sequenceDiagram
 
     Central->>Server: Enable CCCD notifications
 
-    rect rgb(255, 245, 230)
+    rect rgb(30, 73, 102)
         Note over Central,Server: Identity Handshake
         Central->>Server: Write 16 bytes to RX
         Server->>Server: Detect: len=16, no existing identity

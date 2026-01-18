@@ -121,6 +121,11 @@ exceptions:
       - 'ParseException'
     allowedExceptionNameRegex: '_|(ignore|expected).*'
 
+columba:
+  active: true
+  BleLoggingTag:
+    active: true
+
 style:
   active: true
   ForbiddenComment:

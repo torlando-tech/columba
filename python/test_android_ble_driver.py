@@ -1124,5 +1124,430 @@ class TestDuplicateIdentityDetectionFlow(unittest.TestCase):
             )
 
 
+class TestEnsureBytesFunction(unittest.TestCase):
+    """
+    Test the ensure_bytes() utility function.
+
+    This function converts Chaquopy jarray to Python bytes when needed.
+    When Kotlin passes ByteArray to Python via Chaquopy, it arrives as a
+    jarray('B') (Java array), not Python bytes.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Import the real ensure_bytes function."""
+        # Remove existing bluetooth_driver mock to replace with proper class mock
+        if 'bluetooth_driver' in sys.modules:
+            del sys.modules['bluetooth_driver']
+        if 'android_ble_driver' in sys.modules:
+            del sys.modules['android_ble_driver']
+
+        # Create proper base class (not MagicMock)
+        class MockBLEDriverInterface:
+            """Mock base class for AndroidBLEDriver."""
+            pass
+
+        # Set up bluetooth_driver with proper class
+        mock_bt_driver = MagicMock()
+        mock_bt_driver.BLEDriverInterface = MockBLEDriverInterface
+        mock_bt_driver.DriverState = MockDriverState
+        mock_bt_driver.BLEDevice = MagicMock()
+        sys.modules['bluetooth_driver'] = mock_bt_driver
+
+        # Add ble_modules to path
+        ble_modules_dir = os.path.join(os.path.dirname(__file__), 'ble_modules')
+        if ble_modules_dir not in sys.path:
+            sys.path.insert(0, ble_modules_dir)
+
+        # Import the real function
+        import android_ble_driver as abd_module
+        cls.abd_module = abd_module
+
+    def test_ensure_bytes_with_bytes_returns_same_object(self):
+        """
+        Test that ensure_bytes returns the same object when given bytes.
+
+        When input is already Python bytes, no conversion is needed.
+        """
+        data = b'\x01\x02\x03\x04\x05'
+
+        result = self.abd_module.ensure_bytes(data)
+
+        self.assertIs(result, data)  # Same object
+        self.assertEqual(result, b'\x01\x02\x03\x04\x05')
+
+    def test_ensure_bytes_with_list_converts_to_bytes(self):
+        """
+        Test that ensure_bytes converts iterables to bytes.
+
+        jarray is iterable, so we can test with a list which behaves similarly.
+        """
+        # Simulate jarray-like behavior with a list of integers
+        data = [0x01, 0x02, 0x03, 0x04, 0x05]
+
+        result = self.abd_module.ensure_bytes(data)
+
+        self.assertIsInstance(result, bytes)
+        self.assertEqual(result, b'\x01\x02\x03\x04\x05')
+
+    def test_ensure_bytes_with_empty_bytes(self):
+        """
+        Test that ensure_bytes handles empty bytes correctly.
+        """
+        data = b''
+
+        result = self.abd_module.ensure_bytes(data)
+
+        self.assertIs(result, data)
+        self.assertEqual(result, b'')
+
+    def test_ensure_bytes_with_empty_iterable(self):
+        """
+        Test that ensure_bytes handles empty iterables correctly.
+        """
+        data = []
+
+        result = self.abd_module.ensure_bytes(data)
+
+        self.assertIsInstance(result, bytes)
+        self.assertEqual(result, b'')
+
+    def test_ensure_bytes_with_tuple(self):
+        """
+        Test that ensure_bytes converts tuple (another iterable) to bytes.
+        """
+        data = (0x41, 0x42, 0x43)  # 'ABC'
+
+        result = self.abd_module.ensure_bytes(data)
+
+        self.assertIsInstance(result, bytes)
+        self.assertEqual(result, b'ABC')
+
+
+class MockJarray:
+    """
+    Mock Chaquopy jarray for testing ensure_bytes.
+
+    Chaquopy's jarray is iterable but not a bytes instance.
+    This mock simulates that behavior.
+    """
+
+    def __init__(self, data):
+        self._data = list(data)
+
+    def __iter__(self):
+        return iter(self._data)
+
+
+class TestEnsureBytesWithMockJarray(unittest.TestCase):
+    """
+    Test ensure_bytes with a mock jarray that mimics Chaquopy behavior.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Import the real ensure_bytes function."""
+        if 'bluetooth_driver' in sys.modules:
+            del sys.modules['bluetooth_driver']
+        if 'android_ble_driver' in sys.modules:
+            del sys.modules['android_ble_driver']
+
+        class MockBLEDriverInterface:
+            pass
+
+        mock_bt_driver = MagicMock()
+        mock_bt_driver.BLEDriverInterface = MockBLEDriverInterface
+        mock_bt_driver.DriverState = MockDriverState
+        mock_bt_driver.BLEDevice = MagicMock()
+        sys.modules['bluetooth_driver'] = mock_bt_driver
+
+        ble_modules_dir = os.path.join(os.path.dirname(__file__), 'ble_modules')
+        if ble_modules_dir not in sys.path:
+            sys.path.insert(0, ble_modules_dir)
+
+        import android_ble_driver as abd_module
+        cls.abd_module = abd_module
+
+    def test_ensure_bytes_with_mock_jarray(self):
+        """
+        Test that ensure_bytes converts mock jarray to bytes.
+
+        This simulates the actual Chaquopy jarray behavior where data
+        arrives as a Java array, not Python bytes.
+        """
+        # Create mock jarray with identity data
+        jarray_data = MockJarray([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                                  0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10])
+
+        result = self.abd_module.ensure_bytes(jarray_data)
+
+        self.assertIsInstance(result, bytes)
+        self.assertEqual(len(result), 16)
+        self.assertEqual(result.hex(), '0102030405060708090a0b0c0d0e0f10')
+
+    def test_ensure_bytes_jarray_allows_hex_method(self):
+        """
+        Test that after conversion, we can call bytes methods like .hex().
+
+        This is the main purpose of ensure_bytes - to allow Python bytes
+        methods on data received from Kotlin.
+        """
+        jarray_data = MockJarray([0xab, 0xcd, 0xef])
+
+        result = self.abd_module.ensure_bytes(jarray_data)
+
+        # These would fail on jarray but work after conversion
+        self.assertEqual(result.hex(), 'abcdef')
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0], 0xab)
+
+
+class TestHandleDuplicateIdentityDetected(unittest.TestCase):
+    """
+    Test _handle_duplicate_identity_detected method on the REAL AndroidBLEDriver class.
+
+    This method is called by Kotlin before accepting a connection to check
+    if the identity is already connected at a different address (MAC rotation).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Import the real AndroidBLEDriver class with proper mock setup."""
+        if 'bluetooth_driver' in sys.modules:
+            del sys.modules['bluetooth_driver']
+        if 'android_ble_driver' in sys.modules:
+            del sys.modules['android_ble_driver']
+
+        class MockBLEDriverInterface:
+            pass
+
+        mock_bt_driver = MagicMock()
+        mock_bt_driver.BLEDriverInterface = MockBLEDriverInterface
+        mock_bt_driver.DriverState = MockDriverState
+        mock_bt_driver.BLEDevice = MagicMock()
+        sys.modules['bluetooth_driver'] = mock_bt_driver
+
+        ble_modules_dir = os.path.join(os.path.dirname(__file__), 'ble_modules')
+        if ble_modules_dir not in sys.path:
+            sys.path.insert(0, ble_modules_dir)
+
+        import android_ble_driver as abd_module
+        cls.AndroidBLEDriver = abd_module.AndroidBLEDriver
+        cls.abd_module = abd_module
+
+    def setUp(self):
+        """Set up test fixtures with a real driver instance."""
+        self.driver = object.__new__(self.AndroidBLEDriver)
+        self.driver.kotlin_bridge = None
+        self.driver.on_duplicate_identity_detected = None
+
+        # Set up log capture
+        self.log_calls = []
+        self._original_log = self.abd_module.RNS.log
+        self.abd_module.RNS.log = lambda msg, level=4: self.log_calls.append((msg, level))
+
+    def tearDown(self):
+        """Restore original RNS.log."""
+        self.abd_module.RNS.log = self._original_log
+
+    def test_duplicate_identity_no_callback_returns_false(self):
+        """
+        Test that _handle_duplicate_identity_detected returns False when no callback.
+
+        When BLEInterface hasn't set on_duplicate_identity_detected, we allow
+        all connections (fail open).
+        """
+        address = "AA:BB:CC:DD:EE:FF"
+        identity = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+
+        # No callback set
+        self.driver.on_duplicate_identity_detected = None
+
+        result = self.driver._handle_duplicate_identity_detected(address, identity)
+
+        self.assertFalse(result)
+
+    def test_duplicate_identity_callback_returns_false_for_non_duplicate(self):
+        """
+        Test that _handle_duplicate_identity_detected returns False for non-duplicates.
+
+        When the callback returns False (not a duplicate), the connection is allowed.
+        """
+        address = "AA:BB:CC:DD:EE:FF"
+        identity = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+
+        # Callback returns False (not a duplicate)
+        self.driver.on_duplicate_identity_detected = Mock(return_value=False)
+
+        result = self.driver._handle_duplicate_identity_detected(address, identity)
+
+        self.assertFalse(result)
+        self.driver.on_duplicate_identity_detected.assert_called_once_with(address, identity)
+
+    def test_duplicate_identity_callback_returns_true_for_duplicate(self):
+        """
+        Test that _handle_duplicate_identity_detected returns True for duplicates.
+
+        When the callback returns True (is duplicate), the connection is rejected.
+        """
+        address = "AA:BB:CC:DD:EE:FF"
+        identity = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+
+        # Callback returns True (is duplicate)
+        self.driver.on_duplicate_identity_detected = Mock(return_value=True)
+
+        result = self.driver._handle_duplicate_identity_detected(address, identity)
+
+        self.assertTrue(result)
+        self.driver.on_duplicate_identity_detected.assert_called_once_with(address, identity)
+        # Should log warning about duplicate rejection
+        self.assertTrue(any("Duplicate identity rejected" in str(msg) for msg, _ in self.log_calls))
+
+    def test_duplicate_identity_exception_returns_false(self):
+        """
+        Test that _handle_duplicate_identity_detected returns False on exception.
+
+        On error, we fail open and allow the connection.
+        """
+        address = "AA:BB:CC:DD:EE:FF"
+        identity = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+
+        # Callback raises exception
+        self.driver.on_duplicate_identity_detected = Mock(side_effect=RuntimeError("Test error"))
+
+        result = self.driver._handle_duplicate_identity_detected(address, identity)
+
+        self.assertFalse(result)
+        # Should log error
+        self.assertTrue(any("Error in duplicate identity check" in str(msg) for msg, _ in self.log_calls))
+
+    def test_duplicate_identity_converts_jarray_to_bytes(self):
+        """
+        Test that _handle_duplicate_identity_detected converts jarray to bytes.
+
+        When Kotlin passes ByteArray, it arrives as jarray which needs conversion.
+        """
+        address = "AA:BB:CC:DD:EE:FF"
+        # Use mock jarray instead of bytes
+        jarray_identity = MockJarray([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                                      0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10])
+
+        # Callback that checks the type
+        received_identity = []
+
+        def capture_callback(addr, identity):
+            received_identity.append(identity)
+            return False
+
+        self.driver.on_duplicate_identity_detected = capture_callback
+
+        self.driver._handle_duplicate_identity_detected(address, jarray_identity)
+
+        # Verify callback received bytes, not jarray
+        self.assertEqual(len(received_identity), 1)
+        self.assertIsInstance(received_identity[0], bytes)
+        self.assertEqual(received_identity[0].hex(), '0102030405060708090a0b0c0d0e0f10')
+
+
+class TestHandleDataReceivedEnsureBytes(unittest.TestCase):
+    """
+    Test that _handle_data_received uses ensure_bytes to convert jarray.
+
+    This tests the specific code path where data arrives from Kotlin as
+    jarray and needs conversion before processing.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Import the real AndroidBLEDriver class."""
+        if 'bluetooth_driver' in sys.modules:
+            del sys.modules['bluetooth_driver']
+        if 'android_ble_driver' in sys.modules:
+            del sys.modules['android_ble_driver']
+
+        class MockBLEDriverInterface:
+            pass
+
+        mock_bt_driver = MagicMock()
+        mock_bt_driver.BLEDriverInterface = MockBLEDriverInterface
+        mock_bt_driver.DriverState = MockDriverState
+        mock_bt_driver.BLEDevice = MagicMock()
+        sys.modules['bluetooth_driver'] = mock_bt_driver
+
+        ble_modules_dir = os.path.join(os.path.dirname(__file__), 'ble_modules')
+        if ble_modules_dir not in sys.path:
+            sys.path.insert(0, ble_modules_dir)
+
+        import android_ble_driver as abd_module
+        cls.AndroidBLEDriver = abd_module.AndroidBLEDriver
+        cls.abd_module = abd_module
+
+    def setUp(self):
+        """Set up test fixtures with a real driver instance."""
+        self.driver = object.__new__(self.AndroidBLEDriver)
+        self.driver._connected_peers = []
+        self.driver._peer_roles = {}
+        self.driver._peer_mtus = {}
+        self.driver._pending_identities = {}
+        self.driver._identity_lock = threading.Lock()
+        self.driver.on_data_received = None
+        self.driver.on_device_connected = None
+        self.driver.on_mtu_negotiated = None
+
+        # Set up log capture
+        self.log_calls = []
+        self._original_log = self.abd_module.RNS.log
+        self.abd_module.RNS.log = lambda msg, level=4: self.log_calls.append((msg, level))
+
+    def tearDown(self):
+        """Restore original RNS.log."""
+        self.abd_module.RNS.log = self._original_log
+
+    def test_handle_data_received_converts_jarray(self):
+        """
+        Test that _handle_data_received converts jarray data to bytes.
+
+        The on_data_received callback should receive Python bytes, not jarray.
+        """
+        address = "AA:BB:CC:DD:EE:FF"
+        self.driver._connected_peers.append(address)
+
+        # Simulate jarray data from Kotlin
+        jarray_data = MockJarray([0x48, 0x65, 0x6c, 0x6c, 0x6f])  # "Hello"
+
+        received_data = []
+
+        def capture_callback(addr, data):
+            received_data.append((addr, data))
+
+        self.driver.on_data_received = capture_callback
+
+        self.driver._handle_data_received(address, jarray_data)
+
+        # Verify callback received bytes
+        self.assertEqual(len(received_data), 1)
+        addr, data = received_data[0]
+        self.assertEqual(addr, address)
+        self.assertIsInstance(data, bytes)
+        self.assertEqual(data, b'Hello')
+
+    def test_handle_data_received_passes_through_bytes(self):
+        """
+        Test that _handle_data_received passes through bytes unchanged.
+        """
+        address = "AA:BB:CC:DD:EE:FF"
+        self.driver._connected_peers.append(address)
+
+        bytes_data = b'Test data'
+
+        received_data = []
+        self.driver.on_data_received = lambda addr, data: received_data.append((addr, data))
+
+        self.driver._handle_data_received(address, bytes_data)
+
+        self.assertEqual(len(received_data), 1)
+        self.assertEqual(received_data[0][1], b'Test data')
+
+
 if __name__ == '__main__':
     unittest.main()

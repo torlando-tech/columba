@@ -345,13 +345,15 @@ flowchart LR
 
 ## Deduplication State Machine
 
-When the same identity is connected via both central and peripheral paths (dual connection):
+When the same identity is connected via both central and peripheral paths (dual connection).
+
+**Location**: `KotlinBLEBridge.handlePeerConnected()` — Kotlin layer only. Python is not involved in deduplication decisions.
 
 ```mermaid
 stateDiagram-v2
     [*] --> NONE: Initial state
 
-    NONE --> DualDetected: peer.isCentral && peer.isPeripheral
+    NONE --> DualDetected: Kotlin: peer.isCentral && peer.isPeripheral<br/>(line 1702)
 
     DualDetected --> DecisionPoint: Compare identity hashes
 
@@ -378,7 +380,9 @@ enum class DeduplicationState {
 }
 ```
 
-### Deduplication Flow
+### Deduplication Flow (Kotlin Layer)
+
+All deduplication logic runs in `KotlinBLEBridge.kt`:
 
 ```mermaid
 sequenceDiagram
@@ -386,7 +390,7 @@ sequenceDiagram
     participant Client as BleGattClient
     participant Server as BleGattServer
 
-    Note over Bridge: Dual connection detected<br/>peer.isCentral && peer.isPeripheral
+    Note over Bridge: handlePeerConnected() detects:<br/>peer.isCentral && peer.isPeripheral (line 1702)
 
     Bridge->>Bridge: Compare identity hashes<br/>localIdentityHex vs peerIdentity
     alt localIdentityHex < peerIdentity (we keep central)

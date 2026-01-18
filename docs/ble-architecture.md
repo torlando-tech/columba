@@ -603,6 +603,10 @@ flowchart LR
 
 ### Advertising with Proactive Refresh
 
+**Problem**: Android silently stops BLE advertising when the app goes to background, the screen turns off, or the device enters Doze mode. There's no callback when this happens—the app thinks it's still advertising but is actually invisible to scanners.
+
+**Solution**: Proactively stop and restart advertising every 60 seconds. If advertising was still active, no harm done. If Android killed it, this brings it back.
+
 ```mermaid
 sequenceDiagram
     participant Adv as BleAdvertiser
@@ -610,16 +614,32 @@ sequenceDiagram
     participant Android as Android BLE
 
     Adv->>Android: startAdvertising()
-    Android-->>Adv: onStartSuccess()
-    Adv->>Timer: Start refresh job
+    alt Success
+        Android-->>Adv: onStartSuccess()
+        Adv->>Adv: retryAttempts = 0
+        Adv->>Timer: Start refresh job
+    else Failure
+        Android-->>Adv: onStartFailure(errorCode)
+        loop Up to 5 retries
+            Note over Adv: Wait (2s × attempt)
+            Adv->>Android: startAdvertising()
+        end
+    end
 
     loop Every 60 seconds
-        Timer->>Adv: Proactive refresh
+        Timer->>Adv: Check: isAdvertising && !isRefreshing?
         Adv->>Android: stopAdvertising()
-        Adv->>Android: startAdvertising()
+        Note over Adv: 100ms delay
+        Adv->>Android: startAdvertisingInternal()
         Note over Adv: Ensures advertising persists<br/>after screen off/background
     end
 ```
+
+**Key implementation details** (BleAdvertiser.kt lines 48-120, 338-396):
+- **Retry with backoff**: On failure, retries up to 5 times with delay = 2s × attempt number
+- **Refresh guard**: Uses `isRefreshing` flag to prevent concurrent refresh operations
+- **100ms cleanup delay**: Brief pause between stop/start ensures Android BLE stack resets properly
+- **Internal restart**: Refresh calls `startAdvertisingInternal()` to bypass the "already advertising" check
 
 ### Advertisement Data Structure
 

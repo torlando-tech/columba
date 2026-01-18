@@ -229,6 +229,170 @@ class CrashReportManagerTest {
         Thread.setDefaultUncaughtExceptionHandler(handlerBefore)
     }
 
+    @Test
+    fun `crash handler persists crash data when exception occurs`() {
+        val handlerBefore = Thread.getDefaultUncaughtExceptionHandler()
+
+        crashReportManager.installCrashHandler()
+
+        // Get the installed handler
+        val handler = Thread.getDefaultUncaughtExceptionHandler()
+        assertNotNull(handler)
+
+        // Create a test exception
+        val testException = RuntimeException("Test crash message")
+
+        // Trigger the handler (but don't let it chain to the default handler)
+        // We need to temporarily set a no-op default handler
+        Thread.setDefaultUncaughtExceptionHandler { _, _ -> /* no-op */ }
+        crashReportManager.installCrashHandler()
+        val newHandler = Thread.getDefaultUncaughtExceptionHandler()
+
+        // Manually invoke the handler
+        newHandler?.uncaughtException(Thread.currentThread(), testException)
+
+        // Verify crash data was persisted
+        assertTrue(crashReportManager.hasPendingCrashReport())
+
+        val crashReport = crashReportManager.getPendingCrashReport()
+        assertNotNull(crashReport)
+        assertEquals("java.lang.RuntimeException", crashReport!!.exceptionClass)
+        assertEquals("Test crash message", crashReport.message)
+        assertTrue(crashReport.stackTrace.contains("RuntimeException"))
+
+        // Clean up
+        crashReportManager.clearPendingCrashReport()
+        Thread.setDefaultUncaughtExceptionHandler(handlerBefore)
+    }
+
+    @Test
+    fun `crash handler persists crash data for exception without message`() {
+        val handlerBefore = Thread.getDefaultUncaughtExceptionHandler()
+
+        // Set up no-op handler and install crash handler
+        Thread.setDefaultUncaughtExceptionHandler { _, _ -> /* no-op */ }
+        crashReportManager.installCrashHandler()
+        val handler = Thread.getDefaultUncaughtExceptionHandler()
+
+        // Create exception without message
+        val testException = NullPointerException()
+
+        handler?.uncaughtException(Thread.currentThread(), testException)
+
+        // Verify crash data was persisted with null message
+        assertTrue(crashReportManager.hasPendingCrashReport())
+        val crashReport = crashReportManager.getPendingCrashReport()
+        assertNotNull(crashReport)
+        assertEquals("java.lang.NullPointerException", crashReport!!.exceptionClass)
+        assertNull(crashReport.message)
+
+        // Clean up
+        crashReportManager.clearPendingCrashReport()
+        Thread.setDefaultUncaughtExceptionHandler(handlerBefore)
+    }
+
+    @Test
+    fun `crash handler includes cause chain in stack trace`() {
+        val handlerBefore = Thread.getDefaultUncaughtExceptionHandler()
+
+        Thread.setDefaultUncaughtExceptionHandler { _, _ -> /* no-op */ }
+        crashReportManager.installCrashHandler()
+        val handler = Thread.getDefaultUncaughtExceptionHandler()
+
+        // Create exception with cause chain
+        val rootCause = IllegalArgumentException("Root cause")
+        val middleCause = IllegalStateException("Middle cause", rootCause)
+        val topException = RuntimeException("Top exception", middleCause)
+
+        handler?.uncaughtException(Thread.currentThread(), topException)
+
+        val crashReport = crashReportManager.getPendingCrashReport()
+        assertNotNull(crashReport)
+        assertTrue(crashReport!!.stackTrace.contains("Caused by:"))
+        assertTrue(crashReport.stackTrace.contains("IllegalStateException"))
+        assertTrue(crashReport.stackTrace.contains("IllegalArgumentException"))
+
+        // Clean up
+        crashReportManager.clearPendingCrashReport()
+        Thread.setDefaultUncaughtExceptionHandler(handlerBefore)
+    }
+
+    // ========== Log Capture Tests ==========
+
+    @Test
+    fun `captureRecentLogs returns string`() = runTest {
+        val logs = crashReportManager.captureRecentLogs()
+        // In test environment, may be empty but should not throw
+        assertNotNull(logs)
+    }
+
+    // ========== Additional Report Generation Tests ==========
+
+    @Test
+    fun `generateBugReport shows no logs message when logs are empty`() = runTest {
+        val systemInfo = createTestSystemInfo()
+        val crashReport = CrashReport(
+            timestamp = System.currentTimeMillis(),
+            exceptionClass = "TestException",
+            message = "Test",
+            stackTrace = "at Test.method(Test.kt:1)",
+            logsAtCrash = "", // Empty logs
+        )
+
+        val report = crashReportManager.generateBugReport(systemInfo, crashReport)
+
+        assertTrue(report.contains("(No logs captured)"))
+    }
+
+    @Test
+    fun `generateBugReport shows no logs message when logs are blank`() = runTest {
+        val systemInfo = createTestSystemInfo()
+        val crashReport = CrashReport(
+            timestamp = System.currentTimeMillis(),
+            exceptionClass = "TestException",
+            message = "Test",
+            stackTrace = "at Test.method(Test.kt:1)",
+            logsAtCrash = "   ", // Blank logs (whitespace only)
+        )
+
+        val report = crashReportManager.generateBugReport(systemInfo, crashReport)
+
+        assertTrue(report.contains("(No logs captured)"))
+    }
+
+    @Test
+    fun `generateBugReport omits message line when crash message is null`() = runTest {
+        val systemInfo = createTestSystemInfo()
+        val crashReport = CrashReport(
+            timestamp = System.currentTimeMillis(),
+            exceptionClass = "TestException",
+            message = null, // No message
+            stackTrace = "at Test.method(Test.kt:1)",
+            logsAtCrash = "some logs",
+        )
+
+        val report = crashReportManager.generateBugReport(systemInfo, crashReport)
+
+        assertTrue(report.contains("**Exception**"))
+        assertFalse(report.contains("**Message**"))
+    }
+
+    @Test
+    fun `generateBugReport uses logsAtCrash when provided`() = runTest {
+        val systemInfo = createTestSystemInfo()
+        val crashReport = CrashReport(
+            timestamp = System.currentTimeMillis(),
+            exceptionClass = "TestException",
+            message = "Test",
+            stackTrace = "at Test.method(Test.kt:1)",
+            logsAtCrash = "Specific crash time log entry",
+        )
+
+        val report = crashReportManager.generateBugReport(systemInfo, crashReport)
+
+        assertTrue(report.contains("Specific crash time log entry"))
+    }
+
     // ========== Helper Functions ==========
 
     private fun createTestSystemInfo(): SystemInfo {

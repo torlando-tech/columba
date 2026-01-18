@@ -416,6 +416,26 @@ sequenceDiagram
 
 **Note**: Deduplication does NOT call `onAddressChanged`. Python is notified via the normal `onConnected` callback, and Python handles its own deduplication logic if needed. The `onAddressChanged` callback is only used for MAC rotation address migration in `handleIdentityReceived`.
 
+### Reconnection Cooldown (`recentlyDeduplicatedIdentities`)
+
+**Problem**: Without a cooldown, deduplication causes a reconnection storm:
+1. We connect as central to Device B
+2. Device B connects to us → dual connection detected
+3. Deduplication closes our central, keeps their peripheral
+4. Scanner rediscovers Device B → immediately reconnects as central
+5. Dual connection again → repeat forever
+
+**Solution**: After deduplication, add the peer's identity to `recentlyDeduplicatedIdentities` with a 60-second cooldown. The scanner checks this list before connecting — if the device name prefix matches a recently deduplicated identity, skip it.
+
+| Event | Action |
+|-------|--------|
+| Deduplication closes central | Add identity to cooldown (line 1722) |
+| Scanner discovers device | Check if name matches cooldown list (lines 993-1015) |
+| 60 seconds pass | Entry expires, reconnection allowed |
+| Identity fully disconnects | Remove from cooldown immediately (line 1830) |
+
+**Important**: The cooldown is only removed when the identity is *fully* disconnected (no connections remain at any address). While the peripheral connection is still active, the cooldown persists to prevent reconnection storms.
+
 ---
 
 ## Data Flow

@@ -386,18 +386,22 @@ sequenceDiagram
 
     Note over Bridge: handlePeerConnected() detects:<br/>peer.isCentral && peer.isPeripheral (line 1702)
 
-    Bridge->>Bridge: Compare identity hashes<br/>localIdentityHex vs peerIdentity
-    alt localIdentityHex < peerIdentity (we keep central)
-        Bridge->>Bridge: Set state = CLOSING_PERIPHERAL
-        Bridge->>Bridge: Set dedupeAction = CLOSE_PERIPHERAL
-    else localIdentityHex > peerIdentity (we keep peripheral)
-        Bridge->>Bridge: Set state = CLOSING_CENTRAL
-        Bridge->>Bridge: Set dedupeAction = CLOSE_CENTRAL
+    alt peerIdentity == null OR localIdentityBytes == null
+        Note over Bridge: Identity not yet available<br/>Deduplication deferred (line 1724-1726)
+    else Both identities available
+        Bridge->>Bridge: Compare identity hashes<br/>localIdentityHex vs peerIdentity (line 1711)
+        alt localIdentityHex < peerIdentity (we keep central)
+            Bridge->>Bridge: Set state = CLOSING_PERIPHERAL
+            Bridge->>Bridge: Set dedupeAction = CLOSE_PERIPHERAL
+        else localIdentityHex > peerIdentity (we keep peripheral)
+            Bridge->>Bridge: Set state = CLOSING_CENTRAL
+            Bridge->>Bridge: Set dedupeAction = CLOSE_CENTRAL
+        end
+
+        Bridge->>Bridge: Add peerIdentity to<br/>recentlyDeduplicatedIdentities (cooldown)
     end
 
-    Bridge->>Bridge: Add peerIdentity to<br/>recentlyDeduplicatedIdentities (cooldown)
-
-    Note over Bridge: Execute disconnect outside mutex
+    Note over Bridge: Execute disconnect outside mutex (line 1764)
 
     alt dedupeAction == CLOSE_CENTRAL
         Bridge->>Client: disconnect(address)
@@ -405,7 +409,7 @@ sequenceDiagram
         Bridge->>Server: disconnectCentral(address)
     end
 
-    Note over Bridge: On disconnect callback:<br/>state returns to NONE
+    Note over Bridge: On disconnect callback:<br/>state returns to NONE (lines 1800-1810)
 ```
 
 **Key code reference**: `KotlinBLEBridge.handlePeerConnected()` lines 1701-1775

@@ -702,17 +702,7 @@ Scan Response (31 bytes separate budget):
 
 **Recommendation**: Consider adaptive timeouts based on operation type and historical success rates.
 
-### 2. Advertising Refresh Interval (60s)
-
-**Issue**: The 60-second advertising refresh may miss discovery windows.
-
-**Impact**: If Android silently stops advertising immediately after screen-off, devices may be undiscoverable for up to 60 seconds.
-
-**Recommendation**:
-- Reduce to 30 seconds when battery is not a concern
-- Add `BroadcastReceiver` for `ACTION_SCREEN_OFF` to trigger immediate refresh
-
-### 3. Fragmenter Key Complexity
+### 2. Fragmenter Key Complexity
 
 **Issue**: Fragmenter keys use `_get_fragmenter_key(identity, address)` but the address parameter is unused.
 
@@ -725,13 +715,23 @@ def _get_fragmenter_key(self, peer_identity, address):
 
 **Recommendation**: Remove unused `address` parameter to avoid confusion.
 
-### 4. Grace Period Timing
+### 3. Grace Period Timing
 
 **Issue**: The 2-second detach grace period (`_pending_detach_grace_period`) is hardcoded.
 
 **Impact**: May not be sufficient for slow network conditions or concurrent reconnection attempts.
 
 **Recommendation**: Make configurable via interface parameters, with a suggested default of 3-5 seconds.
+
+---
+
+## Future Enhancements
+
+### Reactive Advertising Refresh
+
+Currently, advertising refreshes on a 60-second timer. If Android kills advertising immediately after screen-off, the device could be undiscoverable for up to 60 seconds.
+
+**Enhancement**: Add a `BroadcastReceiver` for `ACTION_SCREEN_OFF` to trigger an immediate advertising refresh, reducing worst-case invisibility from 60 seconds to ~100ms.
 
 ---
 

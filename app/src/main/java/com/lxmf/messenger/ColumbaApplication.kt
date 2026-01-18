@@ -16,6 +16,7 @@ import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.startup.ConfigApplyFlagManager
 import com.lxmf.messenger.startup.ServiceIdentityVerifier
 import com.lxmf.messenger.startup.StartupConfigLoader
+import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.util.HexUtils.hexStringToByteArray
 import com.lxmf.messenger.util.HexUtils.toHexString
 import dagger.hilt.android.HiltAndroidApp
@@ -75,6 +76,9 @@ class ColumbaApplication : Application() {
     @Inject
     lateinit var propagationNodeManager: PropagationNodeManager
 
+    @Inject
+    lateinit var crashReportManager: CrashReportManager
+
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Main for lifecycle operations and UI coordination
     // SupervisorJob ensures failures don't crash the entire app
@@ -82,6 +86,10 @@ class ColumbaApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Install crash handler FIRST (before anything else that might crash)
+        // This ensures we capture crashes from any subsequent initialization
+        crashReportManager.installCrashHandler()
 
         // Phase 4 Task 4.1: StrictMode for debug builds
         // Detect threading violations during development

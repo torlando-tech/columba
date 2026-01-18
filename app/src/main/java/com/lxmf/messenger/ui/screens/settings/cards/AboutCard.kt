@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.HorizontalDivider
@@ -40,6 +41,7 @@ fun AboutCard(
     onExpandedChange: (Boolean) -> Unit,
     systemInfo: SystemInfo,
     onCopySystemInfo: () -> Unit,
+    onReportBug: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -187,6 +189,20 @@ fun AboutCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Copy System Info")
+            }
+
+            // Report Bug Button
+            OutlinedButton(
+                onClick = onReportBug,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.BugReport,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Report Bug")
             }
         }
     }

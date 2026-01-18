@@ -1261,6 +1261,7 @@ class KotlinBLEBridge(
      * @param address BLE MAC address
      * @param data Pre-fragmented data bytes (single fragment)
      */
+    @Suppress("CyclomaticComplexMethod", "NestedBlockDepth") // Address resolution and deduplication state handling require these checks
     suspend fun send(
         address: String,
         data: ByteArray,

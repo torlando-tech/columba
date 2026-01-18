@@ -97,7 +97,8 @@ class KotlinBLEBridgeDuplicateIdentityCallbackTest {
         // Try to get the onDuplicateIdentityDetected field
         val field = try {
             KotlinBLEBridge::class.java.getDeclaredField("onDuplicateIdentityDetected")
-        } catch (e: NoSuchFieldException) {
+        } catch (@Suppress("SwallowedException") e: NoSuchFieldException) {
+            // Expected when the field doesn't exist - this is what we're testing for
             null
         }
 
@@ -126,7 +127,8 @@ class KotlinBLEBridgeDuplicateIdentityCallbackTest {
                 "setOnDuplicateIdentityDetected",
                 PyObject::class.java,
             )
-        } catch (e: NoSuchMethodException) {
+        } catch (@Suppress("SwallowedException") e: NoSuchMethodException) {
+            // Expected when the method doesn't exist - this is what we're testing for
             null
         }
 
@@ -216,7 +218,8 @@ class KotlinBLEBridgeDuplicateIdentityCallbackTest {
         for (callbackName in allCallbacks) {
             val field = try {
                 KotlinBLEBridge::class.java.getDeclaredField(callbackName)
-            } catch (e: NoSuchFieldException) {
+            } catch (@Suppress("SwallowedException") e: NoSuchFieldException) {
+                // Expected for missing callbacks - this is what we're testing for
                 null
             }
             assertNotNull("Callback $callbackName should exist", field)
@@ -297,7 +300,7 @@ class KotlinBLEBridgeDuplicateIdentityCallbackTest {
         // This is a documentation test - the actual behavior is in Python
         val safeSeverities = listOf("info", "debug")
         val unsafeSeverities = listOf("error", "critical")
-        val conditionalSeverity = "warning" // Only triggers for "Connection timeout"
+        // Note: "warning" severity only triggers blacklist for "Connection timeout" messages
 
         // Document the expected behavior
         assertTrue("info and debug are safe severities", safeSeverities.isNotEmpty())

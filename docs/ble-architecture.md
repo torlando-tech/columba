@@ -352,24 +352,16 @@ flowchart LR
 **Location**: `KotlinBLEBridge.handlePeerConnected()` — Kotlin layer only. Python is not involved in deduplication decisions.
 
 ```mermaid
-stateDiagram-v2
-    [*] --> NONE: Initial state
+flowchart TD
+    Start(( )) -->|Initial state| NONE[NONE]
 
-    NONE --> DualDetected: Kotlin\: peer.isCentral && peer.isPeripheral<br/>(line 1702)
+    NONE -->|"peer.isCentral && peer.isPeripheral<br/>(KotlinBLEBridge.kt:1702)"| Decision{Compare identity hashes}
 
-    DualDetected --> DecisionPoint: Compare identity hashes
+    Decision -->|"our identity < peer identity<br/>→ Keep central"| CLOSING_PERIPHERAL[CLOSING_PERIPHERAL]
+    Decision -->|"our identity > peer identity<br/>→ Keep peripheral"| CLOSING_CENTRAL[CLOSING_CENTRAL]
 
-    DecisionPoint --> CLOSING_CENTRAL: Keep peripheral<br/>(our identity > peer identity)
-    DecisionPoint --> CLOSING_PERIPHERAL: Keep central<br/>(our identity < peer identity)
-
-    CLOSING_CENTRAL --> NONE: Central disconnected
-    CLOSING_PERIPHERAL --> NONE: Peripheral disconnected
-
-    note right of DecisionPoint
-        Decision based on identity hash comparison:
-        - Lower identity hash = keeps central role
-        - Higher identity hash = keeps peripheral role
-    end note
+    CLOSING_PERIPHERAL -->|"Peripheral disconnected"| NONE
+    CLOSING_CENTRAL -->|"Central disconnected"| NONE
 ```
 
 ### DeduplicationState Enum

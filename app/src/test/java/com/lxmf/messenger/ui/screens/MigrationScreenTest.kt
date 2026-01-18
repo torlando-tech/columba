@@ -156,4 +156,19 @@ class MigrationScreenTest {
 
         composeTestRule.onNodeWithText("Export Data").assertIsDisplayed()
     }
+
+    // ========== Notification Permission Dialog Tests ==========
+
+    @Test
+    fun `notification permission dialog not shown initially`() {
+        composeTestRule.setContent {
+            MigrationScreen(
+                onNavigateBack = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Dialog should not be visible on initial screen load
+        composeTestRule.onNodeWithText("Enable Notifications?").assertDoesNotExist()
+    }
 }

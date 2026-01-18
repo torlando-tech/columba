@@ -571,24 +571,20 @@ sequenceDiagram
 ### Adaptive Scanning
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Active: Start scanning
+flowchart LR
+    subgraph Active["Active Mode"]
+        A1[Interval: 5s]
+        A2[BALANCED / LOW_LATENCY]
+    end
 
-    Active --> Active: New device discovered
-    Active --> Idle: 3 scans without new devices
+    subgraph Idle["Idle Mode"]
+        I1[Interval: 30s]
+        I2[LOW_POWER]
+    end
 
-    Idle --> Active: New device discovered
-    Idle --> Idle: No new devices
-
-    note right of Active
-        Interval: 5s
-        Mode: BALANCED or LOW_LATENCY
-    end note
-
-    note right of Idle
-        Interval: 30s
-        Mode: LOW_POWER
-    end note
+    Start([Start]) --> Active
+    Active -->|3 empty scans| Idle
+    Idle -->|New device found| Active
 ```
 
 ### Scan Configuration
@@ -597,8 +593,13 @@ stateDiagram-v2
 |-----------|--------|------|
 | Interval | 5 seconds | 30 seconds |
 | Duration | 10 seconds | 10 seconds |
-| Mode | `SCAN_MODE_BALANCED` | `SCAN_MODE_LOW_POWER` |
-| Threshold | 3 devices | 3 empty scans |
+| Mode | `BALANCED` / `LOW_LATENCY` | `LOW_POWER` |
+| Transition | 1 new device → stay Active | 3 empty scans → Idle |
+
+**Key implementation details** (BleScanner.kt lines 60-66, 354-358):
+- **LOW_LATENCY** mode activates when > 3 new devices discovered in one scan (high activity environment)
+- **BALANCED** mode is the default for active scanning
+- **LOW_POWER** mode after 3 consecutive scans find no new devices (stable environment)
 
 ### Advertising with Proactive Refresh
 
@@ -628,8 +629,10 @@ Advertising Data (31 bytes max):
 └── Service UUID (19 bytes for 128-bit UUID)
 
 Scan Response (31 bytes separate budget):
-└── Device Name: "RNS-{truncated_identity_hex}"
+└── Device Name: "RNS-{6_hex_chars}"  (e.g., "RNS-ab12cd")
 ```
+
+**Note**: Device name uses first 3 bytes of identity (6 hex chars) due to BLE payload limits. Full 16-byte identity is exchanged via GATT characteristic during connection handshake (Protocol v2.2).
 
 ---
 

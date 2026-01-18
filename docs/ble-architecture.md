@@ -345,7 +345,9 @@ flowchart LR
 
 ## Deduplication State Machine
 
-When the same identity is connected via both central and peripheral paths (dual connection).
+**Problem**: When two devices discover each other simultaneously, both may initiate connections — Device A connects to B (A becomes central), while B connects to A (B becomes central). This creates a "dual connection" where both devices have central AND peripheral connections to each other. Without deduplication, this wastes resources (2x connections, 2x data paths) and can cause duplicate packet delivery.
+
+**Solution**: When a dual connection is detected (`peer.isCentral && peer.isPeripheral`), compare identity hashes to deterministically choose which connection to keep. Both devices perform the same comparison, so they independently arrive at the same decision — one keeps central, the other keeps peripheral, and the redundant connections are closed.
 
 **Location**: `KotlinBLEBridge.handlePeerConnected()` — Kotlin layer only. Python is not involved in deduplication decisions.
 
@@ -353,7 +355,7 @@ When the same identity is connected via both central and peripheral paths (dual 
 stateDiagram-v2
     [*] --> NONE: Initial state
 
-    NONE --> DualDetected: Kotlin: peer.isCentral && peer.isPeripheral<br/>(line 1702)
+    NONE --> DualDetected: Kotlin\: peer.isCentral && peer.isPeripheral<br/>(line 1702)
 
     DualDetected --> DecisionPoint: Compare identity hashes
 

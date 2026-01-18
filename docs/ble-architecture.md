@@ -10,34 +10,35 @@ The BLE implementation follows a layered architecture with clear separation of c
 flowchart TB
     subgraph Python["Python Layer (ble-reticulum)"]
         BLEInterface["BLEInterface<br/>Protocol handler, fragmentation,<br/>peer lifecycle"]
+        BLEPeerInterface["BLEPeerInterface<br/>Per-peer Reticulum interface"]
         AndroidDriver["AndroidBLEDriver<br/>Chaquopy bridge to Kotlin"]
-                BLEPeerInterface["BLEPeerInterface<br/>Per-peer Reticulum interface"]
-
     end
 
     subgraph Kotlin["Kotlin Native Layer"]
-        OpQueue["BleOperationQueue<br/>Serialized GATT ops"]
         Bridge["KotlinBLEBridge<br/>Main entry point,<br/>PeerInfo tracking,<br/>deduplication"]
         Scanner["BleScanner<br/>Adaptive intervals,<br/>service filtering"]
         Advertiser["BleAdvertiser<br/>Identity naming,<br/>proactive refresh"]
         GattClient["BleGattClient<br/>Central mode,<br/>4-step handshake"]
         GattServer["BleGattServer<br/>Peripheral mode,<br/>GATT service"]
+        OpQueue["BleOperationQueue<br/>Serialized GATT ops"]
     end
 
     subgraph Android["Android BLE Stack"]
-            BluetoothAdapter["BluetoothAdapter"]
-
+        BluetoothAdapter["BluetoothAdapter"]
         BluetoothLeScanner["BluetoothLeScanner"]
         BluetoothLeAdvertiser["BluetoothLeAdvertiser"]
         BluetoothGatt["BluetoothGatt"]
         BluetoothGattServer["BluetoothGattServer"]
-        
     end
 
+    BLEInterface --> BLEPeerInterface
     BLEInterface --> AndroidDriver
     AndroidDriver -->|Chaquopy| Bridge
-    Bridge --> OpQueue
-    OpQueue --> BluetoothAdapter
+    Bridge --> Scanner
+    Bridge --> Advertiser
+    Bridge --> GattClient
+    Bridge --> GattServer
+    GattClient --> OpQueue
     Scanner --> BluetoothLeScanner
     Advertiser --> BluetoothLeAdvertiser
     GattClient --> BluetoothGatt
@@ -57,94 +58,6 @@ flowchart TB
 | Kotlin | `BleGattClient` | Central mode GATT operations |
 | Kotlin | `BleGattServer` | Peripheral mode GATT service |
 | Kotlin | `BleOperationQueue` | Serialized GATT operations (Android limitation) |
-
----
-
-## BLE Operation Queue
-
-Android's BLE stack does **not** queue operations internally. If you call multiple GATT operations in succession (e.g., `readCharacteristic()` then `writeDescriptor()`), the second operation fails silently. `BleOperationQueue` ensures serial execution with proper completion tracking.
-
-### Queue Architecture
-
-```mermaid
-flowchart LR
-    subgraph Callers["Multiple Callers"]
-        C1[GATT Client]
-        C2[Handshake]
-        C3[Data Send]
-    end
-
-    subgraph Queue["BleOperationQueue"]
-        Q[operationQueue<br/>Channel UNLIMITED]
-        P[Queue Processor<br/>Single coroutine]
-        Comp[operationCompletion<br/>Channel RENDEZVOUS]
-    end
-
-    subgraph BLE["Android BLE"]
-        BLE1[BluetoothGatt]
-    end
-
-    C1 --> Q
-    C2 --> Q
-    C3 --> Q
-    Q --> P
-    P --> BLE1
-    BLE1 -->|Callback| Comp
-    Comp -->|Unblock| P
-```
-
-### Operation Flow
-
-Operations follow one of two paths:
-
-1. **Synchronous operations** (e.g., `SetCharacteristicNotification`): Return `Success` or `Failure` immediately, queue processor moves to next operation.
-
-2. **Asynchronous operations** (e.g., `WriteCharacteristic`, `DiscoverServices`): Return `Pending`, queue processor blocks on `operationCompletion.receive()` until the GATT callback fires and calls `completeOperation()`.
-
-```mermaid
-sequenceDiagram
-    participant Caller
-    participant Queue as BleOperationQueue
-    participant BLE as Android BLE
-    participant Callback as GATT Callback
-
-    Caller->>Queue: enqueue(WriteCharacteristic)
-    Queue->>Queue: Create timeout job (5s)
-    Queue->>BLE: writeCharacteristic()
-    BLE-->>Queue: returns true (queued)
-    Queue->>Queue: Return Pending
-    Queue->>Queue: Block on operationCompletion.receive()
-
-    alt Success path
-        BLE-->>Callback: onCharacteristicWrite(SUCCESS)
-        Callback->>Queue: completeOperation(Success)
-        Queue->>Queue: Cancel timeout
-        Queue->>Queue: operationCompletion.trySend(Unit)
-        Queue-->>Caller: Resume with Success
-    else Timeout path
-        Note over Queue: 5 seconds pass
-        Queue->>Queue: Resume with TimeoutException
-        Queue->>Queue: operationCompletion.trySend(Unit)
-        Note over Queue: CRITICAL: Must signal completion<br/>or queue deadlocks forever
-    end
-
-    Queue->>Queue: Process next operation
-```
-
-### Completion Signaling (Critical)
-
-The queue processor blocks on `operationCompletion.receive()` for async operations. **Every code path that ends an async operation must signal completion**:
-
-| Code Path | Signal Location |
-|-----------|-----------------|
-| GATT callback success | `completeOperation()` line 272 |
-| GATT callback failure | `completeOperation()` line 272 |
-| Timeout | Timeout handler line 209 |
-| Exception during execution | Exception handler line 231 |
-
-**Failure to signal causes global queue deadlock**: All subsequent operations for ALL connections will timeout without executing, because the single queue processor is stuck waiting.
-
-**Key code reference**: `BleOperationQueue.kt` — queue processor (lines 158-180), enqueue (lines 189-244), completeOperation (lines 252-273)
 
 ---
 
@@ -209,47 +122,41 @@ When this device discovers and connects to a peripheral:
 
 ```mermaid
 sequenceDiagram
-    box rgb(30, 73, 102) Kotlin Native Layer
     participant Scan as BleScanner
     participant Bridge as KotlinBLEBridge
     participant Client as BleGattClient
-    end
     participant Peer as Remote Peripheral
-    box rgb(55, 118, 71) Python Layer
     participant Python as AndroidBLEDriver
-    end
 
     Scan->>Bridge: onDeviceDiscovered(address, rssi)
     Bridge->>Bridge: shouldConnect(address)?
     Note over Bridge: MAC comparison:<br/>our MAC < peer MAC = connect
     Bridge->>Client: connect(address)
 
-    Note over Client,Peer: GATT Connection Setup
-    Client->>Peer: connectGatt()
-    Peer-->>Client: onConnectionStateChange(CONNECTED)
-    Client->>Peer: discoverServices()
-    Peer-->>Client: onServicesDiscovered()
+    rect rgb(230, 245, 255)
+        Note over Client,Peer: 4-Step GATT Handshake
+        Client->>Peer: 1. connectGatt()
+        Peer-->>Client: onConnectionStateChange(CONNECTED)
+        Client->>Peer: 2. discoverServices()
+        Peer-->>Client: onServicesDiscovered()
 
-    rect rgb(147, 112, 219)
-        Note over Client,Peer: Identity Handshake (Protocol v2.2)
-        Client->>Peer: Step 1: Read Identity Characteristic
+        Client->>Peer: Read Identity Characteristic
         Peer-->>Client: 16-byte identity hash
         Client->>Bridge: onIdentityReceived(address, hash)
 
-        Client->>Peer: Step 2: requestMtu(517)
+        Client->>Peer: 3. requestMtu(517)
         Peer-->>Client: onMtuChanged(negotiated_mtu)
 
-        Client->>Peer: Step 3: Enable CCCD notifications
+        Client->>Peer: 4. Enable CCCD notifications
         Peer-->>Client: onDescriptorWrite(success)
 
-        Client->>Peer: Step 4: Write our identity to RX
+        Client->>Peer: Write our identity to RX
         Peer-->>Client: onCharacteristicWrite(success)
     end
 
-    Client->>Bridge: onConnected(address, mtu)
-    Note over Bridge: Retrieves stored identity<br/>from addressToIdentity map
-    Bridge->>Python: onConnected(address, mtu, role, identity)
-    Python->>Python: _spawn_peer_interface<br/>(address, identity, mtu, role)
+    Client->>Bridge: onConnected(address, mtu, identity)
+    Bridge->>Python: onConnected callback
+    Python->>Python: Spawn BLEPeerInterface
 ```
 
 ### Peripheral Mode Connection Sequence
@@ -259,39 +166,37 @@ When a remote central connects to us:
 ```mermaid
 sequenceDiagram
     participant Central as Remote Central
-    box rgb(30, 73, 102) Kotlin Native Layer
     participant Server as BleGattServer
     participant Bridge as KotlinBLEBridge
-    end
-    box rgb(55, 118, 71) Python Layer
     participant Python as AndroidBLEDriver
-    end
 
     Central->>Server: connectGatt()
     Server->>Server: onConnectionStateChange(CONNECTED)
     Server->>Bridge: onCentralConnected(address, MIN_MTU)
-    Note over Bridge: Tracks as pending connection<br/>(awaiting identity from central)
+    Note over Bridge: Track as pending connection<br/>(identity not yet received)
 
     Central->>Server: discoverServices()
     Central->>Server: Read Identity Characteristic
     Server-->>Central: Our 16-byte identity
 
     Central->>Server: requestMtu()
+    Server->>Server: onMtuChanged()
     Server->>Bridge: onMtuChanged(address, mtu)
 
     Central->>Server: Enable CCCD notifications
 
-    rect rgb(147, 112, 219)
-        Note over Central,Python: Identity Handshake (Protocol v2.2)
+    rect rgb(255, 245, 230)
+        Note over Central,Server: Identity Handshake
         Central->>Server: Write 16 bytes to RX
-        Server->>Bridge: onDataReceived(address, data)
-        Bridge->>Python: on_data_received(address, data)
-        Python->>Python: _handle_identity_handshake()<br/>Detect: len=16, no existing identity
-        Note over Python: Store identity mapping:<br/>address_to_identity[addr] = bytes<br/>identity_to_address[hash] = addr<br/>
-        Note over Python: Create fragmenter/reassembler<br/>key = identity.hex() (32 chars)<br/>fragmenters[key] = BLEFragmenter(mtu)<br/>reassemblers[key] = BLEReassembler()
+        Server->>Server: Detect: len=16, no existing identity
+        Server->>Bridge: onIdentityReceived(address, hash)
+        Server->>Bridge: onDataReceived(address, identity_bytes)
     end
 
-    Python->>Python: _spawn_peer_interface<br/>(address, identity, mtu, role)
+    Bridge->>Bridge: Complete connection with identity
+    Bridge->>Python: onConnected(address, mtu, "peripheral", identity)
+    Bridge->>Python: onIdentityReceived(address, hash)
+    Python->>Python: Spawn BLEPeerInterface
 ```
 
 ### Defensive Recovery for Missed onConnectionStateChange
@@ -330,8 +235,6 @@ sequenceDiagram
 
 **Key log message**: `"DEFENSIVE RECOVERY: Data received from {address} but onConnectionStateChange was never called!"`
 
-**Key code reference**: `BleGattServer.handleCharacteristicWriteRequest()` lines 721-748
-
 ---
 
 ## Identity Protocol (v2.2)
@@ -350,13 +253,13 @@ sequenceDiagram
     Note over C: Connect as GATT client
     C->>P: Read Identity Characteristic
     P-->>C: Peripheral's 16-byte identity
-    Note over C: Store bidirectional mapping:<br/>address_to_identity[addr] = bytes<br/>identity_to_address[hash] = addr
+    Note over C: Store: address → identity
 
     C->>P: Write 16 bytes to RX Characteristic
     Note over P: Detect identity handshake:<br/>exactly 16 bytes, no existing identity
-    Note over P: Store bidirectional mapping:<br/>address_to_identity[addr] = bytes<br/>identity_to_address[hash] = addr
+    Note over P: Store: address → identity
 
-    Note over C,P: Both sides now have<br/>bidirectional identity ↔ address mapping
+    Note over C,P: Both sides now have<br/>identity ↔ address mapping
 ```
 
 ### Identity Tracking Data Structures
@@ -364,183 +267,121 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph Python["Python (BLEInterface)"]
-        P_A2I["address_to_identity<br/>MAC → 16 bytes"]
-        P_I2A["identity_to_address<br/>16-char hex → MAC"]
-        P_SI["spawned_interfaces<br/>16-char hex → BLEPeerInterface"]
-        P_Cache["_identity_cache<br/>MAC → (16 bytes, timestamp)<br/>TTL: 60s"]
+        P_A2I["address_to_identity<br/>MAC → 16-byte identity"]
+        P_I2A["identity_to_address<br/>hash → MAC"]
+        P_SI["spawned_interfaces<br/>hash → BLEPeerInterface"]
+        P_Cache["_identity_cache<br/>MAC → (identity, timestamp)<br/>TTL: 60s"]
     end
 
     subgraph Kotlin["Kotlin (KotlinBLEBridge)"]
-        K_A2I["addressToIdentity<br/>MAC → 16 bytes<br/>(central mode only)"]
-        K_I2A["identityToAddress<br/>16-char hex → MAC<br/>(central mode only)"]
+        K_A2I["addressToIdentity<br/>MAC → 32-char hex"]
+        K_I2A["identityToAddress<br/>hex → MAC"]
         K_Peers["connectedPeers<br/>MAC → PeerConnection"]
         K_Pending["pendingConnections<br/>MAC → PendingConnection"]
     end
 
-    K_A2I -.->|"central mode: populates"| P_A2I
-    K_I2A -.->|"central mode: populates"| P_I2A
+    P_A2I -.->|sync| K_A2I
+    P_I2A -.->|sync| K_I2A
 ```
-
-> **Note on 16-char hex keys:** Maps like `identity_to_address` and `spawned_interfaces` use truncated 64-bit keys (16 hex chars) for shorter log output. Birthday collision risk is ~2³² (~4 billion) identities — astronomically safe for BLE mesh networks with <100 peers. Fragmenter/reassembler keys use full 32-char hex for maximum precision in packet reassembly.
-
-**Identity detection by connection role:**
-| Role | Who Detects | How |
-|------|-------------|-----|
-| Central (we connect to them) | Kotlin (GattClient) | Reads Identity Characteristic |
-| Peripheral (they connect to us) | Python (BLEInterface) | Detects 16-byte write to RX |
 
 ### MAC Rotation Handling
 
-**Problem:** Android devices rotate their BLE MAC address every ~15 minutes for privacy. This breaks naive address-based peer tracking — the same physical device appears as a "new" peer after rotation.
+When a peer reconnects with a new MAC address, the handling differs by connection mode:
 
-**Solution:** Use the 16-byte Reticulum identity (exchanged during handshake) as the stable peer identifier. When a new connection arrives with a known identity but different MAC, migrate all address-based mappings to the new MAC while preserving the peer interface and fragmenter state.
-
-**Important:** Identity detection differs by connection role:
-- **Central mode** (we connect to peer): Kotlin reads Identity Characteristic → `handleIdentityReceived`
-- **Peripheral mode** (peer connects to us): Python detects 16-byte handshake → `_handle_identity_handshake`
-
-**Central mode flow** (we connect to peer with new MAC):
+#### Overview
 
 ```mermaid
 flowchart TD
-    A[We connect to MAC_NEW<br/>Read Identity Characteristic] --> B[Kotlin: handleIdentityReceived]
-    B --> C{Kotlin: onDuplicateIdentityDetected?<br/>Calls Python _check_duplicate_identity<br/>Returns: bool}
-    C -->|"Returns True<br/>(identity already at different MAC)"| D[Reject: disconnect MAC_NEW<br/>Log: Duplicate identity rejected]
-    C -->|"Returns False or no callback"| E[Allow: continue processing]
-
-    E --> F{Kotlin: existingAddress =<br/>identityToAddress‹hash›}
-
-    F -->|"null<br/>(new identity)"| G[shouldUpdate = true]
-    F -->|"MAC_OLD exists"| H{Is MAC_OLD actually connected?<br/>gattClient.isConnected‹MAC_OLD›}
-
-    H -->|"No, or MAC_NEW has central"| G
-    H -->|"Yes, and MAC_NEW lacks central"| I[shouldUpdate = false<br/>Keep MAC_OLD as primary]
-
-    G --> J[Update identityToAddress‹hash› = MAC_NEW]
-    J --> K{existingAddress ≠ null<br/>AND existingAddress ≠ MAC_NEW?}
-    K -->|Yes| L[Kotlin: onAddressChanged‹MAC_OLD, MAC_NEW›]
-    K -->|No| M[No address change notification]
-
-    I --> N[Keep identityToAddress‹hash› = MAC_OLD]
-
-    L --> O[Python: _address_changed_callback<br/>Migrate peer mappings]
-
-    N --> P[Always: addressToIdentity‹MAC_NEW› = hash]
-    M --> P
-    O --> P
+    A[New connection from MAC_NEW] --> B{Identity received?}
+    B -->|Yes| C[Compute identity_hash]
+    C --> D{identity_hash in identityToAddress?}
+    D -->|Yes, points to MAC_OLD| E[MAC Rotation Detected]
+    E --> F{Is MAC_OLD still connected?}
+    F -->|No| G[Clean up stale mappings]
+    G --> H[Update: identity → MAC_NEW]
+    F -->|Yes| I[Dual connection - deduplicate]
+    D -->|No| J[New identity - normal flow]
+    B -->|No, peripheral| K[Wait for handshake]
 ```
 
-**Key code reference**: `KotlinBLEBridge.handleIdentityReceived()` lines 1997-2150
+#### Central Mode Flow (We Connect to Them)
 
-**Peripheral mode flow** (peer with new MAC connects to us):
+Identity is received via GATT read of Identity Characteristic, then processed in Kotlin's `handleIdentityReceived`:
+
+```mermaid
+flowchart TD
+    A[We connect to MAC_NEW<br/>Read Identity Characteristic] --> B[Kotlin: handleIdentityReceived<br/>Gets 16-byte identity from GATT read]
+    B --> C{Kotlin: onDuplicateIdentityDetected?<br/>Calls Python callback if set}
+    C -->|Callback returns True<br/>identity already at different MAC| D[Reject: disconnect MAC_NEW<br/>Log: Duplicate identity rejected]
+    C -->|Callback returns False<br/>new identity or same MAC| E[Allow connection to proceed]
+    C -->|No callback set| E
+
+    E --> F[Kotlin: Store addressToIdentity‹MAC_NEW›]
+    F --> G{Kotlin: identityToAddress‹hash› exists?}
+    G -->|"No (new identity)"| H[Store identityToAddress‹hash› = MAC_NEW<br/>Notify Python: onConnected]
+    G -->|"Yes, = MAC_OLD"| I[Keep MAC_OLD as primary in identityToAddress<br/>Still store addressToIdentity‹MAC_NEW›<br/>Notify Python: onConnected]
+```
+
+**Key code reference**: `KotlinBLEBridge.handleIdentityReceived()` (duplicate identity check requires `onDuplicateIdentityDetected` callback)
+
+#### Peripheral Mode Flow (They Connect to Us)
+
+Identity is received via 16-byte write to RX characteristic, detected in Python's `_handle_identity_handshake`:
 
 ```mermaid
 flowchart TD
     A[MAC_NEW connects to us<br/>Writes 16-byte identity to RX] --> B{Python: _handle_identity_handshake<br/>Entry check: len=16 AND<br/>no address_to_identity‹MAC_NEW›}
-    B -->|Check fails| Z[Return False: not a handshake<br/>Pass to normal data handler]
-    B -->|Check passes| C{Python: _check_duplicate_identity<br/>identity_to_address‹hash› = MAC_OLD?}
+    B -->|Check fails| Z[Not a handshake, pass to data handler]
+    B -->|Check passes| C{Python: _check_duplicate_identity<br/>Returns: True if duplicate, False otherwise}
 
-    C -->|"No MAC_OLD or<br/>MAC_OLD = MAC_NEW"| E[Allow: continue processing]
-    C -->|"MAC_OLD exists and<br/>MAC_OLD ≠ MAC_NEW"| C2{Is old connection alive?}
+    C -->|"Returns True<br/>(identity_to_address‹hash› = MAC_OLD<br/>AND MAC_OLD ≠ MAC_NEW)"| D[Reject: driver.disconnect‹MAC_NEW›<br/>Log: duplicate identity rejected<br/>Return True: handshake consumed]
+    C -->|"Returns False<br/>(new identity OR same MAC)"| E[Allow: continue processing]
 
-    C2 -->|"pending_detach‹hash› exists<br/>(old connection gone)"| C3[Cleanup stale MAC_OLD<br/>Allow reconnection]
-    C2 -->|"MAC_OLD not in connected_peers<br/>AND not in peers"| C3
-    C2 -->|"MAC_OLD still connected"| D[Reject: driver.disconnect‹MAC_NEW›<br/>Log: duplicate identity rejected<br/>Return True: handshake consumed]
-
-    C3 --> E
-
-    E --> F[Store mappings unconditionally:<br/>address_to_identity‹MAC_NEW› = identity<br/>identity_to_address‹hash› = MAC_NEW]
+    E --> F[Store address_to_identity‹MAC_NEW› = identity<br/>Store identity_to_address‹hash› = MAC_NEW]
     F --> G{spawned_interfaces‹hash› exists?}
-    G -->|No| H[Create new BLEPeerInterface<br/>via _spawn_peer_interface]
+    G -->|No| H[Create new BLEPeerInterface<br/>Store in spawned_interfaces‹hash›]
     G -->|Yes| I{existing.peer_address ≠ MAC_NEW?}
     I -->|Yes| J[Update existing interface:<br/>peer_address = MAC_NEW<br/>address_to_interface‹MAC_NEW› = interface]
-    I -->|No| K[No update needed<br/>Same address already set]
+    I -->|No| K[No update needed, same address]
 ```
 
-**Key code reference**: `BLEInterface._handle_identity_handshake()` lines 1108-1200
+**Key code reference**: `BLEInterface._handle_identity_handshake()` at lines 1108-1200
 
-**On disconnect (MAC_OLD disconnects while MAC_NEW still connected):**
-```mermaid
-flowchart LR
-    A[MAC_OLD disconnects] --> B{Identity still<br/>connected at MAC_NEW?}
-    B -->|Yes| C[Cache: staleAddressToIdentity<br/>MAC_OLD → identity]
-    B -->|No| D[Clean up all mappings<br/>for this identity]
-```
+#### Return Value Clarification
 
-**Key behaviors:**
-- **Early rejection (both modes)**: `_check_duplicate_identity` rejects if identity already connected at different MAC **AND the old connection is still alive** — works in both central mode (via Kotlin callback) and peripheral mode (in `_handle_identity_handshake`). Crucially, if the old connection has `pending_detach` scheduled or is no longer in `connected_peers`/`peers`, the reconnection is **allowed** (stale entry cleanup).
-- **Central preference**: Kotlin prefers mappings with live central connections (more reliable for sending)
-- **Stale cache**: On disconnect, `staleAddressToIdentity` caches old address → identity, allowing `send()` to resolve old addresses during transition
-- **Fragmenter/Reassembler unaffected**: Keyed by identity (32-char hex), not address — they continue working across MAC rotations without migration
+The `_check_duplicate_identity` function returns a **boolean**, not a MAC address:
 
-### Identity Timeout Handling
-
-**Problem:** Non-Reticulum BLE devices (AirTags, fitness trackers, BLE scanners) may connect to our GATT server but never send the 16-byte identity handshake. Without cleanup, these connections would persist indefinitely, consuming resources and cluttering connection tracking.
-
-**Solution:** Track peripheral-mode connections in `_pending_identity_connections` with their connect timestamp. A periodic cleanup timer (30s interval) disconnects any connection that hasn't received an identity within the timeout period (30s).
-
-```mermaid
-flowchart TD
-    subgraph Connection["New Peripheral Connection"]
-        A[Central connects to us<br/>role = peripheral] --> B{Identity received<br/>with connection?}
-        B -->|Yes| C[Process normally<br/>Skip timeout tracking]
-        B -->|No| D[Add to _pending_identity_connections<br/>address → timestamp]
-    end
-
-    subgraph Cleanup["Periodic Cleanup Timer (30s interval)"]
-        E[Timer fires] --> F[For each pending connection]
-        F --> G{elapsed > 30s?}
-        G -->|Yes| H[Log timeout warning<br/>Disconnect address<br/>Remove from pending]
-        G -->|No| I[Keep waiting]
-    end
-
-    subgraph Success["Identity Handshake Received"]
-        J[16-byte write to RX<br/>_handle_identity_handshake] --> K[Remove from<br/>_pending_identity_connections]
-        K --> L[Continue normal<br/>connection setup]
-    end
-
-    D -.->|"If handshake arrives"| J
-    D -.->|"If timeout expires"| G
-```
-
-**Key code references:**
-- Tracking: `BLEInterface._on_device_connected_callback()` — adds to `_pending_identity_connections` for peripheral role
-- Cleanup: `BLEInterface._cleanup_pending_identity_connections()` — called by periodic timer
-- Removal: `BLEInterface._handle_identity_handshake()` — removes on successful handshake
-
-**Configuration:**
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `_pending_identity_timeout` | 30s | Max wait time for identity handshake |
-| Cleanup timer interval | 30s | How often to check for timeouts |
-
-**Common timeout causes:**
-- Non-Reticulum devices connecting (AirTags, scanners)
-- Network congestion delaying handshake
-- Central disconnecting before sending identity
-- BLE stack issues on connecting device
+| Condition | Return Value | Meaning |
+|-----------|--------------|---------|
+| `identity_to_address[hash]` not found | `False` | New identity, allow |
+| `identity_to_address[hash]` = MAC_NEW | `False` | Same MAC, allow |
+| `identity_to_address[hash]` = MAC_OLD (≠ MAC_NEW) | `True` | Duplicate, reject |
 
 ---
 
 ## Deduplication State Machine
 
-**Problem**: When two devices discover each other simultaneously, both may initiate connections — Device A connects to B (A becomes central), while B connects to A (B becomes central). This creates a "dual connection" where both devices have central AND peripheral connections to each other. Without deduplication, this wastes resources (2x connections, 2x data paths) and can cause duplicate packet delivery.
-
-**Solution**: When a dual connection is detected (`peer.isCentral && peer.isPeripheral`), compare identity hashes to deterministically choose which connection to keep. Both devices perform the same comparison, so they independently arrive at the same decision — one keeps central, the other keeps peripheral, and the redundant connections are closed.
-
-**Location**: `KotlinBLEBridge.handlePeerConnected()` — Kotlin layer only. Python is not involved in deduplication decisions.
+When the same identity is connected via both central and peripheral paths:
 
 ```mermaid
-flowchart TD
-    Start(( )) -->|Initial state| NONE[NONE]
+stateDiagram-v2
+    [*] --> NONE: Initial state
 
-    NONE -->|"peer.isCentral && peer.isPeripheral<br/>(KotlinBLEBridge.kt:1702)"| Decision{Compare identity hashes}
+    NONE --> DualDetected: Same identity on both paths
 
-    Decision -->|"our identity > peer"| CLOSING_CENTRAL[CLOSING_CENTRAL<br/>Keep peripheral]
-    Decision -->|"our identity < peer"| CLOSING_PERIPHERAL[CLOSING_PERIPHERAL<br/>Keep central]
+    DualDetected --> DecisionPoint: Determine which to keep
 
-    CLOSING_CENTRAL -->|"Central disconnected"| NONE2[NONE]
-    CLOSING_PERIPHERAL -->|"Peripheral disconnected"| NONE2
+    DecisionPoint --> CLOSING_CENTRAL: Keep peripheral<br/>(our MAC > peer MAC)
+    DecisionPoint --> CLOSING_PERIPHERAL: Keep central<br/>(our MAC < peer MAC)
+
+    CLOSING_CENTRAL --> NONE: Central disconnected
+    CLOSING_PERIPHERAL --> NONE: Peripheral disconnected
+
+    note right of DecisionPoint
+        Decision based on MAC comparison:
+        - Lower MAC = central role
+        - Higher MAC = peripheral role
+    end note
 ```
 
 ### DeduplicationState Enum
@@ -553,67 +394,32 @@ enum class DeduplicationState {
 }
 ```
 
-### Deduplication Flow (Kotlin Layer)
-
-All deduplication logic runs in `KotlinBLEBridge.kt`:
+### Deduplication Flow
 
 ```mermaid
 sequenceDiagram
     participant Bridge as KotlinBLEBridge
     participant Client as BleGattClient
     participant Server as BleGattServer
+    participant Python as AndroidBLEDriver
 
-    Note over Bridge: handlePeerConnected() detects:<br/>peer.isCentral && peer.isPeripheral (line 1702)
+    Note over Bridge: Dual connection detected<br/>Same identity on both paths
 
-    alt peerIdentity == null OR localIdentityBytes == null
-        Note over Bridge: Identity not yet available<br/>Deduplication deferred (line 1724-1726)
-    else Both identities available
-        Bridge->>Bridge: Compare identity hashes<br/>localIdentityHex vs peerIdentity (line 1711)
-        alt localIdentityHex < peerIdentity (we keep central)
-            Bridge->>Bridge: Set state = CLOSING_PERIPHERAL
-            Bridge->>Bridge: Set dedupeAction = CLOSE_PERIPHERAL
-        else localIdentityHex > peerIdentity (we keep peripheral)
-            Bridge->>Bridge: Set state = CLOSING_CENTRAL
-            Bridge->>Bridge: Set dedupeAction = CLOSE_CENTRAL
-        end
-
-        Bridge->>Bridge: Add peerIdentity to<br/>recentlyDeduplicatedIdentities (cooldown)
-    end
-
-    Note over Bridge: Execute disconnect outside mutex (line 1764)
-
-    alt dedupeAction == CLOSE_CENTRAL
-        Bridge->>Client: disconnect(address)
-    else dedupeAction == CLOSE_PERIPHERAL
+    Bridge->>Bridge: Compare MAC addresses
+    alt Our MAC < Peer MAC (we should be central)
+        Bridge->>Bridge: Set state = CLOSING_PERIPHERAL
         Bridge->>Server: disconnectCentral(address)
+        Bridge->>Python: onAddressChanged(peripheral_addr, central_addr, identity)
+    else Our MAC > Peer MAC (we should be peripheral)
+        Bridge->>Bridge: Set state = CLOSING_CENTRAL
+        Bridge->>Client: disconnect(address)
+        Bridge->>Python: onAddressChanged(central_addr, peripheral_addr, identity)
     end
 
-    Note over Bridge: On disconnect callback:<br/>state returns to NONE (lines 1800-1810)
+    Note over Python: Update address mappings<br/>Migrate fragmenter keys
+
+    Bridge->>Bridge: Set state = NONE
 ```
-
-**Key code reference**: `KotlinBLEBridge.handlePeerConnected()` lines 1701-1775
-
-**Note**: Deduplication does NOT call `onAddressChanged`. Python is notified via the normal `onConnected` callback, and Python handles its own deduplication logic if needed. The `onAddressChanged` callback is only used for MAC rotation address migration in `handleIdentityReceived`.
-
-### Reconnection Cooldown (`recentlyDeduplicatedIdentities`)
-
-**Problem**: Without a cooldown, deduplication causes a reconnection storm:
-1. We connect as central to Device B
-2. Device B connects to us → dual connection detected
-3. Deduplication closes our central, keeps their peripheral
-4. Scanner rediscovers Device B → immediately reconnects as central
-5. Dual connection again → repeat forever
-
-**Solution**: After deduplication, add the peer's identity to `recentlyDeduplicatedIdentities` with a 60-second cooldown. The scanner checks this list before connecting — if the device name prefix matches a recently deduplicated identity, skip it.
-
-| Event | Action |
-|-------|--------|
-| Deduplication closes central | Add identity to cooldown (line 1722) |
-| Scanner discovers device | Check if name matches cooldown list (lines 993-1015) |
-| 60 seconds pass | Entry expires, reconnection allowed |
-| Identity fully disconnects | Remove from cooldown immediately (line 1830) |
-
-**Important**: The cooldown is only removed when the identity is *fully* disconnected (no connections remain at any address). While the peripheral connection is still active, the cooldown persists to prevent reconnection storms.
 
 ---
 
@@ -625,34 +431,25 @@ sequenceDiagram
 flowchart TB
     subgraph Python["Python Layer"]
         A[BLEPeerInterface.process_outgoing] --> B[Get fragmenter by identity_key]
-        B --> C[fragmenter.fragment_packet]
+        B --> C[BLEFragmenter.fragment]
         C --> D["Fragments with header:<br/>type(1) + seq(2) + total(2)"]
-        D --> E["driver.send(peer_address, fragment)"]
+        D --> E[AndroidBLEDriver.send]
     end
 
     subgraph Kotlin["Kotlin Layer"]
         E --> F[KotlinBLEBridge.sendAsync]
-        F --> G{Resolve address via identity<br/>if peer not found}
-        G --> H{"useCentral?<br/>(isCentral && state != CLOSING_CENTRAL)"}
+        F --> G{Check deduplicationState}
+        G -->|NONE| H{isCentral?}
+        G -->|CLOSING_*| I[Block send - in transition]
         H -->|Yes| J[GattClient.sendData]
-        H -->|No| I{"usePeripheral?<br/>(isPeripheral && state != CLOSING_PERIPHERAL)"}
-        I -->|Yes| K[GattServer.notifyCentrals]
-        I -->|No| L{deduplicationState != NONE?}
-        L -->|Yes| M[Log warning, PACKET DROPPED]
-        L -->|No| N[Silent no-op, PACKET DROPPED<br/>Invalid state]
-        J --> O[Write to RX characteristic]
-        K --> P[Notify via TX characteristic]
+        H -->|No| K[GattServer.notifyCentrals]
+        J --> L[Write to RX characteristic]
+        K --> M[Notify via TX characteristic]
     end
 
-    O --> Q[Remote peripheral receives]
-    P --> R[Remote central receives]
+    L --> N[Remote peripheral receives]
+    M --> O[Remote central receives]
 ```
-
-**Key implementation details** (KotlinBLEBridge.kt lines 1255-1325):
-- Address resolution handles MAC rotation by looking up the current address via identity mappings
-- During deduplication, only the *closing* path is blocked—the other path continues to work
-- For example, during `CLOSING_CENTRAL`, the peripheral path is still available for sending
-- **Packet loss during deduplication**: If both paths are blocked (rare edge case where peer has dual connection but both are closing), packets are dropped with a warning log. This window is brief—once disconnect completes, the remaining path resumes. Reticulum's transport layer handles retransmission if needed.
 
 ### Receiving Data (BLE → Python)
 
@@ -668,33 +465,23 @@ flowchart TB
         B -->|Peripheral| D[onCharacteristicWriteRequest]
         C --> E[Bridge.handleDataReceived]
         D --> E
-        E --> F{Fragment size valid?}
-        F -->|No, > MAX_BLE_PACKET_SIZE| G[Log warning, discard]
-        F -->|Yes| H[Update peer.lastActivity]
-        H --> I[Forward ALL data to Python]
+        E --> F{First 16 bytes, no identity?}
+        F -->|Yes| G[Identity handshake - store]
+        F -->|No| H[Forward to Python]
     end
 
     subgraph Python["Python Layer"]
-        I --> J[BLEInterface._data_received_callback]
-        J --> K{_handle_identity_handshake?}
-        K -->|Yes, 16 bytes, no identity| L[Store identity mapping<br/>Return early]
-        K -->|No| M[_handle_ble_data]
-        M --> N{1-byte keepalive 0x00?}
-        N -->|Yes| O[Ignore keepalive]
-        N -->|No| P[Get reassembler by frag_key]
-        P --> Q[reassembler.receive_fragment]
-        Q --> R{Complete packet?}
-        R -->|Yes| S[peer_interface.process_incoming]
-        R -->|No| T[Wait for more fragments]
+        H --> I[AndroidBLEDriver._handle_data_received]
+        I --> J{Check identity handshake}
+        J -->|Yes, 16 bytes| K[_handle_identity_handshake]
+        J -->|No| L[_handle_ble_data]
+        L --> M[Get reassembler by identity_key]
+        M --> N[BLEReassembler.add_fragment]
+        N --> O{Complete packet?}
+        O -->|Yes| P[BLEPeerInterface.process_incoming]
+        O -->|No| Q[Wait for more fragments]
     end
 ```
-
-**Key implementation details** (KotlinBLEBridge.kt lines 1964-2013, BLEInterface.py lines 1108-1970):
-- Kotlin validates fragment size against `MAX_BLE_PACKET_SIZE` before processing
-- `lastActivity` timestamp is updated for keepalive tracking (handles MAC rotation via identity lookup)
-- Python filters 1-byte `0x00` keepalive packets—these are Android BLE supervision timeout prevention
-- Identity handshake detection: exactly 16 bytes when no identity is stored
-- If identity not found, Python tries the `_identity_cache` before requesting driver resync
 
 ---
 
@@ -704,14 +491,12 @@ Android BLE connections timeout after 20-30 seconds of inactivity. Both layers i
 
 ```mermaid
 sequenceDiagram
-    participant Client as BleGattClient<br/>(Central)
+    participant Client as BleGattClient
     participant Timer as Keepalive Timer<br/>(15s interval)
     participant Peer as Remote Peripheral
 
     Note over Client: Connection established
     Client->>Timer: Start keepalive job
-    Client->>Peer: Write 0x00 immediately
-    Note over Client: Prevents early timeout
 
     loop Every 15 seconds
         Timer->>Client: Send keepalive
@@ -737,46 +522,7 @@ sequenceDiagram
 | Max failures | 3 | `BleConstants.MAX_CONNECTION_FAILURES` |
 | Packet | `0x00` (1 byte) | Minimal overhead |
 
-**Key implementation details** (BleGattClient.kt lines 1081-1181, BleGattServer.kt lines 1000-1060):
-- Both sides send an **immediate first keepalive** on connection, then continue at 15s intervals
-- **Central (BleGattClient)**: Tracks `consecutiveKeepaliveFailures`, disconnects after 3 failures
-- **Peripheral (BleGattServer)**: Fire-and-forget notifications—no failure tracking or disconnect logic
-- This asymmetry is intentional: the central manages connection lifecycle, the peripheral just keeps it alive
-
-### Keepalive Job Lifecycle
-
-Keepalive jobs are coroutines that run independently from connection state. Proper cleanup is critical to prevent orphaned jobs.
-
-**Problem**: If `disconnectCentral()` removes an address from `connectedCentrals` without stopping the keepalive job, the job continues running forever. Each keepalive attempt fails with "No connected centrals" (since the address is gone), creating log spam and wasting resources.
-
-**Solution**:
-
-1. **Explicit cleanup in `disconnectCentral()`**: Call `stopPeripheralKeepalive(address)` **before** removing from `connectedCentrals`. This is critical because `cancelConnection()` doesn't reliably trigger `onConnectionStateChange`, so the normal disconnect handler may never run. See `BleGattServer.kt` line 477.
-
-2. **Defensive loop exit**: The keepalive loop checks for "No connected centrals" errors and breaks out if the target is no longer tracked. This is a safety net for cases where cleanup is missed. See `BleGattServer.kt` lines 1045-1048.
-
-```mermaid
-flowchart TD
-    A[disconnectCentral called] --> A2[gattServer.cancelConnection]
-    A2 --> B[stopPeripheralKeepalive]
-    B --> C[Cancel keepalive Job]
-    C --> D[Remove from peripheralKeepaliveJobs]
-    D --> E[Remove from connectedCentrals]
-    E --> E2[Remove from centralMtus, addressToIdentity]
-    E2 --> F[Fire onCentralDisconnected callback]
-
-    subgraph Defensive["Defensive Loop Exit (safety net)"]
-        G[Keepalive attempt] --> H{notifyCentrals result}
-        H -->|Success| I[Continue loop]
-        H -->|"No connected centrals"| J[Log warning, break loop]
-        H -->|Other error| K[Log warning, continue loop]
-    end
-```
-
-**Key code references**:
-- Cleanup: `BleGattServer.disconnectCentral()` line 477
-- Defensive exit: `BleGattServer.startPeripheralKeepalive()` lines 1045-1048
-- Stop function: `BleGattServer.stopPeripheralKeepalive()` lines 1067-1073
+Both `BleGattClient` (central) and `BleGattServer` (peripheral) maintain independent keepalive mechanisms.
 
 ---
 
@@ -785,20 +531,24 @@ flowchart TD
 ### Adaptive Scanning
 
 ```mermaid
-flowchart LR
-    subgraph Active["Active Mode"]
-        A1[Interval: 5s]
-        A2[BALANCED / LOW_LATENCY]
-    end
+stateDiagram-v2
+    [*] --> Active: Start scanning
 
-    subgraph Idle["Idle Mode"]
-        I1[Interval: 30s]
-        I2[LOW_POWER]
-    end
+    Active --> Active: New device discovered
+    Active --> Idle: 3 scans without new devices
 
-    Start([Start]) --> Active
-    Active -->|3 empty scans| Idle
-    Idle -->|New device found| Active
+    Idle --> Active: New device discovered
+    Idle --> Idle: No new devices
+
+    note right of Active
+        Interval: 5s
+        Mode: BALANCED or LOW_LATENCY
+    end note
+
+    note right of Idle
+        Interval: 30s
+        Mode: LOW_POWER
+    end note
 ```
 
 ### Scan Configuration
@@ -807,19 +557,10 @@ flowchart LR
 |-----------|--------|------|
 | Interval | 5 seconds | 30 seconds |
 | Duration | 10 seconds | 10 seconds |
-| Mode | `BALANCED` / `LOW_LATENCY` | `LOW_POWER` |
-| Transition | 1 new device → stay Active | 3 empty scans → Idle |
-
-**Key implementation details** (BleScanner.kt lines 60-66, 354-358):
-- **LOW_LATENCY** mode activates when > 3 new devices discovered in one scan (high activity environment)
-- **BALANCED** mode is the default for active scanning
-- **LOW_POWER** mode after 3 consecutive scans find no new devices (stable environment)
+| Mode | `SCAN_MODE_BALANCED` | `SCAN_MODE_LOW_POWER` |
+| Threshold | 3 devices | 3 empty scans |
 
 ### Advertising with Proactive Refresh
-
-**Problem**: Android silently stops BLE advertising when the app goes to background, the screen turns off, or the device enters Doze mode. There's no callback when this happens—the app thinks it's still advertising but is actually invisible to scanners.
-
-**Solution**: Proactively stop and restart advertising every 60 seconds. If advertising was still active, no harm done. If Android killed it, this brings it back.
 
 ```mermaid
 sequenceDiagram
@@ -828,32 +569,16 @@ sequenceDiagram
     participant Android as Android BLE
 
     Adv->>Android: startAdvertising()
-    alt Success
-        Android-->>Adv: onStartSuccess()
-        Adv->>Adv: retryAttempts = 0
-        Adv->>Timer: Start refresh job
-    else Failure
-        Android-->>Adv: onStartFailure(errorCode)
-        loop Up to 5 retries
-            Note over Adv: Wait (2s × attempt)
-            Adv->>Android: startAdvertising()
-        end
-    end
+    Android-->>Adv: onStartSuccess()
+    Adv->>Timer: Start refresh job
 
     loop Every 60 seconds
-        Timer->>Adv: Check: isAdvertising && !isRefreshing?
+        Timer->>Adv: Proactive refresh
         Adv->>Android: stopAdvertising()
-        Note over Adv: 100ms delay
-        Adv->>Android: startAdvertisingInternal()
+        Adv->>Android: startAdvertising()
         Note over Adv: Ensures advertising persists<br/>after screen off/background
     end
 ```
-
-**Key implementation details** (BleAdvertiser.kt lines 48-120, 338-396):
-- **Retry with backoff**: On failure, retries up to 5 times with delay = 2s × attempt number
-- **Refresh guard**: Uses `isRefreshing` flag to prevent concurrent refresh operations
-- **100ms cleanup delay**: Brief pause between stop/start ensures Android BLE stack resets properly
-- **Internal restart**: Refresh calls `startAdvertisingInternal()` to bypass the "already advertising" check
 
 ### Advertisement Data Structure
 
@@ -863,10 +588,8 @@ Advertising Data (31 bytes max):
 └── Service UUID (19 bytes for 128-bit UUID)
 
 Scan Response (31 bytes separate budget):
-└── Device Name: "RNS-{6_hex_chars}"  (e.g., "RNS-ab12cd")
+└── Device Name: "RNS-{truncated_identity_hex}"
 ```
-
-**Note**: Device name uses first 3 bytes of identity (6 hex chars) due to BLE payload limits. Full 16-byte identity is exchanged via GATT characteristic during connection handshake (Protocol v2.2).
 
 ---
 
@@ -876,17 +599,16 @@ Scan Response (31 bytes separate budget):
 
 | Dictionary | Key | Value | Purpose |
 |------------|-----|-------|---------|
-| `peers` | MAC address | (client, last_seen, mtu) | Low-level connection tracking |
 | `address_to_identity` | MAC address | 16-byte identity | MAC → identity lookup |
 | `identity_to_address` | 16-char hash | MAC address | Identity → current MAC |
 | `spawned_interfaces` | 16-char hash | BLEPeerInterface | Identity → interface |
 | `address_to_interface` | MAC address | BLEPeerInterface | Fallback cleanup |
 | `_identity_cache` | MAC address | (identity, timestamp) | Reconnection cache (60s TTL) |
-| `_pending_identity_connections` | MAC address | timestamp | Timeout tracking (see [Identity Timeout Handling](#identity-timeout-handling)) |
+| `_pending_identity_connections` | MAC address | timestamp | Timeout tracking |
 | `_pending_detach` | 16-char hash | timestamp | Grace period detach |
 | `pending_mtu` | MAC address | MTU value | MTU/identity race handling |
-| `fragmenters` | 16-char hash | BLEFragmenter | Per-identity fragmentation |
-| `reassemblers` | 16-char hash | BLEReassembler | Per-identity reassembly |
+| `fragmenters` | identity_key | BLEFragmenter | Per-identity fragmentation |
+| `reassemblers` | identity_key | BLEReassembler | Per-identity reassembly |
 
 ### Kotlin Layer (`KotlinBLEBridge`)
 
@@ -898,8 +620,7 @@ Scan Response (31 bytes separate budget):
 | `pendingConnections` | MAC address | PendingConnection | Awaiting identity |
 | `pendingCentralConnections` | Set<MAC> | - | In-progress central connects |
 | `recentlyDeduplicatedIdentities` | 32-char hex | timestamp | Dedup cooldown (60s) |
-| `processedIdentityCallbacks` | Set<"addr:hash"> | - | Prevent duplicate identity callbacks |
-| `staleAddressToIdentity` | MAC address | 32-char hex | Cache disconnected addresses for send() resolution |
+| `processedIdentityCallbacks` | Set<key> | - | Prevent duplicate notifications |
 
 ---
 
@@ -916,9 +637,25 @@ Scan Response (31 bytes separate budget):
 
 **Recommendation**: Consider adaptive timeouts based on operation type and historical success rates.
 
-**Note on Queue Deadlock Prevention**: The queue processor waits on `operationCompletion.receive()` for async operations (those returning `Pending`). The timeout handler **must** signal `operationCompletion.trySend(Unit)` after resuming the continuation with `TimeoutException`. Without this signal, the queue processor stays blocked forever, causing all subsequent operations across ALL connections to fail. See `BleOperationQueue.kt` lines 206-209.
+### 2. Advertising Refresh Interval (60s)
 
-### 2. Fragmenter Key Complexity
+**Issue**: The 60-second advertising refresh may miss discovery windows.
+
+**Impact**: If Android silently stops advertising immediately after screen-off, devices may be undiscoverable for up to 60 seconds.
+
+**Recommendation**:
+- Reduce to 30 seconds when battery is not a concern
+- Add `BroadcastReceiver` for `ACTION_SCREEN_OFF` to trigger immediate refresh
+
+### 3. Identity Cache Coherence
+
+**Issue**: The 60-second identity cache in Python may become stale if not properly synchronized with Kotlin state.
+
+**Impact**: Race conditions during rapid reconnection cycles could cause identity mismatches.
+
+**Recommendation**: Add explicit cache invalidation when Kotlin detects MAC rotation or deduplication.
+
+### 4. Fragmenter Key Complexity
 
 **Issue**: Fragmenter keys use `_get_fragmenter_key(identity, address)` but the address parameter is unused.
 
@@ -931,23 +668,21 @@ def _get_fragmenter_key(self, peer_identity, address):
 
 **Recommendation**: Remove unused `address` parameter to avoid confusion.
 
-### 3. Grace Period Timing
+### 5. Double Identity Callback Processing
+
+**Issue**: Both Kotlin (`onIdentityReceived`) and Python (`_handle_identity_handshake`) detect and process identity handshakes.
+
+**Impact**: Additional complexity and potential for desynchronization.
+
+**Recommendation**: Single point of identity detection (Kotlin) with Python purely as a consumer.
+
+### 6. Grace Period Timing
 
 **Issue**: The 2-second detach grace period (`_pending_detach_grace_period`) is hardcoded.
 
 **Impact**: May not be sufficient for slow network conditions or concurrent reconnection attempts.
 
 **Recommendation**: Make configurable via interface parameters, with a suggested default of 3-5 seconds.
-
----
-
-## Future Enhancements
-
-### Reactive Advertising Refresh
-
-Currently, advertising refreshes on a 60-second timer. If Android kills advertising immediately after screen-off, the device could be undiscoverable for up to 60 seconds.
-
-**Enhancement**: Add a `BroadcastReceiver` for `ACTION_SCREEN_OFF` to trigger an immediate advertising refresh, reducing worst-case invisibility from 60 seconds to ~100ms.
 
 ---
 

@@ -714,6 +714,35 @@ class BleGattServer(
                     // RX characteristic write - data received from central
                     Log.i(TAG, "Received ${value.size} bytes from ${device.address}")
 
+                    // DEFENSIVE FIX: Android's onConnectionStateChange is unreliable and sometimes
+                    // doesn't fire. If we receive data from a device that's not in connectedCentrals,
+                    // retroactively register it. This prevents orphaned connections where keepalives
+                    // flow but data can't be sent back (because the address isn't tracked).
+                    val isKnown = centralsMutex.withLock { connectedCentrals.containsKey(device.address) }
+                    if (!isKnown) {
+                        Log.w(
+                            TAG,
+                            "DEFENSIVE RECOVERY: Data received from ${device.address} but " +
+                                "onConnectionStateChange was never called! Retroactively registering connection.",
+                        )
+
+                        // Simulate what onConnectionStateChange(STATE_CONNECTED) would have done
+                        centralsMutex.withLock {
+                            connectedCentrals[device.address] = device
+                        }
+                        mtuMutex.withLock {
+                            centralMtus[device.address] = BleConstants.MIN_MTU
+                        }
+
+                        // Fire the connection callback so the bridge can register the peer
+                        val mtu = BleConstants.MIN_MTU
+                        Log.i(
+                            TAG,
+                            "DEFENSIVE: Firing retroactive onCentralConnected for ${device.address}, MTU=$mtu",
+                        )
+                        onCentralConnected?.invoke(device.address, mtu)
+                    }
+
                     // Send response if needed
                     if (responseNeeded) {
                         gattServer?.sendResponse(

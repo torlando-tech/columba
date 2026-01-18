@@ -19,7 +19,31 @@ import sys
 import os
 import time
 import threading
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Union
+
+
+def ensure_bytes(data: Union[bytes, 'jarray']) -> bytes:
+    """
+    Convert Chaquopy jarray to Python bytes if needed.
+
+    When Kotlin passes ByteArray to Python via Chaquopy, it arrives as a
+    jarray('B') (Java array), not Python bytes. Java arrays don't have
+    Python methods like .hex(), .decode(), etc. This function ensures
+    we always have a Python bytes object.
+
+    Usage:
+        data = ensure_bytes(data)  # Safe to call .hex(), .decode(), etc.
+
+    Args:
+        data: Either Python bytes or Chaquopy jarray
+
+    Returns:
+        Python bytes object
+    """
+    if isinstance(data, bytes):
+        return data
+    # jarray is iterable and bytes() constructor accepts iterables
+    return bytes(data)
 
 # Add parent interfaces directory to path for imports
 # When deployed, bluetooth_driver.py is in the parent interfaces/ directory
@@ -669,6 +693,8 @@ class AndroidBLEDriver(BLEDriverInterface):
         we finalize the connection using the pending identity before passing data.
         """
         try:
+            data = ensure_bytes(data)
+
             RNS.log(f"AndroidBLEDriver: Received {len(data)} bytes from {address}", RNS.LOG_EXTREME)
 
             # Check if this address has a pending identity but never got onConnected
@@ -797,6 +823,8 @@ class AndroidBLEDriver(BLEDriverInterface):
         """
         try:
             RNS.log(f"AndroidBLEDriver: [CALLBACK] _handle_duplicate_identity_detected: address={address}", RNS.LOG_DEBUG)
+
+            identity_bytes = ensure_bytes(identity_bytes)
 
             # Forward to the callback set by BLEInterface
             if hasattr(self, 'on_duplicate_identity_detected') and self.on_duplicate_identity_detected:

@@ -341,6 +341,53 @@ flowchart LR
 - **Stale cache**: On disconnect, `staleAddressToIdentity` caches old address → identity, allowing `send()` to resolve old addresses during transition
 - **Fragmenter/Reassembler unaffected**: Keyed by identity (32-char hex), not address — they continue working across MAC rotations without migration
 
+### Identity Timeout Handling
+
+**Problem:** Non-Reticulum BLE devices (AirTags, fitness trackers, BLE scanners) may connect to our GATT server but never send the 16-byte identity handshake. Without cleanup, these connections would persist indefinitely, consuming resources and cluttering connection tracking.
+
+**Solution:** Track peripheral-mode connections in `_pending_identity_connections` with their connect timestamp. A periodic cleanup timer (30s interval) disconnects any connection that hasn't received an identity within the timeout period (30s).
+
+```mermaid
+flowchart TD
+    subgraph Connection["New Peripheral Connection"]
+        A[Central connects to us<br/>role = peripheral] --> B{Identity received<br/>with connection?}
+        B -->|Yes| C[Process normally<br/>Skip timeout tracking]
+        B -->|No| D[Add to _pending_identity_connections<br/>address → timestamp]
+    end
+
+    subgraph Cleanup["Periodic Cleanup Timer (30s interval)"]
+        E[Timer fires] --> F[For each pending connection]
+        F --> G{elapsed > 30s?}
+        G -->|Yes| H[Log timeout warning<br/>Disconnect address<br/>Remove from pending]
+        G -->|No| I[Keep waiting]
+    end
+
+    subgraph Success["Identity Handshake Received"]
+        J[16-byte write to RX<br/>_handle_identity_handshake] --> K[Remove from<br/>_pending_identity_connections]
+        K --> L[Continue normal<br/>connection setup]
+    end
+
+    D -.->|"If handshake arrives"| J
+    D -.->|"If timeout expires"| G
+```
+
+**Key code references:**
+- Tracking: `BLEInterface._on_device_connected_callback()` — adds to `_pending_identity_connections` for peripheral role
+- Cleanup: `BLEInterface._cleanup_pending_identity_connections()` — called by periodic timer
+- Removal: `BLEInterface._handle_identity_handshake()` — removes on successful handshake
+
+**Configuration:**
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `_pending_identity_timeout` | 30s | Max wait time for identity handshake |
+| Cleanup timer interval | 30s | How often to check for timeouts |
+
+**Common timeout causes:**
+- Non-Reticulum devices connecting (AirTags, scanners)
+- Network congestion delaying handshake
+- Central disconnecting before sending identity
+- BLE stack issues on connecting device
+
 ---
 
 ## Deduplication State Machine
@@ -668,7 +715,7 @@ Scan Response (31 bytes separate budget):
 | `spawned_interfaces` | 16-char hash | BLEPeerInterface | Identity → interface |
 | `address_to_interface` | MAC address | BLEPeerInterface | Fallback cleanup |
 | `_identity_cache` | MAC address | (identity, timestamp) | Reconnection cache (60s TTL) |
-| `_pending_identity_connections` | MAC address | timestamp | Timeout tracking |
+| `_pending_identity_connections` | MAC address | timestamp | Timeout tracking (see [Identity Timeout Handling](#identity-timeout-handling)) |
 | `_pending_detach` | 16-char hash | timestamp | Grace period detach |
 | `pending_mtu` | MAC address | MTU value | MTU/identity race handling |
 | `fragmenters` | 16-char hash | BLEFragmenter | Per-identity fragmentation |

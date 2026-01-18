@@ -11,34 +11,52 @@ plugins {
 }
 
 // Parse version from git tag (e.g., v1.2.3 -> versionName "1.2.3", versionCode calculated)
+// New scheme: major * 10M + minor * 100K + patch * 1K (+ commits for dev builds)
 fun getVersionFromTag(): Pair<Int, String> {
     return try {
-        val tagName =
-            providers.exec {
-                commandLine("git", "describe", "--tags", "--exact-match")
-            }.standardOutput.asText.get().trim()
+        // Try exact tag match first (release build)
+        val tagName = providers.exec {
+            commandLine("git", "describe", "--tags", "--exact-match")
+        }.standardOutput.asText.get().trim()
 
-        // Parse version from tag (e.g., v1.2.3 or 1.2.3)
         val versionString = tagName.removePrefix("v")
         val parts = versionString.split(".")
+        val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
+        val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val patch = parts.getOrNull(2)?.split("-")?.get(0)?.toIntOrNull() ?: 0
 
-        // Calculate versionCode from version numbers (e.g., 1.2.3 -> 10203)
-        val versionCode =
-            when {
-                parts.size >= 3 -> {
-                    val major = parts[0].toIntOrNull() ?: 0
-                    val minor = parts[1].toIntOrNull() ?: 0
-                    val patch = parts[2].split("-")[0].toIntOrNull() ?: 0
-                    major * 10000 + minor * 100 + patch
-                }
-                else -> 1
-            }
-
+        // New scheme: major * 10M + minor * 100K + patch * 1K
+        val versionCode = major * 10_000_000 + minor * 100_000 + patch * 1_000
         Pair(versionCode, versionString)
     } catch (e: Exception) {
-        // Not on a tag or git command failed, use defaults
-        println("Warning: Could not parse version from git tag, using defaults")
-        Pair(301, "3.0.1-dev")
+        // Not on exact tag - get nearest tag + commit count
+        try {
+            val describe = providers.exec {
+                commandLine("git", "describe", "--tags", "--long")
+            }.standardOutput.asText.get().trim()
+
+            // Format: v0.6.4-beta-5-g1234abc or v0.6.4-5-g1234abc
+            val parts = describe.removePrefix("v").split("-")
+            val versionPart = parts[0] // "0.6.4"
+
+            // Find commit count (second-to-last element before git hash)
+            val commitCount = parts.getOrNull(parts.size - 2)?.toIntOrNull() ?: 0
+
+            val versionParts = versionPart.split(".")
+            val major = versionParts.getOrNull(0)?.toIntOrNull() ?: 0
+            val minor = versionParts.getOrNull(1)?.toIntOrNull() ?: 0
+            val patch = versionParts.getOrNull(2)?.toIntOrNull() ?: 0
+
+            val versionCode = major * 10_000_000 + minor * 100_000 + patch * 1_000 + commitCount
+            val versionName = "$major.$minor.$patch.${commitCount.toString().padStart(4, '0')}-dev"
+
+            println("Dev build: $versionName (versionCode=$versionCode)")
+            Pair(versionCode, versionName)
+        } catch (e2: Exception) {
+            // No tags at all - fallback
+            println("Warning: No git tags found, using fallback version")
+            Pair(1_000_000, "0.0.0-dev")
+        }
     }
 }
 

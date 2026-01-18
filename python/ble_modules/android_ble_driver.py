@@ -19,7 +19,34 @@ import sys
 import os
 import time
 import threading
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Union
+
+# Hierarchical log tag for consistent filtering (matches Kotlin BLE components)
+LOG_TAG = "Columba:BLE:Py:Driver"
+
+
+def ensure_bytes(data: Union[bytes, 'jarray']) -> bytes:
+    """
+    Convert Chaquopy jarray to Python bytes if needed.
+
+    When Kotlin passes ByteArray to Python via Chaquopy, it arrives as a
+    jarray('B') (Java array), not Python bytes. Java arrays don't have
+    Python methods like .hex(), .decode(), etc. This function ensures
+    we always have a Python bytes object.
+
+    Usage:
+        data = ensure_bytes(data)  # Safe to call .hex(), .decode(), etc.
+
+    Args:
+        data: Either Python bytes or Chaquopy jarray
+
+    Returns:
+        Python bytes object
+    """
+    if isinstance(data, bytes):
+        return data
+    # jarray is iterable and bytes() constructor accepts iterables
+    return bytes(data)
 
 # Add parent interfaces directory to path for imports
 # When deployed, bluetooth_driver.py is in the parent interfaces/ directory
@@ -87,7 +114,7 @@ class AndroidBLEDriver(BLEDriverInterface):
         self._service_discovery_delay = kwargs.get('service_discovery_delay', 0.5)
         self._power_mode = "balanced"
 
-        RNS.log("AndroidBLEDriver: Initialized", RNS.LOG_DEBUG)
+        RNS.log(f"{LOG_TAG}: Initialized", RNS.LOG_DEBUG)
 
     # --- Lifecycle & Configuration ---
 
@@ -95,10 +122,10 @@ class AndroidBLEDriver(BLEDriverInterface):
         """Initialize the driver and Android BLE stack."""
         try:
             if self._state != DriverState.IDLE:
-                RNS.log(f"AndroidBLEDriver: Cannot start - current state: {self._state}", RNS.LOG_WARNING)
+                RNS.log(f"{LOG_TAG}: Cannot start - current state: {self._state}", RNS.LOG_WARNING)
                 return
 
-            RNS.log("AndroidBLEDriver: Starting...", RNS.LOG_INFO)
+            RNS.log(f"{LOG_TAG}: Starting...", RNS.LOG_INFO)
 
             # Store UUIDs
             self._service_uuid = service_uuid
@@ -129,10 +156,10 @@ class AndroidBLEDriver(BLEDriverInterface):
                 self.kotlin_bridge.setIdentity(self._transport_identity)
 
             self._state = DriverState.IDLE
-            RNS.log("AndroidBLEDriver: Started successfully", RNS.LOG_INFO)
+            RNS.log(f"{LOG_TAG}: Started successfully", RNS.LOG_INFO)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Failed to start: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Failed to start: {e}", RNS.LOG_ERROR)
             if self.on_error:
                 self.on_error("critical", f"Failed to start driver: {e}", e)
             raise
@@ -143,7 +170,7 @@ class AndroidBLEDriver(BLEDriverInterface):
             if self._state == DriverState.IDLE:
                 return
 
-            RNS.log("AndroidBLEDriver: Stopping...", RNS.LOG_INFO)
+            RNS.log(f"{LOG_TAG}: Stopping...", RNS.LOG_INFO)
 
             if self.kotlin_bridge:
                 self.kotlin_bridge.stopAsync()
@@ -152,10 +179,10 @@ class AndroidBLEDriver(BLEDriverInterface):
             self._peer_roles.clear()
             self._state = DriverState.IDLE
 
-            RNS.log("AndroidBLEDriver: Stopped", RNS.LOG_INFO)
+            RNS.log(f"{LOG_TAG}: Stopped", RNS.LOG_INFO)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error stopping: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error stopping: {e}", RNS.LOG_ERROR)
             if self.on_error:
                 self.on_error("error", f"Error stopping driver: {e}", e)
 
@@ -170,7 +197,7 @@ class AndroidBLEDriver(BLEDriverInterface):
             self.kotlin_bridge.setIdentity(identity_bytes)
 
         hex_identity = identity_bytes.hex()
-        RNS.log(f"AndroidBLEDriver: Identity set: {hex_identity}", RNS.LOG_DEBUG)
+        RNS.log(f"{LOG_TAG}: Identity set: {hex_identity}", RNS.LOG_DEBUG)
 
     # --- State & Properties ---
 
@@ -195,10 +222,10 @@ class AndroidBLEDriver(BLEDriverInterface):
             self.kotlin_bridge.startScanningAsync()
 
             self._state = DriverState.SCANNING
-            RNS.log("AndroidBLEDriver: Scanning started", RNS.LOG_DEBUG)
+            RNS.log(f"{LOG_TAG}: Scanning started", RNS.LOG_DEBUG)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Failed to start scanning: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Failed to start scanning: {e}", RNS.LOG_ERROR)
             if self.on_error:
                 self.on_error("error", f"Failed to start scanning: {e}", e)
 
@@ -211,10 +238,10 @@ class AndroidBLEDriver(BLEDriverInterface):
             if self._state == DriverState.SCANNING:
                 self._state = DriverState.IDLE
 
-            RNS.log("AndroidBLEDriver: Scanning stopped", RNS.LOG_DEBUG)
+            RNS.log(f"{LOG_TAG}: Scanning stopped", RNS.LOG_DEBUG)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error stopping scan: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error stopping scan: {e}", RNS.LOG_ERROR)
 
     def start_advertising(self, device_name: str, identity: bytes):
         """Start BLE advertising."""
@@ -225,10 +252,10 @@ class AndroidBLEDriver(BLEDriverInterface):
             self.kotlin_bridge.startAdvertisingAsync(device_name)
 
             self._state = DriverState.ADVERTISING
-            RNS.log(f"AndroidBLEDriver: Advertising started as '{device_name}'", RNS.LOG_DEBUG)
+            RNS.log(f"{LOG_TAG}: Advertising started as '{device_name}'", RNS.LOG_DEBUG)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Failed to start advertising: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Failed to start advertising: {e}", RNS.LOG_ERROR)
             if self.on_error:
                 self.on_error("error", f"Failed to start advertising: {e}", e)
 
@@ -241,10 +268,10 @@ class AndroidBLEDriver(BLEDriverInterface):
             if self._state == DriverState.ADVERTISING:
                 self._state = DriverState.IDLE
 
-            RNS.log("AndroidBLEDriver: Advertising stopped", RNS.LOG_DEBUG)
+            RNS.log(f"{LOG_TAG}: Advertising stopped", RNS.LOG_DEBUG)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error stopping advertising: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error stopping advertising: {e}", RNS.LOG_ERROR)
 
     def should_connect(self, peer_address: str) -> bool:
         """Check if we should initiate connection based on MAC address sorting.
@@ -267,15 +294,15 @@ class AndroidBLEDriver(BLEDriverInterface):
         """
         try:
             if not self.kotlin_bridge:
-                RNS.log("AndroidBLEDriver: Cannot check shouldConnect - no bridge", RNS.LOG_WARNING)
+                RNS.log(f"{LOG_TAG}: Cannot check shouldConnect - no bridge", RNS.LOG_WARNING)
                 return False
 
             result = self.kotlin_bridge.shouldConnect(peer_address)
-            RNS.log(f"AndroidBLEDriver: shouldConnect({peer_address}) = {result}", RNS.LOG_DEBUG)
+            RNS.log(f"{LOG_TAG}: shouldConnect({peer_address}) = {result}", RNS.LOG_DEBUG)
             return bool(result)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error in shouldConnect: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error in shouldConnect: {e}", RNS.LOG_ERROR)
             return False
 
     def connect(self, address: str):
@@ -292,7 +319,7 @@ class AndroidBLEDriver(BLEDriverInterface):
             self.kotlin_bridge.connectAsync(address)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Failed to connect to {address}: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Failed to connect to {address}: {e}", RNS.LOG_ERROR)
             if self.on_error:
                 self.on_error("error", f"Failed to connect to {address}: {e}", e)
 
@@ -303,10 +330,10 @@ class AndroidBLEDriver(BLEDriverInterface):
                 # Kotlin bridge launches coroutines internally
                 self.kotlin_bridge.disconnectAsync(address)
 
-            RNS.log(f"AndroidBLEDriver: Disconnecting from {address}", RNS.LOG_DEBUG)
+            RNS.log(f"{LOG_TAG}: Disconnecting from {address}", RNS.LOG_DEBUG)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error disconnecting from {address}: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error disconnecting from {address}: {e}", RNS.LOG_ERROR)
 
     def disconnect_central(self, address: str):
         """Disconnect our central connection TO a peer device.
@@ -318,12 +345,12 @@ class AndroidBLEDriver(BLEDriverInterface):
         try:
             if self.kotlin_bridge:
                 self.kotlin_bridge.disconnectCentralAsync(address)
-                RNS.log(f"AndroidBLEDriver: Disconnecting central connection to {address}", RNS.LOG_DEBUG)
+                RNS.log(f"{LOG_TAG}: Disconnecting central connection to {address}", RNS.LOG_DEBUG)
             else:
-                RNS.log("AndroidBLEDriver: Cannot disconnect central - no bridge", RNS.LOG_WARNING)
+                RNS.log(f"{LOG_TAG}: Cannot disconnect central - no bridge", RNS.LOG_WARNING)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error disconnecting central from {address}: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error disconnecting central from {address}: {e}", RNS.LOG_ERROR)
 
     def disconnect_peripheral(self, address: str):
         """Disconnect a peripheral connection FROM a peer device.
@@ -335,12 +362,12 @@ class AndroidBLEDriver(BLEDriverInterface):
         try:
             if self.kotlin_bridge:
                 self.kotlin_bridge.disconnectPeripheralAsync(address)
-                RNS.log(f"AndroidBLEDriver: Disconnecting peripheral connection from {address}", RNS.LOG_DEBUG)
+                RNS.log(f"{LOG_TAG}: Disconnecting peripheral connection from {address}", RNS.LOG_DEBUG)
             else:
-                RNS.log("AndroidBLEDriver: Cannot disconnect peripheral - no bridge", RNS.LOG_WARNING)
+                RNS.log(f"{LOG_TAG}: Cannot disconnect peripheral - no bridge", RNS.LOG_WARNING)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error disconnecting peripheral from {address}: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error disconnecting peripheral from {address}: {e}", RNS.LOG_ERROR)
 
     def send(self, address: str, data: bytes):
         """Send data to a connected peer (data already fragmented by BLEInterface)."""
@@ -350,10 +377,10 @@ class AndroidBLEDriver(BLEDriverInterface):
 
             self.kotlin_bridge.sendAsync(address, data)
 
-            RNS.log(f"AndroidBLEDriver: Sent {len(data)} bytes to {address}", RNS.LOG_EXTREME)
+            RNS.log(f"{LOG_TAG}: Sent {len(data)} bytes to {address}", RNS.LOG_EXTREME)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Failed to send to {address}: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Failed to send to {address}: {e}", RNS.LOG_ERROR)
             if self.on_error:
                 self.on_error("error", f"Failed to send to {address}: {e}", e)
 
@@ -364,7 +391,7 @@ class AndroidBLEDriver(BLEDriverInterface):
         # This method is here for interface compatibility. In this driver,
         # characteristic reads are handled by the Kotlin bridge, and the results
         # (like the peer identity) are passed up via callbacks.
-        RNS.log(f"AndroidBLEDriver: read_characteristic is not implemented for direct use. Use callbacks instead.", RNS.LOG_WARNING)
+        RNS.log(f"{LOG_TAG}: read_characteristic is not implemented for direct use. Use callbacks instead.", RNS.LOG_WARNING)
         return b""
 
     def write_characteristic(self, address: str, char_uuid: str, data: bytes):
@@ -372,13 +399,13 @@ class AndroidBLEDriver(BLEDriverInterface):
         # This method is here for interface compatibility. In this driver,
         # all data transmission is handled by the send() method, which abstracts
         # away the specific characteristic writes.
-        RNS.log(f"AndroidBLEDriver: write_characteristic is not implemented for direct use. Use send() instead.", RNS.LOG_WARNING)
+        RNS.log(f"{LOG_TAG}: write_characteristic is not implemented for direct use. Use send() instead.", RNS.LOG_WARNING)
 
     def start_notify(self, address: str, char_uuid: str, callback: Callable[[bytes], None]):
         """Subscribe to notifications (handled automatically by Kotlin bridge)."""
         # Note: Notifications are automatically handled by KotlinBLEBridge
         # Data comes through on_data_received callback
-        RNS.log(f"AndroidBLEDriver: start_notify not needed (automatic in bridge)", RNS.LOG_DEBUG)
+        RNS.log(f"{LOG_TAG}: start_notify not needed (automatic in bridge)", RNS.LOG_DEBUG)
 
     # --- Configuration & Queries ---
 
@@ -397,7 +424,7 @@ class AndroidBLEDriver(BLEDriverInterface):
     def set_service_discovery_delay(self, seconds: float):
         """Set delay between connection and service discovery (not needed on Android)."""
         self._service_discovery_delay = seconds
-        RNS.log(f"AndroidBLEDriver: Service discovery delay set to {seconds}s (ignored on Android)", RNS.LOG_DEBUG)
+        RNS.log(f"{LOG_TAG}: Service discovery delay set to {seconds}s (ignored on Android)", RNS.LOG_DEBUG)
 
     def set_power_mode(self, mode: str):
         """Set power mode for scanning ('aggressive', 'balanced', 'saver')."""
@@ -405,7 +432,7 @@ class AndroidBLEDriver(BLEDriverInterface):
             raise ValueError(f"Invalid power mode: {mode}")
 
         self._power_mode = mode
-        RNS.log(f"AndroidBLEDriver: Power mode set to {mode}", RNS.LOG_DEBUG)
+        RNS.log(f"{LOG_TAG}: Power mode set to {mode}", RNS.LOG_DEBUG)
         # Note: Could propagate to KotlinBLEBridge if needed
 
     def get_peer_mtu(self, address: str) -> Optional[int]:
@@ -427,16 +454,16 @@ class AndroidBLEDriver(BLEDriverInterface):
         """
         try:
             if self.kotlin_bridge is None:
-                RNS.log("AndroidBLEDriver: Cannot ensure advertising - no bridge", RNS.LOG_WARNING)
+                RNS.log(f"{LOG_TAG}: Cannot ensure advertising - no bridge", RNS.LOG_WARNING)
                 return False
 
             result = self.kotlin_bridge.ensureAdvertising()
             if not result:
-                RNS.log("AndroidBLEDriver: Advertising was stopped, restarting...", RNS.LOG_INFO)
+                RNS.log(f"{LOG_TAG}: Advertising was stopped, restarting...", RNS.LOG_INFO)
             return bool(result)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error ensuring advertising: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error ensuring advertising: {e}", RNS.LOG_ERROR)
             return False
 
     def request_identity_resync(self, address: str) -> bool:
@@ -454,15 +481,15 @@ class AndroidBLEDriver(BLEDriverInterface):
         """
         try:
             if self.kotlin_bridge is None:
-                RNS.log("AndroidBLEDriver: Cannot resync identity - no bridge", RNS.LOG_WARNING)
+                RNS.log(f"{LOG_TAG}: Cannot resync identity - no bridge", RNS.LOG_WARNING)
                 return False
 
             result = self.kotlin_bridge.requestIdentityResync(address)
-            RNS.log(f"AndroidBLEDriver: Identity resync for {address}: {'found' if result else 'not found'}", RNS.LOG_DEBUG)
+            RNS.log(f"{LOG_TAG}: Identity resync for {address}: {'found' if result else 'not found'}", RNS.LOG_DEBUG)
             return bool(result)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error requesting identity resync for {address}: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error requesting identity resync for {address}: {e}", RNS.LOG_ERROR)
             return False
 
     # --- Internal Methods ---
@@ -475,18 +502,18 @@ class AndroidBLEDriver(BLEDriverInterface):
             wrapper = reticulum_wrapper._global_wrapper_instance
 
             if wrapper is None:
-                RNS.log("AndroidBLEDriver: No global wrapper instance found", RNS.LOG_ERROR)
+                RNS.log(f"{LOG_TAG}: No global wrapper instance found", RNS.LOG_ERROR)
                 return None
 
             if wrapper.kotlin_ble_bridge is None:
-                RNS.log("AndroidBLEDriver: No BLE bridge set in wrapper. Call set_ble_bridge() from Kotlin first.", RNS.LOG_ERROR)
+                RNS.log(f"{LOG_TAG}: No BLE bridge set in wrapper. Call set_ble_bridge() from Kotlin first.", RNS.LOG_ERROR)
                 return None
 
-            RNS.log("AndroidBLEDriver: Kotlin bridge acquired from wrapper", RNS.LOG_DEBUG)
+            RNS.log(f"{LOG_TAG}: Kotlin bridge acquired from wrapper", RNS.LOG_DEBUG)
             return wrapper.kotlin_ble_bridge
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Failed to get Kotlin bridge: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Failed to get Kotlin bridge: {e}", RNS.LOG_ERROR)
             import traceback
             RNS.log(traceback.format_exc(), RNS.LOG_ERROR)
             return None
@@ -505,7 +532,11 @@ class AndroidBLEDriver(BLEDriverInterface):
         self.kotlin_bridge.setOnMtuNegotiated(lambda address, mtu: self._handle_mtu_negotiated(address, mtu))
         self.kotlin_bridge.setOnAddressChanged(lambda old_addr, new_addr, identity_hash: self._handle_address_changed(old_addr, new_addr, identity_hash))
 
-        RNS.log("AndroidBLEDriver: Kotlin callbacks configured", RNS.LOG_DEBUG)
+        # Wire up duplicate identity detection callback
+        # Python's _check_duplicate_identity is set by BLEInterface and returns True if duplicate
+        self.kotlin_bridge.setOnDuplicateIdentityDetected(lambda address, identity_bytes: self._handle_duplicate_identity_detected(address, identity_bytes))
+
+        RNS.log(f"{LOG_TAG}: Kotlin callbacks configured", RNS.LOG_DEBUG)
 
     def _handle_device_discovered(self, address: str, name: Optional[str], rssi: int, service_uuids: Optional[List[str]]):
         """Handle device discovered event from Kotlin."""
@@ -522,7 +553,7 @@ class AndroidBLEDriver(BLEDriverInterface):
                 self.on_device_discovered(device)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error handling device discovered: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error handling device discovered: {e}", RNS.LOG_ERROR)
 
     def _handle_connected(self, address: str, mtu: int, role: str = "central", identity_hash: Optional[str] = None):
         """Handle peer connected event from Kotlin.
@@ -535,7 +566,7 @@ class AndroidBLEDriver(BLEDriverInterface):
         """
         try:
             # DEBUG: Log callback entry for tracking callback chain
-            RNS.log(f"AndroidBLEDriver: [CALLBACK] _handle_connected ENTRY: address={address}, mtu={mtu}, role={role}, identity_hash={identity_hash[:16] if identity_hash else 'None'}...", RNS.LOG_WARNING)
+            RNS.log(f"{LOG_TAG}: [CALLBACK] _handle_connected ENTRY: address={address}, mtu={mtu}, role={role}, identity_hash={identity_hash[:16] if identity_hash else 'None'}...", RNS.LOG_DEBUG)
 
             if address not in self._connected_peers:
                 self._connected_peers.append(address)
@@ -543,7 +574,7 @@ class AndroidBLEDriver(BLEDriverInterface):
             # Set role from parameter (passed from Kotlin)
             self._peer_roles[address] = role
 
-            RNS.log(f"AndroidBLEDriver: Connected to {address} (MTU={mtu}, role={role}, identity={'present' if identity_hash else 'pending'})", RNS.LOG_INFO)
+            RNS.log(f"{LOG_TAG}: Connected to {address} (MTU={mtu}, role={role}, identity={'present' if identity_hash else 'pending'})", RNS.LOG_INFO)
 
             # Use identity from callback (passed directly to avoid race condition with onIdentityReceived)
             # Fall back to _pending_identities for backwards compatibility
@@ -551,9 +582,9 @@ class AndroidBLEDriver(BLEDriverInterface):
             if identity_hash:
                 try:
                     identity = bytes.fromhex(identity_hash)
-                    RNS.log(f"AndroidBLEDriver: Using identity from onConnected callback: {identity_hash[:16]}...", RNS.LOG_DEBUG)
+                    RNS.log(f"{LOG_TAG}: Using identity from onConnected callback: {identity_hash[:16]}...", RNS.LOG_DEBUG)
                 except ValueError as e:
-                    RNS.log(f"AndroidBLEDriver: Invalid identity_hash format: {e}", RNS.LOG_WARNING)
+                    RNS.log(f"{LOG_TAG}: Invalid identity_hash format: {e}", RNS.LOG_WARNING)
 
             if identity is None:
                 # Fall back to pending identities (from earlier onIdentityReceived if it arrived first)
@@ -561,7 +592,7 @@ class AndroidBLEDriver(BLEDriverInterface):
                 with self._identity_lock:
                     identity = self._pending_identities.pop(address, None)
                 if identity:
-                    RNS.log(f"AndroidBLEDriver: Using identity from pending cache", RNS.LOG_DEBUG)
+                    RNS.log(f"{LOG_TAG}: Using identity from pending cache", RNS.LOG_DEBUG)
 
             # Track identity-to-address mapping for debugging/logging purposes only
             # Deduplication is handled by BLEInterface, not the driver
@@ -575,7 +606,7 @@ class AndroidBLEDriver(BLEDriverInterface):
                         # Same identity at different address - log but don't disconnect
                         # This is normal in dual-mode BLE or during MAC rotation
                         RNS.log(
-                            f"AndroidBLEDriver: Identity {identity_hex[:16]}... also at {address} (was at {existing_address})",
+                            f"{LOG_TAG}: Identity {identity_hex[:16]}... also at {address} (was at {existing_address})",
                             RNS.LOG_DEBUG
                         )
                     # Update mappings - we track the most recent address per identity
@@ -590,19 +621,19 @@ class AndroidBLEDriver(BLEDriverInterface):
                 # or None if no identity (Protocol v1 device, or peripheral pending handshake)
                 self.on_device_connected(address, identity)
                 if identity:
-                    RNS.log(f"AndroidBLEDriver: Notified {role} connection with identity for {address}", RNS.LOG_DEBUG)
+                    RNS.log(f"{LOG_TAG}: Notified {role} connection with identity for {address}", RNS.LOG_DEBUG)
                 else:
-                    RNS.log(f"AndroidBLEDriver: Notified {role} connection without identity for {address} (will receive via handshake)", RNS.LOG_DEBUG)
+                    RNS.log(f"{LOG_TAG}: Notified {role} connection without identity for {address} (will receive via handshake)", RNS.LOG_DEBUG)
 
             # Report MTU negotiation
             if self.on_mtu_negotiated:
                 self.on_mtu_negotiated(address, mtu)
 
             # DEBUG: Log callback completion
-            RNS.log(f"AndroidBLEDriver: [CALLBACK] _handle_connected EXIT: address={address}, called on_device_connected={self.on_device_connected is not None}, called on_mtu_negotiated={self.on_mtu_negotiated is not None}", RNS.LOG_WARNING)
+            RNS.log(f"{LOG_TAG}: [CALLBACK] _handle_connected EXIT: address={address}, called on_device_connected={self.on_device_connected is not None}, called on_mtu_negotiated={self.on_mtu_negotiated is not None}", RNS.LOG_DEBUG)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error handling connected: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error handling connected: {e}", RNS.LOG_ERROR)
 
     def _handle_disconnected(self, address: str):
         """Handle peer disconnected event from Kotlin."""
@@ -622,15 +653,15 @@ class AndroidBLEDriver(BLEDriverInterface):
                     # (might have been updated to a new address during MAC rotation)
                     if self._identity_to_address.get(identity_hex) == address:
                         del self._identity_to_address[identity_hex]
-                        RNS.log(f"AndroidBLEDriver: Cleared identity mapping for {address} ({identity_hex[:16]}...)", RNS.LOG_DEBUG)
+                        RNS.log(f"{LOG_TAG}: Cleared identity mapping for {address} ({identity_hex[:16]}...)", RNS.LOG_DEBUG)
 
-            RNS.log(f"AndroidBLEDriver: Disconnected from {address}", RNS.LOG_INFO)
+            RNS.log(f"{LOG_TAG}: Disconnected from {address}", RNS.LOG_INFO)
 
             if self.on_device_disconnected:
                 self.on_device_disconnected(address)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error handling disconnected: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error handling disconnected: {e}", RNS.LOG_ERROR)
 
     def _handle_address_changed(self, old_address: str, new_address: str, identity_hash: str):
         """Handle address change event from Kotlin during dual connection deduplication.
@@ -646,7 +677,7 @@ class AndroidBLEDriver(BLEDriverInterface):
         """
         try:
             RNS.log(
-                f"AndroidBLEDriver: Address changed for {identity_hash[:8]}: {old_address} -> {new_address}",
+                f"{LOG_TAG}: Address changed for {identity_hash[:8]}: {old_address} -> {new_address}",
                 RNS.LOG_INFO
             )
 
@@ -654,7 +685,7 @@ class AndroidBLEDriver(BLEDriverInterface):
                 self.on_address_changed(old_address, new_address, identity_hash)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error handling address changed: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error handling address changed: {e}", RNS.LOG_ERROR)
 
     def _handle_data_received(self, address: str, data: bytes):
         """Handle data received event from Kotlin (already defragmented).
@@ -665,7 +696,9 @@ class AndroidBLEDriver(BLEDriverInterface):
         we finalize the connection using the pending identity before passing data.
         """
         try:
-            RNS.log(f"AndroidBLEDriver: Received {len(data)} bytes from {address}", RNS.LOG_EXTREME)
+            data = ensure_bytes(data)
+
+            RNS.log(f"{LOG_TAG}: Received {len(data)} bytes from {address}", RNS.LOG_EXTREME)
 
             # Check if this address has a pending identity but never got onConnected
             # This handles the case where Android MAC randomization causes identity
@@ -675,7 +708,7 @@ class AndroidBLEDriver(BLEDriverInterface):
                     pending_identity = self._pending_identities.get(address)
                     if pending_identity:
                         # Finalize connection with pending identity
-                        RNS.log(f"AndroidBLEDriver: Finalizing connection for {address} from pending identity (data arrived first)", RNS.LOG_DEBUG)
+                        RNS.log(f"{LOG_TAG}: Finalizing connection for {address} from pending identity (data arrived first)", RNS.LOG_DEBUG)
                         self._connected_peers.append(address)
                         self._peer_roles[address] = "peripheral"  # Data arriving = peripheral role
                         # Remove from pending before callback to prevent double-use
@@ -695,7 +728,7 @@ class AndroidBLEDriver(BLEDriverInterface):
                 self.on_data_received(address, data)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error handling data received: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error handling data received: {e}", RNS.LOG_ERROR)
 
     def _handle_identity_received(self, address: str, identity_hash: str):
         """Handle identity received event from Kotlin (Protocol v2.2).
@@ -713,9 +746,9 @@ class AndroidBLEDriver(BLEDriverInterface):
         """
         try:
             # DEBUG: Log callback entry
-            RNS.log(f"AndroidBLEDriver: [CALLBACK] _handle_identity_received ENTRY: address={address}, identity={identity_hash[:16]}..., already_connected={address in self._connected_peers}", RNS.LOG_WARNING)
+            RNS.log(f"{LOG_TAG}: [CALLBACK] _handle_identity_received ENTRY: address={address}, identity={identity_hash[:16]}..., already_connected={address in self._connected_peers}", RNS.LOG_DEBUG)
 
-            RNS.log(f"AndroidBLEDriver: Identity received from {address}: {identity_hash[:16]}...",
+            RNS.log(f"{LOG_TAG}: Identity received from {address}: {identity_hash[:16]}...",
                    RNS.LOG_INFO)
 
             # Convert hex string to bytes (16 bytes = 32 hex chars)
@@ -732,7 +765,7 @@ class AndroidBLEDriver(BLEDriverInterface):
                     # Same identity at different address - log but don't disconnect
                     # This is normal in dual-mode BLE or during MAC rotation
                     RNS.log(
-                        f"AndroidBLEDriver: Identity {identity_hash[:16]}... also at {address} (was at {existing_address})",
+                        f"{LOG_TAG}: Identity {identity_hash[:16]}... also at {address} (was at {existing_address})",
                         RNS.LOG_DEBUG
                     )
 
@@ -745,34 +778,71 @@ class AndroidBLEDriver(BLEDriverInterface):
                 if address in self._connected_peers:
                     # Peer is already connected - notify BLEInterface immediately
                     # This allows BLEInterface to spawn the peer interface with identity
-                    RNS.log(f"AndroidBLEDriver: Late identity for connected peer {address}, notifying BLEInterface", RNS.LOG_DEBUG)
+                    RNS.log(f"{LOG_TAG}: Late identity for connected peer {address}, notifying BLEInterface", RNS.LOG_DEBUG)
                     if self.on_device_connected:
                         self.on_device_connected(address, identity_bytes)
-                        RNS.log(f"AndroidBLEDriver: [CALLBACK] _handle_identity_received: Called on_device_connected for late identity at {address}", RNS.LOG_WARNING)
+                        RNS.log(f"{LOG_TAG}: [CALLBACK] _handle_identity_received: Called on_device_connected for late identity at {address}", RNS.LOG_DEBUG)
                 else:
                     # Peer not yet connected - cache identity for when onConnected fires
                     # This handles the race where identity arrives before connection
                     self._pending_identities[address] = identity_bytes
-                    RNS.log(f"AndroidBLEDriver: Cached identity for {address}, waiting for connection complete", RNS.LOG_DEBUG)
-                    RNS.log(f"AndroidBLEDriver: [CALLBACK] _handle_identity_received: Cached identity (peer not connected yet) for {address}", RNS.LOG_WARNING)
+                    RNS.log(f"{LOG_TAG}: Cached identity for {address}, waiting for connection complete", RNS.LOG_DEBUG)
+                    RNS.log(f"{LOG_TAG}: [CALLBACK] _handle_identity_received: Cached identity (peer not connected yet) for {address}", RNS.LOG_DEBUG)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error handling identity received: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error handling identity received: {e}", RNS.LOG_ERROR)
 
     def _handle_mtu_negotiated(self, address: str, mtu: int):
         """Handle MTU negotiation completion from Kotlin."""
         try:
             # DEBUG: Log callback entry
-            RNS.log(f"AndroidBLEDriver: [CALLBACK] _handle_mtu_negotiated ENTRY: address={address}, mtu={mtu}", RNS.LOG_WARNING)
+            RNS.log(f"{LOG_TAG}: [CALLBACK] _handle_mtu_negotiated ENTRY: address={address}, mtu={mtu}", RNS.LOG_DEBUG)
 
-            RNS.log(f"AndroidBLEDriver: MTU negotiated with {address}: {mtu}", RNS.LOG_INFO)
+            RNS.log(f"{LOG_TAG}: MTU negotiated with {address}: {mtu}", RNS.LOG_INFO)
 
             # Store MTU for this peer
             self._peer_mtus[address] = mtu
 
             if self.on_mtu_negotiated:
                 self.on_mtu_negotiated(address, mtu)
-                RNS.log(f"AndroidBLEDriver: [CALLBACK] _handle_mtu_negotiated: Called on_mtu_negotiated for {address}", RNS.LOG_WARNING)
+                RNS.log(f"{LOG_TAG}: [CALLBACK] _handle_mtu_negotiated: Called on_mtu_negotiated for {address}", RNS.LOG_DEBUG)
 
         except Exception as e:
-            RNS.log(f"AndroidBLEDriver: Error handling MTU negotiated: {e}", RNS.LOG_ERROR)
+            RNS.log(f"{LOG_TAG}: Error handling MTU negotiated: {e}", RNS.LOG_ERROR)
+
+    def _handle_duplicate_identity_detected(self, address: str, identity_bytes: bytes) -> bool:
+        """Handle duplicate identity detection request from Kotlin.
+
+        Called by Kotlin's handleIdentityReceived before accepting a connection.
+        This forwards to Python's _check_duplicate_identity (set by BLEInterface)
+        which checks if this identity is already connected at a different address.
+
+        Args:
+            address: MAC address of the incoming connection
+            identity_bytes: 16-byte identity of the peer
+
+        Returns:
+            True if duplicate (connection should be rejected), False otherwise
+        """
+        try:
+            RNS.log(f"{LOG_TAG}: [CALLBACK] _handle_duplicate_identity_detected: address={address}", RNS.LOG_DEBUG)
+
+            identity_bytes = ensure_bytes(identity_bytes)
+
+            # Forward to the callback set by BLEInterface
+            if hasattr(self, 'on_duplicate_identity_detected') and self.on_duplicate_identity_detected:
+                is_duplicate = self.on_duplicate_identity_detected(address, identity_bytes)
+                if is_duplicate:
+                    RNS.log(
+                        f"{LOG_TAG}: Duplicate identity rejected for {address} (MAC rotation)",
+                        RNS.LOG_WARNING
+                    )
+                return bool(is_duplicate)
+
+            # No callback set - allow connection
+            return False
+
+        except Exception as e:
+            RNS.log(f"{LOG_TAG}: Error in duplicate identity check: {e}", RNS.LOG_ERROR)
+            # On error, allow connection (fail open)
+            return False

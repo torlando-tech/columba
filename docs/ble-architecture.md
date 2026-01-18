@@ -525,12 +525,14 @@ Android BLE connections timeout after 20-30 seconds of inactivity. Both layers i
 
 ```mermaid
 sequenceDiagram
-    participant Client as BleGattClient
+    participant Client as BleGattClient<br/>(Central)
     participant Timer as Keepalive Timer<br/>(15s interval)
     participant Peer as Remote Peripheral
 
     Note over Client: Connection established
     Client->>Timer: Start keepalive job
+    Client->>Peer: Write 0x00 immediately
+    Note over Client: Prevents early timeout
 
     loop Every 15 seconds
         Timer->>Client: Send keepalive
@@ -556,7 +558,11 @@ sequenceDiagram
 | Max failures | 3 | `BleConstants.MAX_CONNECTION_FAILURES` |
 | Packet | `0x00` (1 byte) | Minimal overhead |
 
-Both `BleGattClient` (central) and `BleGattServer` (peripheral) maintain independent keepalive mechanisms.
+**Key implementation details** (BleGattClient.kt lines 1081-1181, BleGattServer.kt lines 965-1035):
+- Both sides send an **immediate first keepalive** on connection, then continue at 15s intervals
+- **Central (BleGattClient)**: Tracks `consecutiveKeepaliveFailures`, disconnects after 3 failures
+- **Peripheral (BleGattServer)**: Fire-and-forget notifications—no failure tracking or disconnect logic
+- This asymmetry is intentional: the central manages connection lifecycle, the peripheral just keeps it alive
 
 ---
 

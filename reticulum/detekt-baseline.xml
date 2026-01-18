@@ -6,6 +6,7 @@
     <ID>CyclomaticComplexMethod:BleOperationQueue.kt$BleOperationQueue$private suspend fun executeOperation(operation: BleOperation): OperationResult</ID>
     <ID>CyclomaticComplexMethod:KotlinBLEBridge.kt$KotlinBLEBridge$private suspend fun handleIdentityReceived( address: String, identityHash: String, isCentralConnection: Boolean, )</ID>
     <ID>LargeClass:BleGattClient.kt$BleGattClient</ID>
+    <ID>LargeClass:BleGattServer.kt$BleGattServer</ID>
     <ID>LargeClass:KotlinBLEBridge.kt$KotlinBLEBridge</ID>
     <ID>LongMethod:BleAdvertiser.kt$BleAdvertiser$suspend fun startAdvertising(deviceName: String = BleConstants.DEFAULT_DEVICE_NAME_PREFIX): Result&lt;Unit&gt;</ID>
     <ID>LongMethod:BleGattClient.kt$BleGattClient$private suspend fun enableNotifications( address: String, gatt: BluetoothGatt, txChar: BluetoothGattCharacteristic, )</ID>

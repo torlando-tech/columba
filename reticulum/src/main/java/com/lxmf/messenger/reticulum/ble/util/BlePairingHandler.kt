@@ -35,7 +35,7 @@ import androidx.core.content.ContextCompat
  */
 class BlePairingHandler(private val context: Context) {
     companion object {
-        private const val TAG = "Columba:Kotlin:BlePairingHandler"
+        private const val TAG = "Columba:BLE:K:Pair"
 
         // Pairing variant constants (not all are public in BluetoothDevice)
         // See: https://android.googlesource.com/platform/frameworks/base/+/refs/heads/master/core/java/android/bluetooth/BluetoothDevice.java

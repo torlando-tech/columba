@@ -59,7 +59,7 @@ class BleConnectionManager(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
 ) {
     companion object {
-        private const val TAG = "Columba:Kotlin:BleConnectionManager"
+        private const val TAG = "Columba:BLE:K:ConnMgr"
     }
 
     private val bluetoothAdapter: BluetoothAdapter = bluetoothManager.adapter

@@ -54,7 +54,7 @@ class BleScanner(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
 ) {
     companion object {
-        private const val TAG = "Columba:Kotlin:BleScanner"
+        private const val TAG = "Columba:BLE:K:Scan"
 
         // Scan intervals
         private const val ACTIVE_SCAN_INTERVAL_MS = BleConstants.DISCOVERY_INTERVAL_MS

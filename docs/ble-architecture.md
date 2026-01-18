@@ -489,23 +489,33 @@ flowchart TB
         B -->|Peripheral| D[onCharacteristicWriteRequest]
         C --> E[Bridge.handleDataReceived]
         D --> E
-        E --> F[Forward ALL data to Python]
+        E --> F{Fragment size valid?}
+        F -->|No, > MAX_BLE_PACKET_SIZE| G[Log warning, discard]
+        F -->|Yes| H[Update peer.lastActivity]
+        H --> I[Forward ALL data to Python]
     end
 
     subgraph Python["Python Layer"]
-        F --> G[BLEInterface._data_received_callback]
-        G --> H{_handle_identity_handshake?}
-        H -->|Yes, 16 bytes, no identity| I[Store identity mapping<br/>Return early]
-        H -->|No| J[_handle_ble_data]
-        J --> K[Get reassembler by frag_key]
-        K --> L[reassembler.receive_fragment]
-        L --> M{Complete packet?}
-        M -->|Yes| N[peer_interface.process_incoming]
-        M -->|No| O[Wait for more fragments]
+        I --> J[BLEInterface._data_received_callback]
+        J --> K{_handle_identity_handshake?}
+        K -->|Yes, 16 bytes, no identity| L[Store identity mapping<br/>Return early]
+        K -->|No| M[_handle_ble_data]
+        M --> N{1-byte keepalive 0x00?}
+        N -->|Yes| O[Ignore keepalive]
+        N -->|No| P[Get reassembler by frag_key]
+        P --> Q[reassembler.receive_fragment]
+        Q --> R{Complete packet?}
+        R -->|Yes| S[peer_interface.process_incoming]
+        R -->|No| T[Wait for more fragments]
     end
 ```
 
-**Note**: As of 2026-01-17, identity detection was simplified. Kotlin passes ALL data to Python without filtering, matching the Linux/Bleak architecture. Python handles identity handshake detection in `_handle_identity_handshake` (BLEInterface.py lines 1108-1200).
+**Key implementation details** (KotlinBLEBridge.kt lines 1964-2013, BLEInterface.py lines 1108-1970):
+- Kotlin validates fragment size against `MAX_BLE_PACKET_SIZE` before processing
+- `lastActivity` timestamp is updated for keepalive tracking (handles MAC rotation via identity lookup)
+- Python filters 1-byte `0x00` keepalive packets—these are Android BLE supervision timeout prevention
+- Identity handshake detection: exactly 16 bytes when no identity is stored
+- If identity not found, Python tries the `_identity_cache` before requesting driver resync
 
 ---
 

@@ -1,8 +1,10 @@
 package com.lxmf.messenger.service.manager
 
 import com.chaquo.python.PyObject
+import com.lxmf.messenger.service.persistence.ServicePersistenceManager
 import com.lxmf.messenger.service.state.ServiceState
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -280,4 +282,149 @@ class EventHandlerTest {
     // The fix for issue #233 (propagation node garbled names) is tested via:
     // - AppDataParserTest for msgpack metadata extraction
     // - Integration tests for end-to-end announce handling
+
+    // ========== Conditional Broadcast Tests (Block Unknown Senders fix) ==========
+    // These tests verify that EventHandler only broadcasts messages that were successfully persisted.
+    // This prevents blocked messages from triggering notifications in the app process.
+
+    @Test
+    fun `handleMessageReceivedEvent broadcasts when persistMessage returns true`() =
+        runTest {
+            // Setup: Create EventHandler with persistence manager
+            val persistenceManager = mockk<ServicePersistenceManager>(relaxed = true)
+            coEvery { persistenceManager.persistMessage(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns true
+
+            val eventHandlerWithPersistence = EventHandler(
+                state = state,
+                wrapperManager = wrapperManager,
+                broadcaster = broadcaster,
+                scope = testScope,
+                attachmentStorage = null,
+                persistenceManager = persistenceManager,
+            )
+
+            // Message JSON with full_message flag (truly event-driven path)
+            val messageJson = """
+                {
+                    "full_message": true,
+                    "message_hash": "test_hash_123",
+                    "content": "Hello world",
+                    "source_hash": "abcdef123456",
+                    "timestamp": 1234567890
+                }
+            """.trimIndent()
+
+            // Act
+            eventHandlerWithPersistence.handleMessageReceivedEvent(messageJson)
+            testScope.advanceUntilIdle()
+
+            // Assert: Message should be broadcast (persistence returned true)
+            verify { broadcaster.broadcastMessage(any()) }
+        }
+
+    @Test
+    fun `handleMessageReceivedEvent does not broadcast when persistMessage returns false`() =
+        runTest {
+            // Setup: Create EventHandler with persistence manager that blocks messages
+            val persistenceManager = mockk<ServicePersistenceManager>(relaxed = true)
+            coEvery { persistenceManager.persistMessage(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns false
+
+            val eventHandlerWithPersistence = EventHandler(
+                state = state,
+                wrapperManager = wrapperManager,
+                broadcaster = broadcaster,
+                scope = testScope,
+                attachmentStorage = null,
+                persistenceManager = persistenceManager,
+            )
+
+            // Message JSON with full_message flag (truly event-driven path)
+            val messageJson = """
+                {
+                    "full_message": true,
+                    "message_hash": "blocked_hash_123",
+                    "content": "This should be blocked",
+                    "source_hash": "unknown_sender",
+                    "timestamp": 1234567890
+                }
+            """.trimIndent()
+
+            // Act
+            eventHandlerWithPersistence.handleMessageReceivedEvent(messageJson)
+            testScope.advanceUntilIdle()
+
+            // Assert: Message should NOT be broadcast (persistence returned false = blocked)
+            verify(exactly = 0) { broadcaster.broadcastMessage(any()) }
+        }
+
+    @Test
+    fun `handleMessageReceivedEvent calls persistMessage with correct parameters`() =
+        runTest {
+            // Setup: Create EventHandler with persistence manager
+            val persistenceManager = mockk<ServicePersistenceManager>(relaxed = true)
+            coEvery { persistenceManager.persistMessage(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns true
+
+            val eventHandlerWithPersistence = EventHandler(
+                state = state,
+                wrapperManager = wrapperManager,
+                broadcaster = broadcaster,
+                scope = testScope,
+                attachmentStorage = null,
+                persistenceManager = persistenceManager,
+            )
+
+            // Message JSON with full_message flag
+            val messageJson = """
+                {
+                    "full_message": true,
+                    "message_hash": "hash_abc",
+                    "content": "Test content",
+                    "source_hash": "sender_xyz",
+                    "timestamp": 9876543210
+                }
+            """.trimIndent()
+
+            // Act
+            eventHandlerWithPersistence.handleMessageReceivedEvent(messageJson)
+            testScope.advanceUntilIdle()
+
+            // Assert: persistMessage called with correct message hash and source hash
+            coVerify {
+                persistenceManager.persistMessage(
+                    messageHash = "hash_abc",
+                    content = "Test content",
+                    sourceHash = "sender_xyz",
+                    timestamp = 9876543210L,
+                    fieldsJson = any(),
+                    publicKey = any(),
+                    replyToMessageId = any(),
+                    deliveryMethod = any(),
+                    hasFileAttachments = any(),
+                    receivedHopCount = any(),
+                    receivedInterface = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `handleMessageReceivedEvent broadcasts without persistence manager for backwards compatibility`() =
+        runTest {
+            // When there's no persistence manager (e.g., testing), messages should still broadcast
+            val messageJson = """
+                {
+                    "full_message": true,
+                    "message_hash": "no_persistence_hash",
+                    "content": "No persistence test",
+                    "source_hash": "some_sender",
+                    "timestamp": 1111111111
+                }
+            """.trimIndent()
+
+            // Act: Use the default eventHandler (no persistence manager)
+            eventHandler.handleMessageReceivedEvent(messageJson)
+            testScope.advanceUntilIdle()
+
+            // Assert: Message should be broadcast (no persistence check when manager is null)
+            verify { broadcaster.broadcastMessage(any()) }
+        }
 }

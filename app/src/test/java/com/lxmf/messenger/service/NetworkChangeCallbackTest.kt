@@ -1,3 +1,5 @@
+@file:Suppress("SwallowedException") // Test file intentionally catches exceptions to verify handling
+
 package com.lxmf.messenger.service
 
 import com.lxmf.messenger.service.binder.ReticulumServiceBinder

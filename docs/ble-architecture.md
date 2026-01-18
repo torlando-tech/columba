@@ -206,6 +206,42 @@ sequenceDiagram
     Python->>Python: _spawn_peer_interface<br/>(address, identity, mtu, role)
 ```
 
+### Defensive Recovery for Missed onConnectionStateChange
+
+Android's `onConnectionStateChange` callback is unreliable and sometimes doesn't fire, even when a BLE connection is established. When this happens, the connection would be "orphaned" - data arrives but can't be sent back because the address isn't registered.
+
+The fix: When `handleCharacteristicWriteRequest` receives data from an address not in `connectedCentrals`, it retroactively registers the connection:
+
+```mermaid
+sequenceDiagram
+    participant Central as Remote Central
+    participant Server as BleGattServer
+    participant Bridge as KotlinBLEBridge
+    participant Python as AndroidBLEDriver
+
+    Central->>Server: connectGatt()
+    Note over Server: ⚠️ onConnectionStateChange NOT called<br/>(Android BLE bug)
+    Note over Server: connectedCentrals is empty
+
+    Central->>Server: Write data to RX characteristic
+    Server->>Server: handleCharacteristicWriteRequest
+    Server->>Server: Check: address in connectedCentrals?
+
+    rect rgb(255, 230, 230)
+        Note over Server: DEFENSIVE RECOVERY
+        Server->>Server: Address NOT found!<br/>Log warning
+        Server->>Server: Add to connectedCentrals
+        Server->>Server: Set MTU = MIN_MTU
+        Server->>Bridge: onCentralConnected(address, mtu)
+        Bridge->>Bridge: Add to connectedPeers
+    end
+
+    Server->>Bridge: onDataReceived(address, data)
+    Note over Server,Python: Connection now properly tracked
+```
+
+**Key log message**: `"DEFENSIVE RECOVERY: Data received from {address} but onConnectionStateChange was never called!"`
+
 ---
 
 ## Identity Protocol (v2.2)

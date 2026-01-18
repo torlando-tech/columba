@@ -203,6 +203,10 @@ class BleOperationQueue(
                             )
                         }
                     }
+                    // CRITICAL: Signal queue processor that operation completed (via timeout)
+                    // Without this, the queue stays blocked on operationCompletion.receive()
+                    // and ALL subsequent operations for ALL connections will timeout
+                    operationCompletion.trySend(Unit)
                 }
 
             scope.launch {

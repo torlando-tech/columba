@@ -472,6 +472,10 @@ class BleGattServer(
                     gattServer?.cancelConnection(device)
                     Log.d(TAG, "Connection cancelled for $address")
 
+                    // Stop keepalive BEFORE removing from connectedCentrals to prevent orphaned jobs
+                    // This is critical because cancelConnection() doesn't trigger onConnectionStateChange
+                    stopPeripheralKeepalive(address)
+
                     // Manually clean up since cancelConnection doesn't reliably trigger callback
                     centralsMutex.withLock {
                         connectedCentrals.remove(address)
@@ -1037,6 +1041,11 @@ class BleGattServer(
                                 if (result.isSuccess) {
                                     Log.v(TAG, "Peripheral keepalive sent to $address")
                                 } else {
+                                    val error = result.exceptionOrNull()?.message ?: "unknown"
+                                    if (error.contains("No connected centrals")) {
+                                        Log.w(TAG, "Keepalive for $address: target no longer tracked, stopping")
+                                        break // Exit loop, job ends naturally
+                                    }
                                     Log.w(TAG, "Peripheral keepalive failed for $address, connection may be dead")
                                 }
                             } catch (e: Exception) {

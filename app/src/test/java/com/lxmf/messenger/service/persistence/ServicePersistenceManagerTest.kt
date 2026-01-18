@@ -950,16 +950,17 @@ class ServicePersistenceManagerTest {
             coEvery { conversationDao.insertConversation(any()) } just Runs
             coEvery { messageDao.insertMessage(any()) } just Runs
 
-            val result = persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello",
-                sourceHash = "sender_hash",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             assertTrue("persistMessage should return true on success", result)
         }
@@ -984,16 +985,17 @@ class ServicePersistenceManagerTest {
             coEvery { contactDao.contactExists("unknown_sender", testIdentityHash) } returns false
             coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
 
-            val result = persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello from unknown",
-                sourceHash = "unknown_sender",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello from unknown",
+                    sourceHash = "unknown_sender",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             assertFalse("persistMessage should return false when blocked", result)
         }
@@ -1028,16 +1030,17 @@ class ServicePersistenceManagerTest {
             coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
             coEvery { messageDao.getMessageById("test_message_hash", testIdentityHash) } returns existingMessage
 
-            val result = persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello",
-                sourceHash = "sender_hash",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             // Duplicates should return true - message exists, app should still show notification
             assertTrue("persistMessage should return true for duplicates (message exists)", result)
@@ -1048,16 +1051,17 @@ class ServicePersistenceManagerTest {
         runTest {
             coEvery { localIdentityDao.getActiveIdentitySync() } returns null
 
-            val result = persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello",
-                sourceHash = "sender_hash",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             assertFalse("persistMessage should return false when no active identity", result)
         }
@@ -1067,16 +1071,17 @@ class ServicePersistenceManagerTest {
         runTest {
             coEvery { localIdentityDao.getActiveIdentitySync() } throws RuntimeException("Database error")
 
-            val result = persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello",
-                sourceHash = "sender_hash",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             assertFalse("persistMessage should return false on exception", result)
         }
@@ -1105,16 +1110,17 @@ class ServicePersistenceManagerTest {
             coEvery { conversationDao.insertConversation(any()) } just Runs
             coEvery { messageDao.insertMessage(any()) } just Runs
 
-            val result = persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello from contact",
-                sourceHash = "known_sender",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello from contact",
+                    sourceHash = "known_sender",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             assertTrue("persistMessage should return true for known contacts", result)
         }

@@ -26,8 +26,7 @@ class ServiceSettingsAccessor(
     }
 
     // Get fresh SharedPreferences each time to avoid caching issues across processes
-    private fun getCrossProcessPrefs() =
-        context.getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+    private fun getCrossProcessPrefs() = context.getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
 
     /**
      * Save the network change announce timestamp.
@@ -63,6 +62,5 @@ class ServiceSettingsAccessor(
      *
      * @return true if unknown senders should be blocked, false otherwise (default)
      */
-    fun getBlockUnknownSenders(): Boolean =
-        getCrossProcessPrefs().getBoolean(KEY_BLOCK_UNKNOWN_SENDERS, false)
+    fun getBlockUnknownSenders(): Boolean = getCrossProcessPrefs().getBoolean(KEY_BLOCK_UNKNOWN_SENDERS, false)
 }

@@ -64,7 +64,7 @@ class BleGattClient(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
 ) {
     companion object {
-        private const val TAG = "Columba:Kotlin:BleGattClient"
+        private const val TAG = "Columba:BLE:K:Client"
         private const val MAX_CONNECTION_RETRIES = 3
         private const val CONNECTION_TIMEOUT_MS = BleConstants.CONNECTION_TIMEOUT_MS
         private val CCCD_UUID = BleConstants.CCCD_UUID
@@ -90,6 +90,12 @@ class BleGattClient(
     // Active connections: address -> ConnectionData
     private val connections = mutableMapOf<String, ConnectionData>()
     private val connectionsMutex = Mutex()
+
+    // Track manual disconnects to prevent duplicate callbacks
+    // When disconnect() is called manually, the GATT onConnectionStateChange callback
+    // may also fire. We track manual disconnects to ensure only one callback fires.
+    private val manualDisconnects = mutableSetOf<String>()
+    private val manualDisconnectsMutex = Mutex()
 
     // Local transport identity (16 bytes, set by Python bridge)
     @Volatile
@@ -280,6 +286,13 @@ class BleGattClient(
             // Stop keepalive first
             stopKeepalive(address)
 
+            // Mark as manual disconnect BEFORE calling gatt.disconnect()
+            // This prevents the GATT onConnectionStateChange callback from firing
+            // a duplicate onDisconnected callback
+            manualDisconnectsMutex.withLock {
+                manualDisconnects.add(address)
+            }
+
             val connData =
                 withContext(Dispatchers.Main) {
                     connectionsMutex.withLock {
@@ -293,13 +306,20 @@ class BleGattClient(
                     connData.gatt.disconnect()
                     connData.gatt.close()
                 }
-                Log.d(TAG, "Disconnected from $address")
+                Log.d(TAG, "Disconnected from $address (manual)")
                 onDisconnected?.invoke(address, null)
+            }
+
+            // Clean up manual disconnect tracking after callback is fired
+            manualDisconnectsMutex.withLock {
+                manualDisconnects.remove(address)
             }
         } catch (e: SecurityException) {
             Log.e(TAG, "Permission denied when disconnecting from $address", e)
+            manualDisconnectsMutex.withLock { manualDisconnects.remove(address) }
         } catch (e: Exception) {
             Log.e(TAG, "Error disconnecting from $address", e)
+            manualDisconnectsMutex.withLock { manualDisconnects.remove(address) }
         }
     }
 
@@ -466,14 +486,26 @@ class BleGattClient(
                         "Error (status: $status)"
                     }
 
-                Log.d(TAG, "Disconnected from $address: $reason")
-
-                connectionsMutex.withLock {
-                    connections.remove(address)
+                // Check if this was a manual disconnect (callback will be fired by disconnect())
+                val isManualDisconnect = manualDisconnectsMutex.withLock {
+                    manualDisconnects.contains(address)
                 }
 
-                gatt.close()
-                onDisconnected?.invoke(address, reason)
+                if (isManualDisconnect) {
+                    Log.d(TAG, "Disconnected from $address: $reason (manual, skipping callback)")
+                    // Clean up but don't fire callback - disconnect() will handle it
+                    connectionsMutex.withLock {
+                        connections.remove(address)
+                    }
+                    gatt.close()
+                } else {
+                    Log.d(TAG, "Disconnected from $address: $reason")
+                    connectionsMutex.withLock {
+                        connections.remove(address)
+                    }
+                    gatt.close()
+                    onDisconnected?.invoke(address, reason)
+                }
             }
 
             else -> {

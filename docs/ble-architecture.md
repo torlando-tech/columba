@@ -662,6 +662,7 @@ Scan Response (31 bytes separate budget):
 
 | Dictionary | Key | Value | Purpose |
 |------------|-----|-------|---------|
+| `peers` | MAC address | (client, last_seen, mtu) | Low-level connection tracking |
 | `address_to_identity` | MAC address | 16-byte identity | MAC → identity lookup |
 | `identity_to_address` | 16-char hash | MAC address | Identity → current MAC |
 | `spawned_interfaces` | 16-char hash | BLEPeerInterface | Identity → interface |
@@ -670,8 +671,8 @@ Scan Response (31 bytes separate budget):
 | `_pending_identity_connections` | MAC address | timestamp | Timeout tracking |
 | `_pending_detach` | 16-char hash | timestamp | Grace period detach |
 | `pending_mtu` | MAC address | MTU value | MTU/identity race handling |
-| `fragmenters` | identity_key | BLEFragmenter | Per-identity fragmentation |
-| `reassemblers` | identity_key | BLEReassembler | Per-identity reassembly |
+| `fragmenters` | 16-char hash | BLEFragmenter | Per-identity fragmentation |
+| `reassemblers` | 16-char hash | BLEReassembler | Per-identity reassembly |
 
 ### Kotlin Layer (`KotlinBLEBridge`)
 
@@ -683,7 +684,7 @@ Scan Response (31 bytes separate budget):
 | `pendingConnections` | MAC address | PendingConnection | Awaiting identity |
 | `pendingCentralConnections` | Set<MAC> | - | In-progress central connects |
 | `recentlyDeduplicatedIdentities` | 32-char hex | timestamp | Dedup cooldown (60s) |
-| `processedIdentityCallbacks` | Set<key> | - | Prevent duplicate notifications |
+| `processedIdentityCallbacks` | Set<"addr:hash"> | - | Prevent duplicate identity callbacks |
 | `staleAddressToIdentity` | MAC address | 32-char hex | Cache disconnected addresses for send() resolution |
 
 ---

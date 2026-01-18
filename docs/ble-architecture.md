@@ -446,25 +446,34 @@ sequenceDiagram
 flowchart TB
     subgraph Python["Python Layer"]
         A[BLEPeerInterface.process_outgoing] --> B[Get fragmenter by identity_key]
-        B --> C[BLEFragmenter.fragment]
+        B --> C[fragmenter.fragment_packet]
         C --> D["Fragments with header:<br/>type(1) + seq(2) + total(2)"]
-        D --> E[AndroidBLEDriver.send]
+        D --> E["driver.send(peer_address, fragment)"]
     end
 
     subgraph Kotlin["Kotlin Layer"]
         E --> F[KotlinBLEBridge.sendAsync]
-        F --> G{Check deduplicationState}
-        G -->|NONE| H{isCentral?}
-        G -->|CLOSING_*| I[Block send - in transition]
+        F --> G{Resolve address via identity<br/>if peer not found}
+        G --> H{"useCentral?<br/>(isCentral && state != CLOSING_CENTRAL)"}
         H -->|Yes| J[GattClient.sendData]
-        H -->|No| K[GattServer.notifyCentrals]
-        J --> L[Write to RX characteristic]
-        K --> M[Notify via TX characteristic]
+        H -->|No| I{"usePeripheral?<br/>(isPeripheral && state != CLOSING_PERIPHERAL)"}
+        I -->|Yes| K[GattServer.notifyCentrals]
+        I -->|No| L{deduplicationState != NONE?}
+        L -->|Yes| M[Log warning, PACKET DROPPED]
+        L -->|No| N[Silent no-op, PACKET DROPPED<br/>Invalid state]
+        J --> O[Write to RX characteristic]
+        K --> P[Notify via TX characteristic]
     end
 
-    L --> N[Remote peripheral receives]
-    M --> O[Remote central receives]
+    O --> Q[Remote peripheral receives]
+    P --> R[Remote central receives]
 ```
+
+**Key implementation details** (KotlinBLEBridge.kt lines 1255-1325):
+- Address resolution handles MAC rotation by looking up the current address via identity mappings
+- During deduplication, only the *closing* path is blocked—the other path continues to work
+- For example, during `CLOSING_CENTRAL`, the peripheral path is still available for sending
+- **Packet loss during deduplication**: If both paths are blocked (rare edge case where peer has dual connection but both are closing), packets are dropped with a warning log. This window is brief—once disconnect completes, the remaining path resumes. Reticulum's transport layer handles retransmission if needed.
 
 ### Receiving Data (BLE → Python)
 
@@ -480,23 +489,23 @@ flowchart TB
         B -->|Peripheral| D[onCharacteristicWriteRequest]
         C --> E[Bridge.handleDataReceived]
         D --> E
-        E --> F{First 16 bytes, no identity?}
-        F -->|Yes| G[Identity handshake - store]
-        F -->|No| H[Forward to Python]
+        E --> F[Forward ALL data to Python]
     end
 
     subgraph Python["Python Layer"]
-        H --> I[AndroidBLEDriver._handle_data_received]
-        I --> J{Check identity handshake}
-        J -->|Yes, 16 bytes| K[_handle_identity_handshake]
-        J -->|No| L[_handle_ble_data]
-        L --> M[Get reassembler by identity_key]
-        M --> N[BLEReassembler.add_fragment]
-        N --> O{Complete packet?}
-        O -->|Yes| P[BLEPeerInterface.process_incoming]
-        O -->|No| Q[Wait for more fragments]
+        F --> G[BLEInterface._data_received_callback]
+        G --> H{_handle_identity_handshake?}
+        H -->|Yes, 16 bytes, no identity| I[Store identity mapping<br/>Return early]
+        H -->|No| J[_handle_ble_data]
+        J --> K[Get reassembler by frag_key]
+        K --> L[reassembler.receive_fragment]
+        L --> M{Complete packet?}
+        M -->|Yes| N[peer_interface.process_incoming]
+        M -->|No| O[Wait for more fragments]
     end
 ```
+
+**Note**: As of 2026-01-17, identity detection was simplified. Kotlin passes ALL data to Python without filtering, matching the Linux/Bleak architecture. Python handles identity handshake detection in `_handle_identity_handshake` (BLEInterface.py lines 1108-1200).
 
 ---
 

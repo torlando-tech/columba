@@ -1,6 +1,7 @@
 package com.lxmf.messenger.repository
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -17,11 +18,14 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.data.repository.CustomThemeRepository
+import com.lxmf.messenger.service.persistence.ServiceSettingsAccessor
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.CustomTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -109,6 +113,43 @@ class SettingsRepository
             val MAP_SOURCE_HTTP_ENABLED = booleanPreferencesKey("map_source_http_enabled")
             val MAP_SOURCE_RMSP_ENABLED = booleanPreferencesKey("map_source_rmsp_enabled")
         }
+
+        // Cross-process SharedPreferences for service communication
+        // DataStore does NOT support multi-process access, so we use SharedPreferences
+        // with MODE_MULTI_PROCESS for values written by the service process.
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS is deprecated but necessary for cross-process
+        private fun getCrossProcessPrefs(): SharedPreferences =
+            context.getSharedPreferences(
+                ServiceSettingsAccessor.CROSS_PROCESS_PREFS_NAME,
+                Context.MODE_MULTI_PROCESS,
+            )
+
+        /**
+         * Creates a Flow that observes a Long value from cross-process SharedPreferences.
+         * Uses OnSharedPreferenceChangeListener to emit updates reactively.
+         */
+        private fun crossProcessLongFlow(key: String): Flow<Long?> =
+            callbackFlow {
+                val prefs = getCrossProcessPrefs()
+
+                // Emit initial value
+                val initialValue = prefs.getLong(key, -1L).takeIf { it != -1L }
+                trySend(initialValue)
+
+                // Listen for changes
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, changedKey ->
+                        if (changedKey == key) {
+                            val newValue = sharedPrefs.getLong(key, -1L).takeIf { it != -1L }
+                            trySend(newValue)
+                        }
+                    }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+
+                awaitClose {
+                    prefs.unregisterOnSharedPreferenceChangeListener(listener)
+                }
+            }.distinctUntilChanged()
 
         // Notification preferences
 
@@ -367,23 +408,24 @@ class SettingsRepository
         /**
          * Flow of the last auto-announce timestamp (epoch milliseconds).
          * Returns null if no announce has been sent yet.
+         *
+         * Uses SharedPreferences for cross-process communication since both
+         * the service and main app can trigger announces.
          */
         val lastAutoAnnounceTimeFlow: Flow<Long?> =
-            context.dataStore.data
-                .map { preferences ->
-                    preferences[PreferencesKeys.LAST_AUTO_ANNOUNCE_TIME]
-                }
-                .distinctUntilChanged()
+            crossProcessLongFlow(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME)
 
         /**
          * Save the last auto-announce timestamp.
+         * Writes to SharedPreferences for cross-process visibility.
          *
          * @param timestamp The timestamp in epoch milliseconds
          */
+        @Suppress("RedundantSuspendModifier") // Keep suspend for API compatibility
         suspend fun saveLastAutoAnnounceTime(timestamp: Long) {
-            context.dataStore.edit { preferences ->
-                preferences[PreferencesKeys.LAST_AUTO_ANNOUNCE_TIME] = timestamp
-            }
+            getCrossProcessPrefs().edit()
+                .putLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
+                .apply()
         }
 
         /**
@@ -417,24 +459,23 @@ class SettingsRepository
          * Used for cross-process signaling: when the service triggers an announce
          * due to network topology change, it saves this timestamp, and the main app's
          * AutoAnnounceManager observes this to reset its timer.
+         *
+         * Uses SharedPreferences for cross-process communication.
          */
         val networkChangeAnnounceTimeFlow: Flow<Long?> =
-            context.dataStore.data
-                .map { preferences ->
-                    preferences[PreferencesKeys.NETWORK_CHANGE_ANNOUNCE_TIME]
-                }
-                .distinctUntilChanged()
+            crossProcessLongFlow(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME)
 
         /**
          * Save the network change announce timestamp.
-         * Call this from the service when a network topology change triggers an announce.
+         * Writes to SharedPreferences for cross-process visibility.
          *
          * @param timestamp The timestamp in epoch milliseconds
          */
+        @Suppress("RedundantSuspendModifier") // Keep suspend for API compatibility
         suspend fun saveNetworkChangeAnnounceTime(timestamp: Long) {
-            context.dataStore.edit { preferences ->
-                preferences[PreferencesKeys.NETWORK_CHANGE_ANNOUNCE_TIME] = timestamp
-            }
+            getCrossProcessPrefs().edit()
+                .putLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, timestamp)
+                .apply()
         }
 
         // Service status persistence

@@ -345,26 +345,26 @@ flowchart LR
 
 ## Deduplication State Machine
 
-When the same identity is connected via both central and peripheral paths:
+When the same identity is connected via both central and peripheral paths (dual connection):
 
 ```mermaid
 stateDiagram-v2
     [*] --> NONE: Initial state
 
-    NONE --> DualDetected: Same identity on both paths
+    NONE --> DualDetected: peer.isCentral && peer.isPeripheral
 
-    DualDetected --> DecisionPoint: Determine which to keep
+    DualDetected --> DecisionPoint: Compare identity hashes
 
-    DecisionPoint --> CLOSING_CENTRAL: Keep peripheral<br/>(our MAC > peer MAC)
-    DecisionPoint --> CLOSING_PERIPHERAL: Keep central<br/>(our MAC < peer MAC)
+    DecisionPoint --> CLOSING_CENTRAL: Keep peripheral<br/>(our identity > peer identity)
+    DecisionPoint --> CLOSING_PERIPHERAL: Keep central<br/>(our identity < peer identity)
 
     CLOSING_CENTRAL --> NONE: Central disconnected
     CLOSING_PERIPHERAL --> NONE: Peripheral disconnected
 
     note right of DecisionPoint
-        Decision based on MAC comparison:
-        - Lower MAC = central role
-        - Higher MAC = peripheral role
+        Decision based on identity hash comparison:
+        - Lower identity hash = keeps central role
+        - Higher identity hash = keeps peripheral role
     end note
 ```
 
@@ -385,25 +385,34 @@ sequenceDiagram
     participant Bridge as KotlinBLEBridge
     participant Client as BleGattClient
     participant Server as BleGattServer
-    participant Python as AndroidBLEDriver
 
-    Note over Bridge: Dual connection detected<br/>Same identity on both paths
+    Note over Bridge: Dual connection detected<br/>peer.isCentral && peer.isPeripheral
 
-    Bridge->>Bridge: Compare MAC addresses
-    alt Our MAC < Peer MAC (we should be central)
+    Bridge->>Bridge: Compare identity hashes<br/>localIdentityHex vs peerIdentity
+    alt localIdentityHex < peerIdentity (we keep central)
         Bridge->>Bridge: Set state = CLOSING_PERIPHERAL
-        Bridge->>Server: disconnectCentral(address)
-        Bridge->>Python: onAddressChanged(peripheral_addr, central_addr, identity)
-    else Our MAC > Peer MAC (we should be peripheral)
+        Bridge->>Bridge: Set dedupeAction = CLOSE_PERIPHERAL
+    else localIdentityHex > peerIdentity (we keep peripheral)
         Bridge->>Bridge: Set state = CLOSING_CENTRAL
-        Bridge->>Client: disconnect(address)
-        Bridge->>Python: onAddressChanged(central_addr, peripheral_addr, identity)
+        Bridge->>Bridge: Set dedupeAction = CLOSE_CENTRAL
     end
 
-    Note over Python: Update address mappings<br/>Migrate fragmenter keys
+    Bridge->>Bridge: Add peerIdentity to<br/>recentlyDeduplicatedIdentities (cooldown)
 
-    Bridge->>Bridge: Set state = NONE
+    Note over Bridge: Execute disconnect outside mutex
+
+    alt dedupeAction == CLOSE_CENTRAL
+        Bridge->>Client: disconnect(address)
+    else dedupeAction == CLOSE_PERIPHERAL
+        Bridge->>Server: disconnectCentral(address)
+    end
+
+    Note over Bridge: On disconnect callback:<br/>state returns to NONE
 ```
+
+**Key code reference**: `KotlinBLEBridge.handlePeerConnected()` lines 1701-1775
+
+**Note**: Deduplication does NOT call `onAddressChanged`. Python is notified via the normal `onConnected` callback, and Python handles its own deduplication logic if needed. The `onAddressChanged` callback is only used for MAC rotation address migration in `handleIdentityReceived`.
 
 ---
 

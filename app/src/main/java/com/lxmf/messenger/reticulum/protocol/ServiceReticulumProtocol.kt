@@ -2329,8 +2329,9 @@ class ServiceReticulumProtocol(
 
         val messageHash = json.optString("message_hash", "")
         val content = json.optString("content", "")
-        val sourceHash = json.optString("source_hash").toByteArrayFromBase64() ?: byteArrayOf()
-        val destHash = json.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
+        // Python sends hex strings, not Base64 - use hex decoding
+        val sourceHash = json.optString("source_hash", "").hexToByteArray()
+        val destHash = json.optString("destination_hash", "").hexToByteArray()
         val timestamp = json.optLong("timestamp", System.currentTimeMillis())
         // Extract LXMF fields (attachments, images, etc.) if present
         val fieldsJson = json.optJSONObject("fields")?.toString()
@@ -2545,6 +2546,21 @@ class ServiceReticulumProtocol(
     }
 
     // Helper extension functions
+
+    /**
+     * Convert hex string to ByteArray.
+     * Used for source_hash and destination_hash from Python (which sends hex strings).
+     */
+    private fun String.hexToByteArray(): ByteArray {
+        if (this.isEmpty()) return byteArrayOf()
+        return try {
+            chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse hex string: ${this.take(20)}", e)
+            byteArrayOf()
+        }
+    }
+
     private fun String.toByteArrayFromBase64(): ByteArray? {
         return try {
             android.util.Base64.decode(this, android.util.Base64.NO_WRAP)

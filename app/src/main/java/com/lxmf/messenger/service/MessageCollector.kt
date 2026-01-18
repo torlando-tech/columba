@@ -91,7 +91,31 @@ class MessageCollector
                         val existingMessage = conversationRepository.getMessageById(receivedMessage.messageHash)
                         if (existingMessage != null) {
                             processedMessageIds.add(receivedMessage.messageHash) // Add to cache to avoid repeat DB checks
-                            Log.d(TAG, "Skipping duplicate message ${receivedMessage.messageHash.take(16)} (already in database)")
+                            Log.d(TAG, "Message ${receivedMessage.messageHash.take(16)} already in database - checking if notification needed")
+
+                            // Even though message is persisted, we may still need to show notification
+                            // (EventHandler in service process persists messages but can't show notifications)
+                            val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
+                            val peerName = peerNames[sourceHash] ?: "Peer ${sourceHash.take(8).uppercase()}"
+                            val isFavorite =
+                                try {
+                                    announceRepository.getAnnounce(sourceHash)?.isFavorite ?: false
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Could not check if peer is favorite", e)
+                                    false
+                                }
+
+                            try {
+                                notificationHelper.notifyMessageReceived(
+                                    destinationHash = sourceHash,
+                                    peerName = peerName,
+                                    messagePreview = receivedMessage.content.take(100),
+                                    isFavorite = isFavorite,
+                                )
+                                Log.d(TAG, "Posted notification for already-persisted message from $peerName")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to post notification for already-persisted message", e)
+                            }
                             return@collect
                         }
 

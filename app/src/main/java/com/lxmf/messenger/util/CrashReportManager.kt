@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -80,18 +79,10 @@ class CrashReportManager @Inject constructor(
             Log.e(TAG, "Uncaught exception captured", throwable)
 
             try {
-                // Capture logs synchronously (we're about to crash)
-                val logs = runBlocking {
-                    try {
-                        LogcatReader.readRecentLogs(MAX_LOG_LINES)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to capture logs during crash", e)
-                        null
-                    }
-                }
-
-                // Persist crash data
-                persistCrashData(throwable, logs)
+                // Persist crash data without logs - logs will be captured fresh when
+                // the user chooses to report the bug after restart. This avoids using
+                // runBlocking which can deadlock if crash occurred on main thread.
+                persistCrashData(throwable, logs = null)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to persist crash data", e)
             }

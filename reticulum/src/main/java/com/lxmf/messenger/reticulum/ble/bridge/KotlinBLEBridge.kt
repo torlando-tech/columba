@@ -186,6 +186,20 @@ class KotlinBLEBridge(
     // How long to prevent reconnection after deduplication (60 seconds)
     private val deduplicationCooldownMs = 60_000L
 
+    // Track addresses that are currently in deduplication (one connection closing)
+    // Maps address -> DeduplicationTracker with timestamp and which connection is closing
+    // During the grace period, we don't clean up the peer for unexpected disconnects
+    data class DeduplicationTracker(
+        val timestamp: Long,
+        val closingCentral: Boolean, // true if closing central, false if closing peripheral
+    )
+    private val deduplicationInProgress = ConcurrentHashMap<String, DeduplicationTracker>()
+
+    // Grace period after deduplication starts - ignore spurious disconnect events during this time
+    // This handles Android BLE stack bugs where closing one GATT connection might trigger
+    // spurious disconnect events for other connections to the same device
+    private val deduplicationGracePeriodMs = 2_000L
+
     // TEST HOOK: Delay between reading deduplicationState and using it in send()
     // This widens the TOCTOU race window for testing. Set to 0 in production.
     @androidx.annotation.VisibleForTesting
@@ -1786,10 +1800,21 @@ class KotlinBLEBridge(
         // Execute deduplication disconnect outside mutex to avoid deadlock
         when (dedupeAction) {
             DedupeAction.CLOSE_CENTRAL -> {
+                // Track that deduplication is in progress for this address
+                // This prevents premature cleanup if Android fires spurious disconnect events
+                deduplicationInProgress[address] = DeduplicationTracker(
+                    timestamp = System.currentTimeMillis(),
+                    closingCentral = true,
+                )
                 Log.i(TAG, "Deduplication: disconnecting central connection to $address")
                 gattClient?.disconnect(address)
             }
             DedupeAction.CLOSE_PERIPHERAL -> {
+                // Track that deduplication is in progress for this address
+                deduplicationInProgress[address] = DeduplicationTracker(
+                    timestamp = System.currentTimeMillis(),
+                    closingCentral = false,
+                )
                 Log.i(TAG, "Deduplication: disconnecting peripheral connection from $address")
                 gattServer?.disconnectCentral(address)
             }
@@ -1802,7 +1827,12 @@ class KotlinBLEBridge(
 
     /**
      * Handle peer disconnection.
+     *
+     * Complexity justified: Handles deduplication protection to work around Android BLE
+     * stack bugs where closing one GATT connection may fire spurious disconnect events
+     * for other connections to the same device.
      */
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     private suspend fun handlePeerDisconnected(
         address: String,
         isCentral: Boolean,
@@ -1812,6 +1842,34 @@ class KotlinBLEBridge(
             if (peer == null) {
                 Log.w(TAG, "Disconnect notification for unknown peer: $address")
                 return
+            }
+
+            // Check if deduplication is in progress for this address
+            // If so, we might need to ignore spurious disconnects for the kept connection
+            val dedupeTracker = deduplicationInProgress[address]
+            if (dedupeTracker != null) {
+                val elapsed = System.currentTimeMillis() - dedupeTracker.timestamp
+                if (elapsed < deduplicationGracePeriodMs) {
+                    // Within grace period - check if this is the expected disconnect
+                    val isExpectedDisconnect = (isCentral && dedupeTracker.closingCentral) ||
+                        (!isCentral && !dedupeTracker.closingCentral)
+
+                    if (!isExpectedDisconnect) {
+                        // This disconnect is for the connection we're KEEPING, not closing
+                        // This is a spurious disconnect from Android BLE stack - ignore it
+                        Log.w(
+                            TAG,
+                            "DEDUP PROTECTION: Ignoring spurious disconnect for $address " +
+                                "(received ${if (isCentral) "central" else "peripheral"} disconnect, " +
+                                "but we're closing ${if (dedupeTracker.closingCentral) "central" else "peripheral"}). " +
+                                "This is an Android BLE stack bug.",
+                        )
+                        return
+                    }
+                    // Expected disconnect - process normally and clear tracker
+                    Log.d(TAG, "Deduplication disconnect processed for $address (${if (isCentral) "central" else "peripheral"})")
+                    deduplicationInProgress.remove(address)
+                }
             }
 
             if (isCentral) {
@@ -1840,6 +1898,18 @@ class KotlinBLEBridge(
 
             // If no connections remain, remove peer and clean up mappings
             if (!peer.isCentral && !peer.isPeripheral) {
+                // Safety check: if we still have deduplication tracker, something went wrong
+                // This shouldn't happen since we check at the start of the function, but log anyway
+                val remainingTracker = deduplicationInProgress.remove(address)
+                if (remainingTracker != null) {
+                    val elapsed = System.currentTimeMillis() - remainingTracker.timestamp
+                    Log.w(
+                        TAG,
+                        "DEDUP WARNING: Both connections closed for $address despite deduplication protection " +
+                            "(${elapsed}ms since deduplication started). This shouldn't happen.",
+                    )
+                }
+
                 connectedPeers.remove(address)
 
                 // Remove any pending connection (race condition cleanup)

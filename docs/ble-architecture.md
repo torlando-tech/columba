@@ -357,11 +357,11 @@ flowchart TD
 
     NONE -->|"peer.isCentral && peer.isPeripheral<br/>(KotlinBLEBridge.kt:1702)"| Decision{Compare identity hashes}
 
-    Decision -->|"our identity < peer identity<br/>→ Keep central"| CLOSING_PERIPHERAL[CLOSING_PERIPHERAL]
-    Decision -->|"our identity > peer identity<br/>→ Keep peripheral"| CLOSING_CENTRAL[CLOSING_CENTRAL]
+    Decision -->|"our identity > peer"| CLOSING_CENTRAL[CLOSING_CENTRAL<br/>Keep peripheral]
+    Decision -->|"our identity < peer"| CLOSING_PERIPHERAL[CLOSING_PERIPHERAL<br/>Keep central]
 
-    CLOSING_PERIPHERAL -->|"Peripheral disconnected"| NONE
-    CLOSING_CENTRAL -->|"Central disconnected"| NONE
+    CLOSING_CENTRAL -->|"Central disconnected"| NONE2[NONE]
+    CLOSING_PERIPHERAL -->|"Peripheral disconnected"| NONE2
 ```
 
 ### DeduplicationState Enum

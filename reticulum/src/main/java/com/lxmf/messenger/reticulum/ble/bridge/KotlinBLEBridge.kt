@@ -62,7 +62,7 @@ class KotlinBLEBridge(
     private val bluetoothManager: BluetoothManager,
 ) {
     companion object {
-        private const val TAG = "Columba:Kotlin:BLEBridge"
+        private const val TAG = "Columba:BLE:K:Bridge"
         private const val MAX_BLE_PACKET_SIZE = 512 // Maximum BLE packet size in bytes for validation
 
         @Volatile

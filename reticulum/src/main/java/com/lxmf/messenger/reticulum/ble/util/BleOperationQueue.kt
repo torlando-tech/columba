@@ -45,7 +45,7 @@ class BleOperationQueue(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ) {
     companion object {
-        private const val TAG = "Columba:Kotlin:BleOperationQueue"
+        private const val TAG = "Columba:BLE:K:Queue"
         private const val DEFAULT_TIMEOUT_MS = BleConstants.OPERATION_TIMEOUT_MS
     }
 

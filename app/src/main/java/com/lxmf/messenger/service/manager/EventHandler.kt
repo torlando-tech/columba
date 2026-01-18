@@ -258,9 +258,10 @@ class EventHandler(
             // Extract reply_to_message_id from fields
             val replyToMessageId = fieldsJson?.optString("9")?.takeIf { it.isNotBlank() }
 
-            // Persist to database
+            // Persist to database and only broadcast if successful
+            // This ensures blocked messages don't trigger notifications in the app process
             if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
-                persistenceManager.persistMessage(
+                val persisted = persistenceManager.persistMessage(
                     messageHash = messageHash,
                     content = content,
                     sourceHash = sourceHashHex,
@@ -273,11 +274,17 @@ class EventHandler(
                     receivedHopCount = receivedHopCount,
                     receivedInterface = receivedInterface,
                 )
-                Log.d(TAG, "Message persisted from callback: $messageHash from $sourceHashHex")
+                if (persisted) {
+                    Log.d(TAG, "Message persisted from callback: $messageHash from $sourceHashHex")
+                    // Broadcast to app process for UI updates (only if persisted)
+                    broadcaster.broadcastMessage(messageJson = json.toString())
+                } else {
+                    Log.d(TAG, "Message blocked or failed to persist: $messageHash - not broadcasting")
+                }
+            } else {
+                // No persistence manager - broadcast anyway for UI updates
+                broadcaster.broadcastMessage(messageJson = json.toString())
             }
-
-            // Broadcast to app process for UI updates
-            broadcaster.broadcastMessage(messageJson = json.toString())
         } catch (e: Exception) {
             Log.e(TAG, "Error processing message from JSON", e)
         }
@@ -452,6 +459,7 @@ class EventHandler(
      * This is a suspend function to ensure message persistence completes before sync
      * completion is reported to the UI.
      */
+    @Suppress("CyclomaticComplexMethod", "NestedBlockDepth") // Complex due to LXMF field extraction
     private suspend fun handleMessageEvent(event: PyObject) {
         try {
             val messageHash = event.getDictValue("message_hash")?.toString().orEmpty()
@@ -497,9 +505,15 @@ class EventHandler(
             val receivedHopCount = event.getDictValue("hops").toIntOrNull()
             val receivedInterface = event.getDictValue("receiving_interface")?.toString()?.takeIf { it != "None" }
 
+            // Build broadcast JSON (used whether or not we have persistence manager)
+            val messageJson = buildMessageBroadcastJson(
+                messageHash, content, sourceHash, destHash, timestamp, fieldsJson, publicKey
+            )
+
             // Persist to database first (survives app process death)
+            // Only broadcast if message was actually persisted (not blocked)
             if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
-                persistenceManager.persistMessage(
+                val persisted = persistenceManager.persistMessage(
                     messageHash = messageHash,
                     content = content,
                     sourceHash = sourceHashHex,
@@ -512,25 +526,41 @@ class EventHandler(
                     receivedHopCount = receivedHopCount,
                     receivedInterface = receivedInterface,
                 )
-                Log.d(TAG, "Message persisted to database: $messageHash from $sourceHashHex")
-            }
 
-            // Broadcast to app process for UI updates (may be dead, that's OK)
-            val messageJson =
-                JSONObject().apply {
-                    put("message_hash", messageHash)
-                    put("content", content)
-                    put("source_hash", sourceHash.toBase64())
-                    put("destination_hash", destHash.toBase64())
-                    put("timestamp", timestamp)
-                    fieldsJson?.let { put("fields", it) }
-                    publicKey?.let { put("public_key", it.toBase64()) }
+                if (persisted) {
+                    Log.d(TAG, "Message persisted to database: $messageHash from $sourceHashHex")
+                    broadcaster.broadcastMessage(messageJson.toString())
+                } else {
+                    Log.d(TAG, "Message blocked or failed to persist: $messageHash - not broadcasting")
                 }
-
-            broadcaster.broadcastMessage(messageJson.toString())
+            } else {
+                // No persistence manager - broadcast anyway for UI updates
+                broadcaster.broadcastMessage(messageJson.toString())
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling message event", e)
         }
+    }
+
+    /**
+     * Build JSON object for broadcasting a message to the app process.
+     */
+    private fun buildMessageBroadcastJson(
+        messageHash: String,
+        content: String,
+        sourceHash: ByteArray?,
+        destHash: ByteArray?,
+        timestamp: Long,
+        fieldsJson: JSONObject?,
+        publicKey: ByteArray?,
+    ): JSONObject = JSONObject().apply {
+        put("message_hash", messageHash)
+        put("content", content)
+        put("source_hash", sourceHash.toBase64())
+        put("destination_hash", destHash.toBase64())
+        put("timestamp", timestamp)
+        fieldsJson?.let { put("fields", it) }
+        publicKey?.let { put("public_key", it.toBase64()) }
     }
 
     /**

@@ -165,8 +165,11 @@ class ServicePersistenceManager(
      *
      * This is a suspend function that completes before returning, ensuring the message
      * is fully persisted before sync completion is reported to the UI.
+     *
+     * @return true if the message was persisted (or already exists), false if blocked or error.
+     *         The caller should only broadcast to the app process if this returns true.
      */
-    @Suppress("LongParameterList") // Parameters mirror MessageEntity fields for direct persistence
+    @Suppress("LongParameterList", "LongMethod", "ReturnCount") // Parameters mirror MessageEntity fields; early returns for clarity
     suspend fun persistMessage(
         messageHash: String,
         content: String,
@@ -179,25 +182,26 @@ class ServicePersistenceManager(
         hasFileAttachments: Boolean = false,
         receivedHopCount: Int? = null,
         receivedInterface: String? = null,
-    ) {
+    ): Boolean {
         try {
             // Get active identity to scope the message correctly
             val activeIdentity = localIdentityDao.getActiveIdentitySync()
             if (activeIdentity == null) {
                 Log.w(TAG, "No active identity - cannot persist message")
-                return
+                return false
             }
 
             // Check if we should block this sender
             if (shouldBlockUnknownSender(sourceHash, activeIdentity.identityHash)) {
-                return
+                return false
             }
 
             // Check for duplicates (composite key is id + identityHash)
             val existingMessage = messageDao.getMessageById(messageHash, activeIdentity.identityHash)
             if (existingMessage != null) {
                 Log.d(TAG, "Message already exists - skipping duplicate: $messageHash")
-                return
+                // Return true for duplicates - message exists, app should still show notification
+                return true
             }
 
             // Create/update conversation
@@ -272,8 +276,10 @@ class ServicePersistenceManager(
             }
 
             Log.d(TAG, "Service persisted message from $sourceHash: ${content.take(30)}...")
+            return true
         } catch (e: Exception) {
             Log.e(TAG, "Error persisting message in service from $sourceHash", e)
+            return false
         }
     }
 

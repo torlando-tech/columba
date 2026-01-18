@@ -925,4 +925,197 @@ class ServicePersistenceManagerTest {
             // Should still persist message (fail-open on error)
             coVerify { messageDao.insertMessage(any()) }
         }
+
+    // ========== persistMessage() Return Value Tests ==========
+    // These tests verify that persistMessage() returns the correct Boolean value
+    // to allow EventHandler to conditionally broadcast messages.
+
+    @Test
+    fun `persistMessage returns true on successful persistence`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation(any(), any()) } returns null
+            coEvery { conversationDao.insertConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(any()) } just Runs
+
+            val result = persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello",
+                sourceHash = "sender_hash",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            assertTrue("persistMessage should return true on success", result)
+        }
+
+    @Test
+    fun `persistMessage returns false when blocked by privacy setting`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            // Enable block unknown senders
+            every { settingsAccessor.getBlockUnknownSenders() } returns true
+            // Sender is NOT in contacts
+            coEvery { contactDao.contactExists("unknown_sender", testIdentityHash) } returns false
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+
+            val result = persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello from unknown",
+                sourceHash = "unknown_sender",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            assertFalse("persistMessage should return false when blocked", result)
+        }
+
+    @Test
+    fun `persistMessage returns true for duplicate message`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            val existingMessage =
+                MessageEntity(
+                    id = "test_message_hash",
+                    conversationHash = "sender_hash",
+                    identityHash = testIdentityHash,
+                    content = "Existing message",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = false,
+                    status = "delivered",
+                    isRead = false,
+                    fieldsJson = null,
+                )
+
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById("test_message_hash", testIdentityHash) } returns existingMessage
+
+            val result = persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello",
+                sourceHash = "sender_hash",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            // Duplicates should return true - message exists, app should still show notification
+            assertTrue("persistMessage should return true for duplicates (message exists)", result)
+        }
+
+    @Test
+    fun `persistMessage returns false when no active identity`() =
+        runTest {
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns null
+
+            val result = persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello",
+                sourceHash = "sender_hash",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            assertFalse("persistMessage should return false when no active identity", result)
+        }
+
+    @Test
+    fun `persistMessage returns false on database exception`() =
+        runTest {
+            coEvery { localIdentityDao.getActiveIdentitySync() } throws RuntimeException("Database error")
+
+            val result = persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello",
+                sourceHash = "sender_hash",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            assertFalse("persistMessage should return false on exception", result)
+        }
+
+    @Test
+    fun `persistMessage returns true for known contact when blocking enabled`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "dest_hash",
+                    filePath = "/test/path",
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            // Enable block unknown senders
+            every { settingsAccessor.getBlockUnknownSenders() } returns true
+            // Sender IS in contacts
+            coEvery { contactDao.contactExists("known_sender", testIdentityHash) } returns true
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { messageDao.getMessageById(any(), any()) } returns null
+            coEvery { conversationDao.getConversation(any(), any()) } returns null
+            coEvery { conversationDao.insertConversation(any()) } just Runs
+            coEvery { messageDao.insertMessage(any()) } just Runs
+
+            val result = persistenceManager.persistMessage(
+                messageHash = "test_message_hash",
+                content = "Hello from contact",
+                sourceHash = "known_sender",
+                timestamp = System.currentTimeMillis(),
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = null,
+            )
+
+            assertTrue("persistMessage should return true for known contacts", result)
+        }
 }
